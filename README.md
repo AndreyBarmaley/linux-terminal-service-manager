@@ -20,7 +20,8 @@ if you have the ability to public VDS (4 core, 2Gb memory, 4Gb disk), please let
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service
 
 # LTSM_connector
-сетевой частью занимается служебный xinetd, и это хорошо, LTSM_сonnector является только обработчиком сетевого протокола VNC и RDP, также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия AGPLv3)
+сетевой частью занимается служебный xinetd, и это хорошо, LTSM_сonnector является только обработчиком сетевого протокола VNC и RDP, также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия AGPLv3)  
+see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/118249135-9ac9ad80-b494-11eb-9a5c-ddff59048293.png)
