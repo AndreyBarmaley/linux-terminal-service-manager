@@ -1,0 +1,46 @@
+{
+    "logging:level": "debug",
+    "logging:facility": "local6",
+    "encoding:debug": 0,
+    "encoding:threads": 4,
+    "encoding:blacklist": [ "zlib" ],
+
+    "group:shm": "ltsm-shm",
+    "group:auth": "ltsm-auth",
+    "group:remote": "ltsm-users",
+    "user:xvfb": "ltsm-xvfb",
+    "pam:service": "login",
+
+    "helper:autocomplete": true,
+    "helper:idletimeout": 100,
+    "helper:accesslist": [ ],
+    "autocomplete:min": 100,
+    "autocomplete:max": 10000,
+    "helper:path": "/usr/libexec/ltsm/LTSM_helper",
+    "helper:args": "",
+    "helper:dateformat": "dddd dd MMMM, hh:mm:ss",
+    "helper:title": "X11 Remote Desktop Service (%{version})",
+
+    "login:failures_count": 3,
+    "session:duration_max_sec": 0,
+    "session:policy": "authlock",
+    "session:path": "/etc/X11/xinit/xinitrc",
+
+    "default:width": 1024,
+    "default:height": 768,
+
+    "display:min": 55,
+    "display:max": 99,
+    "display:solid": 0x4e7db7,
+
+    "xauth:path": "/usr/bin/xauth",
+    "xauth:args": "-f %{authfile} add :%{display} \".\" %{mcookie}",
+    "xauth:file": "/var/run/ltsm/auth_%{remoteaddr}_%{display}",
+
+    "mcookie:path": "/usr/bin/mcookie",
+
+    "xvfb:path": "/usr/bin/Xvfb",
+    "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",
+    "xvfb:socket": "/tmp/.X11-unix/X%{display}",
+    "xvfb:lock": "/tmp/.X%{display}-lock"
+}

@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node name="/ltsm/manager/service">
+    <interface name="LTSM.Manager.Service">
+        <method name="busGetServiceVersion">
+            <arg type="i" name="version" direction="out" />
+        </method>
+        <method name="busStartLoginSession">
+            <arg type="s" name="remoteAddr" direction="in" />
+            <arg type="s" name="connType" direction="in" />
+            <arg type="i" name="display" direction="out" />
+        </method>
+        <method name="busCreateAuthFile">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="path" direction="out" />
+        </method>
+        <method name="busShutdownDisplay">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="success" direction="out" />
+        </method>
+        <method name="busStartUserSession">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="userName" direction="in" />
+            <arg type="s" name="remoteAddr" direction="in" />
+            <arg type="s" name="connType" direction="in" />
+            <arg type="i" name="display" direction="out" />
+        </method>
+        <method name="helperIsAutoComplete">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="success" direction="out" />
+        </method>
+        <method name="helperIdleTimeoutAction">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="helperGetIdleTimeoutSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="i" name="result" direction="out" />
+        </method>
+        <method name="helperGetTitle">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="result" direction="out" />
+        </method>
+        <method name="helperGetDateFormat">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="result" direction="out" />
+        </method>
+        <method name="helperGetUsersList">
+            <arg type="i" name="display" direction="in" />
+            <arg type="as" name="result" direction="out" />
+        </method>
+        <method name="helperWidgetStartedAction">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetDebugLevel">
+            <arg type="s" name="level" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetSessionDurationSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="u" name="duration" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetSessionPolicy">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="policy" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busConnectorTerminated">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busConnectorSwitched">
+            <arg type="i" name="oldDisplay" direction="in" />
+            <arg type="i" name="newDisplay" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busConnectorAlive">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busCheckAuthenticate">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="login" direction="in" />
+            <arg type="s" name="password" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busGetSessions">
+            <arg type="a(iiiiiiiiiissss)" name="result" direction="out" />
+        </method>
+        <method name="busRenderRect">
+            <arg type="i" name="display" direction="in" />
+            <arg type="(nnqq)" name="rect" direction="in" />
+            <arg type="(yyy)" name="color" direction="in" />
+            <arg type="b" name="fill" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busRenderText">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="text" direction="in" />
+            <arg type="(nn)" name="pos" direction="in" />
+            <arg type="(yyy)" name="color" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busRenderClear">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+
+        <signal name="helperWidgetStarted">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="helperSetLoginPassword">
+            <arg type="i" name="display" />
+            <arg type="s" name="login" />
+            <arg type="s" name="pass" />
+        </signal>
+        <signal name="loginFailure">
+            <arg type="i" name="display" />
+            <arg type="s" name="msg" />
+        </signal>
+        <signal name="loginSuccess">
+            <arg type="i" name="display" />
+            <arg type="s" name="userName" />
+        </signal>
+        <signal name="shutdownConnector">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="pingConnector">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="sendBellSignal">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="sessionReconnect">
+            <arg type="s" name="removeAddr" />
+            <arg type="s" name="connType" />
+        </signal>
+        <signal name="sessionSleeped">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="clearRenderPrimitives">
+            <arg type="i" name="display" />
+        </signal>
+        <signal name="addRenderRect">
+            <arg type="i" name="display" />
+            <arg type="(nnqq)" name="rect" />
+            <arg type="(yyy)" name="color" />
+            <arg type="b" name="fill" />
+        </signal>
+        <signal name="addRenderText">
+            <arg type="i" name="display" />
+            <arg type="s" name="text" />
+            <arg type="(nn)" name="pos" />
+            <arg type="(yyy)" name="color" />
+        </signal>
+        <signal name="debugLevel">
+            <arg type="s" name="level" />
+        </signal>
+    </interface>
+</node>

@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/ltsm">
+        <file>ltsm_logo.png</file>
+    </qresource>
+</RCC>

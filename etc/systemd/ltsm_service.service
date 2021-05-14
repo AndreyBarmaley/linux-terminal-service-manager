@@ -1,0 +1,8 @@
+[Unit]
+Description=LTSM service
+
+[Service]
+ExecStart=/usr/local/sbin/LTSM_service
+
+[Install]
+WantedBy=multi-user.target
