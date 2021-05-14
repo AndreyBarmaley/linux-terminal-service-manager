@@ -32,6 +32,6 @@ see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/
 # LTSM_admins
 графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service
 main features:  
-  -show any users session  
+  -connected to users display  
   -disconnecting a session  
   -in development  
