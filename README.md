@@ -1,6 +1,8 @@
 # linux-terminal-service-manager
 Linux Terminal Service Manager (LTSM) is a set of service programs that allows remote computers to connect to a Linux operating system computer using a remote terminal session (over VNC or RDP)
 
+# Linux Only!
+main dependencies: systemd, sdbus, sdbus-cpp (https://github.com/Kistler-Group/sdbus-cpp), libdeflate (https://github.com/ebiggers/libdeflate), XCB system libs
 
 # Схема взаимодействия компонентов
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)
