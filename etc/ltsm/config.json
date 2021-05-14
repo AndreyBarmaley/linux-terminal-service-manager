@@ -7,7 +7,6 @@
 
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",
-    "group:remote": "ltsm-users",
     "user:xvfb": "ltsm-xvfb",
     "pam:service": "login",
 
@@ -31,7 +30,7 @@
 
     "display:min": 55,
     "display:max": 99,
-    "display:solid": 0x4e7db7,
+    "display:solid": "0x4e7db7",
 
     "xauth:path": "/usr/bin/xauth",
     "xauth:args": "-f %{authfile} add :%{display} \".\" %{mcookie}",

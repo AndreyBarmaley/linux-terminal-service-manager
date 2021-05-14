@@ -1492,7 +1492,7 @@ namespace LTSM
                 if(0 != chmod(folder.c_str(), setmode))
                     Application::error("chmod failed, dir: %s, mode: %d, error: %s", folder.c_str(), setmode, strerror(errno));
 
-                // fix owner root.'group:remote'
+                // fix owner
                 if(0 != chown(folder.c_str(), 0, setgid))
                     Application::error("chown failed, dir: %s, uid: %d, gid: %d, error: %s", folder.c_str(), 0, setgid, strerror(errno));
 
