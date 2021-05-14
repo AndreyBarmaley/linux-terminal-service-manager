@@ -12,7 +12,8 @@ main dependencies:
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)
 
 # LTSM_service
-основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)
+основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)  
+see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service
 
 # LTSM_connector
 сетевой частью занимается служебный xinetd, и это хорошо, LTSM_сonnector является только обработчиком сетевого протокола VNC и RDP, также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия AGPLv3)
