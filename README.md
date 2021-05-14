@@ -15,12 +15,12 @@ main dependencies:
 основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)
 
 # LTSM_connector
-сетевой частью занимается служебный xinetd, и это хорошо, LTSM_сonnector является только обработчиком сетевого протокола VNC и RDP, также он является клиентом dbus ltsm.service.manager, подключается к Xvfb через механизм shared memory (Лицензия AGPLv3)
+сетевой частью занимается служебный xinetd, и это хорошо, LTSM_сonnector является только обработчиком сетевого протокола VNC и RDP, также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия AGPLv3)
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/118249135-9ac9ad80-b494-11eb-9a5c-ddff59048293.png)
 
-графическая утилита входа в систему, является клиентом dbus ltsm.service.manager (Лицензия GPLv3)
+графическая утилита входа в систему, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)
 
 # LTSM_admins
-графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.service.manager
+графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service
