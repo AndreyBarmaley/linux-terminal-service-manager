@@ -8,6 +8,10 @@ main dependencies:
   -libdeflate (https://github.com/ebiggers/libdeflate)  
   -XCB system libs  
 
+# Demo access
+in the near future, it is being prepared, expect it.  
+if you have the ability to public VDS (4 core, 2Gb memory, 4Gb disk), please let me know.  
+
 # Схема взаимодействия компонентов
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)
 
