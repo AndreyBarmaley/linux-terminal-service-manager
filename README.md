@@ -25,7 +25,8 @@ see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/118249135-9ac9ad80-b494-11eb-9a5c-ddff59048293.png)
 
-графическая утилита входа в систему, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)
+графическая утилита входа в систему, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
+see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description)
 
 # LTSM_admins
 графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service
