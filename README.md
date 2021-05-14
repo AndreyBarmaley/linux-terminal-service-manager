@@ -35,3 +35,7 @@ main features:
   -connected to users display  
   -disconnecting a session  
   -in development  
+
+## Donate
+<a href="https://paypal.me/andreyafletdinov/"><img src="blue.svg" height="40"></a>  
+If you enjoyed this project — or just feeling generous, consider buying me a beer. Cheers!
