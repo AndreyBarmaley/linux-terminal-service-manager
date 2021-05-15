@@ -20,28 +20,67 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_GLOBALS_
-#define _LTSM_GLOBALS_
+#ifndef LTSM_SESSIONS_H
+#define LTSM_SESSIONS_H
 
-namespace LTSM
+#include <QDialog>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QtDBus/QtDBus>
+#include <QScopedPointer>
+#include <QTableWidgetItem>
+
+struct XvfbInfo
 {
-    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep };
-    enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
+    qint32      display;
+    qint32      pid1;
+    qint32      pid2;
+    qint32      width;
+    qint32      height;
+    qint32      uid;
+    qint32      gid;
+    qint32      durationLimit;
+    qint32      mode;
+    qint32      policy;
+    QString     user;
+    QString     authfile;
+    QString     remoteaddr;
+    QString     conntype;
+};
 
-    inline static const char* dbus_service_name = "ltsm.manager.service";
-    inline static const char* dbus_object_path = "/ltsm/manager/service";
-    inline static int service_version = 20210515;
+struct RowItem : QTableWidgetItem
+{
+    int     display;
+    int     mode;
+    QString authfile;
+
+    RowItem(const XvfbInfo &, const QString &);
+};
+
+namespace Ui
+{
+    class LTSM_Sessions;
 }
 
-#ifdef LTSM_BUILD_STD_MAP
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
-#endif
+class LTSM_Sessions : public QDialog
+{
+    Q_OBJECT
 
-#endif // _LTSM_GLOBALS_
+protected slots:
+    void	tableReload(void);
+    void	disconnectClicked(void);
+    void	logoffClicked(void);
+    void	sendmsgClicked(void);
+    void	itemClicked(QTableWidgetItem*);
+
+public:
+    explicit LTSM_Sessions(QWidget* parent = 0);
+    ~LTSM_Sessions();
+
+private:
+    Ui::LTSM_Sessions* ui;
+    QScopedPointer<QDBusInterface> dbusInterfacePtr;
+    const RowItem* selectedRow;
+};
+
+#endif // LTSM_SESSIONS_H

@@ -118,3 +118,20 @@ add_executable(LTSM_helper
 
 target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+# LTSM sessions
+project(LTSM_sessions VERSION 20210301.1)
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt5 COMPONENTS Core Gui DBus Widgets REQUIRED)
+
+add_executable(LTSM_sessions
+    src/qt_sessions/main.cpp
+    src/qt_sessions/ltsm_sessions.ui
+    src/qt_sessions/ltsm_sessions.cpp)
+
+target_link_libraries(LTSM_sessions Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
+set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

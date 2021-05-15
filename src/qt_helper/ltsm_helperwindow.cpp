@@ -52,10 +52,8 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     const char* service = "ltsm.manager.service";
     const char* path = "/ltsm/manager/service";
     const char* interface = "LTSM.Manager.Service";
-    dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::sessionBus()));
 
-    if(! dbusInterfacePtr->isValid())
-        dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::systemBus()));
+    dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::systemBus()));
 
     if(! dbusInterfacePtr->isValid())
     {

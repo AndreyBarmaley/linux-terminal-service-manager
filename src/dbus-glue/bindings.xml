@@ -14,6 +14,10 @@
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="path" direction="out" />
         </method>
+        <method name="busShutdownConnector">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="success" direction="out" />
+        </method>
         <method name="busShutdownDisplay">
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="success" direction="out" />
@@ -51,6 +55,11 @@
         </method>
         <method name="helperWidgetStartedAction">
             <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSendMessage">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="message" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetDebugLevel">

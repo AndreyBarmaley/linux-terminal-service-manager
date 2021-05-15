@@ -20,28 +20,14 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_GLOBALS_
-#define _LTSM_GLOBALS_
+#include "ltsm_sessions.h"
+#include <QApplication>
 
-namespace LTSM
+int main(int argc, char *argv[])
 {
-    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep };
-    enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
+    QApplication a(argc, argv);
+    LTSM_Sessions w;
+    w.show();
 
-    inline static const char* dbus_service_name = "ltsm.manager.service";
-    inline static const char* dbus_object_path = "/ltsm/manager/service";
-    inline static int service_version = 20210515;
+    return a.exec();
 }
-
-#ifdef LTSM_BUILD_STD_MAP
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
-#endif
-
-#endif // _LTSM_GLOBALS_

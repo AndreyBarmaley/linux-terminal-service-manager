@@ -25,6 +25,8 @@ if [ -f ${HOME}/.Xresources ]; then
     xrdb -merge ${HOME}/.Xresources
 fi
 
+# setxkbmap -model pc105 -layout us -option ''
+
 if [ -f /etc/X11/Xmodmap ]; then
     xmodmap /etc/X11/Xmodmap
 fi

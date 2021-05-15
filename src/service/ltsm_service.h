@@ -123,8 +123,9 @@ namespace LTSM
             void                        closefds(void) const;
 	    void			openlog(void) const;
             int		                getFreeDisplay(void);
+	    void			closeSystemSession(int display, XvfbSession &);
             std::string			createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
-            std::string                 createSessionConnInfo(const std::string & home, const XvfbSession &);
+            std::string                 createSessionConnInfo(const std::string & home, const XvfbSession*);
             int				runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userLogin);
             int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
@@ -151,12 +152,14 @@ namespace LTSM
             int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;
             bool                        busShutdownDisplay(const int32_t & display) override;
+            bool                        busShutdownConnector(const int32_t & display) override;
             bool                        busConnectorTerminated(const int32_t & display) override;
             bool                        busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
             bool                        busSetDebugLevel(const std::string & level) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
+            bool                        busSendMessage(const int32_t& display, const std::string& message) override;
 
             bool                        helperIdleTimeoutAction(const int32_t & display) override;
             bool                        helperWidgetStartedAction(const int32_t & display) override;

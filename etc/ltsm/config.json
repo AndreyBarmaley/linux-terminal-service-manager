@@ -8,7 +8,7 @@
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",
     "user:xvfb": "ltsm-xvfb",
-    "pam:service": "login",
+    "pam:service": "ltsm",
 
     "helper:autocomplete": true,
     "helper:idletimeout": 100,
@@ -41,5 +41,9 @@
     "xvfb:path": "/usr/bin/Xvfb",
     "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",
     "xvfb:socket": "/tmp/.X11-unix/X%{display}",
-    "xvfb:lock": "/tmp/.X%{display}-lock"
+    "xvfb:lock": "/tmp/.X%{display}-lock",
+
+    "sessreg:path": "/usr/bin/sessreg",
+    "sessreg:args1": "-a -l :%{display} %{user}",
+    "sessreg:args2": "-d -l :%{display} %{user}"
 }

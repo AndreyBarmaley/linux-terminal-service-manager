@@ -25,6 +25,7 @@ protected:
         object_.registerMethod("busGetServiceVersion").onInterface(INTERFACE_NAME).withOutputParamNames("version").implementedAs([this](){ return this->busGetServiceVersion(); });
         object_.registerMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withInputParamNames("remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const std::string& remoteAddr, const std::string& connType){ return this->busStartLoginSession(remoteAddr, connType); });
         object_.registerMethod("busCreateAuthFile").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("path").implementedAs([this](const int32_t& display){ return this->busCreateAuthFile(display); });
+        object_.registerMethod("busShutdownConnector").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownConnector(display); });
         object_.registerMethod("busShutdownDisplay").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownDisplay(display); });
         object_.registerMethod("busStartUserSession").onInterface(INTERFACE_NAME).withInputParamNames("display", "userName", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType){ return this->busStartUserSession(display, userName, remoteAddr, connType); });
         object_.registerMethod("helperIsAutoComplete").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->helperIsAutoComplete(display); });
@@ -34,6 +35,7 @@ protected:
         object_.registerMethod("helperGetDateFormat").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetDateFormat(display); });
         object_.registerMethod("helperGetUsersList").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetUsersList(display); });
         object_.registerMethod("helperWidgetStartedAction").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperWidgetStartedAction(display); });
+        object_.registerMethod("busSendMessage").onInterface(INTERFACE_NAME).withInputParamNames("display", "message").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& message){ return this->busSendMessage(display, message); });
         object_.registerMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withInputParamNames("level").withOutputParamNames("result").implementedAs([this](const std::string& level){ return this->busSetDebugLevel(level); });
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
@@ -132,6 +134,7 @@ private:
     virtual int32_t busGetServiceVersion() = 0;
     virtual int32_t busStartLoginSession(const std::string& remoteAddr, const std::string& connType) = 0;
     virtual std::string busCreateAuthFile(const int32_t& display) = 0;
+    virtual bool busShutdownConnector(const int32_t& display) = 0;
     virtual bool busShutdownDisplay(const int32_t& display) = 0;
     virtual int32_t busStartUserSession(const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual bool helperIsAutoComplete(const int32_t& display) = 0;
@@ -141,6 +144,7 @@ private:
     virtual std::string helperGetDateFormat(const int32_t& display) = 0;
     virtual std::vector<std::string> helperGetUsersList(const int32_t& display) = 0;
     virtual bool helperWidgetStartedAction(const int32_t& display) = 0;
+    virtual bool busSendMessage(const int32_t& display, const std::string& message) = 0;
     virtual bool busSetDebugLevel(const std::string& level) = 0;
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;

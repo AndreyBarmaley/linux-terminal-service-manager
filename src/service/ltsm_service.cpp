@@ -338,7 +338,7 @@ namespace LTSM
 			pair.second.checkconn = false;
         		Application::error("connector not reply, display: %d", pair.first);
 			// complete shutdown
-			emitShutdownConnector(pair.first);
+			busConnectorTerminated(pair.first);
 		    }
 		}
 	    }
@@ -516,11 +516,34 @@ namespace LTSM
             // dbus no wait, remove background
             std::thread([=]()
             {
+                this->closeSystemSession(display, *xvfb);
                 std::this_thread::sleep_for(300ms);
                 this->removeXvfbDisplay(display);
 		this->removeXvfbSocket(display);
             }).detach();
         }
+    }
+
+    void Manager::Object::closeSystemSession(int display, XvfbSession & info)
+    {
+        // PAM close
+        if(info.pamh)
+        {
+            pam_close_session(info.pamh, 0);
+            pam_end(info.pamh, PAM_SUCCESS);
+            info.pamh = nullptr;
+
+    	    // unreg sessreg
+    	    std::string sessreg = _config->getString("sessreg:path");
+    	    if(! sessreg.empty())
+    	    {
+        	std::string args = _config->getString("sessreg:args2");
+        	args = Tools::replace(args, "%{display}", display);
+        	args = Tools::replace(args, "%{user}", info.user);
+        	sessreg.append(" ").append(args);
+        	std::system(sessreg.c_str());
+    	    }
+	}
     }
 
     bool Manager::Object::waitXvfbStarting(int display, uint32_t ms)
@@ -578,7 +601,7 @@ namespace LTSM
         return xauthFile;
     }
 
-    std::string Manager::Object::createSessionConnInfo(const std::string & home, const XvfbSession & xvfb)
+    std::string Manager::Object::createSessionConnInfo(const std::string & home, const XvfbSession* xvfb)
     {
         auto ltsmInfo = std::string(home).append("/.ltsm/conninfo");
         auto dir = Tools::dirname(ltsmInfo);
@@ -589,8 +612,8 @@ namespace LTSM
         std::ofstream ofs(ltsmInfo, std::ofstream::trunc);
         if(ofs.good())
         {
-            ofs << "LTSM_REMOTEADDR" << "=" << xvfb.remoteaddr << std::endl <<
-                            "LTSM_TYPECONN" << "=" << xvfb.conntype << std::endl;
+            ofs << "LTSM_REMOTEADDR" << "=" << (xvfb ? xvfb->remoteaddr : "") << std::endl <<
+                            "LTSM_TYPECONN" << "=" << (xvfb ? xvfb->conntype : "") << std::endl;
         }
         else
         {   
@@ -818,7 +841,7 @@ namespace LTSM
         	setenv("XAUTHORITY", xvfb.xauthfile.c_str(), 1);
         	setenv("DISPLAY", strdisplay.c_str(), 1);
 
-                createSessionConnInfo(home, xvfb);
+                createSessionConnInfo(home, & xvfb);
 
         	int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
 
@@ -954,7 +977,7 @@ namespace LTSM
     	    xvfb->mode = XvfbMode::SessionOnline;
 
             // update conn info
-            auto file = createSessionConnInfo(home, *xvfb);
+            auto file = createSessionConnInfo(home, xvfb);
             setFilePermission(file, 0, uid, gid);
 
             emitSessionReconnect(remoteAddr, connType);
@@ -1017,6 +1040,17 @@ namespace LTSM
         Application::debug("user session child started, pid: %d, display: %d", st.pid2, oldScreen);
 
         registryXvfbSession(oldScreen, st);
+
+        std::string sessreg = _config->getString("sessreg:path");
+        if(! sessreg.empty())
+        {
+            std::string args = _config->getString("sessreg:args1");
+            args = Tools::replace(args, "%{display}", oldScreen);
+            args = Tools::replace(args, "%{user}", userName);
+            sessreg.append(" ").append(args);
+            std::system(sessreg.c_str());
+        }
+
         Application::debug("user session registered, display: %d", oldScreen);
 
         return oldScreen;
@@ -1041,6 +1075,19 @@ namespace LTSM
         return true;
     }
 
+    bool Manager::Object::busShutdownConnector(const int32_t& display)
+    {
+        Application::info("shutdown connector, display: %d", display);
+        emitShutdownConnector(display);
+        return true;
+    }
+
+    bool Manager::Object::busSendMessage(const int32_t& display, const std::string& message)
+    {
+        Application::info("send message, display: %d, message: %s", display, message.c_str());
+        return true;
+    }
+
     bool Manager::Object::busConnectorAlive(const int32_t & display)
     {
 	std::thread([=](){ this->confirmCheckConnection(display); }).detach();
@@ -1060,6 +1107,9 @@ namespace LTSM
 	    {
 		xvfb->mode = XvfbMode::SessionSleep;
     		emitSessionSleeped(display);
+
+	        auto userInfo = Manager::getUserInfo(xvfb->user);
+                createSessionConnInfo( std::get<2>(userInfo), nullptr);
 	    }
 	}
 
@@ -1404,14 +1454,7 @@ namespace LTSM
                 if(xvfb->mode == XvfbMode::SessionOnline || xvfb->mode == XvfbMode::SessionSleep)
                 {
                     emitShutdownConnector(display);
-
-                    // PAM close
-                    if(xvfb->pamh)
-                    {
-                        pam_close_session(xvfb->pamh, 0);
-                        pam_end(xvfb->pamh, PAM_SUCCESS);
-                        xvfb->pamh = nullptr;
-                    }
+		    closeSystemSession(display, *xvfb);
 
                     std::this_thread::sleep_for(300ms);
                     removeXvfbDisplay(display);

@@ -75,6 +75,13 @@ public:
         return result;
     }
 
+    bool busShutdownConnector(const int32_t& display)
+    {
+        bool result;
+        proxy_.callMethod("busShutdownConnector").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
     bool busShutdownDisplay(const int32_t& display)
     {
         bool result;
@@ -135,6 +142,13 @@ public:
     {
         bool result;
         proxy_.callMethod("helperWidgetStartedAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool busSendMessage(const int32_t& display, const std::string& message)
+    {
+        bool result;
+        proxy_.callMethod("busSendMessage").onInterface(INTERFACE_NAME).withArguments(display, message).storeResultsTo(result);
         return result;
     }
 

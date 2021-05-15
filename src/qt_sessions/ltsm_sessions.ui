@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LTSM_Sessions</class>
+ <widget class="QDialog" name="LTSM_Sessions">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>515</width>
+    <height>339</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>LTSM_admin</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QTableWidget" name="tableWidget">
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectRows</enum>
+     </property>
+     <attribute name="horizontalHeaderCascadingSectionResizes">
+      <bool>true</bool>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>User</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Display</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Status</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>RemoteAddr</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Pid</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Uid</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="line">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonDisconnect">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Disconnect</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonLogoff">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Logoff</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonSendMsg">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Send Message...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>pushButtonDisconnect</sender>
+   <signal>clicked()</signal>
+   <receiver>LTSM_Sessions</receiver>
+   <slot>disconnectClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>255</x>
+     <y>315</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>257</x>
+     <y>169</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonLogoff</sender>
+   <signal>clicked()</signal>
+   <receiver>LTSM_Sessions</receiver>
+   <slot>logoffClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>341</x>
+     <y>315</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>257</x>
+     <y>169</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButtonSendMsg</sender>
+   <signal>clicked()</signal>
+   <receiver>LTSM_Sessions</receiver>
+   <slot>sendmsgClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>446</x>
+     <y>315</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>257</x>
+     <y>169</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>tableWidget</sender>
+   <signal>itemClicked(QTableWidgetItem*)</signal>
+   <receiver>LTSM_Sessions</receiver>
+   <slot>itemClicked(QTableWidgetItem*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>257</x>
+     <y>147</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>257</x>
+     <y>169</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>disconnectClicked()</slot>
+  <slot>logoffClicked()</slot>
+  <slot>sendmsgClicked()</slot>
+  <slot>itemClicked(QTableWidgetItem*)</slot>
+ </slots>
+</ui>
