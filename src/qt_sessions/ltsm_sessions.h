@@ -23,7 +23,10 @@
 #ifndef LTSM_SESSIONS_H
 #define LTSM_SESSIONS_H
 
+#include <QIcon>
 #include <QDialog>
+#include <QProcess>
+#include <QFileInfo>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QtDBus/QtDBus>
@@ -50,11 +53,12 @@ struct XvfbInfo
 
 struct RowItem : QTableWidgetItem
 {
-    int     display;
-    int     mode;
-    QString authfile;
+    int         display;
+    int         mode;
+    QString     authfile;
 
     RowItem(const XvfbInfo &, const QString &);
+    RowItem(const XvfbInfo &, const QIcon &, const QString &);
 };
 
 namespace Ui
@@ -70,17 +74,22 @@ protected slots:
     void	tableReload(void);
     void	disconnectClicked(void);
     void	logoffClicked(void);
+    void	showClicked(void);
     void	sendmsgClicked(void);
     void	itemClicked(QTableWidgetItem*);
+    void        displayRemovedCallback(int);
+    void        sessionSleepedCallback(int);
 
 public:
     explicit LTSM_Sessions(QWidget* parent = 0);
     ~LTSM_Sessions();
 
 private:
-    Ui::LTSM_Sessions* ui;
+    Ui::LTSM_Sessions*             ui;
     QScopedPointer<QDBusInterface> dbusInterfacePtr;
-    const RowItem* selectedRow;
+    const RowItem*                 selectedRow;
+    QFileInfo	                   sdl2x11;
+    QProcess	                   process;
 };
 
 #endif // LTSM_SESSIONS_H

@@ -149,6 +149,9 @@
         <signal name="sessionSleeped">
             <arg type="i" name="display" />
         </signal>
+        <signal name="displayRemoved">
+            <arg type="i" name="display" />
+        </signal>
         <signal name="clearRenderPrimitives">
             <arg type="i" name="display" />
         </signal>

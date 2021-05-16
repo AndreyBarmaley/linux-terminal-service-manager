@@ -66,20 +66,25 @@ namespace LTSM
         XCB::Damage     damageInfo;
         SDL::Texture    txShadow;
         SDL_Rect        damageArea;
+        bool            shmUsed;
 
     public:
-        SDL2X11(int display, int winsz_w, int winsz_h)
-            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window("SDL2X11", width(), height(), winsz_w, winsz_h)
+        SDL2X11(int display, int winsz_w, int winsz_h, bool shm)
+            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window("SDL2X11", width(), height(), winsz_w, winsz_h), shmUsed(shm)
         {
             const int bpp = 4;
             const int pagesz = 4096;
             const size_t shmsz = ((width() * height() * bpp / pagesz) + 1) * pagesz;
-            shmInfo = createSHM(shmsz);
 
-            if(! shmInfo.isValid())
+            if(shmUsed)
             {
-                std::string err = Tools::StringFormat("xcb shm attach failed, error code: %1").arg(shmInfo.error()->error_code);
-                throw err;
+                shmInfo = createSHM(shmsz);
+
+                if(! shmInfo.isValid())
+                {
+                    std::string err = Tools::StringFormat("xcb shm attach failed, error code: %1").arg(shmInfo.error()->error_code);
+                    throw err;
+                }
             }
 
             damageInfo = createDamageNotify(0, 0, width(), height());
@@ -203,6 +208,7 @@ namespace LTSM
             const int bytePerPixel = bitsPerPixel() >> 3;
             bool quit = false;
             std::list<SDL_Rect> damages;
+            uint8_t* buf = shmUsed ? shmInfo->addr : new uint8_t[width() * height() * (bitsPerPixel() >> 2)];
 
             while(! quit)
             {
@@ -216,8 +222,12 @@ namespace LTSM
                     delay = false;
                     // join damages
                     SDL_Rect repairArea = joinRects<SDL_Rect>(damages);
-                    // direct copy region
-                    auto reply = copyRootImageRegion(shmInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
+                    std::pair<bool, XCB::PixmapInfo> reply;
+
+                    if(shmUsed)
+                        reply = copyRootImageRegion(shmInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
+                    else
+                        reply = copyRootImageRegion(repairArea.x, repairArea.y, repairArea.w, repairArea.h, buf);
 
                     if(reply.first)
                     {
@@ -225,8 +235,8 @@ namespace LTSM
                         if(reply.second.size > (repairArea.w * repairArea.h * bytePerPixel))
                             repairArea.w += reply.second.size / (repairArea.h * bytePerPixel) - repairArea.w;
 
-                        std::cout << "[ " << repairArea.x << ", " << repairArea.y << ", " << repairArea.w << ", " << repairArea.h << " ]" << std::endl;
-                        txShadow.updateRect(& repairArea, shmInfo->addr, repairArea.w * 4);
+                        // std::cout << "[ " << repairArea.x << ", " << repairArea.y << ", " << repairArea.w << ", " << repairArea.h << " ]" << std::endl;
+                        txShadow.updateRect(& repairArea, buf, repairArea.w * 4);
                         renderTexture(txShadow.get());
                         renderPresent();
                         XCB::RootDisplay::damageSubtrack(damageInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
@@ -239,6 +249,9 @@ namespace LTSM
                     SDL_Delay(5);
             }
 
+            if(!shmUsed)
+                delete [] buf;
+
             return EXIT_SUCCESS;
         }
     };
@@ -246,7 +259,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --display <num> --scale <width>x<height>" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --display <num> --scale <width>x<height> [--shm]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -257,6 +270,7 @@ int main(int argc, char** argv)
     int winsz_h = 0;
     std::string xauth;
     std::string geometry;
+    bool shmUsed = false;
 
     if(1 < argc)
     {
@@ -297,6 +311,8 @@ int main(int argc, char** argv)
                     return printHelp(argv[0]);
                 }
             }
+            else if(0 == std::strcmp(argv[it], "--shm"))
+                shmUsed = true;
         }
 
         if(xauth.size())
@@ -308,7 +324,7 @@ int main(int argc, char** argv)
 
     try
     {
-        LTSM::SDL2X11 app(display, winsz_w, winsz_h);
+        LTSM::SDL2X11 app(display, winsz_w, winsz_h, shmUsed);
         return app.start();
     }
     catch(int errcode)

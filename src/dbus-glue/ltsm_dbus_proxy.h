@@ -31,6 +31,7 @@ protected:
         proxy_.uponSignal("sendBellSignal").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSendBellSignal(display); });
         proxy_.uponSignal("sessionReconnect").onInterface(INTERFACE_NAME).call([this](const std::string& removeAddr, const std::string& connType){ this->onSessionReconnect(removeAddr, connType); });
         proxy_.uponSignal("sessionSleeped").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSessionSleeped(display); });
+        proxy_.uponSignal("displayRemoved").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onDisplayRemoved(display); });
         proxy_.uponSignal("clearRenderPrimitives").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onClearRenderPrimitives(display); });
         proxy_.uponSignal("addRenderRect").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ this->onAddRenderRect(display, rect, color, fill); });
         proxy_.uponSignal("addRenderText").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ this->onAddRenderText(display, text, pos, color); });
@@ -48,6 +49,7 @@ protected:
     virtual void onSendBellSignal(const int32_t& display) = 0;
     virtual void onSessionReconnect(const std::string& removeAddr, const std::string& connType) = 0;
     virtual void onSessionSleeped(const int32_t& display) = 0;
+    virtual void onDisplayRemoved(const int32_t& display) = 0;
     virtual void onClearRenderPrimitives(const int32_t& display) = 0;
     virtual void onAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual void onAddRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;

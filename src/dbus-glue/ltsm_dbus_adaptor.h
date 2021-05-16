@@ -56,6 +56,7 @@ protected:
         object_.registerSignal("sendBellSignal").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("sessionReconnect").onInterface(INTERFACE_NAME).withParameters<std::string, std::string>("removeAddr", "connType");
         object_.registerSignal("sessionSleeped").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
+        object_.registerSignal("displayRemoved").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("clearRenderPrimitives").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("addRenderRect").onInterface(INTERFACE_NAME).withParameters<int32_t, sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>, bool>("display", "rect", "color", "fill");
         object_.registerSignal("addRenderText").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, sdbus::Struct<int16_t, int16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>>("display", "text", "pos", "color");
@@ -108,6 +109,11 @@ public:
     void emitSessionSleeped(const int32_t& display)
     {
         object_.emitSignal("sessionSleeped").onInterface(INTERFACE_NAME).withArguments(display);
+    }
+
+    void emitDisplayRemoved(const int32_t& display)
+    {
+        object_.emitSignal("displayRemoved").onInterface(INTERFACE_NAME).withArguments(display);
     }
 
     void emitClearRenderPrimitives(const int32_t& display)

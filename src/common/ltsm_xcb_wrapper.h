@@ -235,6 +235,8 @@ namespace LTSM
             std::pair<bool, XCB::PixmapInfo> copyRootImageRegion(const SHM &, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const;
             std::pair<bool, XCB::PixmapInfo> copyRootImageRegion(const SHM &, const xcb_rectangle_t &) const;
 
+            std::pair<bool, XCB::PixmapInfo> copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint8_t*) const;
+
             int                     getEventSHM(const GenericEvent & ev);
             int                     getEventDAMAGE(const GenericEvent & ev);
             int                     getEventTEST(const GenericEvent & ev);

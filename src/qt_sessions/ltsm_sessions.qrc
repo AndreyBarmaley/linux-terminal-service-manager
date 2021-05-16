@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/ltsm">
+    <file>ltsm_offline.png</file>
+    <file>ltsm_online.png</file>
+  </qresource>
+</RCC>

@@ -482,6 +482,46 @@ namespace LTSM
         return gc;
     }
 
+    std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint8_t* buf) const
+    {
+        size_t pitch = rw * (bitsPerPixel() >> 2);
+        size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * rh;
+        uint64_t maxReqLength = xcb_get_maximum_request_length(_conn);
+        std::pair<bool, PixmapInfo> res;
+
+	uint16_t allowRows = maxReqLength / pitch;
+	if(allowRows > rh)
+	    allowRows = rh;
+
+        for(int16_t yy = ry; yy < ry + rh; yy += allowRows)
+        {
+	    // last rows
+	    if(yy + allowRows > ry + rh)
+		allowRows = ry + rh - yy;
+
+            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, rx, yy, rw, allowRows, ~0);
+            std::unique_ptr<xcb_get_image_reply_t, decltype(&std::free)> xcbReply { xcb_get_image_reply(_conn, cookie, nullptr), &std::free };
+
+            auto reply = xcbReply.get();
+            res.first = reply;
+
+            if(reply)
+            {
+                auto length = xcb_get_image_data_length(reply);
+                auto ptr = xcb_get_image_data(reply);
+
+                res.second.depth = reply->depth;
+                res.second.size += length;
+                res.second.visual = reply->visual;
+
+                std::memcpy(buf, ptr, length);
+                buf += length;
+            }
+        }
+
+        return res;
+    }
+
     std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(const SHM & shmInfo, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const
     {
         return copyRootImageRegion(shmInfo, { rx, ry, rw, rh});

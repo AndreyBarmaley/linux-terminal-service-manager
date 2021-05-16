@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>LTSM_admin</string>
+   <string>LTSM sessions</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -80,9 +80,25 @@
       </spacer>
      </item>
      <item>
+      <widget class="QPushButton" name="pushButtonShow">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>show display</string>
+       </property>
+       <property name="text">
+        <string>Show</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="pushButtonDisconnect">
        <property name="enabled">
         <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>disconnect session</string>
        </property>
        <property name="text">
         <string>Disconnect</string>
@@ -94,8 +110,11 @@
        <property name="enabled">
         <bool>false</bool>
        </property>
+       <property name="toolTip">
+        <string>logout session</string>
+       </property>
        <property name="text">
-        <string>Logoff</string>
+        <string>Logout</string>
        </property>
       </widget>
      </item>
@@ -103,6 +122,9 @@
       <widget class="QPushButton" name="pushButtonSendMsg">
        <property name="enabled">
         <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>send message</string>
        </property>
        <property name="text">
         <string>Send Message...</string>
@@ -114,7 +136,9 @@
   </layout>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
- <resources/>
+ <resources>
+  <include location="ltsm_sessions.qrc"/>
+ </resources>
  <connections>
   <connection>
    <sender>pushButtonDisconnect</sender>
@@ -180,11 +204,28 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>pushButtonShow</sender>
+   <signal>clicked()</signal>
+   <receiver>LTSM_Sessions</receiver>
+   <slot>showClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>169</x>
+     <y>315</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>257</x>
+     <y>169</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>disconnectClicked()</slot>
   <slot>logoffClicked()</slot>
   <slot>sendmsgClicked()</slot>
   <slot>itemClicked(QTableWidgetItem*)</slot>
+  <slot>showClicked()</slot>
  </slots>
 </ui>

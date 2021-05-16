@@ -520,6 +520,7 @@ namespace LTSM
                 std::this_thread::sleep_for(300ms);
                 this->removeXvfbDisplay(display);
 		this->removeXvfbSocket(display);
+                this->emitDisplayRemoved(display);
             }).detach();
         }
     }
@@ -1085,6 +1086,34 @@ namespace LTSM
     bool Manager::Object::busSendMessage(const int32_t& display, const std::string& message)
     {
         Application::info("send message, display: %d, message: %s", display, message.c_str());
+
+        if(auto xvfb = getXvfbInfo(display))
+	{
+            std::string home;
+	    std::tie(std::ignore, std::ignore, home, std::ignore) = Manager::getUserInfo(xvfb->user);
+
+            auto  dtn = std::chrono::system_clock::now().time_since_epoch();
+            auto file = std::string(home).append("/.ltsm/messages").append("/").append(std::to_string(dtn.count()));
+            auto dir = Tools::dirname(file);
+
+            if(0 != access(dir.c_str(), F_OK))
+                mkdir(dir.c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP);
+
+            setFilePermission(dir, 0, xvfb->uid, xvfb->gid);
+
+            std::ofstream ofs(file, std::ofstream::trunc);
+            if(ofs.good())
+            {
+                ofs << message;
+                ofs.close();
+                setFilePermission(file, 0, xvfb->uid, xvfb->gid);
+            }
+            else
+            {
+                Application::error("can't create file: %s", file.c_str());
+            }
+        }
+
         return true;
     }
 
@@ -1106,10 +1135,11 @@ namespace LTSM
 	    if(xvfb->mode == XvfbMode::SessionOnline)
 	    {
 		xvfb->mode = XvfbMode::SessionSleep;
-    		emitSessionSleeped(display);
 
 	        auto userInfo = Manager::getUserInfo(xvfb->user);
-                createSessionConnInfo( std::get<2>(userInfo), nullptr);
+                createSessionConnInfo(std::get<2>(userInfo), nullptr);
+
+    		emitSessionSleeped(display);
 	    }
 	}
 
@@ -1459,6 +1489,8 @@ namespace LTSM
                     std::this_thread::sleep_for(300ms);
                     removeXvfbDisplay(display);
                     removeXvfbSocket(display);
+
+                    emitDisplayRemoved(display);
                 }
             }
         }
