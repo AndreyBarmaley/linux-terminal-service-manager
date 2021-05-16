@@ -14,7 +14,8 @@ in the near future, it is being prepared, expect it.
 if you have the ability to public VDS (4 core, 2Gb memory, 4Gb disk, centos7 prefectly), please let me know.  
 
 # Схема взаимодействия компонентов
-![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)
+![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)  
+это реально работает, реализованы следующие компоненты:
 
 # LTSM_service
 основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)  
