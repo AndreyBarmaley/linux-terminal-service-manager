@@ -49,6 +49,19 @@ namespace LTSM
             StringFormat & replace(const char*, double, int prec);
         };
 
+        struct StreamBits
+        {
+            std::vector<uint8_t> &	data;
+            size_t			seek;
+
+            StreamBits(std::vector<uint8_t> & v, size_t offset = 0) : data(v), seek(offset)
+            {
+            }
+
+            void        pushBitBE(bool v);
+            void        pushBitLE(bool v);
+        };
+
         std::list<std::string> split(const std::string & str, const std::string & sep);
         std::list<std::string> split(const std::string & str, int sep);
 

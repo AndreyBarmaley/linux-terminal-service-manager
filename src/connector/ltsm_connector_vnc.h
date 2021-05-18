@@ -30,6 +30,7 @@
 #include <future>
 #include <atomic>
 #include <functional>
+#include <forward_list>
 
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
@@ -228,6 +229,11 @@ namespace LTSM
             ~fbinfo_t();
         };
 
+	struct RLE : std::pair<int, size_t>
+	{
+	    RLE(int pixel, size_t length) : std::pair<int, size_t>(pixel, length) {}
+	};
+
         struct FrameBuffer : std::shared_ptr<fbinfo_t>
         {
             uint16_t            width;
@@ -256,6 +262,7 @@ namespace LTSM
 
             ColorMap            colourMap(void) const;
             PixelMapWeight      pixelMapWeight(const Region &) const;
+	    std::list<RLE>      toRLE(const Region &) const;
             bool                allOfPixel(int pixel, const Region &) const;
 
             uint8_t*            pitchData(size_t row) const;
@@ -264,6 +271,15 @@ namespace LTSM
             int			bytePerPixel(void) const { return get() ? get()->format.bytePerPixel() : 0; }
             uint8_t*            data(void) { return get() ? get()->buffer : nullptr; }
             size_t		size(void) const { return get() ? get()->pitch * height : 0; }
+        };
+    }
+
+    namespace RRE
+    {
+        struct Region : std::pair<RFB::Region, int>
+        {
+            Region(const RFB::Region & reg, int pixel) : std::pair<RFB::Region, int>(reg, pixel) {}
+            Region() {}
         };
     }
 
@@ -316,24 +332,36 @@ namespace LTSM
             void                serverSendCutText(const std::string &);
 
             int                 sendPixel(int pixel);
+            int                 sendCPixel(int pixel);
             void                waitSendUpdateFBComplete(void) const;
 
             int                 sendEncodingRaw(const RFB::Region &, const RFB::FrameBuffer &);
-            int                 sendEncodingRawSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
+            int                 sendEncodingRawSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
             int                 sendEncodingRawSubRegionRaw(const RFB::Region &, const RFB::FrameBuffer &);
 
             int                 sendEncodingRRE(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingRRESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
+            int			sendEncodingRRESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
 
             int                 sendEncodingCoRRE(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingCoRRESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
+            int			sendEncodingCoRRESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingCoRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
 
             int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingHextileSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
-            int			sendEncodingHextileSubRegionRaw(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
+            int			sendEncodingHextileSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int			sendEncodingHextileSubForeground(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
+            int			sendEncodingHextileSubColored(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
+            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
 
             int                 sendEncodingZLib(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingZLibSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int threadId);
+            int			sendEncodingZLibSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+
+            int                 sendEncodingTRLE(const RFB::Region &, const RFB::FrameBuffer &);
+            int			sendEncodingTRLESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingTRLESubPacked(const RFB::Region &, const RFB::FrameBuffer &, int jobId, size_t field, size_t rowsz, const RFB::PixelMapWeight &);
+	    int			sendEncodingTRLESubPlain(const RFB::Region &, const RFB::FrameBuffer &, const std::list<RFB::RLE> &);
+	    int			sendEncodingTRLESubPalette(const RFB::Region &, const RFB::FrameBuffer &, const RFB::PixelMapWeight &, const std::list<RFB::RLE> &);
+	    int			sendEncodingTRLESubRaw(const RFB::Region &, const RFB::FrameBuffer &);
 
             int                 sendEncodingSmall(const RFB::Region &, const RFB::FrameBuffer &);
 

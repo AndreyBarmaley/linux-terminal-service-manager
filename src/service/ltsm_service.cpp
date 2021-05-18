@@ -309,6 +309,11 @@ namespace LTSM
         		    const int16_t py = (fh - 16) / 2;
         		    this->emitAddRenderText(display, text, {px, py}, {0xFF, 0xFF, 0});
 			}
+			// inform beep
+                        if(std::chrono::seconds(10) > lastsec)
+			{
+                            this->emitSendBellSignal(display);
+                        }
 		    }).detach();
 		}
 	    }
@@ -516,11 +521,21 @@ namespace LTSM
             // dbus no wait, remove background
             std::thread([=]()
             {
+    	        std::string script = _config->getString("script:shutdown");
+                std::string user = xvfb->user;
+
                 this->closeSystemSession(display, *xvfb);
                 std::this_thread::sleep_for(300ms);
                 this->removeXvfbDisplay(display);
 		this->removeXvfbSocket(display);
                 this->emitDisplayRemoved(display);
+
+                if(! script.empty())
+                {
+                    script.append(" ").append(std::to_string(display)).append(" ").append(user);
+                    int ret = std::system(script.c_str());
+                    Application::debug("system cmd: `%s', return code: %d, display: %d", script.c_str(), ret, display);
+                }
             }).detach();
         }
     }
@@ -542,7 +557,8 @@ namespace LTSM
         	args = Tools::replace(args, "%{display}", display);
         	args = Tools::replace(args, "%{user}", info.user);
         	sessreg.append(" ").append(args);
-        	std::system(sessreg.c_str());
+        	int ret = std::system(sessreg.c_str());
+                Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, display);
     	    }
 	}
     }
@@ -593,7 +609,7 @@ namespace LTSM
         xauthBin.append(" ").append(xauthArgs);
 
         int ret = std::system(xauthBin.c_str());
-        Application::debug("system cmd: `%s', return code: %d", xauthBin.c_str(), ret);
+        Application::debug("system cmd: `%s', return code: %d, display: %d", xauthBin.c_str(), ret, display);
 
         // xauthfile pemission 440
         auto userInfo = getUserInfo(userName);
@@ -1049,7 +1065,8 @@ namespace LTSM
             args = Tools::replace(args, "%{display}", oldScreen);
             args = Tools::replace(args, "%{user}", userName);
             sessreg.append(" ").append(args);
-            std::system(sessreg.c_str());
+            int ret = std::system(sessreg.c_str());
+            Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, oldScreen);
         }
 
         Application::debug("user session registered, display: %d", oldScreen);
@@ -1483,14 +1500,7 @@ namespace LTSM
                 // session closed
                 if(xvfb->mode == XvfbMode::SessionOnline || xvfb->mode == XvfbMode::SessionSleep)
                 {
-                    emitShutdownConnector(display);
-		    closeSystemSession(display, *xvfb);
-
-                    std::this_thread::sleep_for(300ms);
-                    removeXvfbDisplay(display);
-                    removeXvfbSocket(display);
-
-                    emitDisplayRemoved(display);
+                    displayShutdown(display, true);
                 }
             }
         }

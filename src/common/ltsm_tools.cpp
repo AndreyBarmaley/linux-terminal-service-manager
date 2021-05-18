@@ -282,7 +282,7 @@ namespace LTSM
 
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic)
     {
-        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [ = ](uint32_t crc, int val)
+        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [=](uint32_t crc, int val)
         {
             crc ^= val;
 
@@ -321,6 +321,43 @@ namespace LTSM
         }
 
         return false;
+    }
+
+    void Tools::StreamBits::pushBitBE(bool v)
+    {
+        size_t pos = seek >> 3;
+        
+        if(pos >= data.size())
+            throw std::string("stream bits: out of range");
+
+        uint8_t mask = 1 << (seek % 8);
+
+        if(v)
+            data[pos] |= mask;
+        else
+            data[pos] &= ~mask;
+
+        if((seek % 8) == 0)
+            seek += 15;
+        else
+            seek--;
+    }
+
+    void Tools::StreamBits::pushBitLE(bool v)
+    {
+        size_t pos = seek >> 3;
+        
+        if(pos >= data.size())
+            throw std::string("stream bits: out of range");
+
+        uint8_t mask = 1 << (seek % 8);
+
+        if(v)
+            data[pos] |= mask;
+        else
+            data[pos] &= ~mask;
+
+        seek++;
     }
 
 /*

@@ -199,6 +199,26 @@ namespace LTSM
             return 0;
         }
 
+	std::list<RLE> FrameBuffer::toRLE(const Region & reg) const
+	{
+	    std::list<RLE> res;
+
+            for(int yy = 0; yy < reg.h; ++yy)
+            {
+                for(int xx = 0; xx < reg.w; ++xx)
+                {
+                    int pix = pixel(xx + reg.x, yy + reg.y);
+
+		    if(0 < xx && res.back().first == pix)
+			res.back().second++;
+		    else
+			res.emplace_back(pix, 1);
+		}
+	    }
+
+	    return res;
+	}
+
         ColorMap FrameBuffer::colourMap(void) const
         {
             ColorMap map;
@@ -1000,10 +1020,35 @@ namespace LTSM
         }
         else if(colourMap.size())
             Application::error("%s", "not usable");
-        else
-            throw std::string("send pixel: colour map is empty");
 
+        throw std::string("send pixel: unknown format");
         return 0;
+    }
+
+    int Connector::VNC::sendCPixel(int pixel)
+    {
+        // break connection
+        if(! loopMessage)
+            return 0;
+
+        if(clientFormat.trueColor && clientFormat.bitsPerPixel == 32)
+        {
+            int pixel2 = clientFormat.convertFrom(serverFormat, pixel);
+
+    	    int red = clientFormat.red(pixel2);
+    	    int green = clientFormat.green(pixel2);
+    	    int blue = clientFormat.blue(pixel2);
+
+#ifdef __ORDER_LITTLE_ENDIAN__
+	    std::swap(red, blue);
+#endif
+    	    sendInt8(red);
+            sendInt8(green);
+            sendInt8(blue);
+            return 3;
+        }
+
+	return sendPixel(pixel);
     }
 
     void Connector::VNC::xcbReleaseInputsEvent(void)
