@@ -219,6 +219,27 @@ namespace LTSM
 	    return res;
 	}
 
+	void FrameBuffer::blitRegion(const FrameBuffer & fb, const Region & reg, int16_t dstx, int16_t dsty)
+	{
+	    Region dst = Region(dstx, dsty, reg.w, reg.h).intersected({0, 0, reg.w, reg.h});
+
+    	    if(get()->format != fb.get()->format)
+    	    {
+        	for(int yy = 0; yy < dst.w; ++yy)
+            	    for(int xx = 0; xx < dst.h; ++xx)
+                	setPixel(dst.x + xx, dst.y + yy, fb.pixel(reg.x + xx, reg.y + yy), fb.get()->format);
+    	    }
+    	    else
+    	    {
+        	for(int row = 0; row < dst.h; ++row)
+        	{
+            	    auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.get()->format.bytePerPixel();
+            	    size_t length = dst.w * fb.get()->format.bytePerPixel();
+            	    std::copy(ptr, ptr + length, pitchData(row));
+        	}
+    	    }
+	}
+
         ColorMap FrameBuffer::colourMap(void) const
         {
             ColorMap map;

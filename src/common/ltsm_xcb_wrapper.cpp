@@ -34,7 +34,9 @@
 #include "xcb/xproto.h"
 #include "xcb/damage.h"
 
+#ifdef LTSM_BUILD_XCB_ERRORS
 #include "libxcb-errors/xcb_errors.h"
+#endif
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
@@ -242,16 +244,23 @@ namespace LTSM
 
     void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func) const
     {
+
+#ifdef LTSM_BUILD_XCB_ERRORS
         xcb_errors_context_t* err_ctx;
         xcb_errors_context_new(_conn, &err_ctx);
         const char* major, *minor, *extension, *error;
         major = xcb_errors_get_name_for_major_code(err_ctx, err->major_code);
         minor = xcb_errors_get_name_for_minor_code(err_ctx, err->major_code, err->minor_code);
         error = xcb_errors_get_name_for_error(err_ctx, err->error_code, &extension);
-        Application::error("%s error: %s:%s, %s:%s, resource %u sequence %u\n",
+        Application::error("%s error: %s:%s, %s:%s, resource %u sequence %u",
                            func, error, extension ? extension : "no_extension", major, minor ? minor : "no_minor",
                            (unsigned int) err->resource_id, (unsigned int) err->sequence);
         xcb_errors_context_free(err_ctx);
+#else
+
+        Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
+                           func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
+#endif
     }
 
     XCB::GenericEvent XCB::Connector::poolEvent(void)
@@ -485,9 +494,15 @@ namespace LTSM
     std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint8_t* buf) const
     {
         size_t pitch = rw * (bitsPerPixel() >> 2);
-        size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * rh;
+        //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * rh;
         uint64_t maxReqLength = xcb_get_maximum_request_length(_conn);
         std::pair<bool, PixmapInfo> res;
+
+        if(pitch == 0)
+        {
+            Application::error("copy root image error, empty size: %d, %d, bpp: %d", rw, rh, bitsPerPixel());
+            return res;
+        }
 
 	uint16_t allowRows = maxReqLength / pitch;
 	if(allowRows > rh)

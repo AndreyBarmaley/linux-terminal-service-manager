@@ -23,7 +23,8 @@
     "login:failures_count": 3,
     "session:duration_max_sec": 0,
     "session:policy": "authlock",
-    "session:path": "/etc/X11/xinit/xinitrc",
+    "session:path": "/etc/ltsm/xclients",
+    "script:shutdown": "",
 
     "default:width": 1024,
     "default:height": 768,

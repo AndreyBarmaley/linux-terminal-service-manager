@@ -522,6 +522,7 @@ namespace LTSM
             std::thread([=]()
             {
     	        std::string script = _config->getString("script:shutdown");
+    	        std::string sysuser = _config->getString("user:xvfb");
                 std::string user = xvfb->user;
 
                 this->closeSystemSession(display, *xvfb);
@@ -530,7 +531,7 @@ namespace LTSM
 		this->removeXvfbSocket(display);
                 this->emitDisplayRemoved(display);
 
-                if(! script.empty())
+                if(! script.empty() && sysuser != user)
                 {
                     script.append(" ").append(std::to_string(display)).append(" ").append(user);
                     int ret = std::system(script.c_str());
@@ -894,7 +895,7 @@ namespace LTSM
 
         if(0 > uid)
         {
-            Application::error("username not found, user: %s, uid: %d, gid: %d", userXvfb, uid, gid);
+            Application::error("username not found, user: %s, uid: %d, gid: %d", userXvfb.c_str(), uid, gid);
             return -1;
         }
 
@@ -980,7 +981,7 @@ namespace LTSM
 
         if(0 > uid)
         {
-            Application::error("username not found, user: %s, uid: %d, gid: %d", userName, uid, gid);
+            Application::error("username not found, user: %s, uid: %d, gid: %d", userName.c_str(), uid, gid);
             return -1;
         }
 

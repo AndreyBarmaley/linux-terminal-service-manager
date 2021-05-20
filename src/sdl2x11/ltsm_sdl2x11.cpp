@@ -87,6 +87,7 @@ namespace LTSM
                 }
             }
 
+            damageArea = { 0, 0, 0, 0, };
             damageInfo = createDamageNotify(0, 0, width(), height());
 
             if(! damageInfo.isValid())

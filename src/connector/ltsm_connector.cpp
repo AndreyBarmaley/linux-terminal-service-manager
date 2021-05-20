@@ -414,7 +414,8 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: add fill rect, display: %d", display);
-            _renderPrimitives.emplace_back(new RenderRect(rect, color, fill));
+            auto ptr = new RenderRect(rect, color, fill);
+            _renderPrimitives.emplace_back(ptr);
         }
     }
 
@@ -427,7 +428,8 @@ namespace LTSM
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
             const uint16_t rh = _systemfont.height;
-            _renderPrimitives.emplace_back(new RenderText(text, { rx, ry, rw, rh }, color));
+            auto ptr = new RenderText(text, { rx, ry, rw, rh }, color);
+            _renderPrimitives.emplace_back(ptr);
         }
     }
 

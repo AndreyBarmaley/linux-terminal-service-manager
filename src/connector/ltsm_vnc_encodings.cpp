@@ -32,9 +32,6 @@
 #include <iostream>
 #include <iterator>
 
-#include "zlib.h"
-
-#include "libdeflate.h"
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
 
@@ -670,7 +667,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, reg.x, reg.y, reg.w, reg.h, "raw");
 
-                    res = sendEncodingHextileSubRaw(reg, fb, jobId);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId);
                 }
                 else
                 {
@@ -678,7 +675,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
                                        jobId, reg.x, reg.y, reg.w, reg.h, back, goods.size(), "foreground");
 
-                    res = sendEncodingHextileSubForeground(reg, fb, jobId, back, goods);
+                    res += sendEncodingHextileSubForeground(reg, fb, jobId, back, goods);
                 }
             }
             else
@@ -692,7 +689,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, reg.x, reg.y, reg.w, reg.h, "raw");
 
-                    res = sendEncodingHextileSubRaw(reg, fb, jobId);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId);
                 }
                 else
                 {
@@ -700,7 +697,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
                                        jobId, reg.x, reg.y, reg.w, reg.h, back, goods.size(), "colored");
 
-                    res = sendEncodingHextileSubColored(reg, fb, jobId, back, goods);
+                    res += sendEncodingHextileSubColored(reg, fb, jobId, back, goods);
                 }
             }
 
@@ -842,33 +839,33 @@ namespace LTSM
         int res = 12;
 
         RFB::FrameBuffer clientfb(reg.w, reg.h, clientFormat);
+	clientfb.blitRegion(fb, reg, 0, 0);
 
-        if(serverFormat != clientFormat)
-        {
-            for(int yy = 0; yy < clientfb.height; ++yy)
-                for(int xx = 0; xx < clientfb.width; ++xx)
-                    clientfb.setPixel(xx, yy, fb.pixel(reg.x + xx, reg.y + yy), serverFormat);
-        }
-        else
-        {
-            for(int row = 0; row < reg.h; ++row)
-            {
-                auto ptr = fb.pitchData(reg.y + row) + reg.x * serverFormat.bytePerPixel();
-                size_t length = reg.w * serverFormat.bytePerPixel();
-                std::copy(ptr, ptr + length, clientfb.pitchData(row));
-            }
-        }
+	if(! zlibStreamPtr)
+	{
+    	    zlibStreamPtr.reset(new zlibStream());
+	    int ret = deflateInit2(zlibStreamPtr.get(), Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+	    if(ret != Z_OK)
+		Application::error("zlib: deflateInit error: %d", ret);
+	}
 
-        auto ld = libdeflate_alloc_compressor(6);
-        if(! ld) throw std::string("libdeflate_alloc failed");
+	zlibStreamPtr->next_in = clientfb.data();
+	zlibStreamPtr->avail_in = clientfb.size();
 
-        // deflate, zlib, or gzip?
-        std::vector<uint8_t> data(libdeflate_zlib_compress_bound(ld, clientfb.size()));
-        size_t zipsz = libdeflate_zlib_compress(ld, clientfb.data(), clientfb.size(), data.data(), data.size());
+        std::vector<uint8_t> zip(deflateBound(zlibStreamPtr.get(), clientfb.size()));
+
+	zlibStreamPtr->next_out = zip.data();
+	zlibStreamPtr->avail_out = zip.size();
+
+	int prev = zlibStreamPtr->total_out;
+	int ret = deflate(zlibStreamPtr.get(), Z_SYNC_FLUSH);
+	if(ret != Z_OK)
+	    Application::error("zlib: deflate error: %d", ret);
+
+	int zipsz = zlibStreamPtr->total_out - prev;
 
         sendIntBE32(zipsz);
-        sendRaw(data.data(), zipsz);
-        libdeflate_free_compressor(ld);
+        sendRaw(zip.data(), zipsz);
 
         return res;
     }
@@ -952,7 +949,7 @@ namespace LTSM
                                    jobId, reg.x, reg.y, reg.w, reg.h, back, "solid");
 
             // subencoding type: solid tile
-            sendInt8(map.size());
+            sendInt8(1);
             res += 1;
 
             res += sendCPixel(back);
@@ -1030,7 +1027,6 @@ namespace LTSM
 	    return res;
 	}
 
-        throw std::string("send TRLE encoding: pixel map is empty");
         return 0;
     }
 

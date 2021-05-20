@@ -32,6 +32,8 @@
 #include <functional>
 #include <forward_list>
 
+#include "zlib.h"
+
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -257,6 +259,7 @@ namespace LTSM
             void		fillPixel(const Region &, int pixel, const PixelFormat &);
             void		fillColor(const Region &, const Color &);
             void		drawRect(const Region &, const Color &);
+	    void		blitRegion(const FrameBuffer &, const Region &, int16_t dstx, int16_t dsty);
 
             int                 pixel(uint16_t px, uint16_t py) const;
 
@@ -283,6 +286,28 @@ namespace LTSM
         };
     }
 
+    struct zlibStream : z_stream
+    {
+	zlibStream()
+	{
+    	    zalloc = 0;
+    	    zfree = 0;
+    	    opaque = 0;
+    	    total_in = 0;
+    	    total_out = 0;
+    	    avail_in = 0;
+    	    next_in = 0;
+    	    avail_out = 0;
+    	    next_out = 0;
+    	    data_type = Z_BINARY;
+	}
+
+	~zlibStream()
+	{
+	    deflateEnd(this);
+	}
+    };
+
     namespace Connector
     {
         typedef std::function<int(const RFB::Region &, const RFB::FrameBuffer &)> sendEncodingFunc;
@@ -307,6 +332,7 @@ namespace LTSM
             std::list< std::future<int> > jobsEncodings;
             INTSET<XCB::KeyCodes, XCB::HasherKeyCodes> pressedKeys;
             std::pair<sendEncodingFunc, std::string> prefEncodings;
+	    std::unique_ptr<zlibStream> zlibStreamPtr;
 
         protected:
             // dbus virtual signals
