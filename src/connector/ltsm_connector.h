@@ -24,6 +24,8 @@
 #ifndef _LTSM_CONNECTOR_
 #define _LTSM_CONNECTOR_
 
+#include "zlib.h"
+
 #include "ltsm_global.h"
 #include "ltsm_dbus_proxy.h"
 #include "ltsm_application.h"
@@ -78,11 +80,11 @@ namespace LTSM
         BaseStream &                    sendIntLE16(uint16_t);
         BaseStream &                    sendIntLE32(uint32_t);
 
-        BaseStream &                    sendInt8(uint8_t val);
+        virtual BaseStream &            sendInt8(uint8_t val);
         BaseStream &                    sendInt16(uint16_t val);
         BaseStream &                    sendInt32(uint32_t val);
 
-        BaseStream &                    sendRaw(const uint8_t*, size_t);
+        virtual BaseStream &            sendRaw(const uint8_t*, size_t);
 
         bool                            hasInput(void) const;
         void                            sendFlush(void);
@@ -103,6 +105,50 @@ namespace LTSM
         std::string	                recvString(size_t);
 
         virtual int	                communication(void) = 0;
+    };
+
+    struct zlibStream : z_stream
+    {
+	std::vector<uint8_t> outbuf;
+
+        zlibStream()
+        {
+            zalloc = 0;
+            zfree = 0;
+            opaque = 0;
+            total_in = 0;
+            total_out = 0;
+            avail_in = 0;
+            next_in = 0;
+            avail_out = 0;
+            next_out = 0;
+            data_type = Z_BINARY;
+        }
+
+        ~zlibStream()
+        {
+            deflateEnd(this);
+        }
+
+	std::vector<uint8_t>		syncFlush(void);
+        void                            pushInt8(uint8_t val);
+        void                            pushRaw(const uint8_t*, size_t);
+    };
+
+    class ZlibOutStream : public BaseStream
+    {
+    protected:
+	std::unique_ptr<zlibStream>	zlibStreamPtr;
+	bool                            deflateStarted;
+
+    public:
+	ZlibOutStream(FILE* in, FILE* out) : BaseStream(in, out), deflateStarted(false) {}
+
+	void 				zlibDeflateStart(size_t reserve);
+	std::vector<uint8_t>		zlibDeflateStop(void);
+
+        ZlibOutStream &                 sendInt8(uint8_t val) override;
+        ZlibOutStream &                 sendRaw(const uint8_t*, size_t) override;
     };
 
     namespace Connector

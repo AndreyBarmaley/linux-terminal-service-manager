@@ -243,6 +243,78 @@ namespace LTSM
         return res;
     }
 
+    /* ZlibOutStream */
+    void zlibStream::pushInt8(uint8_t val)
+    {
+	outbuf.push_back(val);
+    }
+
+    void zlibStream::pushRaw(const uint8_t* buf, size_t length)
+    {
+	outbuf.insert(outbuf.end(), buf, buf + length);
+    }
+
+    std::vector<uint8_t> zlibStream::syncFlush(void)
+    {
+    	next_in = outbuf.data();
+    	avail_in = outbuf.size();
+
+        std::vector<uint8_t> zip(deflateBound(this, outbuf.size()));
+        next_out = zip.data();
+        avail_out = zip.size();
+
+        int prev = total_out;
+        int ret = deflate(this, Z_SYNC_FLUSH);
+        if(ret != Z_OK)
+            Application::error("zlib: deflate error: %d", ret);
+
+        size_t zipsz = total_out - prev;
+	zip.resize(zipsz);
+	outbuf.clear();
+
+	return std::move(zip);
+    }
+
+    void ZlibOutStream::zlibDeflateStart(size_t len)
+    {
+        if(! zlibStreamPtr)
+        {
+            zlibStreamPtr.reset(new zlibStream());
+            int ret = deflateInit2(zlibStreamPtr.get(), Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+            if(ret != Z_OK)
+                Application::error("zlib: deflateInit error: %d", ret);
+	}
+
+	zlibStreamPtr->outbuf.reserve(len);
+	deflateStarted = true;
+    }
+
+    std::vector<uint8_t> ZlibOutStream::zlibDeflateStop(void)
+    {
+	deflateStarted = false;
+	return zlibStreamPtr->syncFlush();
+    }
+
+    ZlibOutStream & ZlibOutStream::sendInt8(uint8_t val)
+    {
+	if(zlibStreamPtr && deflateStarted)
+	    zlibStreamPtr->pushInt8(val);
+	else
+	    BaseStream::sendInt8(val);
+
+	return *this;
+    }
+
+    ZlibOutStream & ZlibOutStream::sendRaw(const uint8_t* buf, size_t length)
+    {
+	if(zlibStreamPtr && deflateStarted)
+	    zlibStreamPtr->pushRaw(buf, length);
+	else
+	    BaseStream::sendRaw(buf, length);
+
+	return *this;
+    }
+
     /* Connector::Service */
     Connector::Service::Service(int argc, const char** argv)
         : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("vnc")

@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -Wall -Werror -Wn
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-compare -Wno-unused-function -Wno-unused-variable")
 
 option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
+option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
@@ -31,6 +32,10 @@ add_compile_options("-DJSMN_STATIC")
 
 if(LTSM_BUILD_STD_MAP)
     add_compile_options("-DLTSM_BUILD_STD_MAP")
+endif()
+
+if(LTSM_BUILD_XCB_ERRORS)
+    add_compile_options("-DLTSM_BUILD_XCB_ERRORS")
 endif()
 
 add_library(LTSM_common STATIC)
@@ -82,7 +87,7 @@ target_include_directories(LTSM_connector PUBLIC src/dbus-glue)
 
 target_link_libraries(LTSM_connector LTSM_common)
 target_link_libraries(LTSM_connector SDBusCpp::sdbus-c++)
-target_link_libraries(LTSM_connector deflate)
+target_link_libraries(LTSM_connector z)
 
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -131,7 +136,8 @@ find_package(Qt5 COMPONENTS Core Gui DBus Widgets REQUIRED)
 add_executable(LTSM_sessions
     src/qt_sessions/main.cpp
     src/qt_sessions/ltsm_sessions.ui
-    src/qt_sessions/ltsm_sessions.cpp)
+    src/qt_sessions/ltsm_sessions.cpp
+    src/qt_sessions/ltsm_sessions.qrc)
 
 target_link_libraries(LTSM_sessions Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

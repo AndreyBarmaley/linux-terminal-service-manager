@@ -121,7 +121,14 @@ namespace LTSM
                     Application::info("server select encoding: %s", RFB::encodingName(type));
                     return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
                     {
-                        return this->sendEncodingHextile(a, b);
+                        return this->sendEncodingHextile(a, b, false);
+                    }, RFB::encodingName(type));
+
+                case RFB::ENCODING_ZLIBHEX:
+                    Application::info("server select encoding: %s", RFB::encodingName(type));
+                    return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
+                    {
+                        return this->sendEncodingHextile(a, b, true);
                     }, RFB::encodingName(type));
 
                 case RFB::ENCODING_CORRE:
@@ -142,7 +149,14 @@ namespace LTSM
                     Application::info("server select encoding: %s", RFB::encodingName(type));
                     return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
                     {
-                        return this->sendEncodingTRLE(a, b);
+                        return this->sendEncodingTRLE(a, b, false);
+                    }, RFB::encodingName(type));
+
+                case RFB::ENCODING_ZRLE:
+                    Application::info("server select encoding: %s", RFB::encodingName(type));
+                    return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
+                    {
+                        return this->sendEncodingTRLE(a, b, true);
                     }, RFB::encodingName(type));
 
                 default:
@@ -562,7 +576,7 @@ namespace LTSM
     }
 
     /* HexTile */
-    int Connector::VNC::sendEncodingHextile(const RFB::Region & reg0, const RFB::FrameBuffer & fb)
+    int Connector::VNC::sendEncodingHextile(const RFB::Region & reg0, const RFB::FrameBuffer & fb, bool zlib)
     {
         Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "HexTile", reg0.x, reg0.y, reg0.w, reg0.h);
 
@@ -575,7 +589,7 @@ namespace LTSM
         // make pool jobs
         while(jobId <= _encodingThreads && ! regions.empty())
         {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, std::move(regions.front()), fb, jobId));
+            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, std::move(regions.front()), fb, jobId, zlib));
             regions.pop_front();
             jobId++;
         }
@@ -591,7 +605,7 @@ namespace LTSM
                 if(job.wait_for(std::chrono::nanoseconds(100)) == std::future_status::ready)
                 {
                     res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, std::move(regions.front()), fb, jobId);
+                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, std::move(regions.front()), fb, jobId, zlib);
                     regions.pop_front();
                     jobId++;
                 }
@@ -606,11 +620,11 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingHextileSubRegion(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
+    int Connector::VNC::sendEncodingHextileSubRegion(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlib)
     {
         auto map = fb.pixelMapWeight(reg);
 
-	auto sendHeaderHexTile = [this](const RFB::Region & reg)
+	auto sendHeaderHexTile = [this](const RFB::Region & reg, bool zlib)
 	{
             // region size
             this->sendIntBE16(reg.x);
@@ -618,7 +632,7 @@ namespace LTSM
             this->sendIntBE16(reg.w);
             this->sendIntBE16(reg.h);
             // region type
-            this->sendIntBE32(RFB::ENCODING_HEXTILE);
+            this->sendIntBE32(zlib ? RFB::ENCODING_ZLIBHEX : RFB::ENCODING_HEXTILE);
             return 12;
         };
 
@@ -627,7 +641,7 @@ namespace LTSM
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
-            int res = sendHeaderHexTile(reg);
+            int res = sendHeaderHexTile(reg, zlib);
             int back = fb.pixel(reg.x, reg.y);
 
             if(encodingDebug)
@@ -654,7 +668,7 @@ namespace LTSM
 
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
-            int res = sendHeaderHexTile(reg);
+            int res = sendHeaderHexTile(reg, zlib);
 
             if(foreground)
             {
@@ -667,7 +681,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, reg.x, reg.y, reg.w, reg.h, "raw");
 
-                    res += sendEncodingHextileSubRaw(reg, fb, jobId);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlib);
                 }
                 else
                 {
@@ -689,7 +703,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, reg.x, reg.y, reg.w, reg.h, "raw");
 
-                    res += sendEncodingHextileSubRaw(reg, fb, jobId);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlib);
                 }
                 else
                 {
@@ -766,14 +780,30 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingHextileSubRaw(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
+    int Connector::VNC::sendEncodingHextileSubRaw(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlib)
     {
-        // hextile flags
-        sendInt8(RFB::HEXTILE_RAW);
-        int res = 1;
+	int res = 0;
 
-        res += sendEncodingRawSubRegionRaw(reg, fb);
-        return res;
+	if(zlib)
+	{
+	    // hextile flags
+    	    sendInt8(RFB::HEXTILE_ZLIBRAW);
+
+            zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
+    	    sendEncodingRawSubRegionRaw(reg, fb);
+
+            auto zip = zlibDeflateStop();
+            sendIntBE16(zip.size());
+            sendRaw(zip.data(), zip.size());
+	}
+	else
+	{
+    	    // hextile flags
+    	    sendInt8(RFB::HEXTILE_RAW);
+    	    res = 1 + sendEncodingRawSubRegionRaw(reg, fb);
+	}
+
+	return res;
     }
 
     /* ZLib */
@@ -781,44 +811,9 @@ namespace LTSM
     {
         Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "ZLib", reg0.x, reg0.y, reg0.w, reg0.h);
 
-        std::list<RFB::Region> regions = reg0.divideBlocks(64, 64);
-        // regions counts
-        sendIntBE16(regions.size());
-        int res = 2;
-        int jobId = 1;
-
-        // make pool jobs
-        while(jobId <= _encodingThreads && ! regions.empty())
-        {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingZLibSubRegion, this, std::move(regions.front()), fb, jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            for(auto & job : jobsEncodings)
-            {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(std::chrono::nanoseconds(300)) == std::future_status::ready)
-                {
-                    res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingZLibSubRegion, this, std::move(regions.front()), fb, jobId);
-                    regions.pop_front();
-                    jobId++;
-                }
-            }
-        }
-
-        // get results
-        for(auto & job : jobsEncodings)
-            res += job.get();
-
-        jobsEncodings.clear();
-        return res;
+	// zlib specific: single thread only
+	sendIntBE16(1);
+	return 2 + sendEncodingZLibSubRegion(reg0, fb, 1);
     }
 
     int Connector::VNC::sendEncodingZLibSubRegion(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
@@ -838,44 +833,24 @@ namespace LTSM
         sendIntBE32(RFB::ENCODING_ZLIB);
         int res = 12;
 
-        RFB::FrameBuffer clientfb(reg.w, reg.h, clientFormat);
-	clientfb.blitRegion(fb, reg, 0, 0);
+	zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
 
-	if(! zlibStreamPtr)
-	{
-    	    zlibStreamPtr.reset(new zlibStream());
-	    int ret = deflateInit2(zlibStreamPtr.get(), Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-	    if(ret != Z_OK)
-		Application::error("zlib: deflateInit error: %d", ret);
-	}
+	sendEncodingRawSubRegionRaw(reg, fb);
+	auto zip = zlibDeflateStop();
 
-	zlibStreamPtr->next_in = clientfb.data();
-	zlibStreamPtr->avail_in = clientfb.size();
-
-        std::vector<uint8_t> zip(deflateBound(zlibStreamPtr.get(), clientfb.size()));
-
-	zlibStreamPtr->next_out = zip.data();
-	zlibStreamPtr->avail_out = zip.size();
-
-	int prev = zlibStreamPtr->total_out;
-	int ret = deflate(zlibStreamPtr.get(), Z_SYNC_FLUSH);
-	if(ret != Z_OK)
-	    Application::error("zlib: deflate error: %d", ret);
-
-	int zipsz = zlibStreamPtr->total_out - prev;
-
-        sendIntBE32(zipsz);
-        sendRaw(zip.data(), zipsz);
+        sendIntBE32(zip.size());
+        sendRaw(zip.data(), zip.size());
+	res += zip.size();
 
         return res;
     }
 
     /* TRLE */
-    int Connector::VNC::sendEncodingTRLE(const RFB::Region & reg0, const RFB::FrameBuffer & fb)
+    int Connector::VNC::sendEncodingTRLE(const RFB::Region & reg0, const RFB::FrameBuffer & fb, bool zrle)
     {
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "TRLE", reg0.x, reg0.y, reg0.w, reg0.h);
+        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (zrle ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.w, reg0.h);
 
-        auto regions = reg0.divideBlocks(16, 16);
+        auto regions = zrle ? reg0.divideBlocks(64, 64) : reg0.divideBlocks(16, 16);
         // regions counts
         sendIntBE16(regions.size());
         int res = 2;
@@ -884,7 +859,7 @@ namespace LTSM
         // make pool jobs
         while(jobId <= _encodingThreads && ! regions.empty())
         {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, std::move(regions.front()), fb, jobId));
+            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, std::move(regions.front()), fb, jobId, zrle));
             regions.pop_front();
             jobId++;
         }
@@ -900,7 +875,7 @@ namespace LTSM
                 if(job.wait_for(std::chrono::nanoseconds(100)) == std::future_status::ready)
                 {
                     res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, std::move(regions.front()), fb, jobId);
+                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, std::move(regions.front()), fb, jobId, zrle);
                     regions.pop_front();
                     jobId++;
                 }
@@ -915,7 +890,7 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingTRLESubRegion(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
+    int Connector::VNC::sendEncodingTRLESubRegion(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zrle)
     {
         auto map = fb.pixelMapWeight(reg);
 
@@ -924,7 +899,7 @@ namespace LTSM
         for(auto & pair : map)
             pair.second = index++;
 
-	auto sendHeaderTRLE = [this](const RFB::Region & reg)
+	auto sendHeaderTRLE = [this](const RFB::Region & reg, bool zrle)
 	{
     	    // region size
     	    this->sendIntBE16(reg.x);
@@ -932,7 +907,7 @@ namespace LTSM
     	    this->sendIntBE16(reg.w);
     	    this->sendIntBE16(reg.h);
     	    // region type
-    	    this->sendIntBE32(RFB::ENCODING_TRLE);
+    	    this->sendIntBE32(zrle ? RFB::ENCODING_ZRLE : RFB::ENCODING_TRLE);
 	    return 12;
 	};
 
@@ -942,18 +917,32 @@ namespace LTSM
 
     	    // wait thread
     	    const std::lock_guard<std::mutex> lock(sendEncoding);
-	    int res = sendHeaderTRLE(reg);
+	    int res = sendHeaderTRLE(reg, zrle);
 
             if(encodingDebug)
-                Application::debug("send TRLE region, job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, %s",
-                                   jobId, reg.x, reg.y, reg.w, reg.h, back, "solid");
+                Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, %s",
+                                   (zrle ? "ZRLE" : "TRLE"), jobId, reg.x, reg.y, reg.w, reg.h, back, "solid");
+	    if(zrle)
+	    {
+		zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
 
-            // subencoding type: solid tile
-            sendInt8(1);
-            res += 1;
+    		// subencoding type: solid tile
+        	sendInt8(1);
+        	sendCPixel(back);
+		auto zip = zlibDeflateStop();
+    		sendIntBE32(zip.size());
+    		sendRaw(zip.data(), zip.size());
+    		res += zip.size();
+	    }
+	    else
+	    {
+    		// subencoding type: solid tile
+        	sendInt8(1);
+        	res += 1;
+        	res += sendCPixel(back);
+	    }
 
-            res += sendCPixel(back);
-            return res;
+	    return res;
         }
         else
         if(2 <= map.size() && map.size() <= 16)
@@ -972,15 +961,25 @@ namespace LTSM
 
     	    // wait thread
     	    const std::lock_guard<std::mutex> lock(sendEncoding);
-	    int res = sendHeaderTRLE(reg);
+	    int res = sendHeaderTRLE(reg, zrle);
 
             if(encodingDebug)
-                Application::debug("send TRLE region, job id: %d, [%d, %d, %d, %d], palsz: %d, rowsz: %d, packed: %d",
-                                   jobId, reg.x, reg.y, reg.w, reg.h, map.size(), field, rowsz, field);
+                Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], palsz: %d, rowsz: %d, packed: %d",
+                                   (zrle ? "ZRLE" : "TRLE"), jobId, reg.x, reg.y, reg.w, reg.h, map.size(), field, rowsz, field);
+	    if(zrle)
+	    {
+		zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
+		sendEncodingTRLESubPacked(reg, fb, jobId, field, rowsz, map);
 
-	    res += sendEncodingTRLESubPacked(reg, fb, jobId, field, rowsz, map);
+		auto zip = zlibDeflateStop();
+    		sendIntBE32(zip.size());
+    		sendRaw(zip.data(), zip.size());
+    		res += zip.size();
+	    }
+	    else
+		res += sendEncodingTRLESubPacked(reg, fb, jobId, field, rowsz, map);
 
-            return res;
+	    return res;
         }
         else
 	{
@@ -999,35 +998,61 @@ namespace LTSM
 
     	    // wait thread
     	    const std::lock_guard<std::mutex> lock(sendEncoding);
-	    int res = sendHeaderTRLE(reg);
+	    int res = sendHeaderTRLE(reg, zrle);
 
 	    if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength)
 	    {
     		if(encodingDebug)
-        	    Application::debug("send TRLE region, job id: %d, [%d, %d, %d, %d], length: %d, rle plain",
-                                   jobId, reg.x, reg.y, reg.w, reg.h, rleList.size());
-		res += sendEncodingTRLESubPlain(reg, fb, rleList);
+        	    Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], length: %d, rle plain",
+                                   (zrle ? "ZRLE" : "TRLE"), jobId, reg.x, reg.y, reg.w, reg.h, rleList.size());
+		if(zrle)
+		{
+		    zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
+		    sendEncodingTRLESubPlain(reg, fb, rleList);
+		}
+		else
+		    res += sendEncodingTRLESubPlain(reg, fb, rleList);
 	    }
 	    else
 	    if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength)
 	    {
         	if(encodingDebug)
-            	    Application::debug("send TRLE region, job id: %d, [%d, %d, %d, %d], pal size: %d, length: %d, rle palette",
-                                   jobId, reg.x, reg.y, reg.w, reg.h, map.size(), rleList.size());
-		res += sendEncodingTRLESubPalette(reg, fb, map, rleList);
+            	    Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], pal size: %d, length: %d, rle palette",
+                                   (zrle ? "ZRLE" : "TRLE"), jobId, reg.x, reg.y, reg.w, reg.h, map.size(), rleList.size());
+		if(zrle)
+		{
+		    zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
+		    sendEncodingTRLESubPalette(reg, fb, map, rleList);
+		}
+		else
+		    res += sendEncodingTRLESubPalette(reg, fb, map, rleList);
 	    }
 	    else
 	    {
     		if(encodingDebug)
-        	    Application::debug("send TRLE region, job id: %d, [%d, %d, %d, %d], raw",
-                                   jobId, reg.x, reg.y, reg.w, reg.h);
-		res += sendEncodingTRLESubRaw(reg, fb);
+        	    Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], raw",
+                                   (zrle ? "ZRLE" : "TRLE"), jobId, reg.x, reg.y, reg.w, reg.h);
+		if(zrle)
+		{
+		    zlibDeflateStart(reg.w * reg.h * clientFormat.bytePerPixel());
+		    sendEncodingTRLESubRaw(reg, fb);
+		}
+		else
+		    res += sendEncodingTRLESubRaw(reg, fb);
+	    }
+
+	    if(zrle)
+	    {
+		auto zip = zlibDeflateStop();
+    		sendIntBE32(zip.size());
+    		sendRaw(zip.data(), zip.size());
+    		res += zip.size();
 	    }
 
 	    return res;
 	}
 
-        return 0;
+	return 0;
     }
 
     int Connector::VNC::sendEncodingTRLESubPacked(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, size_t field, size_t rowsz, const RFB::PixelMapWeight & pal)
@@ -1069,7 +1094,7 @@ namespace LTSM
 		std::ostringstream os;
         	for(auto & v : packedRowIndexes)
 		    os << "0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(v) << " ";
-            	Application::debug("send TRLE region, job id: %d, packed stream: %s", jobId, os.str().c_str());
+            	Application::debug("send RLE region, job id: %d, packed stream: %s", jobId, os.str().c_str());
 	    }
 
             res += packedRowIndexes.size();

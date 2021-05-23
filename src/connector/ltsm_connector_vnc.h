@@ -32,8 +32,6 @@
 #include <functional>
 #include <forward_list>
 
-#include "zlib.h"
-
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -286,34 +284,12 @@ namespace LTSM
         };
     }
 
-    struct zlibStream : z_stream
-    {
-	zlibStream()
-	{
-    	    zalloc = 0;
-    	    zfree = 0;
-    	    opaque = 0;
-    	    total_in = 0;
-    	    total_out = 0;
-    	    avail_in = 0;
-    	    next_in = 0;
-    	    avail_out = 0;
-    	    next_out = 0;
-    	    data_type = Z_BINARY;
-	}
-
-	~zlibStream()
-	{
-	    deflateEnd(this);
-	}
-    };
-
     namespace Connector
     {
         typedef std::function<int(const RFB::Region &, const RFB::FrameBuffer &)> sendEncodingFunc;
 
         /* Connector::VNC */
-        class VNC : public BaseStream, public SignalProxy
+        class VNC : public ZlibOutStream, public SignalProxy
         {
             std::atomic<bool>   loopMessage;
             int                 encodingDebug;
@@ -332,7 +308,6 @@ namespace LTSM
             std::list< std::future<int> > jobsEncodings;
             INTSET<XCB::KeyCodes, XCB::HasherKeyCodes> pressedKeys;
             std::pair<sendEncodingFunc, std::string> prefEncodings;
-	    std::unique_ptr<zlibStream> zlibStreamPtr;
 
         protected:
             // dbus virtual signals
@@ -373,17 +348,17 @@ namespace LTSM
             int			sendEncodingCoRRESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
             int                 sendEncodingCoRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
 
-            int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingHextileSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &, bool zlib);
+            int			sendEncodingHextileSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlib);
             int			sendEncodingHextileSubForeground(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
             int			sendEncodingHextileSubColored(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
-            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlib);
 
             int                 sendEncodingZLib(const RFB::Region &, const RFB::FrameBuffer &);
             int			sendEncodingZLibSubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
 
-            int                 sendEncodingTRLE(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingTRLESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingTRLE(const RFB::Region &, const RFB::FrameBuffer &, bool zrle);
+            int			sendEncodingTRLESubRegion(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zrle);
             int                 sendEncodingTRLESubPacked(const RFB::Region &, const RFB::FrameBuffer &, int jobId, size_t field, size_t rowsz, const RFB::PixelMapWeight &);
 	    int			sendEncodingTRLESubPlain(const RFB::Region &, const RFB::FrameBuffer &, const std::list<RFB::RLE> &);
 	    int			sendEncodingTRLESubPalette(const RFB::Region &, const RFB::FrameBuffer &, const RFB::PixelMapWeight &, const std::list<RFB::RLE> &);
@@ -396,7 +371,7 @@ namespace LTSM
 
         public:
             VNC(FILE* fd1, FILE* fd2, sdbus::IConnection* conn, const JsonObject & jo)
-                : BaseStream(fd1, fd2), SignalProxy(conn, jo, "vnc"), loopMessage(false),
+                : ZlibOutStream(fd1, fd2), SignalProxy(conn, jo, "vnc"), loopMessage(false),
                   encodingDebug(0), pressedMask(0), fbUpdateComplete(false)
             {
                 registerProxy();
