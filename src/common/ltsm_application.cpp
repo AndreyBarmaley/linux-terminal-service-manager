@@ -20,22 +20,31 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#include <sys/types.h>
-
-#include <libgen.h>
 #include <unistd.h>
 
+#include <ctime>
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
+#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
-
 namespace LTSM
 {
     int Application::_debug = 2;
+
+    Application::Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
+    {
+        ::openlog(_ident, 0, _facility);
+	std::srand(std::time(0));
+    }
+
+    Application::~Application()
+    {
+        closelog();
+    }
 
     ApplicationJsonConfig::ApplicationJsonConfig(const char* ident, int argc, const char** argv)
         : Application(ident, argc, argv)
@@ -63,7 +72,9 @@ namespace LTSM
             for(auto path :
                 { "config.json", "/etc/ltsm/config.json" })
             {
-                if(0 == access(path, R_OK))
+		auto st = std::filesystem::status(path);
+                if(std::filesystem::file_type::not_found != st.type() &&
+		    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                 {
                     confPath.assign(path);
                     break;
@@ -72,9 +83,10 @@ namespace LTSM
 
             if(confPath.empty())
             {
-                const std::string local = Tools::dirname(argv[0]).append("/").append("config.json");
-
-                if(0 == access(local.c_str(), R_OK))
+                const std::string local = std::filesystem::path(Tools::dirname(argv[0])) / "config.json";
+		auto st = std::filesystem::status(local);
+                if(std::filesystem::file_type::not_found != st.type() &&
+		    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                     confPath.assign(local);
             }
         }

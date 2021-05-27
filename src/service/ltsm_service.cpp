@@ -40,6 +40,7 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -75,7 +76,7 @@ namespace LTSM
         if(xauthfile.size())
         {
             // remove xautfile
-            unlink(xauthfile.c_str());
+            std::filesystem::remove(xauthfile);
             xauthfile.clear();
         }
 
@@ -412,6 +413,13 @@ namespace LTSM
             close(fd);
     }
 
+    bool Manager::Object::checkFileReadable(const std::string & file)
+    {
+        auto st = std::filesystem::status(file);
+        return std::filesystem::file_type::not_found != st.type() &&
+                (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
+    }
+
     bool Manager::Object::checkXvfbSocket(int display)
     {
 	if(0 < display)
@@ -427,7 +435,7 @@ namespace LTSM
 	if(0 < display)
         {
     	    std::string xvfbLock = Tools::replace(_config->getString("xvfb:lock"), "%{display}", display);
-    	    return 0 == access(xvfbLock.c_str(), R_OK);
+            return checkFileReadable(xvfbLock);
 	}
 	return false;
     }
@@ -438,7 +446,7 @@ namespace LTSM
         {
     	    std::string socketFormat = _config->getString("xvfb:socket");
     	    std::string socketPath = Tools::replace(socketFormat, "%{display}", display);
-    	    unlink(socketPath.c_str());
+    	    std::filesystem::remove(socketPath);
 	}
     }
 
@@ -543,24 +551,26 @@ namespace LTSM
 
     void Manager::Object::closeSystemSession(int display, XvfbSession & info)
     {
+        Application::info("close system session, user: %s, display: %d", info.user.c_str(), display);
+
         // PAM close
         if(info.pamh)
         {
             pam_close_session(info.pamh, 0);
             pam_end(info.pamh, PAM_SUCCESS);
             info.pamh = nullptr;
+	}
 
-    	    // unreg sessreg
-    	    std::string sessreg = _config->getString("sessreg:path");
-    	    if(! sessreg.empty())
-    	    {
-        	std::string args = _config->getString("sessreg:args2");
-        	args = Tools::replace(args, "%{display}", display);
-        	args = Tools::replace(args, "%{user}", info.user);
-        	sessreg.append(" ").append(args);
-        	int ret = std::system(sessreg.c_str());
-                Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, display);
-    	    }
+    	// unreg sessreg
+    	std::string sessreg = _config->getString("sessreg:path");
+    	if(! sessreg.empty())
+    	{
+    	    std::string args = _config->getString("sessreg:args2");
+    	    args = Tools::replace(args, "%{display}", display);
+    	    args = Tools::replace(args, "%{user}", info.user);
+    	    sessreg.append(" ").append(args);
+    	    int ret = std::system(sessreg.c_str());
+    	    Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, display);
 	}
     }
 
@@ -614,7 +624,9 @@ namespace LTSM
 
         // xauthfile pemission 440
         auto userInfo = getUserInfo(userName);
-	setFilePermission(xauthFile, S_IRUSR | S_IRGRP, std::get<0>(userInfo), getGroupGid(groupAuth));
+        std::filesystem::permissions(xauthFile, std::filesystem::perms::owner_read |
+                    std::filesystem::perms::group_read, std::filesystem::perm_options::replace);
+	setFileOwner(xauthFile, std::get<0>(userInfo), getGroupGid(groupAuth));
 
         return xauthFile;
     }
@@ -624,8 +636,11 @@ namespace LTSM
         auto ltsmInfo = std::string(home).append("/.ltsm/conninfo");
         auto dir = Tools::dirname(ltsmInfo);
 
-        if(0 != access(dir.c_str(), F_OK))
-            mkdir(dir.c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP);
+        if(! std::filesystem::is_directory(dir))
+            std::filesystem::create_directory(dir);
+        // set mode 750
+        std::filesystem::permissions(dir, std::filesystem::perms::group_write |
+                    std::filesystem::perms::others_all, std::filesystem::perm_options::remove);
 
         std::ofstream ofs(ltsmInfo, std::ofstream::trunc);
         if(ofs.good())
@@ -642,16 +657,10 @@ namespace LTSM
         return ltsmInfo;
     }
 
-    void Manager::Object::setFilePermission(const std::string & file, int mode, int uid, int gid)
+    void Manager::Object::setFileOwner(const std::string & file, int uid, int gid)
     {
-        if(0 != mode && 0 != chmod(file.c_str(), mode))
-            Application::error("chmod failed, file: %s, mode: %d, error: %s", file.c_str(), mode, strerror(errno));
-
-        if(0 != uid)
-        {
-            if(0 != chown(file.c_str(), uid, gid))
-                Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
-        }
+        if(0 != chown(file.c_str(), uid, gid))
+            Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
     }
 
     int Manager::Object::runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userXvfb)
@@ -694,7 +703,7 @@ namespace LTSM
 
         	argv.push_back(nullptr);
 
-        	if(0 != access(xauthFile.c_str(), R_OK))
+                if(! checkFileReadable(xauthFile))
             	    Application::error("access failed, file: %s, user: %s, error: %s", xauthFile.c_str(), userXvfb.c_str(), strerror(errno));
 
         	int res = execv(xvfbBin.c_str(), (char* const*) argv.data());
@@ -745,7 +754,7 @@ namespace LTSM
         	setenv("XAUTHORITY", xauthFile.c_str(), 1);
         	setenv("DISPLAY", strdisplay.c_str(), 1);
 
-        	if(0 != access(xauthFile.c_str(), R_OK))
+        	if(! checkFileReadable(xauthFile))
             	    Application::error("access failed, file: %s, user: %s, error: %s", xauthFile.c_str(), userLogin.c_str(), strerror(errno));
 
         	// create argv
@@ -909,17 +918,22 @@ namespace LTSM
         if(xauthFile.empty())
             return -1;
 
-        // fixed xvfb socket pemission 660
 	std::string socketFormat = _config->getString("xvfb:socket");
     	std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
-	if(0 == access(socketPath.c_str(), F_OK))
-	    setFilePermission(socketPath, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, uid, getGroupGid(groupAuth));
+
+	if(std::filesystem::is_socket(socketPath))
+        {
+            // fixed xvfb socket pemission 660
+            std::filesystem::permissions(socketPath, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
+                    std::filesystem::perms::group_read | std::filesystem::perms::group_write, std::filesystem::perm_options::replace);
+	    setFileOwner(socketPath, uid, getGroupGid(groupAuth));
+        }
 
         int pid1 = runXvfbDisplay(screen, width, height, xauthFile, userXvfb);
         if(0 > pid1)
         {
             Application::error("fork failed, result: %d", pid1);
-            unlink(xauthFile.c_str());
+            std::filesystem::remove(xauthFile);
             return -1;
         }
 
@@ -930,7 +944,7 @@ namespace LTSM
         if(! waitXvfbStarting(screen, 5000 /* 5 sec */))
         {
             Application::error("system error: %s", "xvfb not started");
-            unlink(xauthFile.c_str());
+            std::filesystem::remove(xauthFile);
             return -1;
         }
 
@@ -940,7 +954,7 @@ namespace LTSM
         if(0 > pid2)
         {
             Application::error("fork failed, result: %d", pid2);
-            unlink(xauthFile.c_str());
+            std::filesystem::remove(xauthFile);
             return -1;
         }
 
@@ -996,7 +1010,7 @@ namespace LTSM
 
             // update conn info
             auto file = createSessionConnInfo(home, xvfb);
-            setFilePermission(file, 0, uid, gid);
+            setFileOwner(file, uid, gid);
 
             emitSessionReconnect(remoteAddr, connType);
             Application::debug("user session connected, display: %d", userScreen);
@@ -1029,12 +1043,16 @@ namespace LTSM
         // xauthfile pemission 440
         std::string groupAuth = _config->getString("group:auth");
         int gidAuth = getGroupGid(groupAuth);
-	setFilePermission(xvfb->xauthfile, S_IRUSR | S_IRGRP, uid, gidAuth);
+        std::filesystem::permissions(xvfb->xauthfile, std::filesystem::perms::owner_read |
+                    std::filesystem::perms::group_read, std::filesystem::perm_options::replace);
+	setFileOwner(xvfb->xauthfile, uid, gidAuth);
 
         // xvfb socket pemission 660
         std::string socketFormat = _config->getString("xvfb:socket");
         std::string socketPath = Tools::replace(socketFormat, "%{display}", oldScreen);
-	setFilePermission(socketPath, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, uid, gidAuth);
+        std::filesystem::permissions(socketPath, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
+                    std::filesystem::perms::group_read | std::filesystem::perms::group_write, std::filesystem::perm_options::replace);
+	setFileOwner(socketPath, uid, gidAuth);
 
         // registry screen
         struct XvfbSession st = *xvfb;
@@ -1114,17 +1132,21 @@ namespace LTSM
             auto file = std::string(home).append("/.ltsm/messages").append("/").append(std::to_string(dtn.count()));
             auto dir = Tools::dirname(file);
 
-            if(0 != access(dir.c_str(), F_OK))
-                mkdir(dir.c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP);
+            if(! std::filesystem::is_directory(dir))
+                std::filesystem::create_directory(dir);
 
-            setFilePermission(dir, 0, xvfb->uid, xvfb->gid);
+            // fixed permissions 750
+            std::filesystem::permissions(dir, std::filesystem::perms::group_write |
+                    std::filesystem::perms::others_all, std::filesystem::perm_options::remove);
+ 
+            setFileOwner(dir, xvfb->uid, xvfb->gid);
 
             std::ofstream ofs(file, std::ofstream::trunc);
             if(ofs.good())
             {
                 ofs << message;
                 ofs.close();
-                setFilePermission(file, 0, xvfb->uid, xvfb->gid);
+                setFileOwner(file, xvfb->uid, xvfb->gid);
             }
             else
             {
@@ -1437,6 +1459,7 @@ namespace LTSM
 	{
 	    const std::lock_guard<std::mutex> lock(_mutex);
 	    xvfb->durationlimit = duration;
+            emitSessionParamsChanged(display);
 	    return true;
 	}
 	return false;
@@ -1446,18 +1469,25 @@ namespace LTSM
     {
         Application::info("set session policy: %s, display: %d", policy.c_str(), display);
 
-        if(Tools::lower(policy) == "authlock")
-            _sessionPolicy = SessionPolicy::AuthLock;
-        else
-        if(Tools::lower(policy) == "authtake")
-            _sessionPolicy = SessionPolicy::AuthTake;
-        else
-        if(Tools::lower(policy) == "authshare")
-            _sessionPolicy = SessionPolicy::AuthShare;
-	else
-    	    Application::error("unknown policy: %s, display: %d", policy.c_str(), display);
+        if(auto xvfb = getXvfbInfo(display))
+	{
+	    const std::lock_guard<std::mutex> lock(_mutex);
 
-	return true;
+            if(Tools::lower(policy) == "authlock")
+                xvfb->policy = SessionPolicy::AuthLock;
+            else
+            if(Tools::lower(policy) == "authtake")
+                xvfb->policy = SessionPolicy::AuthTake;
+            else
+            if(Tools::lower(policy) == "authshare")
+                xvfb->policy = SessionPolicy::AuthShare;
+	    else
+    	        Application::error("unknown policy: %s, display: %d", policy.c_str(), display);
+
+            emitSessionParamsChanged(display);
+	    return true;
+        }
+	return false;
     }
 
     std::vector<xvfb2tuple> Manager::Object::busGetSessions(void)
@@ -1490,7 +1520,7 @@ namespace LTSM
 
         if(auto xvfb = getXvfbInfo(display))
         {
-            // abnormal shutdown only
+            // child ended or abnormal shutdown only
             if(xvfb->pid2 == pid && ! xvfb->shutdown)
             {
                 // helper closed
@@ -1534,7 +1564,7 @@ namespace LTSM
                 auto value = _config.getString(key);
                 Application::debug("checking executable: %s", value.c_str());
 
-                if(0 != access(value.c_str(), X_OK))
+                if(! std::filesystem::exists(value))
                     throw std::string("application not found: ").append(value);
             }
         }
@@ -1554,36 +1584,24 @@ namespace LTSM
 
         if(folder.size())
         {
-            struct stat st;
-            mode_t setmode = S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP |  S_IROTH |  S_IXOTH; // 0755
-
             // create
-            if(0 != stat(folder.c_str(), & st))
+            if(! std::filesystem::is_directory(folder))
             {
-                if(0 != mkdir(folder.c_str(), setmode))
+                if(! std::filesystem::create_directory(folder))
                 {
-                    Application::error("mkdir failed, dir: %s, error: %s", folder.c_str(), strerror(errno));
+                    Application::error("mkdir failed, dir: %s", folder.c_str());
                     return false;
                 }
             }
 
-            if(0 != stat(folder.c_str(), & st))
-            {
-                Application::error("stat failed, dir: %s, error: %s", folder.c_str(), strerror(errno));
-                return false;
-            }
-            else if(S_ISDIR(st.st_mode))
-            {
-                // fix mode
-                if(0 != chmod(folder.c_str(), setmode))
-                    Application::error("chmod failed, dir: %s, mode: %d, error: %s", folder.c_str(), setmode, strerror(errno));
-
-                // fix owner
-                if(0 != chown(folder.c_str(), 0, setgid))
+            // fix mode 755
+	    std::filesystem::permissions(folder, std::filesystem::perms::owner_all |
+		    std::filesystem::perms::group_read | std::filesystem::perms::group_exec |
+		    std::filesystem::perms::others_read | std::filesystem::perms::others_exec, std::filesystem::perm_options::replace);
+            // fix owner
+            if(0 != chown(folder.c_str(), 0, setgid))
                     Application::error("chown failed, dir: %s, uid: %d, gid: %d, error: %s", folder.c_str(), 0, setgid, strerror(errno));
-
-                return true;
-            }
+            return true;
         }
 
         return false;

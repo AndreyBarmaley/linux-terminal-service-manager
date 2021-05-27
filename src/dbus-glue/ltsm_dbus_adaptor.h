@@ -55,6 +55,7 @@ protected:
         object_.registerSignal("pingConnector").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("sendBellSignal").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("sessionReconnect").onInterface(INTERFACE_NAME).withParameters<std::string, std::string>("removeAddr", "connType");
+        object_.registerSignal("sessionParamsChanged").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("sessionSleeped").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("displayRemoved").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("clearRenderPrimitives").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
@@ -104,6 +105,11 @@ public:
     void emitSessionReconnect(const std::string& removeAddr, const std::string& connType)
     {
         object_.emitSignal("sessionReconnect").onInterface(INTERFACE_NAME).withArguments(removeAddr, connType);
+    }
+
+    void emitSessionParamsChanged(const int32_t& display)
+    {
+        object_.emitSignal("sessionParamsChanged").onInterface(INTERFACE_NAME).withArguments(display);
     }
 
     void emitSessionSleeped(const int32_t& display)

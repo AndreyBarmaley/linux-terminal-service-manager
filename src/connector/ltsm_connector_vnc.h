@@ -30,7 +30,6 @@
 #include <future>
 #include <atomic>
 #include <functional>
-#include <forward_list>
 
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
@@ -294,7 +293,7 @@ namespace LTSM
             std::atomic<bool>   loopMessage;
             int                 encodingDebug;
             std::atomic<int>    pressedMask;
-            std::atomic<bool>   fbUpdateComplete;
+            std::atomic<bool>   fbUpdateProcessing;
             RFB::PixelFormat    serverFormat;
             RFB::PixelFormat    clientFormat;
             RFB::Region         clientRegion;
@@ -306,7 +305,7 @@ namespace LTSM
             std::vector<int>    clientEncodings;
             std::list<std::string> disabledEncodings;
             std::list< std::future<int> > jobsEncodings;
-            INTSET<XCB::KeyCodes, XCB::HasherKeyCodes> pressedKeys;
+            std::list<XCB::KeyCodes> pressedKeys;
             std::pair<sendEncodingFunc, std::string> prefEncodings;
 
         protected:
@@ -372,7 +371,7 @@ namespace LTSM
         public:
             VNC(FILE* fd1, FILE* fd2, sdbus::IConnection* conn, const JsonObject & jo)
                 : ZlibOutStream(fd1, fd2), SignalProxy(conn, jo, "vnc"), loopMessage(false),
-                  encodingDebug(0), pressedMask(0), fbUpdateComplete(false)
+                  encodingDebug(0), pressedMask(0), fbUpdateProcessing(false)
             {
                 registerProxy();
             }
@@ -381,6 +380,7 @@ namespace LTSM
             {
                 busConnectorTerminated(_display);
                 unregisterProxy();
+		clientDisconnectedEvent();
             }
 
             int		        communication(void) override;

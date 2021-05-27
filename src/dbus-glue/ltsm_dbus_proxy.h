@@ -30,6 +30,7 @@ protected:
         proxy_.uponSignal("pingConnector").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onPingConnector(display); });
         proxy_.uponSignal("sendBellSignal").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSendBellSignal(display); });
         proxy_.uponSignal("sessionReconnect").onInterface(INTERFACE_NAME).call([this](const std::string& removeAddr, const std::string& connType){ this->onSessionReconnect(removeAddr, connType); });
+        proxy_.uponSignal("sessionParamsChanged").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSessionParamsChanged(display); });
         proxy_.uponSignal("sessionSleeped").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSessionSleeped(display); });
         proxy_.uponSignal("displayRemoved").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onDisplayRemoved(display); });
         proxy_.uponSignal("clearRenderPrimitives").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onClearRenderPrimitives(display); });
@@ -48,6 +49,7 @@ protected:
     virtual void onPingConnector(const int32_t& display) = 0;
     virtual void onSendBellSignal(const int32_t& display) = 0;
     virtual void onSessionReconnect(const std::string& removeAddr, const std::string& connType) = 0;
+    virtual void onSessionParamsChanged(const int32_t& display) = 0;
     virtual void onSessionSleeped(const int32_t& display) = 0;
     virtual void onDisplayRemoved(const int32_t& display) = 0;
     virtual void onClearRenderPrimitives(const int32_t& display) = 0;

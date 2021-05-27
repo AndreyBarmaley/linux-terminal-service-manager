@@ -24,7 +24,10 @@
 #define _LTSM_XCB_WRAPPER_
 
 #include <list>
+#include <mutex>
 #include <memory>
+#include <thread>
+#include <atomic>
 
 #include "xcb/xcb.h"
 #include "xcb/shm.h"
@@ -101,6 +104,14 @@ namespace LTSM
             {
             }
         };
+
+	template<typename ReplyType>
+	struct GenericReply : std::shared_ptr<ReplyType>
+	{
+    	    GenericReply(ReplyType* ptr) : std::shared_ptr<ReplyType>(ptr, std::free)
+    	    {
+    	    }
+	};
 
         struct KeyCodes : std::shared_ptr<xcb_keycode_t>
         {
@@ -190,7 +201,7 @@ namespace LTSM
 
         public:
             Connector(const char* addr);
-            ~Connector();
+            virtual ~Connector();
 
             bool                    checkExtensionSHM(void);
             bool                    checkExtensionDAMAGE(void);
@@ -201,12 +212,16 @@ namespace LTSM
             GenericEvent            poolEvent(void);
 
             SHM                     createSHM(size_t, int mode = 0600);
+	    xcb_atom_t              getAtom(const std::string &) const;
+	    std::string	            getAtomName(xcb_atom_t) const;
+	    size_t                  getMaxRequest(void) const;
 
             static bool             testConnection(const char* addr);
         };
 
         class RootDisplay : public Connector
         {
+	protected:
             xcb_screen_t*           _screen;
             xcb_key_symbols_t*      _symbols;
             xcb_format_t*           _format;
@@ -254,6 +269,34 @@ namespace LTSM
             bool                    damageSubtrack(const Damage &, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
             bool                    damageSubtrack(const Damage &, const xcb_rectangle_t &);
         };
+
+	class SelectionOwner : public RootDisplay
+	{
+        protected:
+            xcb_window_t            _window;
+            std::mutex              _change;
+	    std::string             _buffer;
+            std::thread             _thread;
+            std::atomic<bool>       _running;
+
+	    xcb_atom_t              _atoms[5];
+	    xcb_atom_t &            _atomAtom;
+	    xcb_atom_t &            _atomClipboard;
+	    xcb_atom_t &            _atomTargets;
+	    xcb_atom_t &            _atomText;
+	    xcb_atom_t &            _atomUTF8;
+
+            void                     startBackground(void);
+            bool                     clearEvent(xcb_selection_request_event_t*);
+            bool                     requestEvent(xcb_selection_request_event_t*);
+
+	public:
+	    SelectionOwner(const std::string & addr);
+            ~SelectionOwner();
+
+            void                     setClipboard(const std::string &);
+            void                     stopEvent(void);
+	};
     }
 }
 

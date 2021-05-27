@@ -26,6 +26,7 @@
 #include <list>
 #include <vector>
 #include <string>
+#include <iterator>
 #include <algorithm>
 
 namespace LTSM

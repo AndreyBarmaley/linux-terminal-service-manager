@@ -25,9 +25,19 @@
 
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
-    LTSM_Sessions w;
-    w.show();
+    int res = 0;
 
-    return a.exec();
+    try
+    {
+	QApplication a(argc, argv);
+	LTSM_Sessions w;
+	w.show();
+	res = a.exec();
+    }
+    catch(int e)
+    {
+	res = e;
+    }
+
+    return res;
 }

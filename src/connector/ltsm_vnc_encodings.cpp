@@ -21,14 +21,13 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include<iomanip>
-#include<sstream>
-
 #include <string>
 #include <chrono>
 #include <thread>
 #include <future>
 #include <numeric>
+#include <iomanip>
+#include <sstream>
 #include <iostream>
 #include <iterator>
 

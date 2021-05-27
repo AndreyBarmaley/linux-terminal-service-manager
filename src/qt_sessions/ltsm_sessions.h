@@ -51,14 +51,15 @@ struct XvfbInfo
     QString     conntype;
 };
 
+Q_DECLARE_METATYPE(XvfbInfo);
+
 struct RowItem : QTableWidgetItem
 {
-    int         display;
-    int         mode;
-    QString     authfile;
-
     RowItem(const XvfbInfo &, const QString &);
     RowItem(const XvfbInfo &, const QIcon &, const QString &);
+
+    XvfbInfo    xvfbInfo(void) const;
+    int		display(void) const;
 };
 
 namespace Ui
@@ -75,10 +76,16 @@ protected slots:
     void	disconnectClicked(void);
     void	logoffClicked(void);
     void	showClicked(void);
+    void	showInformation(void);
     void	sendmsgClicked(void);
-    void	itemClicked(QTableWidgetItem*);
+    void	itemSelectionChanged(void);
+    void        itemDoubleClicked(QTableWidgetItem*);
     void        displayRemovedCallback(int);
     void        sessionSleepedCallback(int);
+    void        sessionParamsChangedCallback(int);
+    void	customContextMenu(QPoint);
+    void	changeSessionPolicy(void);
+    void	changeSessionDuration(void);
 
 public:
     explicit LTSM_Sessions(QWidget* parent = 0);

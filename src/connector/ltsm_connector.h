@@ -169,7 +169,9 @@ namespace LTSM
                                         _renderPrimitives;
 
             std::unique_ptr<XCB::RootDisplay>
-            _xcbDisplay;
+        				_xcbDisplay;
+	    std::unique_ptr<XCB::SelectionOwner>
+					_xcbSelectionOwner;
             XCB::SHM                    _shmInfo;
             XCB::Damage                 _damageInfo;
 
@@ -179,6 +181,7 @@ namespace LTSM
             void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionSleeped(const int32_t& display) override {}
+	    void			onSessionParamsChanged(const int32_t& display) override {}
 	    void			onDisplayRemoved(const int32_t& display) override {}
 
         protected:

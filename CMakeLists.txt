@@ -48,6 +48,7 @@ link_libraries(${XCB_XFIXES_LIBRARIES})
 link_libraries(${XCB_XTEST_LIBRARIES})
 link_libraries(${XCB_KEYSYMS_LIBRARIES})
 link_libraries(pthread)
+link_libraries(stdc++fs)
 
 # LTSM service
 project(LTSM_service VERSION 20210301.1)

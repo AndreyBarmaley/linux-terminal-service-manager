@@ -146,6 +146,9 @@
             <arg type="s" name="removeAddr" />
             <arg type="s" name="connType" />
         </signal>
+        <signal name="sessionParamsChanged">
+            <arg type="i" name="display" />
+        </signal>
         <signal name="sessionSleeped">
             <arg type="i" name="display" />
         </signal>

@@ -272,7 +272,7 @@ namespace LTSM
 	zip.resize(zipsz);
 	outbuf.clear();
 
-	return std::move(zip);
+	return zip;
     }
 
     void ZlibOutStream::zlibDeflateStart(size_t len)
@@ -361,12 +361,12 @@ namespace LTSM
         else if(_type == "rdp")
             stream.reset(new Connector::RDP(in, out, conn.get(), _config));
 
-        if(!stream)
-            throw std::string("unknown connector type: ").append(_type);
+	int res = stream ?
+		stream->communication() : EXIT_FAILURE;
 
-        int res = stream->communication();
         std::fclose(in);
         std::fclose(out);
+
         return res;
     }
 
@@ -414,10 +414,12 @@ namespace LTSM
             }
         }
 
+	_xcbSelectionOwner.reset();
         _xcbDisplay.reset(new XCB::RootDisplay(addr));
-        Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
-        int color = _config->getInteger("display:solid", 0);
 
+        Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
+
+        int color = _config->getInteger("display:solid", 0);
         if(0 != color) _xcbDisplay->fillBackground(color);
 
         const int & winsz_w = _xcbDisplay->width();

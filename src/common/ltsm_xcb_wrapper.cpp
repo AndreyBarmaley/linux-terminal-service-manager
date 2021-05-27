@@ -25,6 +25,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+#include <unistd.h>
+#include <sys/types.h>
+
+#include <chrono>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -41,6 +45,8 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
+
+using namespace std::chrono_literals;
 
 namespace LTSM
 {
@@ -102,8 +108,10 @@ namespace LTSM
     {
         auto cookie = xcb_shm_get_image(get()->conn, winid, rect.x, rect.y, rect.width, rect.height,
                                         ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, get()->xcb, offset);
-        std::unique_ptr<xcb_shm_get_image_reply_t, decltype(&std::free)> shmReply { xcb_shm_get_image_reply(get()->conn, cookie, nullptr), &std::free };
+
+        GenericReply<xcb_shm_get_image_reply_t> shmReply(xcb_shm_get_image_reply(get()->conn, cookie, nullptr));
         std::pair<bool, PixmapInfo> res;
+
         auto reply = shmReply.get();
         res.first = reply;
 
@@ -237,6 +245,34 @@ namespace LTSM
         return shm;
     }
 
+    size_t XCB::Connector::getMaxRequest(void) const
+    {
+	return xcb_get_maximum_request_length(_conn);
+    }
+
+    xcb_atom_t XCB::Connector::getAtom(const std::string & name) const
+    {
+	auto cookie = xcb_intern_atom(_conn, 0, name.size(), name.c_str());
+	GenericReply<xcb_intern_atom_reply_t> reply(xcb_intern_atom_reply(_conn, cookie, nullptr));
+
+	return reply ? reply->atom : 0;
+    }
+
+    std::string XCB::Connector::getAtomName(xcb_atom_t atom) const
+    {
+	auto cookie = xcb_get_atom_name_unchecked(_conn, atom);
+        GenericReply<xcb_get_atom_name_reply_t> replyAtom(xcb_get_atom_name_reply(_conn, cookie, nullptr));
+
+	if(replyAtom)
+	{
+	    const char* name = xcb_get_atom_name_name(replyAtom.get());
+	    size_t len = xcb_get_atom_name_name_length(replyAtom.get());
+	    return std::string(name, len);
+	}
+
+	return "";
+    }
+
     void XCB::Connector::extendedError(const GenericError & gen, const char* func) const
     {
         if(gen) extendedError(gen.get(), func);
@@ -277,7 +313,7 @@ namespace LTSM
             return false;
 
         auto cookie = xcb_shm_query_version(_conn);
-        auto version = xcb_shm_query_version_reply(_conn, cookie, &error);
+	GenericReply<xcb_shm_query_version_reply_t> replyVersion(xcb_shm_query_version_reply(_conn, cookie, &error));
 
         if(error)
         {
@@ -285,10 +321,8 @@ namespace LTSM
             free(error);
             return false;
         }
-        else
-            Application::debug("used %s extension, version: %d.%d", "SHM", version->major_version, version->minor_version);
 
-        free(version);
+        Application::debug("used %s extension, version: %d.%d", "SHM", replyVersion->major_version, replyVersion->minor_version);
         return true;
     }
 
@@ -301,7 +335,7 @@ namespace LTSM
             return false;
 
         auto cookie = xcb_xfixes_query_version(_conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
-        auto version = xcb_xfixes_query_version_reply(_conn, cookie, &error);
+        GenericReply<xcb_xfixes_query_version_reply_t> replyVersion(xcb_xfixes_query_version_reply(_conn, cookie, &error));
 
         if(error)
         {
@@ -309,10 +343,8 @@ namespace LTSM
             free(error);
             return false;
         }
-        else
-            Application::debug("used %s extension, version: %d.%d", "XFIXES", version->major_version, version->minor_version);
 
-        free(version);
+        Application::debug("used %s extension, version: %d.%d", "XFIXES", replyVersion->major_version, replyVersion->minor_version);
         return true;
     }
 
@@ -325,7 +357,7 @@ namespace LTSM
             return false;
 
         auto cookie = xcb_damage_query_version(_conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
-        auto version = xcb_damage_query_version_reply(_conn, cookie, &error);
+        GenericReply<xcb_damage_query_version_reply_t> replyVersion(xcb_damage_query_version_reply(_conn, cookie, &error));
 
         if(error)
         {
@@ -333,10 +365,8 @@ namespace LTSM
             free(error);
             return false;
         }
-        else
-            Application::debug("used %s extension, version: %d.%d", "DAMAGE", version->major_version, version->minor_version);
 
-        free(version);
+        Application::debug("used %s extension, version: %d.%d", "DAMAGE", replyVersion->major_version, replyVersion->minor_version);
         return true;
     }
 
@@ -349,7 +379,7 @@ namespace LTSM
             return false;
 
         auto cookie = xcb_test_get_version_unchecked(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
-        auto version = xcb_test_get_version_reply(_conn, cookie, &error);
+        GenericReply<xcb_test_get_version_reply_t> replyVersion(xcb_test_get_version_reply(_conn, cookie, &error));
 
         if(error)
         {
@@ -357,10 +387,8 @@ namespace LTSM
             free(error);
             return false;
         }
-        else
-            Application::debug("used %s extension, version: %d.%d", "TEST", version->major_version, version->minor_version);
 
-        free(version);
+        Application::debug("used %s extension, version: %d.%d", "TEST", replyVersion->major_version, replyVersion->minor_version);
         return true;
     }
 
@@ -515,7 +543,7 @@ namespace LTSM
 		allowRows = ry + rh - yy;
 
             auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, rx, yy, rw, allowRows, ~0);
-            std::unique_ptr<xcb_get_image_reply_t, decltype(&std::free)> xcbReply { xcb_get_image_reply(_conn, cookie, nullptr), &std::free };
+            GenericReply<xcb_get_image_reply_t> xcbReply(xcb_get_image_reply(_conn, cookie, nullptr));
 
             auto reply = xcbReply.get();
             res.first = reply;
@@ -857,5 +885,150 @@ namespace LTSM
             if(error)
                 extendedError(error, "xcb_clear_area_checked");
         }
+    }
+
+    /* XCB::SelectionOwner */
+    XCB::SelectionOwner::SelectionOwner(const std::string & addr) : RootDisplay(addr), _running(false),
+    _atoms{XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE},
+    _atomAtom(_atoms[0]), _atomClipboard(_atoms[1]), _atomTargets(_atoms[2]), _atomText(_atoms[3]), _atomUTF8(_atoms[4])
+    {
+	uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+	_window = xcb_generate_id(_conn);
+
+	auto cookie = xcb_create_window_checked(_conn, 0, _window, _screen->root, -1, -1, 1, 1, 0,
+			    XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, XCB_CW_EVENT_MASK, & mask);
+	auto error = checkRequest(cookie);
+	if(! error)
+        {
+	    _atomAtom = getAtom("ATOM");
+	    _atomClipboard = getAtom("CLIPBOARD");
+	    _atomTargets = getAtom("TARGETS");
+	    _atomText = getAtom("TEXT");
+	    _atomUTF8 = getAtom("UTF8_STRING");
+
+	    cookie = xcb_set_selection_owner_checked(_conn, _window, _atomClipboard, XCB_CURRENT_TIME);
+
+	    error = checkRequest(cookie);
+	    if(error)
+    	        extendedError(error, "xcb_set_selection_owner_checked");
+
+
+	    startBackground();
+        }
+        else
+	{
+    	    extendedError(error, "xcb_create_window_checked");
+            _window = 0;
+	}
+    }
+
+    XCB::SelectionOwner::~SelectionOwner()
+    {
+        if(_running)
+            _running = false;
+
+        if(_thread.joinable())
+	    _thread.join();
+
+	if(_window)
+            xcb_destroy_window(_conn, _window);
+    }
+
+    void XCB::SelectionOwner::setClipboard(const std::string & str)
+    {
+        const std::lock_guard<std::mutex> lock(_change);
+        _buffer.assign(str);
+    }
+
+    bool XCB::SelectionOwner::clearEvent(xcb_selection_request_event_t* ev)
+    {
+        if(_buffer.empty())
+            return false;
+
+    	const std::lock_guard<std::mutex> lock(_change);
+
+	if(ev->selection == _atomClipboard)
+	    _buffer.clear();
+
+	return true;
+    }
+
+    bool XCB::SelectionOwner::requestEvent(xcb_selection_request_event_t* ev)
+    {
+        if(_buffer.empty())
+            return false;
+
+	if(ev->selection != _atomClipboard)
+	    return false;
+
+    	const std::lock_guard<std::mutex> lock(_change);
+
+	if(ev->target == _atomTargets)
+	{
+	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+    		    _atomAtom, 8 * sizeof(xcb_atom_t), 3, & _atomTargets);
+	}
+	else
+	if(ev->target == _atomText || ev->target == _atomUTF8)
+	{
+	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+		    ev->target == _atomText ? _atomText : _atomUTF8, 8, _buffer.size(), _buffer.data());
+        }
+
+	xcb_selection_notify_event_t notify;
+	notify.response_type = XCB_SELECTION_NOTIFY;
+	notify.pad0          = 0;
+	notify.sequence      = 0;
+    	notify.time          = XCB_CURRENT_TIME;
+	notify.requestor     = ev->requestor;
+	notify.selection     = ev->selection;
+	notify.target        = ev->target;
+	notify.property      = ev->property;
+
+	xcb_send_event(_conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+	xcb_flush(_conn);
+
+        return true;
+    }
+
+    void XCB::SelectionOwner::stopEvent(void)
+    {
+        if(_running)
+            _running = false;
+    }
+
+    void XCB::SelectionOwner::startBackground(void)
+    {
+        _running = true;
+        _thread = std::thread([this]()
+        {
+	    while(_running)
+	    {
+		auto ev = poolEvent();
+    		if(! ev)
+		{
+		    std::this_thread::sleep_for(50ms);
+		    continue;
+		}
+
+	        switch(ev->response_type & ~0x80)
+                {
+                    case XCB_DESTROY_NOTIFY:
+                        _running = false;
+                        break;
+
+                    case XCB_SELECTION_CLEAR:
+                        clearEvent(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                        break;
+
+                    case XCB_SELECTION_REQUEST:
+                        requestEvent(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+        });
     }
 }

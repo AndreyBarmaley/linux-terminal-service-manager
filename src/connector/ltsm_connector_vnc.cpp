@@ -29,8 +29,10 @@
 #include <cstring>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 #include <iostream>
 #include <iterator>
+#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_font_psf.h"
@@ -636,21 +638,21 @@ namespace LTSM
                         continue;
                     }
 
-                    if(! _xcbDisplay->isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
-                        continue;
-
-                    const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
-                    joinRegion.join(notify->area);
+                    if(_xcbDisplay->isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
+                    {
+                	const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
+                	joinRegion.join(notify->area);
+		    }
                 }
 
                 // server action
-                if(clientUpdateReq && ! joinRegion.empty() && ! fbUpdateComplete)
+                if(clientUpdateReq && ! joinRegion.empty() && ! fbUpdateProcessing)
                 {
                     RFB::Region res;
 
                     if(RFB::Region::intersection(clientRegion, joinRegion, & res))
 		    {
-			fbUpdateComplete = true;
+			fbUpdateProcessing = true;
 			// background job
                         std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
 		    }
@@ -665,14 +667,12 @@ namespace LTSM
             std::this_thread::sleep_for(2ms);
         }
 
-        // disconnected
-        clientDisconnectedEvent();
         return EXIT_SUCCESS;
     }
 
     void Connector::VNC::waitSendUpdateFBComplete(void) const
     {
-        while(fbUpdateComplete)
+        while(fbUpdateProcessing)
         {
             std::this_thread::sleep_for(1ms);
         }
@@ -742,10 +742,7 @@ namespace LTSM
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
 
                 if(std::any_of(disabledEncodings.begin(), disabledEncodings.end(),
-                               [&](auto & str)
-            {
-                return enclower == Tools::lower(str);
-                }))
+                               [&](auto & str) { return enclower == Tools::lower(str); }))
                 {
                     Application::info("RFB request encodings: %s (disabled)", RFB::encodingName(encoding));
                     continue;
@@ -807,9 +804,9 @@ namespace LTSM
             }).detach();
 
             if(0 < pressed)
-                pressedKeys.insert(keyCodes);
+                pressedKeys.push_back(keyCodes);
             else
-                pressedKeys.erase(keyCodes);
+                pressedKeys.remove(keyCodes);
         }
     }
 
@@ -826,7 +823,7 @@ namespace LTSM
             // no wait xcb replies
             std::thread([=]()
             {
-                if(pressedMask ^ mask)
+                if(this->pressedMask ^ mask)
                 {
                     for(int num = 0; num < 8; ++num)
                     {
@@ -836,13 +833,13 @@ namespace LTSM
                         {
                             Application::debug("xfb fake input pressed: %d", num + 1);
                             _xcbDisplay->fakeInputMouse(XCB_BUTTON_PRESS, num + 1, posx, posy);
-                            pressedMask |= bit;
+                            this->pressedMask |= bit;
                         }
                         else if(bit & pressedMask)
                         {
                             Application::debug("xfb fake input released: %d", num + 1);
                             _xcbDisplay->fakeInputMouse(XCB_BUTTON_RELEASE, num + 1, posx, posy);
-                            pressedMask &= ~bit;
+                            this->pressedMask &= ~bit;
                         }
                     }
                 }
@@ -858,26 +855,37 @@ namespace LTSM
     void Connector::VNC::clientCutTextEvent(void)
     {
         // RFB: 6.4.6
+
         // skip padding
         recvSkip(3);
         size_t length = recvIntBE32();
-        Application::info("RFB 6.4.6, cut text event, length: %d", length);
-	std::string temp;
+
+        Application::debug("RFB 6.4.6, cut text event, length: %d", length);
+
+        if(! _xcbSelectionOwner)
+        {
+            std::string addr = std::string(":").append(std::to_string(_display));
+            _xcbSelectionOwner.reset(new XCB::SelectionOwner(addr));
+        }
+
+        std::string buffer;
+	size_t maxReq = _xcbSelectionOwner->getMaxRequest();
+        size_t limit = std::min(length, maxReq);
+
+        buffer.reserve(limit);
+
+        if(limit < length)
+	    Application::error("request limited: %d", maxReq);
 
         while(0 < length--)
         {
-            recvInt8();
-/*
-	    // check RealVNC
+            int ch = recvInt8();
 
-            if(! _xcbDisableMessages && std::isprint(val))
-            {
-                auto keyCodes = _xcbDisplay->keysymToKeycodes(val);
-                _xcbDisplay->fakeInputKeysym(XCB_KEY_PRESS, keyCodes);
-                _xcbDisplay->fakeInputKeysym(XCB_KEY_RELEASE, keyCodes);
-            }
-*/
+            if(buffer.size() < limit)
+                buffer.append(1, ch);
         }
+
+        _xcbSelectionOwner->setClipboard(buffer);
     }
 
     void Connector::VNC::clientDisconnectedEvent(void)
@@ -886,6 +894,9 @@ namespace LTSM
 
         if(! _xcbDisableMessages)
 	    xcbReleaseInputsEvent();
+
+        if(_xcbSelectionOwner)
+            _xcbSelectionOwner->stopEvent();
     }
 
     void Connector::VNC::serverSendColourMap(int first)
@@ -1010,7 +1021,7 @@ namespace LTSM
         else
             Application::error("xcb call error: %s", "copyRootImageRegion");
 
-        fbUpdateComplete = false;
+        fbUpdateProcessing = false;
     }
 
     int Connector::VNC::sendPixel(int pixel)

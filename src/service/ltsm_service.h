@@ -129,11 +129,12 @@ namespace LTSM
             int				runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userLogin);
             int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
-	    void			setFilePermission(const std::string & file, int mode, int uid, int gid);
+	    void			setFileOwner(const std::string & file, int uid, int gid);
             bool			waitXvfbStarting(int display, uint32_t waitms);
             bool	                switchToUser(const std::string &);
             bool			checkXvfbSocket(int display);
             bool			checkXvfbLocking(int display);
+            bool                        checkFileReadable(const std::string &);
 	    void			removeXvfbSocket(int display);
             void			displayShutdown(int display, bool emitSignal);
             std::list<std::string>      getSystemUsersList(int uidMin, int uidMax) const;

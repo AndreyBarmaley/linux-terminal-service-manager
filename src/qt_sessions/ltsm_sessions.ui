@@ -22,39 +22,12 @@
      <property name="selectionBehavior">
       <enum>QAbstractItemView::SelectRows</enum>
      </property>
+     <property name="columnCount">
+      <number>0</number>
+     </property>
      <attribute name="horizontalHeaderCascadingSectionResizes">
       <bool>true</bool>
      </attribute>
-     <column>
-      <property name="text">
-       <string>User</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Display</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Status</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>RemoteAddr</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Pid</string>
-      </property>
-     </column>
-     <column>
-      <property name="text">
-       <string>Uid</string>
-      </property>
-     </column>
     </widget>
    </item>
    <item>
@@ -139,93 +112,13 @@
  <resources>
   <include location="ltsm_sessions.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>pushButtonDisconnect</sender>
-   <signal>clicked()</signal>
-   <receiver>LTSM_Sessions</receiver>
-   <slot>disconnectClicked()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>255</x>
-     <y>315</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>257</x>
-     <y>169</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>pushButtonLogoff</sender>
-   <signal>clicked()</signal>
-   <receiver>LTSM_Sessions</receiver>
-   <slot>logoffClicked()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>341</x>
-     <y>315</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>257</x>
-     <y>169</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>pushButtonSendMsg</sender>
-   <signal>clicked()</signal>
-   <receiver>LTSM_Sessions</receiver>
-   <slot>sendmsgClicked()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>446</x>
-     <y>315</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>257</x>
-     <y>169</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>tableWidget</sender>
-   <signal>itemClicked(QTableWidgetItem*)</signal>
-   <receiver>LTSM_Sessions</receiver>
-   <slot>itemClicked(QTableWidgetItem*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>257</x>
-     <y>147</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>257</x>
-     <y>169</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>pushButtonShow</sender>
-   <signal>clicked()</signal>
-   <receiver>LTSM_Sessions</receiver>
-   <slot>showClicked()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>169</x>
-     <y>315</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>257</x>
-     <y>169</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
  <slots>
   <slot>disconnectClicked()</slot>
   <slot>logoffClicked()</slot>
   <slot>sendmsgClicked()</slot>
   <slot>itemClicked(QTableWidgetItem*)</slot>
   <slot>showClicked()</slot>
+  <slot>showMenu(QPoint)</slot>
  </slots>
 </ui>

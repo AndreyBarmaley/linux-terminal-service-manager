@@ -42,15 +42,8 @@ namespace LTSM
 	int		_facility;
 
     public:
-        Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
-        {
-            ::openlog(_ident, 0, _facility);
-        }
-
-        virtual ~Application()
-        {
-            closelog();
-        }
+        Application(const char* ident, int argc, const char** argv);
+        virtual ~Application();
 
         template<typename... Values>
         static void info(const char* format, Values && ... vals)
@@ -63,11 +56,6 @@ namespace LTSM
         static void error(const char* format, Values && ... vals)
         {
             syslog(LOG_ERR, format, (vals)...);
-#ifdef LTSM_DEBUG
-            // copy error to stderr
-	    fprintf(stderr, format, (vals)...);
-            fprintf(stderr, "\n");
-#endif
         }
 
         template<typename... Values>

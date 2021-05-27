@@ -23,8 +23,6 @@
 #include <unistd.h>
 
 #include <sys/un.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 
 #include <cstdio>
@@ -36,6 +34,7 @@
 #include <numeric>
 #include <iterator>
 #include <stdexcept>
+#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
@@ -275,6 +274,39 @@ namespace LTSM
         return stream.str();
     }
 
+/*
+    template<typename InputIterator>
+    InputIterator   random_n(InputIterator first, InputIterator last)
+    {
+        auto dist = std::distance(first, last);
+        InputIterator res = first;
+
+        if(1 < dist)
+        {
+            auto randomIndex = std::rand() / (RAND_MAX + 1.0) * (dist + 1);
+            std::advance(res, randomIndex);
+        }
+        return res;
+    }
+
+    std::string Tools::randomHexString(size_t width)
+    {
+	const char charsets[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabctefghijklmnopqrstuvwxyz";
+	
+	std::string res;
+	res.reserve(width);
+
+	while(width--)
+	{
+	    auto beg = std::begin(charsets);
+	    auto end = std::end(charsets);
+	    auto it = random_n(beg, end);
+	    res.push_back(it != end ? *it : 'X');
+	}
+
+	return res;
+    }
+*/
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size)
     {
         return crc32b(ptr, size, 0xEDB88320);
@@ -300,10 +332,7 @@ namespace LTSM
     bool Tools::checkUnixSocket(const std::string & path)
     {
         // check present
-        struct stat st;
-        int res = stat(path.c_str(), & st);
-
-        if(0 == res && S_ISSOCK(st.st_mode))
+	if(std::filesystem::is_socket(path))
         {
             // check open
             struct sockaddr_un address;
@@ -314,7 +343,7 @@ namespace LTSM
 
             if(0 < socket_fd)
             {
-                res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
+                int res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
                 close(socket_fd);
                 return res == 0;
             }
