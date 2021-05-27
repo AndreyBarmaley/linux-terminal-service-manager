@@ -32,7 +32,7 @@ see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description)  
 
 # LTSM_sessions
-![sessions](https://user-images.githubusercontent.com/8620726/118389681-78fa3300-b61a-11eb-8981-1d1e49894a5a.png)  
+![ltsm_session](https://user-images.githubusercontent.com/8620726/119793454-23e5d900-bec6-11eb-9978-ee31f44360ae.png)  
 графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
