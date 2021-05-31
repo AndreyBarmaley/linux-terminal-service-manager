@@ -672,9 +672,9 @@ namespace LTSM
 
     void Connector::VNC::waitSendUpdateFBComplete(void) const
     {
-        while(fbUpdateProcessing)
+        while(fbUpdateProcessing && ! jobsEncodings.empty())
         {
-            std::this_thread::sleep_for(1ms);
+            std::this_thread::sleep_for(3ms);
         }
     }
 
