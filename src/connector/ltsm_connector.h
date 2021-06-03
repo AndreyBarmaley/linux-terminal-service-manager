@@ -130,9 +130,10 @@ namespace LTSM
             deflateEnd(this);
         }
 
-	std::vector<uint8_t>		syncFlush(void);
         void                            pushInt8(uint8_t val);
         void                            pushRaw(const uint8_t*, size_t);
+
+	std::vector<uint8_t>		syncFlush(bool finish = false);
     };
 
     class ZlibOutStream : public BaseStream
@@ -179,6 +180,7 @@ namespace LTSM
             // dbus virtual signals
             void                        onLoginFailure(const int32_t & display, const std::string & msg) override {}
             void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) override {}
+            void                        onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionSleeped(const int32_t& display) override {}
 	    void			onSessionParamsChanged(const int32_t& display) override {}

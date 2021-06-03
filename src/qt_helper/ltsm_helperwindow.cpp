@@ -137,6 +137,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
 
         connect(dbusInterfacePtr.data(), SIGNAL(loginFailure(int, const QString &)), this, SLOT(loginFailureCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
+        connect(dbusInterfacePtr.data(), SIGNAL(helperAutoLogin(int, const QString &, const QString &)), this, SLOT(autoLoginCallback(int, const QString &, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &)));
 
         initArguments = true;
@@ -248,6 +249,17 @@ void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & lo
     {
         ui->comboBoxUsername->setEditText(login);
         ui->lineEditPassword->setText(pass);
+    }
+}
+
+void LTSM_HelperWindow::autoLoginCallback(int display, const QString & login, const QString & pass)
+{
+    if(display == displayNum)
+    {
+        ui->comboBoxUsername->setEditText(login);
+        ui->lineEditPassword->setText(pass);
+
+        loginClicked();
     }
 }
 

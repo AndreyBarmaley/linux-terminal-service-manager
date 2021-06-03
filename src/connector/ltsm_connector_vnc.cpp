@@ -340,6 +340,16 @@ namespace LTSM
             }
         }
 
+        Region operator- (const Region & reg, const Point & pt)
+        {
+            return Region(reg.x - pt.x, reg.y - pt.y, reg.w, reg.h);
+        }
+            
+        Region operator+ (const Region & reg, const Point & pt)
+        {
+            return Region(reg.x + pt.x, reg.y + pt.y, reg.w, reg.h);
+        }
+
         void Region::assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
         {
             x = rx;
@@ -350,10 +360,12 @@ namespace LTSM
 
         void Region::reset(void)
         {
-            x = 0;
-            y = 0;
-            w = 0;
-            h = 0;
+            assign(-1, -1, 0, 0);
+        }
+
+        bool Region::invalid(void) const
+        {
+            return x == -1 && y == -1 && w == 0 && h == 0;
         }
 
         bool Region::empty(void) const
@@ -434,14 +446,24 @@ namespace LTSM
 
         void Region::join(const Region & rt)
         {
+	    if(invalid())
+	    {
+		x = rt.x;
+		y = rt.y;
+		w = rt.w;
+		h = rt.h;
+	    }
+	    else
             if(! rt.empty() && *this != rt)
             {
                 /* Horizontal union */
-                x = std::min(x, rt.x);
-                w = std::max(x + w, rt.x + rt.w) - x;
+                auto xm = std::min(x, rt.x);
+                w = std::max(x + w, rt.x + rt.w) - xm;
+		x = xm;
                 /* Vertical union */
-                y = std::min(y, rt.y);
-                h = std::max(y + h, rt.y + rt.h) - y;
+                auto ym = std::min(y, rt.y);
+                h = std::max(y + h, rt.y + rt.h) - ym;
+		y = ym;
             }
         }
     }
@@ -463,10 +485,8 @@ namespace LTSM
         disabledEncodings = _config->getStdList<std::string>("encoding:blacklist");
 
         if(! disabledEncodings.empty())
-            disabledEncodings.remove_if([](auto & str)
-        {
-            return 0 == Tools::lower(str).compare("raw");
-        });
+            disabledEncodings.remove_if([](auto & str){ return 0 == Tools::lower(str).compare("raw"); });
+
         // RFB 6.1.1 version
         const std::string version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
         sendString(version).sendFlush();
@@ -481,17 +501,22 @@ namespace LTSM
 
         // Xvfb: session request
         int screen = busStartLoginSession(remoteaddr, "vnc");
-
         if(screen <= 0)
-            throw std::string("login session request failure");
+        {
+            Application::error("%s", "login session request failure");
+            return EXIT_FAILURE;
+        }
 
         Application::debug("login session request success, display: %d", screen);
+	Application::info("server default encoding: %s", RFB::encodingName(prefEncodings.second));
 
         if(! xcbConnect(screen))
-            throw std::string("xcb connect failed");
+        {
+            Application::error("%s", "xcb connect failed");
+            return EXIT_FAILURE;
+        }
 
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
-
         if(! visual)
         {
             Application::error("%s", "xcb visual empty");
@@ -564,7 +589,7 @@ namespace LTSM
         // xcb on
         _xcbDisableMessages = false;
         serverRegion.assign(0, 0, _xcbDisplay->width(), _xcbDisplay->height());
-        bool clientUpdateReq = false;
+	bool clientUpdateReq = false;
 
         while(loopMessage)
         {
@@ -578,37 +603,36 @@ namespace LTSM
                     case RFB::CLIENT_SET_PIXEL_FORMAT:
                         clientSetPixelFormat();
                         joinRegion.join(serverRegion);
+			clientUpdateReq = true;
                         break;
 
                     case RFB::CLIENT_SET_ENCODINGS:
                         clientSetEncodings();
-                        clientUpdateReq = true;
                         // full update
                         joinRegion.join(serverRegion);
+			clientUpdateReq = true;
                         break;
 
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
-                        clientUpdateReq = true;
-
                         // full update
                         if(clientFramebufferUpdate())
                             joinRegion.join(serverRegion);
-
+			clientUpdateReq = true;
                         break;
 
                     case RFB::CLIENT_EVENT_KEY:
                         clientKeyEvent();
-                        clientUpdateReq = true;
+			clientUpdateReq = true;
                         break;
 
                     case RFB::CLIENT_EVENT_POINTER:
                         clientPointerEvent();
-                        clientUpdateReq = true;
+			clientUpdateReq = true;
                         break;
 
                     case RFB::CLIENT_CUT_TEXT:
                         clientCutTextEvent();
-                        clientUpdateReq = true;
+			clientUpdateReq = true;
                         break;
 
                     default:
@@ -657,7 +681,7 @@ namespace LTSM
                         std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
 		    }
                     joinRegion.reset();
-                    clientUpdateReq = false;
+		    clientUpdateReq = false;
                 }
             }
 
@@ -670,9 +694,9 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
-    void Connector::VNC::waitSendUpdateFBComplete(void) const
+    void Connector::VNC::waitSendingFBUpdate(void) const
     {
-        while(fbUpdateProcessing && ! jobsEncodings.empty())
+        while(fbUpdateProcessing || ! jobsEncodings.empty())
         {
             std::this_thread::sleep_for(3ms);
         }
@@ -680,7 +704,7 @@ namespace LTSM
 
     void Connector::VNC::clientSetPixelFormat(void)
     {
-        waitSendUpdateFBComplete();
+        waitSendingFBUpdate();
 
         // RFB: 6.4.1
         RFB::PixelFormat pf;
@@ -698,6 +722,7 @@ namespace LTSM
         pf.blueShift = recvInt8();
         // skip padding
         recvSkip(3);
+
         Application::info("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                           pf.bitsPerPixel, pf.depth, pf.bigEndian, pf.trueColor,
                           pf.redMax, pf.redShift, pf.greenMax,
@@ -721,15 +746,18 @@ namespace LTSM
         if(colourMap.size()) colourMap.clear();
     }
 
-    void Connector::VNC::clientSetEncodings(void)
+    bool Connector::VNC::clientSetEncodings(void)
     {
-        waitSendUpdateFBComplete();
+        waitSendingFBUpdate();
 
         // RFB: 6.4.2
         // skip padding
         recvSkip(1);
+
+	int previousType = prefEncodings.second;
         int numEncodings = recvIntBE16();
         Application::info("RFB 6.4.2, set encodings, counts: %d", numEncodings);
+
         clientEncodings.clear();
         clientEncodings.reserve(numEncodings);
 
@@ -759,6 +787,9 @@ namespace LTSM
         }
 
         prefEncodings = selectEncodings();
+	Application::info("server select encoding: %s", RFB::encodingName(prefEncodings.second));
+
+	return previousType != prefEncodings.second;
     }
 
     bool Connector::VNC::clientFramebufferUpdate(void)
@@ -831,13 +862,15 @@ namespace LTSM
 
                         if(bit & mask)
                         {
-                            Application::debug("xfb fake input pressed: %d", num + 1);
+			    if(1 < encodingDebug)
+                        	Application::debug("xfb fake input pressed: %d", num + 1);
                             _xcbDisplay->fakeInputMouse(XCB_BUTTON_PRESS, num + 1, posx, posy);
                             this->pressedMask |= bit;
                         }
                         else if(bit & pressedMask)
                         {
-                            Application::debug("xfb fake input released: %d", num + 1);
+			    if(1 < encodingDebug)
+                        	Application::debug("xfb fake input released: %d", num + 1);
                             _xcbDisplay->fakeInputMouse(XCB_BUTTON_RELEASE, num + 1, posx, posy);
                             this->pressedMask &= ~bit;
                         }
@@ -845,7 +878,8 @@ namespace LTSM
                 }
                 else
                 {
-                    Application::debug("xfb fake input move, posx: %d, posy: %d", posx, posy);
+		    if(1 < encodingDebug)
+                	Application::debug("xfb fake input move, posx: %d, posy: %d", posx, posy);
                     _xcbDisplay->fakeInputMouse(XCB_MOTION_NOTIFY, 0, posx, posy);
                 }
             }).detach();
@@ -915,6 +949,8 @@ namespace LTSM
             sendIntBE16(col.g);
             sendIntBE16(col.b);
         }
+
+	sendFlush();
     }
 
     void Connector::VNC::serverSendBell(void)
@@ -923,6 +959,7 @@ namespace LTSM
         Application::debug("server send: %s", "bell");
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
+	sendFlush();
     }
 
     void Connector::VNC::serverSendCutText(const std::string & text)
@@ -936,6 +973,8 @@ namespace LTSM
 
         for(auto & ch : text)
             sendInt8(ch);
+
+	sendFlush();
     }
 
     void Connector::VNC::renderPrimitivesTo(const RFB::Region & reg, RFB::FrameBuffer & fb)
@@ -1013,10 +1052,11 @@ namespace LTSM
             {
                 int rawLength = 14 /* raw header for one region */ + reg.w * reg.h * clientFormat.bytePerPixel();
                 float optimize = 100.0f - encodingLength * 100 / static_cast<float>(rawLength);
-                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", prefEncodings.second.c_str(), 2, optimize, encodingLength, rawLength, reg.w, reg.h);
+                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.w, reg.h);
             }
 
             _xcbDisplay->damageSubtrack(_damageInfo, reg.x, reg.y, reg.w, reg.h);
+	    sendFlush();
         }
         else
             Application::error("xcb call error: %s", "copyRootImageRegion");
@@ -1117,7 +1157,7 @@ namespace LTSM
 	    xcbReleaseInputsEvent();
 
             _xcbDisableMessages = true;
-            waitSendUpdateFBComplete();
+            waitSendingFBUpdate();
 
             SignalProxy::onLoginSuccess(display, userName);
             // full update
@@ -1130,7 +1170,7 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             _xcbDisableMessages = true;
-            waitSendUpdateFBComplete();
+            waitSendingFBUpdate();
 
             loopMessage = false;
             Application::info("dbus signal: shutdown connector, display: %d", display);

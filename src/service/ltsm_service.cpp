@@ -893,7 +893,7 @@ namespace LTSM
         // get free screen
         int screen = getFreeDisplay();
 
-        if(0 > screen)
+        if(0 >= screen)
         {
             Application::error("system error: %s", "all displays busy");
             return -1;

@@ -24,6 +24,7 @@ protected:
     {
         proxy_.uponSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetStarted(display); });
         proxy_.uponSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass){ this->onHelperSetLoginPassword(display, login, pass); });
+        proxy_.uponSignal("helperAutoLogin").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass){ this->onHelperAutoLogin(display, login, pass); });
         proxy_.uponSignal("loginFailure").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& msg){ this->onLoginFailure(display, msg); });
         proxy_.uponSignal("loginSuccess").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& userName){ this->onLoginSuccess(display, userName); });
         proxy_.uponSignal("shutdownConnector").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onShutdownConnector(display); });
@@ -43,6 +44,7 @@ protected:
 
     virtual void onHelperWidgetStarted(const int32_t& display) = 0;
     virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) = 0;
+    virtual void onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) = 0;
     virtual void onLoginFailure(const int32_t& display, const std::string& msg) = 0;
     virtual void onLoginSuccess(const int32_t& display, const std::string& userName) = 0;
     virtual void onShutdownConnector(const int32_t& display) = 0;

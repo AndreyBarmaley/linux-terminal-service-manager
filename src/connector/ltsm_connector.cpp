@@ -254,7 +254,7 @@ namespace LTSM
 	outbuf.insert(outbuf.end(), buf, buf + length);
     }
 
-    std::vector<uint8_t> zlibStream::syncFlush(void)
+    std::vector<uint8_t> zlibStream::syncFlush(bool finish)
     {
     	next_in = outbuf.data();
     	avail_in = outbuf.size();
@@ -264,8 +264,8 @@ namespace LTSM
         avail_out = zip.size();
 
         int prev = total_out;
-        int ret = deflate(this, Z_SYNC_FLUSH);
-        if(ret != Z_OK)
+        int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
+        if(ret < Z_OK)
             Application::error("zlib: deflate error: %d", ret);
 
         size_t zipsz = total_out - prev;
@@ -281,7 +281,7 @@ namespace LTSM
         {
             zlibStreamPtr.reset(new zlibStream());
             int ret = deflateInit2(zlibStreamPtr.get(), Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-            if(ret != Z_OK)
+            if(ret < Z_OK)
                 Application::error("zlib: deflateInit error: %d", ret);
 	}
 
@@ -350,7 +350,7 @@ namespace LTSM
         std::clearerr(in);
         char bufout[1492];
         // set buffering, optimal for tcp mtu size
-        std::setvbuf(out, bufout, _IOFBF, 1492);
+        std::setvbuf(out, bufout, _IOFBF, sizeof(bufout));
         std::clearerr(out);
         std::unique_ptr<BaseStream> stream;
         Application::busSetDebugLevel(_config.getString("logging:level"));

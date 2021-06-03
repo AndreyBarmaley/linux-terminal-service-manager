@@ -49,6 +49,7 @@ protected:
         object_.registerMethod("busRenderClear").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busRenderClear(display); });
         object_.registerSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
+        object_.registerSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
         object_.registerSignal("loginFailure").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "msg");
         object_.registerSignal("loginSuccess").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "userName");
         object_.registerSignal("shutdownConnector").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
@@ -75,6 +76,11 @@ public:
     void emitHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass)
     {
         object_.emitSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, pass);
+    }
+
+    void emitHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass)
+    {
+        object_.emitSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withArguments(display, login, pass);
     }
 
     void emitLoginFailure(const int32_t& display, const std::string& msg)
