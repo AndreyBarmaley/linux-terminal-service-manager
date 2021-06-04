@@ -130,13 +130,13 @@ namespace LTSM
                 case RFB::ENCODING_CORRE:
                     return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
                     {
-                        return this->sendEncodingCoRRE(a, b);
+                        return this->sendEncodingRRE(a, b, true);
                     }, type);
 
                 case RFB::ENCODING_RRE:
                     return std::make_pair([=](const RFB::Region & a, const RFB::FrameBuffer & b)
                     {
-                        return this->sendEncodingRRE(a, b);
+                        return this->sendEncodingRRE(a, b, false);
                     }, type);
 
                 case RFB::ENCODING_TRLE:
@@ -256,12 +256,13 @@ namespace LTSM
     }
 
     /* RRE */
-    int Connector::VNC::sendEncodingRRE(const RFB::Region & reg0, const RFB::FrameBuffer & fb)
+    int Connector::VNC::sendEncodingRRE(const RFB::Region & reg0, const RFB::FrameBuffer & fb, bool corre)
     {
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "RRE", reg0.x, reg0.y, reg0.w, reg0.h);
+        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (corre ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.w, reg0.h);
 
 	const RFB::Point top(reg0.x, reg0.y);
-        auto regions = reg0.divideBlocks(128, 128);
+	const size_t bw = corre ? 64 : 128;
+        auto regions = reg0.divideBlocks(bw, bw);
         // regions counts
         sendIntBE16(regions.size());
         int res = 2;
@@ -270,7 +271,7 @@ namespace LTSM
         // make pool jobs
         while(jobId <= _encodingThreads && ! regions.empty())
         {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId));
+            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId, corre));
             regions.pop_front();
             jobId++;
         }
@@ -286,7 +287,7 @@ namespace LTSM
                 if(job.wait_for(std::chrono::nanoseconds(200)) == std::future_status::ready)
                 {
                     res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId);
+                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId, corre);
                     regions.pop_front();
                     jobId++;
                 }
@@ -301,11 +302,11 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingRRESubRegion(const RFB::Point & top, const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
+    int Connector::VNC::sendEncodingRRESubRegion(const RFB::Point & top, const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool corre)
     {
         auto map = fb.pixelMapWeight(reg);
 
-        auto sendHeaderRRE = [this](const RFB::Region & reg)
+        auto sendHeaderRRE = [this](const RFB::Region & reg, bool corre)
         {
             // region size
             this->sendIntBE16(reg.x);
@@ -313,7 +314,7 @@ namespace LTSM
             this->sendIntBE16(reg.w);
             this->sendIntBE16(reg.h);
             // region type
-            this->sendIntBE32(RFB::ENCODING_RRE);
+            this->sendIntBE32(corre ? RFB::ENCODING_CORRE : RFB::ENCODING_RRE);
             return 12;
         };
 
@@ -323,7 +324,7 @@ namespace LTSM
             std::list<RRE::Region> goods = processingRRE(reg, fb, back);
 
             const size_t rawLength = reg.w * reg.h * fb.bytePerPixel();
-            const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + 8);
+            const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (corre ? 4 : 8));
 
             // compare with raw
             if(rawLength < rreLength)
@@ -332,11 +333,11 @@ namespace LTSM
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
             if(encodingDebug)
-                Application::debug("send RRE region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
-                                   jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, goods.size());
+                Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
+                                   (corre ? "CoRRE" : "RRE"), jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, goods.size());
 
-            int res = sendHeaderRRE(reg + top);
-            res += sendEncodingRRESubRects(reg, fb, jobId, back, goods);
+            int res = sendHeaderRRE(reg + top, corre);
+            res += sendEncodingRRESubRects(reg, fb, jobId, back, goods, corre);
 
             return res;
         }
@@ -346,10 +347,10 @@ namespace LTSM
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
             if(encodingDebug)
-                Application::debug("send RRE region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
-                                   jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, "solid");
+                Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
+                                   (corre ? "CoRRE" : "RRE"), jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, "solid");
 
-            int res = sendHeaderRRE(reg + top);
+            int res = sendHeaderRRE(reg + top, corre);
 
             // num sub rects
             sendIntBE32(1);
@@ -362,12 +363,23 @@ namespace LTSM
             // subrect pixel
             res += sendPixel(back);
 
-            // subrect region (relative coords)
-            sendIntBE16(0);
-            sendIntBE16(0);
-            sendIntBE16(1);
-            sendIntBE16(1);
-            res += 8;
+    	    // subrect region (relative coords)
+	    if(corre)
+	    {
+        	sendInt8(0);
+        	sendInt8(0);
+        	sendInt8(1);
+        	sendInt8(1);
+        	res += 4;
+	    }
+	    else
+	    {
+        	sendIntBE16(0);
+        	sendIntBE16(0);
+        	sendIntBE16(1);
+        	sendIntBE16(1);
+        	res += 8;
+	    }
 
             return res;
         }
@@ -376,7 +388,7 @@ namespace LTSM
         return 0;
     }
 
-    int Connector::VNC::sendEncodingRRESubRects(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, int back, const std::list<RRE::Region> & rreList)
+    int Connector::VNC::sendEncodingRRESubRects(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, int back, const std::list<RRE::Region> & rreList, bool corre)
     {
         // num sub rects
         sendIntBE32(rreList.size());
@@ -391,165 +403,26 @@ namespace LTSM
             res += sendPixel(pair.second);
 
             // subrect region (relative coords)
-            sendIntBE16(pair.first.x - reg.x);
-            sendIntBE16(pair.first.y - reg.y);
-            sendIntBE16(pair.first.w);
-            sendIntBE16(pair.first.h);
-            res += 8;
-
-            if(1 < encodingDebug)
-                Application::debug("send RRE sub region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x",
-                                       jobId, pair.first.x - reg.x, pair.first.y - reg.y, pair.first.w, pair.first.h, pair.second);
-        }
-
-        return res;
-    }
-
-    /* CoRRE */
-    int Connector::VNC::sendEncodingCoRRE(const RFB::Region & reg0, const RFB::FrameBuffer & fb)
-    {
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "CoRRE", reg0.x, reg0.y, reg0.w, reg0.h);
-
-	const RFB::Point top(reg0.x, reg0.y);
-        auto regions = reg0.divideBlocks(64, 64);
-        // regions counts
-        sendIntBE16(regions.size());
-        int res = 2;
-        int jobId = 1;
-
-        // make pool jobs
-        while(jobId <= _encodingThreads && ! regions.empty())
-        {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingCoRRESubRegion, this, top, regions.front() - top, fb, jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            for(auto & job : jobsEncodings)
+	    if(corre)
+	    {
+        	sendInt8(pair.first.x - reg.x);
+        	sendInt8(pair.first.y - reg.y);
+        	sendInt8(pair.first.w);
+        	sendInt8(pair.first.h);
+        	res += 4;
+	    }
+	    else
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(std::chrono::nanoseconds(200)) == std::future_status::ready)
-                {
-                    res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingCoRRESubRegion, this, top, regions.front() - top, fb, jobId);
-                    regions.pop_front();
-                    jobId++;
-                }
-            }
-        }
-
-        // get results
-        for(auto & job : jobsEncodings)
-            res += job.get();
-
-        jobsEncodings.clear();
-        return res;
-    }
-
-    int Connector::VNC::sendEncodingCoRRESubRegion(const RFB::Point & top, const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId)
-    {
-        auto map = fb.pixelMapWeight(reg);
-
-        auto sendHeaderCoRRE = [this](const RFB::Region & reg)
-        {
-            // region size
-            this->sendIntBE16(reg.x);
-            this->sendIntBE16(reg.y);
-            this->sendIntBE16(reg.w);
-            this->sendIntBE16(reg.h);
-            // region type
-            this->sendIntBE32(RFB::ENCODING_CORRE);
-            return 12;
-        };
-
-        if(map.size() > 1)
-        {
-            int back = map.maxWeightPixel();
-            std::list<RRE::Region> goods = processingRRE(reg, fb, back);
-
-            const size_t rawLength = reg.w * reg.h * fb.bytePerPixel();
-            const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + 4);
-
-            // compare with raw
-            if(rawLength < rreLength)
-                return sendEncodingRawSubRegion(top, reg, fb, jobId);
-
-            const std::lock_guard<std::mutex> lock(sendEncoding);
-
-            if(encodingDebug)
-                Application::debug("send CoRRE region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
-                                   jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, goods.size());
-
-            int res = sendHeaderCoRRE(reg + top);
-            res += sendEncodingCoRRESubRects(reg, fb, jobId, back, goods);
-
-            return res;
-        }
-        else if(map.size() == 1)
-        {
-            int back = fb.pixel(reg.x, reg.y);
-            const std::lock_guard<std::mutex> lock(sendEncoding);
-
-            if(encodingDebug)
-                Application::debug("send CoRRE region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
-                                   jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, back, "solid");
-
-            int res = sendHeaderCoRRE(reg + top);
-
-            // num sub rects
-            sendIntBE32(1);
-            res += 4;
-
-            // back pixel
-            res += sendPixel(back);
-
-            /* one fake sub region : RRE requires */
-            // subrect pixel
-            res += sendPixel(back);
-
-            // subrect region (relative coords)
-            sendInt8(0);
-            sendInt8(0);
-            sendInt8(1);
-            sendInt8(1);
-            res += 4;
-
-            return res;
-        }
-
-        throw std::string("send CoRRE encoding: pixel map is empty");
-        return 0;
-    }
-
-    int Connector::VNC::sendEncodingCoRRESubRects(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, int back, const std::list<RRE::Region> & rreList)
-    {
-        // num sub rects
-        sendIntBE32(rreList.size());
-        int res = 4;
-
-        // back pixel
-        res += sendPixel(back);
-
-        for(auto & pair : rreList)
-        {
-            // subrect pixel
-            res += sendPixel(pair.second);
-
-            // subrect region (relative coords)
-            sendInt8(pair.first.x - reg.x);
-            sendInt8(pair.first.y - reg.y);
-            sendInt8(pair.first.w);
-            sendInt8(pair.first.h);
-            res += 4;
+		sendIntBE16(pair.first.x - reg.x);
+        	sendIntBE16(pair.first.y - reg.y);
+        	sendIntBE16(pair.first.w);
+        	sendIntBE16(pair.first.h);
+        	res += 8;
+	    }
 
             if(1 < encodingDebug)
-                Application::debug("send CoRRE sub region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x",
-                                       jobId, pair.first.x - reg.x, pair.first.y - reg.y, pair.first.w, pair.first.h, pair.second);
+                Application::debug("send %s sub region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x",
+                                       (corre ? "CoRRE" : "RRE"), jobId, pair.first.x - reg.x, pair.first.y - reg.y, pair.first.w, pair.first.h, pair.second);
         }
 
         return res;

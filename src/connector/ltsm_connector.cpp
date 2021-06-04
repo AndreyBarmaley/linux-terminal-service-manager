@@ -24,8 +24,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/select.h>
 
+#include <poll.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -55,11 +55,10 @@ namespace LTSM
 
     bool BaseStream::hasInput(void) const
     {
-        fd_set st;
-        struct timeval tv = { 0 };
-        FD_ZERO(& st);
-        FD_SET(STDIN_FILENO, & st);
-        return 0 < select(1, & st, NULL, NULL, & tv);
+	struct pollfd fds = {0};
+	fds.fd = STDIN_FILENO;
+	fds.events = POLLIN;
+	return 0 < poll(& fds, 1, 0);
     }
 
     BaseStream & BaseStream::sendInt8(uint8_t val)
@@ -270,7 +269,10 @@ namespace LTSM
 
         size_t zipsz = total_out - prev;
 	zip.resize(zipsz);
+
 	outbuf.clear();
+        next_out = nullptr;
+        avail_out = 0;
 
 	return zip;
     }
@@ -354,6 +356,7 @@ namespace LTSM
         std::clearerr(out);
         std::unique_ptr<BaseStream> stream;
         Application::busSetDebugLevel(_config.getString("logging:level"));
+        Application::info("connector version: %d", LTSM::service_version);
 
         // protocol up
         if(_type == "vnc")

@@ -607,10 +607,12 @@ namespace LTSM
                         break;
 
                     case RFB::CLIENT_SET_ENCODINGS:
-                        clientSetEncodings();
-                        // full update
-                        joinRegion.join(serverRegion);
-			clientUpdateReq = true;
+                        if(clientSetEncodings())
+                        {
+                            // full update
+                            joinRegion.join(serverRegion);
+			    clientUpdateReq = true;
+                        }
                         break;
 
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
@@ -688,7 +690,7 @@ namespace LTSM
             // dbus processing
             _conn->enterEventLoopAsync();
             // wait
-            std::this_thread::sleep_for(2ms);
+            std::this_thread::sleep_for(3ms);
         }
 
         return EXIT_SUCCESS;

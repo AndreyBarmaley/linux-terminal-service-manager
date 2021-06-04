@@ -522,10 +522,12 @@ namespace LTSM
     {
         if(auto xvfb = getXvfbInfo(display))
         {
+            if(xvfb->shutdown)
+		return;
+
             xvfb->shutdown = true;
-
             if(emitSignal) emitShutdownConnector(display);
-
+	
             // dbus no wait, remove background
             std::thread([=]()
             {
@@ -533,8 +535,11 @@ namespace LTSM
     	        std::string sysuser = _config->getString("user:xvfb");
                 std::string user = xvfb->user;
 
-                this->closeSystemSession(display, *xvfb);
+                if(sysuser != user)
+		    this->closeSystemSession(display, *xvfb);
+
                 std::this_thread::sleep_for(300ms);
+
                 this->removeXvfbDisplay(display);
 		this->removeXvfbSocket(display);
                 this->emitDisplayRemoved(display);
@@ -551,14 +556,14 @@ namespace LTSM
 
     void Manager::Object::closeSystemSession(int display, XvfbSession & info)
     {
-        Application::info("close system session, user: %s, display: %d", info.user.c_str(), display);
+    	Application::info("close system session, user: %s, display: %d", info.user.c_str(), display);
 
-        // PAM close
-        if(info.pamh)
-        {
-            pam_close_session(info.pamh, 0);
-            pam_end(info.pamh, PAM_SUCCESS);
-            info.pamh = nullptr;
+    	// PAM close
+    	if(info.pamh)
+    	{
+    	    pam_close_session(info.pamh, 0);
+    	    pam_end(info.pamh, PAM_SUCCESS);
+    	    info.pamh = nullptr;
 	}
 
     	// unreg sessreg
@@ -1632,7 +1637,7 @@ namespace LTSM
         Manager::obj.reset(new Manager::Object(*conn, _config, *this));
         Manager::running = true;
         Application::busSetDebugLevel(_config.getString("logging:level"));
-        Application::info("%s", "dbus events loop");
+        Application::info("manager version: %d", LTSM::service_version);
 
         while(Manager::running)
         {

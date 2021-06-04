@@ -42,7 +42,7 @@ namespace LTSM
         {
             int16_t     x, y;
 
-            Point() : x(-1) {}
+            Point() : x(-1), y(-1) {}
             Point(int16_t px, int16_t py) : x(px), y(py) {}
 	};
 
@@ -353,13 +353,9 @@ namespace LTSM
             int                 sendEncodingRawSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
             int                 sendEncodingRawSubRegionRaw(const RFB::Region &, const RFB::FrameBuffer &);
 
-            int                 sendEncodingRRE(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingRRESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
-            int                 sendEncodingRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
-
-            int                 sendEncodingCoRRE(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingCoRRESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
-            int                 sendEncodingCoRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
+            int                 sendEncodingRRE(const RFB::Region &, const RFB::FrameBuffer &, bool corre);
+            int			sendEncodingRRESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool corre);
+            int                 sendEncodingRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &, bool corre);
 
             int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &, bool zlib);
             int			sendEncodingHextileSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlib);
