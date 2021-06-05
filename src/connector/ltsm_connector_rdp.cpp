@@ -33,7 +33,7 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     /* Connector::RDP */
-    int Connector::RDP::communication(void)
+    int Connector::RDP::communication(bool tls)
     {
         const std::string remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
         Application::debug("under construction, remoteaddr: %s\n", remoteaddr.c_str());

@@ -24,6 +24,8 @@
 #ifndef _LTSM_CONNECTOR_
 #define _LTSM_CONNECTOR_
 
+#include <gnutls/gnutls.h>
+
 #include "zlib.h"
 
 #include "ltsm_global.h"
@@ -63,16 +65,32 @@ namespace LTSM
             : RenderPrimitive(RenderType::RenderText), text(str), region(rt), color(col) {}
     };
 
+    struct TLS
+    {
+    	gnutls_anon_server_credentials_t cred;
+    	gnutls_session_t		 session;
+	gnutls_dh_params_t		 dhparams;
+
+	TLS(int debug = 0);
+	~TLS();
+
+	bool				initSession(int mode = GNUTLS_SERVER);
+	int				recvInt8(void);
+	bool				sendInt8(uint8_t val);
+	bool				sendRaw(const void* buf, size_t length);
+    };
+
     class BaseStream
     {
     protected:
         FILE*                           fdin;
         FILE*                           fdout;
 	bool				ioerr;
+	std::array<char, 1492>		fdbuf;
 
     public:
-        BaseStream(FILE* in, FILE* out) : fdin(in), fdout(out), ioerr(false) {}
-        virtual ~BaseStream() {}
+        BaseStream();
+        virtual ~BaseStream();
 
         BaseStream &                    sendIntBE16(uint16_t);
         BaseStream &                    sendIntBE32(uint32_t);
@@ -84,10 +102,10 @@ namespace LTSM
         BaseStream &                    sendInt16(uint16_t val);
         BaseStream &                    sendInt32(uint32_t val);
 
-        virtual BaseStream &            sendRaw(const uint8_t*, size_t);
+        virtual BaseStream &            sendRaw(const void*, size_t);
 
-        bool                            hasInput(void) const;
-        void                            sendFlush(void);
+        virtual bool                    hasInput(void) const;
+        virtual void                    sendFlush(void) const;
 
         int		                recvIntBE16(void);
         int		                recvIntBE32(void);
@@ -95,7 +113,7 @@ namespace LTSM
         int		                recvIntLE16(void);
         int		                recvIntLE32(void);
 
-        int		                recvInt8(void);
+        virtual int		        recvInt8(void);
         int		                recvInt16(void);
         int		                recvInt32(void);
 
@@ -104,7 +122,26 @@ namespace LTSM
         BaseStream &                    sendString(const std::string &);
         std::string	                recvString(size_t);
 
-        virtual int	                communication(void) = 0;
+        virtual int	                communication(bool) = 0;
+    };
+
+    class TLS_Stream : public BaseStream
+    {
+    protected:
+	std::unique_ptr<TLS>            tls;
+	bool				handshake;
+
+    public:
+	TLS_Stream() : handshake(false) {}
+	~TLS_Stream();
+
+	bool				tlsInitHandshake(int debug);
+
+        bool                            hasInput(void) const override;
+        void                            sendFlush(void) const override;
+        TLS_Stream &                    sendInt8(uint8_t val) override;
+        TLS_Stream &                    sendRaw(const void*, size_t) override;
+        int		                recvInt8(void) override;
     };
 
     struct zlibStream : z_stream
@@ -136,20 +173,20 @@ namespace LTSM
 	std::vector<uint8_t>		syncFlush(bool finish = false);
     };
 
-    class ZlibOutStream : public BaseStream
+    class ZlibOutStream : public TLS_Stream
     {
     protected:
 	std::unique_ptr<zlibStream>	zlibStreamPtr;
 	bool                            deflateStarted;
 
     public:
-	ZlibOutStream(FILE* in, FILE* out) : BaseStream(in, out), deflateStarted(false) {}
+	ZlibOutStream() : deflateStarted(false) {}
 
 	void 				zlibDeflateStart(size_t reserve);
 	std::vector<uint8_t>		zlibDeflateStop(void);
 
         ZlibOutStream &                 sendInt8(uint8_t val) override;
-        ZlibOutStream &                 sendRaw(const uint8_t*, size_t) override;
+        ZlibOutStream &                 sendRaw(const void*, size_t) override;
     };
 
     namespace Connector
@@ -205,6 +242,7 @@ namespace LTSM
         class Service : public ApplicationJsonConfig
         {
             std::string                 _type;
+	    bool			_tls;
 
         public:
             Service(int argc, const char** argv);

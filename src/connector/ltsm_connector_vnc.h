@@ -377,9 +377,8 @@ namespace LTSM
             std::pair<sendEncodingFunc, int> selectEncodings(void);
 
         public:
-            VNC(FILE* fd1, FILE* fd2, sdbus::IConnection* conn, const JsonObject & jo)
-                : ZlibOutStream(fd1, fd2), SignalProxy(conn, jo, "vnc"), loopMessage(false),
-                  encodingDebug(0), pressedMask(0), fbUpdateProcessing(false)
+            VNC(sdbus::IConnection* conn, const JsonObject & jo)
+                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), pressedMask(0), fbUpdateProcessing(false)
             {
                 registerProxy();
             }
@@ -391,7 +390,7 @@ namespace LTSM
 		clientDisconnectedEvent();
             }
 
-            int		        communication(void) override;
+            int		        communication(bool tls) override;
         };
     }
 }

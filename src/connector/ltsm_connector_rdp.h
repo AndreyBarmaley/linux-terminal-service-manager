@@ -41,8 +41,8 @@ namespace LTSM
             void                        onSendBellSignal(const int32_t & display) override {}
 
         public:
-            RDP(FILE* fd1, FILE* fd2, sdbus::IConnection* conn, const JsonObject & jo)
-                : BaseStream(fd1, fd2), SignalProxy(conn, jo, "rdp")
+            RDP(sdbus::IConnection* conn, const JsonObject & jo)
+                : SignalProxy(conn, jo, "rdp")
             {
                 registerProxy();
             }
@@ -52,7 +52,7 @@ namespace LTSM
                 unregisterProxy();
             }
 
-            int		                communication(void) override;
+            int		                communication(bool tls) override;
         };
     }
 }

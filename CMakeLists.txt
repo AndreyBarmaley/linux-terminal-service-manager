@@ -62,7 +62,7 @@ target_sources(LTSM_service PUBLIC ${LTSM_common})
 
 target_include_directories(LTSM_service PUBLIC src/common)
 target_include_directories(LTSM_service PUBLIC src/dbus-glue)
-target_include_directories(LTSM_service PUBLIC PAM_INCLUDE_PATH)
+target_include_directories(LTSM_service PUBLIC ${PAM_INCLUDE_PATH})
 
 target_link_libraries(LTSM_service LTSM_common)
 target_link_libraries(LTSM_service SDBusCpp::sdbus-c++)
@@ -74,6 +74,7 @@ set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_C
 project(LTSM_connector VERSION 20210301.1)
 
 find_package(sdbus-c++ REQUIRED)
+find_package(GnuTLS REQUIRED)
 
 add_executable(LTSM_connector
     src/connector/ltsm_connector_rdp.cpp
@@ -83,11 +84,15 @@ add_executable(LTSM_connector
 
 target_sources(LTSM_connector PUBLIC ${LTSM_common})
 
+target_compile_options(LTSM_connector PUBLIC ${GNUTLS_DEFINITIONS})
+
 target_include_directories(LTSM_connector PUBLIC src/common)
 target_include_directories(LTSM_connector PUBLIC src/dbus-glue)
+target_include_directories(LTSM_connector PUBLIC ${GNUTLS_INCLUDE_DIR})
 
 target_link_libraries(LTSM_connector LTSM_common)
 target_link_libraries(LTSM_connector SDBusCpp::sdbus-c++)
+target_link_libraries(LTSM_connector ${GNUTLS_LIBRARIES})
 target_link_libraries(LTSM_connector z)
 
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
