@@ -74,6 +74,7 @@ namespace LTSM
 	TLS(int debug = 0);
 	~TLS();
 
+	std::string			sessionDescription(void) const;
 	bool				initSession(int mode = GNUTLS_SERVER);
 	int				recvInt8(void);
 	bool				sendInt8(uint8_t val);
@@ -122,7 +123,7 @@ namespace LTSM
         BaseStream &                    sendString(const std::string &);
         std::string	                recvString(size_t);
 
-        virtual int	                communication(bool) = 0;
+        virtual int	                communication(void) = 0;
     };
 
     class TLS_Stream : public BaseStream
@@ -242,7 +243,6 @@ namespace LTSM
         class Service : public ApplicationJsonConfig
         {
             std::string                 _type;
-	    bool			_tls;
 
         public:
             Service(int argc, const char** argv);

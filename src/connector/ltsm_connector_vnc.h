@@ -390,7 +390,7 @@ namespace LTSM
 		clientDisconnectedEvent();
             }
 
-            int		        communication(bool tls) override;
+            int		        communication(void) override;
         };
     }
 }

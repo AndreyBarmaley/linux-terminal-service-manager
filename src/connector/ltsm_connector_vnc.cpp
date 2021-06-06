@@ -487,7 +487,7 @@ namespace LTSM
     }
 
     /* Connector::VNC */
-    int Connector::VNC::communication(bool tls)
+    int Connector::VNC::communication(void)
     {
 	if(0 >= busGetServiceVersion())
 	{
@@ -501,6 +501,10 @@ namespace LTSM
         encodingDebug = _config->getInteger("encoding:debug", 0);
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("encoding:blacklist");
+
+        bool tlsDisable = _config->getBoolean("gnutls:disable", false);
+        int tlsDebug = _config->getInteger("gnutls:debug", 3);
+        std::string encriptionInfo = "none";
 
         if(! disabledEncodings.empty())
             disabledEncodings.remove_if([](auto & str){ return 0 == Tools::lower(str).compare("raw"); });
@@ -550,16 +554,16 @@ namespace LTSM
         serverFormat = RFB::PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, 1, visual->red_mask, visual->green_mask, visual->blue_mask);
 
         // RFB 6.1.2 security
-	if(tls)
+	if(tlsDisable)
 	{
-    	    sendInt8(2);
-	    sendInt8(RFB::SECURITY_TYPE_VENCRYPT);
+	    sendInt8(1);
 	    sendInt8(RFB::SECURITY_TYPE_NONE);
 	    sendFlush();
         }
 	else
 	{
-	    sendInt8(1);
+    	    sendInt8(2);
+	    sendInt8(RFB::SECURITY_TYPE_VENCRYPT);
 	    sendInt8(RFB::SECURITY_TYPE_NONE);
 	    sendFlush();
 	}
@@ -625,10 +629,10 @@ namespace LTSM
 
             sendInt8(1).sendFlush();
 
-	    int debug = _config->getInteger("gnutls:debug", 0);
-	    if(! tlsInitHandshake(debug))
+	    if(! tlsInitHandshake(tlsDebug))
 		return EXIT_FAILURE;
 
+            encriptionInfo = tls->sessionDescription();
             sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
 	}
 	else
@@ -639,6 +643,8 @@ namespace LTSM
             Application::error("error: %s", err);
             return EXIT_FAILURE;
         }
+
+    	busSetEncriptionInfo(screen, encriptionInfo);
 
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();

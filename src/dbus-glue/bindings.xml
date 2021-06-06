@@ -66,6 +66,11 @@
             <arg type="s" name="level" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
+        <method name="busSetEncriptionInfo">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="info" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
         <method name="busSetSessionDurationSec">
             <arg type="i" name="display" direction="in" />
             <arg type="u" name="duration" direction="in" />
@@ -75,6 +80,10 @@
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="policy" direction="in" />
             <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busEncriptionInfo">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="result" direction="out" />
         </method>
         <method name="busConnectorTerminated">
             <arg type="i" name="display" direction="in" />
@@ -96,7 +105,7 @@
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busGetSessions">
-            <arg type="a(iiiiiiiiiissss)" name="result" direction="out" />
+            <arg type="a(iiiiiiiiiisssss)" name="result" direction="out" />
         </method>
         <method name="busRenderRect">
             <arg type="i" name="display" direction="in" />

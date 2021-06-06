@@ -49,6 +49,7 @@ struct XvfbInfo
     QString     authfile;
     QString     remoteaddr;
     QString     conntype;
+    QString     encription;
 };
 
 Q_DECLARE_METATYPE(XvfbInfo);

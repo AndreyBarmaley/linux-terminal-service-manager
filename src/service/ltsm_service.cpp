@@ -213,7 +213,8 @@ namespace LTSM
                     pair.second.user,
                     pair.second.xauthfile,
                     pair.second.remoteaddr,
-                    pair.second.conntype
+                    pair.second.conntype,
+                    pair.second.encription
             );
         }
 
@@ -1454,6 +1455,27 @@ namespace LTSM
         Application::info("set debug level: %s", level.c_str());
         Application::busSetDebugLevel(level);
         return true;
+    }
+
+    std::string Manager::Object::busEncriptionInfo(const int32_t & display)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+    	    return xvfb->encription;
+
+	return "none";
+    }
+
+    bool Manager::Object::busSetEncriptionInfo(const int32_t & display, const std::string & info)
+    {
+        Application::info("set encription: %s, display: %d", info.c_str(), display);
+        if(auto xvfb = getXvfbInfo(display))
+	{
+	    const std::lock_guard<std::mutex> lock(_mutex);
+	    xvfb->encription = info;
+            emitSessionParamsChanged(display);
+	    return true;
+	}
+	return false;
     }
 
     bool Manager::Object::busSetSessionDurationSec(const int32_t & display, const uint32_t & duration)

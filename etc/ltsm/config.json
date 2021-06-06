@@ -4,6 +4,8 @@
     "encoding:debug": 0,
     "encoding:threads": 4,
     "encoding:blacklist": [ "zlib" ],
+    "gnutls:disable": false,
+    "gnutls:debug": 3,
 
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",

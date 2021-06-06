@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>436</width>
-    <height>200</height>
+    <width>440</width>
+    <height>233</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -32,18 +32,18 @@
    <property name="styleSheet">
     <string notr="true"/>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QVBoxLayout" name="verticalLayout_3">
     <property name="spacing">
      <number>2</number>
     </property>
     <property name="leftMargin">
-     <number>0</number>
+     <number>2</number>
     </property>
     <property name="topMargin">
-     <number>0</number>
+     <number>2</number>
     </property>
     <property name="rightMargin">
-     <number>0</number>
+     <number>2</number>
     </property>
     <property name="bottomMargin">
      <number>2</number>
@@ -123,15 +123,12 @@ color: rgb(255, 255, 255);</string>
      </widget>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout4">
-      <property name="leftMargin">
-       <number>6</number>
-      </property>
-      <property name="rightMargin">
-       <number>6</number>
-      </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
       <item>
-       <layout class="QVBoxLayout" name="verticalLayout2">
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <property name="leftMargin">
+         <number>6</number>
+        </property>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout2">
           <item>
@@ -184,8 +181,35 @@ color: rgb(255, 255, 255);</string>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
-              <width>19</width>
+              <width>15</width>
               <height>22</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <item>
+           <widget class="QLabel" name="labelEncription">
+            <property name="text">
+             <string>encription:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Minimum</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>15</width>
+              <height>20</height>
              </size>
             </property>
            </spacer>
@@ -195,7 +219,7 @@ color: rgb(255, 255, 255);</string>
        </layout>
       </item>
       <item>
-       <layout class="QVBoxLayout" name="verticalLayout1">
+       <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
          <widget class="QComboBox" name="comboBoxUsername">
           <property name="inputMethodHints">
@@ -210,6 +234,22 @@ color: rgb(255, 255, 255);</string>
          <widget class="QLineEdit" name="lineEditPassword">
           <property name="echoMode">
            <enum>QLineEdit::Password</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEditEncription">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="autoFillBackground">
+           <bool>false</bool>
+          </property>
+          <property name="text">
+           <string>none</string>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
           </property>
          </widget>
         </item>

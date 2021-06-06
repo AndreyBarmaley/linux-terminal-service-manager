@@ -186,6 +186,14 @@ namespace LTSM
 	return false;
     }
 
+    std::string TLS::sessionDescription(void) const
+    {
+	auto desc = gnutls_session_get_desc(session);
+	std::string res(desc);
+	gnutls_free(desc);
+	return res;
+    }
+
     /* TLS_Stream */
     TLS_Stream::~TLS_Stream()
     {
@@ -221,17 +229,20 @@ namespace LTSM
 	return true;
     }
 
+    bool TLS_Stream::hasInput(void) const
+    {
+        // gnutls doc: 6.5.1 Asynchronous operation
+        // utilize gnutls_record_check_pending, either before the poll system call
+        return (tls ? 0 < gnutls_record_check_pending(tls->session) : false) ||
+            BaseStream::hasInput();
+    }
+
     void TLS_Stream::sendFlush(void) const
     {
 	if(tls)
 	    gnutls_record_uncork(tls->session, 0); 
 	else
 	    BaseStream::sendFlush();
-    }
-
-    bool TLS_Stream::hasInput(void) const
-    {
-	return BaseStream::hasInput();
     }
 
     int TLS_Stream::recvInt8(void)
@@ -552,7 +563,7 @@ namespace LTSM
 
     /* Connector::Service */
     Connector::Service::Service(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("vnc"), _tls(false)
+        : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("vnc")
     {
         for(int it = 1; it < argc; ++it)
         {
@@ -564,11 +575,6 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
             {
                 _type = Tools::lower(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--tls"))
-            {
-                _tls = true;
                 it = it + 1;
             }
         }
@@ -594,7 +600,7 @@ namespace LTSM
             stream.reset(new Connector::RDP(conn.get(), _config));
 
 	int res = stream ?
-		stream->communication(_tls) : EXIT_FAILURE;
+		stream->communication() : EXIT_FAILURE;
 
         return res;
     }

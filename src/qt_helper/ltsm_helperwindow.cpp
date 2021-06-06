@@ -129,6 +129,17 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         if(!res.arguments().isEmpty())
             loginAutoComplete = res.arguments().front().toBool();
 
+        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncriptionInfo", displayNum);
+	QString encription;
+
+        if(!res.arguments().isEmpty())
+            encription = res.arguments().front().toString();
+
+	if(encription.isEmpty())
+            encription = "none";
+
+        ui->lineEditEncription->setText(encription);
+
         if(loginAutoComplete)
         {
             timerReloadUsers = startTimer(std::chrono::minutes(15));
@@ -139,6 +150,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperAutoLogin(int, const QString &, const QString &)), this, SLOT(autoLoginCallback(int, const QString &, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &)));
+	connect(dbusInterfacePtr.data(), SIGNAL(sessionParamsChanged(int)), this, SLOT(sessionParamsChangedCallback(int)));
 
         initArguments = true;
     }
@@ -235,6 +247,23 @@ void LTSM_HelperWindow::setLabelError(const QString & error)
     ui->labelInfo->setText(error);
     ui->labelInfo->setStyleSheet("QLabel { color: red; }");
     errorPause = 2;
+}
+
+void LTSM_HelperWindow::sessionParamsChangedCallback(int display)
+{
+    if(display == displayNum && dbusInterfacePtr)
+    {
+        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncriptionInfo", displayNum);
+	QString encription;
+
+        if(!res.arguments().isEmpty())
+            encription = res.arguments().front().toString();
+
+	if(encription.isEmpty())
+            encription = "none";
+
+        ui->lineEditEncription->setText(encription);
+    }
 }
 
 void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & username)

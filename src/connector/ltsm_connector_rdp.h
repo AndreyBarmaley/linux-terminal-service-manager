@@ -52,7 +52,7 @@ namespace LTSM
                 unregisterProxy();
             }
 
-            int		                communication(bool tls) override;
+            int		                communication(void) override;
         };
     }
 }

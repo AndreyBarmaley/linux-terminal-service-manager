@@ -165,6 +165,13 @@ public:
         return result;
     }
 
+    bool busSetEncriptionInfo(const int32_t& display, const std::string& info)
+    {
+        bool result;
+        proxy_.callMethod("busSetEncriptionInfo").onInterface(INTERFACE_NAME).withArguments(display, info).storeResultsTo(result);
+        return result;
+    }
+
     bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration)
     {
         bool result;
@@ -176,6 +183,13 @@ public:
     {
         bool result;
         proxy_.callMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withArguments(display, policy).storeResultsTo(result);
+        return result;
+    }
+
+    std::string busEncriptionInfo(const int32_t& display)
+    {
+        std::string result;
+        proxy_.callMethod("busEncriptionInfo").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
         return result;
     }
 
@@ -207,9 +221,9 @@ public:
         return result;
     }
 
-    std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string>> busGetSessions()
+    std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> busGetSessions()
     {
-        std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string>> result;
+        std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> result;
         proxy_.callMethod("busGetSessions").onInterface(INTERFACE_NAME).storeResultsTo(result);
         return result;
     }
