@@ -5,8 +5,8 @@ Linux Terminal Service Manager (LTSM) is a set of service programs that allows r
 main dependencies:  
   - systemd, sd-bus  
   - [sdbus-cpp](https://github.com/Kistler-Group/sdbus-cpp)  
-  - [json parser](https://github.com/zserge/jsmn)
-  - XCB system libs  
+  - [json parser](https://github.com/zserge/jsmn)  
+  - system libs: gnutls, xcb, zlib  
 
 # Demo access
 ```
