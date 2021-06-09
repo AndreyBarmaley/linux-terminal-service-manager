@@ -5,6 +5,7 @@
     "encoding:threads": 4,
     "encoding:blacklist": [ "zlib" ],
     "gnutls:disable": false,
+    "gnutls:priority": "NORMAL:+ANON-ECDH:+ANON-DH",
     "gnutls:debug": 3,
 
     "group:shm": "ltsm-shm",

@@ -63,7 +63,7 @@ namespace LTSM
 	gnutls_global_set_log_function(gnutls_log);
     }
 
-    bool TLS::initSession(int mode)
+    bool TLS::initSession(const std::string & priority, int mode)
     {
         int ret = gnutls_init(& session, mode);
 	if(ret < 0)
@@ -72,14 +72,19 @@ namespace LTSM
 	    return false;
 	}
 
-	gnutls_set_default_priority(session);
+        if(priority.empty())
+	    gnutls_set_default_priority(session);
+        else
+        {
+            ret = gnutls_priority_set_direct(session, "NORMAL:+ANON-ECDH:+ANON-DH", nullptr);
+	    if(ret < 0)
+	    {
+	        Application::error("gnutls_priority_set_direct error: %s", gnutls_strerror(ret));
 
-        ret = gnutls_priority_set_direct(session, "NORMAL:+ANON-ECDH:+ANON-DH", nullptr);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_priority_set_direct error: %s", gnutls_strerror(ret));
-	    return false;
-	}
+	        ret = gnutls_set_default_priority(session);
+	        Application::info("gnutls_set_default_prioryty: %s", gnutls_strerror(ret));
+	    }
+        }
 
 	ret = gnutls_dh_params_init(&dhparams);
 	if(ret < 0)
@@ -198,15 +203,15 @@ namespace LTSM
     TLS_Stream::~TLS_Stream()
     {
 	if(tls && handshake)
-	    gnutls_bye(tls->session, GNUTLS_SHUT_RDWR);
+	    gnutls_bye(tls->session, GNUTLS_SHUT_WR);
     }
 
-    bool TLS_Stream::tlsInitHandshake(int debug)
+    bool TLS_Stream::tlsInitHandshake(const std::string & priority, int debug)
     {
 	int ret = 0;
 	tls.reset(new TLS(debug));
 
-	if(! tls->initSession(GNUTLS_SERVER))
+	if(! tls->initSession(priority, GNUTLS_SERVER))
 	{
 	    tls.reset();
 	    return false;

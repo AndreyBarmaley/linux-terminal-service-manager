@@ -75,7 +75,7 @@ namespace LTSM
 	~TLS();
 
 	std::string			sessionDescription(void) const;
-	bool				initSession(int mode = GNUTLS_SERVER);
+	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER);
 	int				recvInt8(void);
 	bool				sendInt8(uint8_t val);
 	bool				sendRaw(const void* buf, size_t length);
@@ -136,7 +136,7 @@ namespace LTSM
 	TLS_Stream() : handshake(false) {}
 	~TLS_Stream();
 
-	bool				tlsInitHandshake(int debug);
+	bool				tlsInitHandshake(const std::string & priority, int debug);
 
         bool                            hasInput(void) const override;
         void                            sendFlush(void) const override;

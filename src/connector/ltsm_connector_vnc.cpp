@@ -502,6 +502,7 @@ namespace LTSM
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("encoding:blacklist");
 
+        const std::string tlsPriority = _config->getString("gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
         bool tlsDisable = _config->getBoolean("gnutls:disable", false);
         int tlsDebug = _config->getInteger("gnutls:debug", 3);
         std::string encriptionInfo = "none";
@@ -629,7 +630,7 @@ namespace LTSM
 
             sendInt8(1).sendFlush();
 
-	    if(! tlsInitHandshake(tlsDebug))
+	    if(! tlsInitHandshake(tlsPriority, tlsDebug))
 		return EXIT_FAILURE;
 
             encriptionInfo = tls->sessionDescription();
