@@ -32,8 +32,8 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
-#include <fstream>
 #include <iostream>
+#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -53,7 +53,7 @@ namespace LTSM
     }
 
     /* TLS */
-    TLS::TLS(int debug) : cred(nullptr), session(nullptr), dhparams(nullptr)
+    TLS::TLS(int debug) : session(nullptr), dhparams(nullptr)
     {
         int ret = gnutls_global_init();
 	if(ret < 0)
@@ -66,80 +66,191 @@ namespace LTSM
     bool TLS::initSession(const std::string & priority, int mode)
     {
         int ret = gnutls_init(& session, mode);
-	if(ret < 0)
+	if(gnutls_error_is_fatal(ret))
 	{
 	    Application::error("gnutls_init error: %s", gnutls_strerror(ret));
 	    return false;
 	}
 
         if(priority.empty())
-	    gnutls_set_default_priority(session);
+        {
+	    ret = gnutls_set_default_priority(session);
+        }
         else
         {
-            ret = gnutls_priority_set_direct(session, "NORMAL:+ANON-ECDH:+ANON-DH", nullptr);
-	    if(ret < 0)
+            ret = gnutls_priority_set_direct(session, priority.c_str(), nullptr);
+	    if(ret != GNUTLS_E_SUCCESS)
 	    {
-	        Application::error("gnutls_priority_set_direct error: %s", gnutls_strerror(ret));
-
-	        ret = gnutls_set_default_priority(session);
-	        Application::info("gnutls_set_default_prioryty: %s", gnutls_strerror(ret));
+		const char* compat = "NORMAL:+ANON-ECDH:+ANON-DH";
+	        Application::error("gnutls_priority_set_direct error: %s, priority: %s", gnutls_strerror(ret), priority.c_str());
+	        Application::info("reuse compat priority: %s", gnutls_strerror(ret), compat);
+        	ret = gnutls_priority_set_direct(session, compat, nullptr);
 	    }
         }
 
+	if(gnutls_error_is_fatal(ret))
+        {
+	    Application::error("gnutls_set_default_priority error: %s", gnutls_strerror(ret));
+	    return false;
+        }
+
 	ret = gnutls_dh_params_init(&dhparams);
-	if(ret < 0)
+	if(gnutls_error_is_fatal(ret))
 	{
 	    Application::error("gnutls_dh_params_init error: %s", gnutls_strerror(ret));
 	    return false;
 	}
 
 	ret = gnutls_dh_params_generate2(dhparams, 1024);
-	if(ret < 0)
+	if(gnutls_error_is_fatal(ret))
 	{
 	    Application::error("gnutls_dh_params_generate2 error: %s", gnutls_strerror(ret));
-	    return false;
-	}
-
-        ret = gnutls_anon_allocate_server_credentials(& cred);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_anon_allocate_server_credentials error: %s", gnutls_strerror(ret));
-	    return false;
-	}
-
-	gnutls_anon_set_server_dh_params(cred, dhparams);
-
-        ret = gnutls_credentials_set(session, GNUTLS_CRD_ANON, cred);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_credentials_set error: %s", gnutls_strerror(ret));
 	    return false;
 	}
 
 	return true;
     }
 
+    bool AnonTLS::initSession(const std::string & priority, int mode)
+    {
+	if(TLS::initSession(priority, mode))
+	{
+    	    int ret = gnutls_anon_allocate_server_credentials(& cred);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_anon_allocate_server_credentials error: %s", gnutls_strerror(ret));
+		return false;
+	    }
+
+	    gnutls_anon_set_server_dh_params(cred, dhparams);
+
+    	    ret = gnutls_credentials_set(session, GNUTLS_CRD_ANON, cred);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_credentials_set error: %s", gnutls_strerror(ret));
+		return false;
+	    }
+
+	    return true;
+	}
+
+	return false;
+    }
+
+    bool x509TLS::initSession(const std::string & priority, int mode)
+    {
+        if(caFile.empty() || ! std::filesystem::exists(caFile))
+	{
+	    Application::error("CA file not found: %s", caFile.c_str());
+	    return false;
+	}
+
+        if(certFile.empty() || ! std::filesystem::exists(certFile))
+	{
+	    Application::error("cert file not found: %s", certFile.c_str());
+	    return false;
+	}
+
+        if(keyFile.empty() || ! std::filesystem::exists(keyFile))
+	{
+	    Application::error("key file not found: %s", keyFile.c_str());
+	    return false;
+	}
+
+	if(TLS::initSession(priority, mode))
+	{
+    	    int ret = gnutls_certificate_allocate_credentials(& cred);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_certificate_allocate_credentials error: %s", gnutls_strerror(ret));
+		return false;
+	    }
+
+	    ret = gnutls_certificate_set_x509_trust_file(cred, caFile.c_str(), GNUTLS_X509_FMT_PEM);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_certificate_set_x509_trust_file error: %s, ca: %s", gnutls_strerror(ret), caFile.c_str());
+		return false;
+	    }
+
+	    if(! crlFile.empty() && std::filesystem::exists(crlFile))
+	    {
+		ret = gnutls_certificate_set_x509_crl_file(cred, crlFile.c_str(), GNUTLS_X509_FMT_PEM);
+		if(gnutls_error_is_fatal(ret))
+		{
+		    Application::error("gnutls_certificate_set_x509_crl_file error: %s, crl: %s", gnutls_strerror(ret), crlFile.c_str());
+		    return false;
+		}
+	    }
+
+	    ret = gnutls_certificate_set_x509_key_file(cred, certFile.c_str(), keyFile.c_str(), GNUTLS_X509_FMT_PEM);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_certificate_set_x509_key_file error: %s, cert: %s, key: %s", gnutls_strerror(ret), certFile.c_str(), keyFile.c_str());
+		return false;
+	    }
+
+	    /*
+	    if(! ocspStatusFile.empty() && std::filesystem::is_regular_file(ocspStatusFile))
+	    {
+		ret = gnutls_certificate_set_ocsp_status_request_file(cred, ocspStatusFile.c_str(), 0);
+		if(gnutls_error_is_fatal(ret))
+		{
+		    Application::error("gnutls_certificate_set_ocsp_status_request_file error: %s, ocsp status file: %s", gnutls_strerror(ret), ocspStatusFile.c_str());
+		    return false;
+		}
+	    }
+	    */
+
+    	    gnutls_certificate_set_dh_params(cred, dhparams);
+
+    	    ret = gnutls_credentials_set(session, GNUTLS_CRD_CERTIFICATE, cred);
+	    if(gnutls_error_is_fatal(ret))
+	    {
+		Application::error("gnutls_credentials_set error: %s", gnutls_strerror(ret));
+		return false;
+	    }
+
+	    gnutls_certificate_server_set_request(session, GNUTLS_CERT_IGNORE);
+	    return true;
+	}
+
+	return false;
+    }
+
     TLS::~TLS()
     {
 	if(dhparams) gnutls_dh_params_deinit(dhparams);
         if(session) gnutls_deinit(session);
-        if(cred) gnutls_anon_free_server_credentials(cred);
         gnutls_global_deinit();
+    }
+
+    AnonTLS::~AnonTLS()
+    {
+        if(cred)
+	    gnutls_anon_free_server_credentials(cred);
+    }
+
+    x509TLS::~x509TLS()
+    {
+        if(cred)
+	    gnutls_certificate_free_credentials(cred);
     }
 
     int TLS::recvInt8(void)
     {
 	uint8_t ch = 0;
 	int ret = 0;
+	const int length = 1;
 
-	while((ret = gnutls_record_recv(session, & ch, 1)) < 0)
+	while((ret = gnutls_record_recv(session, & ch, length)) < 0)
 	{
     	    if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
 		continue;
             break;
         }
 
-	if(ret == 1)
+	if(ret == length)
 	    return ch;
 
         if(gnutls_error_is_fatal(ret) == 0)
@@ -151,14 +262,16 @@ namespace LTSM
     bool TLS::sendInt8(uint8_t val)
     {
 	int ret = 0;
-	while((ret = gnutls_record_send(session, & val, 1)) < 0)
+	const int length = 1;
+
+	while((ret = gnutls_record_send(session, & val, length)) < 0)
 	{
     	    if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
 		continue;
             break;
         }
 
-	if(ret == 1)
+	if(ret == length)
 	    return true;
 
         if(gnutls_error_is_fatal(ret) == 0)
@@ -199,6 +312,7 @@ namespace LTSM
 	return res;
     }
 
+
     /* TLS_Stream */
     TLS_Stream::~TLS_Stream()
     {
@@ -206,10 +320,38 @@ namespace LTSM
 	    gnutls_bye(tls->session, GNUTLS_SHUT_WR);
     }
 
-    bool TLS_Stream::tlsInitHandshake(const std::string & priority, int debug)
+    bool TLS_Stream::tlsInitAnonHandshake(const std::string & priority, int debug)
     {
 	int ret = 0;
-	tls.reset(new TLS(debug));
+	tls.reset(new AnonTLS(debug));
+
+	if(! tls->initSession(priority, GNUTLS_SERVER))
+	{
+	    tls.reset();
+	    return false;
+	}
+
+	gnutls_transport_set_int2(tls->session, fileno(fdin), fileno(fdout));
+
+        do {
+            ret = gnutls_handshake(tls->session);
+        }
+        while(ret < 0 && gnutls_error_is_fatal(ret) == 0);
+
+	if(ret < 0)
+	{
+	    Application::error("gnutls_handshake error: %s", gnutls_strerror(ret));
+	    return false;
+	}
+
+	handshake = true;
+	return true;
+    }
+
+    bool TLS_Stream::tlsInitX509Handshake(const std::string & priority, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
+    {
+	int ret = 0;
+	tls.reset(new x509TLS(caFile, certFile, keyFile, crlFile, debug));
 
 	if(! tls->initSession(priority, GNUTLS_SERVER))
 	{

@@ -32,7 +32,6 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_font_psf.h"
@@ -503,6 +502,11 @@ namespace LTSM
         disabledEncodings = _config->getStdList<std::string>("encoding:blacklist");
 
         const std::string tlsPriority = _config->getString("gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        const std::string tlsCAFile = _config->getString("gnutls:cafile");
+        const std::string tlsCertFile = _config->getString("gnutls:certfile");
+        const std::string tlsKeyFile = _config->getString("gnutls:keyfile");
+        const std::string tlsCRLFile = _config->getString("gnutls:crlfile");
+        bool tlsAnonMode = _config->getBoolean("gnutls:anonmode", true);
         bool tlsDisable = _config->getBoolean("gnutls:disable", false);
         int tlsDebug = _config->getInteger("gnutls:debug", 3);
         std::string encriptionInfo = "none";
@@ -593,32 +597,65 @@ namespace LTSM
 
 	    // send supported
 	    sendInt8(0);
+	    bool x509Mode = false;
 
 	    if(minorVer == 1)
 	    {
-		sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
+		if(tlsAnonMode)
+		    sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
+		else
+		    sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
 
 		int res = recvInt8();
     		Application::debug("RFB 6.2.19.0.1, client choice vencrypt security: 0x%02x", res);
 
-		if(res != RFB::SECURITY_VENCRYPT01_TLSNONE)
-        	{
-		    Application::error("error: %s", "unsupported vencrypt security");
-        	    return EXIT_FAILURE;
+		switch(res)
+		{
+		    case RFB::SECURITY_VENCRYPT01_TLSNONE:
+			break;
+
+		    case RFB::SECURITY_VENCRYPT01_X509NONE:
+			if(tlsAnonMode)
+			{
+			    Application::error("error: %s", "unsupported vencrypt security");
+        		    return EXIT_FAILURE;
+			}
+			x509Mode = true;
+			break;
+
+		    default:
+			Application::error("error: %s", "unsupported vencrypt security");
+        		return EXIT_FAILURE;
 		}
 	    }
 	    else
 	    if(minorVer == 2)
 	    {
-		sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
+		if(tlsAnonMode)
+		    sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
+		else
+		    sendInt8(2).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE).sendFlush();
 
 		int res = recvIntBE32();
     		Application::debug("RFB 6.2.19.0.2, client choice vencrypt security: 0x%08x", res);
 
-		if(res != RFB::SECURITY_VENCRYPT02_TLSNONE)
-        	{
-		    Application::error("error: %s", "unsupported vencrypt security");
-        	    return EXIT_FAILURE;
+		switch(res)
+		{
+		    case RFB::SECURITY_VENCRYPT02_TLSNONE:
+			break;
+
+		    case RFB::SECURITY_VENCRYPT02_X509NONE:
+			if(tlsAnonMode)
+			{
+			    Application::error("error: %s", "unsupported vencrypt security");
+        		    return EXIT_FAILURE;
+			}
+			x509Mode = true;
+			break;
+
+		    default:
+			Application::error("error: %s", "unsupported vencrypt security");
+        		return EXIT_FAILURE;
 		}
 	    }
     	    else
@@ -630,7 +667,12 @@ namespace LTSM
 
             sendInt8(1).sendFlush();
 
-	    if(! tlsInitHandshake(tlsPriority, tlsDebug))
+	    // init hasdshake
+	    bool tlsInitHandshake = x509Mode ? 
+		    tlsInitX509Handshake(tlsPriority, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
+		    tlsInitAnonHandshake(tlsPriority, tlsDebug);
+
+	    if(! tlsInitHandshake)
 		return EXIT_FAILURE;
 
             encriptionInfo = tls->sessionDescription();

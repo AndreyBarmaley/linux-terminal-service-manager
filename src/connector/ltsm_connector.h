@@ -67,18 +67,41 @@ namespace LTSM
 
     struct TLS
     {
-    	gnutls_anon_server_credentials_t cred;
     	gnutls_session_t		 session;
 	gnutls_dh_params_t		 dhparams;
 
 	TLS(int debug = 0);
-	~TLS();
+	virtual ~TLS();
 
 	std::string			sessionDescription(void) const;
-	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER);
+
 	int				recvInt8(void);
 	bool				sendInt8(uint8_t val);
 	bool				sendRaw(const void* buf, size_t length);
+
+	virtual bool			initSession(const std::string & priority, int mode = GNUTLS_SERVER);
+    };
+
+    struct AnonTLS : TLS
+    {
+    	gnutls_anon_server_credentials_t cred;
+
+	AnonTLS(int debug = 0) : TLS(debug), cred(nullptr) {}
+	~AnonTLS();
+
+	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
+    };
+
+    struct x509TLS : TLS
+    {
+	gnutls_certificate_credentials_t cred;
+	const std::string		 caFile, certFile, keyFile, crlFile;
+
+	x509TLS(const std::string & ca, const std::string & cert, const std::string & key, const std::string & crl, int debug = 0)
+	    : TLS(debug), cred(nullptr), caFile(ca), certFile(cert), keyFile(key), crlFile(crl) {}
+	~x509TLS();
+
+	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
     };
 
     class BaseStream
@@ -136,7 +159,8 @@ namespace LTSM
 	TLS_Stream() : handshake(false) {}
 	~TLS_Stream();
 
-	bool				tlsInitHandshake(const std::string & priority, int debug);
+	bool				tlsInitAnonHandshake(const std::string & priority, int debug);
+	bool				tlsInitX509Handshake(const std::string & priority, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug);
 
         bool                            hasInput(void) const override;
         void                            sendFlush(void) const override;

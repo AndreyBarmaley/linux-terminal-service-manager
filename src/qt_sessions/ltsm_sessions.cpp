@@ -81,7 +81,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     ui->setupUi(this);
 
     ui->tableWidget->setColumnCount(6);
-    ui->tableWidget->setHorizontalHeaderLabels(QStringList() << "User" << "Display" << "Status" << "RemoteAddr" << "Pid" << "Uid");
+    ui->tableWidget->setHorizontalHeaderLabels(QStringList() << tr("HeaderLabel", "User") << tr("HeaderLabel", "Display") << tr("HeaderLabel", "Status") << tr("HeaderLabel", "RemoteAddr") << tr("HeaderLabel", "Pid") << tr("HeaderLabel", "Uid"));
     ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
     sdl2x11.setFile(QDir(QCoreApplication::applicationDirPath()).filePath("LTSM_sdl2x11"));
@@ -89,7 +89,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     if(! sdl2x11.exists())
     {
 	ui->pushButtonShow->setEnabled(false);
-	ui->pushButtonShow->setToolTip(QString("utility not found: %1").arg(sdl2x11.fileName()));
+	ui->pushButtonShow->setToolTip(QString(tr("utility not found: %1")).arg(sdl2x11.fileName()));
     }
 
     const char* service = "ltsm.manager.service";
@@ -102,7 +102,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
         dbusInterfacePtr.reset();
 
 	QMessageBox::critical(this, "LTSM_sessions",
-                QString("<b>DBus interface not found!</b><br><br>service: %1<br>path: %2<br>interface: %3").arg(service).arg(path).arg(interface),
+                QString(tr("<b>DBus interface not found!</b><br><br>service: %1<br>path: %2<br>interface: %3")).arg(service).arg(path).arg(interface),
         	QMessageBox::Ok);
 
 	throw -1;
@@ -136,13 +136,13 @@ void LTSM_Sessions::customContextMenu(QPoint pos)
 
 	QMenu * menu = new QMenu(this);
 
-	QAction* infoAction = new QAction("information");
-	QAction* showAction = new QAction("show");
-	QAction* disconnectAction = new QAction("disconnect");
-	QAction* logoutAction = new QAction("logout");
-	QAction* sendmsgAction = new QAction("send message");
-	QAction* setSessionDurationAction = new QAction("set session duration");
-	QAction* setSessionPolicyAction = new QAction("set session policy");
+	QAction* infoAction = new QAction(tr("ContextMenu", "information"));
+	QAction* showAction = new QAction(tr("ContextMenu", "show"));
+	QAction* disconnectAction = new QAction(tr("ContextMenu", "disconnect"));
+	QAction* logoutAction = new QAction(tr("ContextMenu", "logout"));
+	QAction* sendmsgAction = new QAction(tr("ContextMenu", "send message"));
+	QAction* setSessionDurationAction = new QAction(tr("ContextMenu", "set session duration"));
+	QAction* setSessionPolicyAction = new QAction(tr("ContextMenu", "set session policy"));
 
 	menu->addAction(infoAction);
 	menu->addSeparator();
@@ -183,19 +183,19 @@ void LTSM_Sessions::showInformation(void)
 	QString content;
 	QTextStream ts(& content);
 
-	QString status = "login";
+	QString status = tr("XvfbStatus", "login");
 	switch(xvfb.mode)
 	{
-	    case 1: status = "online"; break;
-	    case 2: status = "sleep"; break;
+	    case 1: status = tr("XvfbStatus", "online"); break;
+	    case 2: status = tr("XvfbStatus", "sleep"); break;
 	    default: break;
 	}
 
-	QString policy = "authlock";
+	QString policy = tr("XvfbPolicy", "authlock");
 	switch(xvfb.policy)
 	{
-	    case 1: policy = "authtake"; break;
-	    case 2: policy = "authshare"; break;
+	    case 1: policy = tr("XvfbPolicy", "authtake"); break;
+	    case 2: policy = tr("XvfbPolicy", "authshare"); break;
 	    default: break;
 	}
 
@@ -215,7 +215,7 @@ void LTSM_Sessions::showInformation(void)
 	    "connection: " << xvfb.conntype << "<br>" <<
 	    "encription: " << xvfb.encription << "<br>";
 
-	QMessageBox::information(this, "Session Info", ts.readAll(), QMessageBox::Ok);
+	QMessageBox::information(this, tr("Session Info"), ts.readAll(), QMessageBox::Ok);
     }
 }
 
@@ -225,7 +225,7 @@ void LTSM_Sessions::changeSessionDuration(void)
     {
 	auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
-        int duration = QInputDialog::getInt(this, QString("Change session duration for: %1").arg(xvfb.user), "seconds:", xvfb.durationLimit, 0, 2147483647, 1, & change);
+        int duration = QInputDialog::getInt(this, QString(tr("Change session duration for: %1")).arg(xvfb.user), tr("seconds:"), xvfb.durationLimit, 0, 2147483647, 1, & change);
         if(change) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationSec", xvfb.display, duration);
     }
 }
@@ -236,7 +236,7 @@ void LTSM_Sessions::changeSessionPolicy(void)
     {
 	auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
-        QString policy = QInputDialog::getItem(this, QString("Change session policy for: %1").arg(xvfb.user), "", QStringList() << "authlock" << "authtake" << "authshare", xvfb.policy, false, & change);
+        QString policy = QInputDialog::getItem(this, QString(tr("Change session policy for: %1")).arg(xvfb.user), "", QStringList() << tr("XvfbPolicy", "authlock") << tr("XvfbPolicy", "authtake") << tr("XvfbPolicy", "authshare"), xvfb.policy, false, & change);
         if(change) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionPolicy", xvfb.display, policy);
     }
 }
@@ -279,7 +279,7 @@ void LTSM_Sessions::tableReload(void)
     	        ui->tableWidget->setItem(row, 0, new RowItem(info,
                         QIcon(1 == info.mode ? ":/ltsm/ltsm_online.png" : ":/ltsm/ltsm_offline.png"), info.user));
     	        ui->tableWidget->setItem(row, 1, new RowItem(info, QString::number(info.display)));
-		ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? "online" : "sleep")));
+		ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? tr("XvfbStatus", "online") : tr("XvfbStatus", "sleep"))));
     	        ui->tableWidget->setItem(row, 3, new RowItem(info, info.remoteaddr));
     	        ui->tableWidget->setItem(row, 4, new RowItem(info, QString::number(info.pid1)));
     	        ui->tableWidget->setItem(row, 5, new RowItem(info, QString::number(info.uid)));
@@ -321,7 +321,7 @@ void LTSM_Sessions::sendmsgClicked(void)
     {
 	auto xvfb = selectedRow->xvfbInfo();
         bool send = false;
-        auto message = QInputDialog::getMultiLineText(this, QString("Send message to: %1").arg(xvfb.user), "", QString(), & send);
+        auto message = QInputDialog::getMultiLineText(this, QString(tr("Send message to: %1")).arg(xvfb.user), "", QString(), & send);
 	if(send) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSendMessage", xvfb.display, message);
     }
 }

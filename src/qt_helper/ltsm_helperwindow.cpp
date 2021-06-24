@@ -38,7 +38,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui->setupUi(this);
     ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
     ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
-    ui->labelTitle->setText("X11 Remote Desktop");
+    ui->labelTitle->setText(tr("X11 Remote Desktop"));
     ui->comboBoxUsername->setFocus();
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
@@ -59,7 +59,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     {
         syslog(LOG_ERR, "dbus interface not found: [%s, %s, %s]", service, path, interface);
         dbusInterfacePtr.reset();
-        setLabelError("dbus init failed");
+        setLabelError(tr("dbus init failed"));
         idleTimeoutSec = 5;
     }
 }
@@ -291,26 +291,3 @@ void LTSM_HelperWindow::autoLoginCallback(int display, const QString & login, co
         loginClicked();
     }
 }
-
-/*
-#include <QJsonObject>
-#include <QJsonDocument>
-
-void LTSM_HelperWindow::readConfig(const QString & filename)
-{
-    QFile file(filename);
-
-    if(file.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        auto content = file.readAll();
-        file.close();
-        QJsonDocument doc = QJsonDocument::fromJson(QString(content).toUtf8());
-        QJsonObject obj = doc.object();
-
-        if(! obj.isEmpty())
-        {
-            //QJsonValue value = sett2.value(QString("appName"));
-        }
-    }
-}
-*/
