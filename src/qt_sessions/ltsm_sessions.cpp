@@ -111,8 +111,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     tableReload();
 
     connect(dbusInterfacePtr.data(), SIGNAL(displayRemoved(int)), this, SLOT(displayRemovedCallback(int)));
-    connect(dbusInterfacePtr.data(), SIGNAL(sessionSleeped(int)), this, SLOT(sessionSleepedCallback(int)));
-    connect(dbusInterfacePtr.data(), SIGNAL(sessionParamsChanged(int)), this, SLOT(sessionParamsChangedCallback(int)));
+    connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
     connect(ui->tableWidget, SIGNAL(itemSelectionChanged()), this, SLOT(itemSelectionChanged()));
     connect(ui->tableWidget, SIGNAL(itemDoubleClicked(QTableWidgetItem*)), this, SLOT(itemDoubleClicked(QTableWidgetItem*)));
     connect(ui->tableWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(customContextMenu(QPoint)));
@@ -226,7 +225,7 @@ void LTSM_Sessions::changeSessionDuration(void)
 	auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
         int duration = QInputDialog::getInt(this, QString(tr("Change session duration for: %1")).arg(xvfb.user), tr("seconds:"), xvfb.durationLimit, 0, 2147483647, 1, & change);
-        if(change) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationSec", xvfb.display, duration);
+        if(change) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationSec", xvfb.display, static_cast<quint32>(duration));
     }
 }
 
@@ -293,12 +292,7 @@ void LTSM_Sessions::displayRemovedCallback(int display)
     tableReload();
 }
 
-void LTSM_Sessions::sessionSleepedCallback(int display)
-{
-    tableReload();
-}
-
-void LTSM_Sessions::sessionParamsChangedCallback(int display)
+void LTSM_Sessions::sessionChangedCallback(int display)
 {
     tableReload();
 }

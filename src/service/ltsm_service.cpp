@@ -1020,8 +1020,10 @@ namespace LTSM
             auto file = createSessionConnInfo(home, xvfb);
             setFileOwner(file, uid, gid);
 
-            emitSessionReconnect(remoteAddr, connType);
             Application::debug("user session connected, display: %d", userScreen);
+
+            emitSessionReconnect(remoteAddr, connType);
+            emitSessionChanged(userScreen);
 
             return userScreen;
         }
@@ -1098,6 +1100,7 @@ namespace LTSM
 
         Application::debug("user session registered, display: %d", oldScreen);
 
+        emitSessionChanged(oldScreen);
         return oldScreen;
     }
 
@@ -1187,7 +1190,7 @@ namespace LTSM
 	        auto userInfo = Manager::getUserInfo(xvfb->user);
                 createSessionConnInfo(std::get<2>(userInfo), nullptr);
 
-    		emitSessionSleeped(display);
+    		emitSessionChanged(display);
 	    }
 	}
 
@@ -1474,7 +1477,7 @@ namespace LTSM
 	{
 	    const std::lock_guard<std::mutex> lock(_mutex);
 	    xvfb->encryption = info;
-            emitSessionParamsChanged(display);
+            emitSessionChanged(display);
 	    return true;
 	}
 	return false;
@@ -1488,7 +1491,7 @@ namespace LTSM
 	{
 	    const std::lock_guard<std::mutex> lock(_mutex);
 	    xvfb->durationlimit = duration;
-            emitSessionParamsChanged(display);
+            emitSessionChanged(display);
 	    return true;
 	}
 	return false;
@@ -1513,7 +1516,7 @@ namespace LTSM
 	    else
     	        Application::error("unknown policy: %s, display: %d", policy.c_str(), display);
 
-            emitSessionParamsChanged(display);
+            emitSessionChanged(display);
 	    return true;
         }
 	return false;

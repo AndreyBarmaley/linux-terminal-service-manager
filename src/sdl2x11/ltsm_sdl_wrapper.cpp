@@ -71,7 +71,7 @@ namespace LTSM
         }
     }
 
-    SDL::Window::Window(const char* title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags) : _window(nullptr), _renderer(nullptr), _display(nullptr)
+    SDL::Window::Window(const char* title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, bool accel, int flags) : _window(nullptr), _renderer(nullptr), _display(nullptr)
     {
         if(winsz_w <= 0) winsz_w = rendsz_w;
 
@@ -82,7 +82,7 @@ namespace LTSM
 
         if(_window)
         {
-            _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED /* SDL_RENDERER_SOFTWARE */);
+            _renderer = SDL_CreateRenderer(_window, -1, (accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
 
             if(_renderer)
             {

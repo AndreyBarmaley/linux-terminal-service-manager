@@ -150,7 +150,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperAutoLogin(int, const QString &, const QString &)), this, SLOT(autoLoginCallback(int, const QString &, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &)));
-	connect(dbusInterfacePtr.data(), SIGNAL(sessionParamsChanged(int)), this, SLOT(sessionParamsChangedCallback(int)));
+	connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
 
         initArguments = true;
     }
@@ -249,7 +249,7 @@ void LTSM_HelperWindow::setLabelError(const QString & error)
     errorPause = 2;
 }
 
-void LTSM_HelperWindow::sessionParamsChangedCallback(int display)
+void LTSM_HelperWindow::sessionChangedCallback(int display)
 {
     if(display == displayNum && dbusInterfacePtr)
     {

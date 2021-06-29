@@ -69,8 +69,8 @@ namespace LTSM
         bool            shmUsed;
 
     public:
-        SDL2X11(int display, int winsz_w, int winsz_h, bool shm)
-            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window("SDL2X11", width(), height(), winsz_w, winsz_h), shmUsed(shm)
+        SDL2X11(int display, int winsz_w, int winsz_h, bool accel, bool shm)
+            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window("SDL2X11", width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
         {
             const int bpp = 4;
             const int pagesz = 4096;
@@ -260,7 +260,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --display <num> --scale <width>x<height> [--shm]" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --display <num> --scale <width>x<height> [--shm] [--accel]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -271,7 +271,26 @@ int main(int argc, char** argv)
     int winsz_h = 0;
     std::string xauth;
     std::string geometry;
+
     bool shmUsed = false;
+    bool accelUsed = false;
+
+    if(auto val = getenv("SDL2X11_SCALE"))
+    {
+        size_t idx;
+
+        try
+        {
+            winsz_w = std::stoi(val, & idx, 0);
+            winsz_h = std::stoi(val + idx + 1, nullptr, 0);
+        }
+        catch(const std::invalid_argument &)
+        {
+            std::cerr << "invalid scale" << std::endl;
+            winsz_w = 0;
+            winsz_h = 0;
+        }
+    }
 
     if(1 < argc)
     {
@@ -314,6 +333,8 @@ int main(int argc, char** argv)
             }
             else if(0 == std::strcmp(argv[it], "--shm"))
                 shmUsed = true;
+            else if(0 == std::strcmp(argv[it], "--accel"))
+                accelUsed = true;
         }
 
         if(xauth.size())
@@ -325,7 +346,7 @@ int main(int argc, char** argv)
 
     try
     {
-        LTSM::SDL2X11 app(display, winsz_w, winsz_h, shmUsed);
+        LTSM::SDL2X11 app(display, winsz_w, winsz_h, accelUsed, shmUsed);
         return app.start();
     }
     catch(int errcode)

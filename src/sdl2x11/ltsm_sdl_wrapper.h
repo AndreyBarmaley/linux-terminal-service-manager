@@ -114,7 +114,7 @@ namespace LTSM
         protected:
 
         public:
-            Window(const char*, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags = 0);
+            Window(const char*, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, bool accel, int flags = 0);
             ~Window();
 
             bool		isValid(void) const;

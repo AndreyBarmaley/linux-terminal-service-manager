@@ -82,8 +82,7 @@ protected slots:
     void	itemSelectionChanged(void);
     void        itemDoubleClicked(QTableWidgetItem*);
     void        displayRemovedCallback(int);
-    void        sessionSleepedCallback(int);
-    void        sessionParamsChangedCallback(int);
+    void        sessionChangedCallback(int);
     void	customContextMenu(QPoint);
     void	changeSessionPolicy(void);
     void	changeSessionDuration(void);

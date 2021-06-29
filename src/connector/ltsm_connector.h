@@ -244,8 +244,7 @@ namespace LTSM
             void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) override {}
             void                        onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
-	    void			onSessionSleeped(const int32_t& display) override {}
-	    void			onSessionParamsChanged(const int32_t& display) override {}
+	    void			onSessionChanged(const int32_t& display) override {}
 	    void			onDisplayRemoved(const int32_t& display) override {}
 
         protected:
