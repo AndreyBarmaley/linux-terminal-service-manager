@@ -415,19 +415,18 @@ namespace LTSM
 
         bool Region::intersection(const Region & rt1, const Region & rt2, Region* res)
         {
-            if(! res)
-                return rt1.intersects(rt2);
+    	    bool intersects = rt1.intersects(rt2);
 
-            if(rt1.empty() || rt2.empty())
-            {
-                res->w = 0;
-                res->h = 0;
-                return false;
-            }
+	    if(! intersects)
+		return false;
+
+            if(! res)
+                return intersects;
 
             // horizontal intersection
             res->x = std::max(rt1.x, rt2.x);
             res->w = std::min(rt1.x + rt1.w, rt2.x + rt2.w) - res->x;
+
             // vertical intersection
             res->y = std::max(rt1.y, rt2.y);
             res->h = std::min(rt1.y + rt1.h, rt2.y + rt2.h) - res->y;
@@ -509,7 +508,7 @@ namespace LTSM
         bool tlsAnonMode = _config->getBoolean("gnutls:anonmode", true);
         bool tlsDisable = _config->getBoolean("gnutls:disable", false);
         int tlsDebug = _config->getInteger("gnutls:debug", 3);
-        std::string encriptionInfo = "none";
+        std::string encryptionInfo = "none";
 
         if(! disabledEncodings.empty())
             disabledEncodings.remove_if([](auto & str){ return 0 == Tools::lower(str).compare("raw"); });
@@ -675,7 +674,7 @@ namespace LTSM
 	    if(! tlsInitHandshake)
 		return EXIT_FAILURE;
 
-            encriptionInfo = tls->sessionDescription();
+            encryptionInfo = tls->sessionDescription();
             sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
 	}
 	else
@@ -687,7 +686,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-    	busSetEncriptionInfo(screen, encriptionInfo);
+    	busSetEncryptionInfo(screen, encryptionInfo);
 
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();
@@ -745,7 +744,7 @@ namespace LTSM
                 {
                     case RFB::CLIENT_SET_PIXEL_FORMAT:
                         clientSetPixelFormat();
-                        joinRegion.join(serverRegion);
+                        damageRegion.join(serverRegion);
 			clientUpdateReq = true;
                         break;
 
@@ -753,7 +752,7 @@ namespace LTSM
                         if(clientSetEncodings())
                         {
                             // full update
-                            joinRegion.join(serverRegion);
+                            damageRegion.join(serverRegion);
 			    clientUpdateReq = true;
                         }
                         break;
@@ -761,7 +760,7 @@ namespace LTSM
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
                         // full update
                         if(clientFramebufferUpdate())
-                            joinRegion.join(serverRegion);
+                            damageRegion.join(serverRegion);
 			clientUpdateReq = true;
                         break;
 
@@ -810,22 +809,22 @@ namespace LTSM
                     if(_xcbDisplay->isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
                     {
                 	const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
-                	joinRegion.join(notify->area);
+                	damageRegion.join(notify->area);
 		    }
                 }
 
                 // server action
-                if(clientUpdateReq && ! joinRegion.empty() && ! fbUpdateProcessing)
+                if(clientUpdateReq && ! damageRegion.empty() && ! fbUpdateProcessing)
                 {
                     RFB::Region res;
 
-                    if(RFB::Region::intersection(clientRegion, joinRegion, & res))
+                    if(RFB::Region::intersection(clientRegion, damageRegion, & res))
 		    {
 			fbUpdateProcessing = true;
 			// background job
                         std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
 		    }
-                    joinRegion.reset();
+                    damageRegion.reset();
 		    clientUpdateReq = false;
                 }
             }
@@ -1122,7 +1121,7 @@ namespace LTSM
 	sendFlush();
     }
 
-    void Connector::VNC::renderPrimitivesTo(const RFB::Region & reg, RFB::FrameBuffer & fb)
+    void Connector::VNC::renderPrimitivesTo(const RFB::Region & reg1, RFB::FrameBuffer & fb)
     {
         for(auto & ptr : _renderPrimitives)
         {
@@ -1131,9 +1130,10 @@ namespace LTSM
                 case RenderType::RenderRect:
                     if(auto prim = static_cast<RenderRect*>(ptr.get()))
                     {
+                        const RFB::Region reg2(prim->region);
                         RFB::Region section;
 
-                        if(RFB::Region::intersection(reg, prim->region, & section))
+                        if(RFB::Region::intersection(reg1, reg2, & section))
                         {
                             if(prim->fill)
                                 fb.fillColor(section, prim->color);
@@ -1147,8 +1147,11 @@ namespace LTSM
                 case RenderType::RenderText:
                     if(auto prim = static_cast<RenderText*>(ptr.get()))
                     {
-                        if(RFB::Region::intersection(reg, prim->region, nullptr))
-                            fb.renderText(prim->text, prim->color, std::get<0>(prim->region) - reg.x, std::get<1>(prim->region) - reg.y);
+                        const RFB::Region reg2(prim->region);
+                        if(RFB::Region::intersection(reg1, reg2, nullptr))
+			{
+                            fb.renderText(prim->text, prim->color, reg2.x - reg1.x, reg2.y - reg1.y);
+			}
                     }
 
                     break;
@@ -1188,8 +1191,10 @@ namespace LTSM
             // padding
             sendInt8(0);
             RFB::FrameBuffer shmFrameBuffer(_shmInfo->addr, reg.w + alignRow, reg.h, serverFormat);
+
             // check render primitives
             renderPrimitivesTo(reg, shmFrameBuffer);
+
             // send encodings
             int encodingLength = prefEncodings.first(reg, shmFrameBuffer);
 
@@ -1306,7 +1311,7 @@ namespace LTSM
 
             SignalProxy::onLoginSuccess(display, userName);
             // full update
-            joinRegion.join(serverRegion);
+            damageRegion.join(serverRegion);
         }
     }
 
@@ -1338,5 +1343,10 @@ namespace LTSM
             Application::info("dbus signal: send bell, display: %d", display);
             serverSendBell();
         }
+    }
+
+    void Connector::VNC::onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+    {
+        damageRegion.join(RFB::Region(rx, ry, rw, rh));
     }
 }

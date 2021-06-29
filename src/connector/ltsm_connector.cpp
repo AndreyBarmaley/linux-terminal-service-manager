@@ -861,6 +861,28 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: clear render primitives, display: %d", display);
+            for(auto & ptr : _renderPrimitives)
+	    {
+        	switch(ptr->type)
+        	{
+            	    case RenderType::RenderRect:
+                	if(auto prim = static_cast<RenderRect*>(ptr.get()))
+                	{
+			    onAddDamage(std::get<0>(prim->region),std::get<1>(prim->region),std::get<2>(prim->region),std::get<3>(prim->region));
+                	}
+                	break;
+
+            	    case RenderType::RenderText:
+                	if(auto prim = static_cast<RenderText*>(ptr.get()))
+                	{
+			    onAddDamage(std::get<0>(prim->region),std::get<1>(prim->region),std::get<2>(prim->region),std::get<3>(prim->region));
+                	}
+                	break;
+
+            	    default:
+                	break;
+        	}
+	    }
             _renderPrimitives.clear();
         }
     }
@@ -872,6 +894,7 @@ namespace LTSM
             Application::info("dbus signal: add fill rect, display: %d", display);
             auto ptr = new RenderRect(rect, color, fill);
             _renderPrimitives.emplace_back(ptr);
+	    onAddDamage(std::get<0>(rect),std::get<1>(rect),std::get<2>(rect),std::get<3>(rect));
         }
     }
 
@@ -886,6 +909,7 @@ namespace LTSM
             const uint16_t rh = _systemfont.height;
             auto ptr = new RenderText(text, { rx, ry, rw, rh }, color);
             _renderPrimitives.emplace_back(ptr);
+	    onAddDamage(rx,ry,rw,rh);
         }
     }
 

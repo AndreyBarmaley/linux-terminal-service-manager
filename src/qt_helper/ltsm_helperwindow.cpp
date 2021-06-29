@@ -129,16 +129,16 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         if(!res.arguments().isEmpty())
             loginAutoComplete = res.arguments().front().toBool();
 
-        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncriptionInfo", displayNum);
-	QString encription;
+        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncryptionInfo", displayNum);
+	QString encryption;
 
         if(!res.arguments().isEmpty())
-            encription = res.arguments().front().toString();
+            encryption = res.arguments().front().toString();
 
-	if(encription.isEmpty())
-            encription = "none";
+	if(encryption.isEmpty())
+            encryption = "none";
 
-        ui->lineEditEncription->setText(encription);
+        ui->lineEditEncryption->setText(encryption);
 
         if(loginAutoComplete)
         {
@@ -253,16 +253,16 @@ void LTSM_HelperWindow::sessionParamsChangedCallback(int display)
 {
     if(display == displayNum && dbusInterfacePtr)
     {
-        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncriptionInfo", displayNum);
-	QString encription;
+        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncryptionInfo", displayNum);
+	QString encryption;
 
         if(!res.arguments().isEmpty())
-            encription = res.arguments().front().toString();
+            encryption = res.arguments().front().toString();
 
-	if(encription.isEmpty())
-            encription = "none";
+	if(encryption.isEmpty())
+            encryption = "none";
 
-        ui->lineEditEncription->setText(encription);
+        ui->lineEditEncryption->setText(encryption);
     }
 }
 

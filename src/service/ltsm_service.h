@@ -59,7 +59,7 @@ namespace LTSM
         std::string                     mcookie;
         std::string                     remoteaddr;
         std::string                     conntype;
-        std::string                     encription;
+        std::string                     encryption;
 
         XvfbMode                        mode;
 	SessionPolicy			policy;
@@ -74,7 +74,7 @@ namespace LTSM
         void            destroy(int killpid = 0);
     };
 
-    // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encription
+    // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encryption
     typedef sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>
             xvfb2tuple;
 
@@ -153,14 +153,14 @@ namespace LTSM
             int32_t                     busStartLoginSession(const std::string & remoteAddr, const std::string & connType) override;
             int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;
-            std::string                 busEncriptionInfo(const int32_t & display) override;
+            std::string                 busEncryptionInfo(const int32_t & display) override;
             bool                        busShutdownDisplay(const int32_t & display) override;
             bool                        busShutdownConnector(const int32_t & display) override;
             bool                        busConnectorTerminated(const int32_t & display) override;
             bool                        busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
             bool                        busSetDebugLevel(const std::string & level) override;
-            bool                        busSetEncriptionInfo(const int32_t & display, const std::string & info) override;
+            bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
             bool                        busSendMessage(const int32_t& display, const std::string& message) override;

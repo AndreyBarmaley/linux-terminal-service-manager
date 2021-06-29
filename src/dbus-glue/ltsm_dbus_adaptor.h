@@ -37,10 +37,10 @@ protected:
         object_.registerMethod("helperWidgetStartedAction").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperWidgetStartedAction(display); });
         object_.registerMethod("busSendMessage").onInterface(INTERFACE_NAME).withInputParamNames("display", "message").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& message){ return this->busSendMessage(display, message); });
         object_.registerMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withInputParamNames("level").withOutputParamNames("result").implementedAs([this](const std::string& level){ return this->busSetDebugLevel(level); });
-        object_.registerMethod("busSetEncriptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display", "info").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& info){ return this->busSetEncriptionInfo(display, info); });
+        object_.registerMethod("busSetEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display", "info").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& info){ return this->busSetEncryptionInfo(display, info); });
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
-        object_.registerMethod("busEncriptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busEncriptionInfo(display); });
+        object_.registerMethod("busEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busEncryptionInfo(display); });
         object_.registerMethod("busConnectorTerminated").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorTerminated(display); });
         object_.registerMethod("busConnectorSwitched").onInterface(INTERFACE_NAME).withInputParamNames("oldDisplay", "newDisplay").withOutputParamNames("result").implementedAs([this](const int32_t& oldDisplay, const int32_t& newDisplay){ return this->busConnectorSwitched(oldDisplay, newDisplay); });
         object_.registerMethod("busConnectorAlive").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorAlive(display); });
@@ -166,10 +166,10 @@ private:
     virtual bool helperWidgetStartedAction(const int32_t& display) = 0;
     virtual bool busSendMessage(const int32_t& display, const std::string& message) = 0;
     virtual bool busSetDebugLevel(const std::string& level) = 0;
-    virtual bool busSetEncriptionInfo(const int32_t& display, const std::string& info) = 0;
+    virtual bool busSetEncryptionInfo(const int32_t& display, const std::string& info) = 0;
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;
-    virtual std::string busEncriptionInfo(const int32_t& display) = 0;
+    virtual std::string busEncryptionInfo(const int32_t& display) = 0;
     virtual bool busConnectorTerminated(const int32_t& display) = 0;
     virtual bool busConnectorSwitched(const int32_t& oldDisplay, const int32_t& newDisplay) = 0;
     virtual bool busConnectorAlive(const int32_t& display) = 0;

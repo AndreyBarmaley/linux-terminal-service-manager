@@ -214,7 +214,7 @@ namespace LTSM
                     pair.second.xauthfile,
                     pair.second.remoteaddr,
                     pair.second.conntype,
-                    pair.second.encription
+                    pair.second.encryption
             );
         }
 
@@ -1457,21 +1457,21 @@ namespace LTSM
         return true;
     }
 
-    std::string Manager::Object::busEncriptionInfo(const int32_t & display)
+    std::string Manager::Object::busEncryptionInfo(const int32_t & display)
     {
         if(auto xvfb = getXvfbInfo(display))
-    	    return xvfb->encription;
+    	    return xvfb->encryption;
 
 	return "none";
     }
 
-    bool Manager::Object::busSetEncriptionInfo(const int32_t & display, const std::string & info)
+    bool Manager::Object::busSetEncryptionInfo(const int32_t & display, const std::string & info)
     {
-        Application::info("set encription: %s, display: %d", info.c_str(), display);
+        Application::info("set encryption: %s, display: %d", info.c_str(), display);
         if(auto xvfb = getXvfbInfo(display))
 	{
 	    const std::lock_guard<std::mutex> lock(_mutex);
-	    xvfb->encription = info;
+	    xvfb->encryption = info;
             emitSessionParamsChanged(display);
 	    return true;
 	}

@@ -41,7 +41,7 @@ const QDBusArgument & operator>>(const QDBusArgument & arg, XvfbInfo & st)
     arg.beginStructure();
     arg >> st.display >> st.pid1 >> st.pid2 >> st.width >> st.height >>
 	st.uid >> st.gid >> st.durationLimit >> st.mode >> st.policy >>
-	st.user >> st.authfile >> st.remoteaddr >> st.conntype >> st.encription;
+	st.user >> st.authfile >> st.remoteaddr >> st.conntype >> st.encryption;
     arg.endStructure();
     return arg;
 }
@@ -213,7 +213,7 @@ void LTSM_Sessions::showInformation(void)
 	    "session duration: " << xvfb.durationLimit << "<br>" <<
 	    "session policy: " << policy << "<br>" <<
 	    "connection: " << xvfb.conntype << "<br>" <<
-	    "encription: " << xvfb.encription << "<br>";
+	    "encryption: " << xvfb.encryption << "<br>";
 
 	QMessageBox::information(this, tr("Session Info"), ts.readAll(), QMessageBox::Ok);
     }

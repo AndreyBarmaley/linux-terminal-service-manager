@@ -165,10 +165,10 @@ public:
         return result;
     }
 
-    bool busSetEncriptionInfo(const int32_t& display, const std::string& info)
+    bool busSetEncryptionInfo(const int32_t& display, const std::string& info)
     {
         bool result;
-        proxy_.callMethod("busSetEncriptionInfo").onInterface(INTERFACE_NAME).withArguments(display, info).storeResultsTo(result);
+        proxy_.callMethod("busSetEncryptionInfo").onInterface(INTERFACE_NAME).withArguments(display, info).storeResultsTo(result);
         return result;
     }
 
@@ -186,10 +186,10 @@ public:
         return result;
     }
 
-    std::string busEncriptionInfo(const int32_t& display)
+    std::string busEncryptionInfo(const int32_t& display)
     {
         std::string result;
-        proxy_.callMethod("busEncriptionInfo").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        proxy_.callMethod("busEncryptionInfo").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
         return result;
     }
 

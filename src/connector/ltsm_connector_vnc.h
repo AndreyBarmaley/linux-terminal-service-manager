@@ -313,7 +313,7 @@ namespace LTSM
             RFB::Region         serverRegion;
             std::mutex          sendGlobal;
             std::mutex		sendEncoding;
-            RFB::Region         joinRegion;
+            RFB::Region         damageRegion;
             RFB::ColorMap       colourMap;
             std::vector<int>    clientEncodings;
             std::list<std::string> disabledEncodings;
@@ -327,6 +327,7 @@ namespace LTSM
             void                onShutdownConnector(const int32_t & display) override;
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
+	    void		onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) override;
 
         protected:
 	    void		xcbReleaseInputsEvent(void);

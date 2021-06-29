@@ -256,6 +256,7 @@ namespace LTSM
             void			onClearRenderPrimitives(const int32_t & display) override;
             void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
             void			onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
+	    virtual void		onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) {}
 
             bool                        xcbConnect(int display);
 

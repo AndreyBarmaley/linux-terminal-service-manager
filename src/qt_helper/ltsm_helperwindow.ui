@@ -192,9 +192,9 @@ color: rgb(255, 255, 255);</string>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
-           <widget class="QLabel" name="labelEncription">
+           <widget class="QLabel" name="labelEncryption">
             <property name="text">
-             <string>encription:</string>
+             <string>encryption:</string>
             </property>
            </widget>
           </item>
@@ -238,7 +238,7 @@ color: rgb(255, 255, 255);</string>
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEditEncription">
+         <widget class="QLineEdit" name="lineEditEncryption">
           <property name="enabled">
            <bool>true</bool>
           </property>
