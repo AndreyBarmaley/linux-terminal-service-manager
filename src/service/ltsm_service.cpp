@@ -644,6 +644,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(dir))
             std::filesystem::create_directory(dir);
+
         // set mode 750
         std::filesystem::permissions(dir, std::filesystem::perms::group_write |
                     std::filesystem::perms::others_all, std::filesystem::perm_options::remove);
@@ -874,7 +875,8 @@ namespace LTSM
         	setenv("XAUTHORITY", xvfb.xauthfile.c_str(), 1);
         	setenv("DISPLAY", strdisplay.c_str(), 1);
 
-                createSessionConnInfo(home, & xvfb);
+                if(std::filesystem::exists(home))
+		    createSessionConnInfo(home, & xvfb);
 
         	int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
 

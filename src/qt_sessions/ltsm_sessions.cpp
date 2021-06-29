@@ -81,7 +81,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     ui->setupUi(this);
 
     ui->tableWidget->setColumnCount(6);
-    ui->tableWidget->setHorizontalHeaderLabels(QStringList() << tr("HeaderLabel", "User") << tr("HeaderLabel", "Display") << tr("HeaderLabel", "Status") << tr("HeaderLabel", "RemoteAddr") << tr("HeaderLabel", "Pid") << tr("HeaderLabel", "Uid"));
+    ui->tableWidget->setHorizontalHeaderLabels(QStringList() << tr("User", "HeaderLabel") << tr("Display", "HeaderLabel") << tr("Status", "HeaderLabel") << tr("RemoteAddr", "HeaderLabel") << tr("Pid", "HeaderLabel") << tr("Uid", "HeaderLabel"));
     ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
     sdl2x11.setFile(QDir(QCoreApplication::applicationDirPath()).filePath("LTSM_sdl2x11"));
@@ -136,13 +136,13 @@ void LTSM_Sessions::customContextMenu(QPoint pos)
 
 	QMenu * menu = new QMenu(this);
 
-	QAction* infoAction = new QAction(tr("ContextMenu", "information"));
-	QAction* showAction = new QAction(tr("ContextMenu", "show"));
-	QAction* disconnectAction = new QAction(tr("ContextMenu", "disconnect"));
-	QAction* logoutAction = new QAction(tr("ContextMenu", "logout"));
-	QAction* sendmsgAction = new QAction(tr("ContextMenu", "send message"));
-	QAction* setSessionDurationAction = new QAction(tr("ContextMenu", "set session duration"));
-	QAction* setSessionPolicyAction = new QAction(tr("ContextMenu", "set session policy"));
+	QAction* infoAction = new QAction(tr("information", "ContextMenu"));
+	QAction* showAction = new QAction(tr("show", "ContextMenu"));
+	QAction* disconnectAction = new QAction(tr("disconnect", "ContextMenu"));
+	QAction* logoutAction = new QAction(tr("logout", "ContextMenu"));
+	QAction* sendmsgAction = new QAction(tr("send message", "ContextMenu"));
+	QAction* setSessionDurationAction = new QAction(tr("set session duration", "ContextMenu"));
+	QAction* setSessionPolicyAction = new QAction(tr("set session policy", "ContextMenu"));
 
 	menu->addAction(infoAction);
 	menu->addSeparator();
@@ -183,19 +183,19 @@ void LTSM_Sessions::showInformation(void)
 	QString content;
 	QTextStream ts(& content);
 
-	QString status = tr("XvfbStatus", "login");
+	QString status = tr("login", "XvfbStatus");
 	switch(xvfb.mode)
 	{
-	    case 1: status = tr("XvfbStatus", "online"); break;
-	    case 2: status = tr("XvfbStatus", "sleep"); break;
+	    case 1: status = tr("online", "XvfbStatus"); break;
+	    case 2: status = tr("sleep", "XvfbStatus"); break;
 	    default: break;
 	}
 
-	QString policy = tr("XvfbPolicy", "authlock");
+	QString policy = tr("authlock", "XvfbStatus");
 	switch(xvfb.policy)
 	{
-	    case 1: policy = tr("XvfbPolicy", "authtake"); break;
-	    case 2: policy = tr("XvfbPolicy", "authshare"); break;
+	    case 1: policy = tr("authtake", "XvfbStatus"); break;
+	    case 2: policy = tr("authshare", "XvfbStatus"); break;
 	    default: break;
 	}
 
@@ -236,7 +236,7 @@ void LTSM_Sessions::changeSessionPolicy(void)
     {
 	auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
-        QString policy = QInputDialog::getItem(this, QString(tr("Change session policy for: %1")).arg(xvfb.user), "", QStringList() << tr("XvfbPolicy", "authlock") << tr("XvfbPolicy", "authtake") << tr("XvfbPolicy", "authshare"), xvfb.policy, false, & change);
+        QString policy = QInputDialog::getItem(this, QString(tr("Change session policy for: %1")).arg(xvfb.user), "", QStringList() << tr("authlock", "XvfbPolicy") << tr("authtake", "XvfbPolicy") << tr("authshare", "XvfbPolicy"), xvfb.policy, false, & change);
         if(change) dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionPolicy", xvfb.display, policy);
     }
 }
@@ -279,7 +279,7 @@ void LTSM_Sessions::tableReload(void)
     	        ui->tableWidget->setItem(row, 0, new RowItem(info,
                         QIcon(1 == info.mode ? ":/ltsm/ltsm_online.png" : ":/ltsm/ltsm_offline.png"), info.user));
     	        ui->tableWidget->setItem(row, 1, new RowItem(info, QString::number(info.display)));
-		ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? tr("XvfbStatus", "online") : tr("XvfbStatus", "sleep"))));
+		ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? tr("online", "XvfbStatus") : tr("sleep", "XvfbStatus"))));
     	        ui->tableWidget->setItem(row, 3, new RowItem(info, info.remoteaddr));
     	        ui->tableWidget->setItem(row, 4, new RowItem(info, QString::number(info.pid1)));
     	        ui->tableWidget->setItem(row, 5, new RowItem(info, QString::number(info.uid)));
