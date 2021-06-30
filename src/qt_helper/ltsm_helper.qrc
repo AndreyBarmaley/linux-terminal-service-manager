@@ -2,4 +2,7 @@
     <qresource prefix="/ltsm">
         <file>ltsm_logo.png</file>
     </qresource>
+    <qresource prefix="/i18n">
+        <file>ltsm_helper_ru.qm</file>
+    </qresource>
 </RCC>

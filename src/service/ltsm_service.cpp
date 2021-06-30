@@ -995,7 +995,7 @@ namespace LTSM
         std::string userXvfb = _config->getString("user:xvfb");
         std::string sessionBin = _config->getString("session:path");
 
-        Application::info("user session request, remote: %s, user: %s", remoteAddr.c_str(), userName.c_str());
+        Application::info("user session request, remote: %s, user: %s, display: %d", remoteAddr.c_str(), userName.c_str(), oldScreen);
 
         int uid, gid;
         std::string home, shell;
@@ -1003,7 +1003,7 @@ namespace LTSM
 
         if(0 > uid)
         {
-            Application::error("username not found, user: %s, uid: %d, gid: %d", userName.c_str(), uid, gid);
+            Application::error("username not found, user: %s, uid: %d, gid: %d, display: %d", userName.c_str(), uid, gid, oldScreen);
             return -1;
         }
 

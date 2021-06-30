@@ -3,4 +3,7 @@
     <file>ltsm_offline.png</file>
     <file>ltsm_online.png</file>
   </qresource>
+  <qresource prefix="/i18n">
+    <file>ltsm_sessions_ru.qm</file>
+  </qresource>
 </RCC>

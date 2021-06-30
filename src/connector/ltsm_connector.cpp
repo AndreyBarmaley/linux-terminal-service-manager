@@ -851,6 +851,7 @@ namespace LTSM
             	    throw std::string("xcb connect failed");
 
         	busConnectorSwitched(oldDisplay, newDisplay);
+		_display = newDisplay;
 	    }
     	    _xcbDisableMessages = false;
         }

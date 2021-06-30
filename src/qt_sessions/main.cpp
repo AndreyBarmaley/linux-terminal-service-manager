@@ -22,6 +22,7 @@
 
 #include "ltsm_sessions.h"
 #include <QApplication>
+#include <QTranslator>
 
 int main(int argc, char *argv[])
 {
@@ -30,6 +31,11 @@ int main(int argc, char *argv[])
     try
     {
 	QApplication a(argc, argv);
+
+        QTranslator t;
+        t.load(QLocale(), QLatin1String("ltsm_sessions"), QLatin1String("_"), QLatin1String(":/i18n"));
+        a.installTranslator(& t);
+
 	LTSM_Sessions w;
 	w.show();
 	res = a.exec();
