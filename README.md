@@ -29,13 +29,14 @@ It is only a handler of the VNC protocol, and the main network part is handled b
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector  
 
 # LTSM_helper
-![ltsm_helper](https://user-images.githubusercontent.com/8620726/120913449-cfd9b200-c686-11eb-947e-dc0f20e6eda7.png)  
+![ltsm_helper](https://user-images.githubusercontent.com/8620726/123924335-66914a00-d979-11eb-9025-9d6bcf3fa250.png)  
 GUI login utility, and it is a dbus client *ltsm.manager.service* (GPLv3 license)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description)  
 
 # LTSM_sessions
 ![ltsm_session](https://user-images.githubusercontent.com/8620726/119793454-23e5d900-bec6-11eb-9978-ee31f44360ae.png)  
 GUI users sessions management utility, and it is a dbus client *ltsm.manager.service* (GPLv3 license)  
+![ltsm_show_session](https://user-images.githubusercontent.com/8620726/123924343-67c27700-d979-11eb-9802-723d043f9f6f.png)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
 ## Donate
