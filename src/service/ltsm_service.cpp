@@ -815,9 +815,17 @@ namespace LTSM
             std::string home, shell;
 	    std::tie(uid, gid, home, shell) = Manager::getUserInfo(xvfb.user);
 
+
 	    if(uid == 0)
 	    {
                 Application::error("system error: %s", "root access deny");
+    		pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
+        	_exit(0);
+	    }
+
+    	    if(! std::filesystem::is_directory(home))
+	    {
+    		Application::error("home not found: %s, user: %s", home.c_str(), xvfb.user.c_str());
     		pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
         	_exit(0);
 	    }
@@ -875,8 +883,7 @@ namespace LTSM
         	setenv("XAUTHORITY", xvfb.xauthfile.c_str(), 1);
         	setenv("DISPLAY", strdisplay.c_str(), 1);
 
-                if(std::filesystem::exists(home))
-		    createSessionConnInfo(home, & xvfb);
+		createSessionConnInfo(home, & xvfb);
 
         	int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
 
@@ -1007,6 +1014,12 @@ namespace LTSM
             return -1;
         }
 
+        if(! std::filesystem::is_directory(home))
+	{
+    	    Application::error("home not found: %s, user: %s", home.c_str(), userName.c_str());
+	    return -1;
+	}
+
         int userScreen = findUserSession(userName);
         if(0 <= userScreen && checkXvfbSocket(userScreen))
         {
@@ -1017,8 +1030,8 @@ namespace LTSM
     	    xvfb->mode = XvfbMode::SessionOnline;
 
             // update conn info
-            auto file = createSessionConnInfo(home, xvfb);
-            setFileOwner(file, uid, gid);
+	    auto file = createSessionConnInfo(home, xvfb);
+    	    setFileOwner(file, uid, gid);
 
             Application::debug("user session connected, display: %d", userScreen);
 
@@ -1144,7 +1157,13 @@ namespace LTSM
             auto dir = Tools::dirname(file);
 
             if(! std::filesystem::is_directory(dir))
-                std::filesystem::create_directory(dir);
+	    {
+                if(! std::filesystem::create_directory(dir))
+		{
+            	    Application::error("mkdir failed, dir: %s", dir.c_str());
+		    return false;
+		}
+	    }
 
             // fixed permissions 750
             std::filesystem::permissions(dir, std::filesystem::perms::group_write |

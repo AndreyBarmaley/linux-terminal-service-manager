@@ -226,12 +226,11 @@ namespace LTSM
     std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const
     {
         std::pair<int, int> res(0, 0);
-        int winsz_w, winsz_h;
+        int winsz_w, winsz_h, rendsz_w, rendsz_h;
         SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
-        int rendsz_w, rendsz_h;
 
-        if(0 != SDL_GetRendererOutputSize(_renderer, &rendsz_w, &rendsz_h))
-            std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_GetRendererOutputSize" << " error, " << SDL_GetError() << std::endl;
+	if(0 != SDL_QueryTexture(_display, nullptr, nullptr, &rendsz_w, &rendsz_h))
+            std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
         else
         {
             res.first = posx * rendsz_w / winsz_w;

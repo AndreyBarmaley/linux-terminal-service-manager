@@ -69,8 +69,8 @@ namespace LTSM
         bool            shmUsed;
 
     public:
-        SDL2X11(int display, int winsz_w, int winsz_h, bool accel, bool shm)
-            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window("SDL2X11", width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
+        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel, bool shm)
+            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
         {
             const int bpp = 4;
             const int pagesz = 4096;
@@ -260,7 +260,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --display <num> --scale <width>x<height> [--shm] [--accel]" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--shm] [--accel]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -271,6 +271,7 @@ int main(int argc, char** argv)
     int winsz_h = 0;
     std::string xauth;
     std::string geometry;
+    std::string title = "SDL2X11";
 
     bool shmUsed = false;
     bool accelUsed = false;
@@ -299,9 +300,11 @@ int main(int argc, char** argv)
 
         for(int it = 1; it < argc; ++it)
         {
-            if((0 == std::strcmp(argv[it], "--auth") || 0 == std::strcmp(argv[it], "-a")) && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
                 xauth.assign(argv[it + 1]);
-            else if((0 == std::strcmp(argv[it], "--scale") || 0 == std::strcmp(argv[it], "-s")) && it + 1 < argc)
+            else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
+                title.assign(argv[it + 1]);
+            else if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
                 size_t idx;
@@ -317,7 +320,7 @@ int main(int argc, char** argv)
                     return printHelp(argv[0]);
                 }
             }
-            else if((0 == std::strcmp(argv[it], "--display") || 0 == std::strcmp(argv[it], "-d")) && it + 1 < argc)
+            else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
 
@@ -346,7 +349,7 @@ int main(int argc, char** argv)
 
     try
     {
-        LTSM::SDL2X11 app(display, winsz_w, winsz_h, accelUsed, shmUsed);
+        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accelUsed, shmUsed);
         return app.start();
     }
     catch(int errcode)
