@@ -172,8 +172,6 @@ namespace LTSM
 
         bool			getBoolean(void) const override;
         std::string		toString(void) const override;
-
-        static std::string      escapeChars(std::string);
     };
 
     /* JsonDouble */

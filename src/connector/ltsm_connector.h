@@ -118,13 +118,16 @@ namespace LTSM
 
         BaseStream &                    sendIntBE16(uint16_t);
         BaseStream &                    sendIntBE32(uint32_t);
+        BaseStream &                    sendIntBE64(uint64_t);
 
         BaseStream &                    sendIntLE16(uint16_t);
         BaseStream &                    sendIntLE32(uint32_t);
+        BaseStream &                    sendIntLE64(uint64_t);
 
         virtual BaseStream &            sendInt8(uint8_t val);
         BaseStream &                    sendInt16(uint16_t val);
         BaseStream &                    sendInt32(uint32_t val);
+        BaseStream &                    sendInt64(uint64_t val);
 
         virtual BaseStream &            sendRaw(const void*, size_t);
 
@@ -133,13 +136,16 @@ namespace LTSM
 
         int		                recvIntBE16(void);
         int		                recvIntBE32(void);
+        int64_t		                recvIntBE64(void);
 
         int		                recvIntLE16(void);
         int		                recvIntLE32(void);
+        int64_t		                recvIntLE64(void);
 
         virtual int		        recvInt8(void);
         int		                recvInt16(void);
         int		                recvInt32(void);
+        int		                recvInt64(void);
 
         void                            recvSkip(size_t);
 
@@ -231,10 +237,8 @@ namespace LTSM
             std::list<std::unique_ptr<RenderPrimitive>>
                                         _renderPrimitives;
 
-            std::unique_ptr<XCB::RootDisplay>
+            std::unique_ptr<XCB::RootDisplayExt>
         				_xcbDisplay;
-	    std::unique_ptr<XCB::SelectionOwner>
-					_xcbSelectionOwner;
             XCB::SHM                    _shmInfo;
             XCB::Damage                 _damageInfo;
 

@@ -88,17 +88,6 @@ namespace LTSM
         return get() ? get()->error : nullptr;
     }
 
-    xcb_shm_get_image_cookie_t XCB::SHM::getPixmapRegionRequest(xcb_drawable_t winid, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset) const
-    {
-        return getPixmapRegionRequest(winid, { rx, ry, rw, rh }, offset);
-    }
-
-    xcb_shm_get_image_cookie_t XCB::SHM::getPixmapRegionRequest(xcb_drawable_t winid, const xcb_rectangle_t & rect, uint32_t offset) const
-    {
-        return xcb_shm_get_image_unchecked(get()->conn, winid, rect.x, rect.y, rect.width, rect.height,
-                                           ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, get()->xcb, offset);
-    }
-
     std::pair<bool, XCB::PixmapInfo> XCB::SHM::getPixmapRegion(xcb_drawable_t winid, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset) const
     {
         return getPixmapRegion(winid, { rx, ry, rw, rh }, offset);
@@ -106,11 +95,20 @@ namespace LTSM
 
     std::pair<bool, XCB::PixmapInfo> XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const xcb_rectangle_t & rect, uint32_t offset) const
     {
+	xcb_generic_error_t* error;
         auto cookie = xcb_shm_get_image(get()->conn, winid, rect.x, rect.y, rect.width, rect.height,
                                         ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, get()->xcb, offset);
 
-        GenericReply<xcb_shm_get_image_reply_t> shmReply(xcb_shm_get_image_reply(get()->conn, cookie, nullptr));
+        GenericReply<xcb_shm_get_image_reply_t> shmReply(xcb_shm_get_image_reply(get()->conn, cookie, &error));
         std::pair<bool, PixmapInfo> res;
+
+	if(error)
+        {
+	    Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
+                           "xcb_shm_get_image", static_cast<int>(error->error_code), static_cast<int>(error->major_code), error->minor_code, error->sequence);
+            free(error);
+            return res;
+        }
 
         auto reply = shmReply.get();
         res.first = reply;
@@ -240,7 +238,7 @@ namespace LTSM
         SHM shm(shmid, shmaddr, _conn);
 
         if(shm->error)
-            extendedError(shm->error, "xcb_shm_attach_checked");
+            extendedError(shm->error, "xcb_shm_attach");
 
         return shm;
     }
@@ -250,18 +248,42 @@ namespace LTSM
 	return xcb_get_maximum_request_length(_conn);
     }
 
-    xcb_atom_t XCB::Connector::getAtom(const std::string & name) const
+    bool XCB::Connector::checkAtom(const std::string & name) const
     {
-	auto cookie = xcb_intern_atom(_conn, 0, name.size(), name.c_str());
-	GenericReply<xcb_intern_atom_reply_t> reply(xcb_intern_atom_reply(_conn, cookie, nullptr));
+        return XCB_ATOM_NONE != getAtom(name, false);
+    }
 
-	return reply ? reply->atom : 0;
+    xcb_atom_t XCB::Connector::getAtom(const std::string & name, bool create) const
+    {
+	xcb_generic_error_t* error;
+	auto cookie = xcb_intern_atom(_conn, create ? 0 : 1, name.size(), name.c_str());
+	GenericReply<xcb_intern_atom_reply_t> reply(xcb_intern_atom_reply(_conn, cookie, &error));
+
+	if(error)
+        {
+            extendedError(error, "xcb_intern_atom");
+            free(error);
+            return XCB_ATOM_NONE;
+        }
+
+	return reply ? reply->atom : XCB_ATOM_NONE;
     }
 
     std::string XCB::Connector::getAtomName(xcb_atom_t atom) const
     {
-	auto cookie = xcb_get_atom_name_unchecked(_conn, atom);
-        GenericReply<xcb_get_atom_name_reply_t> replyAtom(xcb_get_atom_name_reply(_conn, cookie, nullptr));
+	if(atom == XCB_ATOM_NONE)
+	    return std::string("NONE");
+
+	xcb_generic_error_t* error;
+	auto cookie = xcb_get_atom_name(_conn, atom);
+        GenericReply<xcb_get_atom_name_reply_t> replyAtom(xcb_get_atom_name_reply(_conn, cookie, &error));
+
+	if(error)
+        {
+            extendedError(error, "xcb_get_atom_name");
+            free(error);
+            return std::string();
+        }
 
 	if(replyAtom)
 	{
@@ -270,7 +292,7 @@ namespace LTSM
 	    return std::string(name, len);
 	}
 
-	return "";
+	return std::string();
     }
 
     void XCB::Connector::extendedError(const GenericError & gen, const char* func) const
@@ -280,7 +302,6 @@ namespace LTSM
 
     void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func) const
     {
-
 #ifdef LTSM_BUILD_XCB_ERRORS
         xcb_errors_context_t* err_ctx;
         xcb_errors_context_new(_conn, &err_ctx);
@@ -297,6 +318,11 @@ namespace LTSM
         Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
                            func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
 #endif
+    }
+
+    int XCB::Connector::hasError(void)
+    {
+	return xcb_connection_has_error(_conn);
     }
 
     XCB::GenericEvent XCB::Connector::poolEvent(void)
@@ -378,7 +404,7 @@ namespace LTSM
         if(! _xtest || ! _xtest->present)
             return false;
 
-        auto cookie = xcb_test_get_version_unchecked(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
+        auto cookie = xcb_test_get_version(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
         GenericReply<xcb_test_get_version_reply_t> replyVersion(xcb_test_get_version_reply(_conn, cookie, &error));
 
         if(error)
@@ -514,7 +540,7 @@ namespace LTSM
         GC gc(_screen->root, _conn, value_mask, value_list);
 
         if(gc->error)
-            extendedError(gc->error, "xcb_create_gc_checked");
+            extendedError(gc->error, "xcb_create_gc");
 
         return gc;
     }
@@ -542,8 +568,16 @@ namespace LTSM
 	    if(yy + allowRows > ry + rh)
 		allowRows = ry + rh - yy;
 
+	    xcb_generic_error_t* error;
             auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, rx, yy, rw, allowRows, ~0);
-            GenericReply<xcb_get_image_reply_t> xcbReply(xcb_get_image_reply(_conn, cookie, nullptr));
+            GenericReply<xcb_get_image_reply_t> xcbReply(xcb_get_image_reply(_conn, cookie, &error));
+
+	    if(error)
+    	    {
+        	extendedError(error, "xcb_get_image");
+        	free(error);
+		break;
+    	    }
 
             auto reply = xcbReply.get();
             res.first = reply;
@@ -591,7 +625,7 @@ namespace LTSM
         auto xfixesRegion = XFixesRegion(& rect, 1, _conn);
 
         if(xfixesRegion->error)
-            extendedError(xfixesRegion->error, "xcb_xfixes_create_region_checked");
+            extendedError(xfixesRegion->error, "xcb_xfixes_create_region");
 
         auto damageRegion = Damage(_screen->root, level, _conn);
 
@@ -600,10 +634,10 @@ namespace LTSM
             auto err = damageRegion.addRegion(_screen->root, xfixesRegion->xcb);
 
             if(err)
-                extendedError(err.get(), "xcb_damage_add_checked");
+                extendedError(err.get(), "xcb_damage_add");
         }
         else
-            extendedError(damageRegion->error, "xcb_damage_create_checked");
+            extendedError(damageRegion->error, "xcb_damage_create");
 
         return damageRegion;
     }
@@ -618,15 +652,15 @@ namespace LTSM
         auto repair = XFixesRegion(& rect, 1, _conn);
 
         if(repair->error)
-            extendedError(repair->error, "xcb_xfixes_create_region_checked");
+            extendedError(repair->error, "xcb_xfixes_create_region");
 
-        auto cookie = xcb_damage_subtract_checked(_conn, damage.get()->xcb, repair.get()->xcb, XCB_XFIXES_REGION_NONE);
-        auto error = checkRequest(cookie);
+        auto cookie = xcb_damage_subtract_checked(_conn, damage->xcb, repair->xcb, XCB_XFIXES_REGION_NONE);
+        auto errorReq = checkRequest(cookie);
 
-        if(! error)
+        if(! errorReq)
             return true;
 
-        extendedError(error, "xcb_damage_subtract_checked");
+        extendedError(errorReq, "xcb_damage_subtract");
         return false;
     }
 
@@ -776,7 +810,7 @@ namespace LTSM
             }
             else
             {
-                switch(ev->response_type & ~0x80)
+                switch(ev->response_type & 0x7f)
                 {
                     case XCB_MOTION_NOTIFY:
                         break;
@@ -814,11 +848,11 @@ namespace LTSM
                 if(wait)
                 {
                     auto cookie = xcb_test_fake_input_checked(_conn, type, *keycode, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
-                    auto error = checkRequest(cookie);
+                    auto errorReq = checkRequest(cookie);
 
-                    if(error)
+                    if(errorReq)
                     {
-                        extendedError(error, "xcb_test_fake_input");
+                        extendedError(errorReq, "xcb_test_fake_input");
                         return false;
                     }
                 }
@@ -839,12 +873,12 @@ namespace LTSM
         if(wait)
         {
             auto cookie = xcb_test_fake_input_checked(_conn, type, buttons, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
-            auto error = checkRequest(cookie);
+            auto errorReq = checkRequest(cookie);
 
-            if(! error)
+            if(! errorReq)
                 return true;
 
-            extendedError(error, "xcb_test_fake_input");
+            extendedError(errorReq, "xcb_test_fake_input");
         }
         else
         {
@@ -863,9 +897,9 @@ namespace LTSM
             auto back = createGC(mask, values);
 
             auto cookie = xcb_poly_fill_rectangle_checked(_conn, _screen->root, back.xcb, rects_num, rects_val);
-            auto error = checkRequest(cookie);
-            if(error)
-                extendedError(error, "xcb_poly_fill_rectangle_checked");
+            auto errorReq = checkRequest(cookie);
+            if(errorReq)
+                extendedError(errorReq, "xcb_poly_fill_rectangle");
         }
     */
 
@@ -873,162 +907,272 @@ namespace LTSM
     {
         uint32_t colors[]  = { color, 0 };
         auto cookie = xcb_change_window_attributes(_conn, _screen->root, XCB_CW_BACK_PIXEL, colors);
-        auto error = checkRequest(cookie);
+        auto errorReq = checkRequest(cookie);
 
-        if(error)
-            extendedError(error, "xcb_change_window_attributes");
+        if(errorReq)
+            extendedError(errorReq, "xcb_change_window_attributes");
         else
         {
             cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, width(), height());
-            error = checkRequest(cookie);
+            errorReq = checkRequest(cookie);
 
-            if(error)
-                extendedError(error, "xcb_clear_area_checked");
+            if(errorReq)
+                extendedError(errorReq, "xcb_clear_area");
         }
     }
 
-    /* XCB::SelectionOwner */
-    XCB::SelectionOwner::SelectionOwner(const std::string & addr) : RootDisplay(addr), _running(false),
-    _atoms{XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE, XCB_ATOM_NONE},
-    _atomAtom(_atoms[0]), _atomClipboard(_atoms[1]), _atomTargets(_atoms[2]), _atomText(_atoms[3]), _atomUTF8(_atoms[4])
+    /* XCB::RootDisplayExt */
+    XCB::RootDisplayExt::RootDisplayExt(const std::string & addr) : RootDisplay(addr),
+    _atoms{ XCB_ATOM_NONE }, _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
+    _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
     {
-	uint32_t mask = XCB_EVENT_MASK_PROPERTY_CHANGE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-	_window = xcb_generate_id(_conn);
+	const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+	const uint32_t values[] = { _screen->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE }; 
 
-	auto cookie = xcb_create_window_checked(_conn, 0, _window, _screen->root, -1, -1, 1, 1, 0,
-			    XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, XCB_CW_EVENT_MASK, & mask);
-	auto error = checkRequest(cookie);
-	if(! error)
+	_selwin = xcb_generate_id(_conn);
+	auto cookie = xcb_create_window_checked(_conn, 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
+			    XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, mask, values);
+
+	auto errorReq = checkRequest(cookie);
+	if(! errorReq)
         {
-	    _atomAtom = getAtom("ATOM");
+	    _atomPrimary = getAtom("PRIMARY");
 	    _atomClipboard = getAtom("CLIPBOARD");
+	    _atomBuffer = getAtom("XSEL_DATA");
 	    _atomTargets = getAtom("TARGETS");
 	    _atomText = getAtom("TEXT");
+	    _atomTextPlain = getAtom("text/plain;charset=utf-8");
 	    _atomUTF8 = getAtom("UTF8_STRING");
 
-	    cookie = xcb_set_selection_owner_checked(_conn, _window, _atomClipboard, XCB_CURRENT_TIME);
+	    const std::string name("LTSM_SEL");
+	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, _selwin,
+				getAtom("_NET_WM_NAME"), _atomUTF8, 8, name.size(), name.data());
 
-	    error = checkRequest(cookie);
-	    if(error)
-    	        extendedError(error, "xcb_set_selection_owner_checked");
-
-
-	    startBackground();
+	    xcb_flush(_conn);
         }
         else
 	{
-    	    extendedError(error, "xcb_create_window_checked");
-            _window = 0;
+    	    extendedError(errorReq, "xcb_create_window");
+            _selwin = 0;
 	}
     }
 
-    XCB::SelectionOwner::~SelectionOwner()
+    XCB::RootDisplayExt::~RootDisplayExt()
     {
-        if(_running)
-            _running = false;
-
-        if(_thread.joinable())
-	    _thread.join();
-
-	if(_window)
-            xcb_destroy_window(_conn, _window);
+	if(_selwin)
+            xcb_destroy_window(_conn, _selwin);
     }
 
-    void XCB::SelectionOwner::setClipboard(const std::string & str)
+    bool XCB::RootDisplayExt::selectionClearAction(xcb_selection_clear_event_t* ev)
     {
-        const std::lock_guard<std::mutex> lock(_change);
-        _buffer.assign(str);
-    }
+	if(ev && ev->owner == _selwin)
+        {
+	    _selbuf.clear();
 
-    bool XCB::SelectionOwner::clearEvent(xcb_selection_request_event_t* ev)
-    {
-        if(_buffer.empty())
-            return false;
-
-    	const std::lock_guard<std::mutex> lock(_change);
-
-	if(ev->selection == _atomClipboard)
-	    _buffer.clear();
-
-	return true;
-    }
-
-    bool XCB::SelectionOwner::requestEvent(xcb_selection_request_event_t* ev)
-    {
-        if(_buffer.empty())
-            return false;
-
-	if(ev->selection != _atomClipboard)
-	    return false;
-
-    	const std::lock_guard<std::mutex> lock(_change);
-
-	if(ev->target == _atomTargets)
-	{
-	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
-    		    _atomAtom, 8 * sizeof(xcb_atom_t), 3, & _atomTargets);
-	}
-	else
-	if(ev->target == _atomText || ev->target == _atomUTF8)
-	{
-	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
-		    ev->target == _atomText ? _atomText : _atomUTF8, 8, _buffer.size(), _buffer.data());
+            if(Application::isDebugLevel(DebugLevel::Console) ||
+                Application::isDebugLevel(DebugLevel::SyslogInfo))
+                Application::info("%s", "xcb: clear selection");
+ 	    return true;
         }
 
-	xcb_selection_notify_event_t notify;
-	notify.response_type = XCB_SELECTION_NOTIFY;
-	notify.pad0          = 0;
-	notify.sequence      = 0;
-    	notify.time          = XCB_CURRENT_TIME;
-	notify.requestor     = ev->requestor;
-	notify.selection     = ev->selection;
-	notify.target        = ev->target;
-	notify.property      = ev->property;
+        return false;
+    }
 
-	xcb_send_event(_conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+    xcb_window_t XCB::RootDisplayExt::getOwnerSelection(const xcb_atom_t & atomSel)
+    {
+	xcb_generic_error_t* error;
+	auto cookie = xcb_get_selection_owner(_conn, atomSel);
+	GenericReply<xcb_get_selection_owner_reply_t> reply(xcb_get_selection_owner_reply(_conn, cookie, &error));
+
+    	if(error)
+    	{
+    	    extendedError(error, "xcb_get_selection_owner");
+    	    free(error);
+	    return XCB_WINDOW_NONE;
+	}
+
+	return reply  ? reply->owner : XCB_WINDOW_NONE;
+    }
+
+    bool XCB::RootDisplayExt::sendNotifyTargets(const xcb_selection_request_event_t & ev)
+    {
+	auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
+    		    XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & _atomTargets); /* send list: _atomTargets, _atomText, _atomTextPlain, _atomUTF8 */
+
+    	auto errorReq = checkRequest(cookie);
+    	if(errorReq)
+	{
+    	    extendedError(errorReq, "xcb_change_property");
+	    return false;
+	}
+
+	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+            .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property };
+
+	xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
 	xcb_flush(_conn);
 
         return true;
     }
 
-    void XCB::SelectionOwner::stopEvent(void)
+    bool XCB::RootDisplayExt::sendNotifySelData(const xcb_selection_request_event_t & ev)
     {
-        if(_running)
-            _running = false;
+        size_t length = _selbuf.size();
+        size_t maxreq = getMaxRequest();
+        auto chunk = std::min(maxreq, length);
+       
+	auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, _selbuf.data());
+    	auto errorReq = checkRequest(cookie);
+
+    	if(errorReq)
+	{
+    	    extendedError(errorReq, "xcb_change_property");
+	    return false;
+	}
+
+	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+            .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property };
+
+	xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+	xcb_flush(_conn);
+    
+        if(Application::isDebugLevel(DebugLevel::Console) ||
+            Application::isDebugLevel(DebugLevel::SyslogInfo))
+	{
+	    auto prop = getAtomName(ev.property);
+            Application::info("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), std::string(_selbuf.begin(), _selbuf.end()).c_str(), ev.requestor, prop.c_str());
+	}
+
+        return true;
     }
 
-    void XCB::SelectionOwner::startBackground(void)
+    bool XCB::RootDisplayExt::selectionRequestAction(xcb_selection_request_event_t* ev)
     {
-        _running = true;
-        _thread = std::thread([this]()
-        {
-	    while(_running)
+	if(ev->selection == _atomClipboard || ev->selection == _atomPrimary)
+	{
+	    if(ev->target == _atomTargets)
+		return sendNotifyTargets(*ev);
+	    else
+	    if((ev->target == _atomText || ev->target == _atomTextPlain || ev->target == _atomUTF8) &&
+		ev->property != XCB_ATOM_NONE && ! _selbuf.empty())
+		return sendNotifySelData(*ev);
+	}
+
+	// other variants: discard request
+	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+            .time = ev->time, .requestor = ev->requestor, .selection = ev->selection, .target = ev->target, .property = XCB_ATOM_NONE };
+
+	xcb_send_event(_conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+	xcb_flush(_conn);
+
+        if(Application::isDebugLevel(DebugLevel::Console) ||
+            Application::isDebugLevel(DebugLevel::SyslogInfo))
+	{
+	    auto sel = getAtomName(ev->selection);
+	    auto tgt = getAtomName(ev->target);
+	    auto prop = getAtomName(ev->property);
+	    Application::error("xcb discard selection: `%s', target: `%s', property: `%s', window: 0x%08x", sel.c_str(), tgt.c_str(), prop.c_str(), ev->requestor);
+	}
+
+	return false;
+    }
+
+    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> & buf, const xcb_atom_t & atomSel)
+    {
+	if(_selbuf != buf)
+	{
+    	    std::swap(_selbuf, buf);
+
+	    // take owner
+	    if(_selbuf.empty())
+		return false;
+
+	    auto owner = getOwnerSelection(atomSel);
+	    if(owner != _selwin)
 	    {
-		auto ev = poolEvent();
-    		if(! ev)
-		{
-		    std::this_thread::sleep_for(50ms);
-		    continue;
-		}
+    		xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
+		xcb_flush(_conn);
+	    }
 
-	        switch(ev->response_type & ~0x80)
-                {
-                    case XCB_DESTROY_NOTIFY:
-                        _running = false;
-                        break;
+	    return true;
+	}
 
-                    case XCB_SELECTION_CLEAR:
-                        clearEvent(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
-                        break;
+	return false;
+    }
 
-                    case XCB_SELECTION_REQUEST:
-                        requestEvent(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
-                        break;
+    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> & buf)
+    {
+	return setClipboardEvent(buf, _atomPrimary); // _atomClipboard);
+    }
 
-                    default:
-                        break;
-                }
-            }
-        });
+    bool XCB::RootDisplayExt::getSelectionEvent(const xcb_atom_t & atomSel)
+    {
+	auto owner = getOwnerSelection(atomSel);
+	if(owner == XCB_WINDOW_NONE || owner == _selwin)
+	    return false;
+
+	xcb_delete_property(_conn, _selwin, _atomBuffer);
+	xcb_convert_selection(_conn, _selwin, atomSel, _atomUTF8, _atomBuffer, XCB_CURRENT_TIME);
+
+	xcb_flush(_conn);
+	return true;
+    }
+
+    bool XCB::RootDisplayExt::getClipboardEvent(void)
+    {
+	return getSelectionEvent(_atomPrimary);
+    }
+
+    bool XCB::RootDisplayExt::selectionNotifyAction(xcb_selection_notify_event_t* ev)
+    {
+	if(! ev || ev->property == XCB_ATOM_NONE)
+	    return false;
+
+        // get type
+        auto cookie = xcb_get_property(_conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
+	GenericReply<xcb_get_property_reply_t> reply(xcb_get_property_reply(_conn, cookie, nullptr));
+
+        if(! reply)
+            return false;
+        else
+        if(reply->type != _atomUTF8 && reply->type != _atomText && reply->type != _atomTextPlain)
+        {
+	    auto type = getAtomName(reply->type);
+            Application::error("xcb selection notify action, unknown type: %d, `%s'", reply->type, type.c_str());
+            return false;
+        }
+
+        // get data
+        cookie = xcb_get_property(_conn, false, _selwin, _atomBuffer, reply->type, 0, reply->bytes_after);
+	reply.reset(xcb_get_property_reply(_conn, cookie, nullptr));
+
+        if(! reply)
+            return false;
+
+	bool ret = false;
+        auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+        int length = xcb_get_property_value_length(reply.get());
+
+	if(ptrbuf && 0 < length)
+	{
+	    // check equal
+	    if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
+		ret = false;
+            else
+	    {
+		_selbuf.assign(ptrbuf, ptrbuf + length);
+		ret = true;
+
+                if(Application::isDebugLevel(DebugLevel::Console) ||
+                    Application::isDebugLevel(DebugLevel::SyslogInfo))
+                    Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), std::string(_selbuf.begin(), _selbuf.end()).c_str());
+	    }
+	}
+
+	if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
+	    extendedError(errorReq, "xcb_delete_property");
+
+	xcb_flush(_conn);
+	return ret;
     }
 }

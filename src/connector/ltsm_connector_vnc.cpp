@@ -549,6 +549,8 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
+        Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
+
         // init server format
 #ifdef __ORDER_LITTLE_ENDIAN__
         const int bigEndian = 0;
@@ -732,6 +734,8 @@ namespace LTSM
         _xcbDisableMessages = false;
         serverRegion.assign(0, 0, _xcbDisplay->width(), _xcbDisplay->height());
 	bool clientUpdateReq = false;
+	std::vector<uint8_t> selbuf;
+	Tools::FrequencyTime ftp;
 
         while(loopMessage)
         {
@@ -787,6 +791,13 @@ namespace LTSM
 
             if(! _xcbDisableMessages)
             {
+		if(auto err = _xcbDisplay->hasError())
+		{
+		    _xcbDisableMessages = true;
+                    Application::error("xcb display error connection: %d", err);
+		    break;
+		}
+
                 // get all damages and join it
                 while(auto ev = _xcbDisplay->poolEvent())
                 {
@@ -811,23 +822,62 @@ namespace LTSM
                 	const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
                 	damageRegion.join(notify->area);
 		    }
+
+		    // check selection events
+            	    switch(ev->response_type & 0x7f)
+            	    {
+                	case XCB_SELECTION_CLEAR:
+                	    _xcbDisplay->selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
+                    	    break;
+
+                	case XCB_SELECTION_REQUEST:
+                    	    _xcbDisplay->selectionRequestAction(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                    	    break;
+
+			case XCB_SELECTION_NOTIFY:
+			    if(_xcbDisplay->selectionNotifyAction(reinterpret_cast<xcb_selection_notify_event_t*>(ev.get())))
+                		selbuf = _xcbDisplay->getSelectionData();
+			    break;
+
+                	default:
+                    	    break;
+		    }
                 }
 
                 // server action
-                if(clientUpdateReq && ! damageRegion.empty() && ! fbUpdateProcessing)
-                {
-                    RFB::Region res;
-
-                    if(RFB::Region::intersection(clientRegion, damageRegion, & res))
+		if(! isUpdateProcessed())
+		{
+                    if(sendBellFlag)
 		    {
-			fbUpdateProcessing = true;
-			// background job
-                        std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
+			serverSendBell();
+			sendBellFlag = false;
 		    }
-                    damageRegion.reset();
-		    clientUpdateReq = false;
+
+		    if(selbuf.size())
+		    {
+			serverSendCutText(selbuf);
+			selbuf.clear();
+		    }
+
+		    if(clientUpdateReq && ! damageRegion.empty())
+                    {
+                        RFB::Region res;
+
+                        if(RFB::Region::intersection(clientRegion, damageRegion, & res))
+		        {
+			    fbUpdateProcessing = true;
+			    // background job
+                            std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
+		        }
+                        damageRegion.reset();
+		        clientUpdateReq = false;
+                    }
                 }
-            }
+
+    		// periodic 750ms: get selection action
+    		if(ftp.finishedMilliSeconds(750))
+		    _xcbDisplay->getClipboardEvent();
+    	    }
 
             // dbus processing
             _conn->enterEventLoopAsync();
@@ -838,9 +888,14 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
+    bool Connector::VNC::isUpdateProcessed(void) const
+    {
+        return fbUpdateProcessing || ! jobsEncodings.empty();
+    }
+
     void Connector::VNC::waitSendingFBUpdate(void) const
     {
-        while(fbUpdateProcessing || ! jobsEncodings.empty())
+        while(isUpdateProcessed())
         {
             std::this_thread::sleep_for(3ms);
         }
@@ -1040,30 +1095,24 @@ namespace LTSM
 
         Application::debug("RFB 6.4.6, cut text event, length: %d", length);
 
-        if(! _xcbSelectionOwner)
+        if(! _xcbDisableMessages)
         {
-            std::string addr = std::string(":").append(std::to_string(_display));
-            _xcbSelectionOwner.reset(new XCB::SelectionOwner(addr));
-        }
+	    size_t maxreq = _xcbDisplay->getMaxRequest();
+	    size_t chunk = std::min(maxreq, length);
 
-        std::string buffer;
-	size_t maxReq = _xcbSelectionOwner->getMaxRequest();
-        size_t limit = std::min(length, maxReq);
+    	    std::vector<uint8_t> buffer;
+    	    buffer.reserve(chunk);
 
-        buffer.reserve(limit);
+    	    for(size_t pos = 0; pos < chunk; ++pos)
+            	buffer.push_back(recvInt8());
 
-        if(limit < length)
-	    Application::error("request limited: %d", maxReq);
-
-        while(0 < length--)
-        {
-            int ch = recvInt8();
-
-            if(buffer.size() < limit)
-                buffer.append(1, ch);
-        }
-
-        _xcbSelectionOwner->setClipboard(buffer);
+    	    recvSkip(length - chunk);
+    	    _xcbDisplay->setClipboardEvent(buffer);
+	}
+	else
+	{
+    	    recvSkip(length);
+	}
     }
 
     void Connector::VNC::clientDisconnectedEvent(void)
@@ -1072,9 +1121,6 @@ namespace LTSM
 
         if(! _xcbDisableMessages)
 	    xcbReleaseInputsEvent();
-
-        if(_xcbSelectionOwner)
-            _xcbSelectionOwner->stopEvent();
     }
 
     void Connector::VNC::serverSendColourMap(int first)
@@ -1106,17 +1152,19 @@ namespace LTSM
 	sendFlush();
     }
 
-    void Connector::VNC::serverSendCutText(const std::string & text)
+    void Connector::VNC::serverSendCutText(const std::vector<uint8_t> & buf)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
-        Application::debug("server send: cut text, length: %d", text.size());
+        Application::debug("server send: cut text, length: %d", buf.size());
+
         // RFB: 6.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
         sendInt8(0); // padding
-        sendIntBE32(text.size());
-
-        for(auto & ch : text)
-            sendInt8(ch);
+        sendInt8(0); // padding
+        sendInt8(0); // padding
+    
+	sendIntBE32(buf.size());
+        sendRaw(buf.data(), buf.size());
 
 	sendFlush();
     }
@@ -1341,7 +1389,7 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: send bell, display: %d", display);
-            serverSendBell();
+            sendBellFlag = true;
         }
     }
 

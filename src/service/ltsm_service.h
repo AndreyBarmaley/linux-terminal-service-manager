@@ -23,10 +23,10 @@
 #ifndef _LTSM_SERVICE_
 #define _LTSM_SERVICE_
 
-#include <mutex>
 #include <chrono>
 
 #include <security/pam_appl.h>
+#include "alexab_safe_ptr.h"
 
 #include "ltsm_global.h"
 #include "ltsm_dbus_proxy.h"
@@ -41,10 +41,15 @@ namespace LTSM
         class Object;
     }
 
+    struct PidStatus : std::pair<int, int>
+    {
+	PidStatus(int pid, int status) : std::pair<int, int>(pid, status){}
+    };
+
     struct XvfbSession
     {
-        int                             pid1;
-        int                             pid2;
+        int                             pid1; // xvfb pid
+        int                             pid2; // session pid
         int                             width;
         int                             height;
         int                             uid;
@@ -70,8 +75,9 @@ namespace LTSM
 
         XvfbSession() : pid1(0), pid2(0), width(0), height(0), uid(0), gid(0),
             durationlimit(0), loginFailures(0), shutdown(false), checkconn(false), mode(XvfbMode::SessionLogin), policy(SessionPolicy::AuthLock), pamh(nullptr) {}
+	~XvfbSession() {}
 
-        void            destroy(int killpid = 0);
+	void				destroy(void);
     };
 
     // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encryption
@@ -81,19 +87,15 @@ namespace LTSM
     class XvfbSessions
     {
     protected:
-        INTMAP<int, XvfbSession>        _xvfb;
-        std::mutex              	_mutex;
+        sf::safe_ptr< std::map<int, XvfbSession> > _xvfb;
 
     public:
-        ~XvfbSessions();
+        virtual ~XvfbSessions();
 
         XvfbSession*                    getXvfbInfo(int display);
-        int                             findXvfbPIDs(int pid);
-        int                             findUserSession(const std::string & username);
+        std::pair<int, XvfbSession*>    findUserSession(const std::string & username);
         XvfbSession*                    registryXvfbSession(int display, const XvfbSession &);
         void                            removeXvfbDisplay(int display);
-        void                            unregistryChilds(int pid);
-	void				confirmCheckConnection(int display);
 
         std::vector<xvfb2tuple>         toSessionsList(void);
     };
@@ -118,7 +120,8 @@ namespace LTSM
             std::string                 _helperTitle;
             std::string                 _helperDateFormat;
             std::vector<std::string>    _helperAccessUsersList;
-    	    std::chrono::system_clock::time_point _tpsec3, _tpsec30;
+	    std::list<PidStatus>	_childEnded;
+    	    Tools::FrequencyTime	_tpsec3, _tpsec30;
 
         protected:
             void                        closefds(void) const;
@@ -130,6 +133,7 @@ namespace LTSM
             int				runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userLogin);
             int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
+	    bool			runAsCommand(const std::string & userName, const std::string & cmd, const std::list<std::string>* args = nullptr);
 	    void			setFileOwner(const std::string & file, int uid, int gid);
             bool			waitXvfbStarting(int display, uint32_t waitms);
             bool	                switchToUser(const std::string &);
@@ -137,7 +141,7 @@ namespace LTSM
             bool			checkXvfbLocking(int display);
             bool                        checkFileReadable(const std::string &);
 	    void			removeXvfbSocket(int display);
-            void			displayShutdown(int display, bool emitSignal);
+            bool			displayShutdown(int display, bool emitSignal, XvfbSession*);
             std::list<std::string>      getSystemUsersList(int uidMin, int uidMax) const;
             bool                        pamAuthenticate(const int32_t & display, const std::string & login, const std::string & password);
 
@@ -146,7 +150,7 @@ namespace LTSM
             ~Object();
 
             void                        systemTick(void);
-            void                        childEnded(int pid, int status);
+            void                        signalChildEnded(int pid, int status);
 
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;

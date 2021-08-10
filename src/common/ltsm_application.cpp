@@ -33,7 +33,29 @@
 
 namespace LTSM
 {
-    int Application::_debug = 2;
+    DebugLevel Application::_debug = DebugLevel::Console;
+
+    bool Application::isDebugLevel(const DebugLevel & lvl)
+    {
+        return _debug == lvl;
+    }
+                
+    void Application::setDebugLevel(const DebugLevel & lvl)
+    {
+        _debug = lvl;
+    }
+            
+    void Application::setDebugLevel(const std::string & level)
+    {
+        if(level == "info")
+            _debug = DebugLevel::SyslogInfo;
+        else if(level == "debug")
+            _debug = DebugLevel::SyslogDebug;
+        else if(level == "console")
+            _debug = DebugLevel::Console;
+        else
+            _debug = DebugLevel::Quiet;
+    }
 
     Application::Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
     {
@@ -83,7 +105,7 @@ namespace LTSM
 
             if(confPath.empty())
             {
-                const std::string local = std::filesystem::path(Tools::dirname(argv[0])) / "config.json";
+                auto local = std::filesystem::path(argv[0]).parent_path() / "config.json";
 		auto st = std::filesystem::status(local);
                 if(std::filesystem::file_type::not_found != st.type() &&
 		    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)

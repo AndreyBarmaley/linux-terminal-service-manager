@@ -184,9 +184,6 @@ namespace LTSM
                 return get() && get()->xcb && 0 < get()->shm && ! get()->error;
             }
 
-            xcb_shm_get_image_cookie_t getPixmapRegionRequest(xcb_drawable_t, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset = 0) const;
-            xcb_shm_get_image_cookie_t getPixmapRegionRequest(xcb_drawable_t, const xcb_rectangle_t &, uint32_t offset = 0) const;
-
             std::pair<bool, PixmapInfo> getPixmapRegion(xcb_drawable_t, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset = 0) const;
             std::pair<bool, PixmapInfo> getPixmapRegion(xcb_drawable_t, const xcb_rectangle_t &, uint32_t offset = 0) const;
         };
@@ -196,23 +193,26 @@ namespace LTSM
         protected:
             xcb_connection_t*       _conn;
 
-            void                    extendedError(const xcb_generic_error_t* error, const char* func) const;
-            void                    extendedError(const GenericError &, const char* func) const;
 
         public:
             Connector(const char* addr);
             virtual ~Connector();
 
+	    int                     hasError(void);
             bool                    checkExtensionSHM(void);
             bool                    checkExtensionDAMAGE(void);
             bool                    checkExtensionXFIXES(void);
             bool                    checkExtensionTEST(void);
 
+            void                    extendedError(const xcb_generic_error_t* error, const char* func) const;
+            void                    extendedError(const GenericError &, const char* func) const;
+
             GenericError            checkRequest(const xcb_void_cookie_t &) const;
             GenericEvent            poolEvent(void);
 
             SHM                     createSHM(size_t, int mode = 0600);
-	    xcb_atom_t              getAtom(const std::string &) const;
+	    xcb_atom_t              getAtom(const std::string &, bool create = true) const;
+	    bool                    checkAtom(const std::string &) const;
 	    std::string	            getAtomName(xcb_atom_t) const;
 	    size_t                  getMaxRequest(void) const;
 
@@ -270,32 +270,41 @@ namespace LTSM
             bool                    damageSubtrack(const Damage &, const xcb_rectangle_t &);
         };
 
-	class SelectionOwner : public RootDisplay
+	class RootDisplayExt : public RootDisplay
 	{
         protected:
-            xcb_window_t            _window;
-            std::mutex              _change;
-	    std::string             _buffer;
-            std::thread             _thread;
-            std::atomic<bool>       _running;
+            xcb_window_t            _selwin;
+	    std::vector<uint8_t>    _selbuf;
 
-	    xcb_atom_t              _atoms[5];
-	    xcb_atom_t &            _atomAtom;
+	    xcb_atom_t              _atoms[7];
+	    xcb_atom_t &            _atomPrimary;
 	    xcb_atom_t &            _atomClipboard;
+	    xcb_atom_t &            _atomBuffer;
 	    xcb_atom_t &            _atomTargets;
 	    xcb_atom_t &            _atomText;
+	    xcb_atom_t &            _atomTextPlain;
 	    xcb_atom_t &            _atomUTF8;
 
-            void                     startBackground(void);
-            bool                     clearEvent(xcb_selection_request_event_t*);
-            bool                     requestEvent(xcb_selection_request_event_t*);
+	    xcb_window_t             getOwnerSelection(const xcb_atom_t &);
+
+	    bool                     getSelectionEvent(const xcb_atom_t &);
+	    bool                     setClipboardEvent(std::vector<uint8_t> &, const xcb_atom_t &);
+
+            bool                     sendNotifyTargets(const xcb_selection_request_event_t &);
+            bool                     sendNotifySelData(const xcb_selection_request_event_t &);
 
 	public:
-	    SelectionOwner(const std::string & addr);
-            ~SelectionOwner();
+	    RootDisplayExt(const std::string & addr);
+            ~RootDisplayExt();
 
-            void                     setClipboard(const std::string &);
-            void                     stopEvent(void);
+            bool                     selectionClearAction(xcb_selection_clear_event_t*);
+            bool                     selectionRequestAction(xcb_selection_request_event_t*);
+            bool                     selectionNotifyAction(xcb_selection_notify_event_t*);
+
+            bool                     setClipboardEvent(std::vector<uint8_t> &);
+	    bool                     getClipboardEvent(void);
+
+	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
 	};
     }
 }

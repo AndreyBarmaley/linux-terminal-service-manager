@@ -32,10 +32,12 @@
 
 namespace LTSM
 {
+    enum class DebugLevel { Quiet, Console, SyslogInfo, SyslogDebug };
+
     class Application
     {
     protected:
-        static int      _debug;
+        static DebugLevel _debug;
         int		_argc;
         const char**	_argv;
         const char*     _ident;
@@ -48,20 +50,41 @@ namespace LTSM
         template<typename... Values>
         static void info(const char* format, Values && ... vals)
         {
-            if(0 < _debug)
+	    if(_debug == DebugLevel::Console)
+	    {
+		fprintf(stderr, "[info]\t");
+		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, "\n");
+	    }
+	    else
+            if(_debug != DebugLevel::Quiet)
                 syslog(LOG_INFO, format, (vals)...);
         }
 
         template<typename... Values>
         static void error(const char* format, Values && ... vals)
         {
-            syslog(LOG_ERR, format, (vals)...);
+	    if(_debug == DebugLevel::Console)
+	    {
+		fprintf(stderr, "[error]\t");
+		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, "\n");
+	    }
+	    else
+        	syslog(LOG_ERR, format, (vals)...);
         }
 
         template<typename... Values>
         static void debug(const char* format, Values && ... vals)
         {
-            if(1 < _debug)
+	    if(_debug == DebugLevel::Console)
+	    {
+		fprintf(stderr, "[debug]\t");
+		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, "\n");
+	    }
+	    else
+	    if(_debug == DebugLevel::SyslogDebug)
                 syslog(LOG_DEBUG, format, (vals)...);
         }
 
@@ -70,15 +93,9 @@ namespace LTSM
             ::openlog(_ident, 0, _facility);
         }
 
-        static void busSetDebugLevel(const std::string & level)
-        {
-            if(level == "info")
-                _debug = 1;
-            else if(level == "debug")
-                _debug = 2;
-            else
-                _debug = 0;
-        }
+        static bool isDebugLevel(const DebugLevel &);
+        static void setDebugLevel(const DebugLevel &);
+        static void setDebugLevel(const std::string &);
 
         virtual int start(void) = 0;
     };

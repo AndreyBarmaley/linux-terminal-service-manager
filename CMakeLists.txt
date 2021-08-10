@@ -12,7 +12,7 @@ include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
 # LTSM common lib
-project(LTSM_common VERSION 20210301.1)
+project(LTSM_common VERSION 20210805.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -51,7 +51,7 @@ link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20210301.1)
+project(LTSM_service VERSION 20210805.1)
 
 find_package(sdbus-c++ REQUIRED)
 find_library(PAM_LIBRARIES NAMES pam)
@@ -71,12 +71,13 @@ target_link_libraries(LTSM_service ${PAM_LIBRARIES})
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20210301.1)
+project(LTSM_connector VERSION 20210805.1)
 
 find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
 
 add_executable(LTSM_connector
+    src/connector/ltsm_connector_spice.cpp
     src/connector/ltsm_connector_rdp.cpp
     src/connector/ltsm_vnc_encodings.cpp
     src/connector/ltsm_connector_vnc.cpp
@@ -98,7 +99,7 @@ target_link_libraries(LTSM_connector z)
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20210301.1)
+project(LTSM_sdl2x11 VERSION 20210805.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
 target_compile_options(LTSM_sdl2x11 PUBLIC ${SDL2_CFLAGS})
@@ -113,7 +114,7 @@ target_link_libraries(LTSM_sdl2x11 ${SDL2_IMAGE_LIBRARIES})
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20210301.1)
+project(LTSM_helper VERSION 20210805.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -131,7 +132,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20210301.1)
+project(LTSM_sessions VERSION 20210805.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

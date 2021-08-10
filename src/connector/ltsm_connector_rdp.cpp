@@ -35,6 +35,12 @@ namespace LTSM
     /* Connector::RDP */
     int Connector::RDP::communication(void)
     {
+	if(0 >= busGetServiceVersion())
+        {
+            Application::error("%s", "bus service failure");
+            return EXIT_FAILURE;
+        }
+
         const std::string remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
         Application::debug("under construction, remoteaddr: %s\n", remoteaddr.c_str());
         return EXIT_SUCCESS;

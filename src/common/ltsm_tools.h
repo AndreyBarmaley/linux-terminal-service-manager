@@ -24,6 +24,7 @@
 #define _LTSM_TOOLS_
 
 #include <list>
+#include <chrono>
 #include <vector>
 #include <string>
 #include <iterator>
@@ -63,6 +64,36 @@ namespace LTSM
             void        pushBitLE(bool v);
         };
 
+
+        class FrequencyTime
+        {
+        protected:
+            mutable std::chrono::time_point<std::chrono::system_clock> tp;
+
+            template<typename TimeType>
+            bool finishedTime(size_t val) const
+            {
+                auto cur = std::chrono::system_clock::now();
+                if(TimeType(val) <= cur - tp)
+                {
+                    tp = cur;
+                    return true;
+                }
+
+                return false;
+            }
+
+        public:
+            FrequencyTime() : tp(std::chrono::system_clock::now()) {}
+
+            void        reset(void) { tp = std::chrono::system_clock::now(); }
+            bool        finishedMicroSeconds(int val) const { return finishedTime<std::chrono::microseconds>(val); }
+            bool        finishedMilliSeconds(int val) const { return finishedTime<std::chrono::milliseconds>(val); }
+            bool        finishedSeconds(int val) const { return finishedTime<std::chrono::seconds>(val); }
+            bool        finishedMinutes(int val) const { return finishedTime<std::chrono::minutes>(val); }
+            bool        finishedHours(int val) const { return finishedTime<std::chrono::hours>(val); }
+        };
+
         std::list<std::string> split(const std::string & str, const std::string & sep);
         std::list<std::string> split(const std::string & str, int sep);
 
@@ -72,10 +103,12 @@ namespace LTSM
         std::string     lower(std::string);
         std::string     runcmd(const std::string &);
 
+        std::string     escaped(const std::string &, bool quote);
+        std::string     unescaped(std::string);
+
         std::string     replace(const std::string & src, const char* pred, const std::string & val);
         std::string     replace(const std::string & src, const char* pred, int val);
 
-        std::string     dirname(const std::string &);
         std::string     getenv(const char*, const char* = nullptr);
 
         std::string     hex(int value, int width = 8);

@@ -60,17 +60,17 @@ namespace LTSM
         return around;
     }
 
-    class SDL2X11 : protected XCB::RootDisplay, protected SDL::Window
+    class SDL2X11 : protected XCB::RootDisplayExt, protected SDL::Window
     {
         XCB::SHM        shmInfo;
         XCB::Damage     damageInfo;
         SDL::Texture    txShadow;
-        SDL_Rect        damageArea;
         bool            shmUsed;
+	std::vector<uint8_t> selbuf;
 
     public:
         SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel, bool shm)
-            : XCB::RootDisplay(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
+            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
         {
             const int bpp = 4;
             const int pagesz = 4096;
@@ -87,7 +87,6 @@ namespace LTSM
                 }
             }
 
-            damageArea = { 0, 0, 0, 0, };
             damageInfo = createDamageNotify(0, 0, width(), height());
 
             if(! damageInfo.isValid())
@@ -106,7 +105,7 @@ namespace LTSM
         {
             int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
             auto keycodes = keysymToKeycodes(0 != xksym ? xksym : keysym.sym);
-            return XCB::RootDisplay::fakeInputKeysym(type, keycodes);
+            return XCB::RootDisplayExt::fakeInputKeysym(type, keycodes);
         }
 
         bool sdlEventProcessing(bool & quit)
@@ -122,7 +121,6 @@ namespace LTSM
                     break;
 
                 case SDL_KEYDOWN:
-
                     // fast close
                     if(ev.key()->keysym.sym == SDLK_ESCAPE)
                     {
@@ -176,6 +174,21 @@ namespace LTSM
 
                     break;
 
+		case SDL_CLIPBOARDUPDATE:
+		    if(SDL_HasClipboardText())
+		    {
+			char* ptr = SDL_GetClipboardText();
+			int len = std::strlen(ptr);
+
+			if(ptr && 0 < len)
+			{
+			    selbuf.assign(ptr, ptr + len);
+			    XCB::RootDisplayExt::setClipboardEvent(selbuf);
+			}
+			SDL_free(ptr);
+		    }
+		    break;
+
                 case SDL_QUIT:
                     throw std::string("sdl quit");
                     break;
@@ -187,36 +200,49 @@ namespace LTSM
             return true;
         }
 
-        bool xcbDamageNotifyEvent(void)
-        {
-            auto ev = XCB::RootDisplay::poolEvent();
-
-            if(isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
-            {
-                const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
-                damageArea.x = notify->area.x;
-                damageArea.y = notify->area.y;
-                damageArea.w = notify->area.width;
-                damageArea.h = notify->area.height;
-                return true;
-            }
-
-            return false;
-        }
-
         int start(void)
         {
             const int bytePerPixel = bitsPerPixel() >> 3;
             bool quit = false;
             std::list<SDL_Rect> damages;
             uint8_t* buf = shmUsed ? shmInfo->addr : new uint8_t[width() * height() * (bitsPerPixel() >> 2)];
+	    Tools::FrequencyTime ftp;
 
-            while(! quit)
+            while(! quit && ! XCB::RootDisplayExt::hasError())
             {
                 bool delay = ! sdlEventProcessing(quit);
 
-                while(xcbDamageNotifyEvent())
-                    damages.push_back(damageArea);
+        	while(auto ev = XCB::RootDisplayExt::poolEvent())
+		{
+        	    if(isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
+        	    {
+            		const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
+                	damages.push_back({ notify->area.x, notify->area.y, notify->area.width, notify->area.height });
+        	    }
+
+		    // check selection events
+                    switch(ev->response_type & 0x7f)
+                    {
+                        case XCB_SELECTION_CLEAR:
+                            XCB::RootDisplayExt::selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
+                            break;
+                 
+                        case XCB_SELECTION_REQUEST:
+                            XCB::RootDisplayExt::selectionRequestAction(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                            break;
+                 
+                        case XCB_SELECTION_NOTIFY:
+                            if(XCB::RootDisplayExt::selectionNotifyAction(reinterpret_cast<xcb_selection_notify_event_t*>(ev.get())))
+                            {
+			        auto & selbuf = XCB::RootDisplayExt::getSelectionData();
+				SDL_SetClipboardText(std::string(selbuf.begin(), selbuf.end()).c_str());
+			    }
+                            break;
+                
+                        default:
+                            break;
+                    }
+                }
 
                 if(! damages.empty())
                 {
@@ -240,11 +266,15 @@ namespace LTSM
                         txShadow.updateRect(& repairArea, buf, repairArea.w * 4);
                         renderTexture(txShadow.get());
                         renderPresent();
-                        XCB::RootDisplay::damageSubtrack(damageInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
+                        XCB::RootDisplayExt::damageSubtrack(damageInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
                     }
 
                     damages.clear();
                 }
+
+		// 800ms: get selection action
+                if(ftp.finishedMilliSeconds(800))
+                    XCB::RootDisplayExt::getClipboardEvent();
 
                 if(delay)
                     SDL_Delay(5);
@@ -264,7 +294,7 @@ int printHelp(const char* prog)
     return EXIT_SUCCESS;
 }
 
-int main(int argc, char** argv)
+int main(int argc, const char** argv)
 {
     int display = -1;
     int winsz_w = 0;

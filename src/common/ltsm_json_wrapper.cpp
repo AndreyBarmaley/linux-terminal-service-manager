@@ -224,29 +224,9 @@ namespace LTSM
         return res;
     }
 
-    std::string JsonString::escapeChars(std::string str)
-    {
-        auto escapeChar = [](const std::string & str, int ch) -> std::string
-        {
-            if(str.empty()) return str;
-
-            auto list = Tools::split(str, ch);
-
-            if(str.back() == ch) list.emplace_back("");
-
-            return Tools::join(list, std::string(1, '\\').append(1, ch));
-        };
-
-        for(auto ch :
-            { '"', '\\'
-            })
-            str = escapeChar(str, ch);
-        return str;
-    }
-
     std::string JsonString::toString(void) const
     {
-        return Tools::StringFormat("\"%1\"").arg(escapeChars(content));
+        return Tools::escaped(content, true);
     }
 
     /* JsonValuePtr */
@@ -533,8 +513,7 @@ namespace LTSM
         {
             if((*it).second)
             {
-                os << "\"" << JsonString::escapeChars((*it).first) << "\": " << (*it).second->toString();
-
+                os << Tools::escaped((*it).first, true) << ": " << (*it).second->toString();
                 if(std::next(it) != content.end()) os << ", ";
             }
         }
@@ -850,6 +829,9 @@ namespace LTSM
 
     std::string JsonContent::stringToken(const JsmnToken & tok) const
     {
+	if(0 > tok.start() || 1 > tok.size())
+	    return std::string();
+
         return content.substr(tok.start(), tok.size());
     }
 
@@ -899,15 +881,13 @@ namespace LTSM
 
             while(counts-- && itval != end())
             {
-                if(!(*itkey).isKey())
+                if(! (*itkey).isKey())
 		{
 		    auto str = stringToken(*itkey);
-                    Application::error("not key, index: %d, key`%s'", std::distance(begin(), itkey), str.c_str());
+                    Application::error("not key, index: %d, `%s'", std::distance(begin(), itkey), str.c_str());
 		}
 
-                std::string key = stringToken(*itkey);
-                key = Tools::replace(key, "\\\"", "\"");
-                key = Tools::replace(key, "\\\\", "\\");
+                auto key = Tools::unescaped(stringToken(*itkey));
                 auto valp = getValue(itval, nullptr);
 
                 if(valp.first)
@@ -965,12 +945,7 @@ namespace LTSM
             if(!(*it).isValue())
                 Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
 
-            val = Tools::replace(val, "\\\"", "\"");
-            val = Tools::replace(val, "\\n", "\n");
-            val = Tools::replace(val, "\\r", "\r");
-            val = Tools::replace(val, "\\t", "\t");
-            val = Tools::replace(val, "\\\\", "\\");
-            res = new JsonString(val);
+            res = new JsonString(Tools::unescaped(val));
             skip = 1;
         }
 

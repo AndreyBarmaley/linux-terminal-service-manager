@@ -307,6 +307,7 @@ namespace LTSM
             int                 encodingDebug;
             std::atomic<int>    pressedMask;
             std::atomic<bool>   fbUpdateProcessing;
+	    std::atomic<bool>	sendBellFlag;
             RFB::PixelFormat    serverFormat;
             RFB::PixelFormat    clientFormat;
             RFB::Region         clientRegion;
@@ -343,11 +344,12 @@ namespace LTSM
             void                serverSendFrameBufferUpdate(const RFB::Region &);
             void                serverSendColourMap(int first);
             void                serverSendBell(void);
-            void                serverSendCutText(const std::string &);
+            void                serverSendCutText(const std::vector<uint8_t> &);
 
             int                 sendPixel(int pixel);
             int                 sendCPixel(int pixel);
 
+            bool                isUpdateProcessed(void) const;
             void                waitSendingFBUpdate(void) const;
 
             int                 sendEncodingRaw(const RFB::Region &, const RFB::FrameBuffer &);
@@ -379,7 +381,7 @@ namespace LTSM
 
         public:
             VNC(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), pressedMask(0), fbUpdateProcessing(false)
+                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false)
             {
                 registerProxy();
             }

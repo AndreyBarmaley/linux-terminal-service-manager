@@ -235,28 +235,6 @@ namespace LTSM
         return replace(id, std::to_string(val));
     }
 
-    std::string Tools::dirname(const std::string & str)
-    {
-        if(str.size())
-        {
-            const std::string sep("/");
-            size_t pos = str.rfind(sep);
-
-            if(std::string::npos == pos)
-                return std::string(".");
-
-            if(pos == 0)
-                return sep;
-
-            if(pos == str.size() - sep.size())
-                return dirname(str.substr(0, str.size() - sep.size()));
-
-            return str.substr(0, pos);
-        }
-
-        return str;
-    }
-
     std::string Tools::getenv(const char* name, const char* def)
     {
         std::string res(def ? def : "");
@@ -274,6 +252,68 @@ namespace LTSM
         return stream.str();
     }
 
+    std::string Tools::escaped(const std::string & str, bool quote)
+    {   
+        std::ostringstream os;
+        
+        // start quote
+        if(quote)
+            os << "\"";
+    
+        // variants: \\, \", \/, \t, \n, \r, \f, \b
+        for(auto & ch : str)
+        {
+            switch(ch)
+            {
+                case '\\': os << "\\\\"; break;
+                case '"':  os << "\\\""; break;
+                case '/':  os << "\\/"; break;
+                case '\t': os << "\\t"; break;
+                case '\n': os << "\\n"; break;
+                case '\r': os << "\\r"; break;
+                case '\f': os << "\\f"; break;
+                case '\b': os << "\\b"; break;
+                default: os << ch; break;
+            }
+        }
+
+        // end quote
+        if(quote)
+            os << "\"";
+    
+        return os.str();
+    }
+
+    std::string Tools::unescaped(std::string str)
+    {
+        if(str.size() < 2)
+            return str;
+
+        // variants: \\, \", \/, \t, \n, \r, \f, \b
+        for(auto it = str.begin(); it != str.end(); ++it)
+        {
+            auto itn = std::next(it);
+            if(itn == str.end()) break;
+
+            if(*it == '\\')
+            {
+                switch(*itn)
+                {
+                    case '\\': str.erase(itn); break;
+                    case '"': str.erase(itn); *it = '"'; break;
+                    case '/': str.erase(itn); *it = '/'; break;
+                    case 't': str.erase(itn); *it = '\t'; break;
+                    case 'n': str.erase(itn); *it = '\n'; break;
+                    case 'r': str.erase(itn); *it = '\r'; break;
+                    case 'f': str.erase(itn); *it = '\f'; break;
+                    case 'b': str.erase(itn); *it = '\b'; break;
+                    default: break;
+                }
+            }
+        }
+        
+        return str;
+    }
 /*
     template<typename InputIterator>
     InputIterator   random_n(InputIterator first, InputIterator last)

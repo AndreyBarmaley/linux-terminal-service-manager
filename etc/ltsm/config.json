@@ -1,5 +1,6 @@
 {
-    "logging:level": "debug",
+    "service:debug": "debug",
+    "connector:debug": "info",
     "logging:facility": "local6",
     "encoding:debug": 0,
     "encoding:threads": 4,
@@ -33,6 +34,9 @@
     "session:policy": "authlock",
     "session:path": "/etc/ltsm/xclients",
     "script:shutdown": "",
+
+    "informer:path": "/usr/bin/zenity",
+    "informer:args": "--info --no-wrap --text %{msg}",
 
     "default:width": 1024,
     "default:height": 768,

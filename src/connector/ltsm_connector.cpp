@@ -42,6 +42,7 @@
 
 #include "ltsm_connector_vnc.h"
 #include "ltsm_connector_rdp.h"
+#include "ltsm_connector_spice.h"
 
 using namespace std::chrono_literals;
 
@@ -486,6 +487,15 @@ namespace LTSM
 #endif
     }
 
+    BaseStream & BaseStream::sendInt64(uint64_t val)
+    {
+#ifdef __ORDER_LITTLE_ENDIAN__
+        return sendIntLE64(val);
+#else
+        return sendIntBE64(val);
+#endif
+    }
+
     BaseStream & BaseStream::sendIntBE16(uint16_t val)
     {
         sendInt8(0x00FF & (val >> 8));
@@ -500,6 +510,13 @@ namespace LTSM
         return *this;
     }
 
+    BaseStream & BaseStream::sendIntBE64(uint64_t val)
+    {
+        sendIntBE32(0xFFFFFFFF & (val >> 32));
+        sendIntBE32(0xFFFFFFFF & val);
+        return *this;
+    }
+
     BaseStream & BaseStream::sendIntLE16(uint16_t val)
     {
         sendInt8(0x00FF & val);
@@ -511,6 +528,13 @@ namespace LTSM
     {
         sendIntLE16(0x0000FFFF & val);
         sendIntLE16(0x0000FFFF & (val >> 16));
+        return *this;
+    }
+
+    BaseStream & BaseStream::sendIntLE64(uint64_t val)
+    {
+        sendIntLE32(0xFFFFFFFF & val);
+        sendIntLE32(0xFFFFFFFF & (val >> 32));
         return *this;
     }
 
@@ -550,6 +574,15 @@ namespace LTSM
 #endif
     }
 
+    int BaseStream::recvInt64(void)
+    {
+#ifdef __ORDER_LITTLE_ENDIAN__
+        return recvIntLE64();
+#else
+        return recvIntBE64();
+#endif
+    }
+
     int BaseStream::recvIntBE16(void)
     {
         return (recvInt8() << 8) | recvInt8();
@@ -560,6 +593,11 @@ namespace LTSM
         return (recvIntBE16() << 16) | recvIntBE16();
     }
 
+    int64_t BaseStream::recvIntBE64(void)
+    {
+        return (static_cast<int64_t>(recvIntBE32()) << 32) | recvIntBE32();
+    }
+
     int BaseStream::recvIntLE16(void)
     {
         return  recvInt8() | (recvInt8() << 8);
@@ -568,6 +606,11 @@ namespace LTSM
     int BaseStream::recvIntLE32(void)
     {
         return  recvIntLE16() | (recvIntLE16() << 16);
+    }
+
+    int64_t BaseStream::recvIntLE64(void)
+    {
+        return  recvIntLE32() | (static_cast<int64_t>(recvIntLE32()) << 32);
     }
 
     void BaseStream::recvSkip(size_t length)
@@ -716,7 +759,7 @@ namespace LTSM
         {
             if(0 == std::strcmp(argv[it], "--help"))
             {
-                std::cout << "usage: " << argv[0] << " --config <path> --type <RDP|VNC>" << std::endl;
+                std::cout << "usage: " << argv[0] << " --config <path> --type <RDP|VNC|SPICE>" << std::endl;
                 throw 0;
             }
             else if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
@@ -737,7 +780,7 @@ namespace LTSM
         }
 
         std::unique_ptr<BaseStream> stream;
-        Application::busSetDebugLevel(_config.getString("logging:level"));
+        Application::setDebugLevel(_config.getString("connector:debug"));
         Application::info("connector version: %d", LTSM::service_version);
 
         // protocol up
@@ -745,6 +788,8 @@ namespace LTSM
             stream.reset(new Connector::VNC(conn.get(), _config));
         else if(_type == "rdp")
             stream.reset(new Connector::RDP(conn.get(), _config));
+        else if(_type == "spice")
+            stream.reset(new Connector::SPICE(conn.get(), _config));
 
 	int res = stream ?
 		stream->communication() : EXIT_FAILURE;
@@ -780,25 +825,22 @@ namespace LTSM
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         const std::string addr = Tools::StringFormat(":%1").arg(screen);
-        const std::chrono::milliseconds waitms(5000);
-        auto tp = std::chrono::system_clock::now();
+
         std::string socketFormat = _config->getString("xvfb:socket");
         std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
+        Tools::FrequencyTime ftp;
 
         while(! Tools::checkUnixSocket(socketPath))
         {
-            std::this_thread::sleep_for(100ms);
-
-            if(waitms < std::chrono::system_clock::now() - tp)
+            if(ftp.finishedMilliSeconds(5000))
             {
                 Application::error("xvfb: %s", "not started");
                 return false;
             }
+            std::this_thread::sleep_for(100ms);
         }
 
-	_xcbSelectionOwner.reset();
-        _xcbDisplay.reset(new XCB::RootDisplay(addr));
-
+        _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
         Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         int color = _config->getInteger("display:solid", 0);
@@ -925,12 +967,13 @@ namespace LTSM
     void Connector::SignalProxy::onDebugLevel(const std::string & level)
     {
         Application::info("dbus signal: debug level: %s", level.c_str());
-        Application::busSetDebugLevel(level);
+        Application::setDebugLevel(level);
     }
 }
 
 int main(int argc, const char** argv)
 {
+    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
     int res = 0;
 
     try
