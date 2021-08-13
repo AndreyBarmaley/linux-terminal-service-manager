@@ -775,7 +775,7 @@ namespace LTSM
         auto conn = sdbus::createSystemBusConnection();
         if(! conn)
         {
-            Application::error("dbus create connection failed");
+            Application::error("%s", "dbus create connection failed");
             return EXIT_FAILURE;
         }
 

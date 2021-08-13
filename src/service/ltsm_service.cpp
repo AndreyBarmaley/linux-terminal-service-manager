@@ -234,7 +234,7 @@ namespace LTSM
         	if(session.mode != XvfbMode::SessionLogin && 0 < session.durationlimit)
 		{
 		    // task background
-		    std::thread([display, xvfb = & session, this]()
+		    std::thread([display = (*it).first, xvfb = & session, this]()
 		    {
 			auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - xvfb->tpstart);
 			auto lastsec = std::chrono::seconds(xvfb->durationlimit) - sessionAliveSec;
@@ -276,7 +276,7 @@ namespace LTSM
 		for(const auto & [ pid, status] : _childEnded)
 		{
 		    // find child
-		    auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [=](auto & pair){ return pair.second.pid2 == pid; });
+		    auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [pid1 = pid](auto & pair){ return pair.second.pid2 == pid1; });
 		    if(it != _xvfb->end())
 		    {
 			auto & [ display, session] = *it;
