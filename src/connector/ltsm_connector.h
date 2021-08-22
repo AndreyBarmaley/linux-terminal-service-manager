@@ -37,6 +37,11 @@ namespace LTSM
 {
     enum class RenderType { RenderRect, RenderText };
 
+    namespace XCB
+    {
+        typedef std::shared_ptr<RootDisplayExt> SharedDisplay;
+    }
+
     struct RenderPrimitive
     {
         const RenderType type;
@@ -112,6 +117,11 @@ namespace LTSM
 	bool				ioerr;
 	std::array<char, 1492>		fdbuf;
 
+        int		        	peekInt8(void);
+        bool                    	hasInput(int) const;
+	bool				checkInputInvalid(void) const;
+	bool				checkOutputInvalid(void) const;
+
     public:
         BaseStream();
         virtual ~BaseStream();
@@ -129,10 +139,13 @@ namespace LTSM
         BaseStream &                    sendInt32(uint32_t val);
         BaseStream &                    sendInt64(uint64_t val);
 
+	BaseStream & 			sendZero(size_t);
         virtual BaseStream &            sendRaw(const void*, size_t);
 
         virtual bool                    hasInput(void) const;
         virtual void                    sendFlush(void) const;
+
+	bool				checkError(void) const { return ioerr; }
 
         int		                recvIntBE16(void);
         int		                recvIntBE32(void);
@@ -148,11 +161,10 @@ namespace LTSM
         int		                recvInt64(void);
 
         void                            recvSkip(size_t);
+	std::vector<uint8_t>		recvRaw(size_t);
 
         BaseStream &                    sendString(const std::string &);
         std::string	                recvString(size_t);
-
-        virtual int	                communication(void) = 0;
     };
 
     class TLS_Stream : public BaseStream
@@ -232,13 +244,11 @@ namespace LTSM
             std::string		        _conntype;
             std::string			_remoteaddr;
             bool                        _xcbDisableMessages;
-            int                         _encodingThreads;
 
             std::list<std::unique_ptr<RenderPrimitive>>
                                         _renderPrimitives;
 
-            std::unique_ptr<XCB::RootDisplayExt>
-        				_xcbDisplay;
+            XCB::SharedDisplay          _xcbDisplay;
             XCB::SHM                    _shmInfo;
             XCB::Damage                 _damageInfo;
 
@@ -265,6 +275,8 @@ namespace LTSM
 
         public:
             SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);
+
+    	    virtual int	                communication(void) = 0;
         };
 
         /* Connector::Service */

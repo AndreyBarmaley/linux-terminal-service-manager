@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <cmath>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -269,7 +270,7 @@ namespace LTSM
         int jobId = 1;
 
         // make pool jobs
-        while(jobId <= _encodingThreads && ! regions.empty())
+        while(jobId <= encodingThreads && ! regions.empty())
         {
             jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId, corre));
             regions.pop_front();
@@ -284,7 +285,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::nanoseconds(200)) == std::future_status::ready)
+                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
                 {
                     res += job.get();
                     job = std::async(std::launch::async, & Connector::VNC::sendEncodingRRESubRegion, this, top, regions.front() - top, fb, jobId, corre);
@@ -441,7 +442,7 @@ namespace LTSM
         int jobId = 1;
 
         // make pool jobs
-        while(jobId <= _encodingThreads && ! regions.empty())
+        while(jobId <= encodingThreads && ! regions.empty())
         {
             jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlib));
             regions.pop_front();
@@ -456,7 +457,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::nanoseconds(100)) == std::future_status::ready)
+                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
                 {
                     res += job.get();
                     job = std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlib);
@@ -715,7 +716,7 @@ namespace LTSM
         int jobId = 1;
 
         // make pool jobs
-        while(jobId <= _encodingThreads && ! regions.empty())
+        while(jobId <= encodingThreads && ! regions.empty())
         {
             jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, top, regions.front() - top, fb, jobId, zrle));
             regions.pop_front();
@@ -730,7 +731,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::nanoseconds(100)) == std::future_status::ready)
+                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
                 {
                     res += job.get();
                     job = std::async(std::launch::async, & Connector::VNC::sendEncodingTRLESubRegion, this, top, regions.front() - top, fb, jobId, zrle);

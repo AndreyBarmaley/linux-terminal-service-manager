@@ -149,7 +149,7 @@ namespace LTSM
             Object(sdbus::IConnection &, const JsonObject &, const Application &);
             ~Object();
 
-            void                        systemTick(void);
+            void                        systemTasks(void);
             void                        signalChildEnded(int pid, int status);
 
         private:                        /* virtual dbus methods */

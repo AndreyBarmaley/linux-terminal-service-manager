@@ -305,6 +305,7 @@ namespace LTSM
         {
             std::atomic<bool>   loopMessage;
             int                 encodingDebug;
+            int                 encodingThreads;
             std::atomic<int>    pressedMask;
             std::atomic<bool>   fbUpdateProcessing;
 	    std::atomic<bool>	sendBellFlag;
@@ -381,7 +382,7 @@ namespace LTSM
 
         public:
             VNC(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false)
+                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false)
             {
                 registerProxy();
             }

@@ -374,15 +374,16 @@ namespace LTSM
         // check present
 	if(std::filesystem::is_socket(path))
         {
-            // check open
-            struct sockaddr_un address;
-            std::memset(&address, 0, sizeof(struct sockaddr_un));
-            address.sun_family = AF_UNIX;
-            std::strcpy(address.sun_path, path.c_str());
             int socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 
             if(0 < socket_fd)
             {
+                // check open
+                struct sockaddr_un address;
+                std::memset(&address, 0, sizeof(struct sockaddr_un));
+                address.sun_family = AF_UNIX;
+                std::strcpy(address.sun_path, path.c_str());
+
                 int res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
                 close(socket_fd);
                 return res == 0;

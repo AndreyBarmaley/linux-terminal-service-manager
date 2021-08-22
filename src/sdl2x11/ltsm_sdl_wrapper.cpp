@@ -39,7 +39,7 @@ namespace LTSM
             int width = 0;
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
 
             return width;
         }
@@ -54,7 +54,7 @@ namespace LTSM
             int height = 0;
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
 
             return height;
         }
@@ -67,7 +67,7 @@ namespace LTSM
         if(isValid())
         {
             if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_UpdateTexture" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_UpdateTexture" << " error, " << SDL_GetError() << std::endl;
         }
     }
 
@@ -96,13 +96,13 @@ namespace LTSM
                     renderReset();
                 }
                 else
-                    std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_CreateTexture" << " error, " << SDL_GetError() << std::endl;
+                    std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture" << " error, " << SDL_GetError() << std::endl;
             }
             else
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_CreateRenderer" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_CreateRenderer" << " error, " << SDL_GetError() << std::endl;
         }
         else
-            std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_CreateWindow" << " error, " << SDL_GetError() << std::endl;
+            std::cerr << __FUNCTION__ << ": " << "SDL_CreateWindow" << " error, " << SDL_GetError() << std::endl;
     }
 
     SDL::Window::~Window()
@@ -125,20 +125,20 @@ namespace LTSM
 
             if(0 != SDL_QueryTexture(target, nullptr, & access, nullptr, nullptr))
             {
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
                 return false;
             }
 
             if(access != SDL_TEXTUREACCESS_TARGET)
             {
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "not target texture" << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "not target texture" << std::endl;
                 return false;
             }
         }
 
         if(0 != SDL_SetRenderTarget(_renderer, target))
         {
-            std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_SetRenderTarget" << " error, " << SDL_GetError() << std::endl;
+            std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderTarget" << " error, " << SDL_GetError() << std::endl;
             return false;
         }
 
@@ -155,10 +155,10 @@ namespace LTSM
             if(0 == SDL_SetRenderDrawColor(_renderer, col->r, col->g, col->b, col->a))
             {
                 if(0 != SDL_RenderClear(_renderer))
-                    std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
+                    std::cerr << __FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
             }
             else
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
         }
     }
 
@@ -172,10 +172,10 @@ namespace LTSM
             if(0 == SDL_SetRenderDrawColor(_renderer, col->r, col->g, col->b, col->a))
             {
                 if(0 != SDL_RenderFillRect(_renderer, rt))
-                    std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_RenderFillRect" << " error, " << SDL_GetError() << std::endl;
+                    std::cerr << __FUNCTION__ << ": " << "SDL_RenderFillRect" << " error, " << SDL_GetError() << std::endl;
             }
             else
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
         }
     }
 
@@ -187,7 +187,7 @@ namespace LTSM
         if(renderReset(target) && source)
         {
             if(0 != SDL_RenderCopy(_renderer, source, srcrt, dstrt))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
         }
     }
 
@@ -196,13 +196,13 @@ namespace LTSM
         if(renderReset())
         {
             if(0 != SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 0))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
 
             if(0 != SDL_RenderClear(_renderer))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
 
             if(0 != SDL_RenderCopy(_renderer, _display, nullptr, nullptr))
-                std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
+                std::cerr << __FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
 
             SDL_RenderPresent(_renderer);
         }
@@ -230,7 +230,7 @@ namespace LTSM
         SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
 
 	if(0 != SDL_QueryTexture(_display, nullptr, nullptr, &rendsz_w, &rendsz_h))
-            std::cerr << __PRETTY_FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+            std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
         else
         {
             res.first = posx * rendsz_w / winsz_w;

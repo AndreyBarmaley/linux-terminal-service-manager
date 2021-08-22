@@ -124,8 +124,8 @@ namespace LTSM
 
     XvfbSession* XvfbSessions::registryXvfbSession(int screen, const XvfbSession & st)
     {
-	auto [it, success] = _xvfb->insert({ screen, st });
-	return & (*it).second;
+	auto res = _xvfb->insert({ screen, st });
+	return & res.first->second;
     }
 
     std::vector<xvfb2tuple> XvfbSessions::toSessionsList(void)
@@ -221,7 +221,7 @@ namespace LTSM
 	_app->openlog();
     }
 
-    void Manager::Object::systemTick(void)
+    void Manager::Object::systemTasks(void)
     {
 	// periodic tasks: 3sec
         if(_tpsec3.finishedSeconds(3))
@@ -293,7 +293,7 @@ namespace LTSM
 	    }
 	}
 
-	// periodic tasks: 3sec
+	// periodic tasks: 30sec
         if(_tpsec30.finishedSeconds(30))
 	{
     	    for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
@@ -517,17 +517,20 @@ namespace LTSM
 	    this->removeXvfbSocket(display);
     	    this->emitDisplayRemoved(display);
 
-	    if(! std::filesystem::exists(script))
-	    {
-        	Application::debug("command not found: `%s'", script.c_str());
-	    }
-	    else
-    	    if(! script.empty() && sysuser != user)
-    	    {
-        	script.append(" ").append(std::to_string(display)).append(" ").append(user);
-        	int ret = std::system(script.c_str());
-        	Application::debug("system cmd: `%s', return code: %d, display: %d", script.c_str(), ret, display);
-    	    }
+            if(! script.empty())
+            {
+	        if(! std::filesystem::exists(script))
+	        {
+        	    Application::debug("command not found: `%s'", script.c_str());
+	        }
+	        else
+    	        if(sysuser != user)
+    	        {
+        	    script.append(" ").append(std::to_string(display)).append(" ").append(user);
+        	    int ret = std::system(script.c_str());
+        	    Application::debug("system cmd: `%s', return code: %d, display: %d", script.c_str(), ret, display);
+    	        }
+            }
 
 	    Application::debug("display shutdown complete: %d", display);
 	}).detach();
@@ -1000,7 +1003,9 @@ namespace LTSM
 	    return -1;
 	}
 
-        auto [ userScreen, userSess ] = findUserSession(userName);
+        int userScreen; XvfbSession* userSess;
+        std::tie(userScreen, userSess) = findUserSession(userName);
+
         if(0 <= userScreen && checkXvfbSocket(userScreen) && userSess)
         {
             // parent continue
@@ -1113,7 +1118,8 @@ namespace LTSM
 	    return false;
 	}
 
-	auto [ userScreen, userSess ] = findUserSession(userName);
+        int userScreen; XvfbSession* userSess;
+        std::tie(userScreen, userSess) = findUserSession(userName);
 
         if(! userSess)
         {
@@ -1540,7 +1546,9 @@ namespace LTSM
                 xvfbLogin->loginFailures = 0;
 
 	    // check connection policy
-	    auto [ userScreen, userSess ] = findUserSession(login);
+            int userScreen; XvfbSession* userSess;
+            std::tie(userScreen, userSess) = findUserSession(login);
+
 	    if(0 < userScreen && userSess)
 	    {
 		if(userSess->mode == XvfbMode::SessionOnline)
@@ -1686,7 +1694,7 @@ namespace LTSM
     {
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--help"))
+            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
             {
                 std::cout << "usage: " << argv[0] << " --config <path>" << std::endl;
                 throw 0;
@@ -1709,7 +1717,7 @@ namespace LTSM
 
     bool Manager::Service::createXauthDir(void)
     {
-        auto xauthFile = std::filesystem::path(_config.getString("xauth:file"));
+        auto xauthFile = _config.getString("xauth:file");
         auto groupAuth = _config.getString("group:auth");
         // find group id
         int setgid = getGroupGid(groupAuth);
@@ -1717,8 +1725,7 @@ namespace LTSM
         if(0 > setgid) setgid = 0;
 
         // check directory
-        auto folderPath = xauthFile.parent_path();
-
+        auto folderPath = std::filesystem::path(xauthFile).parent_path();
         if(! folderPath.empty())
         {
             // create
@@ -1770,16 +1777,21 @@ namespace LTSM
         Manager::running = true;
         Application::setDebugLevel(_config.getString("service:debug"));
         Application::info("manager version: %d", LTSM::service_version);
+        Tools::FrequencyTime _tpms100;
 
         while(Manager::running)
         {
             conn->enterEventLoopAsync();
-            std::this_thread::sleep_for(10ms);
-            Manager::obj->systemTick();
+
+            if(_tpms100.finishedMilliSeconds(100))
+                Manager::obj->systemTasks();
+
+            std::this_thread::sleep_for(1ms);
         }
 
         Manager::running = false;
         Manager::obj.reset();
+
         conn->enterEventLoopAsync();
 
         return EXIT_SUCCESS;

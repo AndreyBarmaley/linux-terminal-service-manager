@@ -41,8 +41,12 @@
 #include "ltsm_connector.h"
 
 #include "ltsm_connector_vnc.h"
-#include "ltsm_connector_rdp.h"
-#include "ltsm_connector_spice.h"
+#ifdef LTSM_WITH_RDP
+ #include "ltsm_connector_rdp.h"
+#endif
+#ifdef LTSM_WITH_SPICE
+ #include "ltsm_connector_spice.h"
+#endif
 
 using namespace std::chrono_literals;
 
@@ -440,26 +444,58 @@ namespace LTSM
         std::fclose(fdout);
     }
 
+    bool BaseStream::checkInputInvalid(void) const
+    {
+        if(std::feof(fdin))
+        {
+    	    Application::error("input stream end: %d", strerror(errno));
+	    return true;
+    	}
+
+    	if(std::ferror(fdin))
+    	{
+            Application::error("input stream error: %s", strerror(errno));
+	    return true;
+    	}
+
+	return false;
+    }
+
+    bool BaseStream::checkOutputInvalid(void) const
+    {
+        if(std::feof(fdout))
+        {
+    	    Application::error("output stream end: %d", strerror(errno));
+	    return true;
+    	}
+
+	return false;
+    }
+
     void BaseStream::sendFlush(void) const
     {
         std::fflush(fdout);
     }
 
-    bool BaseStream::hasInput(void) const
+    bool BaseStream::hasInput(int fd) const
     {
 	struct pollfd fds = {0};
-	fds.fd = fileno(fdin);
+	fds.fd = fd;
 	fds.events = POLLIN;
 	return 0 < poll(& fds, 1, 0);
+    }
+
+    bool BaseStream::hasInput(void) const
+    {
+	return ioerr ? false : hasInput(fileno(fdin));
     }
 
     BaseStream & BaseStream::sendInt8(uint8_t val)
     {
 	if(! ioerr)
         {
-    	    if(0 != std::ferror(fdout))
+    	    if(checkOutputInvalid())
     	    {
-    	        Application::error("output stream error: %s", strerror(errno));
     	        ioerr = true;
 	        return *this;
     	    }
@@ -538,15 +574,32 @@ namespace LTSM
         return *this;
     }
 
+    int BaseStream::peekInt8(void)
+    {
+        int res = 0;
+
+	if(! ioerr)
+	{
+    	    if(checkInputInvalid())
+    	    {
+    	        ioerr = true;
+	        return 0;
+    	    }
+
+    	    res = std::fgetc(fdin);
+    	    std::ungetc(res, fdin);
+        }
+        return res;
+    }
+
     int BaseStream::recvInt8(void)
     {
         int res = 0;
 
 	if(! ioerr)
 	{
-    	    if(0 != std::ferror(fdin))
+	    if(checkInputInvalid())
     	    {
-    	        Application::error("input stream error: %s", strerror(errno));
     	        ioerr = true;
 	        return 0;
     	    }
@@ -613,28 +666,37 @@ namespace LTSM
         return  recvIntLE32() | (static_cast<int64_t>(recvIntLE32()) << 32);
     }
 
+    std::vector<uint8_t> BaseStream::recvRaw(size_t length)
+    {
+	std::vector<uint8_t> res;
+	res.reserve(length);
+
+        while(! ioerr && length--)
+            res.push_back(recvInt8());
+
+	return res;
+    }
+
     void BaseStream::recvSkip(size_t length)
     {
-	if(! ioerr)
-        {
-            if(0 != std::ferror(fdin))
-            {
-                Application::error("input stream error: %s", strerror(errno));
-                ioerr = true;
-            }
+        while(! ioerr && length--)
+            recvInt8();
+    }
 
-            while(! ioerr && length--)
-                recvInt8();
-        }
+    BaseStream & BaseStream::sendZero(size_t length)
+    {
+        while(! ioerr && length--)
+            sendInt8(0);
+
+        return *this;
     }
 
     BaseStream & BaseStream::sendRaw(const void* buf, size_t length)
     {
 	if(! ioerr)
         {
-            if(0 != std::ferror(fdout))
+            if(checkOutputInvalid())
             {
-                Application::error("output stream error: %s", strerror(errno));
                 ioerr = true;
 	        return *this;
             }
@@ -658,20 +720,10 @@ namespace LTSM
     std::string BaseStream::recvString(size_t length)
     {
         std::string res;
+        res.reserve(length);
 
-	if(! ioerr)
-        {
-            if(0 != std::ferror(fdin))
-            {
-                Application::error("input stream error: %s", strerror(errno));
-                ioerr = true;
-	        return res;
-            }
-
-            res.reserve(length);
-            while(res.size() < length)
-                res.append(1, recvInt8());
-        }
+        while(! ioerr && res.size() < length)
+            res.append(1, recvInt8());
 
         return res;
     }
@@ -751,15 +803,30 @@ namespace LTSM
 	return *this;
     }
 
+    void connectorHelp(const char* prog)
+    {
+        std::list<std::string> proto = { "VNC" };
+#ifdef LTSM_WITH_RDP
+        proto.emplace_back("RDP");
+#endif
+#ifdef LTSM_WITH_SPICE
+        proto.emplace_back("SPICE");
+#endif
+        if(1 < proto.size())
+            proto.emplace_back("AUTO");
+
+        std::cout << "usage: " << prog << " --config <path> --type <" << Tools::join(proto, "|") << ">" << std::endl;
+    }
+
     /* Connector::Service */
     Connector::Service::Service(int argc, const char** argv)
         : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("vnc")
     {
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--help"))
+            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
             {
-                std::cout << "usage: " << argv[0] << " --config <path> --type <RDP|VNC|SPICE>" << std::endl;
+                connectorHelp(argv[0]);
                 throw 0;
             }
             else if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
@@ -768,6 +835,22 @@ namespace LTSM
                 it = it + 1;
             }
         }
+    }
+
+    int autoDetectType(void)
+    {
+        auto fd = fileno(stdin);
+        struct pollfd fds = {0};
+        fds.fd = fd;
+        fds.events = POLLIN;
+        // has input
+        if(0 < poll(& fds, 1, 0))
+        {
+            int val = std::fgetc(stdin);
+            std::ungetc(val, stdin);
+            return val;
+        }
+        return -1;
     }
 
     int Connector::Service::start(void)
@@ -779,20 +862,38 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        std::unique_ptr<BaseStream> stream;
+        std::unique_ptr<SignalProxy> connector;
         Application::setDebugLevel(_config.getString("connector:debug"));
         Application::info("connector version: %d", LTSM::service_version);
 
         // protocol up
-        if(_type == "vnc")
-            stream.reset(new Connector::VNC(conn.get(), _config));
-        else if(_type == "rdp")
-            stream.reset(new Connector::RDP(conn.get(), _config));
-        else if(_type == "spice")
-            stream.reset(new Connector::SPICE(conn.get(), _config));
+        if(_type == "auto")
+        {
+            _type = "vnc";
+            int first = autoDetectType();
+#ifdef LTSM_WITH_RDP
+            if(first  == 0x03)
+                _type = "rdp";
+#endif
+#ifdef LTSM_WITH_SPICE
+            if(first == 0x52)
+                _type = "spice";
+#endif
+        }
 
-	int res = stream ?
-		stream->communication() : EXIT_FAILURE;
+#ifdef LTSM_WITH_RDP
+        if(_type == "rdp")
+            connector.reset(new Connector::RDP(conn.get(), _config));
+#endif
+#ifdef LTSM_WITH_SPICE
+        if(_type == "spice")
+            connector.reset(new Connector::SPICE(conn.get(), _config));
+#endif
+        if(! connector)
+            connector.reset(new Connector::VNC(conn.get(), _config));
+
+	int res = connector ?
+		connector->communication() : EXIT_FAILURE;
 
         return res;
     }
@@ -803,18 +904,6 @@ namespace LTSM
           _conntype(type), _xcbDisableMessages(true)
     {
         _remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
-        _encodingThreads = _config->getInteger("encoding:threads", 2);
-
-        if(_encodingThreads < 1)
-        {
-            _encodingThreads = 1;
-        }
-        else
-        if(std::thread::hardware_concurrency() < _encodingThreads)
-        {
-            _encodingThreads = std::thread::hardware_concurrency();
-            Application::error("encoding threads incorrect, fixed to hardware concurrency: %d", _encodingThreads);
-        }
     }
 
     bool Connector::SignalProxy::xcbConnect(int screen)

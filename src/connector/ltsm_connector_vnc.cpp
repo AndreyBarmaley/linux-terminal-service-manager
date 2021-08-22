@@ -493,21 +493,33 @@ namespace LTSM
             return EXIT_FAILURE;
 	}
 
-        const std::string remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
-        Application::info("connected: %s\n", remoteaddr.c_str());
-        Application::info("using encoding threads: %d", _encodingThreads);
-        encodingDebug = _config->getInteger("encoding:debug", 0);
-        prefEncodings = selectEncodings();
-        disabledEncodings = _config->getStdList<std::string>("encoding:blacklist");
+        Application::info("connected: %s\n", _remoteaddr.c_str());
 
-        const std::string tlsPriority = _config->getString("gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        const std::string tlsCAFile = _config->getString("gnutls:cafile");
-        const std::string tlsCertFile = _config->getString("gnutls:certfile");
-        const std::string tlsKeyFile = _config->getString("gnutls:keyfile");
-        const std::string tlsCRLFile = _config->getString("gnutls:crlfile");
-        bool tlsAnonMode = _config->getBoolean("gnutls:anonmode", true);
-        bool tlsDisable = _config->getBoolean("gnutls:disable", false);
-        int tlsDebug = _config->getInteger("gnutls:debug", 3);
+        encodingThreads = _config->getInteger("vnc:encoding:threads", 2);
+        if(encodingThreads < 1)
+        {
+            encodingThreads = 1;
+        }
+        else
+        if(std::thread::hardware_concurrency() < encodingThreads)
+        {
+            encodingThreads = std::thread::hardware_concurrency();
+            Application::error("encoding threads incorrect, fixed to hardware concurrency: %d", encodingThreads);
+        }
+        Application::info("using encoding threads: %d", encodingThreads);
+
+        encodingDebug = _config->getInteger("vnc:encoding:debug", 0);
+        prefEncodings = selectEncodings();
+        disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
+
+        const std::string tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        const std::string tlsCAFile = _config->getString("vnc:gnutls:cafile");
+        const std::string tlsCertFile = _config->getString("vnc:gnutls:certfile");
+        const std::string tlsKeyFile = _config->getString("vnc:gnutls:keyfile");
+        const std::string tlsCRLFile = _config->getString("vnc:gnutls:crlfile");
+        bool tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
+        bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
+        int tlsDebug = _config->getInteger("vnc:gnutls:debug", 3);
         std::string encryptionInfo = "none";
 
         if(! disabledEncodings.empty())
@@ -526,7 +538,7 @@ namespace LTSM
         }
 
         // Xvfb: session request
-        int screen = busStartLoginSession(remoteaddr, "vnc");
+        int screen = busStartLoginSession(_remoteaddr, "vnc");
         if(screen <= 0)
         {
             Application::error("%s", "login session request failure");
@@ -557,7 +569,8 @@ namespace LTSM
 #else
         const int bigEndian = 1;
 #endif
-        serverFormat = RFB::PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, 1, visual->red_mask, visual->green_mask, visual->blue_mask);
+        serverFormat = RFB::PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, 1,
+                                            visual->red_mask, visual->green_mask, visual->blue_mask);
 
         // RFB 6.1.2 security
 	if(tlsDisable)
@@ -882,7 +895,7 @@ namespace LTSM
             // dbus processing
             _conn->enterEventLoopAsync();
             // wait
-            std::this_thread::sleep_for(3ms);
+            std::this_thread::sleep_for(1ms);
         }
 
         return EXIT_SUCCESS;
@@ -897,7 +910,7 @@ namespace LTSM
     {
         while(isUpdateProcessed())
         {
-            std::this_thread::sleep_for(3ms);
+            std::this_thread::sleep_for(1ms);
         }
     }
 

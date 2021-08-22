@@ -39,7 +39,7 @@ protected:
         proxy_.uponSignal("debugLevel").onInterface(INTERFACE_NAME).call([this](const std::string& level){ this->onDebugLevel(level); });
     }
 
-    ~Service_proxy() = default;
+    virtual ~Service_proxy() = default;
 
     virtual void onHelperWidgetStarted(const int32_t& display) = 0;
     virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) = 0;

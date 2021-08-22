@@ -27,6 +27,8 @@
 #include <iterator>
 #include <algorithm>
 
+#include "spice/error_codes.h"
+
 #include "ltsm_tools.h"
 #include "ltsm_connector_spice.h"
 
@@ -34,130 +36,223 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-    const int RED_VERSION_MAJOR	= 1;
-    const int RED_VERSION_MINOR	= 0;
-    const int RED_CHANNEL_MAIN	= 1;
-    const int RED_CHANNEL_DISPLAY	= 2;
-    const int RED_CHANNEL_INPUTS	= 3;
-    const int RED_CHANNEL_CURSOR	= 4;
-    const int RED_CHANNEL_PLAYBACK	= 5;
-    const int RED_CHANNEL_RECORD	= 6;
-
-    const int RED_ERROR_OK			= 0;
-    const int RED_ERROR_ERROR			= 1;
-    const int RED_ERROR_INVALID_MAGIC 		= 2;
-    const int RED_ERROR_INVALID_DATA 		= 3;
-    const int RED_ERROR_VERSION_MISMATCH	= 4;
-    const int RED_ERROR_NEED_SECURED 		= 5;
-    const int RED_ERROR_NEED_UNSECURED 		= 6;
-    const int RED_ERROR_PERMISSION_DENIED 	= 7;
-    const int RED_ERROR_BAD_CONNECTION_ID 	= 8;
-    const int RED_ERROR_CHANNEL_NOT_AVAILABLE 	= 9;
-
-    const int RED_WARN_GENERAL	= 0;
-    const int RED_INFO_GENERAL	= 0;
-    const int RED_TICKET_PUBKEY_BYTES = 162;
-
-    const int RED_MIGRATE		= 1;
-    const int RED_MIGRATE_DATA		= 2;
-    const int RED_SET_ACK		= 3;
-    const int RED_PING			= 4;
-    const int RED_WAIT_FOR_CHANNELS	= 5;
-    const int RED_DISCONNECTING		= 6;
-    const int RED_NOTIFY		= 7;
-    const int RED_FIRST_AVAIL_MESSAGE 	= 101;
-
-    const int REDC_ACK_SYNC		= 1;
-    const int REDC_ACK			= 2;
-    const int REDC_PONG			= 3;
-    const int REDC_MIGRATE_FLUSH_MARK	= 4;
-    const int REDC_MIGRATE_DATA		= 5;
-    const int REDC_DISCONNECTING	= 6;
-    const int REDC_FIRST_AVAIL_MESSAGE	= 101;
-
-    const int RED_MAIN_MIGRATE_BEGIN	= 101;
-    const int RED_MAIN_MIGRATE_CANCEL	= 102;
-    const int RED_MAIN_INIT		= 103;
-    const int RED_MAIN_CHANNELS_LIST	= 104;
-    const int RED_MAIN_MOUSE_MODE	= 105;
-    const int RED_MAIN_MULTI_MEDIA_TIME	= 106;
-    const int RED_MAIN_AGENT_CONNECTED	= 107;
-    const int RED_MAIN_AGENT_DISCONNECTED= 108;
-    const int RED_MAIN_AGENT_DATA	= 109;
-    const int RED_MAIN_AGENT_TOKEN	= 110;
-
-    const int REDC_MAIN_RESERVED	= 101;
-    const int REDC_MAIN_MIGRATE_READY	= 102;
-    const int REDC_MAIN_MIGRATE_ERROR	= 103;
-    const int REDC_MAIN_ATTACH_CHANNELS	= 104;
-    const int REDC_MAIN_MOUSE_MODE_REQUEST= 105;
-    const int REDC_MAIN_AGENT_START	= 106;
-    const int REDC_MAIN_AGENT_DATA	= 107;
-    const int REDC_MAIN_AGENT_TOKEN	= 108;
-
-    const int RED_MOUSE_MODE_SERVER	= 1;
-    const int RED_MOUSE_MODE_CLIENT	= 2;
-
-    const int REDC_INPUTS_KEY_DOWN	= 101;
-    const int REDC_INPUTS_KEY_UP	= 102;
-    const int REDC_INPUTS_KEY_MODIFAIERS= 103;
-    const int REDC_INPUTS_MOUSE_MOTION	= 111;
-    const int REDC_INPUTS_MOUSE_POSITION= 112;
-    const int REDC_INPUTS_MOUSE_PRESS	= 113;
-    const int REDC_INPUTS_MOUSE_RELEASE = 114;
-
-    const int RED_INPUTS_INIT		= 101;
-    const int RED_INPUTS_KEY_MODIFAIERS	= 102;
-    const int RED_INPUTS_MOUSE_MOTION_ACK=111;
-
-
-/*
-    RedLinkMess::RedLinkMess() : magic(0), majorVer(0), minorVer(0), size(0), connectionId(0), channelType(0), 
-	channelId(0), numCommonCaps(0), numChannelCaps(0), capsOffset(0)
+    void Connector::SPICE::linkReplyData(const std::vector<uint32_t> & commonCaps, const std::vector<uint32_t> & channelCaps)
     {
+	// https://www.spice-space.org/spice-protocol.html	
+	// 11.4 SpiceLinkReply definition
+	sendIntLE32(SPICE_MAGIC);
+	sendIntLE32(SPICE_VERSION_MAJOR);
+	sendIntLE32(SPICE_VERSION_MINOR);
+	sendIntLE32(sizeof(SpiceLinkReply) + (commonCaps.size() + channelCaps.size()) * sizeof(uint32_t));
+	// SpiceLinkReply
+	sendIntLE32(SPICE_LINK_ERR_OK);
+	// pub_key
+	sendRaw(publicKey.data(), publicKey.size());
+	// num_common_caps
+	sendIntLE32(commonCaps.size());
+	// num_channel_caps
+	sendIntLE32(channelCaps.size());
+	// caps_offset
+	sendIntLE32(publicKey.size() + 16);
+
+	for(auto & word : commonCaps)
+	    sendIntLE32(word);
+
+	for(auto & word : channelCaps)
+	    sendIntLE32(word);
+
+	sendFlush();
     }
 
-
-    RedLinkReply::RedLinkReply() : magic(0), majorVer(0), minorVer(0), size(0), error(0),
-	numCommonCaps(0), numChannelCaps(0), capsOffset(0)
+    void Connector::SPICE::linkReplyOk(void)
     {
-	std::fill(std::begin(pubKey), std::end(pubKey), 0);
+	linkReplyError(SPICE_LINK_ERR_OK);
     }
-*/
+
+    void Connector::SPICE::linkReplyError(int err)
+    {
+	sendIntLE32(SPICE_MAGIC);
+	sendIntLE32(SPICE_VERSION_MAJOR);
+	sendIntLE32(SPICE_VERSION_MINOR);
+	sendIntLE32(sizeof(SpiceLinkReply));
+	// SpiceLinkReply
+	sendIntLE32(err);
+	// pub_key
+	sendRaw(publicKey.data(), publicKey.size());
+	// num_common_caps
+	sendIntLE32(0);
+	// num_channel_caps
+	sendIntLE32(0);
+	// caps_offset
+	sendIntLE32(publicKey.size() + 16);
+
+	sendFlush();
+    }
+
+    std::pair<RedLinkMess, bool> Connector::SPICE::recvLinkMess(void)
+    {
+	// https://www.spice-space.org/spice-protocol.html	
+	// 11.3 SpiceLinkMess definition
+	RedLinkMess msg;
+
+	int magic = recvIntLE32();
+	if(magic != SPICE_MAGIC)
+	{
+	    linkReplyError(SPICE_LINK_ERR_INVALID_MAGIC);
+	    Application::error("handshake failure: 0x%08X", magic);
+
+	    return std::make_pair(msg, false);
+	}
+
+	int majorVer = recvIntLE32();
+	int minorVer = recvIntLE32();
+	if(majorVer != SPICE_VERSION_MAJOR || minorVer != SPICE_VERSION_MINOR)
+	{
+	    linkReplyError(SPICE_LINK_ERR_VERSION_MISMATCH);
+	    Application::error("version mismatch: %d.%d", majorVer, minorVer);
+	    return std::make_pair(msg, false);
+	}
+
+	int msgSize = recvIntLE32();
+	if(msgSize < sizeof(SpiceLinkMess))
+	{
+	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
+	    Application::error("msg size failed: %d", msgSize);
+	    return std::make_pair(msg, false);
+	}
+
+	msg.connectionId = recvIntLE32();
+	msg.channelType = recvInt8();
+	msg.channelId = recvInt8();
+
+	int numCommonCaps = recvIntLE32();
+	int numChannelCaps = recvIntLE32();
+	int capsOffset = recvIntLE32();
+
+	if(capsOffset + (numCommonCaps + numChannelCaps) * sizeof(uint32_t) != msgSize)
+	{
+	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
+	    Application::error("msg size failed: %d", msgSize);
+	    return std::make_pair(msg, false);
+	}
+
+        // check data
+        if(numCommonCaps > 1024)
+        {
+	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
+	    Application::error("huge common caps: %d", numCommonCaps);
+	    return std::make_pair(msg, false);
+        }
+
+        // check data
+        if(numChannelCaps > 1024)
+        {
+	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
+	    Application::error("huge common caps: %d", numChannelCaps);
+	    return std::make_pair(msg, false);
+        }
+
+	for(int num = 0; num < numCommonCaps; ++num)
+	    msg.commonCaps.push_back(recvIntLE32());
+
+	for(int num = 0; num < numChannelCaps; ++num)
+	    msg.channelCaps.push_back(recvIntLE32());
+
+        Application::info("- connected id: %d\n", msg.connectionId);
+        Application::info("- channel type: %d\n", (int) msg.channelType);
+        Application::info("- channel id: %d\n", (int) msg.channelId);
+        Application::info("- num common caps: %d\n", numCommonCaps);
+        Application::info("- num channel caps: %d\n", numChannelCaps);
+        Application::info("- caps offset: %d\n", capsOffset);
+
+	return std::make_pair(msg, true);
+    }
 
     /* Connector::SPICE */
     int Connector::SPICE::communication(void)
     {
+        Application::info("connected: %s\n", _remoteaddr.c_str());
+        //Application::info("using encoding threads: %d", _encodingThreads);
+
+	// wait RedLinkMess
+	const auto & [msg, res] = recvLinkMess();
+	if(!res)
+	    return EXIT_FAILURE;
+
+        // check bus
 	if(0 >= busGetServiceVersion())
         {
             Application::error("%s", "bus service failure");
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
             return EXIT_FAILURE;
         }
 
-        const std::string remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
-        Application::info("connected: %s\n", remoteaddr.c_str());
-        Application::info("using encoding threads: %d", _encodingThreads);
+        // debub caps
+	for(auto & cap : msg.commonCaps)
+	    Application::info("common cap: 0x%08x\n", cap);
 
-	// wait RedLinkMess
-	int redMagick = recvIntBE32();
-	if(redMagick != 0x52454451)
+	for(auto & cap : msg.channelCaps)
+	    Application::info("channel cap: 0x%08x\n", cap);
+
+        // init rsa keys
+	int ret = gnutls_privkey_init(& rsaPrivate);
+	if(ret < 0)
 	{
-	    Application::error("handshake failure: 0x%08X", redMagick);
+	    Application::error("gnutls_privkey_init: %s", gnutls_strerror(ret));
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
 	    return EXIT_FAILURE;
 	}
 
-	int redMajorVer = recvIntLE32();
-	int redMinorVer = recvIntLE32();
-	if(redMajorVer != RED_VERSION_MAJOR || redMinorVer != RED_VERSION_MINOR)
+        ret = gnutls_pubkey_init(& rsaPublic);
+	if(ret < 0)
 	{
-	    Application::error("version mismatch: %d.%d", redMajorVer, redMinorVer);
+	    Application::error("gnutls_pubkey_init: %s", gnutls_strerror(ret));
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
 	    return EXIT_FAILURE;
 	}
 
-	int redNextSize = recvIntLE32();
-        Application::info("red next size: %d\n", redNextSize);
+        // rsa generate
+	ret = gnutls_privkey_generate(rsaPrivate, GNUTLS_PK_RSA, SPICE_TICKET_KEY_PAIR_LENGTH, 0);
+	if(ret < 0)
+	{
+	    Application::error("gnutls_privkey_generate: %s", gnutls_strerror(ret));
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
+	    return EXIT_FAILURE;
+	}
 
-        Application::debug("under construction, remoteaddr: %s\n", remoteaddr.c_str());
+        ret = gnutls_pubkey_import_privkey(rsaPublic, rsaPrivate, 0, 0);
+	if(ret < 0)
+	{
+	    Application::error("gnutls_pubkey_import_privkey: %s", gnutls_strerror(ret));
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
+	    return EXIT_FAILURE;
+	}
+
+        // get public
+        size_t bufsz = publicKey.size();
+        ret = gnutls_pubkey_export(rsaPublic, GNUTLS_X509_FMT_DER, publicKey.data(), & bufsz);
+	if(ret < 0)
+	{
+	    Application::error("gnutls_pubkey_export: %s, size: %d", gnutls_strerror(ret), bufsz);
+	    linkReplyError(SPICE_LINK_ERR_ERROR);
+	    return EXIT_FAILURE;
+	}
+
+	// send reply
+	linkReplyOk();
+
+	// https://www.spice-space.org/spice-protocol.html	
+	// 11.5 Encrypted Password
+	// Client sends RSA encrypted password, with public key received from server (in SpiceLinkReply).
+	// Format is EME-OAEP as described in PKCS#1 v2.0 with SHA-1, MGF1 and an empty encoding parameter.
+
+        while(int tmp = recvInt8())
+	{
+	    Application::info("recv byte: 0x%02x\n", tmp);
+	    if(tmp == 0xffffffff) break;
+	}
+
+        Application::debug("under construction, remoteaddr: %s\n", _remoteaddr.c_str());
         return EXIT_SUCCESS;
     }
 }

@@ -806,7 +806,7 @@ namespace LTSM
 
             if(ev->response_type == 0)
             {
-                extendedError(error, __PRETTY_FUNCTION__, "unknown error");
+                extendedError(error, __FUNCTION__, "unknown error");
             }
             else
             {
@@ -826,7 +826,7 @@ namespace LTSM
                         break;
 
                     default:
-                        extendedError(error, __PRETTY_FUNCTION__, "unknown event");
+                        extendedError(error, __FUNCTION__, "unknown event");
                         break;
                 }
 

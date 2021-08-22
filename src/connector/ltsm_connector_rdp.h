@@ -25,35 +25,75 @@
 #define _LTSM_CONNECTOR_RDP_
 
 #include "ltsm_connector.h"
-#include "ltsm_xcb_wrapper.h"
+
+#include "freerdp/freerdp.h"
+#include "freerdp/listener.h"
 
 namespace LTSM
 {
     namespace Connector
     {
+	class ProxySocket : private BaseStream
+	{
+	    std::atomic<bool>		loopTransmission;
+	    std::thread			loopThread;
+	    int				bridgeSock;
+	    int				clientSock;
+	    std::string			socketPath;
+	    std::vector<uint8_t>	buf;
+
+	protected:
+            bool                        enterEventLoopAsync(void);
+
+	public:
+	    ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
+	    ~ProxySocket();
+
+	    int				clientSocket(void) const;
+            bool                        initUnixSockets(const std::string &);
+
+	    void			startEventLoopBackground(void);
+	    void			stopEventLoop(void);
+
+	    static int			connectUnixSocket(const char* path);
+	    static int			listenUnixSocket(const char* path);
+	};
+
         /* Connector::RDP */
-        class RDP : public BaseStream, public SignalProxy
+        class RDP : public ProxySocket, public SignalProxy
         {
+            std::atomic<bool>           loopMessage;
+
         protected:
             // dbus virtual signals
-            void                        onShutdownConnector(const int32_t & display) override {}
-            void                        onHelperWidgetStarted(const int32_t & display) override {}
             void                        onSendBellSignal(const int32_t & display) override {}
+            void                        onShutdownConnector(const int32_t & display) override;
+            void                        onHelperWidgetStarted(const int32_t & display) override;
 
         public:
             RDP(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "rdp")
+                : SignalProxy(conn, jo, "rdp"), loopMessage(false)
             {
                 registerProxy();
             }
 
             ~RDP()
-            {
-                unregisterProxy();
-            }
+	    {
+    		unregisterProxy();
+	    }
 
             int		                communication(void) override;
-        };
+
+	    static BOOL			clientPostConnect(freerdp_peer* client);
+	    static BOOL			clientActivate(freerdp_peer* client);
+	    static BOOL			clientSynchronizeEvent(rdpInput* input, UINT32 flags);
+	    static BOOL			clientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
+	    static BOOL			clientUnicodeKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
+	    static BOOL			clientMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+	    static BOOL			clientExtendedMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+	    static BOOL			clientRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
+	    static BOOL			clientSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
+	};
     }
 }
 

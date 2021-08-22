@@ -27,6 +27,7 @@
 #include <chrono>
 #include <vector>
 #include <string>
+#include <iomanip>
 #include <iterator>
 #include <algorithm>
 
@@ -120,6 +121,19 @@ namespace LTSM
 
         size_t		maskShifted(size_t mask);
         size_t		maskMaxValue(size_t mask);
+
+	template<typename Int>
+	std::string vector2hexstring(const std::vector<Int> & vec, size_t width = 8, const std::string & sep = ",")
+	{
+    	    std::ostringstream os;
+    	    for(auto it = vec.begin(); it != vec.end(); ++it)
+    	    {
+        	os << "0x" << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(*it);
+        	if(sep.size() && std::next(it) != vec.end()) os << sep;
+    	    }
+
+    	    return os.str();
+	}    
     }
 }
 

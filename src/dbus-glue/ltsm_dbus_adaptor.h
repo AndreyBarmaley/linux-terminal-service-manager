@@ -66,7 +66,7 @@ protected:
         object_.registerSignal("debugLevel").onInterface(INTERFACE_NAME).withParameters<std::string>("level");
     }
 
-    ~Service_adaptor() = default;
+    virtual ~Service_adaptor() = default;
 
 public:
     void emitHelperWidgetStarted(const int32_t& display)

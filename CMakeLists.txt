@@ -73,18 +73,35 @@ set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_C
 # LTSM connector
 project(LTSM_connector VERSION 20210805.1)
 
+option(LTSM_WITH_SPICE "add spice protocol support" OFF)
+option(LTSM_WITH_RDP "add rdp protocol support" OFF)
+
 find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
 
 add_executable(LTSM_connector
-    src/connector/ltsm_connector_spice.cpp
-    src/connector/ltsm_connector_rdp.cpp
     src/connector/ltsm_vnc_encodings.cpp
     src/connector/ltsm_connector_vnc.cpp
     src/connector/ltsm_connector.cpp)
 
-target_sources(LTSM_connector PUBLIC ${LTSM_common})
+if(LTSM_WITH_RDP)
+    pkg_search_module(FreeRDP2 REQUIRED freerdp2)
+    pkg_search_module(WinPR2 REQUIRED winpr2)
+    target_compile_options(LTSM_connector PUBLIC ${FreeRDP2_CFLAGS} ${WinPR2_CFLAGS})
+    target_link_libraries(LTSM_connector ${FreeRDP2_LIBRARIES} ${WinPR2_LIBRARIES})
+    target_compile_options(LTSM_connector PUBLIC "-DLTSM_WITH_RDP")
+    target_sources(LTSM_connector PUBLIC src/connector/ltsm_connector_rdp.cpp)
+endif()
 
+if(LTSM_WITH_SPICE)
+    pkg_search_module(SpiceServer REQUIRED spice-server)
+    target_compile_options(LTSM_connector PUBLIC ${SpiceServer_CFLAGS})
+    target_compile_options(LTSM_connector PUBLIC "-DLTSM_WITH_SPICE")
+    target_link_libraries(LTSM_connector ${SpiceServer})
+    target_sources(LTSM_connector PUBLIC src/connector/ltsm_connector_spice.cpp)
+endif()
+
+target_sources(LTSM_connector PUBLIC ${LTSM_common})
 target_compile_options(LTSM_connector PUBLIC ${GNUTLS_DEFINITIONS})
 
 target_include_directories(LTSM_connector PUBLIC src/common)
