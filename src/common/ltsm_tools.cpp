@@ -516,4 +516,26 @@ namespace LTSM
 
         return res;
     }
+
+    /* BaseTimer */
+    std::thread::id Tools::BaseTimer::getId(void) const
+    {
+        return thread.get_id();
+    }
+
+    void Tools::BaseTimer::stop(void)
+    {
+        if(processed)
+        {
+            processed = false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if(thread.joinable())
+            thread.join();
+    }
+
+    bool Tools::BaseTimer::isRunning(void) const
+    {
+	return processed;
+    }
 }

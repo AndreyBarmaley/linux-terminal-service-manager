@@ -221,102 +221,100 @@ namespace LTSM
 	_app->openlog();
     }
 
-    void Manager::Object::systemTasks(void)
+    void Manager::Object::sessionsTimeLimitAction(void)
     {
-	// periodic tasks: 3sec
-        if(_tpsec3.finishedSeconds(3))
+    	for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
 	{
-    	    for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
+	    auto & [ display, session] = *it;
+
+	    // find timepoint session limit
+    	    if(session.mode != XvfbMode::SessionLogin && 0 < session.durationlimit)
 	    {
-		auto & [ display, session] = *it;
-
-		// find timepoint session limit
-        	if(session.mode != XvfbMode::SessionLogin && 0 < session.durationlimit)
+		// task background
+		std::thread([display = (*it).first, xvfb = & session, this]()
 		{
-		    // task background
-		    std::thread([display = (*it).first, xvfb = & session, this]()
+		    auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - xvfb->tpstart);
+		    auto lastsec = std::chrono::seconds(xvfb->durationlimit) - sessionAliveSec;
+
+		    // shutdown session
+		    if(std::chrono::seconds(xvfb->durationlimit) < sessionAliveSec)
 		    {
-			auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - xvfb->tpstart);
-			auto lastsec = std::chrono::seconds(xvfb->durationlimit) - sessionAliveSec;
-
-			// shutdown session
-			if(std::chrono::seconds(xvfb->durationlimit) < sessionAliveSec)
-			{
-        		    Application::error("time point limit, display: %d", display);
-        		    displayShutdown(display, true, xvfb);
-        		}
-			else
-			// inform alert
-                        if(std::chrono::seconds(100) > lastsec)
-			{
-			    this->emitClearRenderPrimitives(display);
-        		    // send render rect
-        		    const uint16_t fw = xvfb->width;
-        		    const uint16_t fh = 24;
-        		    this->emitAddRenderRect(display, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
-        		    // send render text
-        		    std::string text("time left: ");
-			    text.append(std::to_string(lastsec.count())).append("sec");
-        		    const int16_t px = (fw - text.size() * 8) / 2;
-        		    const int16_t py = (fh - 16) / 2;
-        		    this->emitAddRenderText(display, text, {px, py}, {0xFF, 0xFF, 0});
-			}
-			// inform beep
-                        if(std::chrono::seconds(10) > lastsec)
-			{
-                            this->emitSendBellSignal(display);
-                        }
-		    }).detach();
-		}
-	    }
-
-	    // childEnded
-	    if(! _childEnded.empty())
-	    {
-		for(const auto & [ pid, status] : _childEnded)
-		{
-		    // find child
-		    auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [pid1 = pid](auto & pair){ return pair.second.pid2 == pid1; });
-		    if(it != _xvfb->end())
+        		Application::error("time point limit, display: %d", display);
+        		displayShutdown(display, true, xvfb);
+        	    }
+		    else
+		    // inform alert
+            	    if(std::chrono::seconds(100) > lastsec)
 		    {
-			auto & [ display, session] = *it;
-
-			// skip login helper, or arnormal shutdown only
-			if(session.mode != XvfbMode::SessionLogin || 0 < status)
-			{
-			    session.pid2 = 0;
-                	    displayShutdown(display, true, & session);
-			}
+			this->emitClearRenderPrimitives(display);
+        		// send render rect
+        		const uint16_t fw = xvfb->width;
+        		const uint16_t fh = 24;
+        		this->emitAddRenderRect(display, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
+        		// send render text
+        		std::string text("time left: ");
+			text.append(std::to_string(lastsec.count())).append("sec");
+        		const int16_t px = (fw - text.size() * 8) / 2;
+        		const int16_t py = (fh - 16) / 2;
+        		this->emitAddRenderText(display, text, {px, py}, {0xFF, 0xFF, 0});
 		    }
-		}
-		_childEnded.clear();
+		    // inform beep
+                    if(std::chrono::seconds(10) > lastsec)
+		    {
+                        this->emitSendBellSignal(display);
+                    }
+		}).detach();
 	    }
 	}
+    }
 
-	// periodic tasks: 30sec
-        if(_tpsec30.finishedSeconds(30))
+    void Manager::Object::sessionsEndedAction(void)
+    {
+	// childEnded
+	if(! _childEnded.empty())
 	{
-    	    for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
+	    for(const auto & [ pid, status] : _childEnded)
 	    {
-		auto & [ display, session] = *it;
-
-		if(session.mode == XvfbMode::SessionOnline)
+		// find child
+		auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [pid1 = pid](auto & pair){ return pair.second.pid2 == pid1; });
+		if(it != _xvfb->end())
 		{
-		    // check alive connectors
-		    if(! session.checkconn)
+		    auto & [ display, session] = *it;
+
+		    // skip login helper, or arnormal shutdown only
+		    if(session.mode != XvfbMode::SessionLogin || 0 < status)
 		    {
-			session.checkconn = true;
-			emitPingConnector(display);
+			session.pid2 = 0;
+                	displayShutdown(display, true, & session);
 		    }
-		    else
-		    // not reply
-		    {
-			session.mode = XvfbMode::SessionSleep;
-			session.checkconn = false;
-        		Application::error("connector not reply, display: %d", display);
-			// complete shutdown
-			busConnectorTerminated(display);
-		    }
+		}
+	    }
+	    _childEnded.clear();
+	}
+    }
+
+    void Manager::Object::sessionsCheckAliveAction(void)
+    {
+	for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
+	{
+	    auto & [ display, session] = *it;
+
+	    if(session.mode == XvfbMode::SessionOnline)
+	    {
+		// check alive connectors
+		if(! session.checkconn)
+		{
+		    session.checkconn = true;
+		    emitPingConnector(display);
+		}
+		else
+		// not reply
+		{
+		    session.mode = XvfbMode::SessionSleep;
+		    session.checkconn = false;
+        	    Application::error("connector not reply, display: %d", display);
+		    // complete shutdown
+		    busConnectorTerminated(display);
 		}
 	    }
 	}
@@ -568,17 +566,7 @@ namespace LTSM
 	if(0 >= display)
 	    return false;
 
-        
-        Tools::FrequencyTime ftp;
-
-        while(! checkXvfbSocket(display))
-        {
-            if(ftp.finishedMilliSeconds(ms))
-                return false;
-            std::this_thread::sleep_for(100ms);
-        }
-
-    	return true;
+        return Tools::waitCallable<std::chrono::milliseconds>(ms, 50, [=](){ return ! checkXvfbSocket(display); });
     }
 
     std::string Manager::Object::createXauthFile(int display, const std::string & mcookie, const std::string & userName, const std::string & remoteAddr)
@@ -1682,13 +1670,10 @@ namespace LTSM
 	_childEnded.emplace_back(pid, status);
     }
 
-    namespace Manager
-    {
-        std::unique_ptr<Object> obj;
-        std::atomic<bool> running(false);
-    }
-
     /* Manager::Service */
+    std::atomic<bool> Manager::Service::isRunning = false;
+    std::unique_ptr<Manager::Object> Manager::Service::objAdaptor;
+
     Manager::Service::Service(int argc, const char** argv)
         : ApplicationJsonConfig("ltsm_service", argc, argv)
     {
@@ -1773,24 +1758,34 @@ namespace LTSM
 
         createXauthDir();
 
-        Manager::obj.reset(new Manager::Object(*conn, _config, *this));
-        Manager::running = true;
+        objAdaptor.reset(new Manager::Object(*conn, _config, *this));
+        isRunning = true;
         Application::setDebugLevel(_config.getString("service:debug"));
         Application::info("manager version: %d", LTSM::service_version);
-        Tools::FrequencyTime _tpms100;
 
-        while(Manager::running)
+	std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
+
+        while(isRunning)
         {
             conn->enterEventLoopAsync();
 
-            if(_tpms100.finishedMilliSeconds(100))
-                Manager::obj->systemTasks();
+	    // check sessions timepoint limit
+	    if(!timer1 || !timer1->isRunning())
+		timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, [ptr = objAdaptor.get()](){ ptr->sessionsTimeLimitAction(); });
+
+	    // check sessions killed
+	    if(!timer2 || !timer2->isRunning())
+		timer2 = Tools::BaseTimer::create<std::chrono::seconds>(5, [ptr = objAdaptor.get()](){ ptr->sessionsEndedAction(); });
+
+	    // check sessions alive
+	    if(!timer3 || !timer3->isRunning())
+		timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, [ptr = objAdaptor.get()](){ ptr->sessionsCheckAliveAction(); });
 
             std::this_thread::sleep_for(1ms);
         }
 
-        Manager::running = false;
-        Manager::obj.reset();
+        isRunning = false;
+        objAdaptor.reset();
 
         conn->enterEventLoopAsync();
 
@@ -1800,15 +1795,15 @@ namespace LTSM
     void Manager::Service::signalHandler(int sig)
     {
         if(sig == SIGTERM || sig == SIGINT)
-            Manager::running = false;
-        else if(sig == SIGCHLD && Manager::running)
+            isRunning = false;
+        else if(sig == SIGCHLD && isRunning)
         {
             int status;
             pid_t pid = waitpid(-1, &status, WNOHANG);
 
             if(0 < pid)
 	    {
-                Manager::obj->signalChildEnded(pid, status);
+                objAdaptor->signalChildEnded(pid, status);
 	    }
         }
     }

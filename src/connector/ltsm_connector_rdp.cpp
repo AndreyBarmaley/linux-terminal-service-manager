@@ -35,11 +35,6 @@
 #include <filesystem>
 
 #include <unistd.h>
-#include <sys/un.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-
 #include <winpr/crt.h>
 #include <winpr/ssl.h>
 #include <winpr/wtsapi.h>
@@ -57,188 +52,6 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-    Connector::ProxySocket::~ProxySocket()
-    {
-	loopTransmission = false;
-	if(loopThread.joinable()) loopThread.join();
-
-        std::filesystem::remove(socketPath);
-        if(0 < bridgeSock) close(bridgeSock);
-        if(0 < clientSock) close(clientSock);
-    }
-
-    int Connector::ProxySocket::clientSocket(void) const
-    {
-	return clientSock;
-    }
-
-    void Connector::ProxySocket::stopEventLoop(void)
-    {
-	loopTransmission = false;
-    }
-
-    void Connector::ProxySocket::startEventLoopBackground(void)
-    {
-	loopThread = std::thread([this]{
-	    while(this->loopTransmission)
-	    {
-		if(! this->enterEventLoopAsync())
-		    break;
-
-		std::this_thread::sleep_for(1ms);
-	    }
-	    this->loopTransmission = false;
-	});
-    }
-
-    bool Connector::ProxySocket::enterEventLoopAsync(void)
-    {
-	// read all data
-	while(hasInput())
-	{
-	    uint8_t ch = recvInt8();
-	    buf.push_back(ch);
-
-	}
-
-	if(buf.size())
-	{
-	    if(buf.size() != send(bridgeSock, buf.data(), buf.size(), 0))
-	    {
-		Application::error("unix send error: %s", strerror(errno));
-		return false;
-	    }
-
-#ifdef LTSM_DEBUG
-	    if(! checkError())
-	    {
-		std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
-		Application::info("from rdesktop: [%s]", str.c_str());
-	    }
-#endif
-	    buf.clear();
-	}
-
-	if(checkError())
-	    return false;
-
-	// write all data
-	while(hasInput(bridgeSock))
-	{
-	    uint8_t ch;
-	    if(1 != recv(bridgeSock, & ch, 1, 0))
-	    {
-		Application::error("unix recv error: %s", strerror(errno));
-		return false;
-	    }
-
-	    buf.push_back(ch);
-	}
-
-	if(buf.size())
-	{
-	    sendRaw(buf.data(), buf.size());
-	    sendFlush();
-
-#ifdef LTSM_DEBUG
-	    if(! checkError())
-	    {
-		std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
-		Application::info("from freerdp: [%s]", str.c_str());
-	    }
-#endif
-	    buf.clear();
-	}
-
-	return ! checkError();
-    }
-
-    int Connector::ProxySocket::connectUnixSocket(const char* path)
-    {
-	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-	if(0 > sock)
-	{
-	    Application::error("socket failed: %s", strerror(errno));
-	    return -1;
-	}
-
-	struct sockaddr_un sockaddr;
-	memset(& sockaddr, 0, sizeof(struct sockaddr_un));
-	sockaddr.sun_family = AF_UNIX;   
-	std::strcpy(sockaddr.sun_path, path);
-
-        if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
-	    Application::error("connect failed: %s, socket: %s", strerror(errno), path);
-        else
-	    Application::info("connect unix sock fd: %d", sock);
-
-        return sock;
-    }
-
-    int Connector::ProxySocket::listenUnixSocket(const char* path)
-    {
-	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if(0 > fd)
-	{
-	    Application::error("socket failed: %s", strerror(errno));
-	    return -1;
-	}
-
-	struct sockaddr_un sockaddr;
-	memset(& sockaddr, 0, sizeof(struct sockaddr_un));
-	sockaddr.sun_family = AF_UNIX;   
-	std::strcpy(sockaddr.sun_path, path);
-
-	std::filesystem::remove(path);
-	if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
-	{
-	    Application::error("bind failed: %s, socket: %s", strerror(errno), path);
-	    return -1;
-	}
-
-	if(0 != listen(fd, 5))
-	{
-	    Application::error("listen failed: %s", strerror(errno));
-	    return -1;
-	}
-	Application::info("listen unix sock: %s", path);
-
-	int sock = accept(fd, nullptr, nullptr);
-	if(0 > sock)
-	    Application::error("accept failed: %s", strerror(errno));
-        else
-	    Application::info("accept unix sock: %s", path);
-
-	close(fd);
-	return sock;
-    }
-
-    bool Connector::ProxySocket::initUnixSockets(const std::string & path)
-    {
-	socketPath = path;
-	std::future<int> job = std::async(std::launch::async, Connector::ProxySocket::listenUnixSocket, socketPath.c_str());
-
-	Application::info("wait server socket: %s", socketPath.c_str());
-        while(! std::filesystem::is_socket(socketPath.c_str()))
-            std::this_thread::sleep_for(1ms);
-
-	bridgeSock = -1;
-	// socket fd: client part
-	clientSock = connectUnixSocket(socketPath.c_str());
-	if(0 < clientSock)
-	{
-    	    while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
-	    // socket fd: server part
-    	    bridgeSock = job.get();
-
-    	    return 0 < bridgeSock;
-        }
-
-	Application::error("%s: failed", "init unix sockets");
-        return false;
-    }
-
-
     struct ClientContext : rdp_context
     {
         Connector::RDP*	rdp;
@@ -483,9 +296,9 @@ namespace LTSM
         }
 
         const std::string home = Tools::getenv("HOME", "/tmp");
-	const auto socket = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
+	const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-        if(! initUnixSockets(socket.string()))
+        if(! initUnixSockets(socketFile.string()))
             return EXIT_SUCCESS;
 
         // create X11 connect

@@ -109,6 +109,7 @@ namespace LTSM
 	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
     };
 
+    // BaseStream
     class BaseStream
     {
     protected:
@@ -167,6 +168,7 @@ namespace LTSM
         std::string	                recvString(size_t);
     };
 
+    // TLS_Stream
     class TLS_Stream : public BaseStream
     {
     protected:
@@ -216,6 +218,7 @@ namespace LTSM
 	std::vector<uint8_t>		syncFlush(bool finish = false);
     };
 
+    // ZlibOutStream
     class ZlibOutStream : public TLS_Stream
     {
     protected:
@@ -230,6 +233,33 @@ namespace LTSM
 
         ZlibOutStream &                 sendInt8(uint8_t val) override;
         ZlibOutStream &                 sendRaw(const void*, size_t) override;
+    };
+
+    // ProxySocket
+    class ProxySocket : private BaseStream
+    {
+        std::atomic<bool>               loopTransmission;
+        std::thread                     loopThread;
+        int                             bridgeSock;
+        int                             clientSock;
+        std::string                     socketPath;
+        std::vector<uint8_t>            buf;
+
+    protected:
+        bool                            enterEventLoopAsync(void);
+
+    public:
+        ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
+        ~ProxySocket();
+
+        int                             clientSocket(void) const;
+        bool                            initUnixSockets(const std::string &);
+
+        void                            startEventLoopBackground(void);
+        void                            stopEventLoop(void);
+
+        static int                      connectUnixSocket(const char* path);
+        static int                      listenUnixSocket(const char* path);
     };
 
     namespace Connector

@@ -206,7 +206,7 @@ namespace LTSM
             bool quit = false;
             std::list<SDL_Rect> damages;
             uint8_t* buf = shmUsed ? shmInfo->addr : new uint8_t[width() * height() * (bitsPerPixel() >> 2)];
-	    Tools::FrequencyTime ftp;
+	    std::unique_ptr<Tools::BaseTimer> timerClipboardEvent;
 
             while(! quit && ! XCB::RootDisplayExt::hasError())
             {
@@ -273,8 +273,8 @@ namespace LTSM
                 }
 
 		// 800ms: get selection action
-                if(ftp.finishedMilliSeconds(800))
-                    XCB::RootDisplayExt::getClipboardEvent();
+                if(!timerClipboardEvent || !timerClipboardEvent->isRunning())
+                    timerClipboardEvent = Tools::BaseTimer::create<std::chrono::milliseconds>(800, [=](){ this->XCB::RootDisplayExt::getClipboardEvent(); });
 
                 if(delay)
                     SDL_Delay(5);

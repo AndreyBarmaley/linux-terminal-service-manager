@@ -21,9 +21,12 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+
 
 #include <poll.h>
 #include <unistd.h>
@@ -803,6 +806,189 @@ namespace LTSM
 	return *this;
     }
 
+    /* ProxySocket */
+    ProxySocket::~ProxySocket()
+    {
+        loopTransmission = false;
+        if(loopThread.joinable()) loopThread.join();
+
+        std::filesystem::remove(socketPath);
+        if(0 < bridgeSock) close(bridgeSock);
+        if(0 < clientSock) close(clientSock);
+    }
+
+    int ProxySocket::clientSocket(void) const
+    {
+        return clientSock;
+    }
+
+    void ProxySocket::stopEventLoop(void)
+    {
+        loopTransmission = false;
+    }
+
+    void ProxySocket::startEventLoopBackground(void)
+    {
+        loopThread = std::thread([this]{
+            while(this->loopTransmission)
+            {
+                if(! this->enterEventLoopAsync())
+                    break;
+                
+                std::this_thread::sleep_for(1ms);
+            }
+            this->loopTransmission = false;
+        });         
+    }
+
+    bool ProxySocket::enterEventLoopAsync(void)
+    {
+        // read all data
+        while(hasInput())
+        {
+            uint8_t ch = recvInt8();
+            buf.push_back(ch);
+        
+        }
+        
+        if(buf.size())
+        {
+            if(buf.size() != send(bridgeSock, buf.data(), buf.size(), 0))
+            {
+                Application::error("unix send error: %s", strerror(errno));
+                return false;
+            }
+            
+#ifdef LTSM_DEBUG
+            if(! checkError())
+            {
+                std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
+                Application::debug("from rdesktop: [%s]", str.c_str());
+            }
+#endif
+            buf.clear();
+        }
+
+        if(checkError())
+            return false;
+
+        // write all data
+        while(hasInput(bridgeSock))
+        {
+            uint8_t ch;
+            if(1 != recv(bridgeSock, & ch, 1, 0))
+            {
+                Application::error("unix recv error: %s", strerror(errno));
+                return false;
+            }
+
+            buf.push_back(ch);
+        }
+
+        if(buf.size())
+        {
+            sendRaw(buf.data(), buf.size());
+            sendFlush();
+
+#ifdef LTSM_DEBUG
+            if(! checkError())
+            {
+                std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
+                Application::debug("from freerdp: [%s]", str.c_str());
+            }
+#endif
+            buf.clear();
+        }
+            
+        return ! checkError();
+    }       
+        
+    int ProxySocket::connectUnixSocket(const char* path)
+    {   
+        int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if(0 > sock)
+        {
+            Application::error("socket failed: %s", strerror(errno));
+            return -1;
+        }
+            
+        struct sockaddr_un sockaddr;
+        memset(& sockaddr, 0, sizeof(struct sockaddr_un));
+        sockaddr.sun_family = AF_UNIX;
+        std::strcpy(sockaddr.sun_path, path);
+
+        if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
+            Application::error("connect failed: %s, socket: %s", strerror(errno), path);
+        else
+            Application::debug("connect unix sock fd: %d", sock);
+
+        return sock;
+    }
+
+    int ProxySocket::listenUnixSocket(const char* path)
+    {
+        int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if(0 > fd)
+        {
+            Application::error("socket failed: %s", strerror(errno));
+            return -1;
+        }
+
+        struct sockaddr_un sockaddr;
+        memset(& sockaddr, 0, sizeof(struct sockaddr_un));
+        sockaddr.sun_family = AF_UNIX;
+        std::strcpy(sockaddr.sun_path, path);
+        
+        std::filesystem::remove(path);
+        if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
+        {
+            Application::error("bind failed: %s, socket: %s", strerror(errno), path);
+            return -1;
+        }
+            
+        if(0 != listen(fd, 5))
+        {   
+            Application::error("listen failed: %s", strerror(errno));
+            return -1;
+        }
+        Application::info("listen unix sock: %s", path);
+        
+        int sock = accept(fd, nullptr, nullptr);
+        if(0 > sock)
+            Application::error("accept failed: %s", strerror(errno));
+        else
+            Application::debug("accept unix sock: %s", path);
+        
+        close(fd);
+        return sock;
+    }
+
+    bool ProxySocket::initUnixSockets(const std::string & path)
+    {
+        socketPath = path;
+        std::future<int> job = std::async(std::launch::async, ProxySocket::listenUnixSocket, socketPath.c_str());
+
+        Application::debug("wait server socket: %s", socketPath.c_str());
+        while(! std::filesystem::is_socket(socketPath.c_str()))
+            std::this_thread::sleep_for(1ms);
+
+        bridgeSock = -1;
+        // socket fd: client part
+        clientSock = connectUnixSocket(socketPath.c_str());
+        if(0 < clientSock)
+        {
+            while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
+            // socket fd: server part
+            bridgeSock = job.get();
+
+            return 0 < bridgeSock;
+        }
+
+        Application::error("%s: failed", "init unix sockets");
+        return false;
+    }
+
+    //
     void connectorHelp(const char* prog)
     {
         std::list<std::string> proto = { "VNC" };
@@ -917,17 +1103,9 @@ namespace LTSM
 
         std::string socketFormat = _config->getString("xvfb:socket");
         std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
-        Tools::FrequencyTime ftp;
 
-        while(! Tools::checkUnixSocket(socketPath))
-        {
-            if(ftp.finishedMilliSeconds(5000))
-            {
+	if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
                 Application::error("xvfb: %s", "not started");
-                return false;
-            }
-            std::this_thread::sleep_for(100ms);
-        }
 
         _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
         Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());

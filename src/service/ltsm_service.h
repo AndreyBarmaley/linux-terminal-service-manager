@@ -121,7 +121,6 @@ namespace LTSM
             std::string                 _helperDateFormat;
             std::vector<std::string>    _helperAccessUsersList;
 	    std::list<PidStatus>	_childEnded;
-    	    Tools::FrequencyTime	_tpsec3, _tpsec30;
 
         protected:
             void                        closefds(void) const;
@@ -149,7 +148,9 @@ namespace LTSM
             Object(sdbus::IConnection &, const JsonObject &, const Application &);
             ~Object();
 
-            void                        systemTasks(void);
+	    void			sessionsTimeLimitAction(void);
+	    void			sessionsEndedAction(void);
+	    void			sessionsCheckAliveAction(void);
             void                        signalChildEnded(int pid, int status);
 
         private:                        /* virtual dbus methods */
@@ -187,6 +188,9 @@ namespace LTSM
 
         class Service : public ApplicationJsonConfig
         {
+            static std::unique_ptr<Object> objAdaptor;
+            static std::atomic<bool>       isRunning;
+
         protected:
             bool                        createXauthDir(void);
 

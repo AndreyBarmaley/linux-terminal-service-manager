@@ -748,7 +748,7 @@ namespace LTSM
         serverRegion.assign(0, 0, _xcbDisplay->width(), _xcbDisplay->height());
 	bool clientUpdateReq = false;
 	std::vector<uint8_t> selbuf;
-	Tools::FrequencyTime ftp;
+	std::unique_ptr<Tools::BaseTimer> timerGetSelection;
 
         while(loopMessage)
         {
@@ -888,8 +888,8 @@ namespace LTSM
                 }
 
     		// periodic 750ms: get selection action
-    		if(ftp.finishedMilliSeconds(750))
-		    _xcbDisplay->getClipboardEvent();
+		if(!timerGetSelection || !timerGetSelection->isRunning())
+		    timerGetSelection = Tools::BaseTimer::create<std::chrono::milliseconds>(750, [=](){ _xcbDisplay->getClipboardEvent(); });
     	    }
 
             // dbus processing

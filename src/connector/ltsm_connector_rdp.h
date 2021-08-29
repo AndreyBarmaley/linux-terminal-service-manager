@@ -33,32 +33,6 @@ namespace LTSM
 {
     namespace Connector
     {
-	class ProxySocket : private BaseStream
-	{
-	    std::atomic<bool>		loopTransmission;
-	    std::thread			loopThread;
-	    int				bridgeSock;
-	    int				clientSock;
-	    std::string			socketPath;
-	    std::vector<uint8_t>	buf;
-
-	protected:
-            bool                        enterEventLoopAsync(void);
-
-	public:
-	    ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
-	    ~ProxySocket();
-
-	    int				clientSocket(void) const;
-            bool                        initUnixSockets(const std::string &);
-
-	    void			startEventLoopBackground(void);
-	    void			stopEventLoop(void);
-
-	    static int			connectUnixSocket(const char* path);
-	    static int			listenUnixSocket(const char* path);
-	};
-
         /* Connector::RDP */
         class RDP : public ProxySocket, public SignalProxy
         {

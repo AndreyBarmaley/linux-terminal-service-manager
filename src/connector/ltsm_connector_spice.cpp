@@ -25,232 +25,162 @@
 #include <thread>
 #include <iostream>
 #include <iterator>
+#include <functional>
 #include <algorithm>
+#include <filesystem>
 
-#include "spice/error_codes.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+ #include "spice/protocol.h"
+ #include "spice-server/spice.h"
+#ifdef __cplusplus
+}
+#endif
 
 #include "ltsm_tools.h"
 #include "ltsm_connector_spice.h"
 
 using namespace std::chrono_literals;
 
+class SpiceTimer : protected LTSM::Tools::BaseTimer
+{
+    std::unique_ptr<BaseTimer> ptr;
+    SpiceTimerFunc          callback;
+    void*                   opaque;
+
+public:
+    SpiceTimer(SpiceTimerFunc func, void* data) : callback(func), opaque(data) {}
+
+    void stop(void) { if(ptr) ptr->stop(); }
+
+    void start(uint32_t ms)
+    {
+	if(callback)
+	    ptr = BaseTimer::create<std::chrono::milliseconds>(ms, callback, opaque);
+    }
+};
+
 namespace LTSM
 {
-    void Connector::SPICE::linkReplyData(const std::vector<uint32_t> & commonCaps, const std::vector<uint32_t> & channelCaps)
+    SpiceTimer* cbTimerAdd(SpiceTimerFunc func, void* opaque)
     {
-	// https://www.spice-space.org/spice-protocol.html	
-	// 11.4 SpiceLinkReply definition
-	sendIntLE32(SPICE_MAGIC);
-	sendIntLE32(SPICE_VERSION_MAJOR);
-	sendIntLE32(SPICE_VERSION_MINOR);
-	sendIntLE32(sizeof(SpiceLinkReply) + (commonCaps.size() + channelCaps.size()) * sizeof(uint32_t));
-	// SpiceLinkReply
-	sendIntLE32(SPICE_LINK_ERR_OK);
-	// pub_key
-	sendRaw(publicKey.data(), publicKey.size());
-	// num_common_caps
-	sendIntLE32(commonCaps.size());
-	// num_channel_caps
-	sendIntLE32(channelCaps.size());
-	// caps_offset
-	sendIntLE32(publicKey.size() + 16);
-
-	for(auto & word : commonCaps)
-	    sendIntLE32(word);
-
-	for(auto & word : channelCaps)
-	    sendIntLE32(word);
-
-	sendFlush();
+	auto timer = new SpiceTimer(func, opaque);
+        Application::debug("timer add: %p", timer);
+        return timer;
     }
 
-    void Connector::SPICE::linkReplyOk(void)
+    void cbTimerCancel(SpiceTimer* timer)
     {
-	linkReplyError(SPICE_LINK_ERR_OK);
-    }
-
-    void Connector::SPICE::linkReplyError(int err)
-    {
-	sendIntLE32(SPICE_MAGIC);
-	sendIntLE32(SPICE_VERSION_MAJOR);
-	sendIntLE32(SPICE_VERSION_MINOR);
-	sendIntLE32(sizeof(SpiceLinkReply));
-	// SpiceLinkReply
-	sendIntLE32(err);
-	// pub_key
-	sendRaw(publicKey.data(), publicKey.size());
-	// num_common_caps
-	sendIntLE32(0);
-	// num_channel_caps
-	sendIntLE32(0);
-	// caps_offset
-	sendIntLE32(publicKey.size() + 16);
-
-	sendFlush();
-    }
-
-    std::pair<RedLinkMess, bool> Connector::SPICE::recvLinkMess(void)
-    {
-	// https://www.spice-space.org/spice-protocol.html	
-	// 11.3 SpiceLinkMess definition
-	RedLinkMess msg;
-
-	int magic = recvIntLE32();
-	if(magic != SPICE_MAGIC)
-	{
-	    linkReplyError(SPICE_LINK_ERR_INVALID_MAGIC);
-	    Application::error("handshake failure: 0x%08X", magic);
-
-	    return std::make_pair(msg, false);
-	}
-
-	int majorVer = recvIntLE32();
-	int minorVer = recvIntLE32();
-	if(majorVer != SPICE_VERSION_MAJOR || minorVer != SPICE_VERSION_MINOR)
-	{
-	    linkReplyError(SPICE_LINK_ERR_VERSION_MISMATCH);
-	    Application::error("version mismatch: %d.%d", majorVer, minorVer);
-	    return std::make_pair(msg, false);
-	}
-
-	int msgSize = recvIntLE32();
-	if(msgSize < sizeof(SpiceLinkMess))
-	{
-	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
-	    Application::error("msg size failed: %d", msgSize);
-	    return std::make_pair(msg, false);
-	}
-
-	msg.connectionId = recvIntLE32();
-	msg.channelType = recvInt8();
-	msg.channelId = recvInt8();
-
-	int numCommonCaps = recvIntLE32();
-	int numChannelCaps = recvIntLE32();
-	int capsOffset = recvIntLE32();
-
-	if(capsOffset + (numCommonCaps + numChannelCaps) * sizeof(uint32_t) != msgSize)
-	{
-	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
-	    Application::error("msg size failed: %d", msgSize);
-	    return std::make_pair(msg, false);
-	}
-
-        // check data
-        if(numCommonCaps > 1024)
+        if(timer)
         {
-	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
-	    Application::error("huge common caps: %d", numCommonCaps);
-	    return std::make_pair(msg, false);
+            Application::debug("timer stop: %p", timer);
+            timer->stop();
+        }
+    }
+
+    void cbTimerRemove(SpiceTimer* timer)
+    {
+        if(timer)
+        {
+            Application::debug("timer remove: %p", timer);
+            delete timer;
+        }
+    }
+
+    void cbTimerStart(SpiceTimer* timer, uint32_t ms)
+    {
+        if(timer)
+        {
+            Application::debug("timer start: %p", timer);
+            timer->start(ms);
+        }
+    }
+
+    void cbChannelEvent(int event, SpiceChannelEventInfo* info)
+    {
+    }
+
+    class SpiceClientCallback
+    {
+        SpiceServer*            reds;
+        SpiceCoreInterface      core;
+
+    public:
+        SpiceClientCallback(int fd, const std::string & remoteaddr, const JsonObject & config, Connector::SPICE* connector)
+        {
+            reds = spice_server_new();
+            if(! reds)
+            {
+                Application::error("%s: failure", "spice_server_new");
+                throw EXIT_FAILURE;
+            }
+
+            core.base.type = "SpiceClientCallback";
+            core.base.description = "LTSM SPICE client callback";
+            core.base.major_version = SPICE_INTERFACE_CORE_MAJOR;
+            core.base.minor_version = SPICE_INTERFACE_CORE_MINOR;
+
+            core.timer_add = cbTimerAdd;
+            core.timer_start = cbTimerStart;
+            core.timer_cancel = cbTimerCancel;
+            core.timer_remove = cbTimerRemove;
+            core.channel_event = cbChannelEvent;
+
+/*
+            core.watch_add = BaseWatch::watchAdd;
+            core.watch_update_mask = BaseWatch::watchUpdateMask;
+            core.watch_remove = BaseWatch::watchRemove;
+*/
+
+            spice_server_init(reds, & core);
+            spice_server_set_agent_mouse(reds, 1);
+            spice_server_set_agent_copypaste(reds, 1);
+            spice_server_set_agent_file_xfer(reds, 0);
+
+            spice_server_add_client(reds, fd, 1);
         }
 
-        // check data
-        if(numChannelCaps > 1024)
+        ~SpiceClientCallback()
         {
-	    linkReplyError(SPICE_LINK_ERR_INVALID_DATA);
-	    Application::error("huge common caps: %d", numChannelCaps);
-	    return std::make_pair(msg, false);
+            if(reds) spice_server_destroy(reds);
         }
-
-	for(int num = 0; num < numCommonCaps; ++num)
-	    msg.commonCaps.push_back(recvIntLE32());
-
-	for(int num = 0; num < numChannelCaps; ++num)
-	    msg.channelCaps.push_back(recvIntLE32());
-
-        Application::info("- connected id: %d\n", msg.connectionId);
-        Application::info("- channel type: %d\n", (int) msg.channelType);
-        Application::info("- channel id: %d\n", (int) msg.channelId);
-        Application::info("- num common caps: %d\n", numCommonCaps);
-        Application::info("- num channel caps: %d\n", numChannelCaps);
-        Application::info("- caps offset: %d\n", capsOffset);
-
-	return std::make_pair(msg, true);
-    }
+    };
 
     /* Connector::SPICE */
     int Connector::SPICE::communication(void)
     {
-        Application::info("connected: %s\n", _remoteaddr.c_str());
-        //Application::info("using encoding threads: %d", _encodingThreads);
-
-	// wait RedLinkMess
-	const auto & [msg, res] = recvLinkMess();
-	if(!res)
-	    return EXIT_FAILURE;
-
-        // check bus
-	if(0 >= busGetServiceVersion())
+        if(0 >= busGetServiceVersion())
         {
-            Application::error("%s", "bus service failure");
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
+            Application::error("%s: failed", "bus service");
             return EXIT_FAILURE;
         }
 
-        // debub caps
-	for(auto & cap : msg.commonCaps)
-	    Application::info("common cap: 0x%08x\n", cap);
+        const std::string home = Tools::getenv("HOME", "/tmp");
+        const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-	for(auto & cap : msg.channelCaps)
-	    Application::info("channel cap: 0x%08x\n", cap);
+        if(! initUnixSockets(socketFile.string()))
+            return EXIT_SUCCESS;
 
-        // init rsa keys
-	int ret = gnutls_privkey_init(& rsaPrivate);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_privkey_init: %s", gnutls_strerror(ret));
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
-	    return EXIT_FAILURE;
-	}
+        // create x11 connect
 
-        ret = gnutls_pubkey_init(& rsaPublic);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_pubkey_init: %s", gnutls_strerror(ret));
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
-	    return EXIT_FAILURE;
-	}
 
-        // rsa generate
-	ret = gnutls_privkey_generate(rsaPrivate, GNUTLS_PK_RSA, SPICE_TICKET_KEY_PAIR_LENGTH, 0);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_privkey_generate: %s", gnutls_strerror(ret));
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
-	    return EXIT_FAILURE;
-	}
+        // all ok
+        while(loopMessage)
+        {
+            //if(freeRdpClient->isShutdown())
+            //    loopMessage = false;
 
-        ret = gnutls_pubkey_import_privkey(rsaPublic, rsaPrivate, 0, 0);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_pubkey_import_privkey: %s", gnutls_strerror(ret));
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
-	    return EXIT_FAILURE;
-	}
+            if(! ProxySocket::enterEventLoopAsync())
+                loopMessage = false;
 
-        // get public
-        size_t bufsz = publicKey.size();
-        ret = gnutls_pubkey_export(rsaPublic, GNUTLS_X509_FMT_DER, publicKey.data(), & bufsz);
-	if(ret < 0)
-	{
-	    Application::error("gnutls_pubkey_export: %s, size: %d", gnutls_strerror(ret), bufsz);
-	    linkReplyError(SPICE_LINK_ERR_ERROR);
-	    return EXIT_FAILURE;
-	}
+            // dbus processing
+            _conn->enterEventLoopAsync();
 
-	// send reply
-	linkReplyOk();
+            // wait
+            std::this_thread::sleep_for(1ms);
+        }
 
-	// https://www.spice-space.org/spice-protocol.html	
-	// 11.5 Encrypted Password
-	// Client sends RSA encrypted password, with public key received from server (in SpiceLinkReply).
-	// Format is EME-OAEP as described in PKCS#1 v2.0 with SHA-1, MGF1 and an empty encoding parameter.
-
-        while(int tmp = recvInt8())
-	{
-	    Application::info("recv byte: 0x%02x\n", tmp);
-	    if(tmp == 0xffffffff) break;
-	}
 
         Application::debug("under construction, remoteaddr: %s\n", _remoteaddr.c_str());
         return EXIT_SUCCESS;

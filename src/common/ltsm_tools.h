@@ -31,6 +31,13 @@
 #include <iterator>
 #include <algorithm>
 
+#include <tuple>
+#include <memory>
+#include <atomic>
+#include <thread>
+#include <utility>
+#include <functional>
+
 namespace LTSM
 {
     namespace Tools
@@ -63,36 +70,6 @@ namespace LTSM
 
             void        pushBitBE(bool v);
             void        pushBitLE(bool v);
-        };
-
-
-        class FrequencyTime
-        {
-        protected:
-            mutable std::chrono::time_point<std::chrono::system_clock> tp;
-
-            template<typename TimeType>
-            bool finishedTime(size_t val) const
-            {
-                auto cur = std::chrono::system_clock::now();
-                if(TimeType(val) <= cur - tp)
-                {
-                    tp = cur;
-                    return true;
-                }
-
-                return false;
-            }
-
-        public:
-            FrequencyTime() : tp(std::chrono::system_clock::now()) {}
-
-            void        reset(void) { tp = std::chrono::system_clock::now(); }
-            bool        finishedMicroSeconds(int val) const { return finishedTime<std::chrono::microseconds>(val); }
-            bool        finishedMilliSeconds(int val) const { return finishedTime<std::chrono::milliseconds>(val); }
-            bool        finishedSeconds(int val) const { return finishedTime<std::chrono::seconds>(val); }
-            bool        finishedMinutes(int val) const { return finishedTime<std::chrono::minutes>(val); }
-            bool        finishedHours(int val) const { return finishedTime<std::chrono::hours>(val); }
         };
 
         std::list<std::string> split(const std::string & str, const std::string & sep);
@@ -133,7 +110,88 @@ namespace LTSM
     	    }
 
     	    return os.str();
-	}    
+	}
+
+	// BaseTimer
+	class BaseTimer
+	{
+	protected:
+	    std::thread         thread;
+	    std::atomic<bool>   processed;
+
+	public:
+	    BaseTimer() : processed(false) {}
+	    ~BaseTimer() { stop(); }
+    
+	    std::thread::id 	getId(void) const;
+	    bool		isRunning(void) const;
+	    void		stop(void);
+
+	    // usage:
+	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, [=](){ func(param1, param2, param3); });
+	    // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, func, param1, param2, param3);
+	    //
+	    template <class TimeType = std::chrono::milliseconds, class Func>
+	    static std::unique_ptr<BaseTimer> create(uint32_t delay, Func&& call)
+	    {
+    		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
+    		ptr->thread = std::thread([delay, timer = ptr.get(), call = std::move(call)]()
+    		{
+        	    timer->processed = true;
+        	    auto start = std::chrono::system_clock::now();
+        	    while(timer->processed)
+        	    {
+            		std::this_thread::sleep_for(TimeType(1));
+            		auto cur = std::chrono::system_clock::now();
+            		if(TimeType(delay) <= cur - start)
+            		{
+                	    call();
+                	    timer->processed = false;
+            		}
+        	    }
+    		});
+    		return ptr;
+	    }
+
+	    template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
+	    static std::unique_ptr<BaseTimer> create(uint32_t delay, Func&& call, Args&&... args)
+	    {
+    		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
+    		ptr->thread = std::thread([delay, timer = ptr.get(),
+		    call = std::move(call), args = std::make_tuple(std::forward<Args>(args)...)]()
+    		{
+        	    timer->processed = true;
+        	    auto start = std::chrono::system_clock::now();
+        	    while(timer->processed)
+        	    {
+            		std::this_thread::sleep_for(TimeType(1));
+            		auto cur = std::chrono::system_clock::now();
+            		if(TimeType(delay) <= cur - start)
+            		{
+                	    std::apply(call, args);
+                	    timer->processed = false;
+            		}
+        	    }
+    		});
+    		return ptr;
+	    }
+	};
+
+	// 
+	template <class TimeType, class Func>
+        bool waitCallable(uint32_t delay, uint32_t pause, Func&& call)
+	{
+            auto now = std::chrono::system_clock::now();
+    	    while(call())
+    	    {
+            	auto cur = std::chrono::system_clock::now();
+            	if(TimeType(delay) <= cur - now)
+            	    return false;
+
+        	std::this_thread::sleep_for(TimeType(pause));
+	    }
+	    return true;
+        }
     }
 }
 
