@@ -12,7 +12,7 @@ include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
 # LTSM common lib
-project(LTSM_common VERSION 20210805.1)
+project(LTSM_common VERSION 20210901.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -21,12 +21,14 @@ pkg_search_module(XCB_SHM REQUIRED xcb-shm)
 pkg_search_module(XCB_DAMAGE REQUIRED xcb-damage)
 pkg_search_module(XCB_XFIXES REQUIRED xcb-xfixes)
 pkg_search_module(XCB_XTEST REQUIRED xcb-xtest)
+pkg_search_module(XCB_RANDR REQUIRED xcb-randr)
 pkg_search_module(XCB_KEYSYMS REQUIRED xcb-keysyms)
 
 add_compile_options(${XCB_CFLAGS})
 add_compile_options(${XCB_SHM_CFLAGS})
 add_compile_options(${XCB_XFIXES_CFLAGS})
 add_compile_options(${XCB_XTEST_CFLAGS})
+add_compile_options(${XCB_RANDR_CFLAGS})
 add_compile_options(${XCB_KEYSYMS_CFLAGS})
 add_compile_options("-DJSMN_STATIC")
 
@@ -46,12 +48,13 @@ link_libraries(${XCB_SHM_LIBRARIES})
 link_libraries(${XCB_DAMAGE_LIBRARIES})
 link_libraries(${XCB_XFIXES_LIBRARIES})
 link_libraries(${XCB_XTEST_LIBRARIES})
+link_libraries(${XCB_RANDR_LIBRARIES})
 link_libraries(${XCB_KEYSYMS_LIBRARIES})
 link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20210805.1)
+project(LTSM_service VERSION 20210901.1)
 
 find_package(sdbus-c++ REQUIRED)
 find_library(PAM_LIBRARIES NAMES pam)
@@ -71,7 +74,7 @@ target_link_libraries(LTSM_service ${PAM_LIBRARIES})
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20210805.1)
+project(LTSM_connector VERSION 20210901.1)
 
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
 option(LTSM_WITH_RDP "add rdp protocol support" OFF)
@@ -80,9 +83,10 @@ find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
 
 add_executable(LTSM_connector
+    src/connector/ltsm_sockets.cpp
+    src/connector/ltsm_connector.cpp
     src/connector/ltsm_vnc_encodings.cpp
-    src/connector/ltsm_connector_vnc.cpp
-    src/connector/ltsm_connector.cpp)
+    src/connector/ltsm_connector_vnc.cpp)
 
 if(LTSM_WITH_RDP)
     pkg_search_module(FreeRDP2 REQUIRED freerdp2)
@@ -97,7 +101,7 @@ if(LTSM_WITH_SPICE)
     pkg_search_module(SpiceServer REQUIRED spice-server)
     target_compile_options(LTSM_connector PUBLIC ${SpiceServer_CFLAGS})
     target_compile_options(LTSM_connector PUBLIC "-DLTSM_WITH_SPICE")
-    target_link_libraries(LTSM_connector ${SpiceServer})
+    target_link_libraries(LTSM_connector ${SpiceServer_LIBRARIES})
     target_sources(LTSM_connector PUBLIC src/connector/ltsm_connector_spice.cpp)
 endif()
 
@@ -116,7 +120,7 @@ target_link_libraries(LTSM_connector z)
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20210805.1)
+project(LTSM_sdl2x11 VERSION 20210901.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
 target_compile_options(LTSM_sdl2x11 PUBLIC ${SDL2_CFLAGS})
@@ -131,7 +135,7 @@ target_link_libraries(LTSM_sdl2x11 ${SDL2_IMAGE_LIBRARIES})
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20210805.1)
+project(LTSM_helper VERSION 20210901.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -149,7 +153,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20210805.1)
+project(LTSM_sessions VERSION 20210901.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

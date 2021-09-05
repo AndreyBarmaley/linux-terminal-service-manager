@@ -41,6 +41,7 @@ protected:
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
         object_.registerMethod("busEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busEncryptionInfo(display); });
+        object_.registerMethod("busDisplayResized").onInterface(INTERFACE_NAME).withInputParamNames("display", "width", "height").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint16_t& width, const uint16_t& height){ return this->busDisplayResized(display, width, height); });
         object_.registerMethod("busConnectorTerminated").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorTerminated(display); });
         object_.registerMethod("busConnectorSwitched").onInterface(INTERFACE_NAME).withInputParamNames("oldDisplay", "newDisplay").withOutputParamNames("result").implementedAs([this](const int32_t& oldDisplay, const int32_t& newDisplay){ return this->busConnectorSwitched(oldDisplay, newDisplay); });
         object_.registerMethod("busConnectorAlive").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorAlive(display); });
@@ -52,6 +53,7 @@ protected:
         object_.registerSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
         object_.registerSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
+        object_.registerSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("loginFailure").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "msg");
         object_.registerSignal("loginSuccess").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "userName");
         object_.registerSignal("shutdownConnector").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
@@ -82,6 +84,11 @@ public:
     void emitHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass)
     {
         object_.emitSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withArguments(display, login, pass);
+    }
+
+    void emitHelperWidgetCentered(const int32_t& display)
+    {
+        object_.emitSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).withArguments(display);
     }
 
     void emitLoginFailure(const int32_t& display, const std::string& msg)
@@ -164,6 +171,7 @@ private:
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;
     virtual std::string busEncryptionInfo(const int32_t& display) = 0;
+    virtual bool busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) = 0;
     virtual bool busConnectorTerminated(const int32_t& display) = 0;
     virtual bool busConnectorSwitched(const int32_t& oldDisplay, const int32_t& newDisplay) = 0;
     virtual bool busConnectorAlive(const int32_t& display) = 0;

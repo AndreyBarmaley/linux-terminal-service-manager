@@ -31,6 +31,7 @@
 #include <atomic>
 #include <functional>
 
+#include "ltsm_sockets.h"
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -38,6 +39,70 @@ namespace LTSM
 {
     namespace RFB
     {
+        // RFB protocol constant
+        const int VERSION_MAJOR = 3;
+        const int VERSION_MINOR = 8;
+
+        const int SECURITY_TYPE_NONE = 1;
+        const int SECURITY_TYPE_VNC = 2;
+        const int SECURITY_TYPE_TLS = 18;
+        const int SECURITY_TYPE_VENCRYPT = 19;
+        const int SECURITY_VENCRYPT01_PLAIN = 19;
+        const int SECURITY_VENCRYPT01_TLSNONE = 20;
+        const int SECURITY_VENCRYPT01_TLSVNC = 21;
+        const int SECURITY_VENCRYPT01_TLSPLAIN = 22;
+        const int SECURITY_VENCRYPT01_X509NONE = 23;
+        const int SECURITY_VENCRYPT01_X509VNC = 24;
+        const int SECURITY_VENCRYPT01_X509PLAIN = 25;
+        const int SECURITY_VENCRYPT02_PLAIN = 256;
+        const int SECURITY_VENCRYPT02_TLSNONE = 257;
+        const int SECURITY_VENCRYPT02_TLSVNC = 258;
+        const int SECURITY_VENCRYPT02_TLSPLAIN = 259;
+        const int SECURITY_VENCRYPT02_X509NONE = 260;
+        const int SECURITY_VENCRYPT02_X509VNC = 261;
+        const int SECURITY_VENCRYPT02_X509PLAIN = 261;
+
+        const int SECURITY_RESULT_OK = 0;
+        const int SECURITY_RESULT_ERR = 1;
+
+        const int CLIENT_SET_PIXEL_FORMAT = 0;
+        const int CLIENT_SET_ENCODINGS = 2;
+        const int CLIENT_REQUEST_FB_UPDATE = 3;
+        const int CLIENT_EVENT_KEY = 4;
+        const int CLIENT_EVENT_POINTER = 5;
+        const int CLIENT_CUT_TEXT = 6;
+        const int CLIENT_SET_DESKTOP_SIZE = 251;
+            
+        const int SERVER_FB_UPDATE = 0;
+        const int SERVER_SET_COLOURMAP = 1;
+        const int SERVER_BELL = 2;
+        const int SERVER_CUT_TEXT = 3;
+
+        // RFB protocol constants
+        const int ENCODING_RAW = 0;
+        const int ENCODING_COPYRECT = 1;
+        const int ENCODING_RRE = 2;
+        const int ENCODING_CORRE = 4;
+        const int ENCODING_HEXTILE = 5;
+        const int ENCODING_ZLIB = 6;
+        const int ENCODING_TIGHT = 7;
+        const int ENCODING_ZLIBHEX = 8;
+        const int ENCODING_TRLE = 15;
+        const int ENCODING_ZRLE = 16;
+ 
+        // hextile constants
+        const int HEXTILE_RAW = 1;
+        const int HEXTILE_BACKGROUND = 2;
+        const int HEXTILE_FOREGROUND = 4;
+        const int HEXTILE_SUBRECTS = 8;
+        const int HEXTILE_COLOURED = 16;
+        const int HEXTILE_ZLIBRAW = 32;
+        const int HEXTILE_ZLIB = 64;
+ 
+        // pseudo encodings
+        const int ENCODING_DESKTOP_SIZE = -223;
+        const int ENCODING_EXT_DESKTOP_SIZE = -308;
+
         struct Point
         {
             int16_t     x, y;
@@ -136,6 +201,16 @@ namespace LTSM
         struct ColorMap : INTSET<Color, HasherColor>
         {
         };
+
+	struct ScreenInfo
+	{
+            uint32_t		id = 0;
+            uint16_t		xpos = 0;
+            uint16_t		ypos = 0;
+            uint16_t		width = 0;
+            uint16_t		height = 0;
+            uint32_t		flags = 0;
+	};
 
         struct PixelMapWeight : INTMAP<int, int>
         {
@@ -296,19 +371,29 @@ namespace LTSM
         };
     }
 
+    enum class DesktopResizeMode { Undefined, Disabled, Success, ServerInform, ClientRequest };
+
     namespace Connector
     {
         typedef std::function<int(const RFB::Region &, const RFB::FrameBuffer &)> sendEncodingFunc;
 
         /* Connector::VNC */
-        class VNC : public ZlibOutStream, public SignalProxy
+        class VNC : public SignalProxy, protected NetworkStream
         {
+	    std::unique_ptr<NetworkStream> socket;	/// socket layer
+	    std::unique_ptr<TLS::Stream> tls;		/// tls layer
+	    std::unique_ptr<ZLib::DeflateStream> zlib;	/// zlib layer
+
+	    NetworkStream* 	streamIn;
+	    NetworkStream* 	streamOut;
+
             std::atomic<bool>   loopMessage;
             int                 encodingDebug;
             int                 encodingThreads;
             std::atomic<int>    pressedMask;
             std::atomic<bool>   fbUpdateProcessing;
 	    std::atomic<bool>	sendBellFlag;
+	    std::atomic<DesktopResizeMode> desktopResizeMode;
             RFB::PixelFormat    serverFormat;
             RFB::PixelFormat    clientFormat;
             RFB::Region         clientRegion;
@@ -322,6 +407,19 @@ namespace LTSM
             std::list< std::future<int> > jobsEncodings;
             std::list<XCB::KeyCodes> pressedKeys;
             std::pair<sendEncodingFunc, int> prefEncodings;
+	    std::vector<RFB::ScreenInfo> screensInfo;
+
+
+	    // network stream interface
+	    void		  sendFlush(void) override { return streamOut->sendFlush(); }
+	    void		  sendRaw(const void* ptr, size_t len) override { streamOut->sendRaw(ptr, len); }
+	    void                  recvRaw(void* ptr, size_t len) const override { streamIn->recvRaw(ptr, len); }
+	    bool		  hasInput(void) const override { return streamIn->hasInput(); }
+	    uint8_t		  peekInt8(void) const override { return streamIn->peekInt8(); }
+
+	    // zlib wrapper
+	    void		 zlibDeflateStart(size_t);
+	    std::vector<uint8_t> zlibDeflateStop(void);
 
         protected:
             // dbus virtual signals
@@ -335,17 +433,20 @@ namespace LTSM
 	    void		xcbReleaseInputsEvent(void);
 
             void                clientSetPixelFormat(void);
+	    bool		clientVenCryptHandshake(void);
             bool                clientSetEncodings(void);
             bool                clientFramebufferUpdate(void);
             void                clientKeyEvent(void);
             void                clientPointerEvent(void);
             void                clientCutTextEvent(void);
+	    void		clientSetDesktopSizeEvent(void);
             void                clientDisconnectedEvent(void);
 
             void                serverSendFrameBufferUpdate(const RFB::Region &);
             void                serverSendColourMap(int first);
             void                serverSendBell(void);
             void                serverSendCutText(const std::vector<uint8_t> &);
+	    int			serverSendDesktopSize(const DesktopResizeMode &);
 
             int                 sendPixel(int pixel);
             int                 sendCPixel(int pixel);
@@ -361,11 +462,11 @@ namespace LTSM
             int			sendEncodingRRESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool corre);
             int                 sendEncodingRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &, bool corre);
 
-            int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &, bool zlib);
-            int			sendEncodingHextileSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlib);
+            int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &, bool zlibver);
+            int			sendEncodingHextileSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
             int			sendEncodingHextileSubForeground(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
             int			sendEncodingHextileSubColored(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
-            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlib);
+            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
 
             int                 sendEncodingZLib(const RFB::Region &, const RFB::FrameBuffer &);
             int			sendEncodingZLibSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
@@ -377,22 +478,13 @@ namespace LTSM
 	    int			sendEncodingTRLESubPalette(const RFB::Region &, const RFB::FrameBuffer &, const RFB::PixelMapWeight &, const std::list<RFB::RLE> &);
 	    int			sendEncodingTRLESubRaw(const RFB::Region &, const RFB::FrameBuffer &);
 
+
             void		renderPrimitivesTo(const RFB::Region &, RFB::FrameBuffer &);
             std::pair<sendEncodingFunc, int> selectEncodings(void);
 
         public:
-            VNC(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "vnc"), loopMessage(false), encodingDebug(0), encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false)
-            {
-                registerProxy();
-            }
-
-            ~VNC()
-            {
-                if(0 < _display) busConnectorTerminated(_display);
-                unregisterProxy();
-		clientDisconnectedEvent();
-            }
+            VNC(sdbus::IConnection* conn, const JsonObject & jo);
+            ~VNC();
 
             int		        communication(void) override;
         };

@@ -24,6 +24,7 @@
 #ifndef _LTSM_CONNECTOR_RDP_
 #define _LTSM_CONNECTOR_RDP_
 
+#include "ltsm_sockets.h"
 #include "ltsm_connector.h"
 
 #include "freerdp/freerdp.h"
@@ -34,9 +35,10 @@ namespace LTSM
     namespace Connector
     {
         /* Connector::RDP */
-        class RDP : public ProxySocket, public SignalProxy
+        class RDP : public SignalProxy, protected ProxySocket
         {
-            std::atomic<bool>           loopMessage;
+            std::atomic<bool>           helperStartedFlag;
+            std::atomic<bool>           loopShutdownFlag;
 
         protected:
             // dbus virtual signals
@@ -46,7 +48,7 @@ namespace LTSM
 
         public:
             RDP(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "rdp"), loopMessage(false)
+                : SignalProxy(conn, jo, "rdp"), helperStartedFlag(false), loopShutdownFlag(false)
             {
                 registerProxy();
             }
@@ -57,9 +59,12 @@ namespace LTSM
 	    }
 
             int		                communication(void) override;
+	    bool			createX11Session(void);
 
+	    // freerdp callback func
 	    static BOOL			clientPostConnect(freerdp_peer* client);
 	    static BOOL			clientActivate(freerdp_peer* client);
+	    static BOOL			clientAuthenticate(freerdp_peer* client, const char** user, const char** domain, const char** password);
 	    static BOOL			clientSynchronizeEvent(rdpInput* input, UINT32 flags);
 	    static BOOL			clientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
 	    static BOOL			clientUnicodeKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
@@ -67,6 +72,7 @@ namespace LTSM
 	    static BOOL			clientExtendedMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
 	    static BOOL			clientRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
 	    static BOOL			clientSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
+	    static BOOL			clientRefreshRequest(freerdp_peer* client);
 	};
     }
 }

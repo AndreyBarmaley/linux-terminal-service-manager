@@ -38,9 +38,12 @@
 #include <winpr/crt.h>
 #include <winpr/ssl.h>
 #include <winpr/wtsapi.h>
+#include <winpr/version.h>
 
 #include <freerdp/freerdp.h>
+#include <freerdp/version.h>
 #include <freerdp/constants.h>
+#include <freerdp/codec/region.h>
 #include <freerdp/channels/wtsvc.h>
 #include <freerdp/channels/channels.h>
 
@@ -95,9 +98,7 @@ namespace LTSM
     	context->rfx->width = 1024; //client->settings->DesktopWidth;
     	context->rfx->height = 7680; //client->settings->DesktopHeight;
     	rfx_context_set_pixel_format(context->rfx, PIXEL_FORMAT_BGRA32);
-
 	region16_init(& context->invalidRegion);
-
         Application::info("%s: success", __FUNCTION__);
 	return TRUE;
     }
@@ -123,6 +124,7 @@ namespace LTSM
     public:
 	FreeRdpClient(int fd, const std::string & remoteaddr, const JsonObject & config, Connector::RDP* connector) : peer(nullptr), context(nullptr)
 	{
+	    Application::info("freerdp version usage: %s, winpr: %s", FREERDP_VERSION_FULL, WINPR_VERSION_FULL);
 	    winpr_InitializeSSL(WINPR_SSL_INIT_DEFAULT);
 	    WTSRegisterWtsApiFunctionTable(FreeRDP_InitWtsApi());
 
@@ -131,7 +133,31 @@ namespace LTSM
             if(log)
 	    {
 	        WLog_SetLogAppenderType(log, WLOG_APPENDER_SYSLOG);
-	        WLog_SetLogLevel(log, WLOG_DEBUG);
+		auto str = Tools::lower(config.getString("rdp:freerdp:wlog"));
+		int type = WLOG_ERROR;
+
+		if(str == "trace")
+		    type = WLOG_TRACE;
+		else
+		if(str == "debug")
+		    type = WLOG_DEBUG;
+		else
+		if(str == "info")
+		    type = WLOG_INFO;
+		else
+		if(str == "warn")
+		    type = WLOG_WARN;
+		else
+		if(str == "error")
+		    type = WLOG_ERROR;
+		else
+		if(str == "fatal")
+		    type = WLOG_FATAL;
+		else
+		if(str == "off")
+		    type = WLOG_OFF;
+
+	        WLog_SetLogLevel(log, type);
 	    }
 
 	    peer = freerdp_peer_new(fd);
@@ -157,8 +183,8 @@ namespace LTSM
 	    context = static_cast<ClientContext*>(peer->context);
 	    context->rdp = connector;
 
-            auto certfile = config.getString("rdp:server:certfile");
-            auto keyfile = config.getString("rdp:server:keyfile");
+            auto certfile = connector->checkFileOption("rdp:server:certfile");
+            auto keyfile = connector->checkFileOption("rdp:server:keyfile");
 
             if(keyfile.size())
 	    {
@@ -174,19 +200,20 @@ namespace LTSM
             }
 
             peer->settings->RdpSecurity = TRUE;
-            peer->settings->TlsSecurity = TRUE;
+            peer->settings->TlsSecurity = FALSE;
             peer->settings->NlaSecurity = FALSE;
             peer->settings->ExtSecurity = FALSE;
-            peer->settings->UseRdpSecurityLayer = FALSE;
+            peer->settings->UseRdpSecurityLayer = TRUE;
 	    // ENCRYPTION_LEVEL_NONE ENCRYPTION_LEVEL_CLIENT_COMPATIBLE ENCRYPTION_LEVEL_HIGH, ENCRYPTION_LEVEL_LOW, ENCRYPTION_LEVEL_FIPS
             peer->settings->EncryptionLevel = ENCRYPTION_LEVEL_CLIENT_COMPATIBLE;
 
-            peer->settings->RemoteFxCodec = TRUE;
-	    peer->settings->NSCodec = FALSE;
-	    peer->settings->RemoteFxCodec = FALSE;
             peer->settings->ColorDepth = 32;
-            peer->settings->RefreshRect = FALSE;
+	    peer->settings->NSCodec = TRUE;
+	    peer->settings->RemoteFxCodec = TRUE;
+            peer->settings->RefreshRect = TRUE;
 	    peer->settings->SuppressOutput = TRUE;
+	    peer->settings->FrameMarkerCommandEnabled = TRUE;
+	    peer->settings->SurfaceFrameMarkerEnabled = TRUE;
 
 	    peer->PostConnect = Connector::RDP::clientPostConnect;
 	    peer->Activate = Connector::RDP::clientActivate;
@@ -260,6 +287,11 @@ namespace LTSM
 		if(WaitForSingleObject(client->stopEvent, 1) == WAIT_OBJECT_0)
 		    break;
 
+    		if(peer->activated == TRUE)
+		{
+    		    //event = mf_event_peek(info_event_queue);
+            	    // mf_peer_rfx_update(client);
+                }
 /*
                 handles[count++] = WTSVirtualChannelManagerGetEventHandle(context->vcm);
                 status = WaitForMultipleObjects(count, handles, FALSE, INFINITE);
@@ -299,58 +331,21 @@ namespace LTSM
 	const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
         if(! initUnixSockets(socketFile.string()))
-            return EXIT_SUCCESS;
-
-        // create X11 connect
-        int screen = busStartLoginSession(_remoteaddr, "rdp");
-        if(screen <= 0)
-        {
-            Application::error("%s", "login session request failure");
             return EXIT_FAILURE;
-        }
-
-        Application::debug("login session request success, display: %d", screen);
-
-        if(! xcbConnect(screen))
-        {
-            Application::error("%s", "xcb connect failed");
-            return EXIT_FAILURE;
-        }
-            
-        const xcb_visualtype_t* visual = _xcbDisplay->visual();
-        if(! visual)
-        {
-            Application::error("%s", "xcb visual empty");
-            return EXIT_FAILURE;
-        }
-            
-        Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
-
-        // wait widget started signal
-        while(! loopMessage)
-        {
-            // dbus processing
-            _conn->enterEventLoopAsync();
-            // wait
-            std::this_thread::sleep_for(1ms);
-        }
-    
-        // _xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(),
-        // visual->red_mask, visual->green_mask, visual->blue_mask
 
         // create FreeRdpClient
-    	Application::info("create freerdp client");
+    	Application::info("%s", "create freerdp client");
         auto freeRdpClient = std::unique_ptr<FreeRdpClient>(new FreeRdpClient(clientSocket(), _remoteaddr, *_config, this));
         auto freeRdpThread = std::thread([ptr = freeRdpClient.get()]{ FreeRdpClient::enterEventLoop(ptr); });
 
 	// all ok
-	while(loopMessage)
+	while(! loopShutdownFlag)
 	{
             if(freeRdpClient->isShutdown())
-                loopMessage = false;
+		loopShutdownFlag = true;
 
 	    if(! ProxySocket::enterEventLoopAsync())
-		loopMessage = false;
+		loopShutdownFlag = true;
 
             // dbus processing
             _conn->enterEventLoopAsync();
@@ -359,10 +354,41 @@ namespace LTSM
             std::this_thread::sleep_for(1ms);
 	}
 
+	proxyShutdown();
         freeRdpClient->stopEventLoop();
         freeRdpThread.join();
 
         return EXIT_SUCCESS;
+    }
+
+    bool Connector::RDP::createX11Session(void)
+    {
+        int screen = busStartLoginSession(_remoteaddr, "rdp");
+        if(screen <= 0)
+        {
+            Application::error("%s", "login session request failure");
+            return false;
+        }
+
+        Application::debug("login session request success, display: %d", screen);
+
+        if(! xcbConnect(screen))
+        {
+            Application::error("%s", "xcb connect failed");
+            return false;
+        }
+
+        Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
+
+        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
+        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
+            [=](){ _conn->enterEventLoopAsync(); return ! this->helperStartedFlag; }))
+        {
+            Application::info("connector starting: %s", "something went wrong...");
+            return false;
+        }
+
+	return true;
     }
 
     void Connector::RDP::onShutdownConnector(const int32_t & display)
@@ -370,7 +396,7 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             _xcbDisableMessages = true;
-            loopMessage = false;
+            loopShutdownFlag = true;
             Application::info("dbus signal: shutdown connector, display: %d", display);
         }
     }
@@ -380,16 +406,28 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: helper started, display: %d", display);
-            loopMessage = true;
+            helperStartedFlag = true;
         }
+    }
+
+    BOOL Connector::RDP::clientAuthenticate(freerdp_peer* client, const char** user, const char** domain, const char** password)
+    {
+        Application::error("%s: client:%p", __FUNCTION__, client);
+	return TRUE;
     }
 
     BOOL Connector::RDP::clientPostConnect(freerdp_peer* client)
     {
         Application::error("%s: client:%p", __FUNCTION__, client);
+        Application::error("%s: client geometry:%dx%d", __FUNCTION__, client->settings->DesktopWidth, client->settings->DesktopHeight);
+
+	if(client->settings->MultifragMaxRequestSize < 0x3F0000)
+                client->settings->NSCodec = FALSE; /* NSCodec compressor does not support fragmentation yet */
+
+	if(client->settings->ColorDepth == 24)
+                client->settings->ColorDepth = 16; /* disable 24bpp */
 
 	//auto context = static_cast<ClientContext*>(client->context);
-        UINT32 bitsPerPixel = 32;
 
         client->settings->DesktopWidth = 1024;
         client->settings->DesktopHeight = 768;
@@ -404,6 +442,11 @@ namespace LTSM
         Application::error("%s: client:%p", __FUNCTION__, client);
 
 	auto context = static_cast<ClientContext*>(client->context);
+        auto connector = context->rdp;
+
+	if(! connector->createX11Session())
+	    return FALSE;
+
         rfx_context_reset(context->rfx, client->settings->DesktopWidth, client->settings->DesktopHeight);
         context->activated = TRUE;
 
@@ -422,7 +465,7 @@ namespace LTSM
     BOOL Connector::RDP::clientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code)
     {
         Application::error("%s: flags:0x%04X, code:0x%04X, input:%p", __FUNCTION__, flags, code, input);
-        return FALSE;
+        return TRUE;
     }
 
     BOOL Connector::RDP::clientUnicodeKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code)
@@ -434,24 +477,43 @@ namespace LTSM
     BOOL Connector::RDP::clientMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y)
     {
         Application::error("%s: flags:0x%04X, pos:%d,%d, input:%p", __FUNCTION__, flags, x, y, input);
-        return FALSE;
+        return TRUE;
     }
 
     BOOL Connector::RDP::clientExtendedMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y)
     {
-        Application::error("%s: flags:0x%04X, pos:%d,%d, input: %p, context:%p", __FUNCTION__, flags, x, y, input, input->context);
+        Application::error("%s: flags:0x%04X, pos:%d,%d, input:%p, context:%p", __FUNCTION__, flags, x, y, input, input->context);
         return FALSE;
+    }
+
+    BOOL Connector::RDP::clientRefreshRequest(freerdp_peer* client)
+    {
+/*
+	auto context = static_cast<ClientContext*>(client->context);
+	if(client->subsystem)
+	{
+    	    wMessage message = { 0 };
+    	    wMessagePipe* MsgPipe = client->subsystem->MsgPipe;
+    	    message.id = SHADOW_MSG_IN_REFRESH_REQUEST_ID;
+    	    message.wParam = NULL;
+    	    message.lParam = NULL;
+    	    message.context = (void*)client;
+    	    message.Free = NULL;
+    	    return MessageQueue_Dispatch(MsgPipe->In, &message);
+	}
+*/
+	return FALSE;
     }
 
     BOOL Connector::RDP::clientRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas)
     {
-        Application::error("%s: count rects: %d, context: %p", __FUNCTION__, (int) count, context);
+        Application::error("%s: count rects:%d, context:%p", __FUNCTION__, (int) count, context);
         return FALSE;
     }
 
     BOOL Connector::RDP::clientSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area)
     {
-        Application::error("%s: allow:0x%02X, context: %p", __FUNCTION__, (int) allow, context);
+        Application::error("%s: allow:0x%02X, context:%p", __FUNCTION__, (int) allow, context);
         return FALSE;
     }
 }

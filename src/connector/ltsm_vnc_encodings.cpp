@@ -41,27 +41,6 @@ namespace LTSM
 {
     namespace RFB
     {
-        // RFB protocol constants
-        const int ENCODING_RAW = 0;
-        const int ENCODING_COPYRECT = 1;
-        const int ENCODING_RRE = 2;
-        const int ENCODING_CORRE = 4;
-        const int ENCODING_HEXTILE = 5;
-        const int ENCODING_ZLIB = 6;
-        const int ENCODING_TIGHT = 7;
-        const int ENCODING_ZLIBHEX = 8;
-        const int ENCODING_TRLE = 15;
-        const int ENCODING_ZRLE = 16;
-
-        // hextile constants
-        const int HEXTILE_RAW = 1;
-        const int HEXTILE_BACKGROUND = 2;
-        const int HEXTILE_FOREGROUND = 4;
-        const int HEXTILE_SUBRECTS = 8;
-        const int HEXTILE_COLOURED = 16;
-        const int HEXTILE_ZLIBRAW = 32;
-        const int HEXTILE_ZLIB = 64;
-
         const char* encodingName(int type)
         {
             switch(type)
@@ -95,6 +74,12 @@ namespace LTSM
 
                 case ENCODING_ZRLE:
                     return "ZRLE";
+
+		case ENCODING_DESKTOP_SIZE:
+		    return "DesktopSize";
+
+		case ENCODING_EXT_DESKTOP_SIZE:
+		    return "ExtendedDesktopSize";
 
                 default:
                     break;
@@ -430,7 +415,7 @@ namespace LTSM
     }
 
     /* HexTile */
-    int Connector::VNC::sendEncodingHextile(const RFB::Region & reg0, const RFB::FrameBuffer & fb, bool zlib)
+    int Connector::VNC::sendEncodingHextile(const RFB::Region & reg0, const RFB::FrameBuffer & fb, bool zlibver)
     {
         Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "HexTile", reg0.x, reg0.y, reg0.w, reg0.h);
 
@@ -444,7 +429,7 @@ namespace LTSM
         // make pool jobs
         while(jobId <= encodingThreads && ! regions.empty())
         {
-            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlib));
+            jobsEncodings.push_back(std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlibver));
             regions.pop_front();
             jobId++;
         }
@@ -460,7 +445,7 @@ namespace LTSM
                 if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
                 {
                     res += job.get();
-                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlib);
+                    job = std::async(std::launch::async, & Connector::VNC::sendEncodingHextileSubRegion, this, top, regions.front() - top, fb, jobId, zlibver);
                     regions.pop_front();
                     jobId++;
                 }
@@ -475,11 +460,11 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingHextileSubRegion(const RFB::Point & top, const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlib)
+    int Connector::VNC::sendEncodingHextileSubRegion(const RFB::Point & top, const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlibver)
     {
         auto map = fb.pixelMapWeight(reg);
 
-	auto sendHeaderHexTile = [this](const RFB::Region & reg, bool zlib)
+	auto sendHeaderHexTile = [this](const RFB::Region & reg, bool zlibver)
 	{
             // region size
             this->sendIntBE16(reg.x);
@@ -487,7 +472,7 @@ namespace LTSM
             this->sendIntBE16(reg.w);
             this->sendIntBE16(reg.h);
             // region type
-            this->sendIntBE32(zlib ? RFB::ENCODING_ZLIBHEX : RFB::ENCODING_HEXTILE);
+            this->sendIntBE32(zlibver ? RFB::ENCODING_ZLIBHEX : RFB::ENCODING_HEXTILE);
             return 12;
         };
 
@@ -496,7 +481,7 @@ namespace LTSM
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
-            int res = sendHeaderHexTile(reg + top, zlib);
+            int res = sendHeaderHexTile(reg + top, zlibver);
             int back = fb.pixel(reg.x, reg.y);
 
             if(encodingDebug)
@@ -524,7 +509,7 @@ namespace LTSM
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
-            int res = sendHeaderHexTile(reg + top, zlib);
+            int res = sendHeaderHexTile(reg + top, zlibver);
 
             if(foreground)
             {
@@ -537,7 +522,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, "raw");
 
-                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlib);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlibver);
                 }
                 else
                 {
@@ -559,7 +544,7 @@ namespace LTSM
                         Application::debug("send HexTile region, job id: %d, [%d, %d, %d, %d], %s",
                                       jobId, top.x + reg.x, top.y + reg.y, reg.w, reg.h, "raw");
 
-                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlib);
+                    res += sendEncodingHextileSubRaw(reg, fb, jobId, zlibver);
                 }
                 else
                 {
@@ -636,11 +621,11 @@ namespace LTSM
         return res;
     }
 
-    int Connector::VNC::sendEncodingHextileSubRaw(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlib)
+    int Connector::VNC::sendEncodingHextileSubRaw(const RFB::Region & reg, const RFB::FrameBuffer & fb, int jobId, bool zlibver)
     {
 	int res = 0;
 
-	if(zlib)
+	if(zlibver)
 	{
 	    // hextile flags
     	    sendInt8(RFB::HEXTILE_ZLIBRAW);
@@ -1049,6 +1034,133 @@ namespace LTSM
             }
         }
 
+        return res;
+    }
+
+    /* pseudo encodings DesktopSize/Extended */
+    int Connector::VNC::serverSendDesktopSize(const DesktopResizeMode & mode)
+    {
+	int status = mode == DesktopResizeMode::ClientRequest ? 1 : 0;
+	int error = 0;
+	int screenId = 0;
+	int screenFlags = 0;
+	int width = 0;
+	int height = 0;
+
+	if(! _xcbDisableMessages)
+	{
+	    auto xcbSize = _xcbDisplay->size();
+	    width = xcbSize.first;
+	    height = xcbSize.second;
+	}
+
+	bool extended =  std::any_of(clientEncodings.begin(), clientEncodings.end(),
+        	    [=](auto & val){ return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; });
+
+	// reply type: initiator client/other
+	if(1 == status || 2 == status)
+	{
+	    if(1 != screensInfo.size())
+	    {
+		// invalid screen layout
+		error = 3;
+	    }
+	    else
+	    {
+		auto & info = screensInfo.front();
+
+	    	screenId = info.id;
+	    	screenFlags = info.flags;
+		error = 0;
+
+		if(info.width != width || info.height != height)
+		{
+		    // need resize
+		    if(_xcbDisableMessages)
+		    {
+			// resize is administratively prohibited
+			error = 1;
+		    }
+		    else
+        	    if(_xcbDisplay->setScreenSize(info.width, info.height))
+		    {
+			serverRegion.assign(0, 0, info.width, info.height);
+			damageRegion = serverRegion;
+			width = info.width;
+			height = info.height;
+			error = 0;
+		    }
+		    else
+		    {
+        		error = 3;
+		    }
+		}
+	    }
+	}
+	else
+	// request: initiator server
+	{
+	    status = 0;
+	    screensInfo.clear();
+	}
+
+	// send
+	const std::lock_guard<std::mutex> lock(sendGlobal);
+
+        sendInt8(RFB::SERVER_FB_UPDATE);
+	// padding
+        sendInt8(0);
+
+	// number of rects
+	sendIntBE16(1);
+	int res = 2;
+
+	if(extended)
+	{
+    	    Application::notice("server send: ext desktop size: %dx%d, status: %d, error: %d", width, height, status, error);
+
+    	    sendIntBE16(status);
+    	    sendIntBE16(error);
+    	    sendIntBE16(width);
+    	    sendIntBE16(height);
+
+    	    sendIntBE32(RFB::ENCODING_EXT_DESKTOP_SIZE);
+    	    res += 12;
+
+	    // number of screens
+	    sendInt8(1);
+	    // padding
+	    sendZero(3);
+    	    res += 4;
+
+	    // id
+	    sendIntBE32(screenId);
+	    // xpos
+	    sendIntBE16(0);
+	    // ypos
+	    sendIntBE16(0);
+	    // width
+	    sendIntBE16(width);
+	    // height
+	    sendIntBE16(height);
+	    // flags
+	    sendIntBE32(screenFlags);
+    	    res += 16;
+	}
+	else
+	{
+    	    Application::notice("server send: desktop size, %dx%d, status: %d", width, height, status);
+
+    	    sendIntBE16(0);
+    	    sendIntBE16(0);
+    	    sendIntBE16(width);
+    	    sendIntBE16(height);
+
+    	    sendIntBE32(RFB::ENCODING_DESKTOP_SIZE);
+    	    res += 12;
+	}
+
+	sendFlush();
         return res;
     }
 }

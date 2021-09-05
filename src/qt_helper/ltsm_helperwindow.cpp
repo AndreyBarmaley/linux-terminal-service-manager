@@ -26,6 +26,8 @@
 #include <QScreen>
 #include <QCursor>
 #include <QDateTime>
+#include <QApplication>
+#include <QDesktopWidget>
 
 #include "ltsm_helperwindow.h"
 #include "ui_ltsm_helperwindow.h"
@@ -149,6 +151,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         connect(dbusInterfacePtr.data(), SIGNAL(loginFailure(int, const QString &)), this, SLOT(loginFailureCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperAutoLogin(int, const QString &, const QString &)), this, SLOT(autoLoginCallback(int, const QString &, const QString &)));
+        connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetCentered(int)), this, SLOT(widgetCenteredCallback(int)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &)));
 	connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
 
@@ -226,6 +229,17 @@ void LTSM_HelperWindow::reloadUsersList(void)
             ui->comboBoxUsername->addItems(users);
             ui->comboBoxUsername->setEditText("");
         }
+    }
+}
+
+void LTSM_HelperWindow::widgetCenteredCallback(int display)
+{
+    if(display == displayNum)
+    {
+	auto screenGeometry = QApplication::desktop()->screenGeometry();
+        int nx = (screenGeometry.width() - width()) / 2;
+        int ny = (screenGeometry.height() - height()) / 2;
+        move(nx, ny);
     }
 }
 

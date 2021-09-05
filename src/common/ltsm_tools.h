@@ -121,11 +121,13 @@ namespace LTSM
 
 	public:
 	    BaseTimer() : processed(false) {}
-	    ~BaseTimer() { stop(); }
+            ~BaseTimer();
     
 	    std::thread::id 	getId(void) const;
 	    bool		isRunning(void) const;
+
 	    void		stop(void);
+	    void		join(void);
 
 	    // usage:
 	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, [=](){ func(param1, param2, param3); });

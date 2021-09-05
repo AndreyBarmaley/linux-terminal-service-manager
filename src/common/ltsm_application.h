@@ -62,6 +62,32 @@ namespace LTSM
         }
 
         template<typename... Values>
+        static void notice(const char* format, Values && ... vals)
+        {
+	    if(_debug == DebugLevel::Console)
+	    {
+		fprintf(stderr, "[notice]\t");
+		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, "\n");
+	    }
+	    else
+        	syslog(LOG_NOTICE, format, (vals)...);
+        }
+
+        template<typename... Values>
+        static void warning(const char* format, Values && ... vals)
+        {
+	    if(_debug == DebugLevel::Console)
+	    {
+		fprintf(stderr, "[warning]\t");
+		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, "\n");
+	    }
+	    else
+        	syslog(LOG_WARNING, format, (vals)...);
+        }
+
+        template<typename... Values>
         static void error(const char* format, Values && ... vals)
         {
 	    if(_debug == DebugLevel::Console)

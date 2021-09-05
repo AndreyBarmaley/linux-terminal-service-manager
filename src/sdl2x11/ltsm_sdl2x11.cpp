@@ -62,36 +62,13 @@ namespace LTSM
 
     class SDL2X11 : protected XCB::RootDisplayExt, protected SDL::Window
     {
-        XCB::SHM        shmInfo;
-        XCB::Damage     damageInfo;
         SDL::Texture    txShadow;
-        bool            shmUsed;
 	std::vector<uint8_t> selbuf;
 
     public:
-        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel, bool shm)
-            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel), shmUsed(shm)
+        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel)
+            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel)
         {
-            const int bpp = 4;
-            const int pagesz = 4096;
-            const size_t shmsz = ((width() * height() * bpp / pagesz) + 1) * pagesz;
-
-            if(shmUsed)
-            {
-                shmInfo = createSHM(shmsz);
-
-                if(! shmInfo.isValid())
-                {
-                    std::string err = Tools::StringFormat("xcb shm attach failed, error code: %1").arg(shmInfo.error()->error_code);
-                    throw err;
-                }
-            }
-
-            damageInfo = createDamageNotify(0, 0, width(), height());
-
-            if(! damageInfo.isValid())
-                throw EXIT_FAILURE;
-
             int format = 0;
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
             format = SDL_PIXELFORMAT_ARGB32;
@@ -177,15 +154,13 @@ namespace LTSM
 		case SDL_CLIPBOARDUPDATE:
 		    if(SDL_HasClipboardText())
 		    {
-			char* ptr = SDL_GetClipboardText();
-			int len = std::strlen(ptr);
-
-			if(ptr && 0 < len)
+			if(char* ptr = SDL_GetClipboardText())
 			{
+                            int len = std::strlen(ptr);
 			    selbuf.assign(ptr, ptr + len);
 			    XCB::RootDisplayExt::setClipboardEvent(selbuf);
+			    SDL_free(ptr);
 			}
-			SDL_free(ptr);
 		    }
 		    break;
 
@@ -205,7 +180,6 @@ namespace LTSM
             const int bytePerPixel = bitsPerPixel() >> 3;
             bool quit = false;
             std::list<SDL_Rect> damages;
-            uint8_t* buf = shmUsed ? shmInfo->addr : new uint8_t[width() * height() * (bitsPerPixel() >> 2)];
 	    std::unique_ptr<Tools::BaseTimer> timerClipboardEvent;
 
             while(! quit && ! XCB::RootDisplayExt::hasError())
@@ -214,14 +188,14 @@ namespace LTSM
 
         	while(auto ev = XCB::RootDisplayExt::poolEvent())
 		{
-        	    if(isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
+        	    if(XCB::RootDisplayExt::isDamageNotify(ev))
         	    {
             		const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
                 	damages.push_back({ notify->area.x, notify->area.y, notify->area.width, notify->area.height });
         	    }
 
 		    // check selection events
-                    switch(ev->response_type & 0x7f)
+                    switch(ev->response_type & ~0x80)
                     {
                         case XCB_SELECTION_CLEAR:
                             XCB::RootDisplayExt::selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
@@ -249,24 +223,18 @@ namespace LTSM
                     delay = false;
                     // join damages
                     SDL_Rect repairArea = joinRects<SDL_Rect>(damages);
-                    std::pair<bool, XCB::PixmapInfo> reply;
 
-                    if(shmUsed)
-                        reply = copyRootImageRegion(shmInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
-                    else
-                        reply = copyRootImageRegion(repairArea.x, repairArea.y, repairArea.w, repairArea.h, buf);
-
-                    if(reply.first)
+                    if(auto reply = copyRootImageRegion(repairArea.x, repairArea.y, repairArea.w, repairArea.h))
                     {
                         // fix align
-                        if(reply.second.size > (repairArea.w * repairArea.h * bytePerPixel))
-                            repairArea.w += reply.second.size / (repairArea.h * bytePerPixel) - repairArea.w;
+                        if(reply->size() > (repairArea.w * repairArea.h * bytePerPixel))
+                            repairArea.w += reply->size() / (repairArea.h * bytePerPixel) - repairArea.w;
 
                         // std::cout << "[ " << repairArea.x << ", " << repairArea.y << ", " << repairArea.w << ", " << repairArea.h << " ]" << std::endl;
-                        txShadow.updateRect(& repairArea, buf, repairArea.w * 4);
+                        txShadow.updateRect(& repairArea, reply->data(), repairArea.w * 4);
                         renderTexture(txShadow.get());
                         renderPresent();
-                        XCB::RootDisplayExt::damageSubtrack(damageInfo, repairArea.x, repairArea.y, repairArea.w, repairArea.h);
+                        XCB::RootDisplayExt::damageSubtrack(repairArea.x, repairArea.y, repairArea.w, repairArea.h);
                     }
 
                     damages.clear();
@@ -280,9 +248,6 @@ namespace LTSM
                     SDL_Delay(5);
             }
 
-            if(!shmUsed)
-                delete [] buf;
-
             return EXIT_SUCCESS;
         }
     };
@@ -290,7 +255,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--shm] [--accel]" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--accel]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -303,7 +268,6 @@ int main(int argc, const char** argv)
     std::string geometry;
     std::string title = "SDL2X11";
 
-    bool shmUsed = false;
     bool accelUsed = false;
 
     if(auto val = getenv("SDL2X11_SCALE"))
@@ -364,8 +328,6 @@ int main(int argc, const char** argv)
                     return printHelp(argv[0]);
                 }
             }
-            else if(0 == std::strcmp(argv[it], "--shm"))
-                shmUsed = true;
             else if(0 == std::strcmp(argv[it], "--accel"))
                 accelUsed = true;
         }
@@ -379,7 +341,7 @@ int main(int argc, const char** argv)
 
     try
     {
-        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accelUsed, shmUsed);
+        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accelUsed);
         return app.start();
     }
     catch(int errcode)

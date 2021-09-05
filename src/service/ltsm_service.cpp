@@ -360,16 +360,15 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("switched to user: %s, uid: %d, gid: %d, groups: (%s)", user.c_str(), getuid(), getgid(), sgroups.c_str());
+        if(0 != chdir(home.c_str()))
+            Application::error("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
         setenv("USER", user.c_str(), 1);
         setenv("LOGNAME", user.c_str(), 1);
         setenv("HOME", home.c_str(), 1);
         setenv("SHELL", shell.c_str(), 1);
         setenv("TERM", "linux", 1);
 
-        if(0 != chdir(home.c_str()))
-            Application::error("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
-
+        Application::debug("switched to user: %s, uid: %d, gid: %d, groups: (%s), current dir: `%s'", user.c_str(), getuid(), getgid(), sgroups.c_str(), get_current_dir_name());
         return true;
     }
 
@@ -1086,8 +1085,17 @@ namespace LTSM
         return oldScreen;
     }
 
-    bool Manager::Object::runAsCommand(const std::string & userName, const std::string & cmd, const std::list<std::string>* args)
+    bool Manager::Object::runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args)
     {
+        auto xvfb = getXvfbInfo(display);
+        if(! xvfb)
+        {
+            Application::error("session not found, display: %d", display);
+            return false;
+        }
+
+        auto & userName = xvfb->user;
+
         Application::info("runas request, user: %s, cmd: %s", userName.c_str(), cmd.c_str());
 
         int uid, gid;
@@ -1106,24 +1114,9 @@ namespace LTSM
 	    return false;
 	}
 
-        int userScreen; XvfbSession* userSess;
-        std::tie(userScreen, userSess) = findUserSession(userName);
-
-        if(! userSess)
+        if(xvfb->mode != XvfbMode::SessionLogin && ! xvfb->pamh)
         {
-            Application::error("display not found: %d", userScreen);
-            return false;
-        }
-
-        if(userSess->mode == XvfbMode::SessionLogin)
-        {
-            Application::error("skip login session, display: %d, user: %s", userScreen, userSess->user.c_str());
-            return false;
-        }
-
-        if(! userSess->pamh)
-        {
-            Application::error("pam not started, display: %d, user: %s", userScreen, userSess->user.c_str());
+            Application::error("pam not started, display: %d, user: %s", display, userName.c_str());
             return false;
         }
 
@@ -1153,14 +1146,14 @@ namespace LTSM
             Application::debug("child exec, type: %s, uid: %d", "runas", getuid());
             
             // assign groups
-            if(switchToUser(userSess->user))
+            if(switchToUser(userName))
             {
-                std::string display = std::string(":").append(std::to_string(userScreen));
+                std::string addr = std::string(":").append(std::to_string(display));
 
-                setenv("XAUTHORITY", userSess->xauthfile.c_str(), 1);
-                setenv("DISPLAY", display.c_str(), 1);
-                setenv("LTSM_REMOTEADDR", userSess->remoteaddr.c_str(), 1);
-                setenv("LTSM_TYPECONN", userSess->conntype.c_str(), 1);
+                setenv("XAUTHORITY", xvfb->xauthfile.c_str(), 1);
+                setenv("DISPLAY", addr.c_str(), 1);
+                setenv("LTSM_REMOTEADDR", xvfb->remoteaddr.c_str(), 1);
+                setenv("LTSM_TYPECONN", xvfb->conntype.c_str(), 1);
 
 		if(args)
 		{
@@ -1239,7 +1232,7 @@ namespace LTSM
 		    os << std::quoted(message);
 		    *it = os.str();
 		}
-		return runAsCommand(xvfb->user, informerBin, &args);
+		return runAsCommand(display, informerBin, &args);
 	    }
 
 	    // compat mode: create spool file only
@@ -1593,6 +1586,19 @@ namespace LTSM
 	return "none";
     }
 
+    bool Manager::Object::busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+	{
+	    xvfb->width = width;
+	    xvfb->height = height;
+
+	    emitHelperWidgetCentered(display);
+	    return true;
+	}
+	return false;
+    }
+
     bool Manager::Object::busSetEncryptionInfo(const int32_t & display, const std::string & info)
     {
         Application::info("set encryption: %s, display: %d", info.c_str(), display);
@@ -1785,8 +1791,16 @@ namespace LTSM
         }
 
         isRunning = false;
-        objAdaptor.reset();
+	timer1->stop();
+	timer2->stop();
+	timer3->stop();
 
+        // wait timers, they use objAdaptor
+	timer1->join();
+	timer2->join();
+	timer3->join();
+
+        objAdaptor.reset();
         conn->enterEventLoopAsync();
 
         return EXIT_SUCCESS;

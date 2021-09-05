@@ -24,10 +24,6 @@
 #ifndef _LTSM_CONNECTOR_
 #define _LTSM_CONNECTOR_
 
-#include <gnutls/gnutls.h>
-
-#include "zlib.h"
-
 #include "ltsm_global.h"
 #include "ltsm_dbus_proxy.h"
 #include "ltsm_application.h"
@@ -70,198 +66,6 @@ namespace LTSM
             : RenderPrimitive(RenderType::RenderText), text(str), region(rt), color(col) {}
     };
 
-    struct TLS
-    {
-    	gnutls_session_t		 session;
-	gnutls_dh_params_t		 dhparams;
-
-	TLS(int debug = 0);
-	virtual ~TLS();
-
-	std::string			sessionDescription(void) const;
-
-	int				recvInt8(void);
-	bool				sendInt8(uint8_t val);
-	bool				sendRaw(const void* buf, size_t length);
-
-	virtual bool			initSession(const std::string & priority, int mode = GNUTLS_SERVER);
-    };
-
-    struct AnonTLS : TLS
-    {
-    	gnutls_anon_server_credentials_t cred;
-
-	AnonTLS(int debug = 0) : TLS(debug), cred(nullptr) {}
-	~AnonTLS();
-
-	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
-    };
-
-    struct x509TLS : TLS
-    {
-	gnutls_certificate_credentials_t cred;
-	const std::string		 caFile, certFile, keyFile, crlFile;
-
-	x509TLS(const std::string & ca, const std::string & cert, const std::string & key, const std::string & crl, int debug = 0)
-	    : TLS(debug), cred(nullptr), caFile(ca), certFile(cert), keyFile(key), crlFile(crl) {}
-	~x509TLS();
-
-	bool				initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
-    };
-
-    // BaseStream
-    class BaseStream
-    {
-    protected:
-        FILE*                           fdin;
-        FILE*                           fdout;
-	bool				ioerr;
-	std::array<char, 1492>		fdbuf;
-
-        int		        	peekInt8(void);
-        bool                    	hasInput(int) const;
-	bool				checkInputInvalid(void) const;
-	bool				checkOutputInvalid(void) const;
-
-    public:
-        BaseStream();
-        virtual ~BaseStream();
-
-        BaseStream &                    sendIntBE16(uint16_t);
-        BaseStream &                    sendIntBE32(uint32_t);
-        BaseStream &                    sendIntBE64(uint64_t);
-
-        BaseStream &                    sendIntLE16(uint16_t);
-        BaseStream &                    sendIntLE32(uint32_t);
-        BaseStream &                    sendIntLE64(uint64_t);
-
-        virtual BaseStream &            sendInt8(uint8_t val);
-        BaseStream &                    sendInt16(uint16_t val);
-        BaseStream &                    sendInt32(uint32_t val);
-        BaseStream &                    sendInt64(uint64_t val);
-
-	BaseStream & 			sendZero(size_t);
-        virtual BaseStream &            sendRaw(const void*, size_t);
-
-        virtual bool                    hasInput(void) const;
-        virtual void                    sendFlush(void) const;
-
-	bool				checkError(void) const { return ioerr; }
-
-        int		                recvIntBE16(void);
-        int		                recvIntBE32(void);
-        int64_t		                recvIntBE64(void);
-
-        int		                recvIntLE16(void);
-        int		                recvIntLE32(void);
-        int64_t		                recvIntLE64(void);
-
-        virtual int		        recvInt8(void);
-        int		                recvInt16(void);
-        int		                recvInt32(void);
-        int		                recvInt64(void);
-
-        void                            recvSkip(size_t);
-	std::vector<uint8_t>		recvRaw(size_t);
-
-        BaseStream &                    sendString(const std::string &);
-        std::string	                recvString(size_t);
-    };
-
-    // TLS_Stream
-    class TLS_Stream : public BaseStream
-    {
-    protected:
-	std::unique_ptr<TLS>            tls;
-	bool				handshake;
-
-    public:
-	TLS_Stream() : handshake(false) {}
-	~TLS_Stream();
-
-	bool				tlsInitAnonHandshake(const std::string & priority, int debug);
-	bool				tlsInitX509Handshake(const std::string & priority, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug);
-
-        bool                            hasInput(void) const override;
-        void                            sendFlush(void) const override;
-        TLS_Stream &                    sendInt8(uint8_t val) override;
-        TLS_Stream &                    sendRaw(const void*, size_t) override;
-        int		                recvInt8(void) override;
-    };
-
-    struct zlibStream : z_stream
-    {
-	std::vector<uint8_t> outbuf;
-
-        zlibStream()
-        {
-            zalloc = 0;
-            zfree = 0;
-            opaque = 0;
-            total_in = 0;
-            total_out = 0;
-            avail_in = 0;
-            next_in = 0;
-            avail_out = 0;
-            next_out = 0;
-            data_type = Z_BINARY;
-        }
-
-        ~zlibStream()
-        {
-            deflateEnd(this);
-        }
-
-        void                            pushInt8(uint8_t val);
-        void                            pushRaw(const uint8_t*, size_t);
-
-	std::vector<uint8_t>		syncFlush(bool finish = false);
-    };
-
-    // ZlibOutStream
-    class ZlibOutStream : public TLS_Stream
-    {
-    protected:
-	std::unique_ptr<zlibStream>	zlibStreamPtr;
-	bool                            deflateStarted;
-
-    public:
-	ZlibOutStream() : deflateStarted(false) {}
-
-	void 				zlibDeflateStart(size_t reserve);
-	std::vector<uint8_t>		zlibDeflateStop(void);
-
-        ZlibOutStream &                 sendInt8(uint8_t val) override;
-        ZlibOutStream &                 sendRaw(const void*, size_t) override;
-    };
-
-    // ProxySocket
-    class ProxySocket : private BaseStream
-    {
-        std::atomic<bool>               loopTransmission;
-        std::thread                     loopThread;
-        int                             bridgeSock;
-        int                             clientSock;
-        std::string                     socketPath;
-        std::vector<uint8_t>            buf;
-
-    protected:
-        bool                            enterEventLoopAsync(void);
-
-    public:
-        ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
-        ~ProxySocket();
-
-        int                             clientSocket(void) const;
-        bool                            initUnixSockets(const std::string &);
-
-        void                            startEventLoopBackground(void);
-        void                            stopEventLoop(void);
-
-        static int                      connectUnixSocket(const char* path);
-        static int                      listenUnixSocket(const char* path);
-    };
-
     namespace Connector
     {
         /* Connector::SignalProxy */
@@ -279,14 +83,13 @@ namespace LTSM
                                         _renderPrimitives;
 
             XCB::SharedDisplay          _xcbDisplay;
-            XCB::SHM                    _shmInfo;
-            XCB::Damage                 _damageInfo;
 
         private:
             // dbus virtual signals
             void                        onLoginFailure(const int32_t & display, const std::string & msg) override {}
             void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) override {}
             void                        onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) override {}
+	    void			onHelperWidgetCentered(const int32_t& display) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionChanged(const int32_t& display) override {}
 	    void			onDisplayRemoved(const int32_t& display) override {}
@@ -307,6 +110,7 @@ namespace LTSM
             SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);
 
     	    virtual int	                communication(void) = 0;
+	    std::string         	checkFileOption(const std::string &) const;
         };
 
         /* Connector::Service */

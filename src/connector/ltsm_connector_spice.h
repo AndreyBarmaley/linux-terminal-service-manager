@@ -24,6 +24,7 @@
 #ifndef _LTSM_CONNECTOR_SPICE_
 #define _LTSM_CONNECTOR_SPICE_
 
+#include "ltsm_sockets.h"
 #include "ltsm_connector.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -32,7 +33,7 @@ namespace LTSM
     namespace Connector
     {
         /* Connector::SPICE */
-        class SPICE : public ProxySocket, public SignalProxy
+        class SPICE : public SignalProxy, protected ProxySocket
         {
             std::atomic<bool>           loopMessage;
 

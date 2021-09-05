@@ -518,6 +518,12 @@ namespace LTSM
     }
 
     /* BaseTimer */
+    Tools::BaseTimer::~BaseTimer()
+    {
+        stop();
+        join();
+    }
+
     std::thread::id Tools::BaseTimer::getId(void) const
     {
         return thread.get_id();
@@ -526,10 +532,11 @@ namespace LTSM
     void Tools::BaseTimer::stop(void)
     {
         if(processed)
-        {
             processed = false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+    }
+
+    void Tools::BaseTimer::join(void)
+    {
         if(thread.joinable())
             thread.join();
     }

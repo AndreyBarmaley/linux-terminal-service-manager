@@ -43,7 +43,7 @@ extern "C" {
 
 using namespace std::chrono_literals;
 
-class SpiceTimer : protected LTSM::Tools::BaseTimer
+struct SpiceTimer : protected LTSM::Tools::BaseTimer
 {
     std::unique_ptr<BaseTimer> ptr;
     SpiceTimerFunc          callback;

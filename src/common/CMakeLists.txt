@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 target_sources(LTSM_common PUBLIC ltsm_application.cpp)
 target_sources(LTSM_common PUBLIC ltsm_json_wrapper.cpp)
 target_sources(LTSM_common PUBLIC ltsm_tools.cpp)
+target_sources(LTSM_common PUBLIC ltsm_streambuf.cpp)
 target_sources(LTSM_common PUBLIC ltsm_xcb_wrapper.cpp)
 
 if(LTSM_BUILD_XCB_ERRORS)

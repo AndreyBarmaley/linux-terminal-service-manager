@@ -44,44 +44,6 @@ namespace LTSM
 {
     namespace RFB
     {
-        // RFB protocol constant
-        const int VERSION_MAJOR = 3;
-        const int VERSION_MINOR = 8;
-
-        const int SECURITY_TYPE_NONE = 1;
-        const int SECURITY_TYPE_VNC = 2;
-        const int SECURITY_TYPE_TLS = 18;
-        const int SECURITY_TYPE_VENCRYPT = 19;
-        const int SECURITY_VENCRYPT01_PLAIN = 19;
-        const int SECURITY_VENCRYPT01_TLSNONE = 20;
-        const int SECURITY_VENCRYPT01_TLSVNC = 21;
-        const int SECURITY_VENCRYPT01_TLSPLAIN = 22;
-        const int SECURITY_VENCRYPT01_X509NONE = 23;
-        const int SECURITY_VENCRYPT01_X509VNC = 24;
-        const int SECURITY_VENCRYPT01_X509PLAIN = 25;
-        const int SECURITY_VENCRYPT02_PLAIN = 256;
-        const int SECURITY_VENCRYPT02_TLSNONE = 257;
-        const int SECURITY_VENCRYPT02_TLSVNC = 258;
-        const int SECURITY_VENCRYPT02_TLSPLAIN = 259;
-        const int SECURITY_VENCRYPT02_X509NONE = 260;
-        const int SECURITY_VENCRYPT02_X509VNC = 261;
-        const int SECURITY_VENCRYPT02_X509PLAIN = 261;
-
-        const int SECURITY_RESULT_OK = 0;
-        const int SECURITY_RESULT_ERR = 1;
-
-        const int CLIENT_SET_PIXEL_FORMAT = 0;
-        const int CLIENT_SET_ENCODINGS = 2;
-        const int CLIENT_REQUEST_FB_UPDATE = 3;
-        const int CLIENT_EVENT_KEY = 4;
-        const int CLIENT_EVENT_POINTER = 5;
-        const int CLIENT_CUT_TEXT = 6;
-
-        const int SERVER_FB_UPDATE = 0;
-        const int SERVER_SET_COLOURMAP = 1;
-        const int SERVER_BELL = 2;
-        const int SERVER_CUT_TEXT = 3;
-
         const char* encodingName(int type);
 
         PixelFormat::PixelFormat(int bpp, int dep, int be, int tc, int rmask, int gmask, int bmask)
@@ -485,6 +447,129 @@ namespace LTSM
     }
 
     /* Connector::VNC */
+    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
+        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
+	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
+    {
+	socket.reset(new InetStream());
+	streamIn = streamOut = socket.get();
+        registerProxy();
+    }
+
+    Connector::VNC::~VNC()
+    {
+        if(0 < _display) busConnectorTerminated(_display);
+        unregisterProxy();
+        clientDisconnectedEvent();
+    }
+
+    bool Connector::VNC::clientVenCryptHandshake(void)
+    {
+        const std::string tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        bool tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
+        int tlsDebug = _config->getInteger("vnc:gnutls:debug", 3);
+
+        const std::string tlsCAFile = checkFileOption("vnc:gnutls:cafile");
+        const std::string tlsCertFile = checkFileOption("vnc:gnutls:certfile");
+        const std::string tlsKeyFile = checkFileOption("vnc:gnutls:keyfile");
+        const std::string tlsCRLFile = checkFileOption("vnc:gnutls:crlfile");
+
+	// VenCrypt version
+	sendInt8(0).sendInt8(2).sendFlush();
+	// client req
+	int majorVer = recvInt8();
+	int minorVer = recvInt8();
+    	Application::debug("RFB 6.2.19, client vencrypt version: %d.%d", majorVer, minorVer);
+
+	if(majorVer != 0 || (minorVer < 1 || minorVer > 2))
+	{
+	    // send unsupported
+	    sendInt8(255).sendFlush();
+    	    Application::error("error: %s", "unsupported vencrypt version");
+    	    return false;
+	}
+
+	// send supported
+	sendInt8(0);
+	bool x509Mode = false;
+
+	if(minorVer == 1)
+	{
+	    if(tlsAnonMode)
+	        sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
+	    else
+	        sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
+
+	    int res = recvInt8();
+    	    Application::debug("RFB 6.2.19.0.1, client choice vencrypt security: 0x%02x", res);
+
+	    switch(res)
+	    {
+		case RFB::SECURITY_VENCRYPT01_TLSNONE:
+		    break;
+
+		case RFB::SECURITY_VENCRYPT01_X509NONE:
+		    if(tlsAnonMode)
+		    {
+			Application::error("error: %s", "unsupported vencrypt security");
+        		return false;
+		    }
+		    x509Mode = true;
+		    break;
+
+		default:
+		    Application::error("error: %s", "unsupported vencrypt security");
+        	    return false;
+	    }
+	}
+	else
+	// if(minorVer == 2)
+	{
+	    if(tlsAnonMode)
+		sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
+	    else
+	        sendInt8(2).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE).sendFlush();
+
+	    int res = recvIntBE32();
+    	    Application::debug("RFB 6.2.19.0.2, client choice vencrypt security: 0x%08x", res);
+
+	    switch(res)
+	    {
+		case RFB::SECURITY_VENCRYPT02_TLSNONE:
+		    break;
+
+		case RFB::SECURITY_VENCRYPT02_X509NONE:
+		    if(tlsAnonMode)
+		    {
+			Application::error("error: %s", "unsupported vencrypt security");
+        		return false;
+		    }
+		    x509Mode = true;
+		    break;
+
+		default:
+		    Application::error("error: %s", "unsupported vencrypt security");
+        	    return false;
+	    }
+	}
+
+        sendInt8(1).sendFlush();
+
+	// init hasdshake
+	tls.reset(new TLS::Stream(socket.get()));
+
+	bool tlsInitHandshake = x509Mode ? 
+		tls->initX509Handshake(tlsPriority, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
+		tls->initAnonHandshake(tlsPriority, tlsDebug);
+
+	if(tlsInitHandshake)
+	{
+	    streamIn = streamOut = tls.get();
+	}
+
+	return tlsInitHandshake;
+    }
+
     int Connector::VNC::communication(void)
     {
 	if(0 >= busGetServiceVersion())
@@ -512,14 +597,6 @@ namespace LTSM
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
 
-        const std::string tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        const std::string tlsCAFile = _config->getString("vnc:gnutls:cafile");
-        const std::string tlsCertFile = _config->getString("vnc:gnutls:certfile");
-        const std::string tlsKeyFile = _config->getString("vnc:gnutls:keyfile");
-        const std::string tlsCRLFile = _config->getString("vnc:gnutls:crlfile");
-        bool tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
-        bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
-        int tlsDebug = _config->getInteger("vnc:gnutls:debug", 3);
         std::string encryptionInfo = "none";
 
         if(! disabledEncodings.empty())
@@ -572,6 +649,7 @@ namespace LTSM
         serverFormat = RFB::PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, 1,
                                             visual->red_mask, visual->green_mask, visual->blue_mask);
 
+        bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
         // RFB 6.1.2 security
 	if(tlsDisable)
 	{
@@ -594,154 +672,66 @@ namespace LTSM
         else
         if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT)
 	{
-	    // VenCrypt version
-	    sendInt8(0).sendInt8(2).sendFlush();
-	    // client req
-	    int majorVer = recvInt8();
-	    int minorVer = recvInt8();
-    	    Application::debug("RFB 6.2.19, client vencrypt version: %d.%d", majorVer, minorVer);
-
-	    if(majorVer != 0 || (minorVer < 1 || minorVer > 2))
-	    {
-		// send unsupported
-		sendInt8(255).sendFlush();
-        	Application::error("error: %s", "unsupported vencrypt version");
+	    if(! clientVenCryptHandshake())
         	return EXIT_FAILURE;
-	    }
-
-	    // send supported
-	    sendInt8(0);
-	    bool x509Mode = false;
-
-	    if(minorVer == 1)
-	    {
-		if(tlsAnonMode)
-		    sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
-		else
-		    sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
-
-		int res = recvInt8();
-    		Application::debug("RFB 6.2.19.0.1, client choice vencrypt security: 0x%02x", res);
-
-		switch(res)
-		{
-		    case RFB::SECURITY_VENCRYPT01_TLSNONE:
-			break;
-
-		    case RFB::SECURITY_VENCRYPT01_X509NONE:
-			if(tlsAnonMode)
-			{
-			    Application::error("error: %s", "unsupported vencrypt security");
-        		    return EXIT_FAILURE;
-			}
-			x509Mode = true;
-			break;
-
-		    default:
-			Application::error("error: %s", "unsupported vencrypt security");
-        		return EXIT_FAILURE;
-		}
-	    }
-	    else
-	    if(minorVer == 2)
-	    {
-		if(tlsAnonMode)
-		    sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
-		else
-		    sendInt8(2).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE).sendFlush();
-
-		int res = recvIntBE32();
-    		Application::debug("RFB 6.2.19.0.2, client choice vencrypt security: 0x%08x", res);
-
-		switch(res)
-		{
-		    case RFB::SECURITY_VENCRYPT02_TLSNONE:
-			break;
-
-		    case RFB::SECURITY_VENCRYPT02_X509NONE:
-			if(tlsAnonMode)
-			{
-			    Application::error("error: %s", "unsupported vencrypt security");
-        		    return EXIT_FAILURE;
-			}
-			x509Mode = true;
-			break;
-
-		    default:
-			Application::error("error: %s", "unsupported vencrypt security");
-        		return EXIT_FAILURE;
-		}
-	    }
-    	    else
-	    {
-		sendInt8(0).sendFlush();
-		Application::error("error: %s", "unsupported vencrypt security");
-    		return EXIT_FAILURE;
-	    }
-
-            sendInt8(1).sendFlush();
-
-	    // init hasdshake
-	    bool tlsInitHandshake = x509Mode ? 
-		    tlsInitX509Handshake(tlsPriority, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
-		    tlsInitAnonHandshake(tlsPriority, tlsDebug);
-
-	    if(! tlsInitHandshake)
-		return EXIT_FAILURE;
 
             encryptionInfo = tls->sessionDescription();
             sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
 	}
 	else
         {
-            const char* err = "no matching security types";
-            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendRaw(err, strlen(err)).sendFlush();
+            const std::string err("no matching security types");
+            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
 
-            Application::error("error: %s", err);
+            Application::error("error: %s", err.c_str());
             return EXIT_FAILURE;
         }
 
     	busSetEncryptionInfo(screen, encryptionInfo);
 
         // RFB 6.3.1 client init
-        int clientSharedFlag = recvInt8();
-        Application::debug("RFB 6.3.1, client shared: 0x%02x", clientSharedFlag);
-        // RFB 6.3.2 server init
-        sendIntBE16(_xcbDisplay->width());
-        sendIntBE16(_xcbDisplay->height());
-        Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+	if(1)
+	{
+    	    int clientSharedFlag = recvInt8();
+    	    Application::debug("RFB 6.3.1, client shared: 0x%02x", clientSharedFlag);
+    	    // RFB 6.3.2 server init
+	    auto xcbSize = _xcbDisplay->size();
+    	    sendIntBE16(xcbSize.first);
+    	    sendIntBE16(xcbSize.second);
+    	    Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                            serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian, serverFormat.trueColor,
                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
-        clientFormat = serverFormat;
-        // send pixel format
-        sendInt8(serverFormat.bitsPerPixel);
-        sendInt8(serverFormat.depth);
-        sendInt8(serverFormat.bigEndian);
-        sendInt8(serverFormat.trueColor);
-        sendIntBE16(serverFormat.redMax);
-        sendIntBE16(serverFormat.greenMax);
-        sendIntBE16(serverFormat.blueMax);
-        sendInt8(serverFormat.redShift);
-        sendInt8(serverFormat.greenShift);
-        sendInt8(serverFormat.blueShift);
-        // send padding
-        sendInt8(0);
-        sendInt8(0);
-        sendInt8(0);
-        // send name desktop
-        const std::string desktopName("X11 Remote Desktop");
-        sendIntBE32(desktopName.size());
-        sendString(desktopName).sendFlush();
-        Application::info("%s", "connector starting, wait RFB messages...");
+    	    clientFormat = serverFormat;
+    	    // send pixel format
+    	    sendInt8(serverFormat.bitsPerPixel);
+    	    sendInt8(serverFormat.depth);
+    	    sendInt8(serverFormat.bigEndian);
+    	    sendInt8(serverFormat.trueColor);
+    	    sendIntBE16(serverFormat.redMax);
+    	    sendIntBE16(serverFormat.greenMax);
+    	    sendIntBE16(serverFormat.blueMax);
+    	    sendInt8(serverFormat.redShift);
+    	    sendInt8(serverFormat.greenShift);
+    	    sendInt8(serverFormat.blueShift);
+    	    // send padding
+    	    sendInt8(0);
+    	    sendInt8(0);
+    	    sendInt8(0);
+    	    // send name desktop
+    	    const std::string desktopName("X11 Remote Desktop");
+    	    sendIntBE32(desktopName.size());
+    	    sendString(desktopName).sendFlush();
+	}
 
-        // wait widget started signal
-        while(! loopMessage)
+        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
+        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
+            [=](){ _conn->enterEventLoopAsync(); return ! this->loopMessage; }))
         {
-            // dbus processing
-            _conn->enterEventLoopAsync();
-            // wait
-            std::this_thread::sleep_for(1ms);
+            Application::info("connector starting: %s", "something went wrong...");
+            return EXIT_FAILURE;
         }
+
+        Application::info("connector starting: %s", "wait RFB messages...");
 
         // xcb on
         _xcbDisableMessages = false;
@@ -796,6 +786,11 @@ namespace LTSM
 			clientUpdateReq = true;
                         break;
 
+		    case RFB::CLIENT_SET_DESKTOP_SIZE:
+			clientSetDesktopSizeEvent();
+			//clientUpdateReq = true;
+			break;
+
                     default:
                         throw std::string("RFB unknown message: ").append(Tools::hex(msgType, 2));
                         break;
@@ -814,30 +809,41 @@ namespace LTSM
                 // get all damages and join it
                 while(auto ev = _xcbDisplay->poolEvent())
                 {
-                    int ret = _xcbDisplay->getEventSHM(ev);
-
-                    if(0 <= ret)
+                    int shmOpcode = _xcbDisplay->eventErrorOpcode(ev, XCB::Module::SHM);
+                    if(0 <= shmOpcode)
                     {
-                        Application::error("get event shm: return code: %d", ret);
-                        continue;
+                        _xcbDisplay->extendedError(ev.toerror(), "SHM extension");
+                        loopMessage = false;
+                        break;
                     }
 
-                    ret = _xcbDisplay->getEventTEST(ev);
-
-                    if(0 <= ret)
+                    if(_xcbDisplay->isDamageNotify(ev))
                     {
-                        Application::error("get event test: return code: %d", ret);
-                        continue;
-                    }
-
-                    if(_xcbDisplay->isEventDAMAGE(ev, XCB_DAMAGE_NOTIFY))
-                    {
-                	const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
+                	auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
                 	damageRegion.join(notify->area);
 		    }
+                    else
+                    if(_xcbDisplay->isRandrCRTCNotify(ev))
+                    {
+                        auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
+
+                        xcb_randr_crtc_change_t cc = notify->u.cc;
+                        if(0 < cc.width && 0 < cc.height)
+                        {
+			    busDisplayResized(_display, cc.width, cc.height);
+
+			    if(DesktopResizeMode::Undefined != desktopResizeMode &&
+				DesktopResizeMode::Disabled != desktopResizeMode &&
+				(screensInfo.empty() || (screensInfo.front().width != cc.width || screensInfo.front().height != cc.height)))
+			    {
+				screensInfo.push_back({ .width = cc.width, .height = cc.height });
+				desktopResizeMode = DesktopResizeMode::ServerInform;
+			    }
+                        }
+                    }
 
 		    // check selection events
-            	    switch(ev->response_type & 0x7f)
+            	    switch(ev->response_type & ~0x80)
             	    {
                 	case XCB_SELECTION_CLEAR:
                 	    _xcbDisplay->selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
@@ -860,12 +866,17 @@ namespace LTSM
                 // server action
 		if(! isUpdateProcessed())
 		{
+		    if(DesktopResizeMode::Undefined != desktopResizeMode &&
+			DesktopResizeMode::Disabled != desktopResizeMode && DesktopResizeMode::Success != desktopResizeMode)
+		    {
+			serverSendDesktopSize(desktopResizeMode);
+			desktopResizeMode = DesktopResizeMode::Success;
+		    }
                     if(sendBellFlag)
 		    {
 			serverSendBell();
 			sendBellFlag = false;
 		    }
-
 		    if(selbuf.size())
 		    {
 			serverSendCutText(selbuf);
@@ -935,7 +946,7 @@ namespace LTSM
         // skip padding
         recvSkip(3);
 
-        Application::info("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+        Application::notice("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                           pf.bitsPerPixel, pf.depth, pf.bigEndian, pf.trueColor,
                           pf.redMax, pf.redShift, pf.greenMax,
                           pf.greenShift, pf.blueMax, pf.blueShift);
@@ -968,7 +979,7 @@ namespace LTSM
 
 	int previousType = prefEncodings.second;
         int numEncodings = recvIntBE16();
-        Application::info("RFB 6.4.2, set encodings, counts: %d", numEncodings);
+        Application::notice("RFB 6.4.2, set encodings, counts: %d", numEncodings);
 
         clientEncodings.clear();
         clientEncodings.reserve(numEncodings);
@@ -984,7 +995,7 @@ namespace LTSM
                 if(std::any_of(disabledEncodings.begin(), disabledEncodings.end(),
                                [&](auto & str) { return enclower == Tools::lower(str); }))
                 {
-                    Application::info("RFB request encodings: %s (disabled)", RFB::encodingName(encoding));
+                    Application::warning("RFB request encodings: %s (disabled)", RFB::encodingName(encoding));
                     continue;
                 }
             }
@@ -993,13 +1004,13 @@ namespace LTSM
             const char* name = RFB::encodingName(encoding);
 
             if(0 == std::strcmp(name, "unknown"))
-                Application::debug("RFB request encodings: 0x%08x", encoding);
+                Application::info("RFB request encodings: 0x%08x", encoding);
             else
-                Application::debug("RFB request encodings: %s", RFB::encodingName(encoding));
+                Application::info("RFB request encodings: %s", RFB::encodingName(encoding));
         }
 
         prefEncodings = selectEncodings();
-	Application::info("server select encoding: %s", RFB::encodingName(prefEncodings.second));
+	Application::notice("server select encoding: %s", RFB::encodingName(prefEncodings.second));
 
 	return previousType != prefEncodings.second;
     }
@@ -1017,13 +1028,22 @@ namespace LTSM
         bool fullUpdate = incremental == 0;
 
         if(fullUpdate)
+	{
             clientRegion = serverRegion;
-        else
+
+	    if(desktopResizeMode == DesktopResizeMode::Undefined &&
+		std::any_of(clientEncodings.begin(), clientEncodings.end(),
+                    [=](auto & val){ return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; }))
+	    {
+        	desktopResizeMode = DesktopResizeMode::ServerInform;
+	    }
+        }
+	else
         {
             clientRegion = serverRegion.intersected(clientRegion);
 
             if(clientRegion.empty())
-                Application::error("client region intersection with display [%d, %d] failed", serverRegion.w, serverRegion.h);
+                Application::warning("client region intersection with display [%d, %d] failed", serverRegion.w, serverRegion.h);
         }
 
         return fullUpdate;
@@ -1128,9 +1148,35 @@ namespace LTSM
 	}
     }
 
+    void Connector::VNC::clientSetDesktopSizeEvent(void)
+    {
+        // skip padding (one byte!)
+        recvSkip(1);
+        int width = recvIntBE16();
+        int height = recvIntBE16();
+	int numOfScreens = recvInt8();
+        recvSkip(1);
+
+        Application::notice("RFB 6.4.x, set desktop size event, size: %dx%d, screens: %d", width, height, numOfScreens);
+	screensInfo.resize(numOfScreens);
+
+	// screens array
+	for(auto & info : screensInfo)
+	{
+	    info.id = recvIntBE32();
+	    info.xpos = recvIntBE16();
+	    info.ypos = recvIntBE16();
+	    info.width = recvIntBE16();
+	    info.height = recvIntBE16();
+	    info.flags = recvIntBE32();
+	}
+
+        desktopResizeMode = DesktopResizeMode::ClientRequest;
+    }
+
     void Connector::VNC::clientDisconnectedEvent(void)
     {
-        Application::debug("%s", "RFB disconnected");
+        Application::warning("%s", "RFB disconnected");
 
         if(! _xcbDisableMessages)
 	    xcbReleaseInputsEvent();
@@ -1139,7 +1185,7 @@ namespace LTSM
     void Connector::VNC::serverSendColourMap(int first)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
-        Application::debug("server send: colour map, first: %d, colour map length: %d", first, colourMap.size());
+        Application::notice("server send: colour map, first: %d, colour map length: %d", first, colourMap.size());
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
         sendInt8(0); // padding
@@ -1159,7 +1205,7 @@ namespace LTSM
     void Connector::VNC::serverSendBell(void)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
-        Application::debug("server send: %s", "bell");
+        Application::notice("server send: %s", "bell");
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
 	sendFlush();
@@ -1168,7 +1214,7 @@ namespace LTSM
     void Connector::VNC::serverSendCutText(const std::vector<uint8_t> & buf)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
-        Application::debug("server send: cut text, length: %d", buf.size());
+        Application::info("server send: cut text, length: %d", buf.size());
 
         // RFB: 6.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
@@ -1226,38 +1272,48 @@ namespace LTSM
     void Connector::VNC::serverSendFrameBufferUpdate(const RFB::Region & reg)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
-        auto reply = _xcbDisplay->copyRootImageRegion(_shmInfo, reg.x, reg.y, reg.w, reg.h);
 
-        if(reply.first)
+        if(auto reply = _xcbDisplay->copyRootImageRegion(reg.x, reg.y, reg.w, reg.h))
         {
             const int bytePerPixel = _xcbDisplay->bitsPerPixel() >> 3;
             int alignRow = 0;
 
             if(encodingDebug)
             {
-                if(const xcb_visualtype_t* visual = _xcbDisplay->findVisual(reply.second.visual))
+                if(const xcb_visualtype_t* visual = _xcbDisplay->findVisual(reply->visual()))
                 {
                     Application::debug("shm request size [%d, %d], reply: length: %d, depth: %d, bpp: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       reg.w, reg.h, reply.second.size, reply.second.depth, _xcbDisplay->bitsPerPixel(reply.second.depth), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
+                                       reg.w, reg.h, reply->size(), reply->depth(), _xcbDisplay->bitsPerPixel(reply->depth()), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
                 }
             }
 
             // fix align
-            if(reply.second.size > (reg.w * reg.h * bytePerPixel))
-                alignRow = reply.second.size / (reg.h * bytePerPixel) - reg.w;
+            if(reply->size() > (reg.w * reg.h * bytePerPixel))
+                alignRow = reply->size() / (reg.h * bytePerPixel) - reg.w;
 
             Application::debug("server send fb update: [%d, %d, %d, %d]", reg.x, reg.y, reg.w, reg.h);
+
             // RFB: 6.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
             // padding
             sendInt8(0);
-            RFB::FrameBuffer shmFrameBuffer(_shmInfo->addr, reg.w + alignRow, reg.h, serverFormat);
+
+            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.w + alignRow, reg.h, serverFormat);
 
             // check render primitives
             renderPrimitivesTo(reg, shmFrameBuffer);
+	    int encodingLength = 0;
 
-            // send encodings
-            int encodingLength = prefEncodings.first(reg, shmFrameBuffer);
+            try
+	    {
+		// send encodings
+        	encodingLength = prefEncodings.first(reg, shmFrameBuffer);
+	    }
+	    catch(const SocketFailed &)
+	    {
+		loopMessage = false;
+		return;
+	    }
 
             if(encodingDebug)
             {
@@ -1266,7 +1322,7 @@ namespace LTSM
                 Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.w, reg.h);
             }
 
-            _xcbDisplay->damageSubtrack(_damageInfo, reg.x, reg.y, reg.w, reg.h);
+            _xcbDisplay->damageSubtrack(reg.x, reg.y, reg.w, reg.h);
 	    sendFlush();
         }
         else
@@ -1286,11 +1342,17 @@ namespace LTSM
             switch(clientFormat.bytePerPixel())
             {
                 case 4:
-                    sendInt32(clientFormat.convertFrom(serverFormat, pixel));
+                    if(clientFormat.bigEndian)
+			sendIntBE32(clientFormat.convertFrom(serverFormat, pixel));
+		    else
+			sendIntLE32(clientFormat.convertFrom(serverFormat, pixel));
                     return 4;
 
                 case 2:
-                    sendInt16(clientFormat.convertFrom(serverFormat, pixel));
+                    if(clientFormat.bigEndian)
+                	sendIntBE16(clientFormat.convertFrom(serverFormat, pixel));
+                    else
+			sendIntLE16(clientFormat.convertFrom(serverFormat, pixel));
                     return 2;
 
                 case 1:
@@ -1409,5 +1471,20 @@ namespace LTSM
     void Connector::VNC::onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
     {
         damageRegion.join(RFB::Region(rx, ry, rw, rh));
+    }
+
+    void Connector::VNC::zlibDeflateStart(size_t len)
+    {
+	if(! zlib)
+	    zlib.reset(new ZLib::DeflateStream());
+
+	zlib->prepareSize(len);
+	streamOut = zlib.get();
+    }
+
+    std::vector<uint8_t> Connector::VNC::zlibDeflateStop(void)
+    {
+	streamOut = tls ? tls.get() : socket.get();
+	return zlib->syncFlush();
     }
 }

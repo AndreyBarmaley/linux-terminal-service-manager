@@ -24,9 +24,10 @@
 
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <unistd.h>
-#include <sys/types.h>
 
 #include <chrono>
 #include <cstring>
@@ -37,6 +38,7 @@
 #include "xcb/xtest.h"
 #include "xcb/xproto.h"
 #include "xcb/damage.h"
+#include "xcb/randr.h"
 
 #ifdef LTSM_BUILD_XCB_ERRORS
 #include "libxcb-errors/xcb_errors.h"
@@ -50,143 +52,159 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-    size_t XCB::HasherKeyCodes::operator()(const KeyCodes & kc) const
+    namespace XCB
     {
-        if(kc.get())
+        size_t HasherKeyCodes::operator()(const KeyCodes & kc) const
         {
-            size_t len = 0;
+            if(kc.get())
+            {
+                size_t len = 0;
+                while(*(kc.get() + len) != XCB_NO_SYMBOL) len++;
 
-            while(*(kc.get() + len) != XCB_NO_SYMBOL) len++;
+                return Tools::crc32b(kc.get(), len);
+            }
 
-            return Tools::crc32b(kc.get(), len);
+            return 0;
         }
 
-        return 0;
+        void error(const char* func, const GenericError & err)
+        {
+            Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
+                           func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
+        }
     }
 
     /* XCB::SHM */
     XCB::shm_t::~shm_t()
     {
         if(xcb) xcb_shm_detach(conn, xcb);
-
         if(addr) shmdt(addr);
-
         if(0 < shm) shmctl(shm, IPC_RMID, 0);
     }
 
-    XCB::SHM::SHM(int shmid, uint8_t* addr, xcb_connection_t* xcon)
-        : std::shared_ptr<shm_t>(std::make_shared<shm_t>(shmid, addr, xcon))
+    XCB::SHM::SHM(int shmid, uint8_t* addr, xcb_connection_t* conn)
     {
-        auto xcbid = xcb_generate_id(xcon);
-        auto cookie = xcb_shm_attach_checked(xcon, xcbid, shmid, 0);
-        get()->xcb = xcbid;
-        get()->error = xcb_request_check(xcon, cookie);
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_shm_attach_checked(conn, id, shmid, 0);
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_shm_attach", err);
+        }
+        else
+        {
+            reset(new shm_t(shmid, addr, conn, id));
+        }
     }
 
-    const xcb_generic_error_t* XCB::SHM::error(void) const
-    {
-        return get() ? get()->error : nullptr;
-    }
-
-    std::pair<bool, XCB::PixmapInfo> XCB::SHM::getPixmapRegion(xcb_drawable_t winid, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset) const
+    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset) const
     {
         return getPixmapRegion(winid, { rx, ry, rw, rh }, offset);
     }
 
-    std::pair<bool, XCB::PixmapInfo> XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const xcb_rectangle_t & rect, uint32_t offset) const
+    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const xcb_rectangle_t & rect, uint32_t offset) const
     {
 	xcb_generic_error_t* error;
         auto cookie = xcb_shm_get_image(get()->conn, winid, rect.x, rect.y, rect.width, rect.height,
-                                        ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, get()->xcb, offset);
+                                        ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, getid(), offset);
 
-        GenericReply<xcb_shm_get_image_reply_t> shmReply(xcb_shm_get_image_reply(get()->conn, cookie, &error));
-        std::pair<bool, PixmapInfo> res;
+        auto xcbReply = getReplyConn(xcb_shm_get_image, get()->conn, cookie);
+        PixmapInfoReply res;
 
-	if(error)
+	if(xcbReply.error())
         {
-	    Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
-                           "xcb_shm_get_image", static_cast<int>(error->error_code), static_cast<int>(error->major_code), error->minor_code, error->sequence);
-            free(error);
+            XCB::error("xcb_shm_get_image", xcbReply.error());
             return res;
         }
 
-        auto reply = shmReply.get();
-        res.first = reply;
-
-        if(reply)
-        {
-            res.second.depth = reply->depth;
-            res.second.size = reply->size;
-            res.second.visual = reply->visual;
-        }
+        if(auto reply = xcbReply.reply())
+            res = std::make_shared<PixmapInfoSHM>(reply->depth, reply->visual, *this, reply->size);
 
         return res;
     }
 
     /* XCB::GC */
-    XCB::GC::GC(xcb_drawable_t winid, xcb_connection_t* xcon, uint32_t value_mask, const void* value_list)
-        : std::shared_ptr<gc_t>(std::make_shared<gc_t>(xcon))
+    XCB::GC::GC(xcb_drawable_t win, xcb_connection_t* conn, uint32_t value_mask, const void* value_list)
     {
-        auto xcbid = xcb_generate_id(xcon);
-        auto cookie = xcb_create_gc_checked(xcon, xcbid, winid, value_mask, value_list);
-        get()->xcb = xcbid;
-        get()->error = xcb_request_check(xcon, cookie);
-    }
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_create_gc_checked(conn, id, win, value_mask, value_list);
 
-    const xcb_generic_error_t* XCB::GC::error(void) const
-    {
-        return get() ? get()->error : nullptr;
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_create_gc", err);
+        }
+        else
+        {
+            reset(new gc_t(conn, id));
+        }
     }
 
     /* XCB::Damage */
-    XCB::Damage::Damage(xcb_drawable_t winid, int level, xcb_connection_t* xcon)
-        : std::shared_ptr<damage_t>(std::make_shared<damage_t>(xcon))
+    XCB::Damage::Damage(xcb_drawable_t win, int level, xcb_connection_t* conn)
     {
-        auto xcbid = xcb_generate_id(xcon);
-        auto cookie = xcb_damage_create_checked(xcon, xcbid, winid, level);
-        get()->xcb = xcbid;
-        get()->error = xcb_request_check(xcon, cookie);
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_damage_create_checked(conn, id, win, level);
+
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_damage_create", err);
+        }
+        else
+        {
+            reset(new damage_t(conn, id));
+        }
     }
 
-    const xcb_generic_error_t* XCB::Damage::error(void) const
-    {
-        return get() ? get()->error : nullptr;
-    }
-
-    XCB::GenericError XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid)
+    bool XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid)
     {
         auto cookie = xcb_damage_add_checked(get()->conn, winid, regid);
-        return GenericError(xcb_request_check(get()->conn, cookie));
+        if(auto err = GenericError(xcb_request_check(get()->conn, cookie)))
+        {
+            error("xcb_damage_add", err);
+            return false;
+        }
+        return true;
     }
 
-    XCB::GenericError XCB::Damage::subtractRegion(xcb_drawable_t winid, xcb_xfixes_region_t repair, xcb_xfixes_region_t parts)
+    bool XCB::Damage::subtractRegion(xcb_drawable_t winid, xcb_xfixes_region_t repair, xcb_xfixes_region_t parts)
     {
         auto cookie = xcb_damage_subtract_checked(get()->conn, winid, repair, parts);
-        return GenericError(xcb_request_check(get()->conn, cookie));
+        if(auto err = GenericError(xcb_request_check(get()->conn, cookie)))
+        {
+            error("xcb_damage_subtract", err);
+            return false;
+        }
+        return true;
     }
 
     /* XCB::XFixesRegion */
-    XCB::XFixesRegion::XFixesRegion(const xcb_rectangle_t* rects, uint32_t count, xcb_connection_t* xcon)
-        : std::shared_ptr<xfixes_region_t>(std::make_shared<xfixes_region_t>(xcon))
+    XCB::XFixesRegion::XFixesRegion(const xcb_rectangle_t* rects, uint32_t count, xcb_connection_t* conn)
     {
-        auto xcbid = xcb_generate_id(xcon);
-        auto cookie = xcb_xfixes_create_region_checked(xcon, xcbid, count, rects);
-        get()->xcb = xcbid;
-        get()->error = xcb_request_check(xcon, cookie);
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_xfixes_create_region_checked(conn, id, count, rects);
+
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_xfixes_create_region", err);
+        }
+        else
+        {
+            reset(new xfixes_region_t(conn, id));
+        }
     }
 
-    XCB::XFixesRegion::XFixesRegion(xcb_window_t win, xcb_shape_kind_t kind, xcb_connection_t* xcon)
-        : std::shared_ptr<xfixes_region_t>(std::make_shared<xfixes_region_t>(xcon))
+    XCB::XFixesRegion::XFixesRegion(xcb_window_t win, xcb_shape_kind_t kind, xcb_connection_t* conn)
     {
-        auto xcbid = xcb_generate_id(xcon);
-        auto cookie = xcb_xfixes_create_region_from_window_checked(xcon, xcbid, win, kind);
-        get()->xcb = xcbid;
-        get()->error = xcb_request_check(xcon, cookie);
-    }
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_xfixes_create_region_from_window_checked(conn, id, win, kind);
 
-    const xcb_generic_error_t* XCB::XFixesRegion::error(void) const
-    {
-        return get() ? get()->error : nullptr;
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_xfixes_create_region", err);
+        }
+        else
+        {
+            reset(new xfixes_region_t(conn, id));
+        }
     }
 
     /* XCB::Connector */
@@ -216,31 +234,56 @@ namespace LTSM
         return GenericError(xcb_request_check(_conn, cookie));
     }
 
+    XCB::GC XCB::Connector::createGC(xcb_drawable_t win, uint32_t value_mask, const void* value_list)
+    {
+        return GC(win, _conn, value_mask, value_list);
+    }
+
     XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode)
     {
         int shmid = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
-
         if(shmid == -1)
         {
             Application::error("shmget failed, size: %d, error: %s", shmsz, strerror(errno));
-            return XCB::SHM();
+            return SHM();
         }
 
         uint8_t* shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, 0, 0));
-
         // man shmat: check result
         if(shmaddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
         {
             Application::error("shmaddr failed, id: %d, error: %s", shmid, strerror(errno));
-            return XCB::SHM();
+            return SHM();
         }
 
-        SHM shm(shmid, shmaddr, _conn);
+        return SHM(shmid, shmaddr, _conn);
+    }
 
-        if(shm->error)
-            extendedError(shm->error, "xcb_shm_attach");
+    XCB::Damage XCB::Connector::createDamage(xcb_drawable_t win, int level)
+    {
+        return Damage(win, level, _conn);
+    }
 
-        return shm;
+    bool XCB::Connector::damageSubtrack(const Damage & damage, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+    {
+        const xcb_rectangle_t rect = { rx, ry, rw, rh };
+        if(auto repair = XFixesRegion(& rect, 1, _conn))
+        {
+            auto cookie = xcb_damage_subtract_checked(_conn, damage.getid(), repair.getid(), XCB_XFIXES_REGION_NONE);
+            if(auto errorReq = checkRequest(cookie))
+            {
+                extendedError(errorReq, "xcb_damage_subtract");
+                return false;
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    XCB::XFixesRegion XCB::Connector::createFixesRegion(const xcb_rectangle_t* rect, size_t num)
+    {
+        return XFixesRegion(rect, num, _conn);
     }
 
     size_t XCB::Connector::getMaxRequest(void) const
@@ -255,18 +298,16 @@ namespace LTSM
 
     xcb_atom_t XCB::Connector::getAtom(const std::string & name, bool create) const
     {
-	xcb_generic_error_t* error;
 	auto cookie = xcb_intern_atom(_conn, create ? 0 : 1, name.size(), name.c_str());
-	GenericReply<xcb_intern_atom_reply_t> reply(xcb_intern_atom_reply(_conn, cookie, &error));
+	auto xcbReply = getReplyFunc(xcb_intern_atom, cookie);
 
-	if(error)
+	if(xcbReply.error())
         {
-            extendedError(error, "xcb_intern_atom");
-            free(error);
+            extendedError(xcbReply.error(), "xcb_intern_atom");
             return XCB_ATOM_NONE;
         }
 
-	return reply ? reply->atom : XCB_ATOM_NONE;
+	return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
     }
 
     std::string XCB::Connector::getAtomName(xcb_atom_t atom) const
@@ -274,21 +315,19 @@ namespace LTSM
 	if(atom == XCB_ATOM_NONE)
 	    return std::string("NONE");
 
-	xcb_generic_error_t* error;
 	auto cookie = xcb_get_atom_name(_conn, atom);
-        GenericReply<xcb_get_atom_name_reply_t> replyAtom(xcb_get_atom_name_reply(_conn, cookie, &error));
+	auto xcbReply = getReplyFunc(xcb_get_atom_name, cookie);
 
-	if(error)
+	if(xcbReply.error())
         {
-            extendedError(error, "xcb_get_atom_name");
-            free(error);
+            extendedError(xcbReply.error(), "xcb_get_atom_name");
             return std::string();
         }
 
-	if(replyAtom)
+	if(xcbReply.reply())
 	{
-	    const char* name = xcb_get_atom_name_name(replyAtom.get());
-	    size_t len = xcb_get_atom_name_name_length(replyAtom.get());
+	    const char* name = xcb_get_atom_name_name(xcbReply.reply().get());
+	    size_t len = xcb_get_atom_name_name_length(xcbReply.reply().get());
 	    return std::string(name, len);
 	}
 
@@ -330,92 +369,250 @@ namespace LTSM
         return GenericEvent(xcb_poll_for_event(_conn));
     }
 
-    bool XCB::Connector::checkExtensionSHM(void)
+    bool XCB::Connector::checkExtension(const Module & module)
     {
-        xcb_generic_error_t* error;
-        auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
-
-        if(! _shm || ! _shm->present)
-            return false;
-
-        auto cookie = xcb_shm_query_version(_conn);
-	GenericReply<xcb_shm_query_version_reply_t> replyVersion(xcb_shm_query_version_reply(_conn, cookie, &error));
-
-        if(error)
+        if(module == Module::TEST)
         {
-            extendedError(error, "xcb_shm_query_version");
-            free(error);
-            return false;
+            auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
+            if(! _test || ! _test->present)
+                return false;
+
+            auto cookie = xcb_test_get_version(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
+	    auto xcbReply = getReplyFunc(xcb_test_get_version, cookie);
+
+            if(xcbReply.error())
+            {
+                extendedError(xcbReply.error(), "xcb_test_query_version");
+                return false;
+            }
+
+	    if(xcbReply.reply())
+	    {
+    	        Application::debug("used %s extension, version: %d.%d", "TEST", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        return true;
+	    }
+        }
+        else
+        if(module == Module::DAMAGE)
+        {
+            auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+            if(! _damage || ! _damage->present)
+                return false;
+
+            auto cookie = xcb_damage_query_version(_conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
+	    auto xcbReply = getReplyFunc(xcb_damage_query_version, cookie);
+
+            if(xcbReply.error())
+            {
+                extendedError(xcbReply.error(), "xcb_damage_query_version");
+                return false;
+            }
+
+	    if(xcbReply.reply())
+	    {
+    	        Application::debug("used %s extension, version: %d.%d", "DAMAGE", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        return true;
+	    }
+        }
+        else
+        if(module == Module::XFIXES)
+        {
+            auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+            if(! _xfixes || ! _xfixes->present)
+                return false;
+
+            auto cookie = xcb_xfixes_query_version(_conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
+	    auto xcbReply = getReplyFunc(xcb_xfixes_query_version, cookie);
+
+            if(xcbReply.error())
+            {
+                extendedError(xcbReply.error(), "xcb_xfixes_query_version");
+                return false;
+            }
+
+	    if(xcbReply.reply())
+            {
+	        Application::debug("used %s extension, version: %d.%d", "XFIXES", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        return true;
+	    }
+        }
+        else
+        if(module == Module::RANDR)
+        {
+            auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+            if(! _randr || ! _randr->present)
+                return false;
+
+            auto cookie = xcb_randr_query_version(_conn, XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
+	    auto xcbReply = getReplyFunc(xcb_randr_query_version, cookie);
+
+            if(xcbReply.error())
+            {
+                extendedError(xcbReply.error(), "xcb_randr_query_version");
+                return false;
+            }
+
+	    if(xcbReply.reply())
+	    {
+    	        Application::debug("used %s extension, version: %d.%d", "RANDR", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        return true;
+	    }
+        }
+        else
+        if(module == Module::SHM)
+        {
+            auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
+	    if(! _shm || ! _shm->present)
+                return false;
+
+            auto cookie = xcb_shm_query_version(_conn);
+	    auto xcbReply = getReplyFunc(xcb_shm_query_version, cookie);
+
+            if(xcbReply.error())
+            {
+                extendedError(xcbReply.error(), "xcb_shm_query_version");
+                return false;
+            }
+
+	    if(xcbReply.reply())
+            {
+	        Application::debug("used %s extension, version: %d.%d", "SHM", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        return true;
+	    }
         }
 
-        Application::debug("used %s extension, version: %d.%d", "SHM", replyVersion->major_version, replyVersion->minor_version);
-        return true;
+        return false;
     }
 
-    bool XCB::Connector::checkExtensionXFIXES(void)
+    int XCB::Connector::eventNotify(const GenericEvent & ev, const Module & module)
     {
-        xcb_generic_error_t* error;
-        auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+        // clear bit
+        auto response_type = ev ? ev->response_type & ~0x80 : 0;
 
-        if(! _xfixes || ! _xfixes->present)
-            return false;
-
-        auto cookie = xcb_xfixes_query_version(_conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
-        GenericReply<xcb_xfixes_query_version_reply_t> replyVersion(xcb_xfixes_query_version_reply(_conn, cookie, &error));
-
-        if(error)
+        if(0 < response_type)
         {
-            extendedError(error, "xcb_xfixes_query_version");
-            free(error);
-            return false;
+            if(module == Module::DAMAGE)
+            {
+                // for receive it, usage:
+                // RootDisplay::createDamageNotify
+                auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+                if(response_type == _damage->first_event + XCB_DAMAGE_NOTIFY)
+                    return XCB_DAMAGE_NOTIFY;
+            }
+            else
+            if(module == Module::XFIXES)
+            {
+                // for receive it, usage input filter:
+                // xcb_xfixes_select_selection_input(xcb_xfixes_selection_event_mask_t)
+                // xcb_xfixes_select_cursor_input(xcb_xfixes_cursor_notify_mask_t)
+                //
+                auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+                auto types = { XCB_XFIXES_SELECTION_NOTIFY, XCB_XFIXES_CURSOR_NOTIFY };
+                for(auto & type : types)
+                    if(response_type == _xfixes->first_event + type)
+                        return type;
+            }
+            else
+            if(module == Module::RANDR)
+            {
+                // for receive it, usage input filter:
+                // xcb_xrandr_select_input(xcb_randr_notify_mask_t)
+                //
+                auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+                auto types = { XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_RANDR_NOTIFY };
+                for(auto & type : types)
+                    if(response_type == _randr->first_event + type) return type;
+            }
         }
 
-        Application::debug("used %s extension, version: %d.%d", "XFIXES", replyVersion->major_version, replyVersion->minor_version);
-        return true;
+        return -1;
     }
 
-    bool XCB::Connector::checkExtensionDAMAGE(void)
+    bool XCB::Connector::isDamageNotify(const GenericEvent & ev)
     {
-        xcb_generic_error_t* error;
-        auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
-
-        if(! _damage || ! _damage->present)
-            return false;
-
-        auto cookie = xcb_damage_query_version(_conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
-        GenericReply<xcb_damage_query_version_reply_t> replyVersion(xcb_damage_query_version_reply(_conn, cookie, &error));
-
-        if(error)
-        {
-            extendedError(error, "xcb_damage_query_version");
-            free(error);
-            return false;
-        }
-
-        Application::debug("used %s extension, version: %d.%d", "DAMAGE", replyVersion->major_version, replyVersion->minor_version);
-        return true;
+        return XCB_DAMAGE_NOTIFY == eventNotify(ev, Module::DAMAGE);
     }
 
-    bool XCB::Connector::checkExtensionTEST(void)
+    bool XCB::Connector::isXFixesSelectionNotify(const GenericEvent & ev)
     {
-        xcb_generic_error_t* error;
-        auto _xtest = xcb_get_extension_data(_conn, &xcb_test_id);
+        return XCB_XFIXES_SELECTION_NOTIFY == eventNotify(ev, Module::XFIXES);
+    }
 
-        if(! _xtest || ! _xtest->present)
-            return false;
+    bool XCB::Connector::isXFixesCursorNotify(const GenericEvent & ev)
+    {
+        return XCB_XFIXES_CURSOR_NOTIFY == eventNotify(ev, Module::XFIXES);
+    }
 
-        auto cookie = xcb_test_get_version(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
-        GenericReply<xcb_test_get_version_reply_t> replyVersion(xcb_test_get_version_reply(_conn, cookie, &error));
+    bool XCB::Connector::isRandrScreenNotify(const GenericEvent & ev)
+    {
+        return XCB_RANDR_SCREEN_CHANGE_NOTIFY == eventNotify(ev, Module::RANDR);
+    }
 
-        if(error)
+    bool XCB::Connector::isRandrCRTCNotify(const GenericEvent & ev)
+    {
+        if(XCB_RANDR_NOTIFY == eventNotify(ev, Module::RANDR))
         {
-            extendedError(error, "xcb_test_query_version");
-            free(error);
-            return false;
+            auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
+            return rn->subCode == XCB_RANDR_NOTIFY_CRTC_CHANGE;
         }
 
-        Application::debug("used %s extension, version: %d.%d", "TEST", replyVersion->major_version, replyVersion->minor_version);
-        return true;
+        return false;
+    }
+
+    bool XCB::Connector::isRandrOutputNotify(const GenericEvent & ev)
+    {
+        if(XCB_RANDR_NOTIFY == eventNotify(ev, Module::RANDR))
+        {
+            auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
+            return rn->subCode == XCB_RANDR_NOTIFY_OUTPUT_CHANGE;
+        }
+
+        return false;
+    }
+
+    int XCB::Connector::eventErrorOpcode(const GenericEvent & ev, const Module & module)
+    {
+        if(ev && ev->response_type == 0)
+        {
+            auto error = ev.toerror();
+
+            if(module == Module::TEST)
+            {
+                auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
+                if(error->major_code == _test->major_opcode)
+                    return error->minor_code;
+            }
+            else
+            if(module == Module::DAMAGE)
+            {
+                auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+                if(error->major_code == _damage->major_opcode)
+                    return error->minor_code;
+            }
+            else
+            if(module == Module::XFIXES)
+            {
+                auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+                if(error->major_code == _xfixes->major_opcode)
+                    return error->minor_code;
+            }
+            else
+            if(module == Module::RANDR)
+            {
+                auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+                if(error->major_code == _randr->major_opcode)
+                    return error->minor_code;
+            }
+            else
+            if(module == Module::SHM)
+            {
+                auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
+                if(error->major_code == _shm->major_opcode)
+                    return error->minor_code;
+            }
+        }
+
+        return -1;
     }
 
     /* XCB::RootDisplay */
@@ -463,17 +660,42 @@ namespace LTSM
             throw std::string("xcb_key_symbols_alloc error");
 
         // check extensions
-        if(! checkExtensionSHM())
+        if(! checkExtension(Module::SHM))
             throw std::string("failed: ").append("SHM extension");
 
-        if(! checkExtensionDAMAGE())
+        if(! checkExtension(Module::DAMAGE))
             throw std::string("failed: ").append("DAMAGE extension");
 
-        if(! checkExtensionXFIXES())
+        if(! checkExtension(Module::XFIXES))
             throw std::string("failed: ").append("XFIXES extension");
 
-        if(! checkExtensionTEST())
+        if(! checkExtension(Module::TEST))
             throw std::string("failed: ").append("TEST extension");
+
+        if(! checkExtension(Module::RANDR))
+            throw std::string("failed: ").append("RANDR extension");
+
+        auto sz = size();
+
+        // create randr notify
+        xcb_randr_select_input(_conn, _screen->root, 
+            XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+
+        // create damage notify
+        _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
+        if(_damage)
+        {
+            const xcb_rectangle_t rect = { 0, 0, sz.first, sz.second };
+            _xfixes = XFixesRegion(& rect, 1, _conn);
+            if(_xfixes) _damage.addRegion(_screen->root, _xfixes.getid());
+        }
+
+        // init shm
+        const int bpp = bitsPerPixel() >> 3;
+        const int pagesz = 4096;
+        const size_t shmsz = ((sz.first * sz.second * bpp / pagesz) + 1) * pagesz;
+
+        _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
 
     XCB::RootDisplay::~RootDisplay()
@@ -525,32 +747,103 @@ namespace LTSM
         return _screen->root_depth;
     }
 
+    std::pair<uint16_t,uint16_t> XCB::RootDisplay::size(void) const
+    {
+        auto cookie = xcb_get_geometry(_conn, _screen->root);
+        auto reply = xcb_get_geometry_reply(_conn, cookie, nullptr);
+
+        if(reply)
+            return std::make_pair(reply->width, reply->height);
+
+        return std::make_pair(_screen->width_in_pixels, _screen->height_in_pixels);
+    }
+
     int XCB::RootDisplay::width(void) const
     {
-        return _screen->width_in_pixels;
+        return size().first;
     }
 
     int XCB::RootDisplay::height(void) const
     {
-        return _screen->height_in_pixels;
+        return size().second;
     }
 
-    XCB::GC XCB::RootDisplay::createGC(uint32_t value_mask, const void* value_list)
+    xcb_drawable_t XCB::RootDisplay::root(void) const
     {
-        GC gc(_screen->root, _conn, value_mask, value_list);
-
-        if(gc->error)
-            extendedError(gc->error, "xcb_create_gc");
-
-        return gc;
+        return _screen->root;
     }
 
-    std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint8_t* buf) const
+    std::list<xcb_randr_screen_size_t> XCB::RootDisplay::screenSizes(void) const
     {
+	std::list<xcb_randr_screen_size_t> res;
+
+        auto cookie = xcb_randr_get_screen_info(_conn, _screen->root);
+        auto xcbReply = getReplyFunc(xcb_randr_get_screen_info, cookie);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_randr_get_screen_info");
+            return res;
+        }
+
+        if(xcbReply.reply())
+        {
+            xcb_randr_screen_size_t* sizes = xcb_randr_get_screen_info_sizes(xcbReply.reply().get());
+            int length = xcb_randr_get_screen_info_sizes_length(xcbReply.reply().get());
+
+            for(int pos = 0; pos < length; ++pos)
+        	res.push_back(sizes[pos]);
+	}
+
+	return res;
+    }
+
+    bool XCB::RootDisplay::setScreenSize(uint16_t width, uint16_t height)
+    {
+        auto cookie = xcb_randr_get_screen_info(_conn, _screen->root);
+        auto xcbReply = getReplyFunc(xcb_randr_get_screen_info, cookie);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_randr_get_screen_info");
+            return false;
+        }
+
+        if(xcbReply.reply())
+        {
+            xcb_randr_screen_size_t* sizes = xcb_randr_get_screen_info_sizes(xcbReply.reply().get());
+            int length = xcb_randr_get_screen_info_sizes_length(xcbReply.reply().get());
+
+            auto it = std::find_if(sizes, sizes + length, [=](auto & ss){ return ss.width == width && ss.height == height; });
+            if(it == sizes + length)
+            {
+                Application::error("set screen size failed, unknown mode: %d, %d", width, height);
+                return false;
+            }
+
+            int sizeID = std::distance(sizes, it);
+            auto cookie = xcb_randr_set_screen_config(_conn, _screen->root, XCB_CURRENT_TIME,
+                                xcbReply.reply()->config_timestamp, sizeID, xcbReply.reply()->rotation, 0);
+            auto xcbReply2 = getReplyFunc(xcb_randr_set_screen_config, cookie);
+
+            if(! xcbReply2.error())
+		return true;
+
+            extendedError(xcbReply.error(), "xcb_randr_set_screen_config");
+        }
+
+        return false;
+    }
+
+    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const
+    {
+        if(_shm)
+            return _shm.getPixmapRegion(_screen->root, rx, ry, rw, rh, 0);
+
         size_t pitch = rw * (bitsPerPixel() >> 2);
         //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * rh;
         uint64_t maxReqLength = xcb_get_maximum_request_length(_conn);
-        std::pair<bool, PixmapInfo> res;
+        PixmapInfoReply res;
 
         if(pitch == 0)
         {
@@ -558,6 +851,7 @@ namespace LTSM
             return res;
         }
 
+        PixmapInfoBuffer* info = nullptr;
 	uint16_t allowRows = maxReqLength / pitch;
 	if(allowRows > rh)
 	    allowRows = rh;
@@ -568,100 +862,69 @@ namespace LTSM
 	    if(yy + allowRows > ry + rh)
 		allowRows = ry + rh - yy;
 
-	    xcb_generic_error_t* error;
             auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, rx, yy, rw, allowRows, ~0);
-            GenericReply<xcb_get_image_reply_t> xcbReply(xcb_get_image_reply(_conn, cookie, &error));
+	    auto xcbReply = getReplyFunc(xcb_get_image, cookie);
 
-	    if(error)
+	    if(xcbReply.error())
     	    {
-        	extendedError(error, "xcb_get_image");
-        	free(error);
+        	extendedError(xcbReply.error(), "xcb_get_image");
 		break;
     	    }
 
-            auto reply = xcbReply.get();
-            res.first = reply;
-
-            if(reply)
+            if(xcbReply.reply())
             {
+		auto reply = xcbReply.reply().get();
+
+                if(! info)
+                    info = new PixmapInfoBuffer(reply->depth, reply->visual, rh * pitch);
+
                 auto length = xcb_get_image_data_length(reply);
-                auto ptr = xcb_get_image_data(reply);
+                auto data = xcb_get_image_data(reply);
 
-                res.second.depth = reply->depth;
-                res.second.size += length;
-                res.second.visual = reply->visual;
-
-                std::memcpy(buf, ptr, length);
-                buf += length;
+                info->_pixels.insert(info->_pixels.end(), data, data + length);
             }
         }
 
+        res.reset(info);
         return res;
     }
 
-    std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(const SHM & shmInfo, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const
+    bool XCB::RootDisplay::damageSubtrack(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
     {
-        return copyRootImageRegion(shmInfo, { rx, ry, rw, rh});
+        return Connector::damageSubtrack(_damage, rx, ry, rw, rh);
     }
 
-    std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImageRegion(const SHM & shmInfo, const xcb_rectangle_t & rect) const
+    XCB::GenericEvent XCB::RootDisplay::poolEvent(void)
     {
-        return shmInfo.getPixmapRegion(_screen->root, rect, 0);
-    }
+        GenericEvent ev = Connector::poolEvent();
 
-    std::pair<bool, XCB::PixmapInfo> XCB::RootDisplay::copyRootImage(const SHM & shmInfo) const
-    {
-        return shmInfo.getPixmapRegion(_screen->root, 0, 0, _screen->width_in_pixels, _screen->height_in_pixels, 0);
-    }
-
-    XCB::Damage XCB::RootDisplay::createDamageNotify(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, int level)
-    {
-        return createDamageNotify({rx, ry, rw, rh}, level);
-    }
-
-    XCB::Damage XCB::RootDisplay::createDamageNotify(const xcb_rectangle_t & rect, int level)
-    {
-        // make damage region
-        auto xfixesRegion = XFixesRegion(& rect, 1, _conn);
-
-        if(xfixesRegion->error)
-            extendedError(xfixesRegion->error, "xcb_xfixes_create_region");
-
-        auto damageRegion = Damage(_screen->root, level, _conn);
-
-        if(! damageRegion->error)
+        if(isRandrCRTCNotify(ev))
         {
-            auto err = damageRegion.addRegion(_screen->root, xfixesRegion->xcb);
+            auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
+                
+            xcb_randr_crtc_change_t cc = notify->u.cc;
+            if(0 < cc.width && 0 < cc.height)
+            {
+        	Application::debug("xcb crc change notify: %dx%d", cc.width, cc.height);
 
-            if(err)
-                extendedError(err.get(), "xcb_damage_add");
+                // init shm
+                const int bpp = bitsPerPixel() >> 3;
+                const int pagesz = 4096;
+                const size_t shmsz = ((cc.width * cc.height * bpp / pagesz) + 1) * pagesz;
+                _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+
+                // create damage notify
+                _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
+                if(_damage)
+                {
+                    const xcb_rectangle_t rect = { 0, 0, cc.width, cc.height };
+                    _xfixes = XFixesRegion(& rect, 1, _conn);
+                    if(_xfixes) _damage.addRegion(_screen->root, _xfixes.getid());
+                }
+            }
         }
-        else
-            extendedError(damageRegion->error, "xcb_damage_create");
 
-        return damageRegion;
-    }
-
-    bool XCB::RootDisplay::damageSubtrack(const Damage & damage, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-    {
-        return damageSubtrack(damage, { rx, ry, rw, rh});
-    }
-
-    bool XCB::RootDisplay::damageSubtrack(const Damage & damage, const xcb_rectangle_t & rect)
-    {
-        auto repair = XFixesRegion(& rect, 1, _conn);
-
-        if(repair->error)
-            extendedError(repair->error, "xcb_xfixes_create_region");
-
-        auto cookie = xcb_damage_subtract_checked(_conn, damage->xcb, repair->xcb, XCB_XFIXES_REGION_NONE);
-        auto errorReq = checkRequest(cookie);
-
-        if(! errorReq)
-            return true;
-
-        extendedError(errorReq, "xcb_damage_subtract");
-        return false;
+        return ev;
     }
 
     XCB::KeyCodes XCB::RootDisplay::keysymToKeycodes(int keysym) const
@@ -673,129 +936,6 @@ namespace LTSM
         }
 
         return 0;
-    }
-
-    int XCB::RootDisplay::getEventSHM(const GenericEvent & ev)
-    {
-        if(! ev) return -1;
-
-        auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
-        auto error = reinterpret_cast<const xcb_generic_error_t*>(ev.get());
-
-        if(ev->response_type == 0)
-        {
-            if(error->major_code == _shm->major_opcode)
-                extendedError(error, "SHM extension");
-        }
-        else if(ev->response_type >= _shm->first_event && ev->response_type <= _shm->first_event + 6)
-        {
-            // XCB_SHM_QUERY_VERSION  0
-            // XCB_SHM_ATTACH         1
-            // XCB_SHM_DETACH         2
-            // XCB_SHM_PUT_IMAGE      3
-            // XCB_SHM_GET_IMAGE      4
-            // XCB_SHM_CREATE_PIXMAP  5
-            // XCB_SHM_ATTACH_FD      6
-            // XCB_SHM_CREATE_SEGMENT 7
-            return ev->response_type - _shm->first_event;
-        }
-
-        return -1;
-    }
-
-    bool XCB::RootDisplay::isEventSHM(const GenericEvent & ev, int filter)
-    {
-        int res = getEventSHM(ev);
-        return filter < 0 ? 0 <= res : filter == res;
-    }
-
-    int XCB::RootDisplay::getEventDAMAGE(const GenericEvent & ev)
-    {
-        if(! ev) return -1;
-
-        auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
-        auto error = reinterpret_cast<const xcb_generic_error_t*>(ev.get());
-
-        if(ev->response_type == 0)
-        {
-            if(error->major_code == _damage->major_opcode)
-            {
-                if(error->minor_code != XCB_DAMAGE_SUBTRACT &&
-                   error->minor_code != XCB_DAMAGE_CREATE)
-                    extendedError(error, "DAMAGE extension");
-            }
-        }
-        else if(ev->response_type >= _damage->first_event && ev->response_type <= _damage->first_event + 4)
-        {
-            // XCB_DAMAGE_NOTIFY   0
-            // XCB_DAMAGE_CREATE   1
-            // XCB_DAMAGE_DESTROY  2
-            // XCB_DAMAGE_SUBTRACT 3
-            // XCB_DAMAGE_ADD      4
-            return ev->response_type - _damage->first_event;
-        }
-
-        return -1;
-    }
-
-    bool XCB::RootDisplay::isEventDAMAGE(const GenericEvent & ev, int filter)
-    {
-        int res = getEventDAMAGE(ev);
-        return filter < 0 ? 0 <= res : filter == res;
-    }
-
-    int XCB::RootDisplay::getEventTEST(const GenericEvent & ev)
-    {
-        if(! ev) return -1;
-
-        auto _xtest = xcb_get_extension_data(_conn, &xcb_test_id);
-        auto error = reinterpret_cast<const xcb_generic_error_t*>(ev.get());
-
-        if(ev->response_type == 0)
-        {
-            if(error->major_code == _xtest->major_opcode)
-                extendedError(error, "TEST extension");
-        }
-        else if(ev->response_type >= _xtest->first_event && ev->response_type <= _xtest->first_event + 3)
-        {
-            // XCB_TEST_GET_VERSION    0
-            // XCB_TEST_COMPARE_CURSOR 1
-            // XCB_TEST_FAKE_INPUT     2
-            // XCB_TEST_GRAB_CONTROL   3
-            return ev->response_type - _xtest->first_event;
-        }
-
-        return -1;
-    }
-
-    bool XCB::RootDisplay::isEventTEST(const GenericEvent & ev, int filter)
-    {
-        int res = getEventTEST(ev);
-        return filter < 0 ? 0 <= res : filter == res;
-    }
-
-    int XCB::RootDisplay::getEventXFIXES(const GenericEvent & ev)
-    {
-        if(! ev) return -1;
-
-        auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
-        auto error = reinterpret_cast<const xcb_generic_error_t*>(ev.get());
-
-        if(ev->response_type == 0)
-        {
-            if(error->major_code == _xfixes->major_opcode)
-                extendedError(error, "XFIXES extension");
-        }
-        else if(ev->response_type >= _xfixes->first_event && ev->response_type <= _xfixes->first_event + 32)
-            return ev->response_type - _xfixes->first_event;
-
-        return -1;
-    }
-
-    bool XCB::RootDisplay::isEventXFIXES(const GenericEvent & ev, int filter)
-    {
-        int res = getEventXFIXES(ev);
-        return filter < 0 ? 0 <= res : filter == res;
     }
 
     /*
@@ -810,7 +950,7 @@ namespace LTSM
             }
             else
             {
-                switch(ev->response_type & 0x7f)
+                switch(ev->response_type & ~0x80)
                 {
                     case XCB_MOTION_NOTIFY:
                         break;
@@ -913,7 +1053,8 @@ namespace LTSM
             extendedError(errorReq, "xcb_change_window_attributes");
         else
         {
-            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, width(), height());
+            auto sz = size();
+            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, sz.first, sz.second);
             errorReq = checkRequest(cookie);
 
             if(errorReq)
@@ -980,18 +1121,16 @@ namespace LTSM
 
     xcb_window_t XCB::RootDisplayExt::getOwnerSelection(const xcb_atom_t & atomSel)
     {
-	xcb_generic_error_t* error;
 	auto cookie = xcb_get_selection_owner(_conn, atomSel);
-	GenericReply<xcb_get_selection_owner_reply_t> reply(xcb_get_selection_owner_reply(_conn, cookie, &error));
+	auto xcbReply = getReplyFunc(xcb_get_selection_owner, cookie);
 
-    	if(error)
+    	if(xcbReply.error())
     	{
-    	    extendedError(error, "xcb_get_selection_owner");
-    	    free(error);
+    	    extendedError(xcbReply.error(), "xcb_get_selection_owner");
 	    return XCB_WINDOW_NONE;
 	}
 
-	return reply  ? reply->owner : XCB_WINDOW_NONE;
+	return xcbReply.reply()  ? xcbReply.reply()->owner : XCB_WINDOW_NONE;
     }
 
     bool XCB::RootDisplayExt::sendNotifyTargets(const xcb_selection_request_event_t & ev)
@@ -1129,29 +1268,41 @@ namespace LTSM
 	    return false;
 
         // get type
-        auto cookie = xcb_get_property(_conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
-	GenericReply<xcb_get_property_reply_t> reply(xcb_get_property_reply(_conn, cookie, nullptr));
+        auto cookie1 = xcb_get_property(_conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
+	auto xcbReply1 = getReplyFunc(xcb_get_property, cookie1);
 
-        if(! reply)
+	if(xcbReply1.error())
+	{
+	    extendedError(xcbReply1.error(), "xcb_get_property");
+	    return false;
+	}
+
+        if(! xcbReply1.reply())
             return false;
-        else
-        if(reply->type != _atomUTF8 && reply->type != _atomText && reply->type != _atomTextPlain)
+
+        if(xcbReply1.reply()->type != _atomUTF8 && xcbReply1.reply()->type != _atomText && xcbReply1.reply()->type != _atomTextPlain)
         {
-	    auto type = getAtomName(reply->type);
-            Application::error("xcb selection notify action, unknown type: %d, `%s'", reply->type, type.c_str());
+	    auto type = getAtomName(xcbReply1.reply()->type);
+            Application::error("xcb selection notify action, unknown type: %d, `%s'", xcbReply1.reply()->type, type.c_str());
             return false;
         }
 
         // get data
-        cookie = xcb_get_property(_conn, false, _selwin, _atomBuffer, reply->type, 0, reply->bytes_after);
-	reply.reset(xcb_get_property_reply(_conn, cookie, nullptr));
+        auto cookie2 = xcb_get_property(_conn, false, _selwin, _atomBuffer, xcbReply1.reply()->type, 0, xcbReply1.reply()->bytes_after);
+	auto xcbReply2 = getReplyFunc(xcb_get_property, cookie2);
 
-        if(! reply)
+	if(xcbReply2.error())
+	{
+	    extendedError(xcbReply1.error(), "xcb_get_property");
+	    return false;
+	}
+
+        if(! xcbReply2.reply())
             return false;
 
 	bool ret = false;
-        auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
-        int length = xcb_get_property_value_length(reply.get());
+        auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(xcbReply2.reply().get()));
+        int length = xcb_get_property_value_length(xcbReply2.reply().get());
 
 	if(ptrbuf && 0 < length)
 	{
