@@ -130,14 +130,14 @@ namespace LTSM
 	    void		join(void);
 
 	    // usage:
-	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, [=](){ func(param1, param2, param3); });
-	    // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, func, param1, param2, param3);
+	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
+	    // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, repeat, func, param1, param2, param3);
 	    //
 	    template <class TimeType = std::chrono::milliseconds, class Func>
-	    static std::unique_ptr<BaseTimer> create(uint32_t delay, Func&& call)
+	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call)
 	    {
     		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
-    		ptr->thread = std::thread([delay, timer = ptr.get(), call = std::move(call)]()
+    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::move(call)]()
     		{
         	    timer->processed = true;
         	    auto start = std::chrono::system_clock::now();
@@ -148,7 +148,11 @@ namespace LTSM
             		if(TimeType(delay) <= cur - start)
             		{
                 	    call();
-                	    timer->processed = false;
+
+                            if(repeat)
+        	                start = std::chrono::system_clock::now();
+                            else
+                	        timer->processed = false;
             		}
         	    }
     		});
@@ -156,10 +160,10 @@ namespace LTSM
 	    }
 
 	    template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
-	    static std::unique_ptr<BaseTimer> create(uint32_t delay, Func&& call, Args&&... args)
+	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call, Args&&... args)
 	    {
     		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
-    		ptr->thread = std::thread([delay, timer = ptr.get(),
+    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
 		    call = std::move(call), args = std::make_tuple(std::forward<Args>(args)...)]()
     		{
         	    timer->processed = true;
@@ -171,7 +175,11 @@ namespace LTSM
             		if(TimeType(delay) <= cur - start)
             		{
                 	    std::apply(call, args);
-                	    timer->processed = false;
+
+                            if(repeat)
+        	                start = std::chrono::system_clock::now();
+                            else
+                	        timer->processed = false;
             		}
         	    }
     		});

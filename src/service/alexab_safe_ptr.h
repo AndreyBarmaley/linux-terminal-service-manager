@@ -247,7 +247,7 @@ namespace sf {
 			}
 
 			explicit operator bool() const throw() { return success; }
-			lock_timed_any(lock_timed_any&& other) throw() : locks_ptr_vec(other.locks_ptr_vec) { }
+			lock_timed_any(lock_timed_any&& other) throw() : locks_ptr_vec(other.locks_ptr_vec), success(true) { }
 			lock_timed_any(const lock_timed_any&) = delete;
 			lock_timed_any& operator=(const lock_timed_any&) = delete;
 	};

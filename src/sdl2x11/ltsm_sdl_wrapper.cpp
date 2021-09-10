@@ -82,7 +82,8 @@ namespace LTSM
 
         if(_window)
         {
-            _renderer = SDL_CreateRenderer(_window, -1, (accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
+            _accel = accel;
+            _renderer = SDL_CreateRenderer(_window, -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
 
             if(_renderer)
             {
@@ -115,6 +116,48 @@ namespace LTSM
 
         if(_window)
             SDL_DestroyWindow(_window);
+    }
+
+    bool SDL::Window::resize(int newsz_w, int newsz_h)
+    {
+        newsz_w = std::max(newsz_w, 640);
+        newsz_h = std::max(newsz_h, 480);
+
+        int winsz_w, winsz_h;
+        SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
+
+        if(winsz_w != newsz_w && winsz_h != newsz_h)
+        {
+            int dispsz_w = newsz_w;
+            int dispsz_h = newsz_h;
+
+            SDL_SetWindowSize(_window, newsz_w, newsz_h);
+
+            if(_display)
+                SDL_DestroyTexture(_display);
+
+             if(_renderer)
+                SDL_DestroyRenderer(_renderer);
+
+            if(nullptr != (_renderer = SDL_CreateRenderer(_window, -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE))))
+            {
+                if(nullptr != (_display = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h)))
+                {
+                    SDL_Color black = {0, 0, 0, 0};
+                    SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
+                    renderClear(& black);
+                    renderReset();
+
+                    return true;
+                }
+                else
+                    std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture" << " error, " << SDL_GetError() << std::endl;
+            }
+            else
+                std::cerr << __FUNCTION__ << ": " << "SDL_CreateRenderer" << " error, " << SDL_GetError() << std::endl;
+        }
+
+        return false;
     }
 
     bool SDL::Window::renderReset(SDL_Texture* target)

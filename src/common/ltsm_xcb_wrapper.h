@@ -42,6 +42,71 @@ namespace LTSM
 {
     namespace XCB
     {
+	struct Point
+	{
+	    int16_t x, y;
+
+	    Point() : x(-1), y(-1) {}
+	    Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
+	    Point(int16_t px, int16_t py) : x(px), y(py) {}
+	};
+
+	struct Size
+	{
+	    uint16_t width, height;
+
+	    Size() : width(0), height(0) {}
+	    Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
+
+	    bool isEmpty(void) const { return width == 0 || height == 0; }
+	};
+
+	struct Region : public Point, public Size
+	{
+            Region() {}
+            Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
+            Region(const xcb_rectangle_t & rt) : Point(rt.x, rt.y), Size(rt.width, rt.height) {}
+            Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
+
+            const Point & toPoint(void) const { return *this; }
+            const Size &  toSize(void) const { return *this; }
+
+            bool        operator== (const Region & rt) const { return rt.x == x && rt.y == y && rt.width == width && rt.height == height; }
+            bool        operator!= (const Region & rt) const { return rt.x != x || rt.y != y || rt.width != width || rt.height != height; }
+
+            void        reset(void);
+
+            void        assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
+            void        assign(const Region &);
+
+            void        join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
+            void        join(const Region &);
+
+            bool        empty(void) const;
+            bool        invalid(void) const;
+
+            Region      intersected(const Region &) const;
+            Region      align(size_t) const;
+
+            static bool intersects(const Region &, const Region &);
+            static bool intersection(const Region &, const Region &, Region* res);
+
+            std::list<Region> divideBlocks(size_t cw, size_t ch) const;
+            std::list<Region> divideCounts(size_t cw, size_t ch) const;
+	};
+
+        Region operator- (const Region &, const Point &);
+        Region operator+ (const Region &, const Point &);
+
+        struct HasherRegion
+        {
+            size_t operator()(const Region & reg) const
+            {
+                return std::hash<uint64_t>()((static_cast<uint64_t>(reg.x) << 48) | (static_cast<uint64_t>(reg.y) << 32) |
+                                             (static_cast<uint64_t>(reg.width) << 16) | static_cast<uint64_t>(reg.height));
+            }
+        };
+
         struct object_t
         {
             uint32_t                xcb;
@@ -86,6 +151,7 @@ namespace LTSM
 
         struct GenericEvent : std::shared_ptr<xcb_generic_event_t>
         {
+            GenericEvent() {}
             GenericEvent(xcb_generic_event_t* ev)
                 : std::shared_ptr<xcb_generic_event_t>(ev, std::free) {}
 
@@ -144,16 +210,23 @@ namespace LTSM
             GC(xcb_drawable_t, xcb_connection_t*,
                uint32_t value_mask = 0, const void* value_list = nullptr);
 
-            uint32_t               getid(void) const { return get() ? get()->xcb : 0; }
+            uint32_t               xid(void) const { return get() ? get()->xcb : 0; }
+            xcb_connection_t*      connection(void) const { return get() ? get()->conn : nullptr; }
         };
 
         struct XFixesRegion : std::shared_ptr<xfixes_region_t>
         {
             XFixesRegion() {}
+
+            XFixesRegion(const Region &, xcb_connection_t*);
             XFixesRegion(const xcb_rectangle_t*, uint32_t count, xcb_connection_t*);
             XFixesRegion(xcb_window_t win, xcb_shape_kind_t kind, xcb_connection_t*);
 
-            uint32_t                getid(void) const { return get() ? get()->xcb : 0; }
+            uint32_t                xid(void) const { return get() ? get()->xcb : 0; }
+            xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }
+
+            XFixesRegion            intersect(xcb_xfixes_region_t) const;
+            XFixesRegion            unionreg(xcb_xfixes_region_t) const;
         };
 
         struct Damage : std::shared_ptr<damage_t>
@@ -162,8 +235,10 @@ namespace LTSM
             Damage(xcb_drawable_t, int level, xcb_connection_t*);
 
             bool                    addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid);
-            bool                    subtractRegion(xcb_drawable_t winid, xcb_xfixes_region_t repair, xcb_xfixes_region_t parts);
-            uint32_t                getid(void) const { return get() ? get()->xcb : 0; }
+            bool                    subtractRegion(xcb_xfixes_region_t regid, xcb_xfixes_region_t parts);
+
+            uint32_t                xid(void) const { return get() ? get()->xcb : 0; }
+            xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }
         };
 
         struct PixmapInfoBase
@@ -188,11 +263,13 @@ namespace LTSM
             SHM() {}
             SHM(int shmid, uint8_t* addr, xcb_connection_t*);
 
-            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset = 0) const;
-            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const xcb_rectangle_t &, uint32_t offset = 0) const;
-            uint32_t              getid(void) const { return get() ? get()->xcb : 0; }
+            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, uint32_t offset = 0) const;
+
             uint8_t*              data(void) { return get() ? get()->addr : nullptr; }
             const uint8_t*        data(void) const { return get() ? get()->addr : nullptr; }
+
+            xcb_connection_t*     connection(void) const { return get() ? get()->conn : nullptr; }
+            uint32_t              xid(void) const { return get() ? get()->xcb : 0; }
         };
 
         struct PixmapInfoSHM : PixmapInfoBase
@@ -241,18 +318,18 @@ namespace LTSM
 
 	    #define getReplyFunc(NAME,cookie) getReply<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,cookie)
 
-	    int                     hasError(void);
+	    int                     hasError(void) const;
 
-            bool                    checkExtension(const Module &);
-            int                     eventErrorOpcode(const GenericEvent & ev, const Module &);
-            int                     eventNotify(const GenericEvent & ev, const Module &);
+            bool                    checkExtension(const Module &) const;
+            int                     eventErrorOpcode(const GenericEvent & ev, const Module &) const;
+            int                     eventNotify(const GenericEvent & ev, const Module &) const;
 
-            bool                    isDamageNotify(const GenericEvent & ev);
-            bool                    isXFixesSelectionNotify(const GenericEvent & ev);
-            bool                    isXFixesCursorNotify(const GenericEvent & ev);
-            bool                    isRandrScreenNotify(const GenericEvent & ev);
-            bool                    isRandrOutputNotify(const GenericEvent & ev);
-            bool                    isRandrCRTCNotify(const GenericEvent & ev);
+            bool                    isDamageNotify(const GenericEvent & ev) const;
+            bool                    isXFixesSelectionNotify(const GenericEvent & ev) const;
+            bool                    isXFixesCursorNotify(const GenericEvent & ev) const;
+            bool                    isRandrScreenNotify(const GenericEvent & ev) const;
+            bool                    isRandrOutputNotify(const GenericEvent & ev) const;
+            bool                    isRandrCRTCNotify(const GenericEvent & ev) const;
 
             void                    extendedError(const xcb_generic_error_t* error, const char* func) const;
             void                    extendedError(const GenericError &, const char* func) const;
@@ -263,13 +340,13 @@ namespace LTSM
             GC                      createGC(xcb_drawable_t winid, uint32_t value_mask = 0, const void* value_list = nullptr);
             SHM                     createSHM(size_t, int mode = 0600);
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
+            XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
 	    xcb_atom_t              getAtom(const std::string &, bool create = true) const;
 	    bool                    checkAtom(const std::string &) const;
 	    std::string	            getAtomName(xcb_atom_t) const;
 	    size_t                  getMaxRequest(void) const;
 
-            bool                    damageSubtrack(const Damage &, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
             static bool             testConnection(const char* addr);
         };
 
@@ -282,16 +359,16 @@ namespace LTSM
             xcb_visualtype_t*       _visual;
 
             Damage                  _damage;
-            XFixesRegion            _xfixes;
             SHM                     _shm;
 
         public:
             RootDisplay(const std::string & addr);
             ~RootDisplay();
 
-            int			    width(void) const;
-            int			    height(void) const;
-            std::pair<uint16_t,uint16_t> size(void) const;
+            uint16_t		    width(void) const;
+            uint16_t		    height(void) const;
+            Region                  region(void) const;
+            Size                    size(void) const;
             int	                    depth(void) const;
             int	                    bitsPerPixel(void) const;
             int	                    bitsPerPixel(int depth) const;
@@ -306,13 +383,15 @@ namespace LTSM
 				    screenSizes(void) const;
 	    bool	            setScreenSize(uint16_t windth, uint16_t height);
 
-            PixmapInfoReply         copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const;
+            PixmapInfoReply         copyRootImageRegion(const Region &) const;
 
             bool                    fakeInputKeysym(int type, const KeyCodes &, bool wait = true) const;
             bool                    fakeInputMouse(int type, int buttons, int posx, int posy, bool wait = true) const;
             KeyCodes                keysymToKeycodes(int) const;
 
-            bool                    damageSubtrack(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
+            bool                    damageAdd(const xcb_rectangle_t*, size_t);
+            bool                    damageAdd(const Region &);
+            bool                    damageSubtrack(const Region &);
 
             GenericEvent            poolEvent(void) override;
         };
@@ -322,6 +401,8 @@ namespace LTSM
         protected:
             xcb_window_t            _selwin;
 	    std::vector<uint8_t>    _selbuf;
+            std::unique_ptr<Tools::BaseTimer>
+                                    _timerClipCheck;
 
 	    xcb_atom_t              _atoms[7];
 	    xcb_atom_t &            _atomPrimary;
@@ -339,20 +420,23 @@ namespace LTSM
 
             bool                     sendNotifyTargets(const xcb_selection_request_event_t &);
             bool                     sendNotifySelData(const xcb_selection_request_event_t &);
+            bool                     selectionClearAction(xcb_selection_clear_event_t*);
+            bool                     selectionRequestAction(xcb_selection_request_event_t*);
 
 	public:
 	    RootDisplayExt(const std::string & addr);
             ~RootDisplayExt();
 
-            bool                     selectionClearAction(xcb_selection_clear_event_t*);
-            bool                     selectionRequestAction(xcb_selection_request_event_t*);
+            GenericEvent             poolEvent(void) override;
+
             bool                     selectionNotifyAction(xcb_selection_notify_event_t*);
+            bool                     isSelectionNotify(const GenericEvent & ev) const;
 
-            bool                     setClipboardEvent(std::vector<uint8_t> &);
-	    bool                     getClipboardEvent(void);
-
+            bool                         setClipboardEvent(std::vector<uint8_t> &);
 	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
 	};
+
+	typedef std::shared_ptr<RootDisplayExt> SharedDisplay;
     }
 }
 

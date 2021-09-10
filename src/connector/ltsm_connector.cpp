@@ -175,6 +175,16 @@ namespace LTSM
         return fileName;
     }
 
+    bool Connector::SignalProxy::isAllowXcbMessages(void) const
+    {
+	return ! _xcbDisableMessages;
+    }
+
+    void Connector::SignalProxy::setEnableXcbMessages(bool f)
+    {
+	_xcbDisableMessages = ! f;
+    }
+
     bool Connector::SignalProxy::xcbConnect(int screen)
     {
         std::string xauthFile = busCreateAuthFile(screen);
@@ -206,7 +216,9 @@ namespace LTSM
         {
             Application::info("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
             // disable message loop
+            bool extDisable = _xcbDisableMessages;
             _xcbDisableMessages = true;
+
             int oldDisplay = _display;
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
 
@@ -224,7 +236,10 @@ namespace LTSM
         	busConnectorSwitched(oldDisplay, newDisplay);
 		_display = newDisplay;
 	    }
-    	    _xcbDisableMessages = false;
+
+	    // 
+	    if(! extDisable)
+    		_xcbDisableMessages = false;
         }
     }
 
@@ -239,7 +254,7 @@ namespace LTSM
 		{
             	    if(auto prim = static_cast<RenderRect*>(ptr.get()))
             	    {
-		    	onAddDamage(std::get<0>(prim->region),std::get<1>(prim->region),std::get<2>(prim->region),std::get<3>(prim->region));
+		    	onAddDamage(prim->toRegion());
             	    }
 		}
 		else
@@ -247,7 +262,7 @@ namespace LTSM
 		{
             	    if(auto prim = static_cast<RenderText*>(ptr.get()))
             	    {
-			onAddDamage(std::get<0>(prim->region),std::get<1>(prim->region),std::get<2>(prim->region),std::get<3>(prim->region));
+		    	onAddDamage(prim->toRegion());
             	    }
                 }
 	    }
@@ -262,7 +277,11 @@ namespace LTSM
             Application::info("dbus signal: add fill rect, display: %d", display);
             auto ptr = new RenderRect(rect, color, fill);
             _renderPrimitives.emplace_back(ptr);
-	    onAddDamage(std::get<0>(rect),std::get<1>(rect),std::get<2>(rect),std::get<3>(rect));
+            const int16_t rx = std::get<0>(rect);
+            const int16_t ry = std::get<1>(rect);
+            const uint16_t rw = std::get<2>(rect);
+            const uint16_t rh = std::get<3>(rect);
+	    onAddDamage({rx,ry,rw,rh});
         }
     }
 
@@ -277,7 +296,7 @@ namespace LTSM
             const uint16_t rh = _systemfont.height;
             auto ptr = new RenderText(text, { rx, ry, rw, rh }, color);
             _renderPrimitives.emplace_back(ptr);
-	    onAddDamage(rx,ry,rw,rh);
+	    onAddDamage({rx,ry,rw,rh});
         }
     }
 

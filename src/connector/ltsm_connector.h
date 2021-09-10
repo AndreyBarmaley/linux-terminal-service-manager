@@ -33,11 +33,6 @@ namespace LTSM
 {
     enum class RenderType { RenderRect, RenderText };
 
-    namespace XCB
-    {
-        typedef std::shared_ptr<RootDisplayExt> SharedDisplay;
-    }
-
     struct RenderPrimitive
     {
         const RenderType type;
@@ -54,6 +49,8 @@ namespace LTSM
 
         RenderRect(const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col, bool v)
             : RenderPrimitive(RenderType::RenderRect), region(rt), color(col), fill(v) {}
+
+        XCB::Region toRegion(void) const { return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region)); }
     };
 
     struct RenderText : RenderPrimitive
@@ -64,10 +61,19 @@ namespace LTSM
 
         RenderText(const std::string & str, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col)
             : RenderPrimitive(RenderType::RenderText), text(str), region(rt), color(col) {}
+
+        XCB::Region toRegion(void) const { return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region)); }
     };
 
     namespace Connector
     {
+        ///@brief codec exception
+        struct CodecFailed
+        {
+            std::string err;
+            CodecFailed(const std::string & str) : err(str) {}
+        };
+
         /* Connector::SignalProxy */
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {
@@ -77,11 +83,11 @@ namespace LTSM
             int                         _display;
             std::string		        _conntype;
             std::string			_remoteaddr;
-            bool                        _xcbDisableMessages;
 
             std::list<std::unique_ptr<RenderPrimitive>>
                                         _renderPrimitives;
 
+            std::atomic<bool>           _xcbDisableMessages;
             XCB::SharedDisplay          _xcbDisplay;
 
         private:
@@ -102,7 +108,7 @@ namespace LTSM
             void			onClearRenderPrimitives(const int32_t & display) override;
             void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
             void			onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
-	    virtual void		onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) {}
+	    virtual void		onAddDamage(const XCB::Region &) {}
 
             bool                        xcbConnect(int display);
 
@@ -111,6 +117,9 @@ namespace LTSM
 
     	    virtual int	                communication(void) = 0;
 	    std::string         	checkFileOption(const std::string &) const;
+
+	    bool			isAllowXcbMessages(void) const;
+	    void			setEnableXcbMessages(bool f);
         };
 
         /* Connector::Service */

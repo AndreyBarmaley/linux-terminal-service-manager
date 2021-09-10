@@ -54,6 +54,165 @@ namespace LTSM
 {
     namespace XCB
     {
+        Region operator- (const Region & reg, const Point & pt)
+        {
+            return Region(reg.x - pt.x, reg.y - pt.y, reg.width, reg.height);
+        }
+         
+        Region operator+ (const Region & reg, const Point & pt)
+        {
+            return Region(reg.x + pt.x, reg.y + pt.y, reg.width, reg.height);
+        }
+
+        void Region::reset(void)
+	{
+	    x = -1; y = -1;
+	    width = 0; height = 0;
+	}
+
+        void Region::assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+	{
+	    x = rx; y = ry;
+	    width = rw; height = rh;
+	}
+
+        void Region::assign(const Region & reg)
+	{
+	    *this = reg;
+	}
+
+        Region Region::align(size_t val) const
+	{
+            Region res(x, y, width, height);
+
+            if(auto alignX = x % val)
+            {
+                res.x -= alignX;
+                res.width += alignX;
+            }
+            if(auto alignY = y % val)
+            {
+                res.y -= alignY;
+                res.height += alignY;
+            }
+            if(auto alignW = res.width % val)
+                res.width += val - alignW;
+            if(auto alignH = res.height % val)
+                res.height += val - alignH;
+
+            return res;
+        }
+
+        void Region::join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+	{
+	    join({rx, ry, rw, rh});
+	}
+
+        void Region::join(const Region & reg)
+	{
+            if(invalid())
+            {
+                x = reg.x;
+                y = reg.y;
+                width = reg.width;
+                height = reg.height;
+            }
+            else
+            if(! reg.empty() && *this != reg)
+            {
+                /* Horizontal union */
+                auto xm = std::min(x, reg.x);
+                width = std::max(x + width, reg.x + reg.width) - xm;
+                x = xm;
+                /* Vertical union */
+                auto ym = std::min(y, reg.y);
+                height = std::max(y + height, reg.y + reg.height) - ym;
+                y = ym;
+            }
+ 	}
+
+        bool Region::empty(void) const
+	{
+	    return width == 0 || height == 0;
+	}
+
+        bool Region::invalid(void) const
+	{
+	    return x == -1 && y == -1 && empty();
+	}
+
+        Region Region::intersected(const Region & reg) const
+	{
+            Region res;
+            intersection(*this, reg, & res);
+            return res;
+	}
+
+        bool Region::intersects(const Region & reg1, const Region & reg2)
+	{
+	    // check reg1.empty || reg2.empty
+            if(reg1.empty() || reg2.empty())
+                return false;
+
+            // horizontal intersection
+            if(std::min(reg1.x + reg1.width, reg2.x + reg2.width) <= std::max(reg1.x, reg2.x))
+                return false;
+
+            // vertical intersection
+            if(std::min(reg1.y + reg1.height, reg2.y + reg2.height) <= std::max(reg1.y, reg2.y))
+                return false;
+
+            return true;
+	}
+
+        bool Region::intersection(const Region & reg1, const Region & reg2, Region* res)
+	{
+    	    bool intersects = Region::intersects(reg1, reg2);
+
+            if(! intersects)
+                return false;
+
+            if(! res)
+                return intersects;
+
+            // horizontal intersection
+            res->x = std::max(reg1.x, reg2.x);
+            res->width = std::min(reg1.x + reg1.width, reg2.x + reg2.width) - res->x;
+
+            // vertical intersection
+            res->y = std::max(reg1.y, reg2.y);
+            res->height = std::min(reg1.y + reg1.height, reg2.y + reg2.height) - res->y;
+
+            return ! res->empty();
+	}
+
+        std::list<Region> Region::divideCounts(size_t cw, size_t ch) const
+        {
+            size_t bw = width <= cw ? 1 : width / cw;
+            size_t bh = height <= cw ? 1 : height / ch;
+            return divideBlocks(bw, bh);
+        }
+
+        std::list<Region> Region::divideBlocks(size_t cw, size_t ch) const
+        {
+            std::list<Region> res;
+
+            if(cw > width) cw = width;
+            if(ch > height) ch = height;
+
+            for(size_t yy = 0; yy < height; yy += ch)
+            {
+                for(size_t xx = 0; xx < width; xx += cw)
+                {
+                    uint16_t fixedw = std::min(width - xx, cw);
+                    uint16_t fixedh = std::min(height - yy, ch);
+                    res.emplace_back(x + xx, y + yy, fixedw, fixedh);
+                }
+            }
+                
+            return res;
+        }
+ 
         size_t HasherKeyCodes::operator()(const KeyCodes & kc) const
         {
             if(kc.get())
@@ -96,18 +255,13 @@ namespace LTSM
         }
     }
 
-    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh, uint32_t offset) const
-    {
-        return getPixmapRegion(winid, { rx, ry, rw, rh }, offset);
-    }
-
-    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const xcb_rectangle_t & rect, uint32_t offset) const
+    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, uint32_t offset) const
     {
 	xcb_generic_error_t* error;
-        auto cookie = xcb_shm_get_image(get()->conn, winid, rect.x, rect.y, rect.width, rect.height,
-                                        ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, getid(), offset);
+        auto cookie = xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
+                                        ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
 
-        auto xcbReply = getReplyConn(xcb_shm_get_image, get()->conn, cookie);
+        auto xcbReply = getReplyConn(xcb_shm_get_image, connection(), cookie);
         PixmapInfoReply res;
 
 	if(xcbReply.error())
@@ -156,8 +310,8 @@ namespace LTSM
 
     bool XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid)
     {
-        auto cookie = xcb_damage_add_checked(get()->conn, winid, regid);
-        if(auto err = GenericError(xcb_request_check(get()->conn, cookie)))
+        auto cookie = xcb_damage_add_checked(connection(), winid, regid);
+        if(auto err = GenericError(xcb_request_check(connection(), cookie)))
         {
             error("xcb_damage_add", err);
             return false;
@@ -165,10 +319,10 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::Damage::subtractRegion(xcb_drawable_t winid, xcb_xfixes_region_t repair, xcb_xfixes_region_t parts)
+    bool XCB::Damage::subtractRegion(xcb_xfixes_region_t repair, xcb_xfixes_region_t parts)
     {
-        auto cookie = xcb_damage_subtract_checked(get()->conn, winid, repair, parts);
-        if(auto err = GenericError(xcb_request_check(get()->conn, cookie)))
+        auto cookie = xcb_damage_subtract_checked(connection(), xid(), repair, parts);
+        if(auto err = GenericError(xcb_request_check(connection(), cookie)))
         {
             error("xcb_damage_subtract", err);
             return false;
@@ -177,6 +331,23 @@ namespace LTSM
     }
 
     /* XCB::XFixesRegion */
+    XCB::XFixesRegion::XFixesRegion(const Region & reg, xcb_connection_t* conn)
+    {
+        const xcb_rectangle_t rect{reg.x, reg.y, reg.width, reg.height};
+
+        auto id = xcb_generate_id(conn);
+        auto cookie = xcb_xfixes_create_region_checked(conn, id, 1, & rect);
+
+        if(auto err = GenericError(xcb_request_check(conn, cookie)))
+        {
+            error("xcb_xfixes_create_region", err);
+        }
+        else
+        {
+            reset(new xfixes_region_t(conn, id));
+        }
+    }
+
     XCB::XFixesRegion::XFixesRegion(const xcb_rectangle_t* rects, uint32_t count, xcb_connection_t* conn)
     {
         auto id = xcb_generate_id(conn);
@@ -205,6 +376,42 @@ namespace LTSM
         {
             reset(new xfixes_region_t(conn, id));
         }
+    }
+
+    XCB::XFixesRegion XCB::XFixesRegion::intersect(xcb_xfixes_region_t reg2) const
+    {
+        auto id = xcb_generate_id(connection());
+        auto cookie = xcb_xfixes_intersect_region_checked(connection(), xid(), reg2, id);
+        XCB::XFixesRegion res;
+
+        if(auto err = GenericError(xcb_request_check(connection(), cookie)))
+        {
+            error("xcb_xfixes_intersect_region", err);
+        }
+        else
+        {
+            res.reset(new xfixes_region_t(connection(), id));
+        }
+
+        return res;
+    }
+
+    XCB::XFixesRegion XCB::XFixesRegion::unionreg(xcb_xfixes_region_t reg2) const
+    {
+        auto id = xcb_generate_id(connection());
+        auto cookie = xcb_xfixes_union_region_checked(connection(), xid(), reg2, id);
+        XCB::XFixesRegion res;
+
+        if(auto err = GenericError(xcb_request_check(connection(), cookie)))
+        {
+            error("xcb_xfixes_union_region", err);
+        }
+        else
+        {
+            res.reset(new xfixes_region_t(connection(), id));
+        }
+
+        return res;
     }
 
     /* XCB::Connector */
@@ -264,26 +471,14 @@ namespace LTSM
         return Damage(win, level, _conn);
     }
 
-    bool XCB::Connector::damageSubtrack(const Damage & damage, int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+    XCB::XFixesRegion XCB::Connector::createFixesRegion(const Region & reg)
     {
-        const xcb_rectangle_t rect = { rx, ry, rw, rh };
-        if(auto repair = XFixesRegion(& rect, 1, _conn))
-        {
-            auto cookie = xcb_damage_subtract_checked(_conn, damage.getid(), repair.getid(), XCB_XFIXES_REGION_NONE);
-            if(auto errorReq = checkRequest(cookie))
-            {
-                extendedError(errorReq, "xcb_damage_subtract");
-                return false;
-            }
-
-            return true;
-        }
-        return false;
+	return XFixesRegion(reg, _conn);
     }
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const xcb_rectangle_t* rect, size_t num)
     {
-        return XFixesRegion(rect, num, _conn);
+	return XFixesRegion(rect, num, _conn);
     }
 
     size_t XCB::Connector::getMaxRequest(void) const
@@ -359,7 +554,7 @@ namespace LTSM
 #endif
     }
 
-    int XCB::Connector::hasError(void)
+    int XCB::Connector::hasError(void) const
     {
 	return xcb_connection_has_error(_conn);
     }
@@ -369,7 +564,7 @@ namespace LTSM
         return GenericEvent(xcb_poll_for_event(_conn));
     }
 
-    bool XCB::Connector::checkExtension(const Module & module)
+    bool XCB::Connector::checkExtension(const Module & module) const
     {
         if(module == Module::TEST)
         {
@@ -484,7 +679,7 @@ namespace LTSM
         return false;
     }
 
-    int XCB::Connector::eventNotify(const GenericEvent & ev, const Module & module)
+    int XCB::Connector::eventNotify(const GenericEvent & ev, const Module & module) const
     {
         // clear bit
         auto response_type = ev ? ev->response_type & ~0x80 : 0;
@@ -528,27 +723,27 @@ namespace LTSM
         return -1;
     }
 
-    bool XCB::Connector::isDamageNotify(const GenericEvent & ev)
+    bool XCB::Connector::isDamageNotify(const GenericEvent & ev) const
     {
         return XCB_DAMAGE_NOTIFY == eventNotify(ev, Module::DAMAGE);
     }
 
-    bool XCB::Connector::isXFixesSelectionNotify(const GenericEvent & ev)
+    bool XCB::Connector::isXFixesSelectionNotify(const GenericEvent & ev) const
     {
         return XCB_XFIXES_SELECTION_NOTIFY == eventNotify(ev, Module::XFIXES);
     }
 
-    bool XCB::Connector::isXFixesCursorNotify(const GenericEvent & ev)
+    bool XCB::Connector::isXFixesCursorNotify(const GenericEvent & ev) const
     {
         return XCB_XFIXES_CURSOR_NOTIFY == eventNotify(ev, Module::XFIXES);
     }
 
-    bool XCB::Connector::isRandrScreenNotify(const GenericEvent & ev)
+    bool XCB::Connector::isRandrScreenNotify(const GenericEvent & ev) const
     {
         return XCB_RANDR_SCREEN_CHANGE_NOTIFY == eventNotify(ev, Module::RANDR);
     }
 
-    bool XCB::Connector::isRandrCRTCNotify(const GenericEvent & ev)
+    bool XCB::Connector::isRandrCRTCNotify(const GenericEvent & ev) const
     {
         if(XCB_RANDR_NOTIFY == eventNotify(ev, Module::RANDR))
         {
@@ -559,7 +754,7 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::Connector::isRandrOutputNotify(const GenericEvent & ev)
+    bool XCB::Connector::isRandrOutputNotify(const GenericEvent & ev) const
     {
         if(XCB_RANDR_NOTIFY == eventNotify(ev, Module::RANDR))
         {
@@ -570,7 +765,7 @@ namespace LTSM
         return false;
     }
 
-    int XCB::Connector::eventErrorOpcode(const GenericEvent & ev, const Module & module)
+    int XCB::Connector::eventErrorOpcode(const GenericEvent & ev, const Module & module) const
     {
         if(ev && ev->response_type == 0)
         {
@@ -675,7 +870,7 @@ namespace LTSM
         if(! checkExtension(Module::RANDR))
             throw std::string("failed: ").append("RANDR extension");
 
-        auto sz = size();
+        auto wsz = size();
 
         // create randr notify
         xcb_randr_select_input(_conn, _screen->root, 
@@ -685,15 +880,14 @@ namespace LTSM
         _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
         if(_damage)
         {
-            const xcb_rectangle_t rect = { 0, 0, sz.first, sz.second };
-            _xfixes = XFixesRegion(& rect, 1, _conn);
-            if(_xfixes) _damage.addRegion(_screen->root, _xfixes.getid());
+            auto fixreg = XFixesRegion({0, 0, wsz.width, wsz.height}, _conn);
+            if(fixreg) _damage.addRegion(_screen->root, fixreg.xid());
         }
 
         // init shm
         const int bpp = bitsPerPixel() >> 3;
         const int pagesz = 4096;
-        const size_t shmsz = ((sz.first * sz.second * bpp / pagesz) + 1) * pagesz;
+        const size_t shmsz = ((wsz.width * wsz.height * bpp / pagesz) + 1) * pagesz;
 
         _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
@@ -747,25 +941,30 @@ namespace LTSM
         return _screen->root_depth;
     }
 
-    std::pair<uint16_t,uint16_t> XCB::RootDisplay::size(void) const
+    XCB::Region XCB::RootDisplay::region(void) const
+    {
+        return Region(Point(0, 0), size());
+    }
+
+    XCB::Size XCB::RootDisplay::size(void) const
     {
         auto cookie = xcb_get_geometry(_conn, _screen->root);
         auto reply = xcb_get_geometry_reply(_conn, cookie, nullptr);
 
         if(reply)
-            return std::make_pair(reply->width, reply->height);
+            return Size(reply->width, reply->height);
 
-        return std::make_pair(_screen->width_in_pixels, _screen->height_in_pixels);
+        return Size(_screen->width_in_pixels, _screen->height_in_pixels);
     }
 
-    int XCB::RootDisplay::width(void) const
+    uint16_t XCB::RootDisplay::width(void) const
     {
-        return size().first;
+        return size().width;
     }
 
-    int XCB::RootDisplay::height(void) const
+    uint16_t XCB::RootDisplay::height(void) const
     {
-        return size().second;
+        return size().height;
     }
 
     xcb_drawable_t XCB::RootDisplay::root(void) const
@@ -821,6 +1020,8 @@ namespace LTSM
                 return false;
             }
 
+            damageSubtrack(region());
+
             int sizeID = std::distance(sizes, it);
             auto cookie = xcb_randr_set_screen_config(_conn, _screen->root, XCB_CURRENT_TIME,
                                 xcbReply.reply()->config_timestamp, sizeID, xcbReply.reply()->rotation, 0);
@@ -835,34 +1036,34 @@ namespace LTSM
         return false;
     }
 
-    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) const
+    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg) const
     {
         if(_shm)
-            return _shm.getPixmapRegion(_screen->root, rx, ry, rw, rh, 0);
+            return _shm.getPixmapRegion(_screen->root, reg, 0);
 
-        size_t pitch = rw * (bitsPerPixel() >> 2);
-        //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * rh;
+        size_t pitch = reg.width * (bitsPerPixel() >> 2);
+        //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * reg.height;
         uint64_t maxReqLength = xcb_get_maximum_request_length(_conn);
         PixmapInfoReply res;
 
         if(pitch == 0)
         {
-            Application::error("copy root image error, empty size: %d, %d, bpp: %d", rw, rh, bitsPerPixel());
+            Application::error("copy root image error, empty size: %d, %d, bpp: %d", reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
         PixmapInfoBuffer* info = nullptr;
 	uint16_t allowRows = maxReqLength / pitch;
-	if(allowRows > rh)
-	    allowRows = rh;
+	if(allowRows > reg.height)
+	    allowRows = reg.height;
 
-        for(int16_t yy = ry; yy < ry + rh; yy += allowRows)
+        for(int16_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
         {
 	    // last rows
-	    if(yy + allowRows > ry + rh)
-		allowRows = ry + rh - yy;
+	    if(yy + allowRows > reg.y + reg.height)
+		allowRows = reg.y + reg.height - yy;
 
-            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, rx, yy, rw, allowRows, ~0);
+            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, ~0);
 	    auto xcbReply = getReplyFunc(xcb_get_image, cookie);
 
 	    if(xcbReply.error())
@@ -876,7 +1077,7 @@ namespace LTSM
 		auto reply = xcbReply.reply().get();
 
                 if(! info)
-                    info = new PixmapInfoBuffer(reply->depth, reply->visual, rh * pitch);
+                    info = new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch);
 
                 auto length = xcb_get_image_data_length(reply);
                 auto data = xcb_get_image_data(reply);
@@ -889,15 +1090,53 @@ namespace LTSM
         return res;
     }
 
-    bool XCB::RootDisplay::damageSubtrack(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+    bool XCB::RootDisplay::damageAdd(const xcb_rectangle_t* rects, size_t counts)
     {
-        return Connector::damageSubtrack(_damage, rx, ry, rw, rh);
+	if(_damage && rects && counts)
+	{
+    	    auto fixreg = XFixesRegion(rects, counts, _conn);
+	    return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
+	}
+	return false;
+    }
+
+    bool XCB::RootDisplay::damageAdd(const Region & reg)
+    {
+        if(_damage)
+        {
+    	    auto fixreg = XFixesRegion(region().intersected(reg), _conn);
+	    return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
+        }
+
+        return false;
+    }
+
+    bool XCB::RootDisplay::damageSubtrack(const Region & reg)
+    {
+	if(_damage)
+	{
+    	    auto fixreg = XFixesRegion(reg, _conn);
+	    return fixreg ? _damage.subtractRegion(fixreg.xid(), XCB_XFIXES_REGION_NONE) : false;
+	}
+	return false;
     }
 
     XCB::GenericEvent XCB::RootDisplay::poolEvent(void)
     {
         GenericEvent ev = Connector::poolEvent();
 
+        if(isDamageNotify(ev))
+        {
+            auto wsz = size();
+            auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
+            if(notify->area.x + notify->area.width > wsz.width || notify->area.y + notify->area.height > wsz.height)
+            {
+        	Application::debug("damage notify: [%d,%d,%d,%d] discard", notify->area.x, notify->area.y, notify->area.width, notify->area.height);
+                xcb_discard_reply(_conn, notify->sequence);
+                return GenericEvent();
+            }
+         }
+        else
         if(isRandrCRTCNotify(ev))
         {
             auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
@@ -905,6 +1144,14 @@ namespace LTSM
             xcb_randr_crtc_change_t cc = notify->u.cc;
             if(0 < cc.width && 0 < cc.height)
             {
+                auto wsz = size();
+                if(cc.width != wsz.width || cc.height != wsz.height)
+                {
+        	    Application::debug("xcb crc change notify: %dx%d discard", cc.width, cc.height);
+                    xcb_discard_reply(_conn, notify->sequence);
+                    return GenericEvent();
+                }
+
         	Application::debug("xcb crc change notify: %dx%d", cc.width, cc.height);
 
                 // init shm
@@ -915,12 +1162,7 @@ namespace LTSM
 
                 // create damage notify
                 _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
-                if(_damage)
-                {
-                    const xcb_rectangle_t rect = { 0, 0, cc.width, cc.height };
-                    _xfixes = XFixesRegion(& rect, 1, _conn);
-                    if(_xfixes) _damage.addRegion(_screen->root, _xfixes.getid());
-                }
+		damageAdd({0, 0, cc.width, cc.height});
             }
         }
 
@@ -1053,8 +1295,8 @@ namespace LTSM
             extendedError(errorReq, "xcb_change_window_attributes");
         else
         {
-            auto sz = size();
-            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, sz.first, sz.second);
+            auto wsz = size();
+            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, wsz.width, wsz.height);
             errorReq = checkRequest(cookie);
 
             if(errorReq)
@@ -1064,8 +1306,8 @@ namespace LTSM
 
     /* XCB::RootDisplayExt */
     XCB::RootDisplayExt::RootDisplayExt(const std::string & addr) : RootDisplay(addr),
-    _atoms{ XCB_ATOM_NONE }, _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
-    _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
+        _atoms{ XCB_ATOM_NONE }, _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
+        _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
     {
 	const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
 	const uint32_t values[] = { _screen->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE }; 
@@ -1090,6 +1332,10 @@ namespace LTSM
 				getAtom("_NET_WM_NAME"), _atomUTF8, 8, name.size(), name.data());
 
 	    xcb_flush(_conn);
+
+            // run periodic timer (555ms)
+            _timerClipCheck = Tools::BaseTimer::create<std::chrono::milliseconds>(555, true,
+                        [this](){ this->getSelectionEvent(this->_atomPrimary); });
         }
         else
 	{
@@ -1100,6 +1346,7 @@ namespace LTSM
 
     XCB::RootDisplayExt::~RootDisplayExt()
     {
+        _timerClipCheck->stop();
 	if(_selwin)
             xcb_destroy_window(_conn, _selwin);
     }
@@ -1257,11 +1504,6 @@ namespace LTSM
 	return true;
     }
 
-    bool XCB::RootDisplayExt::getClipboardEvent(void)
-    {
-	return getSelectionEvent(_atomPrimary);
-    }
-
     bool XCB::RootDisplayExt::selectionNotifyAction(xcb_selection_notify_event_t* ev)
     {
 	if(! ev || ev->property == XCB_ATOM_NONE)
@@ -1325,5 +1567,33 @@ namespace LTSM
 
 	xcb_flush(_conn);
 	return ret;
+    }
+
+    XCB::GenericEvent XCB::RootDisplayExt::poolEvent(void)
+    {
+        GenericEvent ev = RootDisplay::poolEvent();
+        auto response_type = ev ? ev->response_type & ~0x80 : 0;
+
+        switch(response_type)
+        {
+            case XCB_SELECTION_CLEAR:
+                selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
+                break;
+
+            case XCB_SELECTION_REQUEST:
+                selectionRequestAction(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                break;
+
+            default:
+                break;
+        }
+
+        return ev;
+    }
+
+    bool XCB::RootDisplayExt::isSelectionNotify(const GenericEvent & ev) const
+    {
+        auto response_type = ev ? ev->response_type & ~0x80 : 0;
+        return response_type == XCB_SELECTION_NOTIFY;
     }
 }

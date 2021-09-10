@@ -209,10 +209,25 @@ namespace LTSM
         });
         _helperAccessUsersList.erase(itend, _helperAccessUsersList.end());
         registerAdaptor();
+
+        // check sessions timepoint limit
+        timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [this](){ this->sessionsTimeLimitAction(); });
+        // check sessions killed
+        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(5, true, [this](){ this->sessionsEndedAction(); });
+        // check sessions alive
+        timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true, [this](){ this->sessionsCheckAliveAction(); });
     }
 
     Manager::Object::~Object()
     {
+        timer1->stop();
+        timer2->stop();
+        timer3->stop();
+
+        timer1->join();
+        timer2->join();
+        timer3->join();
+
         unregisterAdaptor();
     }
 
@@ -239,7 +254,7 @@ namespace LTSM
 		    // shutdown session
 		    if(std::chrono::seconds(xvfb->durationlimit) < sessionAliveSec)
 		    {
-        		Application::error("time point limit, display: %d", display);
+        		Application::notice("time point limit, display: %d", display);
         		displayShutdown(display, true, xvfb);
         	    }
 		    else
@@ -312,7 +327,7 @@ namespace LTSM
 		{
 		    session.mode = XvfbMode::SessionSleep;
 		    session.checkconn = false;
-        	    Application::error("connector not reply, display: %d", display);
+        	    Application::warning("connector not reply, display: %d", display);
 		    // complete shutdown
 		    busConnectorTerminated(display);
 		}
@@ -361,7 +376,7 @@ namespace LTSM
         }
 
         if(0 != chdir(home.c_str()))
-            Application::error("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
+            Application::warning("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
         setenv("USER", user.c_str(), 1);
         setenv("LOGNAME", user.c_str(), 1);
         setenv("HOME", home.c_str(), 1);
@@ -492,7 +507,7 @@ namespace LTSM
         if(!xvfb || xvfb->shutdown)
 	    return false;
 
-	Application::info("display shutdown: %d", display);
+	Application::notice("display shutdown: %d", display);
 
         xvfb->shutdown = true;
         if(emitSignal) emitShutdownConnector(display);
@@ -518,7 +533,7 @@ namespace LTSM
             {
 	        if(! std::filesystem::exists(script))
 	        {
-        	    Application::debug("command not found: `%s'", script.c_str());
+        	    Application::warning("command not found: `%s'", script.c_str());
 	        }
 	        else
     	        if(sysuser != user)
@@ -1133,7 +1148,7 @@ namespace LTSM
         else
         if(0 == pid)
         {
-            Application::info("runas started, pid: %d", getpid());
+            Application::notice("runas started, pid: %d", getpid());
 
 	    // child mode
             closefds();
@@ -1769,40 +1784,16 @@ namespace LTSM
         Application::setDebugLevel(_config.getString("service:debug"));
         Application::info("manager version: %d", LTSM::service_version);
 
-	std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
-
         while(isRunning)
         {
             conn->enterEventLoopAsync();
-
-	    // check sessions timepoint limit
-	    if(!timer1 || !timer1->isRunning())
-		timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, [ptr = objAdaptor.get()](){ ptr->sessionsTimeLimitAction(); });
-
-	    // check sessions killed
-	    if(!timer2 || !timer2->isRunning())
-		timer2 = Tools::BaseTimer::create<std::chrono::seconds>(5, [ptr = objAdaptor.get()](){ ptr->sessionsEndedAction(); });
-
-	    // check sessions alive
-	    if(!timer3 || !timer3->isRunning())
-		timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, [ptr = objAdaptor.get()](){ ptr->sessionsCheckAliveAction(); });
-
             std::this_thread::sleep_for(1ms);
         }
 
         isRunning = false;
-	timer1->stop();
-	timer2->stop();
-	timer3->stop();
-
-        // wait timers, they use objAdaptor
-	timer1->join();
-	timer2->join();
-	timer3->join();
-
         objAdaptor.reset();
-        conn->enterEventLoopAsync();
 
+        conn->enterEventLoopAsync();
         return EXIT_SUCCESS;
     }
 

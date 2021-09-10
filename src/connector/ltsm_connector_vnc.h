@@ -33,6 +33,7 @@
 
 #include "ltsm_sockets.h"
 #include "ltsm_connector.h"
+#include "ltsm_vnc_zlib.h"
 #include "ltsm_xcb_wrapper.h"
 
 namespace LTSM
@@ -102,66 +103,6 @@ namespace LTSM
         // pseudo encodings
         const int ENCODING_DESKTOP_SIZE = -223;
         const int ENCODING_EXT_DESKTOP_SIZE = -308;
-
-        struct Point
-        {
-            int16_t     x, y;
-
-            Point() : x(-1), y(-1) {}
-            Point(int16_t px, int16_t py) : x(px), y(py) {}
-	};
-
-        struct Region
-        {
-            int16_t     x, y;
-            uint16_t    w, h;
-
-            Region() : x(-1), y(-1), w(0), h(0) {}
-            Region(const xcb_rectangle_t & rt) : x(rt.x),  y(rt.y), w(rt.width), h(rt.height) {}
-            Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : x(rx), y(ry), w(rw), h(rh) {}
-            Region(const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & tuple)
-            {
-                std::tie(x, y, w, h) = tuple;
-            }
-
-            void        reset(void);
-            void        assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
-
-            bool        empty(void) const;
-            bool        invalid(void) const;
-            bool        intersects(const Region &) const;
-
-            Region      intersected(const Region &) const;
-            static bool intersection(const Region &, const Region &, Region*);
-
-            std::list<Region> divideBlocks(size_t cw, size_t ch) const;
-            std::list<Region> divideCounts(size_t cw, size_t ch) const;
-
-
-            bool        operator==(const Region & rt) const
-            {
-                return rt.x == x && rt.y == y && rt.w == w && rt.h == h;
-            }
-
-            bool        operator!=(const Region & rt) const
-            {
-                return rt.x != x || rt.y != y || rt.w != w || rt.h != h;
-            }
-
-            void        join(const Region &);
-        };
-
-        Region operator- (const Region & reg, const Point & pt);
-        Region operator+ (const Region & reg, const Point & pt);
-
-        struct HasherRegion
-        {
-            size_t operator()(const Region & reg) const
-            {
-                return std::hash<uint64_t>()((static_cast<uint64_t>(reg.x) << 48) | (static_cast<uint64_t>(reg.y) << 32) |
-                                             (static_cast<uint64_t>(reg.w) << 16) | static_cast<uint64_t>(reg.h));
-            }
-        };
 
         struct Color
         {
@@ -278,19 +219,6 @@ namespace LTSM
                        ((static_cast<int>(col.g) * greenMax / 0xFF) << greenShift) | ((static_cast<int>(col.b) * blueMax / 0xFF) << blueShift);
             }
 
-/*
-            int convertTo(int pixel, const PixelFormat & pf) const
-            {
-                if(pf != *this)
-                {
-                    int r = (red(pixel) * pf.redMax) / redMax;
-                    int g = (green(pixel) * pf.greenMax) / greenMax;
-                    int b = (blue(pixel) * pf.blueMax) / blueMax;
-                    return (r << pf.redShift) | (g << pf.greenShift) | (b << pf.blueShift);
-                }
-                return pixel;
-            }
-*/
             int convertFrom(const PixelFormat & pf, int pixel) const
             {
                 if(pf != *this)
@@ -341,17 +269,17 @@ namespace LTSM
             bool		renderChar(int ch, const Color &, int px, int py);
             void		renderText(const std::string &, const Color &, int px, int py);
 
-            void		fillPixel(const Region &, int pixel, const PixelFormat &);
-            void		fillColor(const Region &, const Color &);
-            void		drawRect(const Region &, const Color &);
-	    void		blitRegion(const FrameBuffer &, const Region &, int16_t dstx, int16_t dsty);
+            void		fillPixel(const XCB::Region &, int pixel, const PixelFormat &);
+            void		fillColor(const XCB::Region &, const Color &);
+            void		drawRect(const XCB::Region &, const Color &);
+	    void		blitRegion(const FrameBuffer &, const XCB::Region &, int16_t dstx, int16_t dsty);
 
             int                 pixel(uint16_t px, uint16_t py) const;
 
             ColorMap            colourMap(void) const;
-            PixelMapWeight      pixelMapWeight(const Region &) const;
-	    std::list<RLE>      toRLE(const Region &) const;
-            bool                allOfPixel(int pixel, const Region &) const;
+            PixelMapWeight      pixelMapWeight(const XCB::Region &) const;
+	    std::list<RLE>      toRLE(const XCB::Region &) const;
+            bool                allOfPixel(int pixel, const XCB::Region &) const;
 
             uint8_t*            pitchData(size_t row) const;
 
@@ -364,18 +292,19 @@ namespace LTSM
 
     namespace RRE
     {
-        struct Region : std::pair<RFB::Region, int>
+        struct Region : std::pair<XCB::Region, int>
         {
-            Region(const RFB::Region & reg, int pixel) : std::pair<RFB::Region, int>(reg, pixel) {}
+            Region(const XCB::Region & reg, int pixel) : std::pair<XCB::Region, int>(reg, pixel) {}
             Region() {}
         };
     }
 
     enum class DesktopResizeMode { Undefined, Disabled, Success, ServerInform, ClientRequest };
+    const char* desktopResizeModeString(const DesktopResizeMode &);
 
     namespace Connector
     {
-        typedef std::function<int(const RFB::Region &, const RFB::FrameBuffer &)> sendEncodingFunc;
+        typedef std::function<int(const XCB::Region &, const RFB::FrameBuffer &)> sendEncodingFunc;
 
         /* Connector::VNC */
         class VNC : public SignalProxy, protected NetworkStream
@@ -396,11 +325,10 @@ namespace LTSM
 	    std::atomic<DesktopResizeMode> desktopResizeMode;
             RFB::PixelFormat    serverFormat;
             RFB::PixelFormat    clientFormat;
-            RFB::Region         clientRegion;
-            RFB::Region         serverRegion;
+            XCB::Region         clientRegion;
+            XCB::Region         serverRegion;
             std::mutex          sendGlobal;
             std::mutex		sendEncoding;
-            RFB::Region         damageRegion;
             RFB::ColorMap       colourMap;
             std::vector<int>    clientEncodings;
             std::list<std::string> disabledEncodings;
@@ -427,7 +355,7 @@ namespace LTSM
             void                onShutdownConnector(const int32_t & display) override;
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
-	    void		onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) override;
+	    void		onAddDamage(const XCB::Region &) override;
 
         protected:
 	    void		xcbReleaseInputsEvent(void);
@@ -442,7 +370,7 @@ namespace LTSM
 	    void		clientSetDesktopSizeEvent(void);
             void                clientDisconnectedEvent(void);
 
-            void                serverSendFrameBufferUpdate(const RFB::Region &);
+            bool                serverSendFrameBufferUpdate(const XCB::Region &);
             void                serverSendColourMap(int first);
             void                serverSendBell(void);
             void                serverSendCutText(const std::vector<uint8_t> &);
@@ -454,32 +382,32 @@ namespace LTSM
             bool                isUpdateProcessed(void) const;
             void                waitSendingFBUpdate(void) const;
 
-            int                 sendEncodingRaw(const RFB::Region &, const RFB::FrameBuffer &);
-            int                 sendEncodingRawSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
-            int                 sendEncodingRawSubRegionRaw(const RFB::Region &, const RFB::FrameBuffer &);
+            int                 sendEncodingRaw(const XCB::Region &, const RFB::FrameBuffer &);
+            int                 sendEncodingRawSubRegion(const XCB::Point &, const XCB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingRawSubRegionRaw(const XCB::Region &, const RFB::FrameBuffer &);
 
-            int                 sendEncodingRRE(const RFB::Region &, const RFB::FrameBuffer &, bool corre);
-            int			sendEncodingRRESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool corre);
-            int                 sendEncodingRRESubRects(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &, bool corre);
+            int                 sendEncodingRRE(const XCB::Region &, const RFB::FrameBuffer &, bool corre);
+            int			sendEncodingRRESubRegion(const XCB::Point &, const XCB::Region &, const RFB::FrameBuffer &, int jobId, bool corre);
+            int                 sendEncodingRRESubRects(const XCB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &, bool corre);
 
-            int                 sendEncodingHextile(const RFB::Region &, const RFB::FrameBuffer &, bool zlibver);
-            int			sendEncodingHextileSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
-            int			sendEncodingHextileSubForeground(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
-            int			sendEncodingHextileSubColored(const RFB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
-            int			sendEncodingHextileSubRaw(const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
+            int                 sendEncodingHextile(const XCB::Region &, const RFB::FrameBuffer &, bool zlibver);
+            int			sendEncodingHextileSubRegion(const XCB::Point &, const XCB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
+            int			sendEncodingHextileSubForeground(const XCB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
+            int			sendEncodingHextileSubColored(const XCB::Region &, const RFB::FrameBuffer &, int jobId, int back, const std::list<RRE::Region> &);
+            int			sendEncodingHextileSubRaw(const XCB::Region &, const RFB::FrameBuffer &, int jobId, bool zlibver);
 
-            int                 sendEncodingZLib(const RFB::Region &, const RFB::FrameBuffer &);
-            int			sendEncodingZLibSubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId);
+            int                 sendEncodingZLib(const XCB::Region &, const RFB::FrameBuffer &);
+            int			sendEncodingZLibSubRegion(const XCB::Point &, const XCB::Region &, const RFB::FrameBuffer &, int jobId);
 
-            int                 sendEncodingTRLE(const RFB::Region &, const RFB::FrameBuffer &, bool zrle);
-            int			sendEncodingTRLESubRegion(const RFB::Point &, const RFB::Region &, const RFB::FrameBuffer &, int jobId, bool zrle);
-            int                 sendEncodingTRLESubPacked(const RFB::Region &, const RFB::FrameBuffer &, int jobId, size_t field, size_t rowsz, const RFB::PixelMapWeight &, bool zrle);
-	    int			sendEncodingTRLESubPlain(const RFB::Region &, const RFB::FrameBuffer &, const std::list<RFB::RLE> &);
-	    int			sendEncodingTRLESubPalette(const RFB::Region &, const RFB::FrameBuffer &, const RFB::PixelMapWeight &, const std::list<RFB::RLE> &);
-	    int			sendEncodingTRLESubRaw(const RFB::Region &, const RFB::FrameBuffer &);
+            int                 sendEncodingTRLE(const XCB::Region &, const RFB::FrameBuffer &, bool zrle);
+            int			sendEncodingTRLESubRegion(const XCB::Point &, const XCB::Region &, const RFB::FrameBuffer &, int jobId, bool zrle);
+            int                 sendEncodingTRLESubPacked(const XCB::Region &, const RFB::FrameBuffer &, int jobId, size_t field, size_t rowsz, const RFB::PixelMapWeight &, bool zrle);
+	    int			sendEncodingTRLESubPlain(const XCB::Region &, const RFB::FrameBuffer &, const std::list<RFB::RLE> &);
+	    int			sendEncodingTRLESubPalette(const XCB::Region &, const RFB::FrameBuffer &, const RFB::PixelMapWeight &, const std::list<RFB::RLE> &);
+	    int			sendEncodingTRLESubRaw(const XCB::Region &, const RFB::FrameBuffer &);
 
 
-            void		renderPrimitivesTo(const RFB::Region &, RFB::FrameBuffer &);
+            void		renderPrimitivesTo(const XCB::Region &, RFB::FrameBuffer &);
             std::pair<sendEncodingFunc, int> selectEncodings(void);
 
         public:

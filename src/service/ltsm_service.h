@@ -121,6 +121,7 @@ namespace LTSM
             std::string                 _helperDateFormat;
             std::vector<std::string>    _helperAccessUsersList;
 	    std::list<PidStatus>	_childEnded;
+            std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
 
         protected:
             void                        closefds(void) const;
@@ -144,13 +145,14 @@ namespace LTSM
             std::list<std::string>      getSystemUsersList(int uidMin, int uidMax) const;
             bool                        pamAuthenticate(const int32_t & display, const std::string & login, const std::string & password);
 
+	    void			sessionsTimeLimitAction(void);
+	    void			sessionsEndedAction(void);
+	    void			sessionsCheckAliveAction(void);
+
         public:
             Object(sdbus::IConnection &, const JsonObject &, const Application &);
             ~Object();
 
-	    void			sessionsTimeLimitAction(void);
-	    void			sessionsEndedAction(void);
-	    void			sessionsCheckAliveAction(void);
             void                        signalChildEnded(int pid, int status);
 
         private:                        /* virtual dbus methods */

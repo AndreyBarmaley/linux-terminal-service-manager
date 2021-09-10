@@ -57,7 +57,7 @@ public:
     void start(uint32_t ms)
     {
 	if(callback)
-	    ptr = BaseTimer::create<std::chrono::milliseconds>(ms, callback, opaque);
+	    ptr = BaseTimer::create<std::chrono::milliseconds>(ms, false, callback, opaque);
     }
 };
 

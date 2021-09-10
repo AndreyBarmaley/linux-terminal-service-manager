@@ -32,6 +32,8 @@
 
 namespace LTSM
 {
+    struct FreeRdpClient;
+
     namespace Connector
     {
         /* Connector::RDP */
@@ -39,24 +41,26 @@ namespace LTSM
         {
             std::atomic<bool>           helperStartedFlag;
             std::atomic<bool>           loopShutdownFlag;
+            std::atomic<bool>           clientUpdatePartFlag;
+	    std::unique_ptr<FreeRdpClient> freeRdpClient;
 
         protected:
             // dbus virtual signals
+	    void                	onLoginSuccess(const int32_t & display, const std::string & userName) override;
             void                        onSendBellSignal(const int32_t & display) override {}
             void                        onShutdownConnector(const int32_t & display) override;
             void                        onHelperWidgetStarted(const int32_t & display) override;
 
-        public:
-            RDP(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "rdp"), helperStartedFlag(false), loopShutdownFlag(false)
-            {
-                registerProxy();
-            }
+	    bool			clientUpdate(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
+	    bool			clientUpdateRemoteFX(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
+	    bool			clientUpdateBitmap(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
+	    void                	clientDisconnectedEvent(void);
 
-            ~RDP()
-	    {
-    		unregisterProxy();
-	    }
+	    void                	xcbReleaseInputsEvent(void);
+
+        public:
+            RDP(sdbus::IConnection* conn, const JsonObject & jo);
+            ~RDP();
 
             int		                communication(void) override;
 	    bool			createX11Session(void);
@@ -67,9 +71,7 @@ namespace LTSM
 	    static BOOL			clientAuthenticate(freerdp_peer* client, const char** user, const char** domain, const char** password);
 	    static BOOL			clientSynchronizeEvent(rdpInput* input, UINT32 flags);
 	    static BOOL			clientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
-	    static BOOL			clientUnicodeKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
 	    static BOOL			clientMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
-	    static BOOL			clientExtendedMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
 	    static BOOL			clientRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
 	    static BOOL			clientSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
 	    static BOOL			clientRefreshRequest(freerdp_peer* client);

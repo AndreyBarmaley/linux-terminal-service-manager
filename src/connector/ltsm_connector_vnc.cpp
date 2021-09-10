@@ -121,12 +121,12 @@ namespace LTSM
             setPixelRaw(px, py, pixel);
         }
 
-        void FrameBuffer::fillPixel(const Region & reg, int val, const PixelFormat & pf)
+        void FrameBuffer::fillPixel(const XCB::Region & reg, int val, const PixelFormat & pf)
         {
             int pixel = get()->format.convertFrom(pf, val);
 
-            for(int yy = 0; yy < reg.h; ++yy)
-                for(int xx = 0; xx < reg.w; ++xx)
+            for(int yy = 0; yy < reg.height; ++yy)
+                for(int xx = 0; xx < reg.width; ++xx)
                     setPixelRaw(reg.x + xx, reg.y + yy, pixel);
         }
 
@@ -136,29 +136,29 @@ namespace LTSM
             setPixelRaw(px, py, pixel);
         }
 
-        void FrameBuffer::fillColor(const Region & reg, const Color & col)
+        void FrameBuffer::fillColor(const XCB::Region & reg, const Color & col)
         {
             int pixel = get()->format.pixel(col);
 
-            for(int yy = 0; yy < reg.h; ++yy)
-                for(int xx = 0; xx < reg.w; ++xx)
+            for(int yy = 0; yy < reg.height; ++yy)
+                for(int xx = 0; xx < reg.width; ++xx)
                     setPixelRaw(reg.x + xx, reg.y + yy, pixel);
         }
 
-        void FrameBuffer::drawRect(const Region & reg, const Color & col)
+        void FrameBuffer::drawRect(const XCB::Region & reg, const Color & col)
         {
             int pixel = get()->format.pixel(col);
 
-            for(int xx = 0; xx < reg.w; ++xx)
+            for(int xx = 0; xx < reg.width; ++xx)
             {
                 setPixelRaw(reg.x + xx, reg.y, pixel);
-                setPixelRaw(reg.x + xx, reg.y + reg.h - 1, pixel);
+                setPixelRaw(reg.x + xx, reg.y + reg.height - 1, pixel);
             }
 
-            for(int yy = 1; yy < reg.h - 1; ++yy)
+            for(int yy = 1; yy < reg.height - 1; ++yy)
             {
                 setPixelRaw(reg.x, reg.y + yy, pixel);
-                setPixelRaw(reg.x + reg.w - 1, reg.y + yy, pixel);
+                setPixelRaw(reg.x + reg.width - 1, reg.y + yy, pixel);
             }
         }
 
@@ -180,13 +180,13 @@ namespace LTSM
             return 0;
         }
 
-	std::list<RLE> FrameBuffer::toRLE(const Region & reg) const
+	std::list<RLE> FrameBuffer::toRLE(const XCB::Region & reg) const
 	{
 	    std::list<RLE> res;
 
-            for(int yy = 0; yy < reg.h; ++yy)
+            for(int yy = 0; yy < reg.height; ++yy)
             {
-                for(int xx = 0; xx < reg.w; ++xx)
+                for(int xx = 0; xx < reg.width; ++xx)
                 {
                     int pix = pixel(xx + reg.x, yy + reg.y);
 
@@ -200,22 +200,22 @@ namespace LTSM
 	    return res;
 	}
 
-	void FrameBuffer::blitRegion(const FrameBuffer & fb, const Region & reg, int16_t dstx, int16_t dsty)
+	void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, int16_t dstx, int16_t dsty)
 	{
-	    Region dst = Region(dstx, dsty, reg.w, reg.h).intersected({0, 0, reg.w, reg.h});
+	    auto dst = XCB::Region(dstx, dsty, reg.width, reg.height).intersected({0, 0, reg.width, reg.height});
 
     	    if(get()->format != fb.get()->format)
     	    {
-        	for(int yy = 0; yy < dst.w; ++yy)
-            	    for(int xx = 0; xx < dst.h; ++xx)
+        	for(int yy = 0; yy < dst.width; ++yy)
+            	    for(int xx = 0; xx < dst.height; ++xx)
                 	setPixel(dst.x + xx, dst.y + yy, fb.pixel(reg.x + xx, reg.y + yy), fb.get()->format);
     	    }
     	    else
     	    {
-        	for(int row = 0; row < dst.h; ++row)
+        	for(int row = 0; row < dst.height; ++row)
         	{
             	    auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.get()->format.bytePerPixel();
-            	    size_t length = dst.w * fb.get()->format.bytePerPixel();
+            	    size_t length = dst.width * fb.get()->format.bytePerPixel();
             	    std::copy(ptr, ptr + length, pitchData(row));
         	}
     	    }
@@ -238,13 +238,13 @@ namespace LTSM
             return map;
         }
 
-        PixelMapWeight FrameBuffer::pixelMapWeight(const RFB::Region & reg) const
+        PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const
         {
             PixelMapWeight map;
 
-            for(int yy = 0; yy < reg.h; ++yy)
+            for(int yy = 0; yy < reg.height; ++yy)
             {
-                for(int xx = 0; xx < reg.w; ++xx)
+                for(int xx = 0; xx < reg.width; ++xx)
                 {
                     int val = pixel(reg.x + xx, reg.y + yy);
                     auto it = map.find(val);
@@ -259,10 +259,10 @@ namespace LTSM
             return map;
         }
 
-        bool FrameBuffer::allOfPixel(int value, const RFB::Region & reg) const
+        bool FrameBuffer::allOfPixel(int value, const XCB::Region & reg) const
         {
-            for(int yy = 0; yy < reg.h; ++yy)
-                for(int xx = 0; xx < reg.w; ++xx)
+            for(int yy = 0; yy < reg.height; ++yy)
+                for(int xx = 0; xx < reg.width; ++xx)
                     if(value != pixel(reg.x + xx, reg.y + yy)) return false;
 
             return true;
@@ -318,132 +318,20 @@ namespace LTSM
                 offset += _systemfont.width;
             }
         }
+    } // RFB
 
-        Region operator- (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x - pt.x, reg.y - pt.y, reg.w, reg.h);
-        }
-            
-        Region operator+ (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x + pt.x, reg.y + pt.y, reg.w, reg.h);
-        }
+    const char* desktopResizeModeString(const DesktopResizeMode & mode)
+    {
+	switch(mode)
+	{
+	    case DesktopResizeMode::Disabled: 		return "Disabled";
+	    case DesktopResizeMode::Success:		return "Success";
+	    case DesktopResizeMode::ServerInform:	return "ServerInform";
+	    case DesktopResizeMode::ClientRequest:	return "ClientRequest";
+	    default: break;
+	}
 
-        void Region::assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-        {
-            x = rx;
-            y = ry;
-            w = rw;
-            h = rh;
-        }
-
-        void Region::reset(void)
-        {
-            assign(-1, -1, 0, 0);
-        }
-
-        bool Region::invalid(void) const
-        {
-            return x == -1 && y == -1 && w == 0 && h == 0;
-        }
-
-        bool Region::empty(void) const
-        {
-            return w == 0 || h == 0;
-        }
-
-        bool Region::intersects(const Region & rt) const
-        {
-            if(empty() || rt.empty())
-                return false;
-
-            // horizontal intersection
-            if(std::min(x + w, rt.x + rt.w) <= std::max(x, rt.x))
-                return false;
-
-            // vertical intersection
-            if(std::min(y + h, rt.y + rt.h) <= std::max(y, rt.y))
-                return false;
-
-            return true;
-        }
-
-        Region Region::intersected(const Region & reg) const
-        {
-            Region res;
-            intersection(*this, reg, & res);
-            return res;
-        }
-
-        bool Region::intersection(const Region & rt1, const Region & rt2, Region* res)
-        {
-    	    bool intersects = rt1.intersects(rt2);
-
-	    if(! intersects)
-		return false;
-
-            if(! res)
-                return intersects;
-
-            // horizontal intersection
-            res->x = std::max(rt1.x, rt2.x);
-            res->w = std::min(rt1.x + rt1.w, rt2.x + rt2.w) - res->x;
-
-            // vertical intersection
-            res->y = std::max(rt1.y, rt2.y);
-            res->h = std::min(rt1.y + rt1.h, rt2.y + rt2.h) - res->y;
-            return ! res->empty();
-        }
-
-        std::list<Region> Region::divideCounts(size_t cw, size_t ch) const
-        {
-            size_t bw = w <= cw ? 1 : w / cw;
-            size_t bh = h <= cw ? 1 : h / ch;
-            return divideBlocks(bw, bh);
-        }
-
-        std::list<Region> Region::divideBlocks(size_t cw, size_t ch) const
-        {
-            std::list<Region> res;
-
-            if(cw > w) cw = w;
-            if(ch > h) ch = h;
-
-            for(size_t yy = 0; yy < h; yy += ch)
-            {
-                for(size_t xx = 0; xx < w; xx += cw)
-                {
-                    uint16_t fixedw = std::min(w - xx, cw);
-                    uint16_t fixedh = std::min(h - yy, ch);
-                    res.emplace_back(x + xx, y + yy, fixedw, fixedh);
-                }
-            }
-
-            return res;
-        }
-
-        void Region::join(const Region & rt)
-        {
-	    if(invalid())
-	    {
-		x = rt.x;
-		y = rt.y;
-		w = rt.w;
-		h = rt.h;
-	    }
-	    else
-            if(! rt.empty() && *this != rt)
-            {
-                /* Horizontal union */
-                auto xm = std::min(x, rt.x);
-                w = std::max(x + w, rt.x + rt.w) - xm;
-		x = xm;
-                /* Vertical union */
-                auto ym = std::min(y, rt.y);
-                h = std::max(y + h, rt.y + rt.h) - ym;
-		y = ym;
-            }
-        }
+	return "Undefined";
     }
 
     /* Connector::VNC */
@@ -690,38 +578,35 @@ namespace LTSM
     	busSetEncryptionInfo(screen, encryptionInfo);
 
         // RFB 6.3.1 client init
-	if(1)
-	{
-    	    int clientSharedFlag = recvInt8();
-    	    Application::debug("RFB 6.3.1, client shared: 0x%02x", clientSharedFlag);
-    	    // RFB 6.3.2 server init
-	    auto xcbSize = _xcbDisplay->size();
-    	    sendIntBE16(xcbSize.first);
-    	    sendIntBE16(xcbSize.second);
-    	    Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+    	int clientSharedFlag = recvInt8();
+    	Application::debug("RFB 6.3.1, client shared: 0x%02x", clientSharedFlag);
+    	// RFB 6.3.2 server init
+	auto wsz = _xcbDisplay->size();
+    	sendIntBE16(wsz.width);
+    	sendIntBE16(wsz.height);
+    	Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                            serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian, serverFormat.trueColor,
                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
-    	    clientFormat = serverFormat;
-    	    // send pixel format
-    	    sendInt8(serverFormat.bitsPerPixel);
-    	    sendInt8(serverFormat.depth);
-    	    sendInt8(serverFormat.bigEndian);
-    	    sendInt8(serverFormat.trueColor);
-    	    sendIntBE16(serverFormat.redMax);
-    	    sendIntBE16(serverFormat.greenMax);
-    	    sendIntBE16(serverFormat.blueMax);
-    	    sendInt8(serverFormat.redShift);
-    	    sendInt8(serverFormat.greenShift);
-    	    sendInt8(serverFormat.blueShift);
-    	    // send padding
-    	    sendInt8(0);
-    	    sendInt8(0);
-    	    sendInt8(0);
-    	    // send name desktop
-    	    const std::string desktopName("X11 Remote Desktop");
-    	    sendIntBE32(desktopName.size());
-    	    sendString(desktopName).sendFlush();
-	}
+    	clientFormat = serverFormat;
+    	// send pixel format
+    	sendInt8(serverFormat.bitsPerPixel);
+    	sendInt8(serverFormat.depth);
+    	sendInt8(serverFormat.bigEndian);
+    	sendInt8(serverFormat.trueColor);
+    	sendIntBE16(serverFormat.redMax);
+    	sendIntBE16(serverFormat.greenMax);
+    	sendIntBE16(serverFormat.blueMax);
+    	sendInt8(serverFormat.redShift);
+    	sendInt8(serverFormat.greenShift);
+    	sendInt8(serverFormat.blueShift);
+    	// send padding
+    	sendInt8(0);
+    	sendInt8(0);
+    	sendInt8(0);
+    	// send name desktop
+    	const std::string desktopName("X11 Remote Desktop");
+    	sendIntBE32(desktopName.size());
+    	sendString(desktopName).sendFlush();
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
@@ -734,11 +619,11 @@ namespace LTSM
         Application::info("connector starting: %s", "wait RFB messages...");
 
         // xcb on
-        _xcbDisableMessages = false;
-        serverRegion.assign(0, 0, _xcbDisplay->width(), _xcbDisplay->height());
+        setEnableXcbMessages(true);
+        serverRegion.assign(0, 0, wsz.width, wsz.height);
+        XCB::Region damageRegion(0, 0, 0, 0);
 	bool clientUpdateReq = false;
 	std::vector<uint8_t> selbuf;
-	std::unique_ptr<Tools::BaseTimer> timerGetSelection;
 
         while(loopMessage)
         {
@@ -797,11 +682,11 @@ namespace LTSM
                 }
             }
 
-            if(! _xcbDisableMessages)
+            if( isAllowXcbMessages())
             {
 		if(auto err = _xcbDisplay->hasError())
 		{
-		    _xcbDisableMessages = true;
+		    setEnableXcbMessages(false);
                     Application::error("xcb display error connection: %d", err);
 		    break;
 		}
@@ -841,27 +726,18 @@ namespace LTSM
 			    }
                         }
                     }
-
-		    // check selection events
-            	    switch(ev->response_type & ~0x80)
+                    else
+                    if(_xcbDisplay->isSelectionNotify(ev))
             	    {
-                	case XCB_SELECTION_CLEAR:
-                	    _xcbDisplay->selectionClearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
-                    	    break;
-
-                	case XCB_SELECTION_REQUEST:
-                    	    _xcbDisplay->selectionRequestAction(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
-                    	    break;
-
-			case XCB_SELECTION_NOTIFY:
-			    if(_xcbDisplay->selectionNotifyAction(reinterpret_cast<xcb_selection_notify_event_t*>(ev.get())))
-                		selbuf = _xcbDisplay->getSelectionData();
-			    break;
-
-                	default:
-                    	    break;
+                        auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
+			if(_xcbDisplay->selectionNotifyAction(notify))
+                	    selbuf = _xcbDisplay->getSelectionData();
 		    }
                 }
+
+		if(! damageRegion.empty())
+                    // fix out of screen
+                    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
 
                 // server action
 		if(! isUpdateProcessed())
@@ -885,9 +761,9 @@ namespace LTSM
 
 		    if(clientUpdateReq && ! damageRegion.empty())
                     {
-                        RFB::Region res;
+                        XCB::Region res;
 
-                        if(RFB::Region::intersection(clientRegion, damageRegion, & res))
+                        if(XCB::Region::intersection(clientRegion, damageRegion, & res))
 		        {
 			    fbUpdateProcessing = true;
 			    // background job
@@ -897,10 +773,6 @@ namespace LTSM
 		        clientUpdateReq = false;
                     }
                 }
-
-    		// periodic 750ms: get selection action
-		if(!timerGetSelection || !timerGetSelection->isRunning())
-		    timerGetSelection = Tools::BaseTimer::create<std::chrono::milliseconds>(750, [=](){ _xcbDisplay->getClipboardEvent(); });
     	    }
 
             // dbus processing
@@ -1021,10 +893,10 @@ namespace LTSM
         int incremental = recvInt8();
         clientRegion.x = recvIntBE16();
         clientRegion.y = recvIntBE16();
-        clientRegion.w = recvIntBE16();
-        clientRegion.h = recvIntBE16();
+        clientRegion.width = recvIntBE16();
+        clientRegion.height = recvIntBE16();
         Application::debug("RFB 6.4.3, request update fb, region [%d, %d, %d, %d], incremental: %d",
-                           clientRegion.x, clientRegion.y, clientRegion.w, clientRegion.h, incremental);
+                           clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         bool fullUpdate = incremental == 0;
 
         if(fullUpdate)
@@ -1043,7 +915,7 @@ namespace LTSM
             clientRegion = serverRegion.intersected(clientRegion);
 
             if(clientRegion.empty())
-                Application::warning("client region intersection with display [%d, %d] failed", serverRegion.w, serverRegion.h);
+                Application::warning("client region intersection with display [%d, %d] failed", serverRegion.width, serverRegion.height);
         }
 
         return fullUpdate;
@@ -1057,7 +929,7 @@ namespace LTSM
         int keysym = recvIntBE32();
         Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
 
-        if(! _xcbDisableMessages)
+        if(isAllowXcbMessages())
         {
             auto keyCodes = _xcbDisplay->keysymToKeycodes(keysym);
             // no wait xcb replies
@@ -1081,7 +953,7 @@ namespace LTSM
         int posy = recvIntBE16();
         Application::debug("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
 
-        if(! _xcbDisableMessages)
+        if(isAllowXcbMessages())
         {
             // no wait xcb replies
             std::thread([=]()
@@ -1128,7 +1000,7 @@ namespace LTSM
 
         Application::debug("RFB 6.4.6, cut text event, length: %d", length);
 
-        if(! _xcbDisableMessages)
+        if(isAllowXcbMessages())
         {
 	    size_t maxreq = _xcbDisplay->getMaxRequest();
 	    size_t chunk = std::min(maxreq, length);
@@ -1176,9 +1048,9 @@ namespace LTSM
 
     void Connector::VNC::clientDisconnectedEvent(void)
     {
-        Application::warning("%s", "RFB disconnected");
+        Application::warning("RFB disconnected, display: %d", _display);
 
-        if(! _xcbDisableMessages)
+        if(isAllowXcbMessages())
 	    xcbReleaseInputsEvent();
     }
 
@@ -1228,7 +1100,7 @@ namespace LTSM
 	sendFlush();
     }
 
-    void Connector::VNC::renderPrimitivesTo(const RFB::Region & reg1, RFB::FrameBuffer & fb)
+    void Connector::VNC::renderPrimitivesTo(const XCB::Region & reg1, RFB::FrameBuffer & fb)
     {
         for(auto & ptr : _renderPrimitives)
         {
@@ -1237,10 +1109,10 @@ namespace LTSM
                 case RenderType::RenderRect:
                     if(auto prim = static_cast<RenderRect*>(ptr.get()))
                     {
-                        const RFB::Region reg2(prim->region);
-                        RFB::Region section;
+                        const XCB::Region reg2 = prim->toRegion();
+                        XCB::Region section;
 
-                        if(RFB::Region::intersection(reg1, reg2, & section))
+                        if(XCB::Region::intersection(reg1, reg2, & section))
                         {
                             if(prim->fill)
                                 fb.fillColor(section, prim->color);
@@ -1254,8 +1126,8 @@ namespace LTSM
                 case RenderType::RenderText:
                     if(auto prim = static_cast<RenderText*>(ptr.get()))
                     {
-                        const RFB::Region reg2(prim->region);
-                        if(RFB::Region::intersection(reg1, reg2, nullptr))
+                        const XCB::Region reg2 = prim->toRegion();
+                        if(XCB::Region::intersection(reg1, reg2, nullptr))
 			{
                             fb.renderText(prim->text, prim->color, reg2.x - reg1.x, reg2.y - reg1.y);
 			}
@@ -1269,36 +1141,36 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::serverSendFrameBufferUpdate(const RFB::Region & reg)
+    bool Connector::VNC::serverSendFrameBufferUpdate(const XCB::Region & reg)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
 
-        if(auto reply = _xcbDisplay->copyRootImageRegion(reg.x, reg.y, reg.w, reg.h))
+        if(auto reply = _xcbDisplay->copyRootImageRegion(reg))
         {
             const int bytePerPixel = _xcbDisplay->bitsPerPixel() >> 3;
-            int alignRow = 0;
+            int alignRowPixels = 0;
 
             if(encodingDebug)
             {
                 if(const xcb_visualtype_t* visual = _xcbDisplay->findVisual(reply->visual()))
                 {
                     Application::debug("shm request size [%d, %d], reply: length: %d, depth: %d, bpp: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       reg.w, reg.h, reply->size(), reply->depth(), _xcbDisplay->bitsPerPixel(reply->depth()), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
+                                       reg.width, reg.height, reply->size(), reply->depth(), _xcbDisplay->bitsPerPixel(reply->depth()), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
                 }
             }
 
             // fix align
-            if(reply->size() > (reg.w * reg.h * bytePerPixel))
-                alignRow = reply->size() / (reg.h * bytePerPixel) - reg.w;
+            if(reply->size() > (reg.width * reg.height * bytePerPixel))
+        	alignRowPixels = reply->size() / (reg.height * bytePerPixel) - reg.width;
 
-            Application::debug("server send fb update: [%d, %d, %d, %d]", reg.x, reg.y, reg.w, reg.h);
+            Application::debug("server send fb update: [%d, %d, %d, %d]", reg.x, reg.y, reg.width, reg.height);
 
             // RFB: 6.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
             // padding
             sendInt8(0);
 
-            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.w + alignRow, reg.h, serverFormat);
+            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.width + alignRowPixels, reg.height, serverFormat);
 
             // check render primitives
             renderPrimitivesTo(reg, shmFrameBuffer);
@@ -1309,26 +1181,32 @@ namespace LTSM
 		// send encodings
         	encodingLength = prefEncodings.first(reg, shmFrameBuffer);
 	    }
+	    catch(const CodecFailed &)
+	    {
+		loopMessage = false;
+		return false;
+	    }
 	    catch(const SocketFailed &)
 	    {
 		loopMessage = false;
-		return;
+		return false;
 	    }
 
             if(encodingDebug)
             {
-                int rawLength = 14 /* raw header for one region */ + reg.w * reg.h * clientFormat.bytePerPixel();
+                int rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
                 float optimize = 100.0f - encodingLength * 100 / static_cast<float>(rawLength);
-                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.w, reg.h);
+                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
             }
 
-            _xcbDisplay->damageSubtrack(reg.x, reg.y, reg.w, reg.h);
+            _xcbDisplay->damageSubtrack(reg);
 	    sendFlush();
         }
         else
-            Application::error("xcb call error: %s", "copyRootImageRegion");
+            Application::error("%s: failed", __FUNCTION__);
 
         fbUpdateProcessing = false;
+        return true;
     }
 
     int Connector::VNC::sendPixel(int pixel)
@@ -1429,12 +1307,15 @@ namespace LTSM
         {
 	    xcbReleaseInputsEvent();
 
-            _xcbDisableMessages = true;
+            setEnableXcbMessages(false);
             waitSendingFBUpdate();
 
             SignalProxy::onLoginSuccess(display, userName);
+            setEnableXcbMessages(true);
+
             // full update
-            damageRegion.join(serverRegion);
+            if(isAllowXcbMessages())
+                _xcbDisplay->damageAdd(serverRegion);
         }
     }
 
@@ -1442,7 +1323,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            _xcbDisableMessages = true;
+            setEnableXcbMessages(false);
             waitSendingFBUpdate();
 
             loopMessage = false;
@@ -1468,9 +1349,10 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onAddDamage(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
+    void Connector::VNC::onAddDamage(const XCB::Region & reg)
     {
-        damageRegion.join(RFB::Region(rx, ry, rw, rh));
+        if(isAllowXcbMessages())
+            _xcbDisplay->damageAdd(reg);
     }
 
     void Connector::VNC::zlibDeflateStart(size_t len)

@@ -25,7 +25,6 @@
 #define _LTSM_SOCKETS_
 
 #include <gnutls/gnutls.h>
-#include <zlib.h>
 
 #include <array>
 #include <atomic>
@@ -242,38 +241,6 @@ namespace LTSM
         };
     } // TLS
 
-    namespace ZLib
-    {
-        struct Context : z_stream
-        {
-            std::vector<uint8_t> outbuf;
-
-            Context();
-            ~Context();
-
-            std::vector<uint8_t> syncFlush(bool finish = false);
-        };
-
-        /// @brief: zlib compress output stream only
-        class DeflateStream : public NetworkStream
-        {
-        protected:
-            std::unique_ptr<Context> zlib;
-
-        public:
-            DeflateStream();
-
-            std::vector<uint8_t> syncFlush(void) const;
-	    void		prepareSize(size_t);
-
-            bool                hasInput(void) const override;
-            void		sendRaw(const void*, size_t) override;
-
-	private:
-            void                recvRaw(void*, size_t) const override;
-            uint8_t             peekInt8(void) const override;
-        };
-    } // Zlib
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

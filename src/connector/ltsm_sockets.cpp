@@ -42,6 +42,8 @@
 
 using namespace std::chrono_literals;
 
+/*
+// not used
 #define bswap16(x) __builtin_bswap16(x)
 #define bswap32(x) __builtin_bswap32(x)
 #define bswap64(x) __builtin_bswap64(x)
@@ -61,6 +63,7 @@ using namespace std::chrono_literals;
  #define swapBE32(x) (x)
  #define swapBE64(x) (x)
 #endif
+*/
 
 namespace LTSM
 {
@@ -266,13 +269,13 @@ namespace LTSM
     {
         if(std::ferror(fdin))
         {
-            Application::error("stream error: %d", strerror(errno));
+            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
         if(len != std::fread(ptr, 1, len, fdin))
         {
-            Application::error("stream error: %s", strerror(errno));
+            Application::error("stream error, %s: %s", "fread", strerror(errno));
             throw SocketFailed(errno);
         }
     }
@@ -281,13 +284,13 @@ namespace LTSM
     {
         if(std::ferror(fdout))
         {
-            Application::error("stream error: %d", strerror(errno));
+            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
         if(std::feof(fdout))
         {
-            Application::error("stream ended: %d", strerror(errno));
+            Application::error("stream ended, %s: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
@@ -314,14 +317,14 @@ namespace LTSM
     {
         if(std::ferror(fdin))
         {
-            Application::error("stream error: %d", strerror(errno));
+            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
         int res = std::fgetc(fdin);
         if(std::feof(fdin))
         {
-            Application::error("stream ended: %d", strerror(errno));
+            Application::error("stream ended, %s: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
@@ -374,13 +377,12 @@ namespace LTSM
 
     bool ProxySocket::enterEventLoopAsync(void)
     {
-        // read all data
-        while(hasInput())
-        {
-            uint8_t ch = recvInt8();
-            buf.push_back(ch);
-
-        }
+    	// read all data
+    	while(hasInput())
+    	{
+    	    uint8_t ch = recvInt8();
+    	    buf.push_back(ch);
+	}
 
         if(buf.size())
         {
@@ -394,7 +396,7 @@ namespace LTSM
             if(! checkError())
             {
                 std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
-                Application::debug("from rdesktop: [%s]", str.c_str());
+                Application::debug("from remote: [%s]", str.c_str());
             }
 #endif
             buf.clear();
@@ -425,7 +427,7 @@ namespace LTSM
             if(! checkError())
             {
                 std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
-                Application::debug("from freerdp: [%s]", str.c_str());
+                Application::debug("from local: [%s]", str.c_str());
             }
 #endif
             buf.clear();
@@ -874,99 +876,4 @@ namespace LTSM
         }
     } // TLS
 
-    namespace ZLib
-    {
-        Context::Context()
-        {
-            zalloc = 0;
-            zfree = 0;
-            opaque = 0;
-            total_in = 0;
-            total_out = 0;
-            avail_in = 0;
-            next_in = 0;
-            avail_out = 0;
-            next_out = 0;
-            data_type = Z_BINARY;
-
-            outbuf.reserve(4 * 1024);
-        }
-
-        Context::~Context()
-        {
-            deflateEnd(this);
-        }
-
-        std::vector<uint8_t> Context::syncFlush(bool finish)
-        {
-            next_in = outbuf.data();
-            avail_in = outbuf.size();
-
-            std::vector<uint8_t> zip(deflateBound(this, outbuf.size()));
-            next_out = zip.data();
-            avail_out = zip.size();
-    
-            int prev = total_out;
-            int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
-            if(ret < Z_OK)
-                Application::error("zlib: deflate error: %d", ret);
-        
-            size_t zipsz = total_out - prev;
-            zip.resize(zipsz);
-        
-            outbuf.clear();
-            next_out = nullptr;
-            avail_out = 0;
-    
-            return zip;
-        }
-
-        /* Zlib::DeflateStream */
-        DeflateStream::DeflateStream()
-        {
-            auto ptr = new Context();
-            zlib.reset(ptr);
-
-            int ret = deflateInit2(ptr, Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-            if(ret < Z_OK)
-            {
-                Application::error("zlib: deflateInit error: %d", ret);
-                throw std::invalid_argument("zlib stream init failed");
-            }
-        }
-
-	void DeflateStream::prepareSize(size_t len)
-	{
-	    if(len < zlib->outbuf.capacity()) zlib->outbuf.reserve(len);
-	}
-
-        std::vector<uint8_t> DeflateStream::syncFlush(void) const
-        {
-            return zlib->syncFlush();
-        }
-
-        void DeflateStream::sendRaw(const void* ptr, size_t len)
-        {
-            auto buf = reinterpret_cast<const uint8_t*>(ptr);
-            zlib->outbuf.insert(zlib->outbuf.end(), buf, buf + len);
-        }
-
-        void DeflateStream::recvRaw(void* ptr, size_t len) const
-        {
-            Application::error("zlib: %s", "recv disabled");
-	    throw std::runtime_error("zlib deflate: disable recv");
-        }
-
-        bool DeflateStream::hasInput(void) const
-        {
-            Application::error("zlib: %s", "has input disabled");
-	    throw std::runtime_error("zlib deflate: check");
-        }
-
-        uint8_t DeflateStream::peekInt8(void) const
-        {
-            Application::error("zlib: %s", "peek disabled");
-	    throw std::runtime_error("zlib deflate: peek");
-        }
-    }
 } // LTSM

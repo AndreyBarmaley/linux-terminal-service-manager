@@ -77,31 +77,12 @@ namespace LTSM
             {
             }
 
-            bool            isValid(void) const
-            {
-                return ptr;
-            }
-            int             type(void) const
-            {
-                return ptr ? ptr->type : 0;
-            }
-
-            const SDL_KeyboardEvent*    key(void) const
-            {
-                return ptr ? & ptr->key : nullptr;
-            }
-            const SDL_MouseMotionEvent* motion(void) const
-            {
-                return ptr ? & ptr->motion : nullptr;
-            }
-            const SDL_MouseButtonEvent* button(void) const
-            {
-                return ptr ? & ptr->button : nullptr;
-            }
-            const SDL_MouseWheelEvent*  wheel(void) const
-            {
-                return ptr ? & ptr->wheel : nullptr;
-            }
+            bool            		isValid(void) const { return ptr; }
+            int             		type(void) const { return ptr ? ptr->type : 0; }
+            const SDL_KeyboardEvent*    key(void) const { return ptr ? & ptr->key : nullptr; }
+            const SDL_MouseMotionEvent* motion(void) const { return ptr ? & ptr->motion : nullptr; }
+            const SDL_MouseButtonEvent* button(void) const { return ptr ? & ptr->button : nullptr; }
+            const SDL_MouseWheelEvent*  wheel(void) const { return ptr ? & ptr->wheel : nullptr; }
         };
 
         class Window
@@ -110,6 +91,7 @@ namespace LTSM
             SDL_Renderer*	_renderer;
             SDL_Texture*	_display;
             SDL_Event           _event;
+            bool                _accel;
 
         protected:
 
@@ -118,6 +100,7 @@ namespace LTSM
             ~Window();
 
             bool		isValid(void) const;
+            bool                resize(int newsz_w, int newsz_h);
 
             void		renderClear(const SDL_Color*, SDL_Texture* target = nullptr);
             void		renderColor(const SDL_Color*, const SDL_Rect*, SDL_Texture* target = nullptr);
