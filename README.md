@@ -15,7 +15,7 @@ vncviewer 62.109.24.208
 logins: demo1, demo2, demo3, demo4
 pass: demo
 ```
-this is a single core system, sorry...
+this is a single core virtual system, sorry...
 
 # The scheme of interaction of components  
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)  
