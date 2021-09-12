@@ -1,10 +1,11 @@
 # linux-terminal-service-manager
-Linux Terminal Service Manager (LTSM) это набор программ для организации доступа к рабочему столу (сервер Linux) на основе терминальных сессий (с использованием протокола VNC)
+Linux Terminal Service Manager (LTSM) это набор программ для организации доступа к рабочему столу (сервер Linux) на основе терминальных сессий (с использованием протокола VNC или RDP)
 
 # Основные зависимости:  
   - systemd, sd-bus  
   - [sdbus-cpp](https://github.com/Kistler-Group/sdbus-cpp)  
   - [json parser](https://github.com/zserge/jsmn)  
+  - [freerdp](https://github.com/FreeRDP/FreeRDP)  
   - system libs: gnutls, xcb, zlib  
 
 # Демо доступ
