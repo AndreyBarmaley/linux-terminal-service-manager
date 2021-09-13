@@ -1,0 +1,16 @@
+[Unit]
+Description=LTSM connector
+After=network.target
+#ltsm_service.service
+
+[Service]
+Type=simple
+ExecStart=-/usr/local/sbin/LTSM_connector --type rdp
+User=ltsm-xvfb
+Group=ltsm-shm
+StandardInput=socket
+StandardOutput=socket
+LimitCORE=infinity
+
+[Install]
+WantedBy=multi-user.target

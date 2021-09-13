@@ -14,15 +14,18 @@
     "vnc:gnutls:crlfile": "server.crl",
     "vnc:gnutls:certfile": "server.crt",
     "vnc:gnutls:keyfile": "server.key",
+    "vnc:keymap:file": "",
 
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
     "rdp:security:tls": true,
     "rdp:security:nla": false,
+    "rdp:tls:level": 1,
     "rdp:encryption:level": "compatible",
     "rdp:server:certfile": "server.crt",
     "rdp:server:keyfile": "server.key",
     "rdp:codec:remotefx": false,
+    "rdp:keymap:file": "",
 
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",

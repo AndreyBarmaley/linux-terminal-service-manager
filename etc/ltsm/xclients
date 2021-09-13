@@ -35,5 +35,9 @@ if [ -f ${HOME}/.Xmodmap ]; then
     xmodmap ${HOME}/.Xmodmap
 fi
 
+export XDG_CONFIG_DIRS="/etc/xdg"
+export XDG_DATA_DIRS="/usr/share"
+export XDG_SESSION_TYPE="x11"
+
 XSESSION=/usr/bin/icewm-session
 exec ${XSESSION}

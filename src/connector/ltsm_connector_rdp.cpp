@@ -314,7 +314,7 @@ namespace LTSM
         static bool enterEventLoop(FreeRdpCallback* client)
         {
 	    auto error = CHANNEL_RC_OK;
-	    HANDLE handles[32] = { 0 };
+	    HANDLE handles[32] = {0};
 	    DWORD count = 0;
 
 	    Application::info("%s: enter event loop", "FreeRdpCallback");
@@ -455,7 +455,7 @@ namespace LTSM
                 }
 
                 if(! damageRegion.empty())
-                    // fix out of screen
+		    // fix out of screen
 		    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
 
                 auto & context = freeRdp->context;
@@ -612,21 +612,27 @@ namespace LTSM
 
     bool Connector::RDP::clientUpdateEvent(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
-	if(peer.settings->RemoteFxCodec)
-	    return clientUpdateRemoteFX(peer, reg, reply);
-	
-        if(peer.settings->ColorDepth == 24)
-	    return clientUpdateBitmapPlanar(peer, reg, reply);
+	if(peer.settings->ColorDepth != 24)
+	    return clientUpdateBitmapInterleaved(peer, reg, reply);
 
-	return clientUpdateBitmapInterleaved(peer, reg, reply);
+	if(peer.settings->RemoteFxCodec)
+	    return clientUpdateRfx(peer, reg, reply);
+	
+	return clientUpdateBitmapPlanar(peer, reg, reply);
     }
 
-    bool Connector::RDP::clientUpdateRemoteFX(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
+    bool Connector::RDP::clientUpdateRfx(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
-        Application::notice("%s: area [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: area [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 	auto context = static_cast<ClientContext*>(peer.context);
 
 	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
+
+    	if(reply->size() != reg.height * reg.width * bytePerPixel)
+	{
+	    Application::error("%s: %s failed", __FUNCTION__, "align region");
+            throw CodecFailed("region not aligned");
+	}
 
 	// rfx activate
 	if(! context->rfx)
@@ -651,30 +657,30 @@ namespace LTSM
 	    throw CodecFailed("Stream_New");
         }
 
-        const RFX_RECT rect{ uint16_t(reg.x), uint16_t(reg.y), reg.width, reg.height };
+        const RFX_RECT rect{ 0, 0, reg.width, reg.height };
         if(! rfx_compose_message(context->rfx, st.get(), &rect, 1,  reply->data(), rect.width, rect.height, bytePerPixel * rect.width))
         {
-            Application::error("%s: rfx_compose_message failed: %d", __FUNCTION__);
+            Application::error("%s: rfx_compose_message failed", __FUNCTION__);
 	    throw CodecFailed("rfx_compose_message");
         }
 
-        SURFACE_BITS_COMMAND cmd = { 0 };
+        SURFACE_BITS_COMMAND cmd = {0};
 
         cmd.bmp.codecID = peer.settings->RemoteFxCodecId;
         cmd.cmdType = CMDTYPE_STREAM_SURFACE_BITS;
-        cmd.destLeft = rect.x;
-        cmd.destTop = rect.y;
-        cmd.destRight = rect.x + rect.width - 1;
-        cmd.destBottom = rect.y + rect.height - 1;
+        cmd.destLeft = reg.x;
+        cmd.destTop = reg.y;
+        cmd.destRight = reg.x + reg.width - 1;
+        cmd.destBottom = reg.y + reg.height - 1;
         cmd.bmp.bpp = bytePerPixel << 3;
         cmd.bmp.flags = 0;
-        cmd.bmp.width = rect.width;
-        cmd.bmp.height = rect.height;
+        cmd.bmp.width = reg.width;
+        cmd.bmp.height = reg.height;
         cmd.bmp.bitmapDataLength = Stream_GetPosition(st.get());
         cmd.bmp.bitmapData = Stream_Buffer(st.get());
 
         // begin_frame
-        SURFACE_FRAME_MARKER fm = { 0 };
+        SURFACE_FRAME_MARKER fm = {0};
         fm.frameAction = SURFACECMD_FRAMEACTION_BEGIN;
         fm.frameId = context->frameId;
         peer.update->SurfaceFrameMarker(peer.update->context, &fm);
@@ -888,6 +894,9 @@ namespace LTSM
             client->settings->DesktopHeight = wsz.height;
             client->update->DesktopResize(client->update->context);
         }
+
+	if(client->settings->RemoteFxCodec && client->settings->ColorDepth != 24)
+	    client->settings->RemoteFxCodec = FALSE;
 
         return TRUE;
     }

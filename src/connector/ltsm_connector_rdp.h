@@ -52,7 +52,7 @@ namespace LTSM
             void                        onHelperWidgetStarted(const int32_t & display) override;
 
 	    bool			clientUpdateEvent(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
-	    bool			clientUpdateRemoteFX(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
+	    bool			clientUpdateRfx(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
 	    bool			clientUpdateBitmapPlanar(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
 	    bool			clientUpdateBitmapInterleaved(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
             void                        clientDesktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
