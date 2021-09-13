@@ -71,7 +71,7 @@ namespace LTSM
         }
     }
 
-    SDL::Window::Window(const char* title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, bool accel, int flags) : _window(nullptr), _renderer(nullptr), _display(nullptr)
+    SDL::Window::Window(const char* title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags) : _window(nullptr), _renderer(nullptr), _display(nullptr)
     {
         if(winsz_w <= 0) winsz_w = rendsz_w;
 
@@ -82,8 +82,15 @@ namespace LTSM
 
         if(_window)
         {
-            _accel = accel;
-            _renderer = SDL_CreateRenderer(_window, -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
+            _accel = true;
+            _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
+
+            if(! _renderer)
+            {
+                _accel = false;
+                _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_SOFTWARE);
+                std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture: " << "switch to sotware render" << std::endl;
+            }
 
             if(_renderer)
             {

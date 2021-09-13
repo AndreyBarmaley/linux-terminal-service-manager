@@ -414,6 +414,28 @@ namespace LTSM
         return res;
     }
 
+    bool XCB::KeyCodes::isValid(void) const
+    {
+        return get() && *get() != XCB_NO_SYMBOL;
+    }
+
+    bool XCB::KeyCodes::operator==(const KeyCodes & kc) const
+    {
+        auto ptr1 = get();
+        auto ptr2 = kc.get();
+
+        if(! ptr1 || ! ptr2) return false;
+        if(ptr1 == ptr2) return true;
+
+        while(*ptr1 != XCB_NO_SYMBOL && *ptr2 != XCB_NO_SYMBOL)
+        {
+            if(*ptr1 != *ptr2) return false;
+            ptr1++; ptr2++;
+        }
+
+        return *ptr1 == *ptr2;
+    }
+
     /* XCB::Connector */
     XCB::Connector::Connector(const char* addr) : _conn(nullptr)
     {
@@ -894,7 +916,16 @@ namespace LTSM
 
     XCB::RootDisplay::~RootDisplay()
     {
+	// release all buttons
+	for(int button = 1; button <= 5; button++)
+    	    xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+
+	// release all keys
+	for(int key = 1; key <= 255; key++)
+    	    xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+
         xcb_key_symbols_free(_symbols);
+	xcb_flush(_conn);
     }
 
     int XCB::RootDisplay::bitsPerPixel(void) const
@@ -1016,8 +1047,18 @@ namespace LTSM
             auto it = std::find_if(sizes, sizes + length, [=](auto & ss){ return ss.width == width && ss.height == height; });
             if(it == sizes + length)
             {
-                Application::error("set screen size failed, unknown mode: %d, %d", width, height);
-                return false;
+        	it = std::min_element(sizes, sizes + length, [=](auto & ss1, auto & ss2)
+			    { return std::abs(ss1.width * ss1.height - width * height) < std::abs(ss2.width * ss2.height - width * height); });
+
+        	if(it == sizes + length)
+        	{
+            	    Application::error("set screen size failed, unknown mode: %d, %d", width, height);
+            	    return false;
+		}
+
+		width = it->width;
+		height = it->height;
+            	Application::warning("set screen size, found nearest suitable mode: %d, %d", width, height);
             }
 
             damageSubtrack(region());
@@ -1039,7 +1080,13 @@ namespace LTSM
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg) const
     {
         if(_shm)
-            return _shm.getPixmapRegion(_screen->root, reg, 0);
+	{
+            auto res = _shm.getPixmapRegion(_screen->root, reg, 0);
+	    // fix visual
+	    auto ptr = static_cast<PixmapInfoSHM*>(res.get());
+	    if(ptr) ptr->_visual = findVisual(ptr->_visid);
+	    return res;
+	}
 
         size_t pitch = reg.width * (bitsPerPixel() >> 2);
         //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * reg.height;
@@ -1077,7 +1124,7 @@ namespace LTSM
 		auto reply = xcbReply.reply().get();
 
                 if(! info)
-                    info = new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch);
+                    info = new PixmapInfoBuffer(reply->depth, findVisual(reply->visual), reg.height * pitch);
 
                 auto length = xcb_get_image_data_length(reply);
                 auto data = xcb_get_image_data(reply);
@@ -1171,13 +1218,9 @@ namespace LTSM
 
     XCB::KeyCodes XCB::RootDisplay::keysymToKeycodes(int keysym) const
     {
-        if(_symbols)
-        {
-            auto ptr = xcb_key_symbols_get_keycode(_symbols, keysym);
-            return KeyCodes(ptr);
-        }
-
-        return 0;
+	xcb_keycode_t* ptr = _symbols ?
+		    xcb_key_symbols_get_keycode(_symbols, keysym) : nullptr;
+        return KeyCodes(ptr);
     }
 
     /*
@@ -1219,7 +1262,22 @@ namespace LTSM
         }
     */
 
-    bool XCB::RootDisplay::fakeInputKeysym(int type, const KeyCodes & keycodes, bool wait) const
+    /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
+    /// @param keycode
+    bool XCB::RootDisplay::fakeInputKeycode(int type, uint8_t keycode)
+    {
+        // type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
+        auto cookie = xcb_test_fake_input_checked(_conn, type, keycode, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+        auto errorReq = checkRequest(cookie);
+
+        if(! errorReq)
+            return true;
+
+        extendedError(errorReq, "xcb_test_fake_input");
+        return false;
+    }
+
+    bool XCB::RootDisplay::fakeInputKeysym(int type, const KeyCodes & keycodes)
     {
         if(keycodes.isValid())
         {
@@ -1227,19 +1285,8 @@ namespace LTSM
 
             while(XCB_NO_SYMBOL != *keycode)
             {
-                if(wait)
-                {
-                    auto cookie = xcb_test_fake_input_checked(_conn, type, *keycode, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
-                    auto errorReq = checkRequest(cookie);
-
-                    if(errorReq)
-                    {
-                        extendedError(errorReq, "xcb_test_fake_input");
-                        return false;
-                    }
-                }
-                else
-                    xcb_test_fake_input(_conn, type, *keycode, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+                if( ! fakeInputKeycode(type, *keycode))
+                    return false;
 
                 keycode++;
             }
@@ -1250,24 +1297,18 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::RootDisplay::fakeInputMouse(int type, int buttons, int posx, int posy, bool wait) const
+
+    /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
+    /// @param button: left 1, middle 2, right 3, scrollup 4, scrolldw 5
+    bool XCB::RootDisplay::fakeInputMouse(int type, int button, int posx, int posy)
     {
-        if(wait)
-        {
-            auto cookie = xcb_test_fake_input_checked(_conn, type, buttons, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
-            auto errorReq = checkRequest(cookie);
+        auto cookie = xcb_test_fake_input_checked(_conn, type, button, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
+        auto errorReq = checkRequest(cookie);
 
-            if(! errorReq)
-                return true;
-
-            extendedError(errorReq, "xcb_test_fake_input");
-        }
-        else
-        {
-            xcb_test_fake_input(_conn, type, buttons, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
+        if(! errorReq)
             return true;
-        }
 
+        extendedError(errorReq, "xcb_test_fake_input");
         return false;
     }
 

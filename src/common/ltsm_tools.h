@@ -100,13 +100,15 @@ namespace LTSM
         size_t		maskMaxValue(size_t mask);
 
 	template<typename Int>
-	std::string vector2hexstring(const std::vector<Int> & vec, size_t width = 8, const std::string & sep = ",")
+	std::string buffer2hexstring(const Int* data, size_t length, size_t width = 8, const std::string & sep = ",", bool prefix = true)
 	{
     	    std::ostringstream os;
-    	    for(auto it = vec.begin(); it != vec.end(); ++it)
+    	    for(size_t it = 0; it != length; ++it)
     	    {
-        	os << "0x" << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(*it);
-        	if(sep.size() && std::next(it) != vec.end()) os << sep;
+                if(prefix)
+        	    os << "0x";
+                os << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(data[it]);
+        	if(sep.size() && it + 1 != length) os << sep;
     	    }
 
     	    return os.str();

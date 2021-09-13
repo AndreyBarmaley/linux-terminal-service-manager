@@ -110,6 +110,41 @@ namespace LTSM
     }
 
     /* JsonValue */
+    bool JsonValue::isNull(void) const
+    {
+        return getType() == JsonType::Null;
+    }
+
+    bool JsonValue::isBoolean(void) const
+    {
+        return getType() == JsonType::Boolean;
+    }
+    
+    bool JsonValue::isInteger(void) const
+    {
+        return getType() == JsonType::Integer;
+    }
+    
+    bool JsonValue::isDouble(void) const
+    {
+        return getType() == JsonType::Double;
+    }
+        
+    bool JsonValue::isString(void) const
+    {
+        return getType() == JsonType::String;
+    }
+        
+    bool JsonValue::isObject(void) const
+    {
+        return getType() == JsonType::Object;
+    }
+
+    bool JsonValue::isArray(void) const
+    {
+        return getType() == JsonType::Array;
+    }
+
     JsonArray & operator<< (JsonArray & jv, const int & st)
     {
         jv.addInteger(st);
@@ -159,6 +194,43 @@ namespace LTSM
         return jv;
     }
 
+    /* JsonNull */
+    JsonType JsonNull::getType(void) const
+    {
+        return JsonType::Null;
+    }
+
+    std::string JsonNull::toString(void) const
+    {
+        return "null";
+    }
+
+    int JsonNull::getInteger(void) const
+    {
+        return 0;
+    }
+
+    std::string JsonNull::getString(void) const
+    {
+        return std::string();
+    }
+
+    double JsonNull::getDouble(void) const
+    {
+        return 0;
+    }
+
+    bool JsonNull::getBoolean(void) const
+    {
+        return false;
+    }
+
+    /* JsonPrimitive */
+    std::string JsonPrimitive::toString(void) const
+    {
+        return getString();
+    }
+
     /* JsonString */
     JsonType JsonString::getType(void) const
     {
@@ -167,6 +239,7 @@ namespace LTSM
 
     int JsonString::getInteger(void) const
     {
+        auto content = getString();
         int res = 0;
 
         try
@@ -183,11 +256,12 @@ namespace LTSM
 
     std::string JsonString::getString(void) const
     {
-        return content;
+        return std::any_cast<std::string>(value);
     }
 
     double JsonString::getDouble(void) const
     {
+        auto content = getString();
         double res = 0;
 
         try
@@ -204,6 +278,7 @@ namespace LTSM
 
     bool JsonString::getBoolean(void) const
     {
+        auto content = getString();
         if(content.compare(0, 4, "fals") == 0)
             return false;
 
@@ -226,13 +301,91 @@ namespace LTSM
 
     std::string JsonString::toString(void) const
     {
-        return Tools::escaped(content, true);
+        return Tools::escaped(getString(), true);
+    }
+
+    /* JsonDouble */
+    JsonType JsonDouble::getType(void) const
+    {
+        return JsonType::Double;
+    }
+
+    double JsonDouble::getDouble(void) const
+    {
+        return std::any_cast<double>(value);
+    }
+
+    int JsonDouble::getInteger(void) const
+    {
+        return getDouble();
+    }
+
+    std::string JsonDouble::getString(void) const
+    {
+        return std::to_string(getDouble());
+    }
+
+    bool JsonDouble::getBoolean(void) const
+    {
+        return getDouble();
+    }
+
+    /* JsonInteger */
+    JsonType JsonInteger::getType(void) const 
+    {
+        return JsonType::Integer;
+    }
+
+    int JsonInteger::getInteger(void) const 
+    {
+        return std::any_cast<int>(value);
+    }
+
+    std::string JsonInteger::getString(void) const
+    {
+        return std::to_string(getInteger());
+    }   
+            
+    double JsonInteger::getDouble(void) const 
+    {
+        return getInteger();
+    }   
+            
+    bool JsonInteger::getBoolean(void) const 
+    {
+        return getInteger();
+    }        
+
+    /* JsonBoolean */
+    JsonType JsonBoolean::getType(void) const 
+    {
+        return JsonType::Boolean;
+    }
+
+    bool JsonBoolean::getBoolean(void) const 
+    {
+        return std::any_cast<bool>(value);
+    }
+
+    int JsonBoolean::getInteger(void) const 
+    {
+        return getBoolean() ? 1 : 0;
+    }
+
+    std::string JsonBoolean::getString(void) const 
+    {
+        return getBoolean() ? "true" : "false";
+    }
+
+    double JsonBoolean::getDouble(void) const
+    {
+        return getInteger();
     }
 
     /* JsonValuePtr */
     JsonValuePtr::JsonValuePtr()
     {
-        reset(new JsonValue());
+        reset(new JsonNull());
     }
 
     JsonValuePtr::JsonValuePtr(int v)
@@ -300,7 +453,7 @@ namespace LTSM
         {
             default:
             case JsonType::Null:
-                val = new JsonValue();
+                val = new JsonNull();
                 break;
 
             case JsonType::Integer:
@@ -364,7 +517,7 @@ namespace LTSM
         return ! content.empty();
     }
 
-    int JsonObject::count(void) const
+    size_t JsonObject::size(void) const
     {
         return content.size();
     }
@@ -597,6 +750,11 @@ namespace LTSM
     }
 
     /* JsonArray */
+    int JsonArray::getInteger(void) const { return 0; }
+    std::string JsonArray::getString(void) const { return ""; }
+    double JsonArray::getDouble(void) const { return 0; }
+    bool JsonArray::getBoolean(void) const { return false; }
+
     JsonArray::JsonArray(const JsonArray & ja)
     {
         content.assign(ja.content.begin(), ja.content.end());
@@ -619,7 +777,7 @@ namespace LTSM
         return *this;
     }
 
-    int JsonArray::count(void) const
+    size_t JsonArray::size(void) const
     {
         return content.size();
     }
@@ -933,7 +1091,7 @@ namespace LTSM
                 else if(Tools::lower(val).compare(0, 4, "true") == 0)
                     res = new JsonBoolean(true);
                 else
-                    res = new JsonValue();
+                    res = new JsonNull();
             }
 
             skip = 1;

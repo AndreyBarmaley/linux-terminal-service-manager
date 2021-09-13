@@ -35,31 +35,6 @@
 
 namespace LTSM
 {
-    template<typename Rect>
-    Rect joinRects(std::list<Rect> & rects)
-    {
-        Rect around = rects.front();
-        std::for_each(std::next(rects.begin()), rects.end(), [&](auto & rt)
-        {
-            if(rt.x < around.x)
-            {
-                around.w += around.x - rt.x;
-                around.x = rt.x;
-            }
-            else if(rt.x + rt.w > around.x + around.w)
-                around.w = rt.x + rt.w - around.x;
-
-            if(rt.y < around.y)
-            {
-                around.h += around.y - rt.y;
-                around.y = rt.y;
-            }
-            else if(rt.y + rt.h > around.y + around.h)
-                around.h = rt.y + rt.h - around.y;
-        });
-        return around;
-    }
-
     class SDL2X11 : protected XCB::RootDisplayExt, protected SDL::Window
     {
         SDL::Texture    txShadow;
@@ -67,8 +42,8 @@ namespace LTSM
         const int       txFormat;
 
     public:
-        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel)
-            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, accel),
+        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
+            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h),
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
             txFormat(SDL_PIXELFORMAT_ARGB32)
 #else
@@ -78,7 +53,7 @@ namespace LTSM
             txShadow = createTexture(width(), height(), txFormat);
         }
 
-        bool fakeInputKeysym(int type, const SDL_Keysym & keysym) const
+        bool fakeInputKeysym(int type, const SDL_Keysym & keysym)
         {
             int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
             auto keycodes = XCB::RootDisplayExt::keysymToKeycodes(0 != xksym ? xksym : keysym.sym);
@@ -246,7 +221,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--accel]" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height>" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -258,8 +233,6 @@ int main(int argc, const char** argv)
     std::string xauth;
     std::string geometry;
     std::string title = "SDL2X11";
-
-    bool accelUsed = false;
 
     if(auto val = getenv("SDL2X11_SCALE"))
     {
@@ -319,8 +292,6 @@ int main(int argc, const char** argv)
                     return printHelp(argv[0]);
                 }
             }
-            else if(0 == std::strcmp(argv[it], "--accel"))
-                accelUsed = true;
         }
 
         if(xauth.size())
@@ -332,7 +303,7 @@ int main(int argc, const char** argv)
 
     try
     {
-        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accelUsed);
+        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h);
         return app.start();
     }
     catch(int errcode)

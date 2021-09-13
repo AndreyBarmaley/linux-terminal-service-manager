@@ -1772,6 +1772,19 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
+	std::string xvfbHome;
+	std::tie(std::ignore, std::ignore, xvfbHome, std::ignore) = Manager::getUserInfo(_config.getString("user:xvfb"));
+
+	if(! std::filesystem::is_directory(xvfbHome))
+        {
+	    Application::error("for 'user:xvfb' home not found: `%s'", xvfbHome.c_str());
+	    return EXIT_FAILURE;
+	}
+
+	// remove old sockets
+	for(auto const & dirEntry : std::filesystem::directory_iterator{xvfbHome})
+	    if(dirEntry.is_socket()) std::filesystem::remove(dirEntry);
+
         signal(SIGTERM, signalHandler);
         signal(SIGCHLD, signalHandler);
         signal(SIGINT,  signalHandler);

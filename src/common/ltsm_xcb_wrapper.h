@@ -24,6 +24,7 @@
 #define _LTSM_XCB_WRAPPER_
 
 #include <list>
+#include <array>
 #include <mutex>
 #include <memory>
 #include <thread>
@@ -59,6 +60,9 @@ namespace LTSM
 	    Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
 	    bool isEmpty(void) const { return width == 0 || height == 0; }
+
+            bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
+            bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
 	};
 
 	struct Region : public Point, public Size
@@ -190,14 +194,14 @@ namespace LTSM
 
         struct KeyCodes : std::shared_ptr<xcb_keycode_t>
         {
-            KeyCodes(xcb_keycode_t* ptr) : std::shared_ptr<xcb_keycode_t>(ptr, std::free)
-            {
-            }
+            KeyCodes(xcb_keycode_t* ptr)
+		: std::shared_ptr<xcb_keycode_t>(ptr, std::free) {}
 
-            bool isValid(void) const
-            {
-                return get() && *get() != XCB_NO_SYMBOL;
-            }
+            KeyCodes(uint8_t code)
+		: std::shared_ptr<xcb_keycode_t>(new xcb_keycode_t[2]{code, XCB_NO_SYMBOL}, std::default_delete<xcb_keycode_t[]>()) {}
+
+            bool isValid(void) const;
+            bool operator==(const KeyCodes &) const;
         };
 
         struct HasherKeyCodes
@@ -244,17 +248,17 @@ namespace LTSM
         struct PixmapInfoBase
         {
             uint8_t                _depth;
-            xcb_visualid_t         _visual;
+            const xcb_visualtype_t* _visual;
 
             virtual uint8_t        depth(void) const { return _depth; }
-            virtual xcb_visualid_t visual(void) const { return _visual; }
+            virtual const xcb_visualtype_t* visual(void) const { return _visual; }
 
             virtual uint8_t*       data(void) = 0;
             virtual const uint8_t* data(void) const = 0;
             virtual size_t         size(void) const = 0;
 
             virtual ~PixmapInfoBase() {}
-            PixmapInfoBase(uint8_t d = 0, xcb_visualid_t v = 0) : _depth(d), _visual(v) {}
+            PixmapInfoBase(uint8_t d = 0, const xcb_visualtype_t* v = nullptr) : _depth(d), _visual(v) {}
         };
         typedef std::shared_ptr<PixmapInfoBase> PixmapInfoReply;
 
@@ -276,14 +280,15 @@ namespace LTSM
         {
             SHM                    _shm;
 	    size_t	           _size;
+	    xcb_visualid_t         _visid;
 
             uint8_t*               data(void) override { return _shm.data(); }
             const uint8_t*         data(void) const override { return _shm.data(); }
             size_t                 size(void) const override { return _size; }
 
-            PixmapInfoSHM() : _size(0) {}
+            PixmapInfoSHM() : _size(0), _visid(0) {}
             PixmapInfoSHM(uint8_t depth, xcb_visualid_t vis, const SHM & shm, size_t len)
-                : PixmapInfoBase(depth, vis), _shm(shm), _size(len) {}
+                : PixmapInfoBase(depth), _shm(shm), _size(len), _visid(vis) {}
         };
 
         struct PixmapInfoBuffer : PixmapInfoBase
@@ -295,7 +300,7 @@ namespace LTSM
             size_t                size(void) const override { return _pixels.size(); }
 
             PixmapInfoBuffer() {}
-            PixmapInfoBuffer(uint8_t depth, xcb_visualid_t vis, size_t res = 0)
+            PixmapInfoBuffer(uint8_t depth, const xcb_visualtype_t* vis, size_t res = 0)
                 : PixmapInfoBase(depth, vis) { _pixels.reserve(res); }
         };
 
@@ -385,8 +390,9 @@ namespace LTSM
 
             PixmapInfoReply         copyRootImageRegion(const Region &) const;
 
-            bool                    fakeInputKeysym(int type, const KeyCodes &, bool wait = true) const;
-            bool                    fakeInputMouse(int type, int buttons, int posx, int posy, bool wait = true) const;
+            bool                    fakeInputKeysym(int type, const KeyCodes &);
+            bool                    fakeInputKeycode(int type, uint8_t keycode);
+            bool                    fakeInputMouse(int type, int buttons, int posx, int posy);
             KeyCodes                keysymToKeycodes(int) const;
 
             bool                    damageAdd(const xcb_rectangle_t*, size_t);

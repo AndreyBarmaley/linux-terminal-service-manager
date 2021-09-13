@@ -362,6 +362,14 @@ namespace LTSM
         const std::string tlsKeyFile = checkFileOption("vnc:gnutls:keyfile");
         const std::string tlsCRLFile = checkFileOption("vnc:gnutls:crlfile");
 
+        const std::string keymapFile = _config->getString("vnc:keymap:file");
+        if(keymapFile.size())
+        {
+            JsonContentFile jc(keymapFile);
+            if(jc.isValid() && jc.isObject())
+                keymap.reset(new JsonObject(jc.toObject()));
+        }
+
 	// VenCrypt version
 	sendInt8(0).sendInt8(2).sendFlush();
 	// client req
@@ -931,27 +939,43 @@ namespace LTSM
 
         if(isAllowXcbMessages())
         {
-            auto keyCodes = _xcbDisplay->keysymToKeycodes(keysym);
-            // no wait xcb replies
-            std::thread([=]()
+            // local keymap priority "vnc:keymap:file"
+            if(auto value = (keymap ? keymap->getValue(Tools::hex(keysym, 8)) : nullptr))
             {
-                _xcbDisplay->fakeInputKeysym(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCodes);
-            }).detach();
-
-            if(0 < pressed)
-                pressedKeys.push_back(keyCodes);
+                // no wait xcb replies
+                std::thread([=]()
+                {
+                    if(value->isArray())
+                    {
+                        auto ja = static_cast<const JsonArray*>(value);
+                        for(auto & val : ja->toStdVector<int>())
+                            _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val);
+                    }
+                    else
+                    {
+                        _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger());
+                    }
+                }).detach();
+            }
             else
-                pressedKeys.remove(keyCodes);
+            if(auto keyCodes = _xcbDisplay->keysymToKeycodes(keysym))
+            {
+                // no wait xcb replies
+                std::thread([=]()
+                {
+                    _xcbDisplay->fakeInputKeysym(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCodes);
+                }).detach();
+            }
         }
     }
 
     void Connector::VNC::clientPointerEvent(void)
     {
         // RFB: 6.4.5
-        int mask = recvInt8();
+        int mask = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
         int posx = recvIntBE16();
         int posy = recvIntBE16();
-        Application::debug("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
+        Application::notice("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
 
         if(isAllowXcbMessages())
         {
@@ -1049,9 +1073,6 @@ namespace LTSM
     void Connector::VNC::clientDisconnectedEvent(void)
     {
         Application::warning("RFB disconnected, display: %d", _display);
-
-        if(isAllowXcbMessages())
-	    xcbReleaseInputsEvent();
     }
 
     void Connector::VNC::serverSendColourMap(int first)
@@ -1147,30 +1168,33 @@ namespace LTSM
 
         if(auto reply = _xcbDisplay->copyRootImageRegion(reg))
         {
-            const int bytePerPixel = _xcbDisplay->bitsPerPixel() >> 3;
-            int alignRowPixels = 0;
+            const int bytePerPixel = _xcbDisplay->bitsPerPixel(reply->depth()) >> 3;
 
             if(encodingDebug)
             {
-                if(const xcb_visualtype_t* visual = _xcbDisplay->findVisual(reply->visual()))
+                if(const xcb_visualtype_t* visual = reply->visual())
                 {
-                    Application::debug("shm request size [%d, %d], reply: length: %d, depth: %d, bpp: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       reg.width, reg.height, reply->size(), reply->depth(), _xcbDisplay->bitsPerPixel(reply->depth()), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
+                    Application::debug("shm request size [%d, %d], reply: length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
+                                       reg.width, reg.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, 
+					visual->green_mask, visual->blue_mask, visual->colormap_entries);
                 }
             }
 
-            // fix align
-            if(reply->size() > (reg.width * reg.height * bytePerPixel))
-        	alignRowPixels = reply->size() / (reg.height * bytePerPixel) - reg.width;
-
             Application::debug("server send fb update: [%d, %d, %d, %d]", reg.x, reg.y, reg.width, reg.height);
+
+            // fix align
+            if(reply->size() != reg.width * reg.height * bytePerPixel)
+	    {
+        	Application::error("%s: %s failed", __FUNCTION__, "align region");
+        	throw CodecFailed("region not aligned");
+	    }
 
             // RFB: 6.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
             // padding
             sendInt8(0);
 
-            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.width + alignRowPixels, reg.height, serverFormat);
+            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.width, reg.height, serverFormat);
 
             // check render primitives
             renderPrimitivesTo(reg, shmFrameBuffer);
@@ -1274,48 +1298,28 @@ namespace LTSM
 	return sendPixel(pixel);
     }
 
-    void Connector::VNC::xcbReleaseInputsEvent(void)
-    {
-        // send release pointer event
-        if(pressedMask)
-        {
-            for(int num = 0; num < 8; ++num)
-            {
-                int bit = 1 << num;
-                if(bit & pressedMask)
-                {
-                    Application::debug("xfb fake input released: %d", num + 1);
-                    _xcbDisplay->fakeInputMouse(XCB_BUTTON_RELEASE, num + 1, 0, 0);
-                    pressedMask &= ~bit;
-                }
-            }
-        }
-
-        // send release key codes
-        if(! pressedKeys.empty())
-        {
-            for(auto & keyCodes : pressedKeys)
-                _xcbDisplay->fakeInputKeysym(XCB_KEY_RELEASE, keyCodes);
-
-            pressedKeys.clear();
-        }
-    }
-
     void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)
     {
         if(0 < _display && display == _display)
         {
-	    xcbReleaseInputsEvent();
-
             setEnableXcbMessages(false);
             waitSendingFBUpdate();
 
             SignalProxy::onLoginSuccess(display, userName);
             setEnableXcbMessages(true);
 
+	    // fix new session size
+	    auto wsz = _xcbDisplay->size();
+	    if(wsz != serverRegion.toSize())
+	    {
+		serverSendDesktopSize(DesktopResizeMode::ServerInform);
+		serverRegion.assign(0, 0, wsz.width, wsz.height);
+	    }
+
             // full update
-            if(isAllowXcbMessages())
-                _xcbDisplay->damageAdd(serverRegion);
+            _xcbDisplay->damageAdd(serverRegion);
+
+            Application::notice("dbus signal: login success, display: %d, usrname: %s", display, userName.c_str());
         }
     }
 
@@ -1327,7 +1331,7 @@ namespace LTSM
             waitSendingFBUpdate();
 
             loopMessage = false;
-            Application::info("dbus signal: shutdown connector, display: %d", display);
+            Application::notice("dbus signal: shutdown connector, display: %d", display);
         }
     }
 

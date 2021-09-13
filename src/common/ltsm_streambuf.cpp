@@ -20,32 +20,16 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#include <iomanip>
-#include <sstream>
 #include <stdexcept>
 
+#include "ltsm_tools.h"
 #include "ltsm_streambuf.h"
 
 namespace LTSM
 {
     std::string ByteArray::hexstring(const std::string & sep, bool prefix) const
     {
-        std::ostringstream os;
-        auto ptr = data();
-        auto len = size();
-
-        while(len--)
-        {
-            if(prefix) os << "0x";
-
-            os << std::setw(2) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(*ptr);
-
-            if(0 < len) os << sep;
-
-            ptr++;
-        }
-
-        return os.str();
+        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2);
     }
 
     /* BinaryBuf */

@@ -24,6 +24,7 @@
 #ifndef _LTSM_CONNECTOR_VNC_
 #define _LTSM_CONNECTOR_VNC_
 
+#include <list>
 #include <mutex>
 #include <tuple>
 #include <memory>
@@ -312,6 +313,7 @@ namespace LTSM
 	    std::unique_ptr<NetworkStream> socket;	/// socket layer
 	    std::unique_ptr<TLS::Stream> tls;		/// tls layer
 	    std::unique_ptr<ZLib::DeflateStream> zlib;	/// zlib layer
+            std::unique_ptr<JsonObject> keymap;
 
 	    NetworkStream* 	streamIn;
 	    NetworkStream* 	streamOut;
@@ -320,7 +322,7 @@ namespace LTSM
             int                 encodingDebug;
             int                 encodingThreads;
             std::atomic<int>    pressedMask;
-            std::atomic<bool>   fbUpdateProcessing;
+	    std::atomic<bool>   fbUpdateProcessing;
 	    std::atomic<bool>	sendBellFlag;
 	    std::atomic<DesktopResizeMode> desktopResizeMode;
             RFB::PixelFormat    serverFormat;
@@ -333,7 +335,6 @@ namespace LTSM
             std::vector<int>    clientEncodings;
             std::list<std::string> disabledEncodings;
             std::list< std::future<int> > jobsEncodings;
-            std::list<XCB::KeyCodes> pressedKeys;
             std::pair<sendEncodingFunc, int> prefEncodings;
 	    std::vector<RFB::ScreenInfo> screensInfo;
 
@@ -358,8 +359,6 @@ namespace LTSM
 	    void		onAddDamage(const XCB::Region &) override;
 
         protected:
-	    void		xcbReleaseInputsEvent(void);
-
             void                clientSetPixelFormat(void);
 	    bool		clientVenCryptHandshake(void);
             bool                clientSetEncodings(void);

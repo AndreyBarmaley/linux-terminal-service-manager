@@ -304,6 +304,10 @@ namespace LTSM
             return 12;
         };
 
+        if(map.empty())
+            throw CodecFailed("send RRE encoding: pixel map is empty");
+
+        int res = 0;
         if(map.size() > 1)
         {
             int back = map.maxWeightPixel();
@@ -322,12 +326,11 @@ namespace LTSM
                 Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
                                    (corre ? "CoRRE" : "RRE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
 
-            int res = sendHeaderRRE(reg + top, corre);
+            res = sendHeaderRRE(reg + top, corre);
             res += sendEncodingRRESubRects(reg, fb, jobId, back, goods, corre);
-
-            return res;
         }
-        else if(map.size() == 1)
+        // if(map.size() == 1)
+        else
         {
             int back = fb.pixel(reg.x, reg.y);
             const std::lock_guard<std::mutex> lock(sendEncoding);
@@ -336,7 +339,7 @@ namespace LTSM
                 Application::debug("send %s region, job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
                                    (corre ? "CoRRE" : "RRE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
-            int res = sendHeaderRRE(reg + top, corre);
+            res = sendHeaderRRE(reg + top, corre);
 
             // num sub rects
             sendIntBE32(1);
@@ -366,12 +369,9 @@ namespace LTSM
         	sendIntBE16(1);
         	res += 8;
 	    }
-
-            return res;
         }
 
-        throw std::string("send RRE encoding: pixel map is empty");
-        return 0;
+        return res;
     }
 
     int Connector::VNC::sendEncodingRRESubRects(const XCB::Region & reg, const RFB::FrameBuffer & fb, int jobId, int back, const std::list<RRE::Region> & rreList, bool corre)
@@ -476,12 +476,16 @@ namespace LTSM
             return 12;
         };
 
+        if(map.empty())
+            throw CodecFailed("send Hextile encoding: pixel map is empty");
+
+        int res = 0;
         if(map.size() == 1)
         {
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
-            int res = sendHeaderHexTile(reg + top, zlibver);
+            res = sendHeaderHexTile(reg + top, zlibver);
             int back = fb.pixel(reg.x, reg.y);
 
             if(encodingDebug)
@@ -491,8 +495,6 @@ namespace LTSM
             // hextile flags
             sendInt8(RFB::HEXTILE_BACKGROUND);
             res += 1 + sendPixel(back);
-
-            return res;
         }
         else if(map.size() > 1)
         {
@@ -509,7 +511,7 @@ namespace LTSM
             // wait thread
             const std::lock_guard<std::mutex> lock(sendEncoding);
 
-            int res = sendHeaderHexTile(reg + top, zlibver);
+            res = sendHeaderHexTile(reg + top, zlibver);
 
             if(foreground)
             {
@@ -555,12 +557,9 @@ namespace LTSM
                     res += sendEncodingHextileSubColored(reg, fb, jobId, back, goods);
                 }
             }
-
-            return res;
         }
 
-        throw std::string("send Hextile encoding: pixel map is empty");
-        return 0;
+        return res;
     }
 
     int Connector::VNC::sendEncodingHextileSubColored(const XCB::Region & reg, const RFB::FrameBuffer & fb, int jobId, int back, const std::list<RRE::Region> & rreList)
@@ -1054,7 +1053,7 @@ namespace LTSM
 	    height = wsz.height;
 	}
 
-	bool extended =  std::any_of(clientEncodings.begin(), clientEncodings.end(),
+	bool extended = std::any_of(clientEncodings.begin(), clientEncodings.end(),
         	    [=](auto & val){ return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; });
 
 	// reply type: initiator client/other

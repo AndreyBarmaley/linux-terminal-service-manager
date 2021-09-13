@@ -395,7 +395,7 @@ namespace LTSM
 #ifdef LTSM_DEBUG
             if(! checkError())
             {
-                std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
+                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from remote: [%s]", str.c_str());
             }
 #endif
@@ -426,7 +426,7 @@ namespace LTSM
 #ifdef LTSM_DEBUG
             if(! checkError())
             {
-                std::string str = Tools::vector2hexstring<uint8_t>(buf, 2);
+                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from local: [%s]", str.c_str());
             }
 #endif
