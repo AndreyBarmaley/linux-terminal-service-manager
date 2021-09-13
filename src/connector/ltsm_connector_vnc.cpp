@@ -1312,14 +1312,17 @@ namespace LTSM
 	    auto wsz = _xcbDisplay->size();
 	    if(wsz != serverRegion.toSize())
 	    {
-		serverSendDesktopSize(DesktopResizeMode::ServerInform);
-		serverRegion.assign(0, 0, wsz.width, wsz.height);
+                if(_xcbDisplay->setScreenSize(serverRegion.width, serverRegion.height))
+                {
+                    wsz = _xcbDisplay->size();
+                    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, display);
+                }
 	    }
 
             // full update
             _xcbDisplay->damageAdd(serverRegion);
 
-            Application::notice("dbus signal: login success, display: %d, usrname: %s", display, userName.c_str());
+            Application::notice("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
         }
     }
 

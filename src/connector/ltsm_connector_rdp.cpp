@@ -219,7 +219,10 @@ namespace LTSM
             {
                 JsonContentFile jc(keymapFile);
                 if(jc.isValid() && jc.isObject())
-                    context->keymap = new JsonObject(jc.toObject());
+                {
+		    context->keymap = new JsonObject(jc.toObject());
+		    Application::notice("keymap loaded: %s", keymapFile.c_str());
+		}
             }
 
             auto certfile = connector->checkFileOption("rdp:server:certfile");
@@ -564,7 +567,13 @@ namespace LTSM
 	    // fix new session size
             auto wsz = _xcbDisplay->size();
 	    if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
-		clientDesktopResizeEvent(*freeRdp->peer, wsz.width, wsz.height);
+	    {
+		if(_xcbDisplay->setScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
+        	{
+		    wsz = _xcbDisplay->size();
+		    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, display);
+		}
+	    }
 
             // full update
             _xcbDisplay->damageAdd(_xcbDisplay->region());
@@ -903,7 +912,7 @@ namespace LTSM
 
     BOOL Connector::RDP::cbClientActivate(freerdp_peer* client)
     {
-        Application::notice("%s: client:%p", __FUNCTION__);
+        Application::notice("%s: client:%p", __FUNCTION__, client);
 
 	auto context = static_cast<ClientContext*>(client->context);
         auto connector = context->rdp;
@@ -980,7 +989,7 @@ namespace LTSM
     /// @see:  freerdp/input.h
     BOOL Connector::RDP::cbClientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code)
     {
-        Application::debug("%s: flags:0x%04X, code:0x%04X, input:%p, context:%p", __FUNCTION__, flags, code, input, input->context);
+        Application::notice("%s: flags:0x%04X, code:0x%04X, input:%p, context:%p", __FUNCTION__, flags, code, input, input->context);
 	auto context = static_cast<ClientContext*>(input->context);
 
 	if(flags == 0x8000 && code == 0x000F)

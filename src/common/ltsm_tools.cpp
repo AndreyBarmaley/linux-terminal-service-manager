@@ -248,7 +248,7 @@ namespace LTSM
     std::string Tools::hex(int value, int width)
     {
         std::ostringstream stream;
-        stream << "0x" << std::setw(width) << std::setfill('0') << std::hex << value;
+        stream << "0x" << std::setw(width) << std::setfill('0') << std::nouppercase << std::hex << value;
         return stream.str();
     }
 
