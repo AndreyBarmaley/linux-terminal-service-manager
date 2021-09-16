@@ -24,7 +24,6 @@
     "rdp:encryption:level": "compatible",
     "rdp:server:certfile": "server.crt",
     "rdp:server:keyfile": "server.key",
-    "rdp:codec:remotefx": false,
     "rdp:keymap:file": "",
 
     "group:shm": "ltsm-shm",
