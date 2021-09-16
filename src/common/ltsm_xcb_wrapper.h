@@ -247,11 +247,14 @@ namespace LTSM
 
         struct PixmapInfoBase
         {
-            uint8_t                _depth;
+            size_t                  _depth;
             const xcb_visualtype_t* _visual;
 
-            virtual uint8_t        depth(void) const { return _depth; }
-            virtual const xcb_visualtype_t* visual(void) const { return _visual; }
+            size_t                 depth(void) const { return _depth; }
+	    size_t		   redMask(void) const { return _visual ? _visual->red_mask : 0; }
+	    size_t		   greenMask(void) const { return _visual ? _visual->red_mask : 0; }
+	    size_t		   blueMask(void) const { return _visual ? _visual->red_mask : 0; }
+            const xcb_visualtype_t* visual(void) const { return _visual; }
 
             virtual uint8_t*       data(void) = 0;
             virtual const uint8_t* data(void) const = 0;
@@ -267,7 +270,7 @@ namespace LTSM
             SHM() {}
             SHM(int shmid, uint8_t* addr, xcb_connection_t*);
 
-            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, uint32_t offset = 0) const;
+            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, size_t offset = 0, size_t planeMask = 0) const;
 
             uint8_t*              data(void) { return get() ? get()->addr : nullptr; }
             const uint8_t*        data(void) const { return get() ? get()->addr : nullptr; }
@@ -374,12 +377,13 @@ namespace LTSM
             uint16_t		    height(void) const;
             Region                  region(void) const;
             Size                    size(void) const;
-            int	                    depth(void) const;
-            int	                    bitsPerPixel(void) const;
-            int	                    bitsPerPixel(int depth) const;
-            int			    scanlinePad(void) const;
+            size_t                  depth(void) const;
+            size_t	            bitsPerPixel(void) const;
+            size_t		    scanlinePad(void) const;
             const xcb_visualtype_t* visual(void) const;
             xcb_drawable_t          root(void) const;
+            size_t	            depth(size_t bitsPerPixel) const;
+            size_t	            bitsPerPixel(size_t depth) const;
 
             const xcb_visualtype_t* findVisual(xcb_visualid_t) const;
             void                    fillBackground(uint32_t color);
@@ -388,7 +392,7 @@ namespace LTSM
 				    screenSizes(void) const;
 	    bool	            setScreenSize(uint16_t windth, uint16_t height);
 
-            PixmapInfoReply         copyRootImageRegion(const Region &) const;
+            PixmapInfoReply         copyRootImageRegion(const Region &, size_t planeMask = 0) const;
 
             bool                    fakeInputKeysym(int type, const KeyCodes &);
             bool                    fakeInputKeycode(int type, uint8_t keycode);

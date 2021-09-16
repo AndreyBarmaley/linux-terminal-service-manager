@@ -288,10 +288,15 @@ void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & userna
 
 void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass)
 {
-    if(display == displayNum)
+    if(display == displayNum && 0 < login.size())
     {
         ui->comboBoxUsername->setEditText(login);
-        ui->lineEditPassword->setText(pass);
+        if(0 < pass.size())
+        {
+            ui->lineEditPassword->setText(pass);
+        }
+        else
+            ui->lineEditPassword->setFocus();
     }
 }
 

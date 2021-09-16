@@ -73,7 +73,6 @@ namespace LTSM
 
     struct ClientContext : rdpContext
     {
-        RFX_CONTEXT*		rfx;
         BITMAP_PLANAR_CONTEXT* 	planar;
 	BITMAP_INTERLEAVED_CONTEXT* interleaved;
         HANDLE			vcm;
@@ -89,7 +88,6 @@ namespace LTSM
 
     int clientContextNew(rdp_freerdp_peer* client, ClientContext* context)
     {
-	context->rfx = nullptr;
         context->planar = nullptr;
         context->interleaved = nullptr;
 
@@ -114,12 +112,6 @@ namespace LTSM
 
     void clientContextFree(ClientContext* context)
     {
-	if(context->rfx)
-	{
-	    rfx_context_free(context->rfx);
-	    context->rfx = nullptr;
-	}
-
 	if(context->planar)
 	{
 	    freerdp_bitmap_planar_context_free(context->planar);
@@ -263,7 +255,7 @@ namespace LTSM
             peer->settings->EncryptionLevel = encryptionLevel;
 
 	    peer->settings->NSCodec = FALSE;
-	    peer->settings->RemoteFxCodec = config.getBoolean("rdp:codec:remotefx", false) ? TRUE : FALSE;;
+	    peer->settings->RemoteFxCodec = FALSE;
             peer->settings->RefreshRect = TRUE;
 	    peer->settings->SuppressOutput = TRUE;
 	    peer->settings->FrameMarkerCommandEnabled = TRUE;
@@ -464,23 +456,11 @@ namespace LTSM
                 auto & context = freeRdp->context;
                 if(! damageRegion.empty() && context && context->activated)
                 {
-                    auto reply = _xcbDisplay->copyRootImageRegion(damageRegion);
 		    clientUpdatePartFlag = true;
 
-		    // shm info dump
-		    if(Application::isDebugLevel(DebugLevel::SyslogDebug))
-		    {
-            		if(const xcb_visualtype_t* visual = reply->visual())
-            		{
-                	    Application::info("shm request size [%d, %d], reply: length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       damageRegion.width, damageRegion.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, 
-                                        visual->green_mask, visual->blue_mask, visual->colormap_entries);
-            		}
-		    }
-		
                     try
 		    {
-			if(clientUpdateEvent(*freeRdp->peer, damageRegion, reply))
+			if(clientUpdateEvent(*freeRdp->peer, damageRegion))
                 	{
                     	    _xcbDisplay->damageSubtrack(damageRegion);
                     	        damageRegion.reset();
@@ -491,6 +471,7 @@ namespace LTSM
 			Application::error("exception: %s", ex.err.c_str());
 			loopShutdownFlag = true;
 		    }
+
 		    clientUpdatePartFlag = false;
                 }
             } // xcb not disabled messages
@@ -619,105 +600,38 @@ namespace LTSM
             Application::error("%s: [%d,%d] failed", __FUNCTION__, width, height);
     }
 
-    bool Connector::RDP::clientUpdateEvent(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
+    bool Connector::RDP::clientUpdateEvent(freerdp_peer & peer, const XCB::Region & damage)
     {
-	if(peer.settings->ColorDepth != 24)
-	    return clientUpdateBitmapInterleaved(peer, reg, reply);
-
-	if(peer.settings->RemoteFxCodec)
-	    return clientUpdateRfx(peer, reg, reply);
-	
-	return clientUpdateBitmapPlanar(peer, reg, reply);
-    }
-
-    bool Connector::RDP::clientUpdateRfx(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
-    {
-        Application::debug("%s: area [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 	auto context = static_cast<ClientContext*>(peer.context);
+        auto reply = context->x11display->copyRootImageRegion(damage);
 
-	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
-
-    	if(reply->size() != reg.height * reg.width * bytePerPixel)
-	{
-	    Application::error("%s: %s failed", __FUNCTION__, "align region");
-            throw CodecFailed("region not aligned");
-	}
-
-	// rfx activate
-	if(! context->rfx)
-	{
-    	    context->rfx = rfx_context_new(TRUE);
-    	    if(! context->rfx)
-		throw CodecFailed("rfx_context_new");
-
-    	    rfx_context_set_pixel_format(context->rfx, PIXEL_FORMAT_BGRX32);
-	}
-
-    	if(! rfx_context_reset(context->rfx, reg.width, reg.height))
-	{
-	    Application::error("%s: failed", "rfx_context_reset");
-	    throw CodecFailed("rfx_context_reset");
-	}
-
-	std::unique_ptr<wStream, decltype(stream_free)*> st = { Stream_New(NULL, 0xFFFF), stream_free };
-        if(! st)
+        // reply info dump
+        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
         {
-            Application::error("%s: failed", "Stream_New");
-	    throw CodecFailed("Stream_New");
+            if(const xcb_visualtype_t* visual = reply->visual())
+            {
+                Application::info("get_image: request size [%d, %d], reply length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
+                        damage.width, damage.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
+            }
         }
 
-        const RFX_RECT rect{ 0, 0, reg.width, reg.height };
-        if(! rfx_compose_message(context->rfx, st.get(), &rect, 1,  reply->data(), rect.width, rect.height, bytePerPixel * rect.width))
-        {
-            Application::error("%s: rfx_compose_message failed", __FUNCTION__);
-	    throw CodecFailed("rfx_compose_message");
-        }
-
-        SURFACE_BITS_COMMAND cmd = {0};
-
-        cmd.bmp.codecID = peer.settings->RemoteFxCodecId;
-        cmd.cmdType = CMDTYPE_STREAM_SURFACE_BITS;
-        cmd.destLeft = reg.x;
-        cmd.destTop = reg.y;
-        cmd.destRight = reg.x + reg.width - 1;
-        cmd.destBottom = reg.y + reg.height - 1;
-        cmd.bmp.bpp = bytePerPixel << 3;
-        cmd.bmp.flags = 0;
-        cmd.bmp.width = reg.width;
-        cmd.bmp.height = reg.height;
-        cmd.bmp.bitmapDataLength = Stream_GetPosition(st.get());
-        cmd.bmp.bitmapData = Stream_Buffer(st.get());
-
-        // begin_frame
-        SURFACE_FRAME_MARKER fm = {0};
-        fm.frameAction = SURFACECMD_FRAMEACTION_BEGIN;
-        fm.frameId = context->frameId;
-        peer.update->SurfaceFrameMarker(peer.update->context, &fm);
-
-	peer.update->SurfaceBits(peer.update->context, &cmd);
-
-        // end_frame
-        fm.frameAction = SURFACECMD_FRAMEACTION_END;
-        fm.frameId = context->frameId;
-        peer.update->SurfaceFrameMarker(peer.update->context, &fm);
-        context->frameId++;
-
-	return true;
+	return 24 == reply->depth() ?
+		clientUpdateBitmapPlanar(peer, damage, reply) : clientUpdateBitmapInterleaved(peer, damage, reply);
     }
 
     bool Connector::RDP::clientUpdateBitmapPlanar(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
-        Application::debug("%s: area [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 	auto context = static_cast<ClientContext*>(peer.context);
 
 	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
-        const size_t tileSize = 256;
+        const size_t tileSize = 64;
+	const size_t pixelFormat = PIXEL_FORMAT_BGRX32;
 
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
-	    Application::error("%s: %s failed", __FUNCTION__, "align region");
-            throw CodecFailed("region not aligned");
+	    Application::error("%s: %s failed, length:%d, size:%dx%d, bpp:%d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+            throw CodecFailed("clientUpdateBitmapPlanar");
 	}
 
         // planar activate
@@ -730,56 +644,90 @@ namespace LTSM
 
 	    context->planar = freerdp_bitmap_planar_context_new(planarFlags, tileSize, tileSize);
 	    if(! context->planar)
-        	throw CodecFailed("bitmap_planar_context_new");
+	    {
+		Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_new");
+                throw CodecFailed("clientUpdateBitmapPlanar");
+	    }
 	}
 
         if(! freerdp_bitmap_planar_context_reset(context->planar, tileSize, tileSize))
         {
 	    Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_reset");
-            throw CodecFailed("bitmap_planar_context_reset");
+            throw CodecFailed("clientUpdateBitmapPlanar");
         }
 
+        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
 	auto blocks = reg.divideBlocks(tileSize, tileSize);
 
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
  
-        BITMAP_DATA st = {0};
-        BITMAP_UPDATE bitmapUpdate = {0};
+	const size_t hdrsz = 34;
+	std::vector<BITMAP_DATA> vec;
+	vec.reserve(blocks.size());
 
         for(auto & subreg : blocks)
         {
 	    const int16_t localX = subreg.x - reg.x;
 	    const int16_t localY = subreg.y - reg.y;
             const size_t offset = localY * scanLineBytes + localX * bytePerPixel;
+	    BITMAP_DATA st = {0};
 
             // Bitmap data here the screen capture
             // https://msdn.microsoft.com/en-us/library/cc240612.aspx
             st.destLeft = subreg.x;
-            st.destTop = subreg.y;
             st.destRight = subreg.x + subreg.width - 1;
-            st.destBottom = subreg.y + subreg.height - 1;
             st.width = subreg.width;
-            st.height = subreg.height;
-            st.bitsPerPixel = bytePerPixel << 3;
+            st.bitsPerPixel = peer.settings->ColorDepth;
+
             st.compressed = TRUE;
+    	    st.height = subreg.height;
+    	    st.destTop = subreg.y;
+    	    st.destBottom = subreg.y + subreg.height - 1;
 
     	    st.cbScanWidth = subreg.width * bytePerPixel;
-            st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
-            st.bitmapDataStream = freerdp_bitmap_compress_planar(context->planar, reply->data() + offset,
-                                        PIXEL_FORMAT_BGRX32, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
-            st.cbCompMainBodySize = st.bitmapLength;
+    	    st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
+    	    st.bitmapDataStream = freerdp_bitmap_compress_planar(context->planar, reply->data() + offset,
+                                        pixelFormat, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
+    	    st.cbCompMainBodySize = st.bitmapLength;
 
-            bitmapUpdate.count = bitmapUpdate.number = 1;
-            bitmapUpdate.rectangles = & st;
-
-            auto ret = peer.update->BitmapUpdate(peer.context, &bitmapUpdate);
-            if(! ret)
+	    if(peer.settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz)
             {
-                Application::error("%s: BitmapUpdate failed", __FUNCTION__);
-                return false;
+        	Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
+                throw CodecFailed("clientUpdateBitmapPlanar");
             }
-        }
+
+	    vec.emplace_back(st);
+	}
+
+	auto it1 = vec.begin();
+	while(it1 != vec.end())
+	{
+	    // calc blocks
+	    size_t totalSize = 0;
+	    auto it2 = std::find_if(it1, vec.end(), [&](auto & st)
+	    {
+		if(totalSize + (st.cbCompMainBodySize + hdrsz) > peer.settings->MultifragMaxRequestSize)
+		    return true;
+		totalSize += (st.cbCompMainBodySize + hdrsz);
+		return false;
+	    });
+
+    	    BITMAP_UPDATE bitmapUpdate = {0};
+    	    bitmapUpdate.count = bitmapUpdate.number = std::distance(it1, it2);
+    	    bitmapUpdate.rectangles = & (*it1);
+
+    	    if(! peer.update->BitmapUpdate(peer.context, &bitmapUpdate))
+    	    {
+            	Application::error("%s: %s failed, length: %d", __FUNCTION__, "BitmapUpdate", totalSize);
+                throw CodecFailed("clientUpdateBitmapPlanar");
+    	    }
+
+	    it1 = it2;
+	}
+
+	for(auto & st: vec)
+	    std::free(st.bitmapDataStream);
 
 	return true;
     }
@@ -787,7 +735,6 @@ namespace LTSM
     bool Connector::RDP::clientUpdateBitmapInterleaved(freerdp_peer & peer, const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
 	auto context = static_cast<ClientContext*>(peer.context);
-        Application::info("%s: area [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
 	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
@@ -796,8 +743,24 @@ namespace LTSM
 
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
-	    Application::error("%s: %s failed", __FUNCTION__, "align region");
-            throw CodecFailed("region not aligned");
+	    Application::error("%s: %s failed, length:%d, size:%dx%d, bpp:%d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+    	    throw CodecFailed("clientUpdateBitmapInterleaved");
+    	}
+
+	size_t pixelFormat = 0;
+	switch(reply->depth())
+	{
+#ifdef __ORDER_LITTLE_ENDIAN__
+	    case 16:	pixelFormat = PIXEL_FORMAT_RGB16; break;
+	    case 24:	pixelFormat = PIXEL_FORMAT_RGB24; break;
+#else
+	    case 16:	pixelFormat = PIXEL_FORMAT_BGR16; break;
+	    case 24:	pixelFormat = PIXEL_FORMAT_BGR24; break;
+#endif
+	    default:
+		Application::error("%s: %s failed", __FUNCTION__, "pixel format");
+        	throw CodecFailed("clientUpdateBitmapInterleaved");
+		break;
 	}
 
         // planar activate
@@ -806,23 +769,25 @@ namespace LTSM
 	    BOOL compressor = TRUE;
 	    context->interleaved = bitmap_interleaved_context_new(compressor);
 	    if(! context->interleaved)
-        	throw CodecFailed("bitmap_interleaved_context_new");
+	    {
+		Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_new");
+        	throw CodecFailed("clientUpdateBitmapInterleaved");
+	    }
 	}
 
         if(! bitmap_interleaved_context_reset(context->interleaved))
         {
 	    Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_reset");
-            throw CodecFailed("bitmap_interleaved_context_reset");
+            throw CodecFailed("clientUpdateBitmapInterleaved");
         }
 
-        Application::info("%s: scanline: %d, bpp:%d", __FUNCTION__, scanLineBytes, bytePerPixel);
+        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
 	auto blocks = reg.divideBlocks(tileSize, tileSize);
 
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
  
         BITMAP_DATA st = {0};
-        BITMAP_UPDATE bitmapUpdate = {0};
 	// full size reserved
 	auto data = std::make_unique<uint8_t[]>(tileSize * tileSize * 4);
 
@@ -847,23 +812,30 @@ namespace LTSM
             st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
 
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
-		reply->data() + offset, PIXEL_FORMAT_RGB16, scanLineBytes, 0, 0, NULL, peer.settings->ColorDepth))
+		reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, peer.settings->ColorDepth))
 	    {
-                Application::error("%s: freerdp_bitmap_compress_interleaved failed", __FUNCTION__);
-                return false;
+                Application::error("%s: %s failed", __FUNCTION__, "freerdp_bitmap_compress_interleaved");
+                throw CodecFailed("clientUpdateBitmapInterleaved");
 	    }
 
 	    st.bitmapDataStream = data.get();
             st.cbCompMainBodySize = st.bitmapLength;
 
+	    if(peer.settings->MultifragMaxRequestSize < st.bitmapLength + 22)
+            {
+        	Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
+                throw CodecFailed("clientUpdateBitmapInterleaved");
+            }
+
+    	    BITMAP_UPDATE bitmapUpdate = {0};
             bitmapUpdate.count = bitmapUpdate.number = 1;
             bitmapUpdate.rectangles = & st;
 
             auto ret = peer.update->BitmapUpdate(peer.context, &bitmapUpdate);
             if(! ret)
             {
-                Application::error("%s: BitmapUpdate failed", __FUNCTION__);
-                return false;
+                Application::error("%s: %s failed", __FUNCTION__, "BitmapUpdate");
+                throw CodecFailed("clientUpdateBitmapInterleaved");
             }
         }
 
@@ -879,7 +851,7 @@ namespace LTSM
 
     BOOL Connector::RDP::cbClientPostConnect(freerdp_peer* client)
     {
-        Application::notice("%s: client:%p, desktop:%dx%d, color depth: %d", __FUNCTION__, client, client->settings->DesktopWidth, client->settings->DesktopHeight, client->settings->ColorDepth);
+        Application::notice("%s: client:%p, desktop:%dx%d, client depth: %d", __FUNCTION__, client, client->settings->DesktopWidth, client->settings->DesktopHeight, client->settings->ColorDepth);
 
 	auto context = static_cast<ClientContext*>(client->context);
         auto connector = context->rdp;
@@ -888,9 +860,10 @@ namespace LTSM
 	    return FALSE;
 
 	context->x11display = connector->_xcbDisplay.get();
-        client->settings->ColorDepth = context->x11display->depth();
+        client->settings->ColorDepth = context->x11display->bitsPerPixel();
 
-	if(context->x11display->size() != XCB::Size(client->settings->DesktopWidth, client->settings->DesktopHeight))
+	auto wsz = context->x11display->size();
+	if(wsz.width != client->settings->DesktopWidth || wsz.height != client->settings->DesktopHeight)
 	{
             if(! context->x11display->setScreenSize(client->settings->DesktopWidth, client->settings->DesktopHeight))
     	        Application::error("%s: x11display set size: failed", __FUNCTION__);
@@ -904,9 +877,6 @@ namespace LTSM
             client->update->DesktopResize(client->update->context);
         }
 
-	if(client->settings->RemoteFxCodec && client->settings->ColorDepth != 24)
-	    client->settings->RemoteFxCodec = FALSE;
-
         return TRUE;
     }
 
@@ -919,6 +889,8 @@ namespace LTSM
 
 	if(1)
 	{
+    	    Application::info("client: %s: %s", "Username", client->settings->Username);
+    	    Application::info("client: %s: %s", "Domain", client->settings->Domain);
     	    Application::info("client: %s: %d", "DesktopWidth", client->settings->DesktopWidth);
     	    Application::info("client: %s: %d", "DesktopHeight", client->settings->DesktopHeight);
     	    Application::info("client: %s: %d", "DesktopColorDepth", client->settings->ColorDepth);
@@ -933,12 +905,12 @@ namespace LTSM
     	    Application::info("client: %s: %s", "SurfaceFrameMarkerEnabled", (client->settings->SurfaceFrameMarkerEnabled ? "true" : "false"));
     	    Application::info("client: %s: %s", "SurfaceCommandsEnabled", (client->settings->SurfaceCommandsEnabled ? "true" : "false"));
     	    Application::info("client: %s: %s", "FastPathInput", (client->settings->FastPathInput ? "true" : "false"));
+    	    Application::info("client: %s: %s", "FastPathOutput", (client->settings->FastPathOutput ? "true" : "false"));
     	    Application::info("client: %s: %s", "UnicodeInput", (client->settings->UnicodeInput ? "true" : "false"));
     	    Application::info("client: %s: %s", "BitmapCacheEnabled", (client->settings->BitmapCacheEnabled ? "true" : "false"));
     	    Application::info("client: %s: %s", "DesktopResize", (client->settings->DesktopResize ? "true" : "false"));
     	    Application::info("client: %s: %s", "RefreshRect", (client->settings->RefreshRect ? "true" : "false"));
     	    Application::info("client: %s: %s", "SuppressOutput", (client->settings->SuppressOutput ? "true" : "false"));
-    	    Application::info("client: %s: %s", "FastPathOutput", (client->settings->FastPathOutput ? "true" : "false"));
     	    Application::info("client: %s: %s", "TlsSecurity", (client->settings->TlsSecurity ? "true" : "false"));
     	    Application::info("client: %s: %s", "NlaSecurity", (client->settings->NlaSecurity ? "true" : "false"));
     	    Application::info("client: %s: %s", "RdpSecurity", (client->settings->RdpSecurity ? "true" : "false"));

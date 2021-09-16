@@ -255,10 +255,12 @@ namespace LTSM
         }
     }
 
-    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, uint32_t offset) const
+    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, size_t planeMask) const
     {
 	xcb_generic_error_t* error;
-        auto cookie = xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
+        auto cookie = planeMask ? xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
+                                        planeMask, XCB_IMAGE_FORMAT_XY_PIXMAP, xid(), offset) :
+    				xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
                                         ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
 
         auto xcbReply = getReplyConn(xcb_shm_get_image, connection(), cookie);
@@ -928,12 +930,12 @@ namespace LTSM
 	xcb_flush(_conn);
     }
 
-    int XCB::RootDisplay::bitsPerPixel(void) const
+    size_t XCB::RootDisplay::bitsPerPixel(void) const
     {
         return _format ? _format->bits_per_pixel : 0;
     }
 
-    int XCB::RootDisplay::bitsPerPixel(int depth) const
+    size_t XCB::RootDisplay::bitsPerPixel(size_t depth) const
     {
         auto setup = xcb_get_setup(_conn);
 
@@ -943,7 +945,17 @@ namespace LTSM
         return 0;
     }
 
-    int XCB::RootDisplay::scanlinePad(void) const
+    size_t XCB::RootDisplay::depth(size_t bitsPerPixel) const
+    {
+        auto setup = xcb_get_setup(_conn);
+
+        for(auto fIter = xcb_setup_pixmap_formats_iterator(setup); fIter.rem; xcb_format_next(& fIter))
+            if(fIter.data->bits_per_pixel == bitsPerPixel) return fIter.data->depth;
+
+        return 0;
+    }
+
+    size_t XCB::RootDisplay::scanlinePad(void) const
     {
         return _format ? _format->scanline_pad : 0;
     }
@@ -967,7 +979,7 @@ namespace LTSM
         return _visual;
     }
 
-    int XCB::RootDisplay::depth(void) const
+    size_t XCB::RootDisplay::depth(void) const
     {
         return _screen->root_depth;
     }
@@ -1077,11 +1089,11 @@ namespace LTSM
         return false;
     }
 
-    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg) const
+    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, size_t planeMask) const
     {
         if(_shm)
 	{
-            auto res = _shm.getPixmapRegion(_screen->root, reg, 0);
+            auto res = _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
 	    // fix visual
 	    auto ptr = static_cast<PixmapInfoSHM*>(res.get());
 	    if(ptr) ptr->_visual = findVisual(ptr->_visid);
@@ -1110,7 +1122,8 @@ namespace LTSM
 	    if(yy + allowRows > reg.y + reg.height)
 		allowRows = reg.y + reg.height - yy;
 
-            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, ~0);
+            auto cookie = planeMask ? xcb_get_image(_conn, XCB_IMAGE_FORMAT_XY_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask) : 
+		xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, ~0);
 	    auto xcbReply = getReplyFunc(xcb_get_image, cookie);
 
 	    if(xcbReply.error())
