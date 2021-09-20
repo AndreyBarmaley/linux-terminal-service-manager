@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.13)
 
 target_sources(LTSM_common PUBLIC ltsm_application.cpp)
 target_sources(LTSM_common PUBLIC ltsm_json_wrapper.cpp)

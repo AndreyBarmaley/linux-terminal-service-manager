@@ -945,19 +945,19 @@ namespace LTSM
 
         if(counts == JSMN_ERROR_INVAL)
         {
-            Application::error("%s", "Invalid character inside JSON content");
+            Application::error("%s: %s", __FUNCTION__, "invalid character inside JSON content");
             clear();
             return false;
         }
         else if(counts == JSMN_ERROR_PART)
         {
-            Application::error("%s", "The content is not a full JSON packet, more bytes expected");
+            Application::error("%s: %s",  __FUNCTION__, "the content is not a full JSON packet, more bytes expected");
             clear();
             return false;
         }
         else if(counts < 0)
         {
-            Application::error("%s", "Unknown error");
+            Application::error("%s: %s",  __FUNCTION__, "unknown error");
             clear();
             return false;
         }

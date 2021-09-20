@@ -114,6 +114,7 @@ namespace LTSM
 
         public:
             SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);
+            virtual ~SignalProxy() {}
 
     	    virtual int	                communication(void) = 0;
 	    std::string         	checkFileOption(const std::string &) const;

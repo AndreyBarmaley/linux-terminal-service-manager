@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -10,6 +10,10 @@ option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
+
+if(NOT CMAKE_CL_64)
+    set(LTSM_BUILD_STD_MAP ON CACHE BOOL "enable usage std::unordered_map" FORCE)
+endif()
 
 # LTSM common lib
 project(LTSM_common VERSION 20210805.1)

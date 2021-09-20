@@ -140,7 +140,7 @@ namespace LTSM
     /* MemoryStream */
     bool MemoryStream::bigendian(void) const
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return false;
 #else
         return true;

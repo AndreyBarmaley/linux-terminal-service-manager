@@ -248,20 +248,17 @@ namespace LTSM
         struct PixmapInfoBase
         {
             size_t                  _depth;
-            const xcb_visualtype_t* _visual;
+	    xcb_visualid_t         _visid;
 
             size_t                 depth(void) const { return _depth; }
-	    size_t		   redMask(void) const { return _visual ? _visual->red_mask : 0; }
-	    size_t		   greenMask(void) const { return _visual ? _visual->red_mask : 0; }
-	    size_t		   blueMask(void) const { return _visual ? _visual->red_mask : 0; }
-            const xcb_visualtype_t* visual(void) const { return _visual; }
+            xcb_visualid_t         visId(void) const { return _visid; }
 
             virtual uint8_t*       data(void) = 0;
             virtual const uint8_t* data(void) const = 0;
             virtual size_t         size(void) const = 0;
 
             virtual ~PixmapInfoBase() {}
-            PixmapInfoBase(uint8_t d = 0, const xcb_visualtype_t* v = nullptr) : _depth(d), _visual(v) {}
+            PixmapInfoBase(uint8_t d = 0, xcb_visualid_t v = 0) : _depth(d), _visid(v) {}
         };
         typedef std::shared_ptr<PixmapInfoBase> PixmapInfoReply;
 
@@ -270,7 +267,7 @@ namespace LTSM
             SHM() {}
             SHM(int shmid, uint8_t* addr, xcb_connection_t*);
 
-            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, size_t offset = 0, size_t planeMask = 0) const;
+            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, size_t offset = 0, uint32_t planeMask = 0xFFFFFFFF) const;
 
             uint8_t*              data(void) { return get() ? get()->addr : nullptr; }
             const uint8_t*        data(void) const { return get() ? get()->addr : nullptr; }
@@ -283,15 +280,14 @@ namespace LTSM
         {
             SHM                    _shm;
 	    size_t	           _size;
-	    xcb_visualid_t         _visid;
 
             uint8_t*               data(void) override { return _shm.data(); }
             const uint8_t*         data(void) const override { return _shm.data(); }
             size_t                 size(void) const override { return _size; }
 
-            PixmapInfoSHM() : _size(0), _visid(0) {}
+            PixmapInfoSHM() : _size(0) {}
             PixmapInfoSHM(uint8_t depth, xcb_visualid_t vis, const SHM & shm, size_t len)
-                : PixmapInfoBase(depth), _shm(shm), _size(len), _visid(vis) {}
+                : PixmapInfoBase(depth, vis), _shm(shm), _size(len) {}
         };
 
         struct PixmapInfoBuffer : PixmapInfoBase
@@ -303,7 +299,7 @@ namespace LTSM
             size_t                size(void) const override { return _pixels.size(); }
 
             PixmapInfoBuffer() {}
-            PixmapInfoBuffer(uint8_t depth, const xcb_visualtype_t* vis, size_t res = 0)
+            PixmapInfoBuffer(uint8_t depth, xcb_visualid_t vis, size_t res = 0)
                 : PixmapInfoBase(depth, vis) { _pixels.reserve(res); }
         };
 
@@ -313,10 +309,15 @@ namespace LTSM
         {
         protected:
             xcb_connection_t*       _conn;
+            const xcb_setup_t*      _setup;
 
         public:
             Connector(const char* addr);
             virtual ~Connector();
+
+            size_t	            pixmapDepth(size_t bitsPerPixel) const;
+            size_t	            pixmapBitsPerPixel(size_t depth) const;
+            const xcb_setup_t*      setup(void) const;
 
 	    template<typename Reply, typename Cookie>
 	    ReplyError<Reply> getReply(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
@@ -382,17 +383,16 @@ namespace LTSM
             size_t		    scanlinePad(void) const;
             const xcb_visualtype_t* visual(void) const;
             xcb_drawable_t          root(void) const;
-            size_t	            depth(size_t bitsPerPixel) const;
-            size_t	            bitsPerPixel(size_t depth) const;
 
-            const xcb_visualtype_t* findVisual(xcb_visualid_t) const;
+            const xcb_visualtype_t* visual(xcb_visualid_t) const;
+
             void                    fillBackground(uint32_t color);
 
 	    std::list<xcb_randr_screen_size_t>
 				    screenSizes(void) const;
 	    bool	            setScreenSize(uint16_t windth, uint16_t height);
 
-            PixmapInfoReply         copyRootImageRegion(const Region &, size_t planeMask = 0) const;
+            PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
 
             bool                    fakeInputKeysym(int type, const KeyCodes &);
             bool                    fakeInputKeycode(int type, uint8_t keycode);

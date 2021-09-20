@@ -48,7 +48,7 @@ using namespace std::chrono_literals;
 #define bswap32(x) __builtin_bswap32(x)
 #define bswap64(x) __builtin_bswap64(x)
 
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
  #define swapLE16(x) (x)
  #define swapLE32(x) (x)
  #define swapLE64(x) (x)
@@ -84,7 +84,7 @@ namespace LTSM
 
     NetworkStream & NetworkStream::sendInt16(uint16_t val)
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return sendIntLE16(val);
 #else
         return sendIntBE16(val);
@@ -93,7 +93,7 @@ namespace LTSM
 
     NetworkStream & NetworkStream::sendInt32(uint32_t val)
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return sendIntLE32(val);
 #else
         return sendIntBE32(val);
@@ -102,7 +102,7 @@ namespace LTSM
 
     NetworkStream & NetworkStream::sendInt64(uint64_t val)
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return sendIntLE64(val);
 #else
         return sendIntBE64(val);
@@ -118,7 +118,7 @@ namespace LTSM
 
     uint16_t NetworkStream::recvInt16(void) const
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return recvIntLE16();
 #else
         return recvIntBE16();
@@ -127,7 +127,7 @@ namespace LTSM
 
     uint32_t NetworkStream::recvInt32(void) const
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return recvIntLE32();
 #else
         return recvIntBE32();
@@ -136,7 +136,7 @@ namespace LTSM
 
     uint64_t NetworkStream::recvInt64(void) const
     {
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return recvIntLE64();
 #else
         return recvIntBE64();
@@ -572,7 +572,7 @@ namespace LTSM
                 {
                     const char* compat = "NORMAL:+ANON-ECDH:+ANON-DH";
                     Application::error("gnutls_priority_set_direct error: %s, priority: %s", gnutls_strerror(ret), priority.c_str());
-                    Application::info("reuse compat priority: %s", gnutls_strerror(ret), compat);
+                    Application::info("reuse compat priority: %s", compat);
                     ret = gnutls_priority_set_direct(session, compat, nullptr);
                 }
             }

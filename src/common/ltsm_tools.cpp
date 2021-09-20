@@ -173,7 +173,7 @@ namespace LTSM
                 }
                 catch(const std::invalid_argument &)
                 {
-                    Application::error("format failed: `%s', arg: ", this->c_str(), val.c_str());
+                    Application::error("format failed: `%s', arg: `%s'", this->c_str(), val.c_str());
                     return *this;
                 }
 

@@ -34,6 +34,7 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
+#include <exception>
 
 #include "xcb/xtest.h"
 #include "xcb/xproto.h"
@@ -255,13 +256,11 @@ namespace LTSM
         }
     }
 
-    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, size_t planeMask) const
+    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, uint32_t planeMask) const
     {
 	xcb_generic_error_t* error;
-        auto cookie = planeMask ? xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
-                                        planeMask, XCB_IMAGE_FORMAT_XY_PIXMAP, xid(), offset) :
-    				xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
-                                        ~0 /* plane mask */, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
+        auto cookie = xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
+                                    planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
 
         auto xcbReply = getReplyConn(xcb_shm_get_image, connection(), cookie);
         PixmapInfoReply res;
@@ -439,17 +438,48 @@ namespace LTSM
     }
 
     /* XCB::Connector */
-    XCB::Connector::Connector(const char* addr) : _conn(nullptr)
+    XCB::Connector::Connector(const char* addr) : _conn(nullptr), _setup(nullptr)
     {
         _conn = xcb_connect(addr, nullptr);
 
         if(xcb_connection_has_error(_conn))
-            throw std::string("connect error ").append(addr);
+        {
+            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", addr);
+            throw std::runtime_error("XCB::Connector");
+        }
+
+        _setup = xcb_get_setup(_conn);
+        if(! _setup)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
+            throw std::runtime_error("XCB::Connector");
+        }
     }
 
     XCB::Connector::~Connector()
     {
         xcb_disconnect(_conn);
+    }
+
+    size_t XCB::Connector::pixmapBitsPerPixel(size_t depth) const
+    {
+        for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
+            if(fIter.data->depth == depth) return fIter.data->bits_per_pixel;
+
+        return 0;
+    }
+
+    size_t XCB::Connector::pixmapDepth(size_t bitsPerPixel) const
+    {
+        for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
+            if(fIter.data->bits_per_pixel == bitsPerPixel) return fIter.data->depth;
+
+        return 0;
+    }
+
+    const xcb_setup_t* XCB::Connector::setup(void) const
+    {
+        return _setup;
     }
 
     bool XCB::Connector::testConnection(const char* addr)
@@ -835,17 +865,18 @@ namespace LTSM
     }
 
     /* XCB::RootDisplay */
-    XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr), _symbols(nullptr),
-        _format(nullptr), _visual(nullptr)
+    XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr),
+        _symbols(nullptr), _format(nullptr), _visual(nullptr)
     {
-        auto setup = xcb_get_setup(_conn);
-        _screen = xcb_setup_roots_iterator(setup).data;
-
+        _screen = xcb_setup_roots_iterator(_setup).data;
         if(! _screen)
-            throw std::string("root window not found");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "root screen");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         // init format
-        for(auto fIter = xcb_setup_pixmap_formats_iterator(setup); fIter.rem; xcb_format_next(& fIter))
+        for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
         {
             if(fIter.data->depth == _screen->root_depth)
             {
@@ -855,7 +886,10 @@ namespace LTSM
         }
 
         if(! _format)
-            throw std::string("xcb format not found");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "init format");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         // init visual
         for(auto dIter = xcb_screen_allowed_depths_iterator(_screen); dIter.rem; xcb_depth_next(& dIter))
@@ -871,28 +905,48 @@ namespace LTSM
         }
 
         if(! _visual)
-            throw std::string("xcb visual not found");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "init visual");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         _symbols = xcb_key_symbols_alloc(_conn);
-
         if(! _symbols)
-            throw std::string("xcb_key_symbols_alloc error");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "key symbols alloc");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         // check extensions
         if(! checkExtension(Module::SHM))
-            throw std::string("failed: ").append("SHM extension");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "SHM extension");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         if(! checkExtension(Module::DAMAGE))
-            throw std::string("failed: ").append("DAMAGE extension");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "DAMAGE extension");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         if(! checkExtension(Module::XFIXES))
-            throw std::string("failed: ").append("XFIXES extension");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "XFIXES extension");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         if(! checkExtension(Module::TEST))
-            throw std::string("failed: ").append("TEST extension");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "TEST extension");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         if(! checkExtension(Module::RANDR))
-            throw std::string("failed: ").append("RANDR extension");
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "RANDR extension");
+            throw std::runtime_error("XCB::RootDisplay");
+        }
 
         auto wsz = size();
 
@@ -934,33 +988,12 @@ namespace LTSM
     {
         return _format ? _format->bits_per_pixel : 0;
     }
-
-    size_t XCB::RootDisplay::bitsPerPixel(size_t depth) const
-    {
-        auto setup = xcb_get_setup(_conn);
-
-        for(auto fIter = xcb_setup_pixmap_formats_iterator(setup); fIter.rem; xcb_format_next(& fIter))
-            if(fIter.data->depth == depth) return fIter.data->bits_per_pixel;
-
-        return 0;
-    }
-
-    size_t XCB::RootDisplay::depth(size_t bitsPerPixel) const
-    {
-        auto setup = xcb_get_setup(_conn);
-
-        for(auto fIter = xcb_setup_pixmap_formats_iterator(setup); fIter.rem; xcb_format_next(& fIter))
-            if(fIter.data->bits_per_pixel == bitsPerPixel) return fIter.data->depth;
-
-        return 0;
-    }
-
     size_t XCB::RootDisplay::scanlinePad(void) const
     {
         return _format ? _format->scanline_pad : 0;
     }
 
-    const xcb_visualtype_t* XCB::RootDisplay::findVisual(xcb_visualid_t id) const
+    const xcb_visualtype_t* XCB::RootDisplay::visual(xcb_visualid_t id) const
     {
         for(auto dIter = xcb_screen_allowed_depths_iterator(_screen); dIter.rem; xcb_depth_next(& dIter))
         {
@@ -1064,13 +1097,13 @@ namespace LTSM
 
         	if(it == sizes + length)
         	{
-            	    Application::error("set screen size failed, unknown mode: %d, %d", width, height);
+            	    Application::error("set screen size failed, unknown mode: [%d,%d]", width, height);
             	    return false;
 		}
 
 		width = it->width;
 		height = it->height;
-            	Application::warning("set screen size, found nearest suitable mode: %d, %d", width, height);
+            	Application::warning("set screen size, found nearest suitable mode: [%d,%d]", width, height);
             }
 
             damageSubtrack(region());
@@ -1089,16 +1122,10 @@ namespace LTSM
         return false;
     }
 
-    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, size_t planeMask) const
+    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
     {
         if(_shm)
-	{
-            auto res = _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
-	    // fix visual
-	    auto ptr = static_cast<PixmapInfoSHM*>(res.get());
-	    if(ptr) ptr->_visual = findVisual(ptr->_visid);
-	    return res;
-	}
+            return _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
 
         size_t pitch = reg.width * (bitsPerPixel() >> 2);
         //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * reg.height;
@@ -1107,7 +1134,7 @@ namespace LTSM
 
         if(pitch == 0)
         {
-            Application::error("copy root image error, empty size: %d, %d, bpp: %d", reg.width, reg.height, bitsPerPixel());
+            Application::error("copy root image error, empty size: [%d,%d], bpp: %d", reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
@@ -1122,8 +1149,7 @@ namespace LTSM
 	    if(yy + allowRows > reg.y + reg.height)
 		allowRows = reg.y + reg.height - yy;
 
-            auto cookie = planeMask ? xcb_get_image(_conn, XCB_IMAGE_FORMAT_XY_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask) : 
-		xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, ~0);
+            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 	    auto xcbReply = getReplyFunc(xcb_get_image, cookie);
 
 	    if(xcbReply.error())
@@ -1137,7 +1163,7 @@ namespace LTSM
 		auto reply = xcbReply.reply().get();
 
                 if(! info)
-                    info = new PixmapInfoBuffer(reply->depth, findVisual(reply->visual), reg.height * pitch);
+                    info = new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch);
 
                 auto length = xcb_get_image_data_length(reply);
                 auto data = xcb_get_image_data(reply);
@@ -1207,12 +1233,12 @@ namespace LTSM
                 auto wsz = size();
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
-        	    Application::debug("xcb crc change notify: %dx%d discard", cc.width, cc.height);
+        	    Application::debug("xcb crc change notify: [%d,%d] discard", cc.width, cc.height);
                     xcb_discard_reply(_conn, notify->sequence);
                     return GenericEvent();
                 }
 
-        	Application::debug("xcb crc change notify: %dx%d", cc.width, cc.height);
+        	Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
 
                 // init shm
                 const int bpp = bitsPerPixel() >> 3;
@@ -1341,6 +1367,15 @@ namespace LTSM
 
     void XCB::RootDisplay::fillBackground(uint32_t color)
     {
+        if(depth() < 24 && color > 0x0000FFFF)
+        {
+            // convert RGB888 to RGB565
+            uint16_t r = ((color >> 24) & 0xFF) * 0x1F / 0xFF;
+            uint16_t g = ((color >> 16) & 0xFF) * 0x3F / 0xFF;
+            uint16_t b = (color & 0xFF) * 0x1F / 0xFF;
+            color = (r << 11) | (g << 5) | b;
+        }
+
         uint32_t colors[]  = { color, 0 };
         auto cookie = xcb_change_window_attributes(_conn, _screen->root, XCB_CW_BACK_PIXEL, colors);
         auto errorReq = checkRequest(cookie);
@@ -1413,7 +1448,7 @@ namespace LTSM
 
             if(Application::isDebugLevel(DebugLevel::Console) ||
                 Application::isDebugLevel(DebugLevel::SyslogInfo))
-                Application::info("%s", "xcb: clear selection");
+                Application::info("%s: %s", __FUNCTION__, "event");
  	    return true;
         }
 
@@ -1480,7 +1515,8 @@ namespace LTSM
             Application::isDebugLevel(DebugLevel::SyslogInfo))
 	{
 	    auto prop = getAtomName(ev.property);
-            Application::info("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), std::string(_selbuf.begin(), _selbuf.end()).c_str(), ev.requestor, prop.c_str());
+	    std::string log(_selbuf.begin(), _selbuf.end());
+            Application::info("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), log.c_str(), ev.requestor, prop.c_str());
 	}
 
         return true;
@@ -1612,7 +1648,10 @@ namespace LTSM
 
                 if(Application::isDebugLevel(DebugLevel::Console) ||
                     Application::isDebugLevel(DebugLevel::SyslogInfo))
-                    Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), std::string(_selbuf.begin(), _selbuf.end()).c_str());
+		{
+		    std::string log(_selbuf.begin(), _selbuf.end());
+                    Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
+		}
 	    }
 	}
 

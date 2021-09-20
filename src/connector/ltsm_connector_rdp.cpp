@@ -552,7 +552,7 @@ namespace LTSM
 		if(_xcbDisplay->setScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
         	{
 		    wsz = _xcbDisplay->size();
-		    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, display);
+		    Application::notice("change session size [%d,%d], display: %d", wsz.width, wsz.height, display);
 		}
 	    }
 
@@ -566,6 +566,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
+    	    freeRdp->stopEventLoop();
             setEnableXcbMessages(false);
             loopShutdownFlag = true;
             Application::notice("dbus signal: shutdown connector, display: %d", display);
@@ -608,9 +609,9 @@ namespace LTSM
         // reply info dump
         if(Application::isDebugLevel(DebugLevel::SyslogDebug))
         {
-            if(const xcb_visualtype_t* visual = reply->visual())
+            if(const xcb_visualtype_t* visual = context->x11display->visual(reply->visId()))
             {
-                Application::info("get_image: request size [%d, %d], reply length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
+                Application::info("get_image: request size: [%d,%d], reply length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
                         damage.width, damage.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
             }
         }
@@ -623,14 +624,14 @@ namespace LTSM
     {
 	auto context = static_cast<ClientContext*>(peer.context);
 
-	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
+	const int bytePerPixel = context->x11display->pixmapBitsPerPixel(reply->depth()) >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
         const size_t tileSize = 64;
 	const size_t pixelFormat = PIXEL_FORMAT_BGRX32;
 
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
-	    Application::error("%s: %s failed, length:%d, size:%dx%d, bpp:%d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+	    Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
             throw CodecFailed("clientUpdateBitmapPlanar");
 	}
 
@@ -736,26 +737,26 @@ namespace LTSM
     {
 	auto context = static_cast<ClientContext*>(peer.context);
 
-	const int bytePerPixel = context->x11display->bitsPerPixel(reply->depth()) >> 3;
+	const int bytePerPixel = context->x11display->pixmapBitsPerPixel(reply->depth()) >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
 	// size fixed: libfreerdp/codec/interleaved.c
         const size_t tileSize = 64;
 
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
-	    Application::error("%s: %s failed, length:%d, size:%dx%d, bpp:%d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+	    Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
     	    throw CodecFailed("clientUpdateBitmapInterleaved");
     	}
 
 	size_t pixelFormat = 0;
 	switch(reply->depth())
 	{
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 	    case 16:	pixelFormat = PIXEL_FORMAT_RGB16; break;
-	    case 24:	pixelFormat = PIXEL_FORMAT_RGB24; break;
+	    case 24:	pixelFormat = PIXEL_FORMAT_RGBX32; break;
 #else
 	    case 16:	pixelFormat = PIXEL_FORMAT_BGR16; break;
-	    case 24:	pixelFormat = PIXEL_FORMAT_BGR24; break;
+	    case 24:	pixelFormat = PIXEL_FORMAT_BGRX32; break;
 #endif
 	    default:
 		Application::error("%s: %s failed", __FUNCTION__, "pixel format");
@@ -814,7 +815,7 @@ namespace LTSM
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
 		reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, peer.settings->ColorDepth))
 	    {
-                Application::error("%s: %s failed", __FUNCTION__, "freerdp_bitmap_compress_interleaved");
+                Application::error("%s: %s failed", __FUNCTION__, "interleaved_compress");
                 throw CodecFailed("clientUpdateBitmapInterleaved");
 	    }
 
@@ -851,7 +852,7 @@ namespace LTSM
 
     BOOL Connector::RDP::cbClientPostConnect(freerdp_peer* client)
     {
-        Application::notice("%s: client:%p, desktop:%dx%d, client depth: %d", __FUNCTION__, client, client->settings->DesktopWidth, client->settings->DesktopHeight, client->settings->ColorDepth);
+        Application::notice("%s: client: %p, desktop: [%d,%d], client depth: %d", __FUNCTION__, client, client->settings->DesktopWidth, client->settings->DesktopHeight, client->settings->ColorDepth);
 
 	auto context = static_cast<ClientContext*>(client->context);
         auto connector = context->rdp;
@@ -870,7 +871,7 @@ namespace LTSM
 
 	    auto wsz = context->x11display->size();
 	    if(wsz.width != client->settings->DesktopWidth || wsz.height != client->settings->DesktopHeight)
-    	        Application::warning("%s: x11display size: %dx%d", __FUNCTION__, wsz.width, wsz.height);
+    	        Application::warning("%s: x11display size: [%d,%d]", __FUNCTION__, wsz.width, wsz.height);
 
             client->settings->DesktopWidth = wsz.width;
             client->settings->DesktopHeight = wsz.height;

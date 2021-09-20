@@ -107,7 +107,7 @@ namespace LTSM
         auto conn = sdbus::createSystemBusConnection();
         if(! conn)
         {
-            Application::error("%s", "dbus create connection failed");
+            Application::error("%s: %s", "Service::start", "dbus create connection failed");
             return EXIT_FAILURE;
         }
 
@@ -168,7 +168,7 @@ namespace LTSM
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName))
         {
-            Application::error("file not found: %s", fileName.c_str());
+            Application::error("file not found: `%s'", fileName.c_str());
             fileName.clear();
         }
 
@@ -189,7 +189,7 @@ namespace LTSM
     {
         std::string xauthFile = busCreateAuthFile(screen);
         Application::debug("uid: %d, euid: %d, gid: %d, egid: %d", getuid(), geteuid(), getgid(), getegid());
-        Application::debug("xauthfile request: %s", xauthFile.c_str());
+        Application::debug("xauthfile request: `%s'", xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         const std::string addr = Tools::StringFormat(":%1").arg(screen);
@@ -198,10 +198,10 @@ namespace LTSM
         std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
 
 	if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
-                Application::error("xvfb: %s", "not started");
+                Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
 
         _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
-        Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
+        Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         int color = _config->getInteger("display:solid", 0);
         if(0 != color) _xcbDisplay->fillBackground(color);

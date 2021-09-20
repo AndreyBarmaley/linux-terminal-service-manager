@@ -537,7 +537,7 @@ namespace LTSM
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
 
         // init server format
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         const int bigEndian = 0;
 #else
         const int bigEndian = 1;
@@ -1168,11 +1168,11 @@ namespace LTSM
 
         if(auto reply = _xcbDisplay->copyRootImageRegion(reg))
         {
-            const int bytePerPixel = _xcbDisplay->bitsPerPixel(reply->depth()) >> 3;
+            const int bytePerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth()) >> 3;
 
             if(encodingDebug)
             {
-                if(const xcb_visualtype_t* visual = reply->visual())
+                if(const xcb_visualtype_t* visual = _xcbDisplay->visual(reply->visId()))
                 {
                     Application::debug("shm request size [%d, %d], reply: length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
                                        reg.width, reg.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, 
@@ -1286,7 +1286,7 @@ namespace LTSM
     	    int green = clientFormat.green(pixel2);
     	    int blue = clientFormat.blue(pixel2);
 
-#ifdef __ORDER_LITTLE_ENDIAN__
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 	    std::swap(red, blue);
 #endif
     	    sendInt8(red);
