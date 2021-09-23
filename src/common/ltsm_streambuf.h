@@ -174,8 +174,8 @@ namespace LTSM
         inline uint32_t readIntBE32(void) const { return getIntBE32(); }
         inline uint64_t readIntBE64(void) const { return getIntBE64(); };
 
-        void            readIn(char*, size_t) const;
-        void            readIn(uint8_t*, size_t) const;
+        void            readTo(char*, size_t) const;
+        void            readTo(uint8_t*, size_t) const;
 
         virtual BinaryBuf read(size_t = 0) const;
         void            skip(size_t) const;
@@ -194,14 +194,14 @@ namespace LTSM
         template<typename T>
         const MemoryStream & operator>>(const RawPtr<T> & v) const
         {
-            readIn(v.first, v.size());
+            readTo(v.first, v.size());
             return *this;
         }
 
         template<size_t N>
         const MemoryStream & operator>>(uint8_t (&arr)[N]) const
         {
-            readIn(arr, N);
+            readTo(arr, N);
             return *this;
         }
 

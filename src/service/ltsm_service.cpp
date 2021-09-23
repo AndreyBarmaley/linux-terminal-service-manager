@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <cctype>
 #include <chrono>
 #include <atomic>
 #include <thread>
@@ -1633,6 +1634,7 @@ namespace LTSM
         if(auto xvfb = getXvfbInfo(display))
 	{
 	    xvfb->durationlimit = duration;
+            emitClearRenderPrimitives(display);
             emitSessionChanged(display);
 	    return true;
 	}
@@ -1660,6 +1662,13 @@ namespace LTSM
 	    return true;
         }
 	return false;
+    }
+
+    bool Manager::Object::busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
+    {
+        Application::info("set session login: %s, display: %d", login.c_str(), display);
+        emitHelperSetLoginPassword(display, login, password, action);
+        return true;
     }
 
     std::vector<xvfb2tuple> Manager::Object::busGetSessions(void)
@@ -1710,7 +1719,7 @@ namespace LTSM
         // check present executable files
         for(auto key : _config.keys())
         {
-            if(5 < key.size() && 0 == key.substr(key.size() - 5).compare(":path"))
+            if(5 < key.size() && 0 == key.substr(key.size() - 5).compare(":path") && 0 != std::isalpha(key.front()) /* skip comment */)
             {
                 auto value = _config.getString(key);
                 Application::debug("checking executable: %s", value.c_str());

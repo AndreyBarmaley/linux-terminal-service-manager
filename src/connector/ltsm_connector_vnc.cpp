@@ -1205,13 +1205,18 @@ namespace LTSM
 		// send encodings
         	encodingLength = prefEncodings.first(reg, shmFrameBuffer);
 	    }
-	    catch(const CodecFailed &)
+	    catch(const CodecFailed & ex)
 	    {
+		Application::error("codec exception: %s", ex.err.c_str());
 		loopMessage = false;
 		return false;
 	    }
-	    catch(const SocketFailed &)
+	    catch(const SocketFailed & ex)
 	    {
+		if(ex.code)
+		    Application::error("socket exception: code: %d, error: %s", ex.code, strerror(ex.code));
+		else
+		    Application::error("socket exception: code: %d", ex.code);
 		loopMessage = false;
 		return false;
 	    }
@@ -1286,9 +1291,8 @@ namespace LTSM
     	    int green = clientFormat.green(pixel2);
     	    int blue = clientFormat.blue(pixel2);
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 	    std::swap(red, blue);
-#endif
+
     	    sendInt8(red);
             sendInt8(green);
             sendInt8(blue);
@@ -1315,14 +1319,14 @@ namespace LTSM
                 if(_xcbDisplay->setScreenSize(serverRegion.width, serverRegion.height))
                 {
                     wsz = _xcbDisplay->size();
-                    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, display);
+                    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, _display);
                 }
 	    }
 
             // full update
             _xcbDisplay->damageAdd(serverRegion);
 
-            Application::notice("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
+            Application::notice("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
         }
     }
 

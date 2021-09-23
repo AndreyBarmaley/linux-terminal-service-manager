@@ -40,6 +40,7 @@ protected:
         object_.registerMethod("busSetEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display", "info").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& info){ return this->busSetEncryptionInfo(display, info); });
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
+        object_.registerMethod("busSetSessionLoginPassword").onInterface(INTERFACE_NAME).withInputParamNames("display", "login", "password", "action").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& login, const std::string& password, const bool& action){ return this->busSetSessionLoginPassword(display, login, password, action); });
         object_.registerMethod("busEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busEncryptionInfo(display); });
         object_.registerMethod("busDisplayResized").onInterface(INTERFACE_NAME).withInputParamNames("display", "width", "height").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint16_t& width, const uint16_t& height){ return this->busDisplayResized(display, width, height); });
         object_.registerMethod("busConnectorTerminated").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorTerminated(display); });
@@ -51,8 +52,7 @@ protected:
         object_.registerMethod("busRenderText").onInterface(INTERFACE_NAME).withInputParamNames("display", "text", "pos", "color").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ return this->busRenderText(display, text, pos, color); });
         object_.registerMethod("busRenderClear").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busRenderClear(display); });
         object_.registerSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
-        object_.registerSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
-        object_.registerSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "login", "pass");
+        object_.registerSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, bool>("display", "login", "pass", "autologin");
         object_.registerSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("loginFailure").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "msg");
         object_.registerSignal("loginSuccess").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "userName");
@@ -76,14 +76,9 @@ public:
         object_.emitSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).withArguments(display);
     }
 
-    void emitHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass)
+    void emitHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin)
     {
-        object_.emitSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, pass);
-    }
-
-    void emitHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass)
-    {
-        object_.emitSignal("helperAutoLogin").onInterface(INTERFACE_NAME).withArguments(display, login, pass);
+        object_.emitSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, pass, autologin);
     }
 
     void emitHelperWidgetCentered(const int32_t& display)
@@ -170,6 +165,7 @@ private:
     virtual bool busSetEncryptionInfo(const int32_t& display, const std::string& info) = 0;
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;
+    virtual bool busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) = 0;
     virtual std::string busEncryptionInfo(const int32_t& display) = 0;
     virtual bool busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) = 0;
     virtual bool busConnectorTerminated(const int32_t& display) = 0;

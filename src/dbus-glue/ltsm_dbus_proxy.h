@@ -23,8 +23,7 @@ protected:
         : proxy_(proxy)
     {
         proxy_.uponSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetStarted(display); });
-        proxy_.uponSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass){ this->onHelperSetLoginPassword(display, login, pass); });
-        proxy_.uponSignal("helperAutoLogin").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass){ this->onHelperAutoLogin(display, login, pass); });
+        proxy_.uponSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin){ this->onHelperSetLoginPassword(display, login, pass, autologin); });
         proxy_.uponSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetCentered(display); });
         proxy_.uponSignal("loginFailure").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& msg){ this->onLoginFailure(display, msg); });
         proxy_.uponSignal("loginSuccess").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& userName){ this->onLoginSuccess(display, userName); });
@@ -43,8 +42,7 @@ protected:
     ~Service_proxy() = default;
 
     virtual void onHelperWidgetStarted(const int32_t& display) = 0;
-    virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) = 0;
-    virtual void onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) = 0;
+    virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) = 0;
     virtual void onHelperWidgetCentered(const int32_t& display) = 0;
     virtual void onLoginFailure(const int32_t& display, const std::string& msg) = 0;
     virtual void onLoginSuccess(const int32_t& display, const std::string& userName) = 0;
@@ -183,6 +181,13 @@ public:
     {
         bool result;
         proxy_.callMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withArguments(display, policy).storeResultsTo(result);
+        return result;
+    }
+
+    bool busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
+    {
+        bool result;
+        proxy_.callMethod("busSetSessionLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, password, action).storeResultsTo(result);
         return result;
     }
 

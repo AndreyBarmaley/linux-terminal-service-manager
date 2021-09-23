@@ -150,9 +150,8 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
 
         connect(dbusInterfacePtr.data(), SIGNAL(loginFailure(int, const QString &)), this, SLOT(loginFailureCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
-        connect(dbusInterfacePtr.data(), SIGNAL(helperAutoLogin(int, const QString &, const QString &)), this, SLOT(autoLoginCallback(int, const QString &, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetCentered(int)), this, SLOT(widgetCenteredCallback(int)));
-        connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &)));
+        connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &, const bool &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &, const bool &)));
 	connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
 
         initArguments = true;
@@ -286,27 +285,17 @@ void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & userna
         close();
 }
 
-void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass)
+void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass, const bool & autoLogin)
 {
     if(display == displayNum && 0 < login.size())
     {
         ui->comboBoxUsername->setEditText(login);
+
+        ui->lineEditPassword->setFocus();
         if(0 < pass.size())
-        {
             ui->lineEditPassword->setText(pass);
-        }
-        else
-            ui->lineEditPassword->setFocus();
-    }
-}
 
-void LTSM_HelperWindow::autoLoginCallback(int display, const QString & login, const QString & pass)
-{
-    if(display == displayNum)
-    {
-        ui->comboBoxUsername->setEditText(login);
-        ui->lineEditPassword->setText(pass);
-
-        loginClicked();
+        if(autoLogin)
+            loginClicked();
     }
 }

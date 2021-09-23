@@ -1365,18 +1365,25 @@ namespace LTSM
         }
     */
 
-    void XCB::RootDisplay::fillBackground(uint32_t color)
+    void XCB::RootDisplay::fillBackground(int r, int g, int b)
     {
+	fillRegion(r, g, b, region());
+    }
+
+    void XCB::RootDisplay::fillRegion(int r, int g, int b, const Region & reg)
+    {
+        uint32_t color = (r << 16) | (g << 8) | b;
+
         if(depth() < 24 && color > 0x0000FFFF)
         {
             // convert RGB888 to RGB565
-            uint16_t r = ((color >> 24) & 0xFF) * 0x1F / 0xFF;
-            uint16_t g = ((color >> 16) & 0xFF) * 0x3F / 0xFF;
-            uint16_t b = (color & 0xFF) * 0x1F / 0xFF;
+            r = ((color >> 24) & 0xFF) * 0x1F / 0xFF;
+            g = ((color >> 16) & 0xFF) * 0x3F / 0xFF;
+            b = (color & 0xFF) * 0x1F / 0xFF;
             color = (r << 11) | (g << 5) | b;
         }
 
-        uint32_t colors[]  = { color, 0 };
+        uint32_t colors[]  = { color };
         auto cookie = xcb_change_window_attributes(_conn, _screen->root, XCB_CW_BACK_PIXEL, colors);
         auto errorReq = checkRequest(cookie);
 
@@ -1384,8 +1391,7 @@ namespace LTSM
             extendedError(errorReq, "xcb_change_window_attributes");
         else
         {
-            auto wsz = size();
-            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, 0, 0, wsz.width, wsz.height);
+            cookie = xcb_clear_area_checked(_conn, 0, _screen->root, reg.x, reg.y, reg.width, reg.height);
             errorReq = checkRequest(cookie);
 
             if(errorReq)

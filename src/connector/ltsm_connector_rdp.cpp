@@ -38,6 +38,7 @@
 #include <filesystem>
 
 #include <unistd.h>
+
 #include <winpr/crt.h>
 #include <winpr/ssl.h>
 #include <winpr/input.h>
@@ -308,15 +309,15 @@ namespace LTSM
 
         static bool enterEventLoop(FreeRdpCallback* client)
         {
-	    auto error = CHANNEL_RC_OK;
-	    HANDLE handles[32] = {0};
-	    DWORD count = 0;
+	    //auto error = CHANNEL_RC_OK;
+	    //HANDLE handles[32] = {0};
+	    //DWORD count = 0;
 
 	    Application::info("%s: enter event loop", "FreeRdpCallback");
 	    auto peer = client->peer;
 
 	    // freerdp client events
-    	    while(error == CHANNEL_RC_OK)
+    	    while(true)
     	    {
                 if(client->isShutdown())
                     break;
@@ -374,31 +375,22 @@ namespace LTSM
         const std::string home = Tools::getenv("HOME", "/tmp");
 	const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-        if(! initUnixSockets(socketFile.string()))
+        if(! proxyInitUnixSockets(socketFile.string()))
             return EXIT_FAILURE;
+ 
+	proxyStartEventLoop();
 
         // create FreeRdpCallback
     	Application::notice("%s", "create freerdp client");
-        freeRdp.reset(new FreeRdpCallback(clientSocket(), _remoteaddr, *_config, this));
+        freeRdp.reset(new FreeRdpCallback(proxyClientSocket(), _remoteaddr, *_config, this));
         auto freeRdpThread = std::thread([ptr = freeRdp.get()]{ FreeRdpCallback::enterEventLoop(ptr); });
 	XCB::Region damageRegion(0, 0, 0, 0);
 
 	// all ok
 	while(! loopShutdownFlag)
 	{
-	    if(freeRdp->isShutdown())
+	    if(freeRdp->isShutdown() || ! proxyRunning())
 		loopShutdownFlag = true;
-
-	    try
-	    {
-		if(! ProxySocket::enterEventLoopAsync())
-		    loopShutdownFlag = true;
-	    }
-    	    catch(const SocketFailed &)
-    	    {
-		loopShutdownFlag = true;
-		break;
-    	    }
 
             if(isAllowXcbMessages())
             {
@@ -468,7 +460,7 @@ namespace LTSM
 		    }
 		    catch(const LTSM::Connector::CodecFailed & ex)
 		    {
-			Application::error("exception: %s", ex.err.c_str());
+			Application::error("codec exception: %s", ex.err.c_str());
 			loopShutdownFlag = true;
 		    }
 
@@ -494,6 +486,11 @@ namespace LTSM
     void Connector::RDP::setEncryptionInfo(const std::string & info)
     {
 	busSetEncryptionInfo(_display, info);
+    }
+
+    void Connector::RDP::setAutoLogin(const std::string & login, const std::string & pass)
+    {
+        busSetSessionLoginPassword(_display, login, pass, false);
     }
 
     bool Connector::RDP::createX11Session(void)
@@ -552,13 +549,13 @@ namespace LTSM
 		if(_xcbDisplay->setScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
         	{
 		    wsz = _xcbDisplay->size();
-		    Application::notice("change session size [%d,%d], display: %d", wsz.width, wsz.height, display);
+		    Application::notice("change session size [%d,%d], display: %d", wsz.width, wsz.height, _display);
 		}
 	    }
 
             // full update
             _xcbDisplay->damageAdd(_xcbDisplay->region());
-	    Application::notice("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
+	    Application::notice("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
         }
     }
 
@@ -951,6 +948,15 @@ namespace LTSM
  
         context->activated = TRUE;
 	connector->setEnableXcbMessages(true);
+
+        if(client->settings->Username)
+	{
+	    std::string user, pass;
+	    user.assign(client->settings->Username);
+	    if(client->settings->Password)
+		pass.assign(client->settings->Password);
+	    connector->setAutoLogin(user, pass);
+	}
 
         const XCB::Region damage(0, 0, client->settings->DesktopWidth, client->settings->DesktopHeight);
 	context->x11display->damageAdd(damage);

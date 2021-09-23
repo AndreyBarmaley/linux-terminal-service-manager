@@ -386,7 +386,8 @@ namespace LTSM
 
             const xcb_visualtype_t* visual(xcb_visualid_t) const;
 
-            void                    fillBackground(uint32_t color);
+            void                    fillRegion(int r, int g, int b, const Region &);
+            void                    fillBackground(int r, int g, int b);
 
 	    std::list<xcb_randr_screen_size_t>
 				    screenSizes(void) const;

@@ -26,7 +26,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 #include <poll.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -206,19 +210,46 @@ namespace LTSM
 
     void BaseSocket::recvRaw(void* ptr, size_t len) const
     {
-        if(len != read(sock, ptr, len))
-        {
-            Application::error("read error: %s", strerror(errno));
-            throw SocketFailed(errno);
+	while(true)
+	{
+	    auto real = read(sock, ptr, len);
+
+	    if(len == real)
+		break;
+	    else
+	    if(0 > real)
+	    {
+		if(EAGAIN == errno || EINTR == errno)
+	    	    continue;
+
+        	Application::error("%s: read error: %s", __FUNCTION__, strerror(errno));
+	    }
+	    else
+        	Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
+
+    	    throw SocketFailed(errno);
         }
     }
 
     void BaseSocket::sendRaw(const void* buf, size_t len)
     {
-        if(len != write(sock, buf, len))
-        {
-            Application::error("write error: %s", strerror(errno));
-            throw SocketFailed(errno);
+	while(true)
+	{
+	    auto real = write(sock, buf, len);
+	    if(len == real)
+		break;
+	    else
+	    if(0 > real)
+	    {
+		if(EAGAIN == errno || EINTR == errno)
+	    	    continue;
+
+        	Application::error("%s: write error: %s", __FUNCTION__, strerror(errno));
+	    }
+	    else
+        	Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, len);
+
+    	    throw SocketFailed(errno);
         }
     }
 
@@ -227,7 +258,7 @@ namespace LTSM
         uint8_t res = 0;
         if(1 != recv(sock, & res, 1, MSG_PEEK))
         {
-            Application::error("recv error: %s", strerror(errno));
+            Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
@@ -269,13 +300,14 @@ namespace LTSM
     {
         if(std::ferror(fdin))
         {
-            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
-        if(len != std::fread(ptr, 1, len, fdin))
-        {
-            Application::error("stream error, %s: %s", "fread", strerror(errno));
+	auto real = std::fread(ptr, 1, len, fdin);
+	if(len != real)
+    	{
+	    Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
             throw SocketFailed(errno);
         }
     }
@@ -284,20 +316,20 @@ namespace LTSM
     {
         if(std::ferror(fdout))
         {
-            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
         if(std::feof(fdout))
         {
-            Application::error("stream ended, %s: %s", __FUNCTION__, strerror(errno));
+            Application::warning("%s: ended", __FUNCTION__);
             throw SocketFailed(errno);
         }
 
-        size_t res = std::fwrite(buf, 1, len, fdout);
-        if(res != len)
+        auto real = std::fwrite(buf, 1, len, fdout);
+        if(len != real)
         {
-            Application::error("write error: %s", strerror(errno));
+            Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, len);
             throw SocketFailed(errno);
         }
     }
@@ -317,14 +349,14 @@ namespace LTSM
     {
         if(std::ferror(fdin))
         {
-            Application::error("stream error, %s: %s", __FUNCTION__, strerror(errno));
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
             throw SocketFailed(errno);
         }
 
         int res = std::fgetc(fdin);
         if(std::feof(fdin))
         {
-            Application::error("stream ended, %s: %s", __FUNCTION__, strerror(errno));
+            Application::warning("%s: ended", __FUNCTION__);
             throw SocketFailed(errno);
         }
 
@@ -340,6 +372,8 @@ namespace LTSM
         
     void ProxySocket::proxyShutdown(void)
     {
+        Application::info("%s: client %d, bridge: %d", __FUNCTION__, clientSock, bridgeSock);
+
         loopTransmission = false;
         if(loopThread.joinable()) loopThread.join();
             
@@ -351,33 +385,59 @@ namespace LTSM
         clientSock = -1;
     }
 
-    int ProxySocket::clientSocket(void) const
+    int ProxySocket::proxyClientSocket(void) const
     {
         return clientSock;
     }
 
-    void ProxySocket::stopEventLoop(void)
+    int ProxySocket::proxyBridgeSocket(void) const
+    {
+        return bridgeSock;
+    }
+
+    bool ProxySocket::proxyRunning(void) const
+    {
+	return loopTransmission;
+    }
+
+    void ProxySocket::proxyStopEventLoop(void)
     {
         loopTransmission = false;
     }   
 
-    void ProxySocket::startEventLoopBackground(void)
+    void ProxySocket::proxyStartEventLoop(void)
     {
+	loopTransmission = true;
+        Application::notice("%s: client: %d, bridge: %d", __FUNCTION__, clientSock, bridgeSock);
+
         loopThread = std::thread([this]{
             while(this->loopTransmission)
             {
-                if(! this->enterEventLoopAsync())
-                    break;
+		try
+        	{
+            	    if(! this->enterEventLoopAsync())
+        		this->loopTransmission = false;
+        	}
+        	catch(const SocketFailed & ex)
+        	{
+		    if(ex.code)
+			Application::error("socket exception: code: %d, error: %s", ex.code, strerror(ex.code));
+		    else
+			Application::error("socket exception: code: %d", ex.code);
+        	    this->loopTransmission = false;
+		}
 
                 std::this_thread::sleep_for(1ms);
             }
-            this->loopTransmission = false;
+            Application::notice("%s: client %d, bridge: %d", "proxy stopped", this->clientSock, this->bridgeSock);
         });
     }
 
     bool ProxySocket::enterEventLoopAsync(void)
     {
-    	// read all data
+        buf.clear();
+
+    	// inetFd -> bridgeSock
     	while(hasInput())
     	{
     	    uint8_t ch = recvInt8();
@@ -388,7 +448,7 @@ namespace LTSM
         {
             if(buf.size() != send(bridgeSock, buf.data(), buf.size(), 0))
             {
-                Application::error("unix send error: %s", strerror(errno));
+                Application::error("%s: send error: %s", __FUNCTION__, strerror(errno));
                 return false;
             }
 
@@ -399,49 +459,48 @@ namespace LTSM
                 Application::debug("from remote: [%s]", str.c_str());
             }
 #endif
-            buf.clear();
         }
 
         if(checkError())
             return false;
 
-        // write all data
+    	// bridgeSock -> inetFd
         while(NetworkStream::hasInput(bridgeSock))
         {
-            uint8_t ch;
-            if(1 != recv(bridgeSock, & ch, 1, 0))
+            // tcp frame
+            buf.resize(1492);
+
+            auto len = recv(bridgeSock, buf.data(), buf.size(), MSG_DONTWAIT);
+            if(len < 0)
             {
-                Application::error("unix recv error: %s", strerror(errno));
+                Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
                 return false;
             }
 
-            buf.push_back(ch);
-        }
-
-        if(buf.size())
-        {
-            sendRaw(buf.data(), buf.size());
-            sendFlush();
+            if(0 < len)
+            {
+                sendRaw(buf.data(), len);
+                sendFlush();
             
 #ifdef LTSM_DEBUG
-            if(! checkError())
-            {
-                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
-                Application::debug("from local: [%s]", str.c_str());
-            }
+                if(! checkError())
+                {
+                    std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+                    Application::debug("from local: [%s]", str.c_str());
+                }
 #endif
-            buf.clear();
+            }
         }
             
         return ! checkError();
     }       
-        
+
     int ProxySocket::connectUnixSocket(const char* path)
     {   
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > sock)
         {
-            Application::error("socket failed: %s", strerror(errno));
+            Application::error("%s: socket error: %s", __FUNCTION__, strerror(errno));
             return -1;
         }
 
@@ -451,9 +510,9 @@ namespace LTSM
         std::strcpy(sockaddr.sun_path, path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
-            Application::error("connect failed: %s, socket: %s", strerror(errno), path);
+            Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), path);
         else
-            Application::debug("connect unix sock fd: %d", sock);
+            Application::debug("%s: fd: %d", __FUNCTION__, sock);
 
         return sock;
     }
@@ -463,7 +522,7 @@ namespace LTSM
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > fd)
         {
-            Application::error("socket failed: %s", strerror(errno));
+            Application::error("%s: socket error: %s", __FUNCTION__, strerror(errno));
             return -1;
         }
 
@@ -475,20 +534,20 @@ namespace LTSM
         std::filesystem::remove(path);
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
-            Application::error("bind failed: %s, socket: %s", strerror(errno), path);
+            Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), path);
             return -1;
         }
             
         if(0 != listen(fd, 5))
         {   
-            Application::error("listen failed: %s", strerror(errno));
+            Application::error("%s: listen error: %s", __FUNCTION__, strerror(errno));
             return -1;
         }
         Application::info("listen unix sock: %s", path);
         
         int sock = accept(fd, nullptr, nullptr);
         if(0 > sock)
-            Application::error("accept failed: %s", strerror(errno));
+            Application::error("%s: accept error: %s", __FUNCTION__, strerror(errno));
         else
             Application::debug("accept unix sock: %s", path);
         
@@ -496,7 +555,7 @@ namespace LTSM
         return sock;
     }
 
-    bool ProxySocket::initUnixSockets(const std::string & path)
+    bool ProxySocket::proxyInitUnixSockets(const std::string & path)
     {   
         socketPath = path;
         std::future<int> job = std::async(std::launch::async, ProxySocket::listenUnixSocket, socketPath.c_str());
@@ -515,11 +574,14 @@ namespace LTSM
             while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
             // socket fd: server part
             bridgeSock = job.get();
-            
+
+            if(0 < bridgeSock)
+		fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
+
             return 0 < bridgeSock;
         }   
-            
-        Application::error("%s: failed", "init unix sockets");
+
+	Application::error("%s: failed", __FUNCTION__);
         return false;
     }
  

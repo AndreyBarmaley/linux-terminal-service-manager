@@ -147,8 +147,12 @@ namespace LTSM
         {
 	    res = connector->communication();
         }
-        catch(const LTSM::SocketFailed &)
+        catch(const LTSM::SocketFailed & ex)
         {
+	    if(ex.code)
+		Application::error("socket exception: code: %d, error: %s", ex.code, strerror(ex.code));
+	    else
+		Application::error("socket exception: code: %d", ex.code);
         }
 
         return res;
@@ -203,8 +207,9 @@ namespace LTSM
         _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
         Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
-        int color = _config->getInteger("display:solid", 0);
-        if(0 != color) _xcbDisplay->fillBackground(color);
+        int color = _config->getInteger("display:solid", 0x4e7db7);
+        if(0 != color)
+	    _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
 
         _display = screen;
         return true;
@@ -327,13 +332,13 @@ int main(int argc, const char** argv)
     }
     catch(const sdbus::Error & err)
     {
-        LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
-        LTSM::Application::info("%s", "terminate...");
+        LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::info("program: %s", "terminate...");
     }
     catch(const std::string & err)
     {
-        LTSM::Application::error("%s", err.c_str());
-        LTSM::Application::info("%s", "terminate...");
+        LTSM::Application::error("local exception: %s", err.c_str());
+        LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)
     {

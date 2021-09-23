@@ -93,8 +93,7 @@ namespace LTSM
         private:
             // dbus virtual signals
             void                        onLoginFailure(const int32_t & display, const std::string & msg) override {}
-            void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass) override {}
-            void                        onHelperAutoLogin(const int32_t& display, const std::string& login, const std::string& pass) override {}
+            void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) override {}
 	    void			onHelperWidgetCentered(const int32_t& display) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionChanged(const int32_t& display) override {}

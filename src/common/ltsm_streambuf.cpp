@@ -162,7 +162,7 @@ namespace LTSM
         return bigendian() ? readIntBE64() : readIntLE64();
     }
 
-    void MemoryStream::readIn(char* ptr, size_t len) const
+    void MemoryStream::readTo(char* ptr, size_t len) const
     {
         while(len--)
         {
@@ -171,7 +171,7 @@ namespace LTSM
         }
     }
 
-    void MemoryStream::readIn(uint8_t* ptr, size_t len) const
+    void MemoryStream::readTo(uint8_t* ptr, size_t len) const
     {
         while(len--)
         {

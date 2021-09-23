@@ -170,6 +170,7 @@ namespace LTSM
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
+            bool                        busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
             bool                        busSendMessage(const int32_t& display, const std::string& message) override;
 	    bool			busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) override;
 

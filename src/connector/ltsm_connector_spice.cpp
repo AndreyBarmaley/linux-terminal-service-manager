@@ -159,7 +159,7 @@ namespace LTSM
         const std::string home = Tools::getenv("HOME", "/tmp");
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-        if(! initUnixSockets(socketFile.string()))
+        if(! proxyInitUnixSockets(socketFile.string()))
             return EXIT_SUCCESS;
 
         // create x11 connect

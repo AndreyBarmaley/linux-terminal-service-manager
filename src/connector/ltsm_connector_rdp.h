@@ -64,6 +64,7 @@ namespace LTSM
             int		                communication(void) override;
 	    bool			createX11Session(void);
 	    void			setEncryptionInfo(const std::string &);
+	    void			setAutoLogin(const std::string &, const std::string &);
 
 	    // freerdp callback func
 	    static BOOL			cbClientPostConnect(freerdp_peer* client);

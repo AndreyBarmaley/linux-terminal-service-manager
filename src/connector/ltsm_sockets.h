@@ -165,11 +165,13 @@ namespace LTSM
         ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
         ~ProxySocket();
             
-        int                     clientSocket(void) const;
-        bool                    initUnixSockets(const std::string &);
+        int                     proxyClientSocket(void) const;
+        int                     proxyBridgeSocket(void) const;
+        bool                    proxyInitUnixSockets(const std::string &);
+        bool                    proxyRunning(void) const;
 
-        void                    startEventLoopBackground(void);
-        void                    stopEventLoop(void);
+        void                    proxyStartEventLoop(void);
+        void                    proxyStopEventLoop(void);
         void                    proxyShutdown(void);
 
         static int              connectUnixSocket(const char* path);
