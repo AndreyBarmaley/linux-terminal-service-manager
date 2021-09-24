@@ -50,6 +50,14 @@ namespace LTSM
 	    Point() : x(-1), y(-1) {}
 	    Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
 	    Point(int16_t px, int16_t py) : x(px), y(py) {}
+
+            bool isValid(void) const { return 0 <= x && 0 <= y; }
+
+            Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
+            Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
+
+            bool operator==(const Point & pt) const { return pt.x == x && pt.y == y; }
+            bool operator!=(const Point & pt) const { return pt.x != x || pt.y != y; }
 	};
 
 	struct Size
@@ -65,6 +73,17 @@ namespace LTSM
             bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
 	};
 
+	struct PointIterator : Point
+	{
+	    const Size & 	limit;
+    	    PointIterator(int16_t px, int16_t py, const Size & sz) : Point(px, py), limit(sz) {}
+
+    	    PointIterator &	operator++(void);
+    	    PointIterator &	operator--(void);
+
+	    bool		isValid(void) const { return Point::isValid() && x < limit.width && y < limit.height; }
+	};
+
 	struct Region : public Point, public Size
 	{
             Region() {}
@@ -72,8 +91,10 @@ namespace LTSM
             Region(const xcb_rectangle_t & rt) : Point(rt.x, rt.y), Size(rt.width, rt.height) {}
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
-            const Point & toPoint(void) const { return *this; }
+            const Point & topLeft(void) const { return *this; }
             const Size &  toSize(void) const { return *this; }
+
+    	    PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
 
             bool        operator== (const Region & rt) const { return rt.x == x && rt.y == y && rt.width == width && rt.height == height; }
             bool        operator!= (const Region & rt) const { return rt.x != x || rt.y != y || rt.width != width || rt.height != height; }

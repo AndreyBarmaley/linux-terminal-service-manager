@@ -27,7 +27,7 @@
 #include "ltsm_global.h"
 #include "ltsm_dbus_proxy.h"
 #include "ltsm_application.h"
-#include "ltsm_xcb_wrapper.h"
+#include "ltsm_framebuffer.h"
 
 namespace LTSM
 {
@@ -107,9 +107,10 @@ namespace LTSM
             void			onClearRenderPrimitives(const int32_t & display) override;
             void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
             void			onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
-	    virtual void		onAddDamage(const XCB::Region &) {}
 
+	    void		        onAddDamage(const XCB::Region &);
             bool                        xcbConnect(int display);
+            void                        renderPrimitivesToFB(FrameBuffer &);
 
         public:
             SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);

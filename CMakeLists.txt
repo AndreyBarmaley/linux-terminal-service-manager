@@ -80,8 +80,8 @@ set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_C
 # LTSM connector
 project(LTSM_connector VERSION 20210805.1)
 
+option(LTSM_WITH_RDP "add rdp protocol support" ON)
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
-option(LTSM_WITH_RDP "add rdp protocol support" OFF)
 
 find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
@@ -89,6 +89,7 @@ find_package(GnuTLS REQUIRED)
 add_executable(LTSM_connector
     src/connector/ltsm_sockets.cpp
     src/connector/ltsm_connector.cpp
+    src/connector/ltsm_framebuffer.cpp
     src/connector/ltsm_vnc_zlib.cpp
     src/connector/ltsm_vnc_encodings.cpp
     src/connector/ltsm_connector_vnc.cpp)

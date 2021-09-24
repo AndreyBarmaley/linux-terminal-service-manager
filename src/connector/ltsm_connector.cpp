@@ -149,10 +149,7 @@ namespace LTSM
         }
         catch(const LTSM::SocketFailed & ex)
         {
-	    if(ex.code)
-		Application::error("socket exception: code: %d, error: %s", ex.code, strerror(ex.code));
-	    else
-		Application::error("socket exception: code: %d", ex.code);
+	    Application::error("socket exception: %s", ex.err.c_str());
         }
 
         return res;
@@ -317,6 +314,51 @@ namespace LTSM
     {
         Application::info("dbus signal: debug level: %s", level.c_str());
         Application::setDebugLevel(level);
+    }
+
+    void Connector::SignalProxy::onAddDamage(const XCB::Region & reg)
+    {
+        if(isAllowXcbMessages())
+            _xcbDisplay->damageAdd(reg);
+    }
+
+    void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb)
+    {
+        for(auto & ptr : _renderPrimitives)
+        {
+            switch(ptr->type)
+            {
+                case RenderType::RenderRect:
+                    if(auto prim = static_cast<RenderRect*>(ptr.get()))
+                    {
+                        XCB::Region section;
+                        if(XCB::Region::intersection(fb.region(), prim->toRegion(), & section))
+                        {
+                            if(prim->fill)
+                                fb.fillColor(section - fb.region().topLeft(), prim->color);
+                            else
+                                fb.drawRect(section - fb.region().topLeft(), prim->color);
+                        }
+                    }
+                    
+                    break;
+
+                case RenderType::RenderText:
+                    if(auto prim = static_cast<RenderText*>(ptr.get()))
+                    {
+                        const XCB::Region reg = prim->toRegion();
+                        if(XCB::Region::intersection(fb.region(), reg, nullptr))
+                        {
+                            fb.renderText(prim->text, prim->color, reg.topLeft() - fb.region().topLeft());
+                        }
+                    }
+                    
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 }
 

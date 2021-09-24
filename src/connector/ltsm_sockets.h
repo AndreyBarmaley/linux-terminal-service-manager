@@ -99,8 +99,8 @@ namespace LTSM
     ///@brief socket exception
     struct SocketFailed
     {
-	int			code;
-	SocketFailed(int err) : code(err) {}
+	std::string             err;
+	SocketFailed(const std::string & val) : err(val) {}
     };
 
     /// @brief: base socket

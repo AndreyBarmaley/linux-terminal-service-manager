@@ -43,6 +43,7 @@ namespace LTSM
             std::atomic<bool>           loopShutdownFlag;
             std::atomic<bool>           clientUpdatePartFlag;
 	    std::unique_ptr<FreeRdpCallback> freeRdp;
+            PixelFormat                 serverFormat;
 
         protected:
             // dbus virtual signals

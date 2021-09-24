@@ -55,6 +55,52 @@ namespace LTSM
 {
     namespace XCB
     {
+        PointIterator & PointIterator::operator++(void)
+        {
+	    if(! isValid())
+		return *this;
+
+            if(x < limit.width)
+                x++;
+
+            if(x == limit.width && y < limit.height)
+            {
+                x = 0;
+                y++;
+
+        	if(y == limit.height)
+		{
+		    x = -1;
+		    y = -1;
+		}
+            }
+
+            return *this;
+        }
+
+        PointIterator & PointIterator::operator--(void)
+        {
+	    if(! isValid())
+		return *this;
+
+            if(x > 0)
+                x--;
+
+            if(x == 0 && y > 0)
+            {
+                x = limit.width - 1;
+                y--;
+
+        	if(y == 0)
+		{
+		    x = -1;
+		    y = -1;
+		}
+            }
+
+            return *this;
+        }
+
         Region operator- (const Region & reg, const Point & pt)
         {
             return Region(reg.x - pt.x, reg.y - pt.y, reg.width, reg.height);

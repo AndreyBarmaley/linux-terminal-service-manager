@@ -42,284 +42,6 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-    namespace RFB
-    {
-        const char* encodingName(int type);
-
-        PixelFormat::PixelFormat(int bpp, int dep, int be, int tc, int rmask, int gmask, int bmask)
-            : bitsPerPixel(bpp), depth(dep), bigEndian(be), trueColor(tc)
-        {
-            redMax = Tools::maskMaxValue(rmask);
-            greenMax = Tools::maskMaxValue(gmask);
-            blueMax = Tools::maskMaxValue(bmask);
-            redShift = Tools::maskShifted(rmask);
-            greenShift = Tools::maskShifted(gmask);
-            blueShift = Tools::maskShifted(bmask);
-        }
-
-        fbinfo_t::fbinfo_t(uint16_t width, uint16_t height, const PixelFormat & fmt)
-            : pitch(0), buffer(nullptr), format(fmt), allocated(true)
-        {
-            pitch = fmt.bytePerPixel() * width;
-            size_t length = pitch * height;
-            buffer = new uint8_t[length];
-            std::fill(buffer, buffer + length, 0);
-        }
-
-        fbinfo_t::fbinfo_t(uint8_t* ptr, uint16_t width, uint16_t height, const PixelFormat & fmt)
-            : pitch(0), buffer(ptr), format(fmt), allocated(false)
-        {
-            pitch = fmt.bytePerPixel() * width;
-        }
-
-        fbinfo_t::~fbinfo_t()
-        {
-            if(allocated)
-                delete [] buffer;
-        }
-
-        int PixelMapWeight::maxWeightPixel(void) const
-        {
-            auto it = std::max_element(begin(), end(), [](auto & p1, auto & p2)
-            {
-                return p1.second < p2.second;
-            });
-            return it != end() ? (*it).first : 0;
-        }
-
-        uint8_t* FrameBuffer::pitchData(size_t row) const
-        {
-            return get()->buffer + offset + (get()->pitch * row);
-        }
-
-        void FrameBuffer::setPixelRaw(uint16_t px, uint16_t py, int pixel)
-        {
-            if(px < width && py < height)
-            {
-                uint8_t* ptr = pitchData(py) + (px * bytePerPixel());
-
-                switch(bytePerPixel())
-                {
-                    case 4:
-                        *reinterpret_cast<uint32_t*>(ptr) = pixel;
-                        break;
-
-                    case 2:
-                        *reinterpret_cast<uint16_t*>(ptr) = static_cast<uint16_t>(pixel);
-                        break;
-
-                    default:
-                        *ptr = static_cast<uint8_t>(pixel);
-                        break;
-                }
-            }
-        }
-
-        void FrameBuffer::setPixel(uint16_t px, uint16_t py, int val, const PixelFormat & pf)
-        {
-            int pixel = get()->format.convertFrom(pf, val);
-            setPixelRaw(px, py, pixel);
-        }
-
-        void FrameBuffer::fillPixel(const XCB::Region & reg, int val, const PixelFormat & pf)
-        {
-            int pixel = get()->format.convertFrom(pf, val);
-
-            for(int yy = 0; yy < reg.height; ++yy)
-                for(int xx = 0; xx < reg.width; ++xx)
-                    setPixelRaw(reg.x + xx, reg.y + yy, pixel);
-        }
-
-        void FrameBuffer::setColor(uint16_t px, uint16_t py, const Color & col)
-        {
-            int pixel = get()->format.pixel(col);
-            setPixelRaw(px, py, pixel);
-        }
-
-        void FrameBuffer::fillColor(const XCB::Region & reg, const Color & col)
-        {
-            int pixel = get()->format.pixel(col);
-
-            for(int yy = 0; yy < reg.height; ++yy)
-                for(int xx = 0; xx < reg.width; ++xx)
-                    setPixelRaw(reg.x + xx, reg.y + yy, pixel);
-        }
-
-        void FrameBuffer::drawRect(const XCB::Region & reg, const Color & col)
-        {
-            int pixel = get()->format.pixel(col);
-
-            for(int xx = 0; xx < reg.width; ++xx)
-            {
-                setPixelRaw(reg.x + xx, reg.y, pixel);
-                setPixelRaw(reg.x + xx, reg.y + reg.height - 1, pixel);
-            }
-
-            for(int yy = 1; yy < reg.height - 1; ++yy)
-            {
-                setPixelRaw(reg.x, reg.y + yy, pixel);
-                setPixelRaw(reg.x + reg.width - 1, reg.y + yy, pixel);
-            }
-        }
-
-        int FrameBuffer::pixel(uint16_t px, uint16_t py) const
-        {
-            if(px < width && py < height)
-            {
-                uint8_t* ptr = pitchData(py) + (px * bytePerPixel());
-
-                if(bytePerPixel() == 4)
-                    return *reinterpret_cast<uint32_t*>(ptr);
-
-                if(bytePerPixel() == 2)
-                    return *reinterpret_cast<uint16_t*>(ptr);
-
-                return *ptr;
-            }
-
-            return 0;
-        }
-
-	std::list<RLE> FrameBuffer::toRLE(const XCB::Region & reg) const
-	{
-	    std::list<RLE> res;
-
-            for(int yy = 0; yy < reg.height; ++yy)
-            {
-                for(int xx = 0; xx < reg.width; ++xx)
-                {
-                    int pix = pixel(xx + reg.x, yy + reg.y);
-
-		    if(0 < xx && res.back().first == pix)
-			res.back().second++;
-		    else
-			res.emplace_back(pix, 1);
-		}
-	    }
-
-	    return res;
-	}
-
-	void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, int16_t dstx, int16_t dsty)
-	{
-	    auto dst = XCB::Region(dstx, dsty, reg.width, reg.height).intersected({0, 0, reg.width, reg.height});
-
-    	    if(get()->format != fb.get()->format)
-    	    {
-        	for(int yy = 0; yy < dst.width; ++yy)
-            	    for(int xx = 0; xx < dst.height; ++xx)
-                	setPixel(dst.x + xx, dst.y + yy, fb.pixel(reg.x + xx, reg.y + yy), fb.get()->format);
-    	    }
-    	    else
-    	    {
-        	for(int row = 0; row < dst.height; ++row)
-        	{
-            	    auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.get()->format.bytePerPixel();
-            	    size_t length = dst.width * fb.get()->format.bytePerPixel();
-            	    std::copy(ptr, ptr + length, pitchData(row));
-        	}
-    	    }
-	}
-
-        ColorMap FrameBuffer::colourMap(void) const
-        {
-            ColorMap map;
-            const PixelFormat & fmt = get()->format;
-
-            for(int yy = 0; yy < height; ++yy)
-            {
-                for(int xx = 0; xx < width; ++xx)
-                {
-                    int pix = pixel(xx, yy);
-                    map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
-                }
-            }
-
-            return map;
-        }
-
-        PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const
-        {
-            PixelMapWeight map;
-
-            for(int yy = 0; yy < reg.height; ++yy)
-            {
-                for(int xx = 0; xx < reg.width; ++xx)
-                {
-                    int val = pixel(reg.x + xx, reg.y + yy);
-                    auto it = map.find(val);
-
-                    if(it != map.end())
-                        (*it).second += 1;
-                    else
-                        map.emplace(val, 1);
-                }
-            }
-
-            return map;
-        }
-
-        bool FrameBuffer::allOfPixel(int value, const XCB::Region & reg) const
-        {
-            for(int yy = 0; yy < reg.height; ++yy)
-                for(int xx = 0; xx < reg.width; ++xx)
-                    if(value != pixel(reg.x + xx, reg.y + yy)) return false;
-
-            return true;
-        }
-
-        bool FrameBuffer::renderChar(int ch, const Color & col, int px, int py)
-        {
-            if(std::isprint(ch))
-            {
-                size_t offsetx = ch * _systemfont.width * _systemfont.height >> 3;
-
-                if(offsetx >= sizeof(_systemfont.data))
-                    return false;
-
-                bool res = false;
-
-                for(int yy = 0; yy < _systemfont.height; ++yy)
-                {
-                    if(py + yy < 0) continue;
-
-                    size_t offsety = yy * _systemfont.width >> 3;
-
-                    if(offsetx + offsety >= sizeof(_systemfont.data))
-                        continue;
-
-                    int line = *(_systemfont.data + offsetx + offsety);
-
-                    for(int xx = 0; xx < _systemfont.width; ++xx)
-                    {
-                        if(px + xx < 0) continue;
-
-                        if(0x80 & (line << xx))
-                        {
-                            setColor(px + xx, py + yy, col);
-                            res = true;
-                        }
-                    }
-                }
-
-                return res;
-            }
-
-            return false;
-        }
-
-        void FrameBuffer::renderText(const std::string & str, const Color & col, int px, int py)
-        {
-            int offset = 0;
-
-            for(auto & ch : str)
-            {
-                renderChar(ch, col, px + offset, py);
-                offset += _systemfont.width;
-            }
-        }
-    } // RFB
-
     const char* desktopResizeModeString(const DesktopResizeMode & mode)
     {
 	switch(mode)
@@ -367,7 +89,16 @@ namespace LTSM
         {
             JsonContentFile jc(keymapFile);
             if(jc.isValid() && jc.isObject())
-                keymap.reset(new JsonObject(jc.toObject()));
+            {
+                keymap.reset(new JsonObject());
+                auto jo = jc.toObject();
+
+                for(auto & key : jo.keys())
+                    if(auto map = jo.getObject(key))
+                        keymap->join(*map);
+
+                Application::notice("keymap loaded: %s, items: %d", keymapFile.c_str(), keymap->size());
+            }
         }
 
 	// VenCrypt version
@@ -538,11 +269,11 @@ namespace LTSM
 
         // init server format
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        const int bigEndian = 0;
+        const bool bigEndian = false;
 #else
-        const int bigEndian = 1;
+        const bool bigEndian = true;
 #endif
-        serverFormat = RFB::PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, 1,
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, true,
                                             visual->red_mask, visual->green_mask, visual->blue_mask);
 
         bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
@@ -593,14 +324,14 @@ namespace LTSM
     	sendIntBE16(wsz.width);
     	sendIntBE16(wsz.height);
     	Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                           serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian, serverFormat.trueColor,
+                           serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian(), serverFormat.trueColor(),
                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
     	clientFormat = serverFormat;
     	// send pixel format
     	sendInt8(serverFormat.bitsPerPixel);
     	sendInt8(serverFormat.depth);
-    	sendInt8(serverFormat.bigEndian);
-    	sendInt8(serverFormat.trueColor);
+    	sendInt8(serverFormat.bigEndian());
+    	sendInt8(serverFormat.trueColor());
     	sendIntBE16(serverFormat.redMax);
     	sendIntBE16(serverFormat.greenMax);
     	sendIntBE16(serverFormat.blueMax);
@@ -810,28 +541,27 @@ namespace LTSM
         waitSendingFBUpdate();
 
         // RFB: 6.4.1
-        RFB::PixelFormat pf;
+
         // skip padding
         recvSkip(3);
-        pf.bitsPerPixel = recvInt8();
-        pf.depth = recvInt8();
-        pf.bigEndian = recvInt8();
-        pf.trueColor = recvInt8();
-        pf.redMax = recvIntBE16();
-        pf.greenMax = recvIntBE16();
-        pf.blueMax = recvIntBE16();
-        pf.redShift = recvInt8();
-        pf.greenShift = recvInt8();
-        pf.blueShift = recvInt8();
+
+        auto bitsPerPixel = recvInt8();
+        auto depth = recvInt8();
+        auto bigEndian = recvInt8();
+        auto trueColor = recvInt8();
+        auto redMax = recvIntBE16();
+        auto greenMax = recvIntBE16();
+        auto blueMax = recvIntBE16();
+        auto redShift = recvInt8();
+        auto greenShift = recvInt8();
+        auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
 
         Application::notice("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                          pf.bitsPerPixel, pf.depth, pf.bigEndian, pf.trueColor,
-                          pf.redMax, pf.redShift, pf.greenMax,
-                          pf.greenShift, pf.blueMax, pf.blueShift);
+                          bitsPerPixel, depth, bigEndian, trueColor, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
-        switch(pf.bytePerPixel())
+        switch(bitsPerPixel >> 3)
         {
             case 4:
             case 2:
@@ -842,10 +572,10 @@ namespace LTSM
                 throw std::string("unknown client pixel format");
         }
 
-	if(pf.trueColor == 0 || pf.redMax == 0 || pf.greenMax == 0 || pf.blueMax == 0)
+	if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
             throw std::string("unsupported pixel format");
 
-        clientFormat = pf;
+        clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
         if(colourMap.size()) colourMap.clear();
     }
 
@@ -975,7 +705,7 @@ namespace LTSM
         int mask = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
         int posx = recvIntBE16();
         int posy = recvIntBE16();
-        Application::notice("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
+        Application::debug("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
 
         if(isAllowXcbMessages())
         {
@@ -1121,47 +851,6 @@ namespace LTSM
 	sendFlush();
     }
 
-    void Connector::VNC::renderPrimitivesTo(const XCB::Region & reg1, RFB::FrameBuffer & fb)
-    {
-        for(auto & ptr : _renderPrimitives)
-        {
-            switch(ptr->type)
-            {
-                case RenderType::RenderRect:
-                    if(auto prim = static_cast<RenderRect*>(ptr.get()))
-                    {
-                        const XCB::Region reg2 = prim->toRegion();
-                        XCB::Region section;
-
-                        if(XCB::Region::intersection(reg1, reg2, & section))
-                        {
-                            if(prim->fill)
-                                fb.fillColor(section, prim->color);
-                            else
-                                fb.drawRect(section, prim->color);
-                        }
-                    }
-
-                    break;
-
-                case RenderType::RenderText:
-                    if(auto prim = static_cast<RenderText*>(ptr.get()))
-                    {
-                        const XCB::Region reg2 = prim->toRegion();
-                        if(XCB::Region::intersection(reg1, reg2, nullptr))
-			{
-                            fb.renderText(prim->text, prim->color, reg2.x - reg1.x, reg2.y - reg1.y);
-			}
-                    }
-
-                    break;
-
-                default:
-                    break;
-            }
-        }
-    }
-
     bool Connector::VNC::serverSendFrameBufferUpdate(const XCB::Region & reg)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
@@ -1194,16 +883,16 @@ namespace LTSM
             // padding
             sendInt8(0);
 
-            RFB::FrameBuffer shmFrameBuffer(reply->data(), reg.width, reg.height, serverFormat);
+            FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
 
-            // check render primitives
-            renderPrimitivesTo(reg, shmFrameBuffer);
+            // apply render primitives
+            renderPrimitivesToFB(frameBuffer);
 	    int encodingLength = 0;
 
             try
 	    {
 		// send encodings
-        	encodingLength = prefEncodings.first(reg, shmFrameBuffer);
+        	encodingLength = prefEncodings.first(frameBuffer);
 	    }
 	    catch(const CodecFailed & ex)
 	    {
@@ -1213,10 +902,7 @@ namespace LTSM
 	    }
 	    catch(const SocketFailed & ex)
 	    {
-		if(ex.code)
-		    Application::error("socket exception: code: %d, error: %s", ex.code, strerror(ex.code));
-		else
-		    Application::error("socket exception: code: %d", ex.code);
+		Application::error("socket exception: %s", ex.err.c_str());
 		loopMessage = false;
 		return false;
 	    }
@@ -1238,25 +924,25 @@ namespace LTSM
         return true;
     }
 
-    int Connector::VNC::sendPixel(int pixel)
+    int Connector::VNC::sendPixel(uint32_t pixel)
     {
         // break connection
         if(! loopMessage)
             return 0;
 
-        if(clientFormat.trueColor)
+        if(clientFormat.trueColor())
         {
             switch(clientFormat.bytePerPixel())
             {
                 case 4:
-                    if(clientFormat.bigEndian)
+                    if(clientFormat.bigEndian())
 			sendIntBE32(clientFormat.convertFrom(serverFormat, pixel));
 		    else
 			sendIntLE32(clientFormat.convertFrom(serverFormat, pixel));
                     return 4;
 
                 case 2:
-                    if(clientFormat.bigEndian)
+                    if(clientFormat.bigEndian())
                 	sendIntBE16(clientFormat.convertFrom(serverFormat, pixel));
                     else
 			sendIntLE16(clientFormat.convertFrom(serverFormat, pixel));
@@ -1277,19 +963,19 @@ namespace LTSM
         return 0;
     }
 
-    int Connector::VNC::sendCPixel(int pixel)
+    int Connector::VNC::sendCPixel(uint32_t pixel)
     {
         // break connection
         if(! loopMessage)
             return 0;
 
-        if(clientFormat.trueColor && clientFormat.bitsPerPixel == 32)
+        if(clientFormat.trueColor() && clientFormat.bitsPerPixel == 32)
         {
-            int pixel2 = clientFormat.convertFrom(serverFormat, pixel);
+            auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);
 
-    	    int red = clientFormat.red(pixel2);
-    	    int green = clientFormat.green(pixel2);
-    	    int blue = clientFormat.blue(pixel2);
+    	    auto red = clientFormat.red(pixel2);
+    	    auto green = clientFormat.green(pixel2);
+    	    auto blue = clientFormat.blue(pixel2);
 
 	    std::swap(red, blue);
 
@@ -1358,12 +1044,6 @@ namespace LTSM
             Application::info("dbus signal: send bell, display: %d", display);
             sendBellFlag = true;
         }
-    }
-
-    void Connector::VNC::onAddDamage(const XCB::Region & reg)
-    {
-        if(isAllowXcbMessages())
-            _xcbDisplay->damageAdd(reg);
     }
 
     void Connector::VNC::zlibDeflateStart(size_t len)
