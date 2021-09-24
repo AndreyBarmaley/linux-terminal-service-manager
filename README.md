@@ -11,7 +11,11 @@ main dependencies:
 
 # Demo access
 ```
+--- vnc
 vncviewer 62.109.24.208
+--- rdp
+xfreerdp /v:62.109.24.208
+
 logins: demo1, demo2, demo3, demo4
 pass: demo
 ```
