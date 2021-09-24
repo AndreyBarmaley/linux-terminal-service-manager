@@ -26,7 +26,7 @@ The main service, dbus owner *ltsm.service.manager*, receives commands from LTSM
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service  
 
 # LTSM_connector
-It is only a handler of the RFB protocol, and the main network part is handled by the service xinetd/(systemd sockets), and it is also a dbus client *ltsm.manager.service*, it connects to Xvfb via the shared memory mechanism (Affero GPLv3 license)  
+It is just a graphics protocol handler, and the main network part is handled by the service xinetd/(systemd sockets), and it is also a dbus client *ltsm.manager.service*, it connects to Xvfb via the shared memory mechanism (Affero GPLv3 license)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector  
 
 # LTSM_helper
