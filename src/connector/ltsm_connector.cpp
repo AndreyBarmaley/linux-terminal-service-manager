@@ -69,7 +69,7 @@ namespace LTSM
 
     /* Connector::Service */
     Connector::Service::Service(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("vnc")
+        : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("auto")
     {
         for(int it = 1; it < argc; ++it)
         {

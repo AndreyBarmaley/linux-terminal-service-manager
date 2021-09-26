@@ -480,10 +480,10 @@ namespace LTSM
             std::this_thread::sleep_for(1ms);
 	}
 
+	proxyShutdown();
+
         freeRdp->stopEventLoop();
         if(freeRdpThread.joinable()) freeRdpThread.join();
-
-	proxyShutdown();
 
         return EXIT_SUCCESS;
     }
@@ -588,6 +588,15 @@ namespace LTSM
             setEnableXcbMessages(false);
             loopShutdownFlag = true;
             Application::notice("dbus signal: shutdown connector, display: %d", display);
+        }
+    }
+
+    void Connector::RDP::onSendBellSignal(const int32_t & display)
+    {
+        if(0 < _display && display == _display &&
+            freeRdp && freeRdp->peer && freeRdp->peer->settings && freeRdp->peer->settings->SoundBeepsEnabled)
+        {
+            // FIXME beep
         }
     }
 

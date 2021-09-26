@@ -48,7 +48,7 @@ namespace LTSM
         protected:
             // dbus virtual signals
 	    void                	onLoginSuccess(const int32_t & display, const std::string & userName) override;
-            void                        onSendBellSignal(const int32_t & display) override {}
+            void                        onSendBellSignal(const int32_t & display) override;
             void                        onShutdownConnector(const int32_t & display) override;
             void                        onHelperWidgetStarted(const int32_t & display) override;
 

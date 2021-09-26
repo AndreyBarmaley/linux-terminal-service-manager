@@ -791,7 +791,7 @@ namespace LTSM
                 // for receive it, usage:
                 // RootDisplay::createDamageNotify
                 auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
-                if(response_type == _damage->first_event + XCB_DAMAGE_NOTIFY)
+                if(_damage && response_type == _damage->first_event + XCB_DAMAGE_NOTIFY)
                     return XCB_DAMAGE_NOTIFY;
             }
             else
@@ -804,7 +804,7 @@ namespace LTSM
                 auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
                 auto types = { XCB_XFIXES_SELECTION_NOTIFY, XCB_XFIXES_CURSOR_NOTIFY };
                 for(auto & type : types)
-                    if(response_type == _xfixes->first_event + type)
+                    if(_xfixes && response_type == _xfixes->first_event + type)
                         return type;
             }
             else
@@ -816,7 +816,7 @@ namespace LTSM
                 auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
                 auto types = { XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_RANDR_NOTIFY };
                 for(auto & type : types)
-                    if(response_type == _randr->first_event + type) return type;
+                    if(_randr && response_type == _randr->first_event + type) return type;
             }
         }
 
@@ -874,35 +874,35 @@ namespace LTSM
             if(module == Module::TEST)
             {
                 auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
-                if(error->major_code == _test->major_opcode)
+                if(_test && error->major_code == _test->major_opcode)
                     return error->minor_code;
             }
             else
             if(module == Module::DAMAGE)
             {
                 auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
-                if(error->major_code == _damage->major_opcode)
+                if(_damage && error->major_code == _damage->major_opcode)
                     return error->minor_code;
             }
             else
             if(module == Module::XFIXES)
             {
                 auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
-                if(error->major_code == _xfixes->major_opcode)
+                if(_xfixes && error->major_code == _xfixes->major_opcode)
                     return error->minor_code;
             }
             else
             if(module == Module::RANDR)
             {
                 auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
-                if(error->major_code == _randr->major_opcode)
+                if(_randr && error->major_code == _randr->major_opcode)
                     return error->minor_code;
             }
             else
             if(module == Module::SHM)
             {
                 auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
-                if(error->major_code == _shm->major_opcode)
+                if(_shm && error->major_code == _shm->major_opcode)
                     return error->minor_code;
             }
         }
