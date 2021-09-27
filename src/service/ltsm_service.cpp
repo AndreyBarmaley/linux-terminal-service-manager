@@ -664,7 +664,7 @@ namespace LTSM
         xvfbArgs = Tools::replace(xvfbArgs, "%{width}", width);
         xvfbArgs = Tools::replace(xvfbArgs, "%{height}", height);
         xvfbArgs = Tools::replace(xvfbArgs, "%{authfile}", xauthFile);
-        Application::debug("xvfb args: %s", xvfbArgs.c_str());
+        Application::debug("xvfb args: `%s'", xvfbArgs.c_str());
 
 	closelog();
         int pid = fork();

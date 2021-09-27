@@ -21,6 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <stdexcept>
+
 #include "ltsm_application.h"
 #include "ltsm_vnc_zlib.h"
 
