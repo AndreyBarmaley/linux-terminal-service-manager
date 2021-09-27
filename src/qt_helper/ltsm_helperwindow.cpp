@@ -28,6 +28,7 @@
 #include <QDateTime>
 #include <QApplication>
 #include <QDesktopWidget>
+#include <QGuiApplication>
 
 #include "ltsm_helperwindow.h"
 #include "ui_ltsm_helperwindow.h"
@@ -235,10 +236,13 @@ void LTSM_HelperWindow::widgetCenteredCallback(int display)
 {
     if(display == displayNum)
     {
-	auto screenGeometry = QApplication::desktop()->screenGeometry();
-        int nx = (screenGeometry.width() - width()) / 2;
-        int ny = (screenGeometry.height() - height()) / 2;
-        move(nx, ny);
+	if(auto primary = QGuiApplication::primaryScreen())
+	{
+	    auto screenGeometry = primary->geometry();
+    	    int nx = (screenGeometry.width() - width()) / 2;
+    	    int ny = (screenGeometry.height() - height()) / 2;
+    	    move(nx, ny);
+	}
     }
 }
 
