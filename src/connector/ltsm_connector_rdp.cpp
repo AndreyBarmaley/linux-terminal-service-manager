@@ -110,7 +110,7 @@ namespace LTSM
 	return TRUE;
     }
 
-    void clientContextFree(ClientContext* context)
+    void clientContextFree(rdp_freerdp_peer* client, ClientContext* context)
     {
 	if(context->planar)
 	{

@@ -1071,10 +1071,10 @@ namespace LTSM
     XCB::Size XCB::RootDisplay::size(void) const
     {
         auto cookie = xcb_get_geometry(_conn, _screen->root);
-        auto reply = xcb_get_geometry_reply(_conn, cookie, nullptr);
+        auto xcbReply = getReplyFunc(xcb_get_geometry, cookie);
 
-        if(reply)
-            return Size(reply->width, reply->height);
+        if(xcbReply.reply())
+            return Size(xcbReply.reply()->width, xcbReply.reply()->height);
 
         return Size(_screen->width_in_pixels, _screen->height_in_pixels);
     }
