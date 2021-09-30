@@ -199,8 +199,8 @@ namespace LTSM
                 throw EXIT_FAILURE;
             }
 
-	    Application::error("peer context: %p", peer);
-	    Application::error("client context: %p", peer->context);
+	    Application::debug("peer context: %p", peer);
+	    Application::debug("client context: %p", peer->context);
 
 	    context = static_cast<ClientContext*>(peer->context);
 	    context->config = & config;
@@ -383,13 +383,25 @@ namespace LTSM
         if(! proxyInitUnixSockets(socketFile.string()))
             return EXIT_FAILURE;
  
+	Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 	proxyStartEventLoop();
 
         // create FreeRdpCallback
-    	Application::notice("%s", "create freerdp client");
+    	Application::notice("%s: %s", __FUNCTION__, "create freerdp client");
         freeRdp.reset(new FreeRdpCallback(proxyClientSocket(), _remoteaddr, *_config, this));
+
         auto freeRdpThread = std::thread([ptr = freeRdp.get()]{ FreeRdpCallback::enterEventLoop(ptr); });
-	XCB::Region damageRegion(0, 0, 0, 0);
+	damageRegion.assign(0, 0, 0, 0);
+
+        // rdp session not activated trigger
+	auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(10, false, [this]()
+	{
+            if(this->freeRdp && this->freeRdp->context && ! this->freeRdp->context->activated)
+            {
+    	        Application::error("rdp session timeout: %s", "not activated");
+                this->loopShutdownFlag = true;
+	    }
+	});
 
 	// all ok
 	while(! loopShutdownFlag)
@@ -399,79 +411,17 @@ namespace LTSM
 
             if(isAllowXcbMessages())
             {
-                if(auto err = _xcbDisplay->hasError())
-                {
-                    setEnableXcbMessages(false);
-                    Application::error("xcb display error connection: %d", err);
-                    break;
-                }
-                
-                // get all damages and join it
-                while(auto ev = _xcbDisplay->poolEvent())
-                {
-                    int shmOpcode = _xcbDisplay->eventErrorOpcode(ev, XCB::Module::SHM);
-                    if(0 <= shmOpcode)
-                    {
-                        _xcbDisplay->extendedError(ev.toerror(), "SHM extension");
-                        loopShutdownFlag = true;
-                        break;
-                    }
+    		if(auto err = _xcbDisplay->hasError())
+    		{
+        	    setEnableXcbMessages(false);
+        	    Application::error("xcb display error connection: %d", err);
+        	    break;
+    		}
 
-                    if(_xcbDisplay->isDamageNotify(ev))
-                    {   
-                        auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
-                        damageRegion.join(notify->area);
-                    }
-                    else
-                    if(_xcbDisplay->isRandrCRTCNotify(ev))
-                    {
-                        auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                    
-                        xcb_randr_crtc_change_t cc = notify->u.cc;
-                        if(0 < cc.width && 0 < cc.height)
-                        {
-			    Application::error("LOOP: randr notify: %d,%d", cc.width, cc.height);
-                            busDisplayResized(_display, cc.width, cc.height);
-                    	    damageRegion.reset();
-                            clientDesktopResizeEvent(*freeRdp->peer, cc.width, cc.height);
-                        }
-                    }
-                    else
-                    if(_xcbDisplay->isSelectionNotify(ev))
-                    {
-                        // FIXME: rdp inform
-                        //auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
-                        //if(_xcbDisplay->selectionNotifyAction(notify))
-                        //    selbuf = _xcbDisplay->getSelectionData();
-                    }
-                }
-
-                if(! damageRegion.empty())
-		    // fix out of screen
-		    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
-
-                auto & context = freeRdp->context;
-                if(! damageRegion.empty() && context && context->activated)
-                {
-		    clientUpdatePartFlag = true;
-
-                    try
-		    {
-			if(clientUpdateEvent(*freeRdp->peer, damageRegion))
-                	{
-                    	    _xcbDisplay->damageSubtrack(damageRegion);
-                    	        damageRegion.reset();
-                	}
-		    }
-		    catch(const LTSM::Connector::CodecFailed & ex)
-		    {
-			Application::error("codec exception: %s", ex.err.c_str());
-			loopShutdownFlag = true;
-		    }
-
-		    clientUpdatePartFlag = false;
-                }
-            } // xcb not disabled messages
+		// xcb processing
+		if(! xcbEventLoopAsync())
+		    loopShutdownFlag = true;
+            }
 
             // dbus processing
             _conn->enterEventLoopAsync();
@@ -483,9 +433,80 @@ namespace LTSM
 	proxyShutdown();
 
         freeRdp->stopEventLoop();
+	timerNotActivated->stop();
+
+	timerNotActivated->join();
         if(freeRdpThread.joinable()) freeRdpThread.join();
 
         return EXIT_SUCCESS;
+    }
+
+    bool Connector::RDP::xcbEventLoopAsync(void)
+    {
+        // get all damages and join it
+        while(auto ev = _xcbDisplay->poolEvent())
+        {
+            int shmOpcode = _xcbDisplay->eventErrorOpcode(ev, XCB::Module::SHM);
+            if(0 <= shmOpcode)
+            {
+                _xcbDisplay->extendedError(ev.toerror(), "SHM extension");
+                return false;
+            }
+
+            if(_xcbDisplay->isDamageNotify(ev))
+            {   
+                auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
+                damageRegion.join(notify->area);
+            }
+            else
+            if(_xcbDisplay->isRandrCRTCNotify(ev))
+            {
+                auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
+                    
+                xcb_randr_crtc_change_t cc = notify->u.cc;
+                if(0 < cc.width && 0 < cc.height)
+                {
+                    busDisplayResized(_display, cc.width, cc.height);
+                    damageRegion.reset();
+                    clientDesktopResizeEvent(*freeRdp->peer, cc.width, cc.height);
+                }
+            }
+            else
+            if(_xcbDisplay->isSelectionNotify(ev))
+            {
+                // FIXME: rdp inform
+                //auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
+                //if(_xcbDisplay->selectionNotifyAction(notify))
+                //    selbuf = _xcbDisplay->getSelectionData();
+            }
+        }
+
+        if(! damageRegion.empty())
+	    // fix out of screen
+	    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
+
+        if(! damageRegion.empty() && freeRdp->context && freeRdp->context->activated)
+	{
+	    clientUpdatePartFlag = true;
+
+    	    try
+	    {
+		if(clientUpdateEvent(*freeRdp->peer, damageRegion))
+                {
+                    _xcbDisplay->damageSubtrack(damageRegion);
+                    damageRegion.reset();
+                }
+	    }
+	    catch(const LTSM::Connector::CodecFailed & ex)
+	    {
+		Application::error("codec exception: %s", ex.err.c_str());
+		return false;
+	    }
+
+	    clientUpdatePartFlag = false;
+	}
+
+	return true;
     }
 
     void Connector::RDP::setEncryptionInfo(const std::string & info)

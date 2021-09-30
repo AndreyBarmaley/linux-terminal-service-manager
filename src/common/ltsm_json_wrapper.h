@@ -423,7 +423,7 @@ namespace LTSM
         std::string		stringToken(const JsmnToken &) const;
         jsmntok_t*		toJsmnTok(void);
         std::pair<JsonValue*, int>
-        getValue(const const_iterator &, JsonContainer* cont) const;
+    				getValue(const const_iterator &, JsonContainer* cont) const;
 
     public:
         JsonContent() {}

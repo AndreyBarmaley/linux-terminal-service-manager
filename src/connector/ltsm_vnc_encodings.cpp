@@ -637,10 +637,12 @@ namespace LTSM
 
             zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
     	    sendEncodingRawSubRegionRaw(reg, fb);
-
             auto zip = zlibDeflateStop();
+
             sendIntBE16(zip.size());
             sendRaw(zip.data(), zip.size());
+
+    	    res += 1 + zip.size();
 	}
 	else
 	{

@@ -74,6 +74,9 @@ namespace LTSM
     /* NetworkStream */
     bool NetworkStream::hasInput(int fd)
     {
+        if(0 > fd)
+            return false;
+
         struct pollfd fds = {0};
         fds.fd = fd;
         fds.events = POLLIN;
@@ -282,8 +285,21 @@ namespace LTSM
 
     InetStream::~InetStream()
     {
-        std::fclose(fdin);
-        std::fclose(fdout);
+        inetFdClose();
+    }
+
+    void InetStream::inetFdClose(void)
+    {
+        if(fdin)
+        {
+            std::fclose(fdin);
+            fdin = nullptr;
+        }
+        if(fdout)
+        {
+            std::fclose(fdout);
+            fdout = nullptr;
+        }
     }
 
     void InetStream::setupTLS(gnutls_session_t sess) const
@@ -293,7 +309,8 @@ namespace LTSM
 
     bool InetStream::hasInput(void) const
     {
-        return std::feof(fdin) || std::ferror(fdin) ? false : NetworkStream::hasInput(fileno(fdin));
+        return fdin == nullptr || std::feof(fdin) || std::ferror(fdin) ?
+                false : NetworkStream::hasInput(fileno(fdin));
     }
 
     void InetStream::recvRaw(void* ptr, size_t len) const
@@ -341,7 +358,7 @@ namespace LTSM
 
     bool InetStream::checkError(void) const
     {
-        return std::ferror(fdin) || std::ferror(fdout) ||
+        return fdin == nullptr || fdout == nullptr || std::ferror(fdin) || std::ferror(fdout) ||
 	    std::feof(fdin) || std::feof(fdout);
     }
 
@@ -375,14 +392,22 @@ namespace LTSM
         Application::info("%s: client %d, bridge: %d", __FUNCTION__, clientSock, bridgeSock);
 
         loopTransmission = false;
-        if(loopThread.joinable()) loopThread.join();
-            
-        std::filesystem::remove(socketPath);
-        if(0 < bridgeSock) close(bridgeSock);
-        if(0 < clientSock) close(clientSock);
+        inetFdClose();
 
-        bridgeSock = -1;
-        clientSock = -1;
+        if(0 < bridgeSock)
+        {
+            close(bridgeSock);
+            bridgeSock = -1;
+        }
+
+        if(0 < clientSock)
+        {
+            close(clientSock);
+            clientSock = -1;
+        }
+
+        if(loopThread.joinable()) loopThread.join();
+        std::filesystem::remove(socketPath);
     }
 
     int ProxySocket::proxyClientSocket(void) const

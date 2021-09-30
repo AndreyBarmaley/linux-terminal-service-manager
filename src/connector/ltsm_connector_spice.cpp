@@ -156,6 +156,8 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
+	Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
+
         const std::string home = Tools::getenv("HOME", "/tmp");
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
@@ -180,7 +182,6 @@ namespace LTSM
             // wait
             std::this_thread::sleep_for(1ms);
         }
-
 
         Application::debug("under construction, remoteaddr: %s\n", _remoteaddr.c_str());
         return EXIT_SUCCESS;

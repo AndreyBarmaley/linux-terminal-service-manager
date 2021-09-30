@@ -205,7 +205,7 @@ namespace LTSM
             return EXIT_FAILURE;
 	}
 
-        Application::info("connected: %s\n", _remoteaddr.c_str());
+        Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
         encodingThreads = _config->getInteger("vnc:encoding:threads", 2);
         if(encodingThreads < 1)

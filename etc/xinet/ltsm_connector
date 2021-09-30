@@ -1,0 +1,23 @@
+service rfb
+{
+  port            = 5900
+  disable         = no
+  flags           = REUSE
+  socket_type     = stream
+  wait            = no
+  user            = ltsm-xvfb
+  server          = /usr/local/sbin/LTSM_connector
+  server_args     = --type vnc
+}
+
+service ms-wbt-server
+{
+  port            = 3389
+  disable         = no
+  flags           = REUSE
+  socket_type     = stream
+  wait            = no
+  user            = ltsm-xvfb
+  server          = /usr/local/sbin/LTSM_connector
+  server_args     = --type rdp
+}

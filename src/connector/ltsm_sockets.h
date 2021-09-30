@@ -132,6 +132,8 @@ namespace LTSM
         FILE*                   fdout;
         std::array<char, 1492>  fdbuf;
 
+        void                    inetFdClose(void);
+
     public:
         InetStream();
         ~InetStream();

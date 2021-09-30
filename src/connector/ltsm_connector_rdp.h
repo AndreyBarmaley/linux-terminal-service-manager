@@ -44,6 +44,7 @@ namespace LTSM
             std::atomic<bool>           clientUpdatePartFlag;
 	    std::unique_ptr<FreeRdpCallback> freeRdp;
             PixelFormat                 serverFormat;
+	    XCB::Region			damageRegion;
 
         protected:
             // dbus virtual signals
@@ -57,6 +58,7 @@ namespace LTSM
 	    bool			clientUpdateBitmapInterleaved(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
             void                        clientDesktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
 	    void                	clientDisconnectedEvent(void);
+	    bool			xcbEventLoopAsync(void);
 
         public:
             RDP(sdbus::IConnection* conn, const JsonObject & jo);
