@@ -23,8 +23,8 @@ this is a single core virtual system, sorry...
 
 # Docker demonstration
 ```
-docker pull docker.io/ltsm/devel:latest
-docker run -i -t docker.io/ltsm/devel:latest
+docker pull docker.io/ltsm/devel
+docker run -i -t docker.io/ltsm/devel
 ```
 
 # The scheme of interaction of components  
