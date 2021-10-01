@@ -14,6 +14,13 @@ vncviewer 62.109.24.208
 logins: demo1, demo2, demo3, demo4
 pass: demo
 ```
+
+# Docker демонстрация
+```
+docker pull docker.io/ltsm/devel
+docker run -i -t docker.io/ltsm/devel
+```
+
 # Схема взаимодействия компонентов
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)  
 реализованы следующие компоненты:
