@@ -21,6 +21,12 @@ pass: demo
 ```
 this is a single core virtual system, sorry...
 
+# Docker demonstration
+```
+docker pull docker.io/ltsm/devel:latest
+docker run -i -t docker.io/ltsm/devel:latest
+```
+
 # The scheme of interaction of components  
 ![ltsm_diagram](https://user-images.githubusercontent.com/8620726/118247282-884e7480-b492-11eb-92a8-d8db95656eee.png)  
 The following components are implemented:  
