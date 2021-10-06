@@ -189,8 +189,8 @@ namespace LTSM
     bool Connector::SignalProxy::xcbConnect(int screen)
     {
         std::string xauthFile = busCreateAuthFile(screen);
-        Application::debug("uid: %d, euid: %d, gid: %d, egid: %d", getuid(), geteuid(), getgid(), getegid());
-        Application::debug("xauthfile request: `%s'", xauthFile.c_str());
+        Application::debug("%s: uid: %d, euid: %d, gid: %d, egid: %d", __FUNCTION__, getuid(), geteuid(), getgid(), getegid());
+        Application::debug("%s: xauthfile request: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         const std::string addr = Tools::StringFormat(":%1").arg(screen);
@@ -201,7 +201,16 @@ namespace LTSM
 	if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
                 Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
 
-        _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
+	try
+	{
+    	    _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
+	}
+	catch(const std::runtime_error & err)
+	{
+            Application::error("%s: error: %s", __FUNCTION__, err.what());
+	    return false;
+	}
+
         Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         int color = _config->getInteger("display:solid", 0x4e7db7);

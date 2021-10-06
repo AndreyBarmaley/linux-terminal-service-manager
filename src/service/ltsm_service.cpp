@@ -1711,7 +1711,7 @@ namespace LTSM
         {
             if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
             {
-                std::cout << "usage: " << argv[0] << " --config <path>" << std::endl;
+                std::cout << "usage: " << argv[0] << " --config <path> [--background]" << std::endl;
                 throw 0;
             }
         }
@@ -1840,6 +1840,14 @@ int main(int argc, const char** argv)
 {
     LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
     int res = 0;
+
+    for(int it = 1; it < argc; ++it)
+    {
+        if(0 == std::strcmp(argv[it], "--background"))
+	{
+	    if(fork()) return res;
+	}
+    }
 
     try
     {
