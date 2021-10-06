@@ -21,8 +21,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Install Dependensies
-      run: apt-get update && apt-get install -y libpam0g-dev libsdbus-c++-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-image-dev qtbase5-dev
+    - name: Install dependencies
+      run: |
+       sudo apt-get update
+       sudo apt-get install -y libpam0g-dev libsdbus-c++-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-image-dev qtbase5-dev
     
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
