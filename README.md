@@ -19,7 +19,6 @@ xfreerdp /v:62.109.24.208
 logins: demo1, demo2, demo3, demo4
 pass: demo
 ```
-this is a single core virtual system, sorry...
 
 # Docker demonstration
 ```
