@@ -9,7 +9,7 @@ on:
 jobs:
   sonarcloud:
     name: SonarCloud Analyzer
-    runs-on: debian-latest
+    runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push' || ( github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository ) }}
     env:
       SONAR_SCANNER_VERSION: 4.5.0.2216
