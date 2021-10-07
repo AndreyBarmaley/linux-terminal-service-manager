@@ -14,6 +14,7 @@ main dependencies:
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=bugs)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=code_smells)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=duplicated_lines_density)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/andreyafletdinov)
 
 # Demo access
 ```
@@ -55,5 +56,3 @@ GUI users sessions management utility, and it is a dbus client *ltsm.manager.ser
 ![ltsm_show_session](https://user-images.githubusercontent.com/8620726/123924343-67c27700-d979-11eb-9802-723d043f9f6f.png)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
-## Donation
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/andreyafletdinov)
