@@ -9,6 +9,12 @@ main dependencies:
   - [freerdp](https://github.com/FreeRDP/FreeRDP)
   - system libs: gnutls, xcb, zlib  
 
+## Developer indicators
+[![Build Status](https://github.com/AndreyBarmaley/linux-terminal-service-manager/actions/workflows/cmake.yml/badge.svg)](https://github.com/AndreyBarmaley/linux-terminal-service-manager/actions)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=bugs)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=code_smells)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=duplicated_lines_density)](https://sonarcloud.io/dashboard?id=AndreyBarmaley_linux-terminal-service-manager)
+
 # Demo access
 ```
 --- vnc
@@ -49,6 +55,5 @@ GUI users sessions management utility, and it is a dbus client *ltsm.manager.ser
 ![ltsm_show_session](https://user-images.githubusercontent.com/8620726/123924343-67c27700-d979-11eb-9802-723d043f9f6f.png)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
-## Donate
-<a href="https://paypal.me/andreyafletdinov/"><img src="blue.svg" height="40"></a>  
-If you enjoyed this project — or just feeling generous, consider buying me a beer. Cheers!
+## Donation
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/andreyafletdinov)
