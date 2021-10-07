@@ -133,6 +133,8 @@ namespace LTSM
             int				runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userLogin);
             int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
+	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
+	    void			runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
 	    bool			runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args = nullptr);
 	    void			setFileOwner(const std::string & file, int uid, int gid);
             bool			waitXvfbStarting(int display, uint32_t waitms);
@@ -170,7 +172,6 @@ namespace LTSM
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
-            bool                        busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
             bool                        busSendMessage(const int32_t& display, const std::string& message) override;
 	    bool			busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) override;
 
@@ -181,6 +182,7 @@ namespace LTSM
             bool                        helperIsAutoComplete(const int32_t & display) override;
             std::string                 helperGetTitle(const int32_t & display) override;
             std::string                 helperGetDateFormat(const int32_t & display) override;
+            bool                        helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
 
             bool                        busCheckAuthenticate(const int32_t & display, const std::string & login, const std::string & password) override;
             std::vector<xvfb2tuple>     busGetSessions(void) override;

@@ -30,7 +30,14 @@ namespace LTSM
 
     inline static const char* dbus_service_name = "ltsm.manager.service";
     inline static const char* dbus_object_path = "/ltsm/manager/service";
-    inline static int service_version = 20211001;
+
+    inline static int service_version = 20211005;
+
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+    inline static const bool big_endian = false;
+#else
+    inline static const bool big_endian = true;
+#endif
 }
 
 #ifdef LTSM_BUILD_STD_MAP

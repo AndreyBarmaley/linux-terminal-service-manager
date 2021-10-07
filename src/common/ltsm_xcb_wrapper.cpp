@@ -543,7 +543,7 @@ namespace LTSM
 
     XCB::GC XCB::Connector::createGC(xcb_drawable_t win, uint32_t value_mask, const void* value_list)
     {
-        return std::move(GC(win, _conn, value_mask, value_list));
+        return GC(win, _conn, value_mask, value_list);
     }
 
     XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode)
@@ -568,17 +568,17 @@ namespace LTSM
 
     XCB::Damage XCB::Connector::createDamage(xcb_drawable_t win, int level)
     {
-        return std::move(Damage(win, level, _conn));
+        return Damage(win, level, _conn);
     }
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const Region & reg)
     {
-	return std::move(XFixesRegion(reg, _conn));
+	return XFixesRegion(reg, _conn);
     }
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const xcb_rectangle_t* rect, size_t num)
     {
-	return std::move(XFixesRegion(rect, num, _conn));
+	return XFixesRegion(rect, num, _conn);
     }
 
     size_t XCB::Connector::getMaxRequest(void) const
@@ -1171,7 +1171,7 @@ namespace LTSM
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
     {
         if(_shm)
-            return std::move(_shm.getPixmapRegion(_screen->root, reg, 0, planeMask));
+            return _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
 
         size_t pitch = reg.width * (bitsPerPixel() >> 2);
         //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * reg.height;

@@ -23,6 +23,7 @@
 #include <stdexcept>
 
 #include "ltsm_tools.h"
+#include "ltsm_global.h"
 #include "ltsm_streambuf.h"
 
 namespace LTSM
@@ -140,11 +141,7 @@ namespace LTSM
     /* MemoryStream */
     bool MemoryStream::bigendian(void) const
     {
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        return false;
-#else
-        return true;
-#endif
+        return big_endian;
     }
 
     uint16_t MemoryStream::readInt16(void) const

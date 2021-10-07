@@ -100,55 +100,6 @@ public:
         return result;
     }
 
-    bool helperIsAutoComplete(const int32_t& display)
-    {
-        bool result;
-        proxy_.callMethod("helperIsAutoComplete").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    bool helperIdleTimeoutAction(const int32_t& display)
-    {
-        bool result;
-        proxy_.callMethod("helperIdleTimeoutAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    int32_t helperGetIdleTimeoutSec(const int32_t& display)
-    {
-        int32_t result;
-        proxy_.callMethod("helperGetIdleTimeoutSec").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    std::string helperGetTitle(const int32_t& display)
-    {
-        std::string result;
-        proxy_.callMethod("helperGetTitle").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    std::string helperGetDateFormat(const int32_t& display)
-    {
-        std::string result;
-        proxy_.callMethod("helperGetDateFormat").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    std::vector<std::string> helperGetUsersList(const int32_t& display)
-    {
-        std::vector<std::string> result;
-        proxy_.callMethod("helperGetUsersList").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    bool helperWidgetStartedAction(const int32_t& display)
-    {
-        bool result;
-        proxy_.callMethod("helperWidgetStartedAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
     bool busSendMessage(const int32_t& display, const std::string& message)
     {
         bool result;
@@ -181,13 +132,6 @@ public:
     {
         bool result;
         proxy_.callMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withArguments(display, policy).storeResultsTo(result);
-        return result;
-    }
-
-    bool busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
-    {
-        bool result;
-        proxy_.callMethod("busSetSessionLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, password, action).storeResultsTo(result);
         return result;
     }
 
@@ -258,6 +202,62 @@ public:
     {
         bool result;
         proxy_.callMethod("busRenderClear").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool helperIsAutoComplete(const int32_t& display)
+    {
+        bool result;
+        proxy_.callMethod("helperIsAutoComplete").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool helperIdleTimeoutAction(const int32_t& display)
+    {
+        bool result;
+        proxy_.callMethod("helperIdleTimeoutAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    int32_t helperGetIdleTimeoutSec(const int32_t& display)
+    {
+        int32_t result;
+        proxy_.callMethod("helperGetIdleTimeoutSec").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    std::string helperGetTitle(const int32_t& display)
+    {
+        std::string result;
+        proxy_.callMethod("helperGetTitle").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    std::string helperGetDateFormat(const int32_t& display)
+    {
+        std::string result;
+        proxy_.callMethod("helperGetDateFormat").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    std::vector<std::string> helperGetUsersList(const int32_t& display)
+    {
+        std::vector<std::string> result;
+        proxy_.callMethod("helperGetUsersList").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool helperWidgetStartedAction(const int32_t& display)
+    {
+        bool result;
+        proxy_.callMethod("helperWidgetStartedAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
+    {
+        bool result;
+        proxy_.callMethod("helperSetSessionLoginPassword").onInterface(INTERFACE_NAME).withArguments(display, login, password, action).storeResultsTo(result);
         return result;
     }
 

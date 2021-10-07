@@ -68,7 +68,9 @@
     "xvfb:socket": "/tmp/.X11-unix/X%{display}",
     "xvfb:lock": "/tmp/.X%{display}-lock",
 
-    "sessreg:path": "/usr/bin/sessreg",
-    "sessreg:args1": "-a -l :%{display} %{user}",
-    "sessreg:args2": "-d -l :%{display} %{user}"
+    "#session:connect": "/path/script",
+    "#session:disconnect": "/path/script",
+
+    "#system:connect": "/usr/bin/sessreg -a -l :%{display} %{user}",
+    "#system:disconnect": "/usr/bin/sessreg -d -l :%{display} %{user}"
 }

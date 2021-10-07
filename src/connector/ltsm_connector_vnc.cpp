@@ -268,12 +268,7 @@ namespace LTSM
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
 
         // init server format
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        const bool bigEndian = false;
-#else
-        const bool bigEndian = true;
-#endif
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, true,
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
                                             visual->red_mask, visual->green_mask, visual->blue_mask);
 
         bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);

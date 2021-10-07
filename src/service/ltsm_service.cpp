@@ -555,6 +555,8 @@ namespace LTSM
     {
     	Application::info("close system session, user: %s, display: %d", info.user.c_str(), display);
 
+	runSessionScript(display, info.user, _config->getString("session:disconnect"));
+
     	// PAM close
     	if(info.pamh)
     	{
@@ -564,16 +566,7 @@ namespace LTSM
 	}
 
     	// unreg sessreg
-    	std::string sessreg = _config->getString("sessreg:path");
-    	if(! sessreg.empty())
-    	{
-    	    std::string args = _config->getString("sessreg:args2");
-    	    args = Tools::replace(args, "%{display}", display);
-    	    args = Tools::replace(args, "%{user}", info.user);
-    	    sessreg.append(" ").append(args);
-    	    int ret = std::system(sessreg.c_str());
-    	    Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, display);
-	}
+	runSystemScript(display, info.user, _config->getString("system:disconnect"));
     }
 
     bool Manager::Object::waitXvfbStarting(int display, uint32_t ms)
@@ -653,6 +646,40 @@ namespace LTSM
     {
         if(0 != chown(file.c_str(), uid, gid))
             Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
+    }
+
+    void Manager::Object::runSessionScript(int display, const std::string & user, const std::string & cmd)
+    {
+	if(cmd.size())
+	{
+    	    auto str = Tools::replace(cmd, "%{display}", display);
+    	    str = Tools::replace(str, "%{user}", user);
+
+    	    auto args = Tools::split(str, 0x20);
+	    if(args.size())
+	    {
+		auto bin = args.front();
+		args.pop_front();
+
+    		if(std::filesystem::exists(bin))
+            	    runAsCommand(display, bin, &args);
+    	    }
+	}
+    }
+
+    void Manager::Object::runSystemScript(int display, const std::string & user, const std::string & cmd)
+    {
+	if(cmd.size())
+	{
+    	    auto str = Tools::replace(cmd, "%{display}", display);
+    	    str = Tools::replace(str, "%{user}", user);
+
+            std::thread([str = std::move(str), screen = display]()
+	    {
+		int ret = std::system(str.c_str());
+        	Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
+	    }).detach();
+	}
     }
 
     int Manager::Object::runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userXvfb)
@@ -1026,6 +1053,8 @@ namespace LTSM
             emitSessionReconnect(remoteAddr, connType);
             emitSessionChanged(userScreen);
 
+	    runSessionScript(userScreen, userName, _config->getString("session:connect"));
+
             return userScreen;
         }
 
@@ -1084,20 +1113,13 @@ namespace LTSM
         Application::debug("user session child started, pid: %d, display: %d", xvfb->pid2, oldScreen);
         registryXvfbSession(oldScreen, *xvfb);
 
-        std::string sessreg = _config->getString("sessreg:path");
-        if(! sessreg.empty())
-        {
-            std::string args = _config->getString("sessreg:args1");
-            args = Tools::replace(args, "%{display}", oldScreen);
-            args = Tools::replace(args, "%{user}", userName);
-            sessreg.append(" ").append(args);
-            int ret = std::system(sessreg.c_str());
-            Application::debug("system cmd: `%s', return code: %d, display: %d", sessreg.c_str(), ret, oldScreen);
-        }
+	runSystemScript(oldScreen, userName, _config->getString("system:connect"));
 
         Application::debug("user session registered, display: %d", oldScreen);
 
         emitSessionChanged(oldScreen);
+	runSessionScript(oldScreen, userName, _config->getString("session:connect"));
+
         return oldScreen;
     }
 
@@ -1664,7 +1686,7 @@ namespace LTSM
 	return false;
     }
 
-    bool Manager::Object::busSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
+    bool Manager::Object::helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action)
     {
         Application::info("set session login: %s, display: %d", login.c_str(), display);
         emitHelperSetLoginPassword(display, login, password, action);

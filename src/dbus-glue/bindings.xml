@@ -29,34 +29,6 @@
             <arg type="s" name="connType" direction="in" />
             <arg type="i" name="display" direction="out" />
         </method>
-        <method name="helperIsAutoComplete">
-            <arg type="i" name="display" direction="in" />
-            <arg type="b" name="success" direction="out" />
-        </method>
-        <method name="helperIdleTimeoutAction">
-            <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
-        </method>
-        <method name="helperGetIdleTimeoutSec">
-            <arg type="i" name="display" direction="in" />
-            <arg type="i" name="result" direction="out" />
-        </method>
-        <method name="helperGetTitle">
-            <arg type="i" name="display" direction="in" />
-            <arg type="s" name="result" direction="out" />
-        </method>
-        <method name="helperGetDateFormat">
-            <arg type="i" name="display" direction="in" />
-            <arg type="s" name="result" direction="out" />
-        </method>
-        <method name="helperGetUsersList">
-            <arg type="i" name="display" direction="in" />
-            <arg type="as" name="result" direction="out" />
-        </method>
-        <method name="helperWidgetStartedAction">
-            <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
-        </method>
         <method name="busSendMessage">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="message" direction="in" />
@@ -79,13 +51,6 @@
         <method name="busSetSessionPolicy">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="policy" direction="in" />
-            <arg type="b" name="result" direction="out" />
-        </method>
-        <method name="busSetSessionLoginPassword">
-            <arg type="i" name="display" direction="in" />
-            <arg type="s" name="login" direction="in" />
-            <arg type="s" name="password" direction="in" />
-            <arg type="b" name="action" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busEncryptionInfo">
@@ -136,6 +101,41 @@
         </method>
         <method name="busRenderClear">
             <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="helperIsAutoComplete">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="success" direction="out" />
+        </method>
+        <method name="helperIdleTimeoutAction">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="helperGetIdleTimeoutSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="i" name="result" direction="out" />
+        </method>
+        <method name="helperGetTitle">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="result" direction="out" />
+        </method>
+        <method name="helperGetDateFormat">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="result" direction="out" />
+        </method>
+        <method name="helperGetUsersList">
+            <arg type="i" name="display" direction="in" />
+            <arg type="as" name="result" direction="out" />
+        </method>
+        <method name="helperWidgetStartedAction">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="helperSetSessionLoginPassword">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="login" direction="in" />
+            <arg type="s" name="password" direction="in" />
+            <arg type="b" name="action" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
 

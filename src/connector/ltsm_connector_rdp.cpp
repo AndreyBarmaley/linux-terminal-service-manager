@@ -516,7 +516,7 @@ namespace LTSM
 
     void Connector::RDP::setAutoLogin(const std::string & login, const std::string & pass)
     {
-        busSetSessionLoginPassword(_display, login, pass, false);
+        helperSetSessionLoginPassword(_display, login, pass, false);
     }
 
     bool Connector::RDP::createX11Session(void)
@@ -546,12 +546,7 @@ namespace LTSM
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
 
         // init server format
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        const bool bigEndian = false;
-#else
-        const bool bigEndian = true;
-#endif
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), bigEndian, true,
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
                                             visual->red_mask, visual->green_mask, visual->blue_mask);
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
