@@ -59,7 +59,7 @@
 
     "xauth:path": "/usr/bin/xauth",
     "xauth:args": "-f %{authfile} add :%{display} \".\" %{mcookie}",
-    "xauth:file": "/var/run/ltsm/auth_%{remoteaddr}_%{display}",
+    "xauth:file": "/var/run/ltsm/auth_%{pid}.%{remoteaddr}.%{display}",
 
     "mcookie:path": "/usr/bin/mcookie",
 
@@ -72,5 +72,5 @@
     "#session:disconnect": "/path/script",
 
     "#system:connect": "/usr/bin/sessreg -a -l :%{display} %{user}",
-    "#system:disconnect": "/usr/bin/sessreg -d -l :%{display} %{user}"
+    "#system:disconnect": "/usr/bin/sessreg -d -l :%{display} %{user}",
 }

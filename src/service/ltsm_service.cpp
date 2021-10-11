@@ -583,6 +583,7 @@ namespace LTSM
         std::string xauthBin = _config->getString("xauth:path");
         std::string xauthArgs = _config->getString("xauth:args");
         std::string groupAuth = _config->getString("group:auth");
+        xauthFile = Tools::replace(xauthFile, "%{pid}", getpid());
         xauthFile = Tools::replace(xauthFile, "%{remoteaddr}", remoteAddr);
         xauthFile = Tools::replace(xauthFile, "%{display}", display);
         Application::debug("xauthfile path: %s", xauthFile.c_str());

@@ -341,7 +341,7 @@ namespace LTSM
     uint8_t StreamBufRef::getInt8(void) const
     {
         if(it1 == it2)
-            throw std::out_of_range(std::string("StreamBufRef: readInt8"));
+            throw std::out_of_range("StreamBufRef: readInt8");
 
         uint8_t v = *it1;
         it1++;
@@ -367,7 +367,7 @@ namespace LTSM
     uint8_t StreamBufRef::peek(void) const
     {
         if(it1 == it2)
-            throw std::out_of_range(std::string("StreamBufRef: peek"));
+            throw std::out_of_range("StreamBufRef: peek");
 
         return *it1;
     }
@@ -388,7 +388,7 @@ namespace LTSM
     uint8_t StreamBuf::getInt8(void) const
     {
         if(it == vec.end())
-            throw std::out_of_range(std::string("StreamBuf: read byte"));
+            throw std::out_of_range("StreamBuf: read byte");
 
         uint8_t v = *it;
         it++;
@@ -430,7 +430,7 @@ namespace LTSM
     uint8_t StreamBuf::peek(void) const
     {
         if(it == vec.end())
-            throw std::out_of_range(std::string("StreamBuf: peek"));
+            throw std::out_of_range("StreamBuf: peek");
 
         return *it;
     }
