@@ -25,7 +25,15 @@ if [ -f ${HOME}/.Xresources ]; then
     xrdb -merge ${HOME}/.Xresources
 fi
 
+# model:
 # setxkbmap -model pc105 -layout us -option ''
+#
+# change layout:
+# setxkbmap -option ""
+# setxkbmap -layout "us,ru" -variant ",winkeys" -option "grp:ctrl_shift_toggle"
+#
+# change symbol:
+# setxkbmap -symbols "+kpdl(dotoss)+kpdl(dotoss):2"
 
 if [ -f /etc/X11/Xmodmap ]; then
     xmodmap /etc/X11/Xmodmap

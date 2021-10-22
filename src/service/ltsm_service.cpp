@@ -291,6 +291,9 @@ namespace LTSM
 	{
 	    for(const auto & [ pid, status] : _childEnded)
 	    {
+                // post debug: for signal handler
+    	        Application::debug("signal child ended, pid: %d, status: %d", pid, status);
+
 		// find child
 		auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [pid1 = pid](auto & pair){ return pair.second.pid2 == pid1; });
 		if(it != _xvfb->end())
@@ -1719,7 +1722,6 @@ namespace LTSM
 
     void Manager::Object::signalChildEnded(int pid, int status)
     {
-    	Application::debug("signal child ended, pid: %d, status: %d", pid, status);
 	_childEnded.emplace_back(pid, status);
     }
 
