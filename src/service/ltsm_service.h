@@ -134,7 +134,7 @@ namespace LTSM
             int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
 	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
-	    void			runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
+	    bool			runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
 	    bool			runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args = nullptr);
 	    void			setFileOwner(const std::string & file, int uid, int gid);
             bool			waitXvfbStarting(int display, uint32_t waitms);

@@ -407,6 +407,7 @@ namespace LTSM
 
             const xcb_visualtype_t* visual(xcb_visualid_t) const;
 
+            void                    resetInputs(void);
             void                    fillRegion(int r, int g, int b, const Region &);
             void                    fillBackground(int r, int g, int b);
 

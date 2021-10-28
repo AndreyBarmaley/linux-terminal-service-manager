@@ -411,7 +411,8 @@ namespace LTSM
 			break;
 
                     default:
-                        throw std::string("RFB unknown message: ").append(Tools::hex(msgType, 2));
+                        Application::error("RFB unknown message: 0x%02x", msgType);
+                        throw std::runtime_error("RFB unknown message");
                         break;
                 }
             }
@@ -564,11 +565,11 @@ namespace LTSM
                 break;
 
             default:
-                throw std::string("unknown client pixel format");
+                throw std::runtime_error("unknown client pixel format");
         }
 
 	if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
-            throw std::string("unsupported pixel format");
+            throw std::runtime_error("unsupported pixel format");
 
         clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
         if(colourMap.size()) colourMap.clear();
@@ -954,7 +955,7 @@ namespace LTSM
         else if(colourMap.size())
             Application::error("%s", "not usable");
 
-        throw std::string("send pixel: unknown format");
+        throw std::runtime_error("send pixel: unknown format");
         return 0;
     }
 

@@ -398,7 +398,7 @@ namespace LTSM
         size_t pos = seek >> 3;
         
         if(pos >= data.size())
-            throw std::string("stream bits: out of range");
+            throw std::runtime_error("stream bits: out of range");
 
         uint8_t mask = 1 << (seek % 8);
 
@@ -418,7 +418,7 @@ namespace LTSM
         size_t pos = seek >> 3;
         
         if(pos >= data.size())
-            throw std::string("stream bits: out of range");
+            throw std::runtime_error("stream bits: out of range");
 
         uint8_t mask = 1 << (seek % 8);
 

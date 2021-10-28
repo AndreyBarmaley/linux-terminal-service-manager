@@ -310,9 +310,9 @@ int main(int argc, const char** argv)
     {
         return errcode;
     }
-    catch(std::string errstr)
+    catch(const std::string & str)
     {
-        std::cerr << "exception: " << errstr << std::endl;
+        std::cerr << "exception: " << str << std::endl;
     }
 
     return 0;

@@ -526,27 +526,14 @@ namespace LTSM
 	// script run in thread
         std::thread([=]()
 	{
-    	    std::string script = _config->getString("script:shutdown");
 	    std::this_thread::sleep_for(300ms);
 
 	    this->removeXvfbDisplay(display);
 	    this->removeXvfbSocket(display);
     	    this->emitDisplayRemoved(display);
 
-            if(! script.empty())
-            {
-	        if(! std::filesystem::exists(script))
-	        {
-        	    Application::warning("command not found: `%s'", script.c_str());
-	        }
-	        else
-    	        if(sysuser != user)
-    	        {
-        	    script.append(" ").append(std::to_string(display)).append(" ").append(user);
-        	    int ret = std::system(script.c_str());
-        	    Application::debug("system cmd: `%s', return code: %d, display: %d", script.c_str(), ret, display);
-    	        }
-            }
+    	    if(sysuser != user)
+		runSystemScript(display, user, _config->getString("system:logoff"));
 
 	    Application::debug("display shutdown complete: %d", display);
 	}).detach();
@@ -667,23 +654,33 @@ namespace LTSM
 
     		if(std::filesystem::exists(bin))
             	    runAsCommand(display, bin, &args);
+		else
+        	    Application::warning("command not found: `%s'", cmd.c_str());
     	    }
 	}
     }
 
-    void Manager::Object::runSystemScript(int display, const std::string & user, const std::string & cmd)
+    bool Manager::Object::runSystemScript(int display, const std::string & user, const std::string & cmd)
     {
-	if(cmd.size())
-	{
-    	    auto str = Tools::replace(cmd, "%{display}", display);
-    	    str = Tools::replace(str, "%{user}", user);
+	if(cmd.empty())
+	    return false;
 
-            std::thread([str = std::move(str), screen = display]()
-	    {
-		int ret = std::system(str.c_str());
-        	Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
-	    }).detach();
+	if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20))))
+	{
+            Application::warning("command not found: `%s'", cmd.c_str());
+	    return false;
 	}
+
+    	auto str = Tools::replace(cmd, "%{display}", display);
+    	str = Tools::replace(str, "%{user}", user);
+
+        std::thread([str = std::move(str), screen = display]()
+	{
+	    int ret = std::system(str.c_str());
+    	    Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
+	}).detach();
+
+	return true;
     }
 
     int Manager::Object::runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userXvfb)
@@ -1117,6 +1114,7 @@ namespace LTSM
         Application::debug("user session child started, pid: %d, display: %d", xvfb->pid2, oldScreen);
         registryXvfbSession(oldScreen, *xvfb);
 
+	runSystemScript(oldScreen, userName, _config->getString("system:logon"));
 	runSystemScript(oldScreen, userName, _config->getString("system:connect"));
 
         Application::debug("user session registered, display: %d", oldScreen);
@@ -1750,7 +1748,10 @@ namespace LTSM
                 Application::debug("checking executable: %s", value.c_str());
 
                 if(! std::filesystem::exists(value))
-                    throw std::string("application not found: ").append(value);
+                {
+                    Application::error("application not found: `%s'", value.c_str());
+                    throw 1;
+                }
             }
         }
     }
@@ -1884,10 +1885,10 @@ int main(int argc, const char** argv)
         LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
         LTSM::Application::info("%s", "terminate...");
     }
-    catch(const std::string & err)
+    catch(const std::runtime_error & err)
     {
-        LTSM::Application::error("%s", err.c_str());
-        LTSM::Application::info("%s", "terminate...");
+        LTSM::Application::error("local exception: %s", err.what());
+        LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)
     {

@@ -1018,6 +1018,14 @@ namespace LTSM
 
     XCB::RootDisplay::~RootDisplay()
     {
+        resetInputs();
+
+        xcb_key_symbols_free(_symbols);
+	xcb_flush(_conn);
+    }
+
+    void XCB::RootDisplay::resetInputs(void)
+    {
 	// release all buttons
 	for(int button = 1; button <= 5; button++)
     	    xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
@@ -1025,9 +1033,6 @@ namespace LTSM
 	// release all keys
 	for(int key = 1; key <= 255; key++)
     	    xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
-
-        xcb_key_symbols_free(_symbols);
-	xcb_flush(_conn);
     }
 
     size_t XCB::RootDisplay::bitsPerPixel(void) const

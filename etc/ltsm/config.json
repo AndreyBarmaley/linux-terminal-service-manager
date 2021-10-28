@@ -71,6 +71,9 @@
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",
 
-    "#system:connect": "/usr/bin/sessreg -a -l :%{display} %{user}",
-    "#system:disconnect": "/usr/bin/sessreg -d -l :%{display} %{user}",
+    "#system:connect": "",
+    "#system:disconnect": "",
+
+    "#system:logon": "/usr/bin/sessreg -a -l :%{display} %{user}",
+    "#system:logoff": "/usr/bin/sessreg -d -l :%{display} %{user}",
 }

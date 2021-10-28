@@ -114,13 +114,13 @@ namespace LTSM
         }
 
         if(confPath.empty())
-            throw std::string("config.json not found");
+            throw std::runtime_error("config.json not found");
 
         info("used config: %s, running uid: %d", confPath.c_str(), getuid());
         JsonContentFile jsonFile(confPath);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject())
-            throw std::string("json parse error: ").append(confPath);
+            throw std::runtime_error("json parse error");
 
         _config = jsonFile.toObject();
         std::string str = _config.getString("logging:facility");

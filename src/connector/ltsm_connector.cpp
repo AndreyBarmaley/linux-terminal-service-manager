@@ -211,6 +211,7 @@ namespace LTSM
 	    return false;
 	}
 
+	_xcbDisplay->resetInputs();
         Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         int color = _config->getInteger("display:solid", 0x4e7db7);
@@ -234,7 +235,7 @@ namespace LTSM
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
 
             if(newDisplay < 0)
-                throw std::string("user session request failure");
+                throw std::runtime_error("user session request failure");
 
 	    if(newDisplay != oldDisplay)
 	    {
@@ -242,7 +243,7 @@ namespace LTSM
     		std::this_thread::sleep_for(100ms);
 
         	if(! xcbConnect(newDisplay))
-            	    throw std::string("xcb connect failed");
+            	    throw std::runtime_error("xcb connect failed");
 
         	busConnectorSwitched(oldDisplay, newDisplay);
 		_display = newDisplay;
@@ -386,9 +387,9 @@ int main(int argc, const char** argv)
         LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
         LTSM::Application::info("program: %s", "terminate...");
     }
-    catch(const std::string & err)
+    catch(const std::runtime_error & err)
     {
-        LTSM::Application::error("local exception: %s", err.c_str());
+        LTSM::Application::error("local exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)
