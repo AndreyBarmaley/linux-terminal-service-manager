@@ -113,6 +113,7 @@ endif()
 
 target_sources(LTSM_connector PUBLIC ${LTSM_common})
 target_compile_options(LTSM_connector PUBLIC ${GNUTLS_DEFINITIONS})
+target_compile_options(LTSM_connector PUBLIC "-DLTSM_WITH_SDBUS")
 
 target_include_directories(LTSM_connector PUBLIC src/common)
 target_include_directories(LTSM_connector PUBLIC src/dbus-glue)
@@ -175,3 +176,29 @@ add_executable(LTSM_sessions
 
 target_link_libraries(LTSM_sessions Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+# LTSM x11vnc
+project(LTSM_x11vnc VERSION 20210805.1)
+
+add_executable(LTSM_x11vnc
+    src/connector/ltsm_vnc_zlib.cpp
+    src/connector/ltsm_sockets.cpp
+    src/connector/ltsm_framebuffer.cpp
+    src/x11vnc/ltsm_vnc_encodings.cpp
+    src/x11vnc/ltsm_connector_vnc.cpp
+    src/x11vnc/ltsm_x11vnc.cpp)
+
+target_sources(LTSM_x11vnc PUBLIC ${LTSM_common})
+target_compile_options(LTSM_x11vnc PUBLIC ${GNUTLS_DEFINITIONS})
+
+target_include_directories(LTSM_x11vnc PUBLIC src/common)
+target_include_directories(LTSM_x11vnc PUBLIC ${GNUTLS_INCLUDE_DIR})
+target_include_directories(LTSM_x11vnc PUBLIC src/dbus-glue)
+target_include_directories(LTSM_x11vnc PUBLIC src/connector)
+target_include_directories(LTSM_x11vnc PUBLIC src/x11vnc)
+
+target_link_libraries(LTSM_x11vnc LTSM_common)
+target_link_libraries(LTSM_x11vnc ${GNUTLS_LIBRARIES})
+target_link_libraries(LTSM_x11vnc z)
+
+set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

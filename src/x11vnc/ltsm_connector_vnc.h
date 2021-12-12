@@ -32,8 +32,8 @@
 #include <atomic>
 #include <functional>
 
+#include "ltsm_x11vnc.h"
 #include "ltsm_sockets.h"
-#include "ltsm_connector.h"
 #include "ltsm_vnc_zlib.h"
 
 namespace LTSM
@@ -134,7 +134,7 @@ namespace LTSM
         typedef std::function<int(const FrameBuffer &)> sendEncodingFunc;
 
         /* Connector::VNC */
-        class VNC : public SignalProxy, protected NetworkStream
+        class VNC : public DisplayProxy, protected NetworkStream
         {
 	    std::unique_ptr<NetworkStream> socket;	/// socket layer
 	    std::unique_ptr<TLS::Stream> tls;		/// tls layer
@@ -181,15 +181,9 @@ namespace LTSM
 	    std::vector<uint8_t> zlibDeflateStop(void);
 
         protected:
-            // dbus virtual signals
-            void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
-            void                onShutdownConnector(const int32_t & display) override;
-            void                onHelperWidgetStarted(const int32_t & display) override;
-            void                onSendBellSignal(const int32_t & display) override;
-
-        protected:
+            bool                clientAuthVnc(void);
+	    bool		clientAuthVenCrypt(void);
             void                clientSetPixelFormat(void);
-	    bool		clientVenCryptHandshake(void);
             bool                clientSetEncodings(void);
             bool                clientFramebufferUpdate(void);
             void                clientKeyEvent(void);
@@ -237,8 +231,8 @@ namespace LTSM
             std::pair<sendEncodingFunc, int> selectEncodings(void);
 
         public:
-            VNC(sdbus::IConnection* conn, const JsonObject & jo);
-            ~VNC();
+            VNC(int fd, const JsonObject & jo);
+            ~VNC() {}
 
             int		        communication(void) override;
         };

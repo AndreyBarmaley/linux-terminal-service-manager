@@ -314,10 +314,6 @@ namespace LTSM
 
         static bool enterEventLoop(FreeRdpCallback* client)
         {
-	    //auto error = CHANNEL_RC_OK;
-	    //HANDLE handles[32] = {0};
-	    //DWORD count = 0;
-
 	    Application::info("%s: enter event loop", "FreeRdpCallback");
 	    auto peer = client->peer;
 

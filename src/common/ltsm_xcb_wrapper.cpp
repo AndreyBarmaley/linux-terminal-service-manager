@@ -1311,45 +1311,6 @@ namespace LTSM
         return KeyCodes(ptr);
     }
 
-    /*
-        void XCB::RootDisplay::eventProcessing(void)
-        {
-            auto ev = poolEvent();
-            if(! ev) return false;
-
-            if(ev->response_type == 0)
-            {
-                extendedError(error, __FUNCTION__, "unknown error");
-            }
-            else
-            {
-                switch(ev->response_type & ~0x80)
-                {
-                    case XCB_MOTION_NOTIFY:
-                        break;
-
-                    case XCB_BUTTON_PRESS:
-                    case XCB_BUTTON_RELEASE:
-                    case XCB_KEY_PRESS:
-                    case XCB_KEY_RELEASE:
-                        break;
-
-                    case XCB_ENTER_NOTIFY:
-                    case XCB_LEAVE_NOTIFY:
-                        break;
-
-                    default:
-                        extendedError(error, __FUNCTION__, "unknown event");
-                        break;
-                }
-
-                return true;
-            }
-
-            return false;
-        }
-    */
-
     /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
     /// @param keycode
     bool XCB::RootDisplay::fakeInputKeycode(int type, uint8_t keycode)
@@ -1491,6 +1452,8 @@ namespace LTSM
     XCB::RootDisplayExt::~RootDisplayExt()
     {
         _timerClipCheck->stop();
+        _timerClipCheck->join();
+
 	if(_selwin)
             xcb_destroy_window(_conn, _selwin);
     }

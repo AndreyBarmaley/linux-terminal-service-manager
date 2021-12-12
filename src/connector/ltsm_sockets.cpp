@@ -28,6 +28,7 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <gnutls/crypto.h>
 
 #include <poll.h>
 #include <fcntl.h>
@@ -958,6 +959,56 @@ namespace LTSM
             gnutls_record_cork(tls->session);
             gnutls_record_uncork(tls->session, 0);
         }
+
+        std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & data, const std::string & str)
+        {
+            gnutls_cipher_hd_t ctx;
+
+            std::vector<uint8_t> res(data);
+            std::array<uint8_t, 8> _key = { 0 };
+            std::array<uint8_t, 8> _iv = { 0 };
+
+            std::copy_n(str.begin(), std::min(str.size(), _key.size()), _key.begin());
+            gnutls_datum_t key = { _key.data(), _key.size() };
+            gnutls_datum_t iv = { _iv.data(), _iv.size() };
+
+            // Reverse the order of bits in the byte
+            for(auto & val : _key)
+                if(val) val = ((val * 0x0202020202ULL & 0x010884422010ULL) % 1023) & 0xfe;
+
+            size_t offset = 0;
+            while(offset < res.size())
+            {
+                if(int ret = gnutls_cipher_init(& ctx, GNUTLS_CIPHER_DES_CBC, & key, & iv))
+                {
+                    Application::error("gnutls_cipher_init error: %s", gnutls_strerror(ret));
+                    throw std::runtime_error("gnutls_cipher_init");
+                }
+
+                if(int ret = gnutls_cipher_encrypt(ctx, res.data() + offset, std::min(_key.size(), res.size() - offset)))
+                {
+                    Application::error("gnutls_cipher_encrypt error: %s", gnutls_strerror(ret));
+                    throw std::runtime_error("gnutls_cipher_encrypt2");
+                }
+
+                gnutls_cipher_deinit(ctx);
+                offset += _key.size();
+            }
+
+            return res;
+        }
+
+        std::vector<uint8_t> randomKey(size_t keysz)
+        {
+            std::vector<uint8_t> res(keysz);
+            if(int ret = gnutls_rnd(GNUTLS_RND_KEY, res.data(), res.size()))
+            {
+                Application::error("gnutls_rnd error: %s", gnutls_strerror(ret));
+                throw std::runtime_error("gnutls_rnd");
+            }
+            return res;
+        }
+
     } // TLS
 
 } // LTSM

@@ -1796,7 +1796,7 @@ namespace LTSM
     {
         if(0 < getuid())
         {
-            Application::error("assert: %s", "root privileges");
+            std::cerr << "need root privileges" << std::endl;
             return EXIT_FAILURE;
         }
 

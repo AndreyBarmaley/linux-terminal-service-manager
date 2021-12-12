@@ -28,8 +28,11 @@
 #include <tuple>
 
 #include "ltsm_global.h"
-#include "ltsm_dbus_proxy.h"
 #include "ltsm_xcb_wrapper.h"
+
+#ifdef LTSM_WITH_SDBUS
+#include "ltsm_dbus_proxy.h"
+#endif
 
 namespace LTSM
 {
@@ -39,11 +42,13 @@ namespace LTSM
 
         Color() : r(0), g(0), b(0) {}
         Color(uint8_t cr, uint8_t cg, uint8_t cb) : r(cr), g(cg), b(cb) {}
+
+#ifdef LTSM_WITH_SDBUS
         Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple)
         {
             std::tie(r, g, b) = tuple;
         }
-
+#endif
         int toRGB888(void) const
         {
             return (static_cast<int>(r) << 16) | (static_cast<int>(g) << 8) | b;

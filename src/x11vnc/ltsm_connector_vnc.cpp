@@ -32,10 +32,10 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <filesystem>
 
 #include "ltsm_tools.h"
-#include "ltsm_font_psf.h"
-#include "ltsm_connector.h"
+#include "ltsm_x11vnc.h"
 #include "ltsm_connector_vnc.h"
 
 using namespace std::chrono_literals;
@@ -57,32 +57,64 @@ namespace LTSM
     }
 
     /* Connector::VNC */
-    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
-	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
+    Connector::VNC::VNC(int fd, const JsonObject & jo)
+        : DisplayProxy(jo), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
+	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Disabled)
     {
 	socket.reset(new InetStream());
+
+	if(jo.getBoolean("DesktopResized"))
+            desktopResizeMode = DesktopResizeMode::Undefined;
+
+	if(0 < fd)
+            socket.reset(new BaseSocket(fd));
+	else
+	    socket.reset(new InetStream());
+
 	streamIn = streamOut = socket.get();
-        registerProxy();
     }
 
-    Connector::VNC::~VNC()
+    bool Connector::VNC::clientAuthVnc(void)
     {
-        if(0 < _display) busConnectorTerminated(_display);
-        unregisterProxy();
-        clientDisconnectedEvent();
+        std::vector<uint8_t> challenge = TLS::randomKey(16);
+        std::vector<uint8_t> response(16);
+
+        std::string tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
+    	Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
+
+        sendRaw(challenge.data(), challenge.size());
+        sendFlush();
+
+        recvRaw(response.data(), response.size());
+        tmp = Tools::buffer2hexstring<uint8_t>(response.data(), response.size(), 2);
+    	Application::debug("%s: response: %s", __FUNCTION__, tmp.c_str());
+
+        std::ifstream ifs(_config->getString("passwdfile"), std::ifstream::in);
+        while(ifs.good())
+        {
+            std::string pass;
+            std::getline(ifs, pass);
+
+            auto crypt = TLS::encryptDES(challenge, pass);
+            tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
+    	    Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
+
+            if(crypt == response)
+                return true;
+        }
+
+        const std::string err("password mismatch");
+        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+
+        Application::error("error: %s", err.c_str());
+        return false;
     }
 
-    bool Connector::VNC::clientVenCryptHandshake(void)
+    bool Connector::VNC::clientAuthVenCrypt(void)
     {
-        const std::string tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        bool tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
+        const std::string tlsPriority = "NORMAL:+ANON-ECDH:+ANON-DH";
         int tlsDebug = _config->getInteger("vnc:gnutls:debug", 3);
-
-        const std::string tlsCAFile = checkFileOption("vnc:gnutls:cafile");
-        const std::string tlsCertFile = checkFileOption("vnc:gnutls:certfile");
-        const std::string tlsKeyFile = checkFileOption("vnc:gnutls:keyfile");
-        const std::string tlsCRLFile = checkFileOption("vnc:gnutls:crlfile");
+        bool noAuth = _config->getBoolean("noauth", false);
 
 	// VenCrypt version
 	sendInt8(0).sendInt8(2).sendFlush();
@@ -101,14 +133,10 @@ namespace LTSM
 
 	// send supported
 	sendInt8(0);
-	bool x509Mode = false;
 
 	if(minorVer == 1)
 	{
-	    if(tlsAnonMode)
-	        sendInt8(1).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendFlush();
-	    else
-	        sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
+	    sendInt8(1).sendInt8(noAuth ? RFB::SECURITY_VENCRYPT01_TLSNONE : RFB::SECURITY_VENCRYPT01_TLSVNC).sendFlush();
 
 	    int res = recvInt8();
     	    Application::debug("RFB 6.2.19.0.1, client choice vencrypt security: 0x%02x", res);
@@ -116,16 +144,12 @@ namespace LTSM
 	    switch(res)
 	    {
 		case RFB::SECURITY_VENCRYPT01_TLSNONE:
+		case RFB::SECURITY_VENCRYPT01_TLSVNC:
 		    break;
 
 		case RFB::SECURITY_VENCRYPT01_X509NONE:
-		    if(tlsAnonMode)
-		    {
-			Application::error("error: %s", "unsupported vencrypt security");
-        		return false;
-		    }
-		    x509Mode = true;
-		    break;
+		    Application::error("error: %s", "unsupported vencrypt security");
+        	    return false;
 
 		default:
 		    Application::error("error: %s", "unsupported vencrypt security");
@@ -135,10 +159,7 @@ namespace LTSM
 	else
 	// if(minorVer == 2)
 	{
-	    if(tlsAnonMode)
-		sendInt8(1).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendFlush();
-	    else
-	        sendInt8(2).sendIntBE32(RFB::SECURITY_VENCRYPT02_TLSNONE).sendIntBE32(RFB::SECURITY_VENCRYPT02_X509NONE).sendFlush();
+	    sendInt8(1).sendIntBE32(noAuth ? RFB::SECURITY_VENCRYPT02_TLSNONE : RFB::SECURITY_VENCRYPT02_TLSVNC).sendFlush();
 
 	    int res = recvIntBE32();
     	    Application::debug("RFB 6.2.19.0.2, client choice vencrypt security: 0x%08x", res);
@@ -146,16 +167,12 @@ namespace LTSM
 	    switch(res)
 	    {
 		case RFB::SECURITY_VENCRYPT02_TLSNONE:
+		case RFB::SECURITY_VENCRYPT02_TLSVNC:
 		    break;
 
 		case RFB::SECURITY_VENCRYPT02_X509NONE:
-		    if(tlsAnonMode)
-		    {
-			Application::error("error: %s", "unsupported vencrypt security");
-        		return false;
-		    }
-		    x509Mode = true;
-		    break;
+		    Application::error("error: %s", "unsupported vencrypt security");
+        	    return false;
 
 		default:
 		    Application::error("error: %s", "unsupported vencrypt security");
@@ -168,29 +185,21 @@ namespace LTSM
 	// init hasdshake
 	tls.reset(new TLS::Stream(socket.get()));
 
-	bool tlsInitHandshake = x509Mode ? 
-		tls->initX509Handshake(tlsPriority, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
-		tls->initAnonHandshake(tlsPriority, tlsDebug);
-
-	if(tlsInitHandshake)
+	if(tls->initAnonHandshake(tlsPriority, tlsDebug))
 	{
 	    streamIn = streamOut = tls.get();
+
+            return noAuth ? true : clientAuthVnc();
 	}
 
-	return tlsInitHandshake;
+	return false;
     }
 
     int Connector::VNC::communication(void)
     {
-	if(0 >= busGetServiceVersion())
-	{
-            Application::error("%s", "bus service failure");
-            return EXIT_FAILURE;
-	}
-
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
-        encodingThreads = _config->getInteger("vnc:encoding:threads", 2);
+        encodingThreads = _config->getInteger("threads", 2);
         if(encodingThreads < 1)
         {
             encodingThreads = 1;
@@ -207,16 +216,11 @@ namespace LTSM
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
 
-        std::string encryptionInfo = "none";
-
-        if(! disabledEncodings.empty())
-            disabledEncodings.remove_if([](auto & str){ return 0 == Tools::lower(str).compare("raw"); });
-
-        // load keymap
         if(_config->hasKey("keymapfile"))
         {
             auto file = _config->getString("keymapfile");
             JsonContentFile jc(file);
+
             if(jc.isValid() && jc.isObject())
             {
                 keymap.reset(new JsonObject());
@@ -230,30 +234,15 @@ namespace LTSM
             }
         }
 
-        // RFB 6.1.1 version
-        const std::string version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
-        sendString(version).sendFlush();
-        std::string magick = recvString(12);
-        Application::debug("RFB 6.1.1, handshake version: %s", magick.c_str());
+        std::string encryptionInfo = "none";
 
-        if(magick != version)
-        {
-            Application::error("%s", "handshake failure");
-            return EXIT_FAILURE;
-        }
+        if(! disabledEncodings.empty())
+            disabledEncodings.remove_if([](auto & str){ return 0 == Tools::lower(str).compare("raw"); });
 
         // Xvfb: session request
-        int screen = busStartLoginSession(_remoteaddr, "vnc");
-        if(screen <= 0)
-        {
-            Application::error("%s", "login session request failure");
-            return EXIT_FAILURE;
-        }
+	Application::info("default encoding: %s", RFB::encodingName(prefEncodings.second));
 
-        Application::debug("login session request success, display: %d", screen);
-	Application::info("server default encoding: %s", RFB::encodingName(prefEncodings.second));
-
-        if(! xcbConnect(screen))
+        if(! xcbConnect())
         {
             Application::error("%s", "xcb connect failed");
             return EXIT_FAILURE;
@@ -268,34 +257,56 @@ namespace LTSM
 
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
 
+        // RFB 6.1.1 version
+        const std::string version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
+        sendString(version).sendFlush();
+        std::string magick = recvString(12);
+        Application::debug("RFB 6.1.1, handshake version: %s", magick.c_str());
+
+        if(magick != version)
+        {
+            Application::error("%s", "handshake failure");
+            return EXIT_FAILURE;
+        }
+
+
         // init server format
         serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
                                             visual->red_mask, visual->green_mask, visual->blue_mask);
 
-        bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
+        bool tlsDisable = _config->getBoolean("notls", false);
+        bool noAuth = _config->getBoolean("noauth", false);
+
         // RFB 6.1.2 security
 	if(tlsDisable)
 	{
 	    sendInt8(1);
-	    sendInt8(RFB::SECURITY_TYPE_NONE);
-	    sendFlush();
         }
 	else
 	{
     	    sendInt8(2);
 	    sendInt8(RFB::SECURITY_TYPE_VENCRYPT);
-	    sendInt8(RFB::SECURITY_TYPE_NONE);
-	    sendFlush();
 	}
+	sendInt8(noAuth ? RFB::SECURITY_TYPE_NONE : RFB::SECURITY_TYPE_VNC);
+	sendFlush();
+
         int clientSecurity = recvInt8();
         Application::debug("RFB 6.1.2, client security: 0x%02x", clientSecurity);
 
-        if(clientSecurity == RFB::SECURITY_TYPE_NONE)
+        if(noAuth && clientSecurity == RFB::SECURITY_TYPE_NONE)
             sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+        else
+        if(clientSecurity == RFB::SECURITY_TYPE_VNC)
+        {
+            if(! clientAuthVnc())
+                return EXIT_FAILURE;
+
+            sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+        }
         else
         if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT)
 	{
-	    if(! clientVenCryptHandshake())
+	    if(! clientAuthVenCrypt())
         	return EXIT_FAILURE;
 
             encryptionInfo = tls->sessionDescription();
@@ -309,8 +320,6 @@ namespace LTSM
             Application::error("error: %s", err.c_str());
             return EXIT_FAILURE;
         }
-
-    	busSetEncryptionInfo(screen, encryptionInfo);
 
         // RFB 6.3.1 client init
     	int clientSharedFlag = recvInt8();
@@ -343,18 +352,12 @@ namespace LTSM
     	sendIntBE32(desktopName.size());
     	sendString(desktopName).sendFlush();
 
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-            [=](){ _conn->enterEventLoopAsync(); return ! this->loopMessage; }))
-        {
-            Application::info("connector starting: %s", "something went wrong...");
-            return EXIT_FAILURE;
-        }
-
         Application::info("connector starting: %s", "wait RFB messages...");
 
         // xcb on
         setEnableXcbMessages(true);
+        loopMessage = true;
+
         serverRegion.assign(0, 0, wsz.width, wsz.height);
         XCB::Region damageRegion(0, 0, 0, 0);
 	bool clientUpdateReq = false;
@@ -451,8 +454,6 @@ namespace LTSM
                         xcb_randr_crtc_change_t cc = notify->u.cc;
                         if(0 < cc.width && 0 < cc.height)
                         {
-			    busDisplayResized(_display, cc.width, cc.height);
-
 			    if(DesktopResizeMode::Undefined != desktopResizeMode &&
 				DesktopResizeMode::Disabled != desktopResizeMode &&
 				(screensInfo.empty() || (screensInfo.front().width != cc.width || screensInfo.front().height != cc.height)))
@@ -511,8 +512,6 @@ namespace LTSM
                 }
     	    }
 
-            // dbus processing
-            _conn->enterEventLoopAsync();
             // wait
             std::this_thread::sleep_for(1ms);
         }
@@ -797,11 +796,6 @@ namespace LTSM
         desktopResizeMode = DesktopResizeMode::ClientRequest;
     }
 
-    void Connector::VNC::clientDisconnectedEvent(void)
-    {
-        Application::warning("RFB disconnected, display: %d", _display);
-    }
-
     void Connector::VNC::serverSendColourMap(int first)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
@@ -883,7 +877,6 @@ namespace LTSM
             FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
 
             // apply render primitives
-            renderPrimitivesToFB(frameBuffer);
 	    int encodingLength = 0;
 
             try
@@ -983,64 +976,6 @@ namespace LTSM
         }
 
 	return sendPixel(pixel);
-    }
-
-    void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)
-    {
-        if(0 < _display && display == _display)
-        {
-            setEnableXcbMessages(false);
-            waitSendingFBUpdate();
-
-            SignalProxy::onLoginSuccess(display, userName);
-            setEnableXcbMessages(true);
-
-	    // fix new session size
-	    auto wsz = _xcbDisplay->size();
-	    if(wsz != serverRegion.toSize())
-	    {
-                if(_xcbDisplay->setScreenSize(serverRegion.width, serverRegion.height))
-                {
-                    wsz = _xcbDisplay->size();
-                    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, _display);
-                }
-	    }
-
-            // full update
-            _xcbDisplay->damageAdd(serverRegion);
-
-            Application::notice("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
-        }
-    }
-
-    void Connector::VNC::onShutdownConnector(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            setEnableXcbMessages(false);
-            waitSendingFBUpdate();
-
-            loopMessage = false;
-            Application::notice("dbus signal: shutdown connector, display: %d", display);
-        }
-    }
-
-    void Connector::VNC::onHelperWidgetStarted(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            Application::info("dbus signal: helper started, display: %d", display);
-            loopMessage = true;
-        }
-    }
-
-    void Connector::VNC::onSendBellSignal(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            Application::info("dbus signal: send bell, display: %d", display);
-            sendBellFlag = true;
-        }
     }
 
     void Connector::VNC::zlibDeflateStart(size_t len)

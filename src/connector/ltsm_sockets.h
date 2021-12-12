@@ -124,6 +124,15 @@ namespace LTSM
         void	                recvRaw(void*, size_t) const override;
     };
 
+    /// @brief: tcp stream
+    class TcpStream : public BaseSocket
+    {
+    protected:
+
+    public:
+        TcpStream(int port){}
+    };
+
     /// @brief: inetd stream
     class InetStream : public NetworkStream
     {
@@ -183,6 +192,9 @@ namespace LTSM
     /// transport layer security
     namespace TLS
     {
+        std::vector<uint8_t>    randomKey(size_t);
+        std::vector<uint8_t>    encryptDES(const std::vector<uint8_t> & crypt, const std::string & key);
+
         /// @brief: tls context
         struct BaseContext
         {
