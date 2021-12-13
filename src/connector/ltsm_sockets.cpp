@@ -28,7 +28,9 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <gnutls/crypto.h>
+
+#include "gnutls/gnutls.h"
+#include "gnutls/crypto.h"
 
 #include <poll.h>
 #include <fcntl.h>

@@ -24,8 +24,6 @@
 #ifndef _LTSM_SOCKETS_
 #define _LTSM_SOCKETS_
 
-#include <gnutls/gnutls.h>
-
 #include <array>
 #include <atomic>
 #include <vector>
@@ -34,6 +32,7 @@
 #include <memory>
 #include <cstdint>
 
+#include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
 
 namespace LTSM
