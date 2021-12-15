@@ -36,7 +36,6 @@
 #include <algorithm>
 #include <exception>
 
-#include "xcb/xkb.h"
 #include "xcb/xtest.h"
 #include "xcb/xproto.h"
 #include "xcb/damage.h"

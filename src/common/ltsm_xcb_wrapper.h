@@ -30,13 +30,13 @@
 #include <atomic>
 #include <vector>
 
-#include "xcb/xcb.h"
 #include "xcb/shm.h"
 #include "xcb/randr.h"
 #include "xcb/damage.h"
 #include "xcb/xproto.h"
 
 #ifdef LTSM_WITH_XKBCOMMON
+#include "xcb/xcb.h"
 #include "xkbcommon/xkbcommon-x11.h"
 #endif
 
