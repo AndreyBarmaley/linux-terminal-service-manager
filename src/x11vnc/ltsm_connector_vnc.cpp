@@ -661,7 +661,7 @@ namespace LTSM
         int pressed = recvInt8();
         recvSkip(2);
         int keysym = recvIntBE32();
-        Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
+        Application::info("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
 
         if(isAllowXcbMessages())
         {
@@ -684,12 +684,13 @@ namespace LTSM
                 }).detach();
             }
             else
-            if(auto keyCodes = _xcbDisplay->keysymToKeycodes(keysym))
             {
                 // no wait xcb replies
                 std::thread([=]()
                 {
-                    _xcbDisplay->fakeInputKeysym(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCodes);
+                    auto keyCode = _xcbDisplay->keysymToKeycode(keysym);
+                    if(keyCode != XCB_NO_SYMBOL)
+                        _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCode);
                 }).detach();
             }
         }

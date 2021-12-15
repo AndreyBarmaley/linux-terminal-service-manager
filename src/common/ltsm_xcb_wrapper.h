@@ -24,20 +24,21 @@
 #define _LTSM_XCB_WRAPPER_
 
 #include <list>
-#include <array>
 #include <mutex>
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <vector>
 
 #include "xcb/xcb.h"
 #include "xcb/shm.h"
 #include "xcb/randr.h"
 #include "xcb/damage.h"
 #include "xcb/xproto.h"
-#include "xcb/xcb_keysyms.h"
 
-struct SDL_Keysym;
+#ifdef LTSM_WITH_XKBCOMMON
+#include "xkbcommon/xkbcommon-x11.h"
+#endif
 
 namespace LTSM
 {
@@ -215,10 +216,10 @@ namespace LTSM
 
         struct KeyCodes : std::shared_ptr<xcb_keycode_t>
         {
-            KeyCodes(xcb_keycode_t* ptr)
-		: std::shared_ptr<xcb_keycode_t>(ptr, std::free) {}
+//            KeyCodes(xcb_keycode_t* ptr)
+//		: std::shared_ptr<xcb_keycode_t>(ptr, std::free) {}
 
-            KeyCodes(uint8_t code)
+            KeyCodes(xcb_keycode_t code)
 		: std::shared_ptr<xcb_keycode_t>(new xcb_keycode_t[2]{code, XCB_NO_SYMBOL}, std::default_delete<xcb_keycode_t[]>()) {}
 
             bool isValid(void) const;
@@ -324,7 +325,7 @@ namespace LTSM
                 : PixmapInfoBase(depth, vis) { _pixels.reserve(res); }
         };
 
-        enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST };
+        enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
 
         class Connector
         {
@@ -384,12 +385,21 @@ namespace LTSM
         {
 	protected:
             xcb_screen_t*           _screen;
-            xcb_key_symbols_t*      _symbols;
             xcb_format_t*           _format;
             xcb_visualtype_t*       _visual;
 
             Damage                  _damage;
             SHM                     _shm;
+
+            std::vector<xcb_keysym_t> _keysymsVec;
+            int                     _keysymsPerKeycode;
+            int                     _keycodesCount;
+
+#ifdef LTSM_WITH_XKBCOMMON
+            std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
+            std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> _xkbmap;
+            std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
+#endif
 
         public:
             RootDisplay(const std::string & addr);
@@ -417,10 +427,12 @@ namespace LTSM
 
             PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
 
-            bool                    fakeInputKeysym(int type, const KeyCodes &);
-            bool                    fakeInputKeycode(int type, uint8_t keycode);
+            bool                    fakeInputKeycode(int type, xcb_keycode_t keycode);
             bool                    fakeInputMouse(int type, int buttons, int posx, int posy);
-            KeyCodes                keysymToKeycodes(int) const;
+
+            xcb_keycode_t           keysymToKeycode(xcb_keysym_t) const;
+            xcb_keycode_t           findKeycodeLayout(xcb_keysym_t, size_t layout) const;
+            size_t                  getCurrentXkbLayout(void) const;
 
             bool                    damageAdd(const xcb_rectangle_t*, size_t);
             bool                    damageAdd(const Region &);

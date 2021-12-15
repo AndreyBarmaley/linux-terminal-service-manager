@@ -146,10 +146,11 @@ namespace LTSM
         {
             Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
 
-            auto debug = _config.getString("debug");
-            if(debug != "console")
-                Application::setDebugLevel(_config.getString("debug"));
         }
+
+        auto debug = _config.getString("debug");
+        if(debug != "console")
+            Application::setDebugLevel(debug);
 
         if(1)
         {

@@ -56,8 +56,8 @@ namespace LTSM
         bool fakeInputKeysym(int type, const SDL_Keysym & keysym)
         {
             int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
-            auto keycodes = XCB::RootDisplayExt::keysymToKeycodes(0 != xksym ? xksym : keysym.sym);
-            return XCB::RootDisplayExt::fakeInputKeysym(type, keycodes);
+            auto keycode = XCB::RootDisplayExt::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
+            return keycode != XCB_NO_SYMBOL ? XCB::RootDisplayExt::fakeInputKeycode(type, keycode) : false;
         }
 
         bool sdlEventProcessing(bool & quit)

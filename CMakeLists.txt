@@ -7,6 +7,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 
 option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
+option(LTSM_BUILD_XKB_COMMON "usage xkb layouts" OFF)
 
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
@@ -26,19 +27,18 @@ pkg_search_module(XCB_DAMAGE REQUIRED xcb-damage)
 pkg_search_module(XCB_XFIXES REQUIRED xcb-xfixes)
 pkg_search_module(XCB_XTEST REQUIRED xcb-xtest)
 pkg_search_module(XCB_RANDR REQUIRED xcb-randr)
-pkg_search_module(XCB_KEYSYMS REQUIRED xcb-keysyms)
 
 add_compile_options(${XCB_CFLAGS})
 add_compile_options(${XCB_SHM_CFLAGS})
 add_compile_options(${XCB_XFIXES_CFLAGS})
 add_compile_options(${XCB_XTEST_CFLAGS})
 add_compile_options(${XCB_RANDR_CFLAGS})
-add_compile_options(${XCB_KEYSYMS_CFLAGS})
 add_compile_options("-DJSMN_STATIC")
 
 if(LTSM_BUILD_STD_MAP)
     add_compile_options("-DLTSM_BUILD_STD_MAP")
 endif()
+
 
 if(LTSM_BUILD_XCB_ERRORS)
     add_compile_options("-DLTSM_BUILD_XCB_ERRORS")
@@ -47,13 +47,22 @@ endif()
 add_library(LTSM_common STATIC)
 add_subdirectory(src/common)
 
+if(LTSM_BUILD_XKB_COMMON)
+    pkg_search_module(XCB_XKB REQUIRED xcb-xkb)
+    pkg_search_module(XKBCOMMON_X11 REQUIRED xkbcommon-x11)
+    add_compile_options(${XCB_XKB_CFLAGS})
+    add_compile_options(${XKBCOMMON_X11_CFLAGS})
+    add_compile_options("-DLTSM_WITH_XKBCOMMON")
+    link_libraries(${XCB_XKB_LIBRARIES})
+    link_libraries(${XKBCOMMON_X11_LIBRARIES})
+endif()
+
 link_libraries(${XCB_LIBRARIES})
 link_libraries(${XCB_SHM_LIBRARIES})
 link_libraries(${XCB_DAMAGE_LIBRARIES})
 link_libraries(${XCB_XFIXES_LIBRARIES})
 link_libraries(${XCB_XTEST_LIBRARIES})
 link_libraries(${XCB_RANDR_LIBRARIES})
-link_libraries(${XCB_KEYSYMS_LIBRARIES})
 link_libraries(pthread)
 link_libraries(stdc++fs)
 

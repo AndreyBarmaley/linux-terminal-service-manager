@@ -685,12 +685,13 @@ namespace LTSM
                 }).detach();
             }
             else
-            if(auto keyCodes = _xcbDisplay->keysymToKeycodes(keysym))
             {
                 // no wait xcb replies
                 std::thread([=]()
                 {
-                    _xcbDisplay->fakeInputKeysym(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCodes);
+                    auto keyCode = _xcbDisplay->keysymToKeycode(keysym);
+                    if(keyCode != XCB_NO_SYMBOL)
+                        _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCode);
                 }).detach();
             }
         }
