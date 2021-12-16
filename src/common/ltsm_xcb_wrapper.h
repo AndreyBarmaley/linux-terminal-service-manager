@@ -328,6 +328,25 @@ namespace LTSM
 
         enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
 
+#ifdef LTSM_WITH_XKBCOMMON
+	union xkb_notify_event_t
+	{
+    	    /* All XKB events share these fields. */
+    	    struct
+	    {
+        	uint8_t		response_type;
+        	uint8_t		xkb_type;
+        	uint16_t	sequence;
+        	xcb_timestamp_t time;
+        	uint8_t		device_id;
+    	    } any;
+
+    	    xcb_xkb_new_keyboard_notify_event_t keyboard_notify;
+    	    xcb_xkb_map_notify_event_t		map_notify;
+    	    xcb_xkb_state_notify_event_t	state_notify;
+	};
+#endif
+
         class Connector
         {
         protected:
@@ -362,6 +381,10 @@ namespace LTSM
             bool                    isRandrScreenNotify(const GenericEvent & ev) const;
             bool                    isRandrOutputNotify(const GenericEvent & ev) const;
             bool                    isRandrCRTCNotify(const GenericEvent & ev) const;
+
+            bool                    isXkbStateNotify(const GenericEvent & ev) const;
+            bool                    isXkbKeyboardNotify(const GenericEvent & ev) const;
+            bool                    isXkbMapNotify(const GenericEvent & ev) const;
 
             void                    extendedError(const xcb_generic_error_t* error, const char* func) const;
             void                    extendedError(const GenericError &, const char* func) const;
@@ -399,7 +422,8 @@ namespace LTSM
 #ifdef LTSM_WITH_XKBCOMMON
             std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
             std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> _xkbmap;
-            std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
+	    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
+	    int32_t                 _xkbdevid;
 #endif
 
         public:
@@ -431,6 +455,7 @@ namespace LTSM
             bool                    fakeInputKeycode(int type, xcb_keycode_t keycode);
             bool                    fakeInputMouse(int type, int buttons, int posx, int posy);
 
+	    bool                    loadKeymaps(void);
             xcb_keycode_t           keysymToKeycode(xcb_keysym_t) const;
             xcb_keycode_t           findKeycodeLayout(xcb_keysym_t, size_t layout) const;
             size_t                  getCurrentXkbLayout(void) const;

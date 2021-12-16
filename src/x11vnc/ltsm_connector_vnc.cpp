@@ -661,7 +661,7 @@ namespace LTSM
         int pressed = recvInt8();
         recvSkip(2);
         int keysym = recvIntBE32();
-        Application::info("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
+        Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
 
         if(isAllowXcbMessages())
         {
