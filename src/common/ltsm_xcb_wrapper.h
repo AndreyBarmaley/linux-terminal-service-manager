@@ -206,14 +206,14 @@ namespace LTSM
 	};
 
 	template<typename Reply, typename Cookie>
-	ReplyError<Reply> getReply(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
+	ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
 	{
     	    xcb_generic_error_t* error = nullptr;
     	    Reply* reply = func(conn, cookie, & error);
     	    return ReplyError<Reply>(reply, error);
 	}
 
-	#define getReplyConn(NAME,conn,cookie) getReply<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,cookie)
+	#define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
 
         struct KeyCodes : std::shared_ptr<xcb_keycode_t>
         {
@@ -347,6 +347,26 @@ namespace LTSM
 	};
 #endif
 
+	struct RandrOutputInfo
+	{
+	    bool		connected;
+	    xcb_randr_crtc_t	crtc;
+	    uint32_t		mm_width;
+	    uint32_t		mm_height;
+	    std::string		name;
+
+	    RandrOutputInfo() : connected(false), crtc(0), mm_width(0), mm_height(0) {}
+	};
+
+	struct RandrScreenInfo
+	{
+	    xcb_timestamp_t 	config_timestamp;
+	    uint16_t 		sizeID;
+	    uint16_t 		rotation;
+	    uint16_t 		rate;
+	    RandrScreenInfo() : config_timestamp(0), sizeID(0), rotation(0), rate(0) {}
+	};
+
         class Connector
         {
         protected:
@@ -362,12 +382,12 @@ namespace LTSM
             const xcb_setup_t*      setup(void) const;
 
 	    template<typename Reply, typename Cookie>
-	    ReplyError<Reply> getReply(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
+	    ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
 	    {
-                return XCB::getReply<Reply, Cookie>(func, _conn, cookie);
+                return XCB::getReply1<Reply, Cookie>(func, _conn, cookie);
 	    }
 
-	    #define getReplyFunc(NAME,cookie) getReply<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,cookie)
+	    #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
 
 	    int                     hasError(void) const;
 
@@ -446,9 +466,6 @@ namespace LTSM
             void                    fillRegion(int r, int g, int b, const Region &);
             void                    fillBackground(int r, int g, int b);
 
-	    std::list<xcb_randr_screen_size_t>
-				    screenSizes(void) const;
-	    bool	            setScreenSize(uint16_t windth, uint16_t height);
 
             PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
 
@@ -459,6 +476,18 @@ namespace LTSM
             xcb_keycode_t           keysymToKeycode(xcb_keysym_t) const;
             xcb_keycode_t           findKeycodeLayout(xcb_keysym_t, size_t layout) const;
             size_t                  getCurrentXkbLayout(void) const;
+
+	    std::vector<xcb_randr_output_t>      getRandrOutputs(void) const;
+	    RandrOutputInfo                      getRandrOutputInfo(const xcb_randr_output_t &) const;
+	    std::vector<xcb_randr_mode_t>        getRandrOutputModes(const xcb_randr_output_t &) const;
+	    std::vector<xcb_randr_crtc_t>        getRandrOutputCrtcs(const xcb_randr_output_t &) const;
+	    RandrScreenInfo                      getRandrScreenInfo(void) const;
+	    std::vector<xcb_randr_screen_size_t> getRandrScreenSizes(RandrScreenInfo* = nullptr) const;
+	    std::vector<xcb_randr_mode_info_t>   getRandrModesInfo(void) const;
+
+	    bool	            setRandrScreenSize(uint16_t windth, uint16_t height);
+	    xcb_randr_mode_t        createRandrMode(uint16_t width, uint16_t height);
+	    bool                    addRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
 
             bool                    damageAdd(const xcb_rectangle_t*, size_t);
             bool                    damageAdd(const Region &);

@@ -579,7 +579,7 @@ namespace LTSM
             auto wsz = _xcbDisplay->size();
 	    if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
 	    {
-		if(_xcbDisplay->setScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
+		if(_xcbDisplay->setRandrScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
         	{
 		    wsz = _xcbDisplay->size();
 		    Application::notice("change session size [%d,%d], display: %d", wsz.width, wsz.height, _display);
@@ -910,7 +910,7 @@ namespace LTSM
 	auto wsz = context->x11display->size();
 	if(wsz.width != client->settings->DesktopWidth || wsz.height != client->settings->DesktopHeight)
 	{
-            if(! context->x11display->setScreenSize(client->settings->DesktopWidth, client->settings->DesktopHeight))
+            if(! context->x11display->setRandrScreenSize(client->settings->DesktopWidth, client->settings->DesktopHeight))
     	        Application::error("%s: x11display set size: failed", __FUNCTION__);
 
 	    auto wsz = context->x11display->size();

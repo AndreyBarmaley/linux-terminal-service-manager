@@ -1000,7 +1000,7 @@ namespace LTSM
 	    auto wsz = _xcbDisplay->size();
 	    if(wsz != serverRegion.toSize())
 	    {
-                if(_xcbDisplay->setScreenSize(serverRegion.width, serverRegion.height))
+                if(_xcbDisplay->setRandrScreenSize(serverRegion.width, serverRegion.height))
                 {
                     wsz = _xcbDisplay->size();
                     Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, _display);

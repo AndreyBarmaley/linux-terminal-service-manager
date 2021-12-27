@@ -57,7 +57,6 @@ namespace LTSM
         : Application("ltsm_x11vnc", argc, argv)
     {
         _config.addString("display", ":0");
-        _config.addString("debug", "info");
         _config.addInteger("port", 5900);
         _config.addInteger("threads", 2);
         _config.addBoolean("inetd", false);
@@ -145,11 +144,10 @@ namespace LTSM
         if(_config.getBoolean("syslog"))
         {
             Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
-
         }
 
         auto debug = _config.getString("debug");
-        if(debug != "console")
+        if(! debug.empty() && debug != "console")
             Application::setDebugLevel(debug);
 
         if(1)
@@ -184,7 +182,12 @@ namespace LTSM
             }
         }
 
-        if(error) throw 0;
+        if(error)
+        {
+            std::cout << std::endl;
+            connectorHelp(argv[0]);
+            throw 0;
+        }
     }
 
     int Connector::Service::startSocket(int port)

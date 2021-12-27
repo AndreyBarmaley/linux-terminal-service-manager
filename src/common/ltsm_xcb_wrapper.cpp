@@ -35,6 +35,7 @@
 #include <iostream>
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 
 #include "xcb/xtest.h"
 #include "xcb/xproto.h"
@@ -304,16 +305,13 @@ namespace LTSM
 
     XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, uint32_t planeMask) const
     {
-	xcb_generic_error_t* error;
-        auto cookie = xcb_shm_get_image(connection(), winid, reg.x, reg.y, reg.width, reg.height,
+        auto xcbReply = getReplyFunc1(xcb_shm_get_image, connection(), winid, reg.x, reg.y, reg.width, reg.height,
                                     planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
-
-        auto xcbReply = getReplyConn(xcb_shm_get_image, connection(), cookie);
         PixmapInfoReply res;
 
-	if(xcbReply.error())
+	if(auto err = xcbReply.error())
         {
-            XCB::error("xcb_shm_get_image", xcbReply.error());
+            XCB::error("xcb_shm_get_image", err);
             return res;
         }
 
@@ -593,12 +591,11 @@ namespace LTSM
 
     xcb_atom_t XCB::Connector::getAtom(const std::string & name, bool create) const
     {
-	auto cookie = xcb_intern_atom(_conn, create ? 0 : 1, name.size(), name.c_str());
-	auto xcbReply = getReplyFunc(xcb_intern_atom, cookie);
+	auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn, create ? 0 : 1, name.size(), name.c_str());
 
-	if(xcbReply.error())
+	if(auto err = xcbReply.error())
         {
-            extendedError(xcbReply.error(), "xcb_intern_atom");
+            extendedError(err, "xcb_intern_atom");
             return XCB_ATOM_NONE;
         }
 
@@ -610,19 +607,18 @@ namespace LTSM
 	if(atom == XCB_ATOM_NONE)
 	    return std::string("NONE");
 
-	auto cookie = xcb_get_atom_name(_conn, atom);
-	auto xcbReply = getReplyFunc(xcb_get_atom_name, cookie);
+	auto xcbReply = getReplyFunc2(xcb_get_atom_name, _conn, atom);
 
-	if(xcbReply.error())
+	if(auto err = xcbReply.error())
         {
-            extendedError(xcbReply.error(), "xcb_get_atom_name");
+            extendedError(err, "xcb_get_atom_name");
             return std::string();
         }
 
-	if(xcbReply.reply())
+	if(auto reply = xcbReply.reply())
 	{
-	    const char* name = xcb_get_atom_name_name(xcbReply.reply().get());
-	    size_t len = xcb_get_atom_name_name_length(xcbReply.reply().get());
+	    const char* name = xcb_get_atom_name_name(reply.get());
+	    size_t len = xcb_get_atom_name_name_length(reply.get());
 	    return std::string(name, len);
 	}
 
@@ -672,18 +668,17 @@ namespace LTSM
             if(! _test || ! _test->present)
                 return false;
 
-            auto cookie = xcb_test_get_version(_conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
-	    auto xcbReply = getReplyFunc(xcb_test_get_version, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_test_get_version, _conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_test_query_version");
+                extendedError(err, "xcb_test_query_version");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
 	    {
-    	        Application::debug("used %s extension, version: %d.%d", "TEST", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        Application::debug("used %s extension, version: %d.%d", "TEST", reply->major_version, reply->minor_version);
     	        return true;
 	    }
         }
@@ -694,18 +689,17 @@ namespace LTSM
             if(! _damage || ! _damage->present)
                 return false;
 
-            auto cookie = xcb_damage_query_version(_conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
-	    auto xcbReply = getReplyFunc(xcb_damage_query_version, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_damage_query_version, _conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_damage_query_version");
+                extendedError(err, "xcb_damage_query_version");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
 	    {
-    	        Application::debug("used %s extension, version: %d.%d", "DAMAGE", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        Application::debug("used %s extension, version: %d.%d", "DAMAGE", reply->major_version, reply->minor_version);
     	        return true;
 	    }
         }
@@ -716,18 +710,17 @@ namespace LTSM
             if(! _xfixes || ! _xfixes->present)
                 return false;
 
-            auto cookie = xcb_xfixes_query_version(_conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
-	    auto xcbReply = getReplyFunc(xcb_xfixes_query_version, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, _conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_xfixes_query_version");
+                extendedError(err, "xcb_xfixes_query_version");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "XFIXES", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+	        Application::debug("used %s extension, version: %d.%d", "XFIXES", reply->major_version, reply->minor_version);
     	        return true;
 	    }
         }
@@ -738,18 +731,17 @@ namespace LTSM
             if(! _randr || ! _randr->present)
                 return false;
 
-            auto cookie = xcb_randr_query_version(_conn, XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
-	    auto xcbReply = getReplyFunc(xcb_randr_query_version, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_randr_query_version, _conn, XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_randr_query_version");
+                extendedError(err, "xcb_randr_query_version");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
 	    {
-    	        Application::debug("used %s extension, version: %d.%d", "RANDR", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+    	        Application::debug("used %s extension, version: %d.%d", "RANDR", reply->major_version, reply->minor_version);
     	        return true;
 	    }
         }
@@ -760,18 +752,17 @@ namespace LTSM
 	    if(! _shm || ! _shm->present)
                 return false;
 
-            auto cookie = xcb_shm_query_version(_conn);
-	    auto xcbReply = getReplyFunc(xcb_shm_query_version, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_shm_query_version, _conn);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_shm_query_version");
+                extendedError(err, "xcb_shm_query_version");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "SHM", xcbReply.reply()->major_version, xcbReply.reply()->minor_version);
+	        Application::debug("used %s extension, version: %d.%d", "SHM", reply->major_version, reply->minor_version);
     	        return true;
 	    }
         }
@@ -783,18 +774,17 @@ namespace LTSM
 	    if(! _xkb)
                 return false;
 
-	    auto cookie = xcb_xkb_use_extension(_conn, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
-	    auto xcbReply = getReplyFunc(xcb_xkb_use_extension, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, _conn, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
-            if(xcbReply.error())
+            if(auto err = xcbReply.error())
             {
-                extendedError(xcbReply.error(), "xcb_xkb_use_extension");
+                extendedError(err, "xcb_xkb_use_extension");
                 return false;
             }
 
-	    if(xcbReply.reply())
+	    if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "XKB", xcbReply.reply()->serverMajor, xcbReply.reply()->serverMinor);
+	        Application::debug("used %s extension, version: %d.%d", "XKB", reply->serverMajor, reply->serverMinor);
     	        return true;
 	    }
 #else
@@ -1163,12 +1153,11 @@ namespace LTSM
 
     bool XCB::RootDisplay::loadKeymaps(void)
     {
-        auto cookie = xcb_get_keyboard_mapping(_conn, _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
-        auto xcbReply = getReplyFunc(xcb_get_keyboard_mapping, cookie);
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
-        if(xcbReply.error())
+        if(auto err = xcbReply.error())
         {
-            extendedError(xcbReply.error(), "xcb_randr_get_screen_info");
+            extendedError(err, "xcb_get_keyboard_mapping");
             return false;
         }
 
@@ -1211,8 +1200,10 @@ namespace LTSM
     	    xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
 
 	// release all keys
-	for(int key = 1; key <= 255; key++)
-    	    xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+        for(size_t key = _setup->min_keycode;  key <= _setup->max_keycode; key++)
+            xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
+
+        xcb_flush(_conn);
     }
 
     size_t XCB::RootDisplay::bitsPerPixel(void) const
@@ -1255,11 +1246,10 @@ namespace LTSM
 
     XCB::Size XCB::RootDisplay::size(void) const
     {
-        auto cookie = xcb_get_geometry(_conn, _screen->root);
-        auto xcbReply = getReplyFunc(xcb_get_geometry, cookie);
+        auto xcbReply = getReplyFunc2(xcb_get_geometry, _conn, _screen->root);
 
-        if(xcbReply.reply())
-            return Size(xcbReply.reply()->width, xcbReply.reply()->height);
+        if(auto reply = xcbReply.reply())
+            return Size(reply->width, reply->height);
 
         return Size(_screen->width_in_pixels, _screen->height_in_pixels);
     }
@@ -1277,80 +1267,6 @@ namespace LTSM
     xcb_drawable_t XCB::RootDisplay::root(void) const
     {
         return _screen->root;
-    }
-
-    std::list<xcb_randr_screen_size_t> XCB::RootDisplay::screenSizes(void) const
-    {
-	std::list<xcb_randr_screen_size_t> res;
-
-        auto cookie = xcb_randr_get_screen_info(_conn, _screen->root);
-        auto xcbReply = getReplyFunc(xcb_randr_get_screen_info, cookie);
-
-        if(xcbReply.error())
-        {
-            extendedError(xcbReply.error(), "xcb_randr_get_screen_info");
-            return res;
-        }
-
-        if(xcbReply.reply())
-        {
-            xcb_randr_screen_size_t* sizes = xcb_randr_get_screen_info_sizes(xcbReply.reply().get());
-            int length = xcb_randr_get_screen_info_sizes_length(xcbReply.reply().get());
-
-            for(int pos = 0; pos < length; ++pos)
-        	res.push_back(sizes[pos]);
-	}
-
-	return res;
-    }
-
-    bool XCB::RootDisplay::setScreenSize(uint16_t width, uint16_t height)
-    {
-        auto cookie = xcb_randr_get_screen_info(_conn, _screen->root);
-        auto xcbReply = getReplyFunc(xcb_randr_get_screen_info, cookie);
-
-        if(xcbReply.error())
-        {
-            extendedError(xcbReply.error(), "xcb_randr_get_screen_info");
-            return false;
-        }
-
-        if(xcbReply.reply())
-        {
-            xcb_randr_screen_size_t* sizes = xcb_randr_get_screen_info_sizes(xcbReply.reply().get());
-            int length = xcb_randr_get_screen_info_sizes_length(xcbReply.reply().get());
-
-            auto it = std::find_if(sizes, sizes + length, [=](auto & ss){ return ss.width == width && ss.height == height; });
-            if(it == sizes + length)
-            {
-        	it = std::min_element(sizes, sizes + length, [=](auto & ss1, auto & ss2)
-			    { return std::abs(ss1.width * ss1.height - width * height) < std::abs(ss2.width * ss2.height - width * height); });
-
-        	if(it == sizes + length)
-        	{
-            	    Application::error("set screen size failed, unknown mode: [%d,%d]", width, height);
-            	    return false;
-		}
-
-		width = it->width;
-		height = it->height;
-            	Application::warning("set screen size, found nearest suitable mode: [%d,%d]", width, height);
-            }
-
-            damageSubtrack(region());
-
-            int sizeID = std::distance(sizes, it);
-            auto cookie = xcb_randr_set_screen_config(_conn, _screen->root, XCB_CURRENT_TIME,
-                                xcbReply.reply()->config_timestamp, sizeID, xcbReply.reply()->rotation, 0);
-            auto xcbReply2 = getReplyFunc(xcb_randr_set_screen_config, cookie);
-
-            if(! xcbReply2.error())
-		return true;
-
-            extendedError(xcbReply.error(), "xcb_randr_set_screen_config");
-        }
-
-        return false;
     }
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
@@ -1378,24 +1294,21 @@ namespace LTSM
 	    if(yy + allowRows > reg.y + reg.height)
 		allowRows = reg.y + reg.height - yy;
 
-            auto cookie = xcb_get_image(_conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
-	    auto xcbReply = getReplyFunc(xcb_get_image, cookie);
+	    auto xcbReply = getReplyFunc2(xcb_get_image, _conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
-	    if(xcbReply.error())
+	    if(auto err = xcbReply.error())
     	    {
-        	extendedError(xcbReply.error(), "xcb_get_image");
+        	extendedError(err, "xcb_get_image");
 		break;
     	    }
 
-            if(xcbReply.reply())
+            if(auto reply = xcbReply.reply())
             {
-		auto reply = xcbReply.reply().get();
-
                 if(! info)
                     info = new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch);
 
-                auto length = xcb_get_image_data_length(reply);
-                auto data = xcb_get_image_data(reply);
+                auto length = xcb_get_image_data_length(reply.get());
+                auto data = xcb_get_image_data(reply.get());
 
                 info->_pixels.insert(info->_pixels.end(), data, data + length);
             }
@@ -1434,6 +1347,325 @@ namespace LTSM
 	    return fixreg ? _damage.subtractRegion(fixreg.xid(), XCB_XFIXES_REGION_NONE) : false;
 	}
 	return false;
+    }
+
+    std::vector<xcb_randr_output_t> XCB::RootDisplay::getRandrOutputs(void) const
+    {
+	auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
+	std::vector<xcb_randr_output_t> res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_screen_resources");
+            return res;
+        }
+
+	if(auto reply = xcbReply.reply())
+        {
+            xcb_randr_output_t* ptr = xcb_randr_get_screen_resources_outputs(reply.get());
+            int len = xcb_randr_get_screen_resources_outputs_length(reply.get());
+	    res.assign(ptr, ptr + len);
+	}
+
+	return res;
+    }
+
+    XCB::RandrOutputInfo XCB::RootDisplay::getRandrOutputInfo(const xcb_randr_output_t & id) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
+	RandrOutputInfo res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_output_info");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+            uint8_t* ptr = xcb_randr_get_output_info_name(reply.get());
+            int len = xcb_randr_get_output_info_name_length(reply.get());
+
+	    res.name.assign(reinterpret_cast<const char*>(ptr), len);
+
+	    res.connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
+	    res.crtc = reply->crtc;
+	    res.mm_width = reply->mm_width;
+	    res.mm_height = reply->mm_height;
+	}
+
+	return res;
+    }
+
+    std::vector<xcb_randr_mode_t> XCB::RootDisplay::getRandrOutputModes(const xcb_randr_output_t & id) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
+	std::vector<xcb_randr_mode_t> res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_output_info");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+    	    xcb_randr_mode_t* ptr = xcb_randr_get_output_info_modes(reply.get());
+	    int len = xcb_randr_get_output_info_modes_length(reply.get());
+	    res.assign(ptr, ptr + len);
+	}
+
+	return res;
+    }
+
+    std::vector<xcb_randr_mode_info_t> XCB::RootDisplay::getRandrModesInfo(void) const
+    {
+	auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
+	std::vector<xcb_randr_mode_info_t> res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_screen_resources");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+	    xcb_randr_mode_info_t* ptr = xcb_randr_get_screen_resources_modes(reply.get());
+	    int len = xcb_randr_get_screen_resources_modes_length(reply.get());
+	    res.assign(ptr, ptr + len);
+	}
+
+        return res;
+    }
+
+    std::vector<xcb_randr_crtc_t> XCB::RootDisplay::getRandrOutputCrtcs(const xcb_randr_output_t & id) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
+	std::vector<xcb_randr_mode_t> res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_output_info");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+    	    xcb_randr_mode_t* ptr = xcb_randr_get_output_info_crtcs(reply.get());
+	    int len = xcb_randr_get_output_info_crtcs_length(reply.get());
+	    res.assign(ptr, ptr + len);
+	}
+
+	return res;
+    }
+
+    XCB::RandrScreenInfo XCB::RootDisplay::getRandrScreenInfo(void) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, _conn, _screen->root);
+	XCB::RandrScreenInfo res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_screen_info");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+	    res.config_timestamp = reply->config_timestamp;
+            res.sizeID = reply->sizeID;
+            res.rotation = reply->rotation;
+            res.rate = reply->rate;
+	}
+
+	return res;
+    }
+
+    std::vector<xcb_randr_screen_size_t> XCB::RootDisplay::getRandrScreenSizes(RandrScreenInfo* info) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, _conn, _screen->root);
+	std::vector<xcb_randr_screen_size_t> res;
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_get_screen_info");
+            return res;
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+            xcb_randr_screen_size_t* ptr = xcb_randr_get_screen_info_sizes(reply.get());
+            int len = xcb_randr_get_screen_info_sizes_length(reply.get());
+	    res.assign(ptr, ptr + len);
+
+	    if(info)
+	    {
+		info->config_timestamp = reply->config_timestamp;
+        	info->sizeID = reply->sizeID;
+        	info->rotation = reply->rotation;
+        	info->rate = reply->rate;
+	    }
+	}
+
+	return res;
+    }
+
+    xcb_randr_mode_t XCB::RootDisplay::createRandrMode(uint16_t width, uint16_t height)
+    {
+        auto cvt = "/usr/bin/cvt";
+        if(! std::filesystem::exists(cvt))
+        {
+            Application::error("%s: utility not found: %s", __FUNCTION__, cvt);
+            return 0;
+        }
+
+        auto cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(width).arg(height));
+        auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
+        params.remove_if([](auto & val){ return val.empty(); });
+    
+        // params: Modeline "1024x600_60.00"   49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync
+        if(params.size() != 13)
+        {
+            Application::error("%s: incorrect cvt format, params: %d", __FUNCTION__, params.size());
+            return 0;
+        }
+            
+        std::string name = Tools::StringFormat("%1x%2_60").arg(width).arg(height);
+            
+        xcb_randr_mode_info_t mode_info;
+        mode_info.id = 0;
+        mode_info.hskew = 0;
+        mode_info.mode_flags = 0;
+        mode_info.name_len = name.size();
+
+        auto it = std::next(params.begin(), 2);
+        float clock = std::stof(*it);
+        mode_info.dot_clock =  clock * 1000000;
+  
+        it = std::next(it);
+        mode_info.width = std::stod(*it);
+  
+        it = std::next(it);
+        mode_info.hsync_start = std::stod(*it);
+  
+        it = std::next(it);
+        mode_info.hsync_end = std::stod(*it);
+  
+        it = std::next(it);
+        mode_info.htotal = std::stod(*it);
+  
+        it = std::next(it);
+        mode_info.height = std::stod(*it);
+        
+        it = std::next(it);
+        mode_info.vsync_start = std::stod(*it);
+        
+        it = std::next(it);
+        mode_info.vsync_end = std::stod(*it);
+        
+        it = std::next(it);
+        mode_info.vtotal = std::stod(*it);
+        
+        it = std::next(it);
+        if(*it == "-hsync")
+            mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_NEGATIVE;
+        else
+        if(*it == "+hsync")
+            mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_POSITIVE;
+
+        it = std::next(it);
+        if(*it == "-vsync")
+            mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_NEGATIVE;
+        else
+        if(*it == "+vsync")
+            mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
+
+        auto xcbReply = getReplyFunc2(xcb_randr_create_mode, _conn, _screen->root, mode_info, name.size(), name.data());
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_randr_create_mode");
+            return 0;
+        }
+            
+        if(auto reply = xcbReply.reply())
+        {   
+            Application::info("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, width, height);
+            return reply->mode;
+        }
+
+	return 0;
+    }
+
+    bool XCB::RootDisplay::addRandrOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t  & mode)
+    {
+        auto cookie = xcb_randr_add_output_mode_checked(_conn, output, mode);
+
+        if(auto errorReq = checkRequest(cookie))
+        {
+	    extendedError(errorReq, "xcb_randr_add_output_mode");
+            return false;
+        }
+
+        Application::info("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
+	return true;
+    }
+
+    bool XCB::RootDisplay::setRandrScreenSize(uint16_t width, uint16_t height)
+    {
+	// align size
+	if(auto alignW = width % 4)
+                width += 4 - alignW;
+        if(auto alignH = height % 4)
+                height += 4 - alignH;
+
+	RandrScreenInfo screenInfo;
+	auto screenSizes = getRandrScreenSizes(& screenInfo);
+        auto it = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+
+	// not found
+        if(it == screenSizes.end())
+        {
+	    // add new mode
+	    auto outputs = getRandrOutputs();
+            auto cur = std::find_if(outputs.begin(), outputs.end(), [this](auto & id){ return this->getRandrOutputInfo(id).connected; });
+
+	    if(cur == outputs.end())
+	    {
+            	Application::error("%s: connected not found, outputs count: %d", __FUNCTION__, outputs.size());
+		return false;
+	    }
+
+	    auto newMode = createRandrMode(width, height);
+	    if(0 == newMode || ! addRandrOutputMode(*cur, newMode))
+		return false;
+
+	    // rescan info
+	    screenSizes = getRandrScreenSizes(& screenInfo);
+    	    it = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+
+    	    if(it == screenSizes.end())
+    	    {
+            	Application::error("%s: incorrect modes: [%d, %d]", __FUNCTION__, width, height);
+		return false;
+	    }
+	}
+
+        int sizeID = std::distance(screenSizes.begin(), it);
+        auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, _conn, _screen->root, XCB_CURRENT_TIME,
+                                screenInfo.config_timestamp, sizeID, screenInfo.rotation /*XCB_RANDR_ROTATION_ROTATE_0*/, 0);
+
+        if(auto err = xcbReply2.error())
+        {
+    	    extendedError(err, "xcb_randr_set_screen_config");
+	    return false;
+	}
+
+        Application::info("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+
+	damageSubtrack(region());
+	return true;
     }
 
     XCB::GenericEvent XCB::RootDisplay::poolEvent(void)
@@ -1733,12 +1965,11 @@ namespace LTSM
 
     xcb_window_t XCB::RootDisplayExt::getOwnerSelection(const xcb_atom_t & atomSel)
     {
-	auto cookie = xcb_get_selection_owner(_conn, atomSel);
-	auto xcbReply = getReplyFunc(xcb_get_selection_owner, cookie);
+	auto xcbReply = getReplyFunc2(xcb_get_selection_owner, _conn, atomSel);
 
-    	if(xcbReply.error())
+    	if(auto err = xcbReply.error())
     	{
-    	    extendedError(xcbReply.error(), "xcb_get_selection_owner");
+    	    extendedError(err, "xcb_get_selection_owner");
 	    return XCB_WINDOW_NONE;
 	}
 
@@ -1876,8 +2107,7 @@ namespace LTSM
 	    return false;
 
         // get type
-        auto cookie1 = xcb_get_property(_conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
-	auto xcbReply1 = getReplyFunc(xcb_get_property, cookie1);
+	auto xcbReply1 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
 	if(xcbReply1.error())
 	{
@@ -1896,12 +2126,11 @@ namespace LTSM
         }
 
         // get data
-        auto cookie2 = xcb_get_property(_conn, false, _selwin, _atomBuffer, xcbReply1.reply()->type, 0, xcbReply1.reply()->bytes_after);
-	auto xcbReply2 = getReplyFunc(xcb_get_property, cookie2);
+	auto xcbReply2 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, xcbReply1.reply()->type, 0, xcbReply1.reply()->bytes_after);
 
-	if(xcbReply2.error())
+	if(auto err = xcbReply2.error())
 	{
-	    extendedError(xcbReply1.error(), "xcb_get_property");
+	    extendedError(err, "xcb_get_property");
 	    return false;
 	}
 

@@ -147,8 +147,12 @@ namespace LTSM
         	    {
             		std::this_thread::sleep_for(TimeType(1));
             		auto cur = std::chrono::system_clock::now();
+
             		if(TimeType(delay) <= cur - start)
             		{
+			    if(!timer->processed)
+				break;
+
                 	    call();
 
                             if(repeat)
@@ -176,6 +180,9 @@ namespace LTSM
             		auto cur = std::chrono::system_clock::now();
             		if(TimeType(delay) <= cur - start)
             		{
+			    if(!timer->processed)
+				break;
+
                 	    std::apply(call, args);
 
                             if(repeat)

@@ -1087,7 +1087,7 @@ namespace LTSM
 			error = 1;
 		    }
 		    else
-        	    if(_xcbDisplay->setScreenSize(info.width, info.height))
+        	    if(_xcbDisplay->setRandrScreenSize(info.width, info.height))
 		    {
 			serverRegion.assign(0, 0, info.width, info.height);
 			_xcbDisplay->damageAdd(serverRegion);

@@ -532,7 +532,9 @@ namespace LTSM
     void Tools::BaseTimer::stop(void)
     {
         if(processed)
+	{
             processed = false;
+	}
     }
 
     void Tools::BaseTimer::join(void)
