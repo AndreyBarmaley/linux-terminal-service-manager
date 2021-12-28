@@ -781,7 +781,7 @@ namespace LTSM
 	int numOfScreens = recvInt8();
         recvSkip(1);
 
-        Application::notice("RFB 6.4.x, set desktop size event, size: %dx%d, screens: %d", width, height, numOfScreens);
+        Application::notice("RFB 6.4.x, set desktop event, size [%dx%d], screens: %d", width, height, numOfScreens);
 	screensInfo.resize(numOfScreens);
 
 	// screens array
@@ -1003,7 +1003,7 @@ namespace LTSM
                 if(_xcbDisplay->setRandrScreenSize(serverRegion.width, serverRegion.height))
                 {
                     wsz = _xcbDisplay->size();
-                    Application::notice("change session size %dx%d, display: %d", wsz.width, wsz.height, _display);
+                    Application::notice("change session size [%dx%d], display: %d", wsz.width, wsz.height, _display);
                 }
 	    }
 

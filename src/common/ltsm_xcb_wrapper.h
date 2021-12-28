@@ -487,7 +487,9 @@ namespace LTSM
 
 	    bool	            setRandrScreenSize(uint16_t windth, uint16_t height);
 	    xcb_randr_mode_t        createRandrMode(uint16_t width, uint16_t height);
+	    bool                    destroyRandrMode(const xcb_randr_mode_t  &);
 	    bool                    addRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
+	    bool                    deleteRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
 
             bool                    damageAdd(const xcb_rectangle_t*, size_t);
             bool                    damageAdd(const Region &);

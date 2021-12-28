@@ -197,6 +197,8 @@ namespace LTSM
 
         std::string socketFormat = _config->getString("xvfb:socket");
         std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
+        int width = _config->getInteger("default:width");
+        int height = _config->getInteger("default:height");
 
 	if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
                 Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
@@ -217,6 +219,9 @@ namespace LTSM
         int color = _config->getInteger("display:solid", 0x4e7db7);
         if(0 != color)
 	    _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
+
+	if(0 < width && 0 < height && _xcbDisplay->size() != XCB::Size(width, height))
+	    _xcbDisplay->setRandrScreenSize(width, height);
 
         _display = screen;
         return true;

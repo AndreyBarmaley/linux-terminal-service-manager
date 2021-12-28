@@ -1531,13 +1531,10 @@ namespace LTSM
             return 0;
         }
             
-        std::string name = Tools::StringFormat("%1x%2_60").arg(width).arg(height);
-            
         xcb_randr_mode_info_t mode_info;
         mode_info.id = 0;
         mode_info.hskew = 0;
         mode_info.mode_flags = 0;
-        mode_info.name_len = name.size();
 
         auto it = std::next(params.begin(), 2);
         float clock = std::stof(*it);
@@ -1581,6 +1578,9 @@ namespace LTSM
         if(*it == "+vsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
 
+        std::string name = Tools::StringFormat("%1x%2_60").arg(mode_info.width).arg(mode_info.height);
+        mode_info.name_len = name.size();
+
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, _conn, _screen->root, mode_info, name.size(), name.data());
 
         if(auto err = xcbReply.error())
@@ -1591,7 +1591,7 @@ namespace LTSM
             
         if(auto reply = xcbReply.reply())
         {   
-            Application::info("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, width, height);
+            Application::info("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
@@ -1612,47 +1612,107 @@ namespace LTSM
 	return true;
     }
 
+    bool XCB::RootDisplay::destroyRandrMode(const xcb_randr_mode_t & mode)
+    {
+        auto cookie = xcb_randr_destroy_mode_checked(_conn, mode);
+
+        if(auto errorReq = checkRequest(cookie))
+        {
+	    extendedError(errorReq, "xcb_randr_destroy_mode_checked");
+            return false;
+        }
+
+        Application::info("%s: id: %08x", __FUNCTION__, mode);
+	return true;
+    }
+
+    bool XCB::RootDisplay::deleteRandrOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t & mode)
+    {
+        auto cookie = xcb_randr_delete_output_mode_checked(_conn, output, mode);
+
+        if(auto errorReq = checkRequest(cookie))
+        {
+	    extendedError(errorReq, "xcb_randr_delete_output_mode_checked");
+            return false;
+        }
+
+        Application::info("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
+	return true;
+    }
+
     bool XCB::RootDisplay::setRandrScreenSize(uint16_t width, uint16_t height)
     {
 	// align size
-	if(auto alignW = width % 4)
-                width += 4 - alignW;
-        if(auto alignH = height % 4)
-                height += 4 - alignH;
+	if(auto alignW = width % 8)
+                width += 8 - alignW;
 
-	RandrScreenInfo screenInfo;
-	auto screenSizes = getRandrScreenSizes(& screenInfo);
-        auto it = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+	auto screenSizes = getRandrScreenSizes();
+        auto its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+
+	xcb_randr_mode_t mode = 0;
+	xcb_randr_output_t output = 0;
 
 	// not found
-        if(it == screenSizes.end())
+        if(its == screenSizes.end())
         {
 	    // add new mode
 	    auto outputs = getRandrOutputs();
-            auto cur = std::find_if(outputs.begin(), outputs.end(), [this](auto & id){ return this->getRandrOutputInfo(id).connected; });
+            auto ito = std::find_if(outputs.begin(), outputs.end(), [this](auto & id){ return this->getRandrOutputInfo(id).connected; });
 
-	    if(cur == outputs.end())
+	    if(ito == outputs.end())
 	    {
-            	Application::error("%s: connected not found, outputs count: %d", __FUNCTION__, outputs.size());
+            	Application::error("%s: connected output not found, outputs count: %d", __FUNCTION__, outputs.size());
 		return false;
 	    }
 
-	    auto newMode = createRandrMode(width, height);
-	    if(0 == newMode || ! addRandrOutputMode(*cur, newMode))
+	    output = *ito;
+	    mode = createRandrMode(width, height);
+
+	    if(0 == mode)
 		return false;
 
-	    // rescan info
-	    screenSizes = getRandrScreenSizes(& screenInfo);
-    	    it = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+	    if(! addRandrOutputMode(output, mode))
+	    {
+            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+		destroyRandrMode(mode);
+		return false;
+	    }
 
-    	    if(it == screenSizes.end())
+	    // fixed size
+	    auto modes = getRandrModesInfo();
+	    auto itm = std::find_if(modes.begin(), modes.end(), [=](auto & val){ return val.id == mode; });
+	    if(itm == modes.end())
+	    {
+            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+		deleteRandrOutputMode(output, mode);
+		destroyRandrMode(mode);
+		return false;
+	    }
+
+	    width = (*itm).width;
+	    height = (*itm).height;
+
+	    // rescan info
+	    screenSizes = getRandrScreenSizes();
+    	    its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+
+    	    if(its == screenSizes.end())
     	    {
-            	Application::error("%s: incorrect modes: [%d, %d]", __FUNCTION__, width, height);
+            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+		//for(auto & sz : screenSizes)
+            	//    Application::info("%s: available modes: [%d, %d]", __FUNCTION__, sz.width, sz.height);
+		deleteRandrOutputMode(output, mode);
+		destroyRandrMode(mode);
 		return false;
 	    }
 	}
 
-        int sizeID = std::distance(screenSizes.begin(), it);
+        int sizeID = std::distance(screenSizes.begin(), its);
+	auto screenInfo = getRandrScreenInfo();
+
+	// clear old damages
+	damageSubtrack(region());
+
         auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, _conn, _screen->root, XCB_CURRENT_TIME,
                                 screenInfo.config_timestamp, sizeID, screenInfo.rotation /*XCB_RANDR_ROTATION_ROTATE_0*/, 0);
 
@@ -1662,9 +1722,17 @@ namespace LTSM
 	    return false;
 	}
 
-        Application::info("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+	auto nsz = size();
+	if(nsz != Size(width, height))
+	{
+    	    Application::error("%s: failed, size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+	    damageAdd({0, 0, nsz.width, nsz.height});
+	    //deleteRandrOutputMode(output, mode);
+	    //destroyRandrMode(mode);
+	    return false;
+	}
 
-	damageSubtrack(region());
+        Application::info("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
 	return true;
     }
 
@@ -1678,7 +1746,7 @@ namespace LTSM
             auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
             if(notify->area.x + notify->area.width > wsz.width || notify->area.y + notify->area.height > wsz.height)
             {
-        	Application::debug("damage notify: [%d,%d,%d,%d] discard", notify->area.x, notify->area.y, notify->area.width, notify->area.height);
+        	Application::warning("damage notify: [%d,%d,%d,%d] discard", notify->area.x, notify->area.y, notify->area.width, notify->area.height);
                 xcb_discard_reply(_conn, notify->sequence);
                 return GenericEvent();
             }
@@ -1694,12 +1762,12 @@ namespace LTSM
                 auto wsz = size();
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
-        	    Application::debug("xcb crc change notify: [%d,%d] discard", cc.width, cc.height);
+        	    Application::warning("xcb crc change notify: [%d,%d] discard, current: [%d,%d]", cc.width, cc.height, wsz.width, wsz.height);
                     xcb_discard_reply(_conn, notify->sequence);
                     return GenericEvent();
                 }
 
-        	Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
+        	Application::info("xcb crc change notify: [%d,%d]", cc.width, cc.height);
 
                 // init shm
                 const int bpp = bitsPerPixel() >> 3;

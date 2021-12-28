@@ -1089,10 +1089,9 @@ namespace LTSM
 		    else
         	    if(_xcbDisplay->setRandrScreenSize(info.width, info.height))
 		    {
-			serverRegion.assign(0, 0, info.width, info.height);
-			_xcbDisplay->damageAdd(serverRegion);
-			width = info.width;
-			height = info.height;
+			auto nsize = _xcbDisplay->size();
+			width = nsize.width;
+			height = nsize.height;
 			error = 0;
 		    }
 		    else
@@ -1111,7 +1110,7 @@ namespace LTSM
 	}
 	else
 	{
-    	    Application::error("unknown action for DesktopResizeMode::%s", desktopResizeModeString(mode));
+    	    Application::error("%s: unknown action for DesktopResizeMode::%s", __FUNCTION__, desktopResizeModeString(mode));
 	}
 
 	// send
@@ -1127,7 +1126,7 @@ namespace LTSM
 
 	if(extended)
 	{
-    	    Application::notice("server send: ext desktop size: %dx%d, status: %d, error: %d", width, height, status, error);
+    	    Application::notice("%s: ext desktop size [%dx%d], status: %d, error: %d", __FUNCTION__, width, height, status, error);
 
     	    sendIntBE16(status);
     	    sendIntBE16(error);
@@ -1159,7 +1158,7 @@ namespace LTSM
 	}
 	else
 	{
-    	    Application::notice("server send: desktop size, %dx%d, status: %d", width, height, status);
+    	    Application::notice("%s: desktop size [%dx%d], status: %d", __FUNCTION__, width, height, status);
 
     	    sendIntBE16(0);
     	    sendIntBE16(0);
@@ -1171,6 +1170,16 @@ namespace LTSM
 	}
 
 	sendFlush();
+
+	if(0 == error)
+	{
+	    // fix damage
+	    auto nsize = _xcbDisplay->size();
+	    serverRegion.assign(0, 0, nsize.width, nsize.height);
+	    _xcbDisplay->damageAdd(serverRegion);
+    	    Application::debug("%s: added damage: [%d,%d]", __FUNCTION__, nsize.width, nsize.height);
+	}
+
         return res;
     }
 }
