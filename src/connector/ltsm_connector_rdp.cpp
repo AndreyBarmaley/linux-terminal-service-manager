@@ -399,6 +399,7 @@ namespace LTSM
 	    }
 	});
 
+        bool nodamage = _config->getBoolean("xcb:nodamage", false);
 	// all ok
 	while(! loopShutdownFlag)
 	{
@@ -415,7 +416,7 @@ namespace LTSM
     		}
 
 		// xcb processing
-		if(! xcbEventLoopAsync())
+		if(! xcbEventLoopAsync(nodamage))
 		    loopShutdownFlag = true;
             }
 
@@ -437,7 +438,7 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
-    bool Connector::RDP::xcbEventLoopAsync(void)
+    bool Connector::RDP::xcbEventLoopAsync(bool nodamage)
     {
         // get all damages and join it
         while(auto ev = _xcbDisplay->poolEvent())
@@ -477,6 +478,9 @@ namespace LTSM
             }
         }
 
+        if(nodamage)
+	    damageRegion = _xcbDisplay->region();
+        else
         if(! damageRegion.empty())
 	    // fix out of screen
 	    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));

@@ -58,7 +58,7 @@ namespace LTSM
 	    bool			clientUpdateBitmapInterleaved(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
             void                        clientDesktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
 	    void                	clientDisconnectedEvent(void);
-	    bool			xcbEventLoopAsync(void);
+	    bool			xcbEventLoopAsync(bool nodamage);
 
         public:
             RDP(sdbus::IConnection* conn, const JsonObject & jo);

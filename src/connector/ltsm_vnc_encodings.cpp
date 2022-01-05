@@ -1041,7 +1041,7 @@ namespace LTSM
     }
 
     /* pseudo encodings DesktopSize/Extended */
-    int Connector::VNC::serverSendDesktopSize(const DesktopResizeMode & mode)
+    int Connector::VNC::serverSendDesktopSize(const DesktopResizeMode & mode, bool xcbAllow)
     {
 	int status = 0;
 	int error = 0;
@@ -1050,7 +1050,7 @@ namespace LTSM
 	int width = 0;
 	int height = 0;
 
-	if(isAllowXcbMessages())
+	if(xcbAllow)
 	{
 	    auto wsz = _xcbDisplay->size();
 	    width = wsz.width;
@@ -1081,7 +1081,7 @@ namespace LTSM
 		if(info.width != width || info.height != height)
 		{
 		    // need resize
-		    if(! isAllowXcbMessages())
+		    if(! xcbAllow)
 		    {
 			// resize is administratively prohibited
 			error = 1;
@@ -1174,10 +1174,9 @@ namespace LTSM
 	if(0 == error)
 	{
 	    // fix damage
-	    auto nsize = _xcbDisplay->size();
-	    serverRegion.assign(0, 0, nsize.width, nsize.height);
-	    _xcbDisplay->damageAdd(serverRegion);
-    	    Application::debug("%s: added damage: [%d,%d]", __FUNCTION__, nsize.width, nsize.height);
+	    auto newreg = _xcbDisplay->region();
+	    _xcbDisplay->damageAdd(newreg);
+    	    Application::debug("%s: added damage [%d,%d]", __FUNCTION__, newreg.width, newreg.height);
 	}
 
         return res;

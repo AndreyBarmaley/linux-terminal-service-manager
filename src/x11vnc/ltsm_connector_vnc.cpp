@@ -358,9 +358,9 @@ namespace LTSM
         setEnableXcbMessages(true);
         loopMessage = true;
 
-        serverRegion.assign(0, 0, wsz.width, wsz.height);
         XCB::Region damageRegion(0, 0, 0, 0);
 	bool clientUpdateReq = false;
+        bool nodamage = _config->getBoolean("xcb:nodamage", false);
 	std::vector<uint8_t> selbuf;
 
         while(loopMessage)
@@ -374,7 +374,7 @@ namespace LTSM
                 {
                     case RFB::CLIENT_SET_PIXEL_FORMAT:
                         clientSetPixelFormat();
-                        damageRegion.join(serverRegion);
+                        damageRegion = _xcbDisplay->region();
 			clientUpdateReq = true;
                         break;
 
@@ -382,7 +382,7 @@ namespace LTSM
                         if(clientSetEncodings())
                         {
                             // full update
-                            damageRegion.join(serverRegion);
+                            damageRegion = _xcbDisplay->region();
 			    clientUpdateReq = true;
                         }
                         break;
@@ -390,7 +390,7 @@ namespace LTSM
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
                         // full update
                         if(clientFramebufferUpdate())
-                            damageRegion.join(serverRegion);
+                            damageRegion = _xcbDisplay->region();
 			clientUpdateReq = true;
                         break;
 
@@ -421,7 +421,7 @@ namespace LTSM
                 }
             }
 
-            if( isAllowXcbMessages())
+            if(isAllowXcbMessages())
             {
 		if(auto err = _xcbDisplay->hasError())
 		{
@@ -472,6 +472,9 @@ namespace LTSM
 		    }
                 }
 
+                if(nodamage)
+                    damageRegion = _xcbDisplay->region();
+                else
 		if(! damageRegion.empty())
                     // fix out of screen
                     damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
@@ -482,7 +485,7 @@ namespace LTSM
 		    if(DesktopResizeMode::Undefined != desktopResizeMode &&
 			DesktopResizeMode::Disabled != desktopResizeMode && DesktopResizeMode::Success != desktopResizeMode)
 		    {
-			serverSendDesktopSize(desktopResizeMode);
+			serverSendDesktopSize(desktopResizeMode, isAllowXcbMessages());
 			desktopResizeMode = DesktopResizeMode::Success;
 		    }
                     if(sendBellFlag)
@@ -632,6 +635,7 @@ namespace LTSM
         Application::debug("RFB 6.4.3, request update fb, region [%d, %d, %d, %d], incremental: %d",
                            clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         bool fullUpdate = incremental == 0;
+        auto serverRegion = _xcbDisplay->region();
 
         if(fullUpdate)
 	{

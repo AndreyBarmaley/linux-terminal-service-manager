@@ -73,7 +73,43 @@ namespace LTSM
         clientDisconnectedEvent();
     }
 
-    bool Connector::VNC::clientVenCryptHandshake(void)
+    bool Connector::VNC::clientAuthVnc(void)
+    {
+        std::vector<uint8_t> challenge = TLS::randomKey(16);
+        std::vector<uint8_t> response(16);
+        
+        std::string tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
+        Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
+
+        sendRaw(challenge.data(), challenge.size());
+        sendFlush();
+     
+        recvRaw(response.data(), response.size());
+        tmp = Tools::buffer2hexstring<uint8_t>(response.data(), response.size(), 2);
+        Application::debug("%s: response: %s", __FUNCTION__, tmp.c_str());
+
+        std::ifstream ifs(_config->getString("passwdfile"), std::ifstream::in);
+        while(ifs.good())
+        {
+            std::string pass;
+            std::getline(ifs, pass);
+            
+            auto crypt = TLS::encryptDES(challenge, pass);
+            tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
+            Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
+        
+            if(crypt == response)
+                return true;
+        }
+    
+        const std::string err("password mismatch");
+        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+
+        Application::error("error: %s", err.c_str());
+        return false;
+    }
+
+    bool Connector::VNC::clientAuthVenCrypt(void)
     {
         const std::string tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
         bool tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
@@ -295,7 +331,7 @@ namespace LTSM
         else
         if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT)
 	{
-	    if(! clientVenCryptHandshake())
+	    if(! clientAuthVenCrypt())
         	return EXIT_FAILURE;
 
             encryptionInfo = tls->sessionDescription();
@@ -355,9 +391,9 @@ namespace LTSM
 
         // xcb on
         setEnableXcbMessages(true);
-        serverRegion.assign(0, 0, wsz.width, wsz.height);
         XCB::Region damageRegion(0, 0, 0, 0);
 	bool clientUpdateReq = false;
+        bool nodamage = _config->getBoolean("xcb:nodamage", false);
 	std::vector<uint8_t> selbuf;
 
         while(loopMessage)
@@ -371,7 +407,7 @@ namespace LTSM
                 {
                     case RFB::CLIENT_SET_PIXEL_FORMAT:
                         clientSetPixelFormat();
-                        damageRegion.join(serverRegion);
+                        damageRegion = _xcbDisplay->region();
 			clientUpdateReq = true;
                         break;
 
@@ -379,7 +415,7 @@ namespace LTSM
                         if(clientSetEncodings())
                         {
                             // full update
-                            damageRegion.join(serverRegion);
+                            damageRegion = _xcbDisplay->region();
 			    clientUpdateReq = true;
                         }
                         break;
@@ -387,7 +423,7 @@ namespace LTSM
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
                         // full update
                         if(clientFramebufferUpdate())
-                            damageRegion.join(serverRegion);
+                            damageRegion = _xcbDisplay->region();
 			clientUpdateReq = true;
                         break;
 
@@ -471,7 +507,10 @@ namespace LTSM
 		    }
                 }
 
-		if(! damageRegion.empty())
+                if(nodamage)
+                    damageRegion = _xcbDisplay->region();
+		else
+                if(! damageRegion.empty())
                     // fix out of screen
                     damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
 
@@ -481,7 +520,7 @@ namespace LTSM
 		    if(DesktopResizeMode::Undefined != desktopResizeMode &&
 			DesktopResizeMode::Disabled != desktopResizeMode && DesktopResizeMode::Success != desktopResizeMode)
 		    {
-			serverSendDesktopSize(desktopResizeMode);
+			serverSendDesktopSize(desktopResizeMode, isAllowXcbMessages());
 			desktopResizeMode = DesktopResizeMode::Success;
 		    }
                     if(sendBellFlag)
@@ -633,6 +672,7 @@ namespace LTSM
         Application::debug("RFB 6.4.3, request update fb, region [%d, %d, %d, %d], incremental: %d",
                            clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         bool fullUpdate = incremental == 0;
+        auto serverRegion = _xcbDisplay->region();
 
         if(fullUpdate)
 	{
@@ -997,18 +1037,14 @@ namespace LTSM
             setEnableXcbMessages(true);
 
 	    // fix new session size
-	    auto wsz = _xcbDisplay->size();
-	    if(wsz != serverRegion.toSize())
+	    if(_xcbDisplay->size() != clientRegion.toSize())
 	    {
-                if(_xcbDisplay->setRandrScreenSize(serverRegion.width, serverRegion.height))
-                {
-                    wsz = _xcbDisplay->size();
-                    Application::notice("change session size [%dx%d], display: %d", wsz.width, wsz.height, _display);
-                }
+                if(_xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
+                    Application::notice("change session size [%dx%d], display: %d", clientRegion.width, clientRegion.height, _display);
 	    }
 
             // full update
-            _xcbDisplay->damageAdd(serverRegion);
+            _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
 
             Application::notice("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
         }

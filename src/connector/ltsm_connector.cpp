@@ -213,7 +213,6 @@ namespace LTSM
 	    return false;
 	}
 
-	_xcbDisplay->resetInputs();
         Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         int color = _config->getInteger("display:solid", 0x4e7db7);
@@ -234,7 +233,9 @@ namespace LTSM
             Application::info("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
             // disable message loop
             bool extDisable = _xcbDisableMessages;
+
             _xcbDisableMessages = true;
+	    _xcbDisplay->resetInputs();
 
             int oldDisplay = _display;
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);

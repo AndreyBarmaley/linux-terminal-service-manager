@@ -12,7 +12,8 @@ option(LTSM_BUILD_XKB_COMMON "usage xkb layouts" OFF)
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
-if(NOT CMAKE_CL_64)
+# detect 64 arch
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(LTSM_BUILD_STD_MAP ON CACHE BOOL "enable usage std::unordered_map" FORCE)
 endif()
 
@@ -193,7 +194,7 @@ add_executable(LTSM_x11vnc
     src/connector/ltsm_vnc_zlib.cpp
     src/connector/ltsm_sockets.cpp
     src/connector/ltsm_framebuffer.cpp
-    src/x11vnc/ltsm_vnc_encodings.cpp
+    src/connector/ltsm_vnc_encodings.cpp
     src/x11vnc/ltsm_connector_vnc.cpp
     src/x11vnc/ltsm_x11vnc.cpp)
 
@@ -203,8 +204,8 @@ target_compile_options(LTSM_x11vnc PUBLIC ${GNUTLS_DEFINITIONS})
 target_include_directories(LTSM_x11vnc PUBLIC src/common)
 target_include_directories(LTSM_x11vnc PUBLIC ${GNUTLS_INCLUDE_DIR})
 target_include_directories(LTSM_x11vnc PUBLIC src/dbus-glue)
-target_include_directories(LTSM_x11vnc PUBLIC src/connector)
 target_include_directories(LTSM_x11vnc PUBLIC src/x11vnc)
+target_include_directories(LTSM_x11vnc PUBLIC src/connector)
 
 target_link_libraries(LTSM_x11vnc LTSM_common)
 target_link_libraries(LTSM_x11vnc ${GNUTLS_LIBRARIES})

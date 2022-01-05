@@ -49,7 +49,7 @@ namespace LTSM
     //
     void connectorHelp(const char* prog)
     {
-        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background]" << std::endl;
+        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage]" << std::endl;
     }
 
     /* Connector::Service */
@@ -127,6 +127,10 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--background"))
             {
                 _config.addBoolean("background", true);
+            }
+            else if(0 == std::strcmp(argv[it], "--nodamage"))
+            {
+                _config.addBoolean("xcb:nodamage", true);
             }
             else if(0 == std::strcmp(argv[it], "+DesktopResized"))
             {

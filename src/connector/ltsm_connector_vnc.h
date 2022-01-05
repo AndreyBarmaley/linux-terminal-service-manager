@@ -155,7 +155,6 @@ namespace LTSM
             PixelFormat         serverFormat;
             PixelFormat         clientFormat;
             XCB::Region         clientRegion;
-            XCB::Region         serverRegion;
             std::mutex          sendGlobal;
             std::mutex		sendEncoding;
             ColorMap            colourMap;
@@ -189,7 +188,8 @@ namespace LTSM
 
         protected:
             void                clientSetPixelFormat(void);
-	    bool		clientVenCryptHandshake(void);
+	    bool		clientAuthVnc(void);
+	    bool		clientAuthVenCrypt(void);
             bool                clientSetEncodings(void);
             bool                clientFramebufferUpdate(void);
             void                clientKeyEvent(void);
@@ -202,7 +202,7 @@ namespace LTSM
             void                serverSendColourMap(int first);
             void                serverSendBell(void);
             void                serverSendCutText(const std::vector<uint8_t> &);
-	    int			serverSendDesktopSize(const DesktopResizeMode &);
+	    int			serverSendDesktopSize(const DesktopResizeMode &, bool xcbAllow);
 
             int                 sendPixel(uint32_t pixel);
             int                 sendCPixel(uint32_t pixel);
