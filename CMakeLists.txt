@@ -194,7 +194,7 @@ add_executable(LTSM_x11vnc
     src/connector/ltsm_vnc_zlib.cpp
     src/connector/ltsm_sockets.cpp
     src/connector/ltsm_framebuffer.cpp
-    src/connector/ltsm_vnc_encodings.cpp
+    src/x11vnc/ltsm_vnc_encodings.cpp
     src/x11vnc/ltsm_connector_vnc.cpp
     src/x11vnc/ltsm_x11vnc.cpp)
 
