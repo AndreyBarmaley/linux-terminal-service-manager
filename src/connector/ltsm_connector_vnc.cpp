@@ -508,7 +508,10 @@ namespace LTSM
                 }
 
                 if(nodamage)
+		{
                     damageRegion = _xcbDisplay->region();
+		    clientUpdateReq = true;
+		}
 		else
                 if(! damageRegion.empty())
                     // fix out of screen

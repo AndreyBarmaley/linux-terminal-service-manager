@@ -984,6 +984,120 @@ namespace LTSM
         return -1;
     }
 
+    XCB::PropertyReply XCB::Connector::getPropertyAnyType(xcb_window_t win, xcb_atom_t prop)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+
+        return xcbReply.reply();
+    }
+
+    xcb_atom_t XCB::Connector::getPropertyType(xcb_window_t win, xcb_atom_t prop)
+    {
+        auto reply = getPropertyAnyType(win, prop);
+        return reply ? reply->type : XCB_ATOM_NONE;
+    }
+
+    xcb_atom_t XCB::Connector::getPropertyAtom(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_ATOM, offset, 1);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
+                return *res;
+        }
+
+        return XCB_ATOM_NONE;
+    }
+
+    xcb_window_t XCB::Connector::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_WINDOW, offset, 1);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
+                return *res;
+        }
+
+        return XCB_WINDOW_NONE;
+    }
+
+    std::string XCB::Connector::getPropertyString(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, offset, ~0);
+        std::string res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
+            if(ptr) res.assign(ptr);
+        }
+
+        return res;
+    }
+
+    std::list<std::string> XCB::Connector::getPropertyStringList(xcb_window_t win, xcb_atom_t prop)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, 0, ~0);
+        std::list<std::string> res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            int len = xcb_get_property_value_length(reply.get());
+            auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
+
+            res = Tools::split(std::string(ptr, ptr + len - (ptr[len - 1] ? 0 : 1 /* remove last nul */)), 0);
+        }
+
+        return res;
+    }
+
+    std::vector<uint8_t> XCB::Connector::getPropertyBinary(xcb_window_t win, xcb_atom_t prop, xcb_atom_t type)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, type, 0, ~0);
+        std::vector<uint8_t> res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            int len = xcb_get_property_value_length(reply.get());
+            auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+            res.assign(ptr, ptr + len);
+        }
+
+        return res;
+    }
+
     /* XCB::RootDisplay */
     XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr),
         _format(nullptr), _visual(nullptr), _keysymsPerKeycode(0), _keycodesCount(0)
@@ -2175,64 +2289,57 @@ namespace LTSM
 	    return false;
 
         // get type
-	auto xcbReply1 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
-
-	if(xcbReply1.error())
-	{
-	    extendedError(xcbReply1.error(), "xcb_get_property");
-	    return false;
-	}
-
-        if(! xcbReply1.reply())
+        auto type = getPropertyType(_selwin, _atomBuffer);
+	if(XCB_ATOM_NONE == type)
             return false;
 
-        if(xcbReply1.reply()->type != _atomUTF8 && xcbReply1.reply()->type != _atomText && xcbReply1.reply()->type != _atomTextPlain)
+        if(type != _atomUTF8 && type != _atomText && type != _atomTextPlain)
         {
-	    auto type = getAtomName(xcbReply1.reply()->type);
-            Application::error("xcb selection notify action, unknown type: %d, `%s'", xcbReply1.reply()->type, type.c_str());
+	    auto name = getAtomName(type);
+            Application::error("xcb selection notify action, unsupported type: %d, `%s'", type, name.c_str());
             return false;
         }
 
         // get data
-	auto xcbReply2 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, xcbReply1.reply()->type, 0, xcbReply1.reply()->bytes_after);
+	auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, type, 0, ~0);
 
-	if(auto err = xcbReply2.error())
+	if(auto err = xcbReply.error())
 	{
 	    extendedError(err, "xcb_get_property");
-	    return false;
 	}
+        else
+        if(auto reply = xcbReply.reply())
+        {
+	    bool ret = false;
+            auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+            int length = xcb_get_property_value_length(reply.get());
 
-        if(! xcbReply2.reply())
-            return false;
-
-	bool ret = false;
-        auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(xcbReply2.reply().get()));
-        int length = xcb_get_property_value_length(xcbReply2.reply().get());
-
-	if(ptrbuf && 0 < length)
-	{
-	    // check equal
-	    if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
-		ret = false;
-            else
+	    if(ptrbuf && 0 < length)
 	    {
-		_selbuf.assign(ptrbuf, ptrbuf + length);
-		ret = true;
+	        // check equal
+	        if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
+		    ret = false;
+                else
+	        {
+		    _selbuf.assign(ptrbuf, ptrbuf + length);
+		    ret = true;
 
-                if(Application::isDebugLevel(DebugLevel::Console) ||
-                    Application::isDebugLevel(DebugLevel::SyslogInfo))
-		{
-		    std::string log(_selbuf.begin(), _selbuf.end());
-                    Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
-		}
+                    if(Application::isDebugLevel(DebugLevel::Console) ||
+                        Application::isDebugLevel(DebugLevel::SyslogInfo))
+		    {
+		        std::string log(_selbuf.begin(), _selbuf.end());
+                        Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
+		    }
+	        }
 	    }
-	}
 
-	if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
-	    extendedError(errorReq, "xcb_delete_property");
+	    if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
+	        extendedError(errorReq, "xcb_delete_property");
 
-	xcb_flush(_conn);
-	return ret;
+	    return ret;
+        }
+
+        return false;
     }
 
     XCB::GenericEvent XCB::RootDisplayExt::poolEvent(void)

@@ -37,7 +37,9 @@
 #include "xcb/xproto.h"
 
 #ifdef LTSM_WITH_XKBCOMMON
+#define explicit dont_use_cxx_explicit
 #include "xcb/xkb.h"
+#undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
 #endif
 
@@ -192,6 +194,15 @@ namespace LTSM
     	    {
     	    }
 	};
+
+        struct PropertyReply : XCB::GenericReply<xcb_get_property_reply_t>
+        {
+            uint32_t    length(void) { return xcb_get_property_value_length(get()); }
+            void*       value(void) { return xcb_get_property_value(get()); }
+
+            PropertyReply(xcb_get_property_reply_t* ptr) : XCB::GenericReply<xcb_get_property_reply_t>(ptr) {}
+            PropertyReply(const XCB::GenericReply<xcb_get_property_reply_t> & ptr) : XCB::GenericReply<xcb_get_property_reply_t>(ptr) {}
+        };
 
 	template<typename ReplyType>
 	struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError>
@@ -423,6 +434,14 @@ namespace LTSM
 	    size_t                  getMaxRequest(void) const;
 
             static bool             testConnection(const char* addr);
+
+            PropertyReply           getPropertyAnyType(xcb_window_t win, xcb_atom_t prop);
+            xcb_atom_t              getPropertyType(xcb_window_t win, xcb_atom_t prop);
+            xcb_atom_t              getPropertyAtom(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
+            xcb_window_t            getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
+            std::string             getPropertyString(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
+            std::list<std::string>  getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
+            std::vector<uint8_t>    getPropertyBinary(xcb_window_t win, xcb_atom_t prop, xcb_atom_t type);
         };
 
         class RootDisplay : public Connector
@@ -465,7 +484,6 @@ namespace LTSM
             void                    resetInputs(void);
             void                    fillRegion(int r, int g, int b, const Region &);
             void                    fillBackground(int r, int g, int b);
-
 
             PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
 

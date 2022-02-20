@@ -473,8 +473,11 @@ namespace LTSM
                 }
 
                 if(nodamage)
+		{
                     damageRegion = _xcbDisplay->region();
-                else
+		    clientUpdateReq = true;
+                }
+		else
 		if(! damageRegion.empty())
                     // fix out of screen
                     damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
