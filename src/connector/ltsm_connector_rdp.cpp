@@ -78,6 +78,7 @@ namespace LTSM
         HANDLE			vcm;
 
         bool			activated;
+        bool                    clipboard;
         size_t			frameId;
 
 	const JsonObject*	config;
@@ -99,6 +100,7 @@ namespace LTSM
 	}
 
         context->activated = false;
+        context->clipboard = true;
         context->frameId = 0;
 
 	context->config = nullptr;
@@ -205,6 +207,7 @@ namespace LTSM
 	    context = static_cast<ClientContext*>(peer->context);
 	    context->config = & config;
 	    context->rdp = connector;
+            context->clipboard = config.getBoolean("rdp:clipboard", true);
 
             const std::string keymapFile = config.getString("rdp:keymap:file");
             if(keymapFile.size())

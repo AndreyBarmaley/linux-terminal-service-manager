@@ -144,10 +144,11 @@ namespace LTSM
 	    NetworkStream* 	streamIn;
 	    NetworkStream* 	streamOut;
 
-            std::atomic<bool>   loopMessage;
             int                 encodingDebug;
             int                 encodingThreads;
+            bool                clipboardEnable;
             std::atomic<int>    pressedMask;
+            std::atomic<bool>   loopMessage;
 	    std::atomic<bool>   fbUpdateProcessing;
 	    std::atomic<bool>	sendBellFlag;
 	    std::atomic<DesktopResizeMode>

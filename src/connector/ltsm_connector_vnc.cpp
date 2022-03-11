@@ -58,8 +58,8 @@ namespace LTSM
 
     /* Connector::VNC */
     Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
-	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
+        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), clipboardEnable(true),
+            pressedMask(0), loopMessage(false), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
     {
 	socket.reset(new InetStream());
 	streamIn = streamOut = socket.get();
@@ -240,6 +240,7 @@ namespace LTSM
         Application::info("using encoding threads: %d", encodingThreads);
 
         encodingDebug = _config->getInteger("vnc:encoding:debug", 0);
+        clipboardEnable = _config->getBoolean("vnc:clipboard", true);
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
 
@@ -499,7 +500,7 @@ namespace LTSM
                         }
                     }
                     else
-                    if(_xcbDisplay->isSelectionNotify(ev))
+                    if(_xcbDisplay->isSelectionNotify(ev) && clipboardEnable)
             	    {
                         auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
 			if(_xcbDisplay->selectionNotifyAction(notify))
@@ -795,7 +796,7 @@ namespace LTSM
 
         Application::debug("RFB 6.4.6, cut text event, length: %d", length);
 
-        if(isAllowXcbMessages())
+        if(isAllowXcbMessages() && clipboardEnable)
         {
 	    size_t maxreq = _xcbDisplay->getMaxRequest();
 	    size_t chunk = std::min(maxreq, length);

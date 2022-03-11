@@ -15,6 +15,7 @@
     "vnc:gnutls:certfile": "server.crt",
     "vnc:gnutls:keyfile": "server.key",
     "vnc:keymap:file": "",
+    "vnc:clipboard": true,
 
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
@@ -25,6 +26,7 @@
     "rdp:server:certfile": "server.crt",
     "rdp:server:keyfile": "server.key",
     "rdp:keymap:file": "",
+    "rdp:clipboard": true,
 
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",
