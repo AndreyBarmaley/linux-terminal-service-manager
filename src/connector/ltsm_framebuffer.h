@@ -222,6 +222,7 @@ namespace LTSM
 	const XCB::Region & region(void) const { return fbreg; }
 
         Color           color(const XCB::Point &) const;
+        uint32_t	bitsPerPixel(void) const;
         uint32_t	bytePerPixel(void) const;
         uint8_t*        data(void);
         size_t		size(void) const;

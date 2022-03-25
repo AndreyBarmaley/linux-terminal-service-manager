@@ -188,8 +188,8 @@ namespace LTSM
         {
             for(int yy = 0; yy < reg.height; ++yy)
             {
-		size_t line = reg.width * serverFormat.bytePerPixel();
-                sendRaw(fb.pitchData(reg.y + yy) + reg.x * serverFormat.bytePerPixel(), line);
+		size_t line = reg.width * fb.bytePerPixel();
+                sendRaw(fb.pitchData(reg.y + yy) + reg.x * fb.bytePerPixel(), line);
                 res += line;
             }
         }
@@ -306,7 +306,7 @@ namespace LTSM
         };
 
         if(map.empty())
-            throw CodecFailed("send RRE encoding: pixel map is empty");
+            throw std::runtime_error("VNC::sendEncodingRRESubRegion: pixel map is empty");
 
         int res = 0;
         if(map.size() > 1)
@@ -480,7 +480,7 @@ namespace LTSM
         };
 
         if(map.empty())
-            throw CodecFailed("send Hextile encoding: pixel map is empty");
+            throw std::runtime_error("VNC::sendEncodingHextileSubRegion: pixel map is empty");
 
         int res = 0;
         if(map.size() == 1)
@@ -635,7 +635,7 @@ namespace LTSM
 	    // hextile flags
     	    sendInt8(RFB::HEXTILE_ZLIBRAW);
 
-            zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+            zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
     	    sendEncodingRawSubRegionRaw(reg, fb);
             auto zip = zlibDeflateStop();
 
@@ -682,7 +682,7 @@ namespace LTSM
         sendIntBE32(RFB::ENCODING_ZLIB);
         int res = 12;
 
-	zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+	zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 
 	sendEncodingRawSubRegionRaw(reg, fb);
 	auto zip = zlibDeflateStop();
@@ -778,7 +778,7 @@ namespace LTSM
                                    (zrle ? "ZRLE" : "TRLE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 	    if(zrle)
 	    {
-		zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+		zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 
     		// subencoding type: solid tile
         	sendInt8(1);
@@ -823,7 +823,7 @@ namespace LTSM
                                    (zrle ? "ZRLE" : "TRLE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), field, rowsz, field);
 	    if(zrle)
 	    {
-		zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+		zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 		sendEncodingTRLESubPacked(reg, fb, jobId, field, rowsz, map, true);
 
 		auto zip = zlibDeflateStop();
@@ -863,7 +863,7 @@ namespace LTSM
                                    (zrle ? "ZRLE" : "TRLE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
 		if(zrle)
 		{
-		    zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+		    zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 		    sendEncodingTRLESubPlain(reg, fb, rleList);
 		}
 		else
@@ -877,7 +877,7 @@ namespace LTSM
                                    (zrle ? "ZRLE" : "TRLE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
 		if(zrle)
 		{
-		    zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+		    zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 		    sendEncodingTRLESubPalette(reg, fb, map, rleList);
 		}
 		else
@@ -890,7 +890,7 @@ namespace LTSM
                                    (zrle ? "ZRLE" : "TRLE"), jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 		if(zrle)
 		{
-		    zlibDeflateStart(reg.width * reg.height * clientFormat.bytePerPixel());
+		    zlibDeflateStart(reg.width * reg.height * fb.bytePerPixel());
 		    sendEncodingTRLESubRaw(reg, fb);
 		}
 		else

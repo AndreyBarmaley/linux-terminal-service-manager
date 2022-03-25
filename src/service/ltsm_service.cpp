@@ -1885,7 +1885,7 @@ int main(int argc, const char** argv)
         LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
         LTSM::Application::info("%s", "terminate...");
     }
-    catch(const std::runtime_error & err)
+    catch(const std::exception & err)
     {
         LTSM::Application::error("local exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");

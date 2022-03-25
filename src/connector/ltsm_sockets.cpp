@@ -198,6 +198,11 @@ namespace LTSM
     }
 
     /* BaseSocket */
+    BaseSocket::BaseSocket(int fd) : sock(fd)
+    {
+        buf.reserve(2048);
+    }
+
     BaseSocket::~BaseSocket()
     {
         if(0 < sock)
@@ -233,19 +238,29 @@ namespace LTSM
 	    else
         	Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
 
-    	    throw SocketFailed("BaseSocket::recvRaw");
+    	    throw std::runtime_error("BaseSocket::recvRaw");
         }
     }
 
-    void BaseSocket::sendRaw(const void* buf, size_t len)
+    void BaseSocket::sendRaw(const void* ptr, size_t len)
+    {
+        if(ptr && len)
+        {
+            auto it = static_cast<const uint8_t*>(ptr);
+            buf.insert(buf.end(), it, it + len);
+        }
+    }
+
+    void BaseSocket::sendFlush(void)
     {
 	while(true)
 	{
-	    auto real = write(sock, buf, len);
-	    if(len == real)
-		break;
+	    auto real = write(sock, buf.data(), buf.size());
+
+	    if(buf.size() == real)
+                break;
 	    else
-	    if(0 > real)
+            if(0 > real)
 	    {
 		if(EAGAIN == errno || EINTR == errno)
 	    	    continue;
@@ -253,10 +268,11 @@ namespace LTSM
         	Application::error("%s: write error: %s", __FUNCTION__, strerror(errno));
 	    }
 	    else
-        	Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, len);
+        	Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, buf.size());
 
-    	    throw SocketFailed("BaseSocket::sendRaw");
+    	    throw std::runtime_error("BaseSocket::sendFlush");
         }
+        buf.clear();
     }
 
     uint8_t BaseSocket::peekInt8(void) const
@@ -265,7 +281,7 @@ namespace LTSM
         if(1 != recv(sock, & res, 1, MSG_PEEK))
         {
             Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
-            throw SocketFailed("BaseSocket::peekInt8");
+            throw std::runtime_error("BaseSocket::peekInt8");
         }
 
         return res;
@@ -321,14 +337,14 @@ namespace LTSM
         if(std::ferror(fdin))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw SocketFailed("InetStream::recvRaw");
+            throw std::runtime_error("InetStream::recvRaw");
         }
 
 	auto real = std::fread(ptr, 1, len, fdin);
 	if(len != real)
     	{
 	    Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
-            throw SocketFailed("InetStream::recvRaw");
+            throw std::runtime_error("InetStream::recvRaw");
         }
     }
 
@@ -337,20 +353,20 @@ namespace LTSM
         if(std::ferror(fdout))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw SocketFailed("InetStream::sendRaw");
+            throw std::runtime_error("InetStream::sendRaw");
         }
 
         if(std::feof(fdout))
         {
             Application::warning("%s: ended", __FUNCTION__);
-            throw SocketFailed("InetStream::sendRaw");
+            throw std::runtime_error("InetStream::sendRaw");
         }
 
         auto real = std::fwrite(buf, 1, len, fdout);
         if(len != real)
         {
             Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, len);
-            throw SocketFailed("InetStream::sendRaw");
+            throw std::runtime_error("InetStream::sendRaw");
         }
     }
 
@@ -370,14 +386,14 @@ namespace LTSM
         if(std::ferror(fdin))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw SocketFailed("InetStream::peekInt8");
+            throw std::runtime_error("InetStream::peekInt8");
         }
 
         int res = std::fgetc(fdin);
         if(std::feof(fdin))
         {
             Application::warning("%s: ended", __FUNCTION__);
-            throw SocketFailed("InetStream::peekInt8");
+            throw std::runtime_error("InetStream::peekInt8");
         }
 
         std::ungetc(res, fdin);
@@ -446,11 +462,15 @@ namespace LTSM
             	    if(! this->enterEventLoopAsync())
         		this->loopTransmission = false;
         	}
-        	catch(const SocketFailed & ex)
+        	catch(const std::exception & err)
         	{
-		    Application::error("socket exception: %s", ex.err.c_str());
+		    Application::error("exception: %s", err.what());
         	    this->loopTransmission = false;
 		}
+                catch(...)
+                {
+        	    this->loopTransmission = false;
+                }
 
                 std::this_thread::sleep_for(1ms);
             }
@@ -918,7 +938,7 @@ namespace LTSM
             {
                 Application::error("gnutls_record_send ret: %ld, error: %s", ret, gnutls_strerror(ret));
                 if(gnutls_error_is_fatal(ret))
-            	    throw SocketFailed("TLS::Stream::sendRaw");
+            	    throw std::runtime_error("TLS::Stream::sendRaw");
             }
         }
 
@@ -936,7 +956,7 @@ namespace LTSM
             {
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
                 if(gnutls_error_is_fatal(ret))
-            	    throw SocketFailed("TLS::Stream::recvRaw");
+            	    throw std::runtime_error("TLS::Stream::recvRaw");
             }
         }
 
@@ -950,7 +970,7 @@ namespace LTSM
             if(ret != 1)
             {
                 Application::error("gnutls_record_recv_early_data error: %s", gnutls_strerror(ret));
-            	throw SocketFailed("TLS::Stream::peekInt8");
+            	throw std::runtime_error("TLS::Stream::peekInt8");
             }
 #endif
             return res;

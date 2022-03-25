@@ -141,15 +141,21 @@ namespace LTSM
         if(! connector)
             connector.reset(new Connector::VNC(conn.get(), _config));
 
-	int res = EXIT_FAILURE;
+	int res = 0;
 
         try
         {
 	    res = connector->communication();
         }
-        catch(const LTSM::SocketFailed & ex)
+        catch(const std::exception & err)
         {
-	    Application::error("socket exception: %s", ex.err.c_str());
+	    Application::error("exception: %s", err.what());
+	    res = EXIT_FAILURE;
+        }
+        catch(...)
+        {
+	    Application::error("exception: %s", "unknown");
+	    res = EXIT_FAILURE;
         }
 
         return res;
@@ -207,9 +213,9 @@ namespace LTSM
 	{
     	    _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
 	}
-	catch(const std::runtime_error & err)
+	catch(const std::exception & err)
 	{
-            Application::error("%s: error: %s", __FUNCTION__, err.what());
+            Application::error("exception: %s", err.what());
 	    return false;
 	}
 
@@ -393,7 +399,7 @@ int main(int argc, const char** argv)
         LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
         LTSM::Application::info("program: %s", "terminate...");
     }
-    catch(const std::runtime_error & err)
+    catch(const std::exception & err)
     {
         LTSM::Application::error("local exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");

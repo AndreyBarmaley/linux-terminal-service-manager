@@ -58,8 +58,8 @@ namespace LTSM
 
     /* Connector::VNC */
     Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
-	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
+        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), clipboardEnable(true),
+            pressedMask(0), loopMessage(true), loginWidgetStarted(false), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
     {
 	socket.reset(new InetStream());
 	streamIn = streamOut = socket.get();
@@ -71,6 +71,34 @@ namespace LTSM
         if(0 < _display) busConnectorTerminated(_display);
         unregisterProxy();
         clientDisconnectedEvent();
+    }
+
+    void Connector::VNC::sendFlush(void)
+    {
+        if(loopMessage)
+            streamOut->sendFlush();
+    }
+
+    void Connector::VNC::sendRaw(const void* ptr, size_t len)
+    {
+        if(loopMessage)
+            streamOut->sendRaw(ptr, len);
+    }
+
+    void Connector::VNC::recvRaw(void* ptr, size_t len) const
+    {
+        if(loopMessage)
+            streamIn->recvRaw(ptr, len);
+    }
+
+    bool Connector::VNC::hasInput(void) const
+    {
+        return loopMessage ? streamIn->hasInput() : false;
+    }
+
+    uint8_t Connector::VNC::peekInt8(void) const
+    {
+        return loopMessage ? streamIn->peekInt8() : 0;
     }
 
     bool Connector::VNC::clientAuthVnc(void)
@@ -103,7 +131,7 @@ namespace LTSM
         }
     
         const std::string err("password mismatch");
-        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
 
         Application::error("error: %s", err.c_str());
         return false;
@@ -240,6 +268,7 @@ namespace LTSM
         Application::info("using encoding threads: %d", encodingThreads);
 
         encodingDebug = _config->getInteger("vnc:encoding:debug", 0);
+        clipboardEnable = _config->getBoolean("vnc:clipboard", true);
         prefEncodings = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
 
@@ -340,7 +369,7 @@ namespace LTSM
 	else
         {
             const std::string err("no matching security types");
-            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
 
             Application::error("error: %s", err.c_str());
             return EXIT_FAILURE;
@@ -376,12 +405,11 @@ namespace LTSM
     	sendInt8(0);
     	// send name desktop
     	const std::string desktopName("X11 Remote Desktop");
-    	sendIntBE32(desktopName.size());
-    	sendString(desktopName).sendFlush();
+    	sendIntBE32(desktopName.size()).sendString(desktopName).sendFlush();
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-            [=](){ _conn->enterEventLoopAsync(); return ! this->loopMessage; }))
+            [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
         {
             Application::info("connector starting: %s", "something went wrong...");
             return EXIT_FAILURE;
@@ -448,9 +476,7 @@ namespace LTSM
 			break;
 
                     default:
-                        Application::error("RFB unknown message: 0x%02x", msgType);
-                        throw std::runtime_error("RFB unknown message");
-                        break;
+                        throw std::runtime_error(Tools::StringFormat("%1: RFB unknown message: %2").arg(__FUNCTION__).arg(Tools::hex(msgType, 2)));
                 }
             }
 
@@ -499,7 +525,7 @@ namespace LTSM
                         }
                     }
                     else
-                    if(_xcbDisplay->isSelectionNotify(ev))
+                    if(_xcbDisplay->isSelectionNotify(ev) && clipboardEnable)
             	    {
                         auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
 			if(_xcbDisplay->selectionNotifyAction(notify))
@@ -508,7 +534,10 @@ namespace LTSM
                 }
 
                 if(nodamage)
+		{
                     damageRegion = _xcbDisplay->region();
+		    clientUpdateReq = true;
+		}
 		else
                 if(! damageRegion.empty())
                     // fix out of screen
@@ -542,7 +571,29 @@ namespace LTSM
 		        {
 			    fbUpdateProcessing = true;
 			    // background job
-                            std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
+                            std::thread([=]()
+                            {
+                                bool error = false;
+
+                                try
+                                {
+                                    this->serverSendFrameBufferUpdate(res);
+                                }
+                                catch(const std::exception & err)
+                                {
+                                    error = true;
+                                    Application::error("exception: %s", err.what());
+                                }
+                                catch(...)
+                                {
+                                    error = true;
+                                }
+
+                                if(error)
+                                {
+                                    this->loopMessage = false;
+                                }
+                            }).detach();
 		        }
                         damageRegion.reset();
 		        clientUpdateReq = false;
@@ -597,19 +648,19 @@ namespace LTSM
         Application::notice("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                           bitsPerPixel, depth, bigEndian, trueColor, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
-        switch(bitsPerPixel >> 3)
+        switch(bitsPerPixel)
         {
-            case 4:
-            case 2:
-            case 1:
+            case 32:
+            case 16:
+            case 8:
                 break;
 
             default:
-                throw std::runtime_error("unknown client pixel format");
+                throw std::runtime_error(Tools::StringFormat("%1: unknown client pixel format").arg(__FUNCTION__));
         }
 
 	if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
-            throw std::runtime_error("unsupported pixel format");
+            throw std::runtime_error(Tools::StringFormat("%1: unsupported pixel format").arg(__FUNCTION__));
 
         clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
         if(colourMap.size()) colourMap.clear();
@@ -792,7 +843,7 @@ namespace LTSM
 
         Application::debug("RFB 6.4.6, cut text event, length: %d", length);
 
-        if(isAllowXcbMessages())
+        if(isAllowXcbMessages() && clipboardEnable)
         {
 	    size_t maxreq = _xcbDisplay->getMaxRequest();
 	    size_t chunk = std::min(maxreq, length);
@@ -911,10 +962,7 @@ namespace LTSM
 
             // fix align
             if(reply->size() != reg.width * reg.height * bytePerPixel)
-	    {
-        	Application::error("%s: %s failed", __FUNCTION__, "align region");
-        	throw CodecFailed("region not aligned");
-	    }
+        	throw std::runtime_error(Tools::StringFormat("%1: region not aligned").arg(__FUNCTION__));
 
             // RFB: 6.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
@@ -927,23 +975,8 @@ namespace LTSM
             renderPrimitivesToFB(frameBuffer);
 	    int encodingLength = 0;
 
-            try
-	    {
-		// send encodings
-        	encodingLength = prefEncodings.first(frameBuffer);
-	    }
-	    catch(const CodecFailed & ex)
-	    {
-		Application::error("codec exception: %s", ex.err.c_str());
-		loopMessage = false;
-		return false;
-	    }
-	    catch(const SocketFailed & ex)
-	    {
-		Application::error("socket exception: %s", ex.err.c_str());
-		loopMessage = false;
-		return false;
-	    }
+	    // send encodings
+            encodingLength = prefEncodings.first(frameBuffer);
 
             if(encodingDebug)
             {
@@ -964,10 +997,6 @@ namespace LTSM
 
     int Connector::VNC::sendPixel(uint32_t pixel)
     {
-        // break connection
-        if(! loopMessage)
-            return 0;
-
         if(clientFormat.trueColor())
         {
             switch(clientFormat.bytePerPixel())
@@ -997,16 +1026,12 @@ namespace LTSM
         else if(colourMap.size())
             Application::error("%s", "not usable");
 
-        throw std::runtime_error("send pixel: unknown format");
+        throw std::runtime_error(Tools::StringFormat("%1: unknown format").arg(__FUNCTION__));
         return 0;
     }
 
     int Connector::VNC::sendCPixel(uint32_t pixel)
     {
-        // break connection
-        if(! loopMessage)
-            return 0;
-
         if(clientFormat.trueColor() && clientFormat.bitsPerPixel == 32)
         {
             auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);
@@ -1067,7 +1092,7 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: helper started, display: %d", display);
-            loopMessage = true;
+            loginWidgetStarted = true;
         }
     }
 

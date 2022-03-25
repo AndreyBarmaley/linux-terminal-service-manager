@@ -93,22 +93,48 @@ namespace LTSM
         {
             void* offset = pitchData(pos.y) + (pos.x * bytePerPixel());
             length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
+            auto bpp = bitsPerPixel();
 
-            switch(bytePerPixel())
+            switch(bpp)
             {
-                case 4:
+                case 32:
                     if(auto ptr = static_cast<uint32_t*>(offset))
                         while(length--) *ptr++ = pixel;
                     break;
 
-                case 2:
+               case 24:
+                    if(auto ptr = static_cast<uint8_t*>(offset))
+                    {
+                        while(length--)
+                        {
+                            if(big_endian)
+                            {
+                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 16));
+                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 8));
+                                *ptr++ = static_cast<uint8_t>(0xFF & pixel);
+                            }
+                            else
+                            {
+                                *ptr++ = static_cast<uint8_t>(0xFF & pixel);
+                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 8));
+                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 16));
+                            }
+                        }
+                    }
+                    break;
+
+                case 16:
                     if(auto ptr = static_cast<uint16_t*>(offset))
                         while(length--) *ptr++ = static_cast<uint16_t>(pixel);
                     break;
 
-                default:
+                case 8:
                     if(auto ptr = static_cast<uint8_t*>(offset))
                         while(length--) *ptr++ = static_cast<uint8_t>(pixel);
+                    break;
+
+                default:
+                    Application::error("unknown bpp: %d", bpp);
                     break;
             }
         }
@@ -159,14 +185,43 @@ namespace LTSM
         if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
         {
             void* ptr = pitchData(pos.y) + (pos.x * bytePerPixel());
+            auto bpp = bitsPerPixel();
 
-            if(bytePerPixel() == 4)
-                return *static_cast<uint32_t*>(ptr);
+            switch(bpp)
+            {
+                case 32:
+                    return *static_cast<uint32_t*>(ptr);
 
-            if(bytePerPixel() == 2)
-                return *static_cast<uint16_t*>(ptr);
+                case 24:
+                {
+                    auto buf = static_cast<uint8_t*>(ptr);
+                    uint32_t res = 0;
 
-            return *static_cast<uint8_t*>(ptr);
+                    if(big_endian)
+                    {
+                        res |= buf[0]; res <<= 8;
+                        res |= buf[1]; res <<= 8;
+                        res |= buf[2];
+                    }
+                    else
+                    {
+                        res |= buf[2]; res <<= 8;
+                        res |= buf[1]; res <<= 8;
+                        res |= buf[0];
+                    }
+                    return res;
+                }
+
+                case 16:
+                    return *static_cast<uint16_t*>(ptr);
+
+                case 8:
+                    return *static_cast<uint8_t*>(ptr);
+
+                default:
+                    Application::error("unknown bpp: %d", bpp);
+                    break;
+            }
         }
 
         return 0;
@@ -202,8 +257,8 @@ namespace LTSM
 	{
     	    for(int row = 0; row < dst.height; ++row)
     	    {
-        	auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.get()->format.bytePerPixel();
-        	size_t length = dst.width * fb.get()->format.bytePerPixel();
+        	auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
+        	size_t length = dst.width * fb.bytePerPixel();
         	std::copy(ptr, ptr + length, pitchData(row));
     	    }
 	}
@@ -303,6 +358,11 @@ namespace LTSM
     Color FrameBuffer::color(const XCB::Point & pos) const
     {
         return get()->format.color(pixel(pos));
+    }
+
+    uint32_t FrameBuffer::bitsPerPixel(void) const
+    {
+        return get() ? get()->format.bitsPerPixel : 0;
     }
 
     uint32_t FrameBuffer::bytePerPixel(void) const

@@ -95,21 +95,15 @@ namespace LTSM
         std::string	        recvString(size_t) const;
     };
 
-    ///@brief socket exception
-    struct SocketFailed
-    {
-	std::string             err;
-	SocketFailed(const std::string & val) : err(val) {}
-    };
-
     /// @brief: base socket
     class BaseSocket : public NetworkStream
     {
     protected:
         int                     sock;
+        std::vector<uint8_t>    buf;
 
     public:
-        BaseSocket(int fd = 0) : sock(fd) {}
+        BaseSocket(int fd = 0);
         ~BaseSocket();
 
         void                    setupTLS(gnutls_session_t) const override;
@@ -121,15 +115,8 @@ namespace LTSM
 
         void			sendRaw(const void*, size_t) override;
         void	                recvRaw(void*, size_t) const override;
-    };
 
-    /// @brief: tcp stream
-    class TcpStream : public BaseSocket
-    {
-    protected:
-
-    public:
-        TcpStream(int port){}
+        void                    sendFlush(void) override;
     };
 
     /// @brief: inetd stream

@@ -78,6 +78,7 @@ namespace LTSM
         HANDLE			vcm;
 
         bool			activated;
+        bool                    clipboard;
         size_t			frameId;
 
 	const JsonObject*	config;
@@ -99,6 +100,7 @@ namespace LTSM
 	}
 
         context->activated = false;
+        context->clipboard = true;
         context->frameId = 0;
 
 	context->config = nullptr;
@@ -205,6 +207,7 @@ namespace LTSM
 	    context = static_cast<ClientContext*>(peer->context);
 	    context->config = & config;
 	    context->rdp = connector;
+            context->clipboard = config.getBoolean("rdp:clipboard", true);
 
             const std::string keymapFile = config.getString("rdp:keymap:file");
             if(keymapFile.size())
@@ -497,11 +500,16 @@ namespace LTSM
                     damageRegion.reset();
                 }
 	    }
-	    catch(const LTSM::Connector::CodecFailed & ex)
+	    catch(const std::exception & err)
 	    {
-		Application::error("codec exception: %s", ex.err.c_str());
+		Application::error("exception: %s", err.what());
 		return false;
 	    }
+	    catch(...)
+	    {
+		Application::error("exception: %s", "unknown");
+                return false;
+            }
 
 	    clientUpdatePartFlag = false;
 	}
@@ -680,7 +688,7 @@ namespace LTSM
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
 	    Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
-            throw CodecFailed("RDP::clientUpdateBitmapPlanar");
+            throw std::runtime_error("RDP::clientUpdateBitmapPlanar");
 	}
 
         // planar activate
@@ -695,14 +703,14 @@ namespace LTSM
 	    if(! context->planar)
 	    {
 		Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_new");
-                throw CodecFailed("RDP::clientUpdateBitmapPlanar");
+                throw std::runtime_error("RDP::clientUpdateBitmapPlanar");
 	    }
 	}
 
         if(! freerdp_bitmap_planar_context_reset(context->planar, tileSize, tileSize))
         {
 	    Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_reset");
-            throw CodecFailed("RDP::clientUpdateBitmapPlanar");
+            throw std::runtime_error("RDP::clientUpdateBitmapPlanar");
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
@@ -743,7 +751,7 @@ namespace LTSM
 	    if(peer.settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz)
             {
         	Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw CodecFailed("RDP::clientUpdateBitmapPlanar");
+                throw std::runtime_error("RDP::clientUpdateBitmapPlanar");
             }
 
 	    vec.emplace_back(st);
@@ -769,7 +777,7 @@ namespace LTSM
     	    if(! peer.update->BitmapUpdate(peer.context, &bitmapUpdate))
     	    {
             	Application::error("%s: %s failed, length: %d", __FUNCTION__, "BitmapUpdate", totalSize);
-                throw CodecFailed("RDP::clientUpdateBitmapPlanar");
+                throw std::runtime_error("RDP::clientUpdateBitmapPlanar");
     	    }
 
 	    it1 = it2;
@@ -793,7 +801,7 @@ namespace LTSM
     	if(reply->size() != reg.height * reg.width * bytePerPixel)
 	{
 	    Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
-    	    throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+    	    throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
     	}
 
 	size_t pixelFormat = 0;
@@ -808,7 +816,7 @@ namespace LTSM
 #endif
 	    default:
 		Application::error("%s: %s failed", __FUNCTION__, "pixel format");
-        	throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+        	throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
 		break;
 	}
 
@@ -820,14 +828,14 @@ namespace LTSM
 	    if(! context->interleaved)
 	    {
 		Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_new");
-        	throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+        	throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
 	    }
 	}
 
         if(! bitmap_interleaved_context_reset(context->interleaved))
         {
 	    Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_reset");
-            throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+            throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
@@ -864,7 +872,7 @@ namespace LTSM
 		reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, peer.settings->ColorDepth))
 	    {
                 Application::error("%s: %s failed", __FUNCTION__, "interleaved_compress");
-                throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+                throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
 	    }
 
 	    st.bitmapDataStream = data.get();
@@ -873,7 +881,7 @@ namespace LTSM
 	    if(peer.settings->MultifragMaxRequestSize < st.bitmapLength + 22)
             {
         	Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+                throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
             }
 
     	    BITMAP_UPDATE bitmapUpdate = {0};
@@ -884,7 +892,7 @@ namespace LTSM
             if(! ret)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "BitmapUpdate");
-                throw CodecFailed("RDP::clientUpdateBitmapInterleaved");
+                throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
             }
         }
 

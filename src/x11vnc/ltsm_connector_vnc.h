@@ -144,10 +144,10 @@ namespace LTSM
 	    NetworkStream* 	streamIn;
 	    NetworkStream* 	streamOut;
 
-            std::atomic<bool>   loopMessage;
             int                 encodingDebug;
             int                 encodingThreads;
             std::atomic<int>    pressedMask;
+            std::atomic<bool>   loopMessage;
 	    std::atomic<bool>   fbUpdateProcessing;
 	    std::atomic<bool>	sendBellFlag;
 	    std::atomic<DesktopResizeMode>
@@ -169,11 +169,11 @@ namespace LTSM
                                 screensInfo;
 
 	    // network stream interface
-	    void		  sendFlush(void) override { return streamOut->sendFlush(); }
-	    void		  sendRaw(const void* ptr, size_t len) override { streamOut->sendRaw(ptr, len); }
-	    void                  recvRaw(void* ptr, size_t len) const override { streamIn->recvRaw(ptr, len); }
-	    bool		  hasInput(void) const override { return streamIn->hasInput(); }
-	    uint8_t		  peekInt8(void) const override { return streamIn->peekInt8(); }
+	    void		  sendFlush(void) override;
+	    void		  sendRaw(const void* ptr, size_t len) override;
+	    void                  recvRaw(void* ptr, size_t len) const override;
+	    bool		  hasInput(void) const override;
+	    uint8_t		  peekInt8(void) const override;
 
 	    // zlib wrapper
 	    void		 zlibDeflateStart(size_t);

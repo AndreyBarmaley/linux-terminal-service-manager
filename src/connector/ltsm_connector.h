@@ -67,13 +67,6 @@ namespace LTSM
 
     namespace Connector
     {
-        ///@brief codec exception
-        struct CodecFailed
-        {
-            std::string err;
-            CodecFailed(const std::string & str) : err(str) {}
-        };
-
         /* Connector::SignalProxy */
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {

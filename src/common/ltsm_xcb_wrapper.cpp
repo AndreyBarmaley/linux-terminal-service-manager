@@ -984,6 +984,120 @@ namespace LTSM
         return -1;
     }
 
+    XCB::PropertyReply XCB::Connector::getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset, uint32_t length)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+
+        return xcbReply.reply();
+    }
+
+    xcb_atom_t XCB::Connector::getPropertyType(xcb_window_t win, xcb_atom_t prop)
+    {
+        auto reply = getPropertyAnyType(win, prop, 0, 0);
+        return reply ? reply->type : XCB_ATOM_NONE;
+    }
+
+    xcb_atom_t XCB::Connector::getPropertyAtom(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_ATOM, offset, 1);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
+                return *res;
+        }
+
+        return XCB_ATOM_NONE;
+    }
+
+    xcb_window_t XCB::Connector::getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_WINDOW, offset, 1);
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
+                return *res;
+        }
+
+        return XCB_WINDOW_NONE;
+    }
+
+    std::string XCB::Connector::getPropertyString(xcb_window_t win, xcb_atom_t prop, uint32_t offset)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, offset, ~0);
+        std::string res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
+            if(ptr) res.assign(ptr);
+        }
+
+        return res;
+    }
+
+    std::list<std::string> XCB::Connector::getPropertyStringList(xcb_window_t win, xcb_atom_t prop)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, 0, ~0);
+        std::list<std::string> res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            int len = xcb_get_property_value_length(reply.get());
+            auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
+
+            res = Tools::split(std::string(ptr, ptr + len - (ptr[len - 1] ? 0 : 1 /* remove last nul */)), 0);
+        }
+
+        return res;
+    }
+
+    std::vector<uint8_t> XCB::Connector::getPropertyBinary(xcb_window_t win, xcb_atom_t prop, xcb_atom_t type)
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, type, 0, ~0);
+        std::vector<uint8_t> res;
+
+        if(xcbReply.error())
+        {
+            extendedError(xcbReply.error(), "xcb_get_property");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            int len = xcb_get_property_value_length(reply.get());
+            auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+            res.assign(ptr, ptr + len);
+        }
+
+        return res;
+    }
+
     /* XCB::RootDisplay */
     XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr),
         _format(nullptr), _visual(nullptr), _keysymsPerKeycode(0), _keycodesCount(0)
@@ -1591,7 +1705,7 @@ namespace LTSM
             
         if(auto reply = xcbReply.reply())
         {   
-            Application::info("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
+            Application::debug("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
@@ -1608,7 +1722,7 @@ namespace LTSM
             return false;
         }
 
-        Application::info("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
+        Application::debug("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
 	return true;
     }
 
@@ -1622,7 +1736,7 @@ namespace LTSM
             return false;
         }
 
-        Application::info("%s: id: %08x", __FUNCTION__, mode);
+        Application::debug("%s: id: %08x", __FUNCTION__, mode);
 	return true;
     }
 
@@ -1636,7 +1750,7 @@ namespace LTSM
             return false;
         }
 
-        Application::info("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
+        Application::debug("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
 	return true;
     }
 
@@ -1700,7 +1814,7 @@ namespace LTSM
     	    {
             	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
 		//for(auto & sz : screenSizes)
-            	//    Application::info("%s: available modes: [%d, %d]", __FUNCTION__, sz.width, sz.height);
+            	//    Application::debug("%s: available modes: [%d, %d]", __FUNCTION__, sz.width, sz.height);
 		deleteRandrOutputMode(output, mode);
 		destroyRandrMode(mode);
 		return false;
@@ -1732,7 +1846,7 @@ namespace LTSM
 	    return false;
 	}
 
-        Application::info("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+        Application::debug("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
 	return true;
     }
 
@@ -1767,7 +1881,7 @@ namespace LTSM
                     return GenericEvent();
                 }
 
-        	Application::info("xcb crc change notify: [%d,%d]", cc.width, cc.height);
+        	Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
 
                 // init shm
                 const int bpp = bitsPerPixel() >> 3;
@@ -1990,6 +2104,7 @@ namespace LTSM
 	    _atomTextPlain = getAtom("text/plain;charset=utf-8");
 	    _atomUTF8 = getAtom("UTF8_STRING");
 
+            // set _wm_name
 	    const std::string name("LTSM_SEL");
 	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, _selwin,
 				getAtom("_NET_WM_NAME"), _atomUTF8, 8, name.size(), name.data());
@@ -1998,7 +2113,11 @@ namespace LTSM
 
             // run periodic timer (555ms)
             _timerClipCheck = Tools::BaseTimer::create<std::chrono::milliseconds>(555, true,
-                        [this](){ this->getSelectionEvent(this->_atomPrimary); });
+                        [this]()
+                        {
+                            this->getSelectionEvent(this->_atomPrimary);
+                            this->getSelectionEvent(this->_atomClipboard);
+                        });
         }
         else
 	{
@@ -2024,7 +2143,7 @@ namespace LTSM
 
             if(Application::isDebugLevel(DebugLevel::Console) ||
                 Application::isDebugLevel(DebugLevel::SyslogInfo))
-                Application::info("%s: %s", __FUNCTION__, "event");
+                Application::debug("%s: %s", __FUNCTION__, "event");
  	    return true;
         }
 
@@ -2091,7 +2210,7 @@ namespace LTSM
 	{
 	    auto prop = getAtomName(ev.property);
 	    std::string log(_selbuf.begin(), _selbuf.end());
-            Application::info("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), log.c_str(), ev.requestor, prop.c_str());
+            Application::debug("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), log.c_str(), ev.requestor, prop.c_str());
 	}
 
         return true;
@@ -2128,32 +2247,28 @@ namespace LTSM
 	return false;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> & buf, const xcb_atom_t & atomSel)
+    bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf, const xcb_atom_t & atomSel)
     {
-	if(_selbuf != buf)
+	_selbuf.assign(buf.begin(), buf.end());
+
+	if(_selbuf.empty())
+	    return false;
+
+	// take owner
+	auto owner = getOwnerSelection(atomSel);
+	if(owner != _selwin)
 	{
-    	    std::swap(_selbuf, buf);
-
-	    // take owner
-	    if(_selbuf.empty())
-		return false;
-
-	    auto owner = getOwnerSelection(atomSel);
-	    if(owner != _selwin)
-	    {
-    		xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
-		xcb_flush(_conn);
-	    }
-
-	    return true;
+    	    xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
+	    xcb_flush(_conn);
 	}
 
-	return false;
+	return true;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> & buf)
+    bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf)
     {
-	return setClipboardEvent(buf, _atomPrimary); // _atomClipboard);
+        // sync primary and clipboard
+	return setClipboardEvent(buf, _atomPrimary) && setClipboardEvent(buf, _atomClipboard);
     }
 
     bool XCB::RootDisplayExt::getSelectionEvent(const xcb_atom_t & atomSel)
@@ -2175,64 +2290,57 @@ namespace LTSM
 	    return false;
 
         // get type
-	auto xcbReply1 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
-
-	if(xcbReply1.error())
-	{
-	    extendedError(xcbReply1.error(), "xcb_get_property");
-	    return false;
-	}
-
-        if(! xcbReply1.reply())
+        auto type = getPropertyType(_selwin, _atomBuffer);
+	if(XCB_ATOM_NONE == type)
             return false;
 
-        if(xcbReply1.reply()->type != _atomUTF8 && xcbReply1.reply()->type != _atomText && xcbReply1.reply()->type != _atomTextPlain)
+        if(type != _atomUTF8 && type != _atomText && type != _atomTextPlain)
         {
-	    auto type = getAtomName(xcbReply1.reply()->type);
-            Application::error("xcb selection notify action, unknown type: %d, `%s'", xcbReply1.reply()->type, type.c_str());
+	    auto name = getAtomName(type);
+            Application::error("xcb selection notify action, unsupported type: %d, `%s'", type, name.c_str());
             return false;
         }
 
         // get data
-	auto xcbReply2 = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, xcbReply1.reply()->type, 0, xcbReply1.reply()->bytes_after);
+	auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, type, 0, ~0);
 
-	if(auto err = xcbReply2.error())
+	if(auto err = xcbReply.error())
 	{
 	    extendedError(err, "xcb_get_property");
-	    return false;
 	}
+        else
+        if(auto reply = xcbReply.reply())
+        {
+	    bool ret = false;
+            auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+            int length = xcb_get_property_value_length(reply.get());
 
-        if(! xcbReply2.reply())
-            return false;
-
-	bool ret = false;
-        auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(xcbReply2.reply().get()));
-        int length = xcb_get_property_value_length(xcbReply2.reply().get());
-
-	if(ptrbuf && 0 < length)
-	{
-	    // check equal
-	    if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
-		ret = false;
-            else
+	    if(ptrbuf && 0 < length)
 	    {
-		_selbuf.assign(ptrbuf, ptrbuf + length);
-		ret = true;
+	        // check equal
+	        if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
+		    ret = false;
+                else
+	        {
+		    _selbuf.assign(ptrbuf, ptrbuf + length);
+		    ret = true;
 
-                if(Application::isDebugLevel(DebugLevel::Console) ||
-                    Application::isDebugLevel(DebugLevel::SyslogInfo))
-		{
-		    std::string log(_selbuf.begin(), _selbuf.end());
-                    Application::info("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
-		}
+                    if(Application::isDebugLevel(DebugLevel::Console) ||
+                        Application::isDebugLevel(DebugLevel::SyslogInfo))
+		    {
+		        std::string log(_selbuf.begin(), _selbuf.end());
+                        Application::debug("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
+		    }
+	        }
 	    }
-	}
 
-	if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
-	    extendedError(errorReq, "xcb_delete_property");
+	    if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
+	        extendedError(errorReq, "xcb_delete_property");
 
-	xcb_flush(_conn);
-	return ret;
+	    return ret;
+        }
+
+        return false;
     }
 
     XCB::GenericEvent XCB::RootDisplayExt::poolEvent(void)

@@ -242,9 +242,13 @@ namespace LTSM
                     std::unique_ptr<DisplayProxy> connector(new Connector::VNC(sock, _config));
 	            res = connector->communication();
                 }
-                catch(const LTSM::SocketFailed & ex)
+                catch(const std::exception & err)
                 {
-	            Application::error("socket exception: %s", ex.err.c_str());
+	            Application::error("exception: %s", err.what());
+                }
+                catch(...)
+                {
+	            Application::error("exception: %s", "unknown");
                 }
 
                 close(sock);
@@ -267,9 +271,13 @@ namespace LTSM
             std::unique_ptr<DisplayProxy> connector(new Connector::VNC(-1, _config));
 	    res = connector->communication();
         }
-        catch(const LTSM::SocketFailed & ex)
+        catch(const std::exception & err)
         {
-	    Application::error("socket exception: %s", ex.err.c_str());
+	    Application::error("exception: %s", err.what());
+        }
+        catch(...)
+        {
+	    Application::error("exception: %s", "unknown");
         }
 
         return res;
@@ -311,9 +319,9 @@ namespace LTSM
 	{
     	    _xcbDisplay.reset(new XCB::RootDisplayExt(xcbDisplayAddr));
 	}
-	catch(const std::runtime_error & err)
+	catch(const std::exception & err)
 	{
-            Application::error("%s: error: %s", __FUNCTION__, err.what());
+            Application::error("exception: %s", err.what());
 	    return false;
 	}
 
@@ -343,7 +351,7 @@ int main(int argc, const char** argv)
         LTSM::Connector::Service app(argc, argv);
         res = app.start();
     }
-    catch(const std::runtime_error & err)
+    catch(const std::exception & err)
     {
         LTSM::Application::error("local exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");

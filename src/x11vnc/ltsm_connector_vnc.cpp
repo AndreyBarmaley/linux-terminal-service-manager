@@ -58,8 +58,8 @@ namespace LTSM
 
     /* Connector::VNC */
     Connector::VNC::VNC(int fd, const JsonObject & jo)
-        : DisplayProxy(jo), streamIn(nullptr), streamOut(nullptr), loopMessage(false), encodingDebug(0),
-	    encodingThreads(2), pressedMask(0), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Disabled)
+        : DisplayProxy(jo), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), pressedMask(0),
+            loopMessage(true), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Disabled)
     {
 	socket.reset(new InetStream());
 
@@ -72,6 +72,34 @@ namespace LTSM
 	    socket.reset(new InetStream());
 
 	streamIn = streamOut = socket.get();
+    }
+
+    void Connector::VNC::sendFlush(void)
+    {
+        if(loopMessage)
+            streamOut->sendFlush();
+    }
+
+    void Connector::VNC::sendRaw(const void* ptr, size_t len)
+    {
+        if(loopMessage)
+            streamOut->sendRaw(ptr, len);
+    }
+
+    void Connector::VNC::recvRaw(void* ptr, size_t len) const
+    {
+        if(loopMessage)
+             streamIn->recvRaw(ptr, len);
+    }
+
+    bool Connector::VNC::hasInput(void) const
+    {
+        return loopMessage ? streamIn->hasInput() : false;
+    }
+
+    uint8_t Connector::VNC::peekInt8(void) const
+    {
+        return loopMessage ? streamIn->peekInt8() : 0;
     }
 
     bool Connector::VNC::clientAuthVnc(void)
@@ -104,7 +132,7 @@ namespace LTSM
         }
 
         const std::string err("password mismatch");
-        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
 
         Application::error("error: %s", err.c_str());
         return false;
@@ -315,7 +343,7 @@ namespace LTSM
 	else
         {
             const std::string err("no matching security types");
-            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendString(err).sendFlush();
+            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
 
             Application::error("error: %s", err.c_str());
             return EXIT_FAILURE;
@@ -349,14 +377,12 @@ namespace LTSM
     	sendInt8(0);
     	// send name desktop
     	const std::string desktopName("X11 Remote Desktop");
-    	sendIntBE32(desktopName.size());
-    	sendString(desktopName).sendFlush();
+    	sendIntBE32(desktopName.size()).sendString(desktopName).sendFlush();
 
         Application::info("connector starting: %s", "wait RFB messages...");
 
         // xcb on
         setEnableXcbMessages(true);
-        loopMessage = true;
 
         XCB::Region damageRegion(0, 0, 0, 0);
 	bool clientUpdateReq = false;
@@ -415,9 +441,7 @@ namespace LTSM
 			break;
 
                     default:
-                        Application::error("RFB unknown message: 0x%02x", msgType);
-                        throw std::runtime_error("RFB unknown message");
-                        break;
+                        throw std::runtime_error(std::string("RFB unknown message: ").append(Tools::hex(msgType, 2)));
                 }
             }
 
@@ -473,8 +497,11 @@ namespace LTSM
                 }
 
                 if(nodamage)
+		{
                     damageRegion = _xcbDisplay->region();
-                else
+		    clientUpdateReq = true;
+                }
+		else
 		if(! damageRegion.empty())
                     // fix out of screen
                     damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
@@ -507,7 +534,23 @@ namespace LTSM
 		        {
 			    fbUpdateProcessing = true;
 			    // background job
-                            std::thread([=](){ this->serverSendFrameBufferUpdate(res); }).detach();
+                            std::thread([=]()
+                            {
+                                try
+                                {
+                                    this->serverSendFrameBufferUpdate(res);
+                                }
+                                catch(const std::exception & err)
+                                {
+                                    Application::error("exception: %s", err.what());
+                                    loopMessage = false;
+                                }
+                                catch(...)
+                                {
+                                    loopMessage = false;
+                                }
+
+                            }).detach();
 		        }
                         damageRegion.reset();
 		        clientUpdateReq = false;
@@ -568,11 +611,11 @@ namespace LTSM
                 break;
 
             default:
-                throw std::runtime_error("unknown client pixel format");
+                throw std::runtime_error("clientSetPixelFormat: unknown pixel format");
         }
 
 	if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
-            throw std::runtime_error("unsupported pixel format");
+            throw std::runtime_error("clientSetPixelFormat: unsupported pixel format");
 
         clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
         if(colourMap.size()) colourMap.clear();
@@ -869,10 +912,7 @@ namespace LTSM
 
             // fix align
             if(reply->size() != reg.width * reg.height * bytePerPixel)
-	    {
-        	Application::error("%s: %s failed", __FUNCTION__, "align region");
-        	throw CodecFailed("region not aligned");
-	    }
+        	throw std::runtime_error("serverSendFrameBufferUpdate: region not aligned");
 
             // RFB: 6.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
@@ -884,23 +924,8 @@ namespace LTSM
             // apply render primitives
 	    int encodingLength = 0;
 
-            try
-	    {
-		// send encodings
-        	encodingLength = prefEncodings.first(frameBuffer);
-	    }
-	    catch(const CodecFailed & ex)
-	    {
-		Application::error("codec exception: %s", ex.err.c_str());
-		loopMessage = false;
-		return false;
-	    }
-	    catch(const SocketFailed & ex)
-	    {
-		Application::error("socket exception: %s", ex.err.c_str());
-		loopMessage = false;
-		return false;
-	    }
+	    // send encodings
+            encodingLength = prefEncodings.first(frameBuffer);
 
             if(encodingDebug)
             {
@@ -921,10 +946,6 @@ namespace LTSM
 
     int Connector::VNC::sendPixel(uint32_t pixel)
     {
-        // break connection
-        if(! loopMessage)
-            return 0;
-
         if(clientFormat.trueColor())
         {
             switch(clientFormat.bytePerPixel())
@@ -954,16 +975,12 @@ namespace LTSM
         else if(colourMap.size())
             Application::error("%s", "not usable");
 
-        throw std::runtime_error("send pixel: unknown format");
+        throw std::runtime_error("sendPixel: unknown format");
         return 0;
     }
 
     int Connector::VNC::sendCPixel(uint32_t pixel)
     {
-        // break connection
-        if(! loopMessage)
-            return 0;
-
         if(clientFormat.trueColor() && clientFormat.bitsPerPixel == 32)
         {
             auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);

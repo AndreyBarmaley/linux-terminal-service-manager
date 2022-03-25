@@ -24,6 +24,7 @@
 #include <stdexcept>
 
 #include "ltsm_application.h"
+#include "ltsm_tools.h"
 #include "ltsm_vnc_zlib.h"
 
 namespace LTSM
@@ -63,7 +64,7 @@ namespace LTSM
             int prev = total_out;
             int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
             if(ret < Z_OK)
-                Application::error("zlib: deflate error: %d", ret);
+                throw std::runtime_error(Tools::StringFormat("%1: deflate failed, code: %2").arg(__FUNCTION__).arg(ret));
         
             size_t zipsz = total_out - prev;
             zip.resize(zipsz);
@@ -83,10 +84,7 @@ namespace LTSM
 
             int ret = deflateInit2(ptr, Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
             if(ret < Z_OK)
-            {
-                Application::error("zlib: deflateInit error: %d", ret);
-                throw std::invalid_argument("zlib stream init failed");
-            }
+                throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
         }
 
 	void DeflateStream::prepareSize(size_t len)
@@ -107,20 +105,17 @@ namespace LTSM
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const
         {
-            Application::error("zlib: %s", "recv disabled");
-	    throw std::runtime_error("zlib deflate: disable recv");
+	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
         bool DeflateStream::hasInput(void) const
         {
-            Application::error("zlib: %s", "has input disabled");
-	    throw std::runtime_error("zlib deflate: check");
+	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
         uint8_t DeflateStream::peekInt8(void) const
         {
-            Application::error("zlib: %s", "peek disabled");
-	    throw std::runtime_error("zlib deflate: peek");
+	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
     }
 } // LTSM
