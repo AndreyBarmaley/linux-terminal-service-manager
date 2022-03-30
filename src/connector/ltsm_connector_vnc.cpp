@@ -58,7 +58,7 @@ namespace LTSM
 
     /* Connector::VNC */
     Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), clipboardEnable(true),
+        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), netStatRx(0), netStatTx(0), clipboardEnable(true),
             pressedMask(0), loopMessage(true), loginWidgetStarted(false), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
     {
 	socket.reset(new InetStream());
@@ -82,13 +82,19 @@ namespace LTSM
     void Connector::VNC::sendRaw(const void* ptr, size_t len)
     {
         if(loopMessage)
+        {
             streamOut->sendRaw(ptr, len);
+            netStatTx += len;
+        }
     }
 
     void Connector::VNC::recvRaw(void* ptr, size_t len) const
     {
         if(loopMessage)
+        {
             streamIn->recvRaw(ptr, len);
+            netStatRx += len;
+        }
     }
 
     bool Connector::VNC::hasInput(void) const
@@ -475,6 +481,11 @@ namespace LTSM
 			//clientUpdateReq = true;
 			break;
 
+		    case RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES:
+			clientEnableContinuousUpdates();
+			//clientUpdateReq = true;
+			break;
+
                     default:
                         throw std::runtime_error(Tools::StringFormat("%1: RFB unknown message: %2").arg(__FUNCTION__).arg(Tools::hex(msgType, 2)));
                 }
@@ -709,6 +720,17 @@ namespace LTSM
         prefEncodings = selectEncodings();
 	Application::notice("server select encoding: %s", RFB::encodingName(prefEncodings.second));
 
+        if(std::any_of(clientEncodings.begin(), clientEncodings.end(),
+                    [=](auto & val){ return val == RFB::ENCODING_CONTINUOUS_UPDATES; }))
+        {
+            // RFB 1.7.7.15
+            // The server must send a EndOfContinuousUpdates message the first time
+            // it sees a SetEncodings message with the ContinuousUpdates pseudo-encoding,
+            // in order to inform the client that the extension is supported.
+            //
+            // serverSendEndContinuousUpdates();
+        }
+
 	return previousType != prefEncodings.second;
     }
 
@@ -863,6 +885,18 @@ namespace LTSM
 	}
     }
 
+    void Connector::VNC::clientEnableContinuousUpdates(void)
+    {
+        int enable = recvInt8();
+        int regx = recvIntBE16();
+        int regy = recvIntBE16();
+        int regw = recvIntBE16();
+        int regh = recvIntBE16();
+
+        Application::notice("RFB 1.7.4.7, enable continuous updates, region: [%d,%d,%d,%d], enabled: %d", regx, regy, regw, regh, enable);
+        throw std::runtime_error("clientEnableContinuousUpdates: not implemented");
+    }
+
     void Connector::VNC::clientSetDesktopSizeEvent(void)
     {
         // skip padding (one byte!)
@@ -940,6 +974,12 @@ namespace LTSM
 	sendFlush();
     }
 
+    void Connector::VNC::serverSendEndContinuousUpdates(void)
+    {
+        // RFB: 1.7.5.5
+        sendInt8(RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES).sendFlush();
+    }
+
     bool Connector::VNC::serverSendFrameBufferUpdate(const XCB::Region & reg)
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
@@ -976,12 +1016,13 @@ namespace LTSM
 	    int encodingLength = 0;
 
 	    // send encodings
-            encodingLength = prefEncodings.first(frameBuffer);
+            netStatTx = 0;
+            prefEncodings.first(frameBuffer);
 
             if(encodingDebug)
             {
-                int rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
-                float optimize = 100.0f - encodingLength * 100 / static_cast<float>(rawLength);
+                size_t rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
+                double optimize = 100.0f - netStatTx * 100 / static_cast<double>(rawLength);
                 Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
             }
 
@@ -1049,6 +1090,20 @@ namespace LTSM
         }
 
 	return sendPixel(pixel);
+    }
+
+    int Connector::VNC::sendRunLength(size_t length)
+    {
+        int res = 0;
+        while(255 < length)
+        {
+            sendInt8(255);
+            res += 1;
+            length -= 255;
+        }
+    
+        sendInt8((length - 1) % 255);
+        return res + 1;
     }
 
     void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)

@@ -530,7 +530,7 @@ namespace LTSM
 #ifdef LTSM_DEBUG
                 if(! checkError())
                 {
-                    std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+                    std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), len, 2);
                     Application::debug("from local: [%s]", str.c_str());
                 }
 #endif

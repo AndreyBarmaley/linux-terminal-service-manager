@@ -82,11 +82,6 @@ namespace LTSM
         return it != end() ? (*it).first : 0;
     }
 
-    uint8_t* FrameBuffer::pitchData(size_t row) const
-    {
-        return get()->buffer + offset + (get()->pitch * row);
-    }
-
     void FrameBuffer::setPixelRow(const XCB::Point & pos, uint32_t pixel, size_t length)
     {
         if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
@@ -142,12 +137,13 @@ namespace LTSM
 
     void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat & fmt)
     {
-        setPixelRow(pos, get()->format.convertFrom(fmt, pixel), 1);
+        auto raw = pixelFormat().convertFrom(fmt, pixel);
+        setPixelRow(pos, raw, 1);
     }
 
     void FrameBuffer::fillPixel(const XCB::Region & reg, uint32_t pixel, const PixelFormat & fmt)
     {
-        auto raw = get()->format.convertFrom(fmt, pixel);
+        auto raw = pixelFormat().convertFrom(fmt, pixel);
 
         for(int yy = 0; yy < reg.height; ++yy)
             setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
@@ -155,12 +151,13 @@ namespace LTSM
 
     void FrameBuffer::setColor(const XCB::Point & pos, const Color & col)
     {
-        setPixelRow(pos, get()->format.pixel(col), 1);
+        auto raw = pixelFormat().pixel(col);
+        setPixelRow(pos, raw, 1);
     }
 
     void FrameBuffer::fillColor(const XCB::Region & reg, const Color & col)
     {
-        auto raw = get()->format.pixel(col);
+        auto raw = pixelFormat().pixel(col);
 
         for(int yy = 0; yy < reg.height; ++yy)
             setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
@@ -168,7 +165,7 @@ namespace LTSM
 
     void FrameBuffer::drawRect(const XCB::Region & reg, const Color & col)
     {
-        auto raw = get()->format.pixel(col);
+        auto raw = pixelFormat().pixel(col);
 
         setPixelRow(reg.topLeft(), raw, reg.width);
         setPixelRow(reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width);
@@ -248,10 +245,10 @@ namespace LTSM
     {
 	auto dst = XCB::Region(pos, reg.toSize()).intersected({XCB::Point(0, 0), reg.toSize()});
 
-	if(get()->format != fb.get()->format)
+	if(pixelFormat() != fb.pixelFormat())
 	{
 	    for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
-                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), fb.get()->format);
+                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), fb.pixelFormat());
 	}
 	else
 	{
@@ -267,7 +264,7 @@ namespace LTSM
     ColorMap FrameBuffer::colourMap(void) const
     {
         ColorMap map;
-        const PixelFormat & fmt = get()->format;
+        const PixelFormat & fmt = pixelFormat();
 
 	for(auto coord = coordBegin(); coord.isValid(); ++coord)
         {
@@ -357,26 +354,42 @@ namespace LTSM
 
     Color FrameBuffer::color(const XCB::Point & pos) const
     {
-        return get()->format.color(pixel(pos));
+        return pixelFormat().color(pixel(pos));
     }
 
     uint32_t FrameBuffer::bitsPerPixel(void) const
     {
-        return get() ? get()->format.bitsPerPixel : 0;
+        return pixelFormat().bitsPerPixel;
     }
 
     uint32_t FrameBuffer::bytePerPixel(void) const
     {
-        return get() ? get()->format.bytePerPixel() : 0;
+        return pixelFormat().bytePerPixel();
     }
 
-    uint8_t* FrameBuffer::data(void)
+    size_t FrameBuffer::width(void) const
     {
-        return get() ? get()->buffer : nullptr;
+        return fbreg.width;
     }
 
-    size_t FrameBuffer::size(void) const
+    size_t FrameBuffer::height(void) const
     {
-        return get() ? get()->pitch * fbreg.height : 0;
+        return fbreg.height;
+    }
+
+    uint8_t* FrameBuffer::pitchData(size_t row) const
+    {
+        uint32_t col = 0;
+        if(! owner)
+        {
+            col = bytePerPixel() * fbreg.x;
+            row = fbreg.y + row;
+        }
+        return fbptr->buffer + (fbptr->pitch * row) + col;
+    }
+
+    size_t FrameBuffer::pitchSize(void) const
+    {
+        return owner ? fbptr->pitch : bytePerPixel() * fbreg.width;
     }
 } // LTSM

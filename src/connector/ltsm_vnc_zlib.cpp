@@ -87,6 +87,11 @@ namespace LTSM
                 throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
         }
 
+        void DeflateStream::setLevel(size_t level)
+        {
+            deflateParams(zlib.get(), 9 < level ? 9 : level, Z_DEFAULT_STRATEGY);
+        }
+
 	void DeflateStream::prepareSize(size_t len)
 	{
 	    if(len < zlib->outbuf.capacity()) zlib->outbuf.reserve(len);

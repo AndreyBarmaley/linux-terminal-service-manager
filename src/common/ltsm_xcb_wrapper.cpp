@@ -234,19 +234,19 @@ namespace LTSM
             return ! res->empty();
 	}
 
-        std::list<Region> Region::divideCounts(size_t cw, size_t ch) const
+        std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const
         {
-            size_t bw = width <= cw ? 1 : width / cw;
-            size_t bh = height <= cw ? 1 : height / ch;
-            return divideBlocks(bw, bh);
+            size_t bw = width <= cols ? 1 : width / cols;
+            size_t bh = height <= rows? 1 : height / rows;
+            return divideBlocks(Size(bw, bh));
         }
 
-        std::list<Region> Region::divideBlocks(size_t cw, size_t ch) const
+        std::list<Region> Region::divideBlocks(const Size & sz) const
         {
             std::list<Region> res;
 
-            if(cw > width) cw = width;
-            if(ch > height) ch = height;
+            size_t cw = sz.width > width ? width : sz.width;
+            size_t ch = sz.height > height? height: sz.height;
 
             for(size_t yy = 0; yy < height; yy += ch)
             {

@@ -393,43 +393,53 @@ namespace LTSM
         return false;
     }
 
-    void Tools::StreamBits::pushBitBE(bool v)
+    // StreamBitsPack
+    Tools::StreamBitsPack::StreamBitsPack() : bitpos(7)
     {
-        size_t pos = seek >> 3;
+        vecbuf.reserve(32);
+    }
         
-        if(pos >= data.size())
-            throw std::runtime_error("stream bits: out of range");
+    void Tools::StreamBitsPack::pushBit(bool v)
+    {   
+        if(bitpos == 7)
+            vecbuf.push_back(0);
 
-        uint8_t mask = 1 << (seek % 8);
+        uint8_t mask = 1 << bitpos;
+        if(v) vecbuf.back() |= mask;
 
-        if(v)
-            data[pos] |= mask;
+        if(bitpos == 0)
+            bitpos = 7;
         else
-            data[pos] &= ~mask;
-
-        if((seek % 8) == 0)
-            seek += 15;
-        else
-            seek--;
+            bitpos--;
     }
 
-    void Tools::StreamBits::pushBitLE(bool v)
-    {
-        size_t pos = seek >> 3;
-        
-        if(pos >= data.size())
-            throw std::runtime_error("stream bits: out of range");
-
-        uint8_t mask = 1 << (seek % 8);
-
-        if(v)
-            data[pos] |= mask;
-        else
-            data[pos] &= ~mask;
-
-        seek++;
+    void Tools::StreamBitsPack::pushAlign(void)
+    {   
+        bitpos = 7;
     }
 
+    void Tools::StreamBitsPack::pushValue(int val, size_t field)
+    {
+        // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
+        size_t mask = 1 << (field - 1);
+
+        while(mask)
+        {
+            pushBit(val & mask);
+            mask >>= 1;
+        }
+    }
+
+    bool Tools::StreamBitsPack::empty(void) const
+    {
+        return vecbuf.empty() ||
+                (vecbuf.size() == 1 && bitpos == 7);
+    }
+
+    const std::vector<uint8_t> & Tools::StreamBitsPack::toVector(void) const
+    {
+        return vecbuf;
+    }
 /*
     #include <zlib.h>
     std::vector<uint8_t> Tools::zlibCompress(const uint8_t* ptr, size_t size)
@@ -502,7 +512,7 @@ namespace LTSM
         return res;
     }
 
-    size_t Tools::maskMaxValue(size_t mask)
+    size_t Tools::maskMaxValue(uint32_t mask)
     {
         size_t res = 0;
 

@@ -72,6 +72,7 @@ namespace LTSM
         const int CLIENT_EVENT_KEY = 4;
         const int CLIENT_EVENT_POINTER = 5;
         const int CLIENT_CUT_TEXT = 6;
+        const int CLIENT_ENABLE_CONTINUOUS_UPDATES = 150;
         const int CLIENT_SET_DESKTOP_SIZE = 251;
             
         const int SERVER_FB_UPDATE = 0;
@@ -103,6 +104,17 @@ namespace LTSM
         // pseudo encodings
         const int ENCODING_DESKTOP_SIZE = -223;
         const int ENCODING_EXT_DESKTOP_SIZE = -308;
+        const int ENCODING_CONTINUOUS_UPDATES = -313;
+        const int ENCODING_LAST_RECT = -224;
+        const int ENCODING_COMPRESS9 = -247;
+        const int ENCODING_COMPRESS8 = -248;
+        const int ENCODING_COMPRESS7 = -249;
+        const int ENCODING_COMPRESS6 = -250;
+        const int ENCODING_COMPRESS5 = -251;
+        const int ENCODING_COMPRESS4 = -252;
+        const int ENCODING_COMPRESS3 = -253;
+        const int ENCODING_COMPRESS2 = -254;
+        const int ENCODING_COMPRESS1 = -255;
 
 	struct ScreenInfo
 	{
@@ -131,7 +143,7 @@ namespace LTSM
 
     namespace Connector
     {
-        typedef std::function<int(const FrameBuffer &)> sendEncodingFunc;
+        typedef std::function<void(const FrameBuffer &)> sendEncodingFunc;
 
         /* Connector::VNC */
         class VNC : public SignalProxy, protected NetworkStream
@@ -146,6 +158,8 @@ namespace LTSM
 
             int                 encodingDebug;
             int                 encodingThreads;
+            mutable size_t      netStatRx;
+            mutable size_t      netStatTx;
             bool                clipboardEnable;
             std::atomic<int>    pressedMask;
             std::atomic<bool>   loopMessage;
@@ -163,7 +177,7 @@ namespace LTSM
             std::vector<int>    clientEncodings;
             std::list<std::string>
                                 disabledEncodings;
-            std::list< std::future<int> >
+            std::list< std::future<void> >
                                 jobsEncodings;
             std::pair<sendEncodingFunc, int>
                                 prefEncodings;
@@ -198,43 +212,46 @@ namespace LTSM
             void                clientPointerEvent(void);
             void                clientCutTextEvent(void);
 	    void		clientSetDesktopSizeEvent(void);
+            void                clientEnableContinuousUpdates(void);
             void                clientDisconnectedEvent(void);
 
             bool                serverSendFrameBufferUpdate(const XCB::Region &);
             void                serverSendColourMap(int first);
             void                serverSendBell(void);
             void                serverSendCutText(const std::vector<uint8_t> &);
-	    int			serverSendDesktopSize(const DesktopResizeMode &, bool xcbAllow);
+	    void		serverSendDesktopSize(const DesktopResizeMode &, bool xcbAllow);
+            void                serverSendEndContinuousUpdates(void);
 
             int                 sendPixel(uint32_t pixel);
             int                 sendCPixel(uint32_t pixel);
+            int                 sendRunLength(size_t length);
 
             bool                isUpdateProcessed(void) const;
             void                waitSendingFBUpdate(void) const;
 
-            int                 sendEncodingRaw(const FrameBuffer &);
-            int                 sendEncodingRawSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
-            int                 sendEncodingRawSubRegionRaw(const XCB::Region &, const FrameBuffer &);
+            void                sendEncodingRaw(const FrameBuffer &);
+            void                sendEncodingRawSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            void                sendEncodingRawSubRegionRaw(const XCB::Region &, const FrameBuffer &);
 
-            int                 sendEncodingRRE(const FrameBuffer &, bool corre);
-            int			sendEncodingRRESubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool corre);
-            int                 sendEncodingRRESubRects(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &, bool corre);
+            void                sendEncodingRRE(const FrameBuffer &, bool corre);
+            void		sendEncodingRRESubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool corre);
+            void                sendEncodingRRESubRects(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &, bool corre);
 
-            int                 sendEncodingHextile(const FrameBuffer &, bool zlibver);
-            int			sendEncodingHextileSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool zlibver);
-            int			sendEncodingHextileSubForeground(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &);
-            int			sendEncodingHextileSubColored(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &);
-            int			sendEncodingHextileSubRaw(const XCB::Region &, const FrameBuffer &, int jobId, bool zlibver);
+            void                sendEncodingHextile(const FrameBuffer &, bool zlibver);
+            void		sendEncodingHextileSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool zlibver);
+            void		sendEncodingHextileSubForeground(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &);
+            void		sendEncodingHextileSubColored(const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<RegionPixel> &);
+            void		sendEncodingHextileSubRaw(const XCB::Region &, const FrameBuffer &, int jobId, bool zlibver);
 
-            int                 sendEncodingZLib(const FrameBuffer &);
-            int			sendEncodingZLibSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            void                sendEncodingZLib(const FrameBuffer &);
+            void		sendEncodingZLibSubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
-            int                 sendEncodingTRLE(const FrameBuffer &, bool zrle);
-            int			sendEncodingTRLESubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool zrle);
-            int                 sendEncodingTRLESubPacked(const XCB::Region &, const FrameBuffer &, int jobId, size_t field, size_t rowsz, const PixelMapWeight &, bool zrle);
-	    int			sendEncodingTRLESubPlain(const XCB::Region &, const FrameBuffer &, const std::list<PixelLength> &);
-	    int			sendEncodingTRLESubPalette(const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const std::list<PixelLength> &);
-	    int			sendEncodingTRLESubRaw(const XCB::Region &, const FrameBuffer &);
+            void                sendEncodingTRLE(const FrameBuffer &, bool zrle);
+            void                sendEncodingTRLESubRegion(const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId, bool zrle);
+            void                sendEncodingTRLESubPacked(const XCB::Region &, const FrameBuffer &, int jobId, size_t field, const PixelMapWeight &, bool zrle);
+	    void                sendEncodingTRLESubPlain(const XCB::Region &, const FrameBuffer &, const std::list<PixelLength> &);
+	    void                sendEncodingTRLESubPalette(const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const std::list<PixelLength> &);
+	    void                sendEncodingTRLESubRaw(const XCB::Region &, const FrameBuffer &);
 
             std::pair<sendEncodingFunc, int> selectEncodings(void);
 

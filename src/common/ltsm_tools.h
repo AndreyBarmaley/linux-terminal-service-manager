@@ -59,17 +59,19 @@ namespace LTSM
             StringFormat & replace(const char*, double, int prec);
         };
 
-        struct StreamBits
+        struct StreamBitsPack
         {
-            std::vector<uint8_t> &	data;
-            size_t			seek;
-
-            StreamBits(std::vector<uint8_t> & v, size_t offset = 0) : data(v), seek(offset)
-            {
-            }
-
-            void        pushBitBE(bool v);
-            void        pushBitLE(bool v);
+            std::vector<uint8_t> vecbuf;
+            size_t               bitpos;
+        
+            StreamBitsPack();
+        
+            void        pushBit(bool v);
+            void        pushValue(int val, size_t field);
+            void        pushAlign(void);
+        
+            bool        empty(void) const;
+            const std::vector<uint8_t> & toVector(void) const;
         };
 
         std::list<std::string> split(const std::string & str, const std::string & sep);
@@ -97,7 +99,7 @@ namespace LTSM
         bool            checkUnixSocket(const std::string &);
 
         size_t		maskShifted(size_t mask);
-        size_t		maskMaxValue(size_t mask);
+        size_t		maskMaxValue(uint32_t mask);
 
 	template<typename Int>
 	std::string buffer2hexstring(const Int* data, size_t length, size_t width = 8, const std::string & sep = ",", bool prefix = true)

@@ -441,7 +441,7 @@ namespace LTSM
         int max = _config->getInteger("display:max", 99);
         if(max < min) std::swap(max, min);
 
-        std::vector ranges(max - min, 0);
+        std::vector<int> ranges(max - min, 0);
         std::iota(ranges.begin(), ranges.end(), min);
 
         auto it = std::find_if(ranges.begin(), ranges.end(), [&](auto display)

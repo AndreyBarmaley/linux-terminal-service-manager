@@ -38,13 +38,13 @@ namespace LTSM
 {
     struct Color
     {
-        uint8_t             r, g, b;
+        uint8_t             r, g, b, x;
 
-        Color() : r(0), g(0), b(0) {}
-        Color(uint8_t cr, uint8_t cg, uint8_t cb) : r(cr), g(cg), b(cb) {}
+        Color() : r(0), g(0), b(0), x(0) {}
+        Color(uint8_t cr, uint8_t cg, uint8_t cb) : r(cr), g(cg), b(cb), x(0) {}
 
 #ifdef LTSM_WITH_SDBUS
-        Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple)
+        Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple) : x(0)
         {
             std::tie(r, g, b) = tuple;
         }
@@ -185,16 +185,19 @@ namespace LTSM
         const uint32_t &        length(void) const { return second; }
     };
 
-    struct FrameBuffer : std::shared_ptr<fbinfo_t>
+    class FrameBuffer
     {
-        uint32_t        offset;
+    protected:
+        std::shared_ptr<fbinfo_t> fbptr;
 	XCB::Region	fbreg;
+        bool            owner;
 
-        FrameBuffer(const XCB::Region & reg, const PixelFormat & fmt)
-            : std::shared_ptr<fbinfo_t>(std::make_shared<fbinfo_t>(reg.toSize(), fmt)), offset(0), fbreg(reg) {}
+    public:
+//        FrameBuffer(const XCB::Region & reg, const PixelFormat & fmt)
+//            : fbptr(std::make_shared<fbinfo_t>(reg.toSize(), fmt)), fbreg(reg) {}
 
         FrameBuffer(uint8_t* p, const XCB::Region & reg, const PixelFormat & fmt)
-            : std::shared_ptr<fbinfo_t>(std::make_shared<fbinfo_t>(p, reg.toSize(), fmt)), offset(0), fbreg(reg) {}
+            : fbptr(std::make_shared<fbinfo_t>(p, reg.toSize(), fmt)), fbreg(reg), owner(true) {}
 
 	XCB::PointIterator coordBegin(void) const { return XCB::PointIterator(0, 0, fbreg.toSize()); }
 
@@ -219,13 +222,16 @@ namespace LTSM
         bool            allOfPixel(uint32_t pixel, const XCB::Region &) const;
 
         uint8_t*        pitchData(size_t row) const;
+        size_t          pitchSize(void) const;
+        size_t          width(void) const;
+        size_t          height(void) const;
+
 	const XCB::Region & region(void) const { return fbreg; }
+        const PixelFormat & pixelFormat(void) const { return fbptr->format; }
 
         Color           color(const XCB::Point &) const;
         uint32_t	bitsPerPixel(void) const;
         uint32_t	bytePerPixel(void) const;
-        uint8_t*        data(void);
-        size_t		size(void) const;
     };
 }
 

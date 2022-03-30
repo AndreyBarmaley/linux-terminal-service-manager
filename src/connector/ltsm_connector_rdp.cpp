@@ -714,7 +714,7 @@ namespace LTSM
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
-	auto blocks = reg.divideBlocks(tileSize, tileSize);
+	auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
 
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -839,7 +839,7 @@ namespace LTSM
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
-	auto blocks = reg.divideBlocks(tileSize, tileSize);
+	auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
 
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx

@@ -56,7 +56,8 @@ namespace LTSM
     
             std::vector<uint8_t> syncFlush(void) const;
             void                prepareSize(size_t);
-        
+            void                setLevel(size_t level);
+
             bool                hasInput(void) const override;
             void                sendRaw(const void*, size_t) override;
             
