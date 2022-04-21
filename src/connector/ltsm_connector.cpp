@@ -299,8 +299,7 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: add fill rect, display: %d", display);
-            auto ptr = new RenderRect(rect, color, fill);
-            _renderPrimitives.emplace_back(ptr);
+            _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             const int16_t rx = std::get<0>(rect);
             const int16_t ry = std::get<1>(rect);
             const uint16_t rw = std::get<2>(rect);
@@ -318,8 +317,8 @@ namespace LTSM
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
             const uint16_t rh = _systemfont.height;
-            auto ptr = new RenderText(text, { rx, ry, rw, rh }, color);
-            _renderPrimitives.emplace_back(ptr);
+            const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> rt{rx, ry, rw, rh};
+            _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rt, color));
 	    onAddDamage({rx,ry,rw,rh});
         }
     }

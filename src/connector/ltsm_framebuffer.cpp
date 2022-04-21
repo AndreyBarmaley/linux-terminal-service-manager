@@ -87,6 +87,7 @@ namespace LTSM
         if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
         {
             void* offset = pitchData(pos.y) + (pos.x * bytePerPixel());
+            // fix out of range
             length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
             auto bpp = bitsPerPixel();
 
@@ -94,38 +95,38 @@ namespace LTSM
             {
                 case 32:
                     if(auto ptr = static_cast<uint32_t*>(offset))
-                        while(length--) *ptr++ = pixel;
+                        std::fill(ptr, ptr + length, pixel);
                     break;
 
                case 24:
                     if(auto ptr = static_cast<uint8_t*>(offset))
                     {
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+                        uint8_t v1 = pixel;
+                        uint8_t v2 = pixel >> 8;
+                        uint8_t v3 = pixel >> 16;
+#else
+                        uint8_t v1 = pixel >> 16;
+                        uint8_t v2 = pixel >> 8;
+                        uint8_t v3 = pixel;
+#endif
                         while(length--)
                         {
-                            if(big_endian)
-                            {
-                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 16));
-                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 8));
-                                *ptr++ = static_cast<uint8_t>(0xFF & pixel);
-                            }
-                            else
-                            {
-                                *ptr++ = static_cast<uint8_t>(0xFF & pixel);
-                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 8));
-                                *ptr++ = static_cast<uint8_t>(0xFF & (pixel >> 16));
-                            }
+                            *ptr++ = v1;
+                            *ptr++ = v2;
+                            *ptr++ = v3;
                         }
                     }
                     break;
 
                 case 16:
                     if(auto ptr = static_cast<uint16_t*>(offset))
-                        while(length--) *ptr++ = static_cast<uint16_t>(pixel);
+                        std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
                     break;
 
                 case 8:
                     if(auto ptr = static_cast<uint8_t*>(offset))
-                        while(length--) *ptr++ = static_cast<uint8_t>(pixel);
+                        std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
                     break;
 
                 default:
@@ -141,12 +142,16 @@ namespace LTSM
         setPixelRow(pos, raw, 1);
     }
 
-    void FrameBuffer::fillPixel(const XCB::Region & reg, uint32_t pixel, const PixelFormat & fmt)
+    void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat & fmt)
     {
-        auto raw = pixelFormat().convertFrom(fmt, pixel);
+        XCB::Region reg;
+	if(XCB::Region::intersection(region(), reg0, & reg))
+        {
+            auto raw = pixelFormat().convertFrom(fmt, pixel);
 
-        for(int yy = 0; yy < reg.height; ++yy)
-            setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+            for(int yy = 0; yy < reg.height; ++yy)
+                setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+        }
     }
 
     void FrameBuffer::setColor(const XCB::Point & pos, const Color & col)
@@ -155,25 +160,33 @@ namespace LTSM
         setPixelRow(pos, raw, 1);
     }
 
-    void FrameBuffer::fillColor(const XCB::Region & reg, const Color & col)
+    void FrameBuffer::fillColor(const XCB::Region & reg0, const Color & col)
     {
-        auto raw = pixelFormat().pixel(col);
+        XCB::Region reg;
+	if(XCB::Region::intersection(region(), reg0, & reg))
+        {
+            auto raw = pixelFormat().pixel(col);
 
-        for(int yy = 0; yy < reg.height; ++yy)
-            setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+            for(int yy = 0; yy < reg.height; ++yy)
+                setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+        }
     }
 
-    void FrameBuffer::drawRect(const XCB::Region & reg, const Color & col)
+    void FrameBuffer::drawRect(const XCB::Region & reg0, const Color & col)
     {
-        auto raw = pixelFormat().pixel(col);
-
-        setPixelRow(reg.topLeft(), raw, reg.width);
-        setPixelRow(reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width);
-
-        for(int yy = 1; yy < reg.height - 1; ++yy)
+        XCB::Region reg;
+	if(XCB::Region::intersection(region(), reg0, & reg))
         {
-            setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, 1);
-            setPixelRow(reg.topLeft() + XCB::Point(reg.width - 1, yy), raw, 1);
+            auto raw = pixelFormat().pixel(col);
+
+            setPixelRow(reg.topLeft(), raw, reg.width);
+            setPixelRow(reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width);
+
+            for(int yy = 1; yy < reg.height - 1; ++yy)
+            {
+                setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, 1);
+                setPixelRow(reg.topLeft() + XCB::Point(reg.width - 1, yy), raw, 1);
+            }
         }
     }
 
@@ -243,7 +256,7 @@ namespace LTSM
 
     void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos)
     {
-	auto dst = XCB::Region(pos, reg.toSize()).intersected({XCB::Point(0, 0), reg.toSize()});
+	auto dst = XCB::Region(pos, reg.toSize()).intersected(region());
 
 	if(pixelFormat() != fb.pixelFormat())
 	{
@@ -256,7 +269,7 @@ namespace LTSM
     	    {
         	auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
         	size_t length = dst.width * fb.bytePerPixel();
-        	std::copy(ptr, ptr + length, pitchData(row));
+                std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x * bytePerPixel());
     	    }
 	}
     }

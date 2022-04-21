@@ -964,13 +964,13 @@ namespace LTSM
 	    int encodingLength = 0;
 
 	    // send encodings
-            netStatTx = 0;
+            size_t netStatTx2 = netStatTx;
             prefEncodings.first(frameBuffer);
 
             if(encodingDebug)
             {
                 size_t rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
-                double optimize = 100.0f - netStatTx * 100 / static_cast<double>(rawLength);
+                double optimize = 100.0f - (netStatTx - netStatTx2) * 100 / static_cast<double>(rawLength);
                 Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
             }
 
