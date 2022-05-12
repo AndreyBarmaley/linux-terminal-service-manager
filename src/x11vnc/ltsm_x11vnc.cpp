@@ -148,25 +148,18 @@ namespace LTSM
         if(_config.getBoolean("syslog"))
         {
             Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
-        }
 
-        auto debug = _config.getString("debug");
-        if(! debug.empty() && debug != "console")
-            Application::setDebugLevel(debug);
+            auto debug = _config.getString("debug");
+            if(! debug.empty() && debug != "console")
+                Application::setDebugLevel(debug);
+        }
 
         if(1)
         {
             std::string file = _config.getString("authfile");
-            if(file.empty())
+            if(! file.empty() && ! std::filesystem::exists(file))
             {
-                Application::error("error: %s", "authfile not defined");
-                error = true;
-            }
-            else
-            if(! std::filesystem::exists(file))
-            {
-                Application::error("authfile not found: `%s'", file.c_str());
-                error = true;
+                Application::warning("authfile not found: `%s'", file.c_str());
             }
         }
 

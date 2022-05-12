@@ -175,10 +175,12 @@ namespace LTSM
             std::vector<int>    clientEncodings;
             std::list<std::string>
                                 disabledEncodings;
+            std::list<std::string>
+                                prefferedEncodings;
             std::list< std::future<void> >
                                 jobsEncodings;
             std::pair<sendEncodingFunc, int>
-                                prefEncodings;
+                                prefEncodingsPair;
 	    std::vector<RFB::ScreenInfo>
                                 screensInfo;
 

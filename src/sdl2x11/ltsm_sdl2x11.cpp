@@ -53,11 +53,11 @@ namespace LTSM
             txShadow = createTexture(width(), height(), txFormat);
         }
 
-        bool fakeInputKeysym(int type, const SDL_Keysym & keysym)
+        bool fakeInputTest(int type, const SDL_Keysym & keysym)
         {
             int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
             auto keycode = XCB::RootDisplayExt::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
-            return keycode != XCB_NO_SYMBOL ? XCB::RootDisplayExt::fakeInputKeycode(type, keycode) : false;
+            return keycode != XCB_NO_SYMBOL ? XCB::RootDisplayExt::fakeInputTest(type, keycode, 0, 0) : false;
         }
 
         bool sdlEventProcessing(bool & quit)
@@ -80,31 +80,31 @@ namespace LTSM
                         break;
                     }
 
-                    fakeInputKeysym(XCB_KEY_PRESS, ev.key()->keysym);
+                    fakeInputTest(XCB_KEY_PRESS, ev.key()->keysym);
                     break;
 
                 case SDL_KEYUP:
-                    fakeInputKeysym(XCB_KEY_RELEASE, ev.key()->keysym);
+                    fakeInputTest(XCB_KEY_RELEASE, ev.key()->keysym);
                     break;
 
                 case SDL_MOUSEBUTTONDOWN:
                 {
                     std::pair<int, int> coord = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputMouse(XCB_BUTTON_PRESS, ev.button()->button, coord.first, coord.second);
+                    XCB::RootDisplayExt::fakeInputTest(XCB_BUTTON_PRESS, ev.button()->button, coord.first, coord.second);
                 }
                 break;
 
                 case SDL_MOUSEBUTTONUP:
                 {
                     std::pair<int, int> coord = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputMouse(XCB_BUTTON_RELEASE, ev.button()->button, coord.first, coord.second);
+                    XCB::RootDisplayExt::fakeInputTest(XCB_BUTTON_RELEASE, ev.button()->button, coord.first, coord.second);
                 }
                 break;
 
                 case SDL_MOUSEMOTION:
                 {
                     std::pair<int, int> coord = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputMouse(XCB_MOTION_NOTIFY, 0, coord.first, coord.second);
+                    XCB::RootDisplayExt::fakeInputTest(XCB_MOTION_NOTIFY, 0, coord.first, coord.second);
                 }
                 break;
 
@@ -113,15 +113,13 @@ namespace LTSM
                     {
                         int posx, posy;
                         SDL_GetMouseState(& posx, &posy);
-                        fakeInputMouse(XCB_BUTTON_PRESS, 4, posx, posy);
-                        fakeInputMouse(XCB_BUTTON_RELEASE, 4, posx, posy);
+                        fakeInputButton(4, XCB::Point(posx, posy));
                     }
                     else if(ev.wheel()->y < 0)
                     {
                         int posx, posy;
                         SDL_GetMouseState(& posx, &posy);
-                        fakeInputMouse(XCB_BUTTON_PRESS, 5, posx, posy);
-                        fakeInputMouse(XCB_BUTTON_RELEASE, 5, posx, posy);
+                        fakeInputButton(5, XCB::Point(posx, posy));
                     }
 
                     break;

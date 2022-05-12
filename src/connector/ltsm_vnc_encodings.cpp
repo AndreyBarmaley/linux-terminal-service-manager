@@ -183,7 +183,8 @@ namespace LTSM
     void Connector::VNC::sendEncodingRaw(const FrameBuffer & fb)
     {
 	const XCB::Region & reg0 = fb.region();
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "Raw", reg0.x, reg0.y, reg0.width, reg0.height);
+        if(encodingDebug)
+            Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "Raw", reg0.x, reg0.y, reg0.width, reg0.height);
 
         // regions counts
         sendIntBE16(1);
@@ -272,7 +273,8 @@ namespace LTSM
     void Connector::VNC::sendEncodingRRE(const FrameBuffer & fb, bool corre)
     {
 	const XCB::Region & reg0 = fb.region();
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (corre ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.width, reg0.height);
+        if(encodingDebug)
+            Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (corre ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.width, reg0.height);
 
 	const XCB::Point top(reg0.x, reg0.y);
 	const XCB::Size bsz = corre ? XCB::Size(64, 64) : XCB::Size(128, 128);
@@ -432,7 +434,8 @@ namespace LTSM
     void Connector::VNC::sendEncodingHextile(const FrameBuffer & fb, bool zlibver)
     {
 	const XCB::Region & reg0 = fb.region();
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "HexTile", reg0.x, reg0.y, reg0.width, reg0.height);
+        if(encodingDebug)
+            Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "HexTile", reg0.x, reg0.y, reg0.width, reg0.height);
 
 	const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz(16, 16);
@@ -643,7 +646,8 @@ namespace LTSM
     void Connector::VNC::sendEncodingZLib(const FrameBuffer & fb)
     {
 	const XCB::Region & reg0 = fb.region();
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "ZLib", reg0.x, reg0.y, reg0.width, reg0.height);
+        if(encodingDebug)
+            Application::debug("encoding: %s, region: [%d, %d, %d, %d]", "ZLib", reg0.x, reg0.y, reg0.width, reg0.height);
 
 	// zlib specific: single thread only
 	sendIntBE16(1);
@@ -678,7 +682,8 @@ namespace LTSM
     void Connector::VNC::sendEncodingTRLE(const FrameBuffer & fb, bool zrle)
     {
 	const XCB::Region & reg0 = fb.region();
-        Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (zrle ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.width, reg0.height);
+        if(encodingDebug)
+            Application::debug("encoding: %s, region: [%d, %d, %d, %d]", (zrle ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Size bsz(64, 64);
 	const XCB::Point top(reg0.x, reg0.y);

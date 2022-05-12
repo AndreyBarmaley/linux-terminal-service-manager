@@ -221,14 +221,6 @@ namespace LTSM
 
     Manager::Object::~Object()
     {
-        timer1->stop();
-        timer2->stop();
-        timer3->stop();
-
-        timer1->join();
-        timer2->join();
-        timer3->join();
-
         unregisterAdaptor();
     }
 

@@ -196,6 +196,7 @@ namespace LTSM
         JsonValuePtr(int);
         JsonValuePtr(bool);
         JsonValuePtr(double);
+        JsonValuePtr(const char*);
         JsonValuePtr(const std::string &);
         JsonValuePtr(const JsonArray &);
         JsonValuePtr(const JsonObject &);

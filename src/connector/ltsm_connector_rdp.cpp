@@ -435,7 +435,6 @@ namespace LTSM
         freeRdp->stopEventLoop();
 	timerNotActivated->stop();
 
-	timerNotActivated->join();
         if(freeRdpThread.joinable()) freeRdpThread.join();
 
         return EXIT_SUCCESS;
@@ -1042,10 +1041,10 @@ namespace LTSM
                 {
                     auto ja = static_cast<const JsonArray*>(value);
                     for(auto & val : ja->toStdVector<int>())
-                        context->x11display->fakeInputKeycode(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val);
+                        context->x11display->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val, 0, 0);
                 }
                 else
-                    context->x11display->fakeInputKeycode(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger());
+                    context->x11display->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger(), 0, 0);
             }
             else
             {
@@ -1059,7 +1058,7 @@ namespace LTSM
     	        auto vkcode = GetVirtualKeyCodeFromVirtualScanCode(code, 4);
     	        auto keycode = GetKeycodeFromVirtualKeyCode((flags & KBD_FLAGS_EXTENDED ? vkcode | KBDEXT : vkcode), KEYCODE_TYPE_EVDEV);
 
-                context->x11display->fakeInputKeycode(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode);
+                context->x11display->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
 	    }
         }
 
@@ -1078,21 +1077,21 @@ namespace LTSM
         {
 	    // left button
 	    if(flags & PTR_FLAGS_BUTTON1)
-        	context->x11display->fakeInputMouse(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_1, posx, posy);
+        	context->x11display->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_1, posx, posy);
 	    else
 	    // right button
 	    if(flags & PTR_FLAGS_BUTTON2)
-        	context->x11display->fakeInputMouse(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_3, posx, posy);
+        	context->x11display->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_3, posx, posy);
 	    else
 	    // middle button
 	    if(flags & PTR_FLAGS_BUTTON3)
-        	context->x11display->fakeInputMouse(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_2, posx, posy);
+        	context->x11display->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_2, posx, posy);
 	    else
 	    if(flags & PTR_FLAGS_WHEEL)
-        	context->x11display->fakeInputMouse(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, flags & PTR_FLAGS_WHEEL_NEGATIVE ? XCB_BUTTON_INDEX_5 : XCB_BUTTON_INDEX_4, posx, posy);
+        	context->x11display->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, flags & PTR_FLAGS_WHEEL_NEGATIVE ? XCB_BUTTON_INDEX_5 : XCB_BUTTON_INDEX_4, posx, posy);
 
 	    if(flags & PTR_FLAGS_MOVE)
-        	context->x11display->fakeInputMouse(XCB_MOTION_NOTIFY, 0, posx, posy);
+        	context->x11display->fakeInputTest(XCB_MOTION_NOTIFY, 0, posx, posy);
 	}
 
         return TRUE;

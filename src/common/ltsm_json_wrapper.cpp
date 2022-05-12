@@ -403,6 +403,11 @@ namespace LTSM
         reset(new JsonDouble(v));
     }
 
+    JsonValuePtr::JsonValuePtr(const char* v)
+    {
+        reset(new JsonString(v));
+    }
+
     JsonValuePtr::JsonValuePtr(const std::string & v)
     {
         reset(new JsonString(v));

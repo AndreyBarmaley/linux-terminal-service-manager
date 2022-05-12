@@ -225,6 +225,7 @@ namespace LTSM
 	}
 
 	#define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
+	#define NULL_KEYCODE 0
 
         struct KeyCodes : std::shared_ptr<xcb_keycode_t>
         {
@@ -232,7 +233,7 @@ namespace LTSM
 //		: std::shared_ptr<xcb_keycode_t>(ptr, std::free) {}
 
             KeyCodes(xcb_keycode_t code)
-		: std::shared_ptr<xcb_keycode_t>(new xcb_keycode_t[2]{code, XCB_NO_SYMBOL}, std::default_delete<xcb_keycode_t[]>()) {}
+		: std::shared_ptr<xcb_keycode_t>(new xcb_keycode_t[2]{code, NULL_KEYCODE}, std::default_delete<xcb_keycode_t[]>()) {}
 
             bool isValid(void) const;
             bool operator==(const KeyCodes &) const;
@@ -454,9 +455,8 @@ namespace LTSM
             Damage                  _damage;
             SHM                     _shm;
 
-            std::vector<xcb_keysym_t> _keysymsVec;
-            int                     _keysymsPerKeycode;
-            int                     _keycodesCount;
+            xcb_keycode_t           _minKeycode;
+            xcb_keycode_t           _maxKeycode;
 
 #ifdef LTSM_WITH_XKBCOMMON
             std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
@@ -487,13 +487,18 @@ namespace LTSM
 
             PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
 
-            bool                    fakeInputKeycode(int type, xcb_keycode_t keycode);
-            bool                    fakeInputMouse(int type, int buttons, int posx, int posy);
+            void                    fakeInputKeycode(xcb_keycode_t, bool pressed);
+            void                    fakeInputKeysym(xcb_keysym_t, bool pressed);
+            void                    fakeInputButton(int button, const Point &);
+            bool                    fakeInputTest(int type, int detail, int posx, int posy);
 
-	    bool                    loadKeymaps(void);
             xcb_keycode_t           keysymToKeycode(xcb_keysym_t) const;
-            xcb_keycode_t           findKeycodeLayout(xcb_keysym_t, size_t layout) const;
-            size_t                  getCurrentXkbLayout(void) const;
+            xcb_keycode_t           keysymGroupToKeycode(xcb_keysym_t, int group) const;
+	    std::pair<xcb_keycode_t, int>
+                                    keysymToKeycodeGroup(xcb_keysym_t keysym) const;
+            int                     getXkbLayoutGroup(void) const;
+            bool                    switchXkbLayoutGroup(int group = -1);
+            std::list<std::string>  getXkbNames(void) const;
 
 	    std::vector<xcb_randr_output_t>      getRandrOutputs(void) const;
 	    RandrOutputInfo                      getRandrOutputInfo(const xcb_randr_output_t &) const;
@@ -502,6 +507,7 @@ namespace LTSM
 	    RandrScreenInfo                      getRandrScreenInfo(void) const;
 	    std::vector<xcb_randr_screen_size_t> getRandrScreenSizes(RandrScreenInfo* = nullptr) const;
 	    std::vector<xcb_randr_mode_info_t>   getRandrModesInfo(void) const;
+
 
 	    bool	            setRandrScreenSize(uint16_t windth, uint16_t height);
 	    xcb_randr_mode_t        createRandrMode(uint16_t width, uint16_t height);

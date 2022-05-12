@@ -266,7 +266,7 @@ namespace LTSM
             if(kc.get())
             {
                 size_t len = 0;
-                while(*(kc.get() + len) != XCB_NO_SYMBOL) len++;
+                while(*(kc.get() + len) != NULL_KEYCODE) len++;
 
                 return Tools::crc32b(kc.get(), len);
             }
@@ -461,7 +461,7 @@ namespace LTSM
 
     bool XCB::KeyCodes::isValid(void) const
     {
-        return get() && *get() != XCB_NO_SYMBOL;
+        return get() && *get() != NULL_KEYCODE;
     }
 
     bool XCB::KeyCodes::operator==(const KeyCodes & kc) const
@@ -472,7 +472,7 @@ namespace LTSM
         if(! ptr1 || ! ptr2) return false;
         if(ptr1 == ptr2) return true;
 
-        while(*ptr1 != XCB_NO_SYMBOL && *ptr2 != XCB_NO_SYMBOL)
+        while(*ptr1 != NULL_KEYCODE && *ptr2 != NULL_KEYCODE)
         {
             if(*ptr1 != *ptr2) return false;
             ptr1++; ptr2++;
@@ -1100,11 +1100,14 @@ namespace LTSM
 
     /* XCB::RootDisplay */
     XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr),
-        _format(nullptr), _visual(nullptr), _keysymsPerKeycode(0), _keycodesCount(0)
+        _format(nullptr), _visual(nullptr), _minKeycode(0), _maxKeycode(0)
 #ifdef LTSM_WITH_XKBCOMMON
         , _xkbctx{ nullptr, xkb_context_unref }, _xkbmap{ nullptr, xkb_keymap_unref }, _xkbstate{ nullptr, xkb_state_unref }, _xkbdevid(-1)
 #endif
     {
+        _minKeycode = _setup->min_keycode;
+        _maxKeycode = _setup->max_keycode;
+
         _screen = xcb_setup_roots_iterator(_setup).data;
         if(! _screen)
         {
@@ -1200,7 +1203,7 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
             throw std::runtime_error("XCB::RootDisplay");
         }
-        
+
         _xkbctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
         if(! _xkbctx)
         {
@@ -1224,7 +1227,7 @@ namespace LTSM
 
         uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
                         XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
-        uint16_t required_events = ( XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+        uint16_t required_events = (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
      
         auto cookie = xcb_xkb_select_events_checked(_conn, _xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
 	if(auto errorReq = checkRequest(cookie))
@@ -1232,10 +1235,6 @@ namespace LTSM
             extendedError(errorReq, "xcb_xkb_select_events");
         }
 #endif
-
-        // load keymaps
-        if(! loadKeymaps())
-            throw std::runtime_error("XCB::RootDisplay");
 
         auto wsz = size();
 
@@ -1265,48 +1264,6 @@ namespace LTSM
 	xcb_flush(_conn);
     }
 
-    bool XCB::RootDisplay::loadKeymaps(void)
-    {
-        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
-
-        if(auto err = xcbReply.error())
-        {
-            extendedError(err, "xcb_get_keyboard_mapping");
-            return false;
-        }
-
-        if(auto reply = xcbReply.reply())
-        {
-            auto ptr = xcb_get_keyboard_mapping_keysyms(reply.get());
-	    if(! ptr)
-	    {
-        	Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
-            	return false;
-	    }
-
-            _keysymsPerKeycode = reply->keysyms_per_keycode;
-            Application::info("%s: keysyms per keycode: %d", __FUNCTION__, _keysymsPerKeycode);
-
-	    if(1 > _keysymsPerKeycode)
-	    {
-        	Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
-            	return false;
-	    }
-
-            auto len = xcb_get_keyboard_mapping_keysyms_length(reply.get());
-            Application::info("%s: keysyms length: %d", __FUNCTION__, len);
-
-            _keysymsVec.assign(ptr, ptr + len);
-
-            _keycodesCount = len / _keysymsPerKeycode;
-            Application::info("%s: keycodes count: %d", __FUNCTION__, _keycodesCount);
-
-	    return true;
-        }
-
-	return false;
-    }
-
     void XCB::RootDisplay::resetInputs(void)
     {
 	// release all buttons
@@ -1314,7 +1271,7 @@ namespace LTSM
     	    xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
 
 	// release all keys
-        for(size_t key = _setup->min_keycode;  key <= _setup->max_keycode; key++)
+        for(size_t key = _minKeycode;  key <= _maxKeycode; key++)
             xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
 
         xcb_flush(_conn);
@@ -1324,6 +1281,7 @@ namespace LTSM
     {
         return _format ? _format->bits_per_pixel : 0;
     }
+
     size_t XCB::RootDisplay::scanlinePad(void) const
     {
         return _format ? _format->scanline_pad : 0;
@@ -1897,133 +1855,321 @@ namespace LTSM
 
 #ifdef LTSM_WITH_XKBCOMMON
 	int xkbev = eventNotify(ev, Module::XKB);
+        bool resetMapState = false;
 
-        if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev || XCB_XKB_MAP_NOTIFY == xkbev)
+        if(XCB_XKB_MAP_NOTIFY == xkbev)
         {
-	    auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-	    if(XCB_XKB_MAP_NOTIFY == xkbev || (xn->any.device_id == _xkbdevid && (xn->keyboard_notify.changed & XCB_XKB_NKN_DETAIL_KEYCODES)))
-	    {
-		// free state first
-		_xkbstate.reset();
-    		_xkbmap.reset();
-
-		// set new
-    		_xkbmap.reset(xkb_x11_keymap_new_from_device(_xkbctx.get(), _conn, _xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-    		if(_xkbmap)
-		{
-		    _xkbstate.reset(xkb_x11_state_new_from_device(_xkbmap.get(), _conn, _xkbdevid));
-    		    if(!_xkbstate)
-        		Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
-		    else
-        		Application::debug("%s: keyboard updated, device id: %d", __FUNCTION__, _xkbdevid);
-		}
-		else
-    		{
-        	    Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
-    		}
-
-		if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev) loadKeymaps();
-	    }
-	}
+            auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
+            Application::debug("%s: xkb notify: %s, min keycode: %d, max keycode: %d, changed: 0x%04x", __FUNCTION__, "map",
+                                        mn->minKeyCode, mn->maxKeyCode, mn->changed);
+            resetMapState = true;
+            _minKeycode = mn->minKeyCode;
+            _maxKeycode = mn->maxKeyCode;
+        }
         else
-        if(XCB_XKB_STATE_NOTIFY == xkbev)
+        if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
         {
-	    auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-	    xkb_state_update_mask(_xkbstate.get(), xn->state_notify.baseMods, xn->state_notify.latchedMods, xn->state_notify.lockedMods,
-        	xn->state_notify.baseGroup, xn->state_notify.latchedGroup, xn->state_notify.lockedGroup);
-	}
+            auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
+            Application::debug("%s: xkb notify: %s, devid: %d, old devid: %d, min keycode: %d, max keycode: %d, changed: 0x%04x", __FUNCTION__, "new keyboard",
+                                        kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed);
+
+            if(kn->deviceID == _xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
+            {
+                resetMapState = true;
+                _minKeycode = kn->minKeyCode;
+                _maxKeycode = kn->maxKeyCode;
+            }
+        }
+        else
+        if(xkbev == XCB_XKB_STATE_NOTIFY)
+        {
+            Application::debug("%s: xkb notify: %s", __FUNCTION__, "state");
+
+            auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
+            xkb_state_update_mask(_xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
+                                                      sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+            if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
+            {
+                // changed layout group
+                // sn->group
+            }
+        }
+
+        if(resetMapState)
+        {
+            // free state first
+            _xkbstate.reset();
+            _xkbmap.reset();
+
+            // set new
+            _xkbmap.reset(xkb_x11_keymap_new_from_device(_xkbctx.get(), _conn, _xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+	    if(_xkbmap)
+	    {
+                _xkbstate.reset(xkb_x11_state_new_from_device(_xkbmap.get(), _conn, _xkbdevid));
+
+    		if(_xkbstate)
+                {
+        	    Application::debug("%s: keyboard updated, device id: %d", __FUNCTION__, _xkbdevid);
+		}
+                else
+        	    Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
+            }
+	    else
+    	    {
+        	Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
+    	    }
+        }
 #endif
 
         return ev;
     }
 
-    size_t XCB::RootDisplay::getCurrentXkbLayout(void) const
+    std::list<std::string> XCB::RootDisplay::getXkbNames(void) const
     {
+        std::list<std::string> res;
 #ifdef LTSM_WITH_XKBCOMMON
+        auto xcbReply = getReplyFunc2(xcb_xkb_get_names, _conn, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
-        const size_t max_layouts = _keysymsPerKeycode >> 1;
-
-        for(size_t cur = 0; cur < max_layouts; ++cur)
-            if(1 == xkb_state_layout_index_is_active(_xkbstate.get(), cur, XKB_STATE_LAYOUT_EFFECTIVE))
-                return cur;
-#endif
-        return 0;
-    }
-
-    xcb_keycode_t XCB::RootDisplay::findKeycodeLayout(xcb_keysym_t keysym, size_t layout) const
-    {
-        const size_t max_layouts = _keysymsPerKeycode >> 1;
-
-        if(layout < max_layouts)
+        if(auto err = xcbReply.error())
         {
-            for(int ii = 0; ii < _keycodesCount; ++ii)
-            {
-	        auto keycode = _setup->min_keycode + ii;
-                int index = ii * _keysymsPerKeycode + layout * 2;
-
-                if(index + 1 >= _keysymsVec.size())
-                {
-                    Application::warning("%s: out of range, index: %d, layout: %d", __FUNCTION__, index, layout);
-                    return XCB_NO_SYMBOL;
-                }
-
-                // check normal keysyms
-                if(keysym == _keysymsVec[index])
-                    return keycode;
-
-                // check shifted keysyms
-                if(keysym == _keysymsVec[index + 1])
-                    return keycode;
-            }
-
-	    return layout == 0 ? findKeycodeLayout(keysym, 1) : XCB_NO_SYMBOL;
+            extendedError(err, "xcb_xkb_get_names");
+            return res;
         }
 
-        Application::warning("%s: unknown layout: %d", __FUNCTION__, layout);
-        // return base layout
-        return findKeycodeLayout(keysym, 0);
+        if(auto reply = xcbReply.reply())
+        {
+            const void* buffer = xcb_xkb_get_names_value_list(reply.get());
+            xcb_xkb_get_names_value_list_t list;
+
+            xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
+                                            reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
+            int groups = xcb_xkb_get_names_value_list_groups_length(reply.get(), & list);
+
+            // current symbol atom: list.symbolsName;
+
+            for(int ii = 0; ii < groups; ++ii)
+                res.emplace_back(getAtomName(list.groups[ii]));
+        }
+#endif
+        return res;
+    }
+
+    int XCB::RootDisplay::getXkbLayoutGroup(void) const
+    {
+#ifdef LTSM_WITH_XKBCOMMON
+        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn, XCB_XKB_ID_USE_CORE_KBD);
+
+        if(xcbReply.error())
+            throw std::runtime_error("xcb_xkb_get_state");
+
+        if(auto reply = xcbReply.reply())
+            return reply->group;
+#endif
+        return -1;
+    }
+
+    bool XCB::RootDisplay::switchXkbLayoutGroup(int group)
+    {
+#ifdef LTSM_WITH_XKBCOMMON
+        // next
+        if(group < 0)
+        {
+            auto names = getXkbNames();
+            if(2 > names.size())
+                return false;
+
+            group = (getXkbLayoutGroup() + 1) % names.size();
+        }
+
+        auto cookie = xcb_xkb_latch_lock_state_checked(_conn, XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
+        if(auto errorReq = checkRequest(cookie))
+        {
+            extendedError(errorReq, "xcb_xkb_latch_lock_state");
+            return false;
+        }
+
+        return true;
+#endif
+        return false;
     }
 
     xcb_keycode_t XCB::RootDisplay::keysymToKeycode(xcb_keysym_t keysym) const
     {
-        xcb_keycode_t res = XCB_NO_SYMBOL;
-        size_t layout = getCurrentXkbLayout();
+	return keysymGroupToKeycode(keysym, getXkbLayoutGroup());
+    }
 
-        // check current layout
-        if(layout)
+    std::pair<xcb_keycode_t, int> XCB::RootDisplay::keysymToKeycodeGroup(xcb_keysym_t keysym) const
+    {
+	auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
+
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _minKeycode, _maxKeycode - _minKeycode + 1);
+        if(auto err = xcbReply.error())
         {
-            if(XCB_NO_SYMBOL != (res = findKeycodeLayout(keysym, layout)))
-                return res;
+            extendedError(err, "xcb_get_keyboard_mapping");
+            return empty;
         }
 
-        // force check primary layout
-        if(XCB_NO_SYMBOL != (res = findKeycodeLayout(keysym, 0)))
-            return res;
+        auto reply = xcbReply.reply();
+        if(! reply)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            return empty;
+        }
 
-        Application::warning("%s: unknown keysym: 0x%08x, layout: %d", __FUNCTION__, keysym, layout);
-        return res;
+        const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
+	if(! keysyms)
+	{
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            return empty;
+	}
+
+        int keysymsPerKeycode = reply->keysyms_per_keycode;
+	if(1 > keysymsPerKeycode)
+	{
+            Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
+            return empty;
+	}
+
+        int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
+        int keycodesCount = keysymsLength / keysymsPerKeycode;
+
+        Application::debug("%s: keysym: 0x%08x, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                                __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
+
+	// shifted/unshifted
+	int groupsCount = keysymsPerKeycode >> 1;
+        for(int group = 0; group < groupsCount; ++group)
+        {
+	    for(int ii = 0; ii < keycodesCount; ++ii)
+    	    {
+		auto keycode = _minKeycode + ii;
+        	int index = ii * keysymsPerKeycode + group * 2;
+
+        	if(index + 1 >= keysymsLength)
+        	{
+            	    Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+            	    return empty;
+        	}
+
+        	// check normal/shifted keysyms
+    		if(keysym == keysyms[index] || keysym == keysyms[index + 1])
+            	    return std::make_pair(keycode, group);
+	    }
+        }
+
+        Application::warning("%s: keysym not found 0x%08x, group names: [%s]", __FUNCTION__, keysym, Tools::join(getXkbNames(), ",").c_str());
+        return empty;
+    }
+
+    xcb_keycode_t XCB::RootDisplay::keysymGroupToKeycode(xcb_keysym_t keysym, int group) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _minKeycode, _maxKeycode - _minKeycode + 1);
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_get_keyboard_mapping");
+            return NULL_KEYCODE;
+        }
+
+        auto reply = xcbReply.reply();
+        if(! reply)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            return NULL_KEYCODE;
+        }
+
+        const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
+	if(! keysyms)
+	{
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            return NULL_KEYCODE;
+	}
+
+        int keysymsPerKeycode = reply->keysyms_per_keycode;
+	if(1 > keysymsPerKeycode)
+	{
+            Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
+            return NULL_KEYCODE;
+	}
+
+        // [shifted, unshifted] pairs
+        int groupsCount = keysymsPerKeycode >> 1;
+        if(0 > group || groupsCount <= group)
+        {
+            Application::error("%s: unknown group: %d, groups count: %d", __FUNCTION__, group, groupsCount);
+            return NULL_KEYCODE;
+        }
+
+        int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
+        int keycodesCount = keysymsLength / keysymsPerKeycode;
+
+        Application::debug("%s: keysym: 0x%08x, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d, group names: [%s]",
+				__FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount, Tools::join(getXkbNames(), ",").c_str());
+
+        for(int ii = 0; ii < keycodesCount; ++ii)
+        {
+	    auto keycode = _minKeycode + ii;
+            int index = ii * keysymsPerKeycode + group * 2;
+
+            if(index + 1 >= keysymsLength)
+            {
+                Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                return NULL_KEYCODE;
+            }
+
+            // check normal keysyms
+            if(keysym == keysyms[index])
+                return keycode;
+
+            // check shifted keysyms
+            if(keysym == keysyms[index + 1])
+                return keycode;
+        }
+
+        Application::warning("%s: keysym not found 0x%08x, curent group: %d", __FUNCTION__, keysym, group);
+        return NULL_KEYCODE;
+    }
+
+    void XCB::RootDisplay::fakeInputKeycode(xcb_keycode_t keycode, bool pressed)
+    {
+	fakeInputTest(pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
+    }
+
+    void XCB::RootDisplay::fakeInputKeysym(xcb_keysym_t keysym, bool pressed)
+    {
+        auto keycode = keysymToKeycode(keysym);
+        if(keycode == NULL_KEYCODE)
+        {
+            auto keycodeGroup = keysymToKeycodeGroup(keysym);
+            if(keycodeGroup.first != NULL_KEYCODE)
+            {
+    		if(pressed)
+		    Application::debug("%s: keysym 0x%08x was found the another group %d, switched it", __FUNCTION__, keysym, keycodeGroup.second);
+
+                switchXkbLayoutGroup(keycodeGroup.second);
+                keycode = keycodeGroup.first;
+            }
+        }
+
+        if(keycode != NULL_KEYCODE)
+	{
+	    fakeInputKeycode(keycode, pressed);
+	}
+    }
+
+    void XCB::RootDisplay::fakeInputButton(int button, const Point & pos)
+    {
+        xcb_test_fake_input(_conn, XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
+        xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
+        xcb_flush(_conn);
     }
 
     /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
-    /// @param keycode
-    bool XCB::RootDisplay::fakeInputKeycode(int type, xcb_keycode_t keycode)
+    /// @param detail: keycode or left 1, middle 2, right 3, scrollup 4, scrolldw 5
+    bool XCB::RootDisplay::fakeInputTest(int type, int detail, int posx, int posy)
     {
-        // type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
-        auto cookie = xcb_test_fake_input_checked(_conn, type, keycode, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
-        auto errorReq = checkRequest(cookie);
-
-        if(! errorReq)
-            return true;
-
-        extendedError(errorReq, "xcb_test_fake_input");
-        return false;
-    }
-
-    /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
-    /// @param button: left 1, middle 2, right 3, scrollup 4, scrolldw 5
-    bool XCB::RootDisplay::fakeInputMouse(int type, int button, int posx, int posy)
-    {
-        auto cookie = xcb_test_fake_input_checked(_conn, type, button, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
+        auto cookie = xcb_test_fake_input_checked(_conn, type, detail, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
         auto errorReq = checkRequest(cookie);
 
         if(! errorReq)
@@ -2128,8 +2274,7 @@ namespace LTSM
 
     XCB::RootDisplayExt::~RootDisplayExt()
     {
-        _timerClipCheck->stop();
-        _timerClipCheck->join();
+        _timerClipCheck->stop(true);
 
 	if(_selwin)
             xcb_destroy_window(_conn, _selwin);

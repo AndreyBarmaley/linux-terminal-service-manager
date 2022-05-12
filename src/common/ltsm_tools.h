@@ -116,6 +116,37 @@ namespace LTSM
     	    return os.str();
 	}
 
+        // BaseSpinLock
+        class SpinLock
+        {
+            std::atomic<bool> flag{0};
+
+        public:
+            bool tryLock(void) noexcept 
+            {
+                return ! flag.load(std::memory_order_relaxed) &&
+                    ! flag.exchange(true, std::memory_order_acquire);
+            }
+
+            void lock(void) noexcept
+            {
+                for(;;)
+                {
+                    if(! flag.exchange(true, std::memory_order_acquire))
+                        break;
+
+                    while(flag.load(std::memory_order_relaxed))
+                        std::this_thread::yield();
+                }
+            }
+
+            void unlock(void) noexcept
+            {
+                flag.store(false, std::memory_order_release);
+            }
+        };
+
+
 	// BaseTimer
 	class BaseTimer
 	{
@@ -125,13 +156,18 @@ namespace LTSM
 
 	public:
 	    BaseTimer() : processed(false) {}
-            ~BaseTimer();
+            ~BaseTimer() { stop(true); }
     
-	    std::thread::id 	getId(void) const;
-	    bool		isRunning(void) const;
+	    std::thread::id 	getId(void) const
+            {
+                return thread.get_id();
+            }
 
-	    void		stop(void);
-	    void		join(void);
+	    void		stop(bool wait = false)
+            {
+                processed = false;
+                if(wait && thread.joinable()) thread.join();
+            }
 
 	    // usage:
 	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
@@ -144,11 +180,11 @@ namespace LTSM
     		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::move(call)]()
     		{
         	    timer->processed = true;
-        	    auto start = std::chrono::system_clock::now();
+        	    auto start = std::chrono::steady_clock::now();
         	    while(timer->processed)
         	    {
             		std::this_thread::sleep_for(TimeType(1));
-            		auto cur = std::chrono::system_clock::now();
+            		auto cur = std::chrono::steady_clock::now();
 
             		if(TimeType(delay) <= cur - start)
             		{
@@ -158,7 +194,7 @@ namespace LTSM
                 	    call();
 
                             if(repeat)
-        	                start = std::chrono::system_clock::now();
+        	                start = std::chrono::steady_clock::now();
                             else
                 	        timer->processed = false;
             		}
@@ -175,11 +211,11 @@ namespace LTSM
 		    call = std::move(call), args = std::make_tuple(std::forward<Args>(args)...)]()
     		{
         	    timer->processed = true;
-        	    auto start = std::chrono::system_clock::now();
+        	    auto start = std::chrono::steady_clock::now();
         	    while(timer->processed)
         	    {
             		std::this_thread::sleep_for(TimeType(1));
-            		auto cur = std::chrono::system_clock::now();
+            		auto cur = std::chrono::steady_clock::now();
             		if(TimeType(delay) <= cur - start)
             		{
 			    if(!timer->processed)
@@ -188,7 +224,7 @@ namespace LTSM
                 	    std::apply(call, args);
 
                             if(repeat)
-        	                start = std::chrono::system_clock::now();
+        	                start = std::chrono::steady_clock::now();
                             else
                 	        timer->processed = false;
             		}
@@ -202,10 +238,10 @@ namespace LTSM
 	template <class TimeType, class Func>
         bool waitCallable(uint32_t delay, uint32_t pause, Func&& call)
 	{
-            auto now = std::chrono::system_clock::now();
+            auto now = std::chrono::steady_clock::now();
     	    while(call())
     	    {
-            	auto cur = std::chrono::system_clock::now();
+            	auto cur = std::chrono::steady_clock::now();
             	if(TimeType(delay) <= cur - now)
             	    return false;
 

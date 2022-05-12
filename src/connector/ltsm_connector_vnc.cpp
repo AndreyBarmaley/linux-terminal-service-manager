@@ -275,8 +275,13 @@ namespace LTSM
 
         encodingDebug = _config->getInteger("vnc:encoding:debug", 0);
         clipboardEnable = _config->getBoolean("vnc:clipboard", true);
-        prefEncodings = selectEncodings();
+        prefEncodingsPair = selectEncodings();
         disabledEncodings = _config->getStdList<std::string>("vnc:encoding:blacklist");
+        prefferedEncodings = _config->getStdList<std::string>("vnc:encoding:preflist");
+
+        // lower list
+        for(auto & enc : prefferedEncodings) 
+            enc = Tools::lower(enc); 
 
         std::string encryptionInfo = "none";
 
@@ -322,7 +327,7 @@ namespace LTSM
         }
 
         Application::debug("login session request success, display: %d", screen);
-	Application::info("server default encoding: %s", RFB::encodingName(prefEncodings.second));
+	Application::info("server default encoding: %s", RFB::encodingName(prefEncodingsPair.second));
 
         if(! xcbConnect(screen))
         {
@@ -685,7 +690,7 @@ namespace LTSM
         // skip padding
         recvSkip(1);
 
-	int previousType = prefEncodings.second;
+	int previousType = prefEncodingsPair.second;
         int numEncodings = recvIntBE16();
         Application::notice("RFB 6.4.2, set encodings, counts: %d", numEncodings);
 
@@ -717,8 +722,32 @@ namespace LTSM
                 Application::info("RFB request encodings: %s", RFB::encodingName(encoding));
         }
 
-        prefEncodings = selectEncodings();
-	Application::notice("server select encoding: %s", RFB::encodingName(prefEncodings.second));
+        if(! prefferedEncodings.empty())
+        {
+            std::sort(clientEncodings.begin(), clientEncodings.end(), [this](auto & v1, auto & v2){
+                auto s1 = Tools::lower(RFB::encodingName(v1));
+                auto s2 = Tools::lower(RFB::encodingName(v2));
+                auto p1 = std::find(prefferedEncodings.begin(), prefferedEncodings.end(), s1);
+                auto p2 = std::find(prefferedEncodings.begin(), prefferedEncodings.end(), s2);
+                if(p1 != prefferedEncodings.end() && p2 != prefferedEncodings.end())
+                    return std::distance(prefferedEncodings.begin(), p1) < std::distance(prefferedEncodings.begin(), p2);
+                if(p1 != prefferedEncodings.end())
+                    return true;
+                return false;
+            });
+
+            for(auto & enc : clientEncodings)
+            {
+                const char* name = RFB::encodingName(enc);
+                if(0 == std::strcmp(name, "unknown"))
+                    Application::debug("server pref encodings: 0x%08x", enc);
+                else
+                    Application::debug("server pref encodings: %s", RFB::encodingName(enc));
+            }
+        }
+
+        prefEncodingsPair = selectEncodings();
+	Application::notice("server select encoding: %s", RFB::encodingName(prefEncodingsPair.second));
 
         if(std::any_of(clientEncodings.begin(), clientEncodings.end(),
                     [=](auto & val){ return val == RFB::ENCODING_CONTINUOUS_UPDATES; }))
@@ -731,7 +760,7 @@ namespace LTSM
             // serverSendEndContinuousUpdates();
         }
 
-	return previousType != prefEncodings.second;
+	return previousType != prefEncodingsPair.second;
     }
 
     bool Connector::VNC::clientFramebufferUpdate(void)
@@ -775,37 +804,27 @@ namespace LTSM
         int pressed = recvInt8();
         recvSkip(2);
         int keysym = recvIntBE32();
-        Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%04x", (pressed ? "pressed" : "released"), keysym);
+        Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%08x", (pressed ? "pressed" : "released"), keysym);
 
         if(isAllowXcbMessages())
         {
             // local keymap priority "vnc:keymap:file"
             if(auto value = (keymap ? keymap->getValue(Tools::hex(keysym, 8)) : nullptr))
             {
-                // no wait xcb replies
-                std::thread([=]()
+                if(value->isArray())
                 {
-                    if(value->isArray())
-                    {
-                        auto ja = static_cast<const JsonArray*>(value);
-                        for(auto & val : ja->toStdVector<int>())
-                            _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val);
-                    }
-                    else
-                    {
-                        _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger());
-                    }
-                }).detach();
+                    auto ja = static_cast<const JsonArray*>(value);
+                    for(auto keycode: ja->toStdVector<int>())
+                        _xcbDisplay->fakeInputKeycode(value->getInteger(), 0 < pressed);
+                }
+                else
+                {
+                    _xcbDisplay->fakeInputKeycode(value->getInteger(), 0 < pressed);
+                }
             }
             else
             {
-                // no wait xcb replies
-                std::thread([=]()
-                {
-                    auto keyCode = _xcbDisplay->keysymToKeycode(keysym);
-                    if(keyCode != XCB_NO_SYMBOL)
-                        _xcbDisplay->fakeInputKeycode(0 < pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keyCode);
-                }).detach();
+                _xcbDisplay->fakeInputKeysym(keysym, 0 < pressed);
             }
         }
     }
@@ -820,38 +839,34 @@ namespace LTSM
 
         if(isAllowXcbMessages())
         {
-            // no wait xcb replies
-            std::thread([=]()
+            if(this->pressedMask ^ mask)
             {
-                if(this->pressedMask ^ mask)
+                for(int num = 0; num < 8; ++num)
                 {
-                    for(int num = 0; num < 8; ++num)
-                    {
-                        int bit = 1 << num;
+                    int bit = 1 << num;
 
-                        if(bit & mask)
-                        {
-			    if(1 < encodingDebug)
-                        	Application::debug("xfb fake input pressed: %d", num + 1);
-                            _xcbDisplay->fakeInputMouse(XCB_BUTTON_PRESS, num + 1, posx, posy);
-                            this->pressedMask |= bit;
-                        }
-                        else if(bit & pressedMask)
-                        {
-			    if(1 < encodingDebug)
-                        	Application::debug("xfb fake input released: %d", num + 1);
-                            _xcbDisplay->fakeInputMouse(XCB_BUTTON_RELEASE, num + 1, posx, posy);
-                            this->pressedMask &= ~bit;
-                        }
+                    if(bit & mask)
+                    {
+			if(1 < encodingDebug)
+                    	    Application::debug("xfb fake input pressed: %d", num + 1);
+                        _xcbDisplay->fakeInputTest(XCB_BUTTON_PRESS, num + 1, posx, posy);
+                        this->pressedMask |= bit;
+                    }
+                    else if(bit & pressedMask)
+                    {
+			if(1 < encodingDebug)
+                    	    Application::debug("xfb fake input released: %d", num + 1);
+                        _xcbDisplay->fakeInputTest(XCB_BUTTON_RELEASE, num + 1, posx, posy);
+                        this->pressedMask &= ~bit;
                     }
                 }
-                else
-                {
-		    if(1 < encodingDebug)
-                	Application::debug("xfb fake input move, posx: %d, posy: %d", posx, posy);
-                    _xcbDisplay->fakeInputMouse(XCB_MOTION_NOTIFY, 0, posx, posy);
-                }
-            }).detach();
+            }
+            else
+            {
+		if(1 < encodingDebug)
+            	    Application::debug("xfb fake input move, posx: %d, posy: %d", posx, posy);
+                _xcbDisplay->fakeInputTest(XCB_MOTION_NOTIFY, 0, posx, posy);
+            }
         }
     }
 
@@ -1017,13 +1032,13 @@ namespace LTSM
 
 	    // send encodings
             size_t netStatTx2 = netStatTx;
-            prefEncodings.first(frameBuffer);
+            prefEncodingsPair.first(frameBuffer);
 
             if(encodingDebug)
             {
                 size_t rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
                 double optimize = 100.0f - (netStatTx - netStatTx2) * 100 / static_cast<double>(rawLength);
-                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodings.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
+                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodingsPair.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
             }
 
             _xcbDisplay->damageSubtrack(reg);
