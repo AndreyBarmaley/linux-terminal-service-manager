@@ -304,6 +304,10 @@ namespace LTSM
 
                 Application::notice("keymap loaded: %s, items: %d", file.c_str(), keymap->size());
             }
+            else
+            {
+                Application::error("keymap invalid: %s", file.c_str());
+            }
         }
 
         // RFB 6.1.1 version

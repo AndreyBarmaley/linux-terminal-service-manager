@@ -4,7 +4,7 @@ After=network.target ltsm_service.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/LTSM_connector --type vnc
+ExecStart=-/usr/local/sbin/LTSM_connector --type vnc
 User=ltsm-xvfb
 Group=ltsm-shm
 StandardInput=socket

@@ -271,6 +271,10 @@ namespace LTSM
 
                 Application::notice("keymap loaded: %s, items: %d", file.c_str(), keymap->size());
             }
+            else
+            {
+                Application::error("keymap invalid: %s", file.c_str());
+            }
         }
 
         std::string encryptionInfo = "none";
