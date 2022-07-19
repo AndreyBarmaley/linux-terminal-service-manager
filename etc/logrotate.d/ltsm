@@ -1,0 +1,9 @@
+/var/log/ltsm.log
+/var/log/ltsm_connector.log {
+    missingok
+    notifempty
+    rotate 14
+    daily
+    compress
+    nocreate
+}
