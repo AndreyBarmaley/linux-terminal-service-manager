@@ -49,29 +49,6 @@
 
 using namespace std::chrono_literals;
 
-/*
-// not used
-#define bswap16(x) __builtin_bswap16(x)
-#define bswap32(x) __builtin_bswap32(x)
-#define bswap64(x) __builtin_bswap64(x)
-
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
- #define swapLE16(x) (x)
- #define swapLE32(x) (x)
- #define swapLE64(x) (x)
- #define swapBE16(x) bswap16(x)
- #define swapBE32(x) bswap32(x)
- #define swapBE64(x) bswap64(x)
-#else
- #define swapLE16(x) bswap16(x)
- #define swapLE32(x) bswap32(x)
- #define swapLE64(x) bswap64(x)
- #define swapBE16(x) (x)
- #define swapBE32(x) (x)
- #define swapBE64(x) (x)
-#endif
-*/
-
 namespace LTSM
 {
     /* NetworkStream */
@@ -188,12 +165,8 @@ namespace LTSM
 
     std::string NetworkStream::recvString(size_t length) const
     {
-        std::string res;
-        res.reserve(length);
-
-        while(res.size() < length)
-            res.append(1, recvInt8());
-
+        std::string res(length, 0);
+        recvRaw(& res[0], length);
         return res;
     }
 
@@ -223,9 +196,9 @@ namespace LTSM
     {
 	while(true)
 	{
-	    auto real = read(sock, ptr, len);
+	    ssize_t real = read(sock, ptr, len);
 
-	    if(len == real)
+	    if(static_cast<ssize_t>(len) == real)
 		break;
 	    else
 	    if(0 > real)
@@ -255,9 +228,9 @@ namespace LTSM
     {
 	while(true)
 	{
-	    auto real = write(sock, buf.data(), buf.size());
+	    ssize_t real = write(sock, buf.data(), buf.size());
 
-	    if(buf.size() == real)
+	    if(static_cast<ssize_t>(buf.size()) == real)
                 break;
 	    else
             if(0 > real)
@@ -491,7 +464,7 @@ namespace LTSM
 
         if(buf.size())
         {
-            if(buf.size() != send(bridgeSock, buf.data(), buf.size(), 0))
+            if(static_cast<ssize_t>(buf.size()) != send(bridgeSock, buf.data(), buf.size(), 0))
             {
                 Application::error("%s: send error: %s", __FUNCTION__, strerror(errno));
                 return false;
@@ -934,7 +907,7 @@ namespace LTSM
                 break;
             }
 
-            if(ret != len)
+            if(ret != static_cast<ssize_t>(len))
             {
                 Application::error("gnutls_record_send ret: %ld, error: %s", ret, gnutls_strerror(ret));
                 if(gnutls_error_is_fatal(ret))
@@ -952,7 +925,7 @@ namespace LTSM
                 break;
             }
 
-            if(ret != len)
+            if(ret != static_cast<ssize_t>(len))
             {
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
                 if(gnutls_error_is_fatal(ret))

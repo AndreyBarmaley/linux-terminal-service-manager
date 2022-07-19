@@ -25,6 +25,7 @@
 
 #include <any>
 #include <list>
+#include <string>
 #include <vector>
 #include <memory>
 #include <utility>
@@ -120,7 +121,7 @@ namespace LTSM
         JsonPrimitive(const bool & v) : value(v) {}
         JsonPrimitive(const int & v) : value(v) {}
         JsonPrimitive(const double & v) : value(v) {}
-        JsonPrimitive(const std::string & v) : value(v) {}
+        JsonPrimitive(const std::string & v) : value(std::make_any<std::string>(v)) {}
 
         std::string             toString(void) const override;
     };

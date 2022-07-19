@@ -35,6 +35,8 @@
 #include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
 
+#define LTSM_SOCKETS_VERSION 20220719
+
 namespace LTSM
 {
     /// @brief: network stream interface
@@ -43,8 +45,8 @@ namespace LTSM
     protected:
         static bool             hasInput(int);
 
-        uint8_t			getInt8(void) const override { return recvInt8(); }
-        void    		putInt8(uint8_t v) override { sendInt8(v); }
+        inline void             getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
+        inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
         NetworkStream() {}
@@ -52,13 +54,13 @@ namespace LTSM
 
         virtual void            setupTLS(gnutls_session_t) const {}
 
-        NetworkStream &         sendIntBE16(uint16_t v) { putIntBE16(v); return *this; }
-        NetworkStream &         sendIntBE32(uint32_t v) { putIntBE32(v); return *this; }
-        NetworkStream &         sendIntBE64(uint64_t v) { putIntBE64(v); return *this; }
+        inline NetworkStream &  sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
+        inline NetworkStream &  sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
+        inline NetworkStream &  sendIntBE64(uint64_t x) { putIntBE64(x); return *this; }
 
-        NetworkStream &         sendIntLE16(uint16_t v) { putIntLE16(v); return *this; }
-        NetworkStream &         sendIntLE32(uint32_t v) { putIntLE32(v); return *this; }
-        NetworkStream &         sendIntLE64(uint64_t v) { putIntLE64(v); return *this; }
+        inline NetworkStream &  sendIntLE16(uint16_t x) { putIntLE16(x); return *this; }
+        inline NetworkStream &  sendIntLE32(uint32_t x) { putIntLE32(x); return *this; }
+        inline NetworkStream &  sendIntLE64(uint64_t x) { putIntLE64(x); return *this; }
 
         NetworkStream &         sendInt8(uint8_t);
         NetworkStream &         sendInt16(uint16_t);
