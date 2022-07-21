@@ -34,6 +34,7 @@
 namespace LTSM
 {
     DebugLevel Application::_debug = DebugLevel::Console;
+    std::mutex Application::_logging;
 
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {

@@ -23,6 +23,7 @@
 
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -60,7 +61,30 @@ namespace LTSM
         struct pollfd fds = {0};
         fds.fd = fd;
         fds.events = POLLIN;
-        return 0 < poll(& fds, 1, 0);
+        int res = poll(& fds, 1, 0);
+
+        if(0 > res)
+        {
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+            throw std::runtime_error("InetStream::recvRaw error");
+        }
+
+        return 0 < res;
+    }
+
+    int NetworkStream::hasData(int fd)
+    {
+        if(0 > fd)
+            return 0;
+
+        int count;
+        if(0 > ioctl(fd, FIONREAD, & count))
+        {
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+            throw std::runtime_error("InetStream::recvRaw error");
+        }
+
+        return count;
     }
 
     NetworkStream & NetworkStream::sendInt8(uint8_t val)
@@ -170,52 +194,93 @@ namespace LTSM
         return res;
     }
 
-    /* BaseSocket */
-    BaseSocket::BaseSocket(int fd) : sock(fd)
+    /* FileDescriptor */
+    void FileDescriptor::read(int fd, void* ptr, ssize_t len)
+    {
+	while(true)
+	{
+	    ssize_t real = ::read(fd, ptr, len);
+
+	    if(len == real)
+                break;
+
+	    if(0 < real && real < len)
+            {
+                ptr = static_cast<uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            // eof
+	    if(0 == real)
+                throw std::runtime_error("FileDescriptor::read data end");
+
+            // error
+            if(EAGAIN == errno || EINTR == errno)
+	    	continue;
+
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+    	    throw std::runtime_error("FileDescriptor::read error");
+        }
+    }
+
+    void FileDescriptor::write(int fd, const void* ptr, ssize_t len)
+    {
+	while(true)
+	{
+	    ssize_t real = ::write(fd, ptr, len);
+
+	    if(len == real)
+                break;
+
+            if(0 < real && real < len)
+	    {
+                ptr = static_cast<const uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            // eof
+	    if(0 == real)
+                throw std::runtime_error("FileDescriptor::write data end");
+
+            // error
+	    if(EAGAIN == errno || EINTR == errno)
+	    	continue;
+
+            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+    	    throw std::runtime_error("FileDescriptor::write error");
+        }
+    }
+
+    /* SocketStream */
+    SocketStream::SocketStream(int fd) : sock(fd)
     {
         buf.reserve(2048);
     }
 
-    BaseSocket::~BaseSocket()
+    SocketStream::~SocketStream()
     {
         if(0 < sock)
             close(sock);
     }
 
-    void BaseSocket::setupTLS(gnutls_session_t sess) const
+    void SocketStream::setupTLS(gnutls_session_t sess) const
     {
         gnutls_transport_set_int(sess, sock);
     }
 
-    bool BaseSocket::hasInput(void) const
+    bool SocketStream::hasInput(void) const
     {
         return NetworkStream::hasInput(sock);
     }
 
-    void BaseSocket::recvRaw(void* ptr, size_t len) const
+    void SocketStream::recvRaw(void* ptr, size_t len) const
     {
-	while(true)
-	{
-	    ssize_t real = read(sock, ptr, len);
-
-	    if(static_cast<ssize_t>(len) == real)
-		break;
-	    else
-	    if(0 > real)
-	    {
-		if(EAGAIN == errno || EINTR == errno)
-	    	    continue;
-
-        	Application::error("%s: read error: %s", __FUNCTION__, strerror(errno));
-	    }
-	    else
-        	Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
-
-    	    throw std::runtime_error("BaseSocket::recvRaw");
-        }
+        FileDescriptor::read(sock, ptr, len);
     }
 
-    void BaseSocket::sendRaw(const void* ptr, size_t len)
+    void SocketStream::sendRaw(const void* ptr, size_t len)
     {
         if(ptr && len)
         {
@@ -224,37 +289,22 @@ namespace LTSM
         }
     }
 
-    void BaseSocket::sendFlush(void)
+    void SocketStream::sendFlush(void)
     {
-	while(true)
-	{
-	    ssize_t real = write(sock, buf.data(), buf.size());
-
-	    if(static_cast<ssize_t>(buf.size()) == real)
-                break;
-	    else
-            if(0 > real)
-	    {
-		if(EAGAIN == errno || EINTR == errno)
-	    	    continue;
-
-        	Application::error("%s: write error: %s", __FUNCTION__, strerror(errno));
-	    }
-	    else
-        	Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, buf.size());
-
-    	    throw std::runtime_error("BaseSocket::sendFlush");
+        if(buf.size())
+        {
+            FileDescriptor::write(sock, buf.data(), buf.size());
+            buf.clear();
         }
-        buf.clear();
     }
 
-    uint8_t BaseSocket::peekInt8(void) const
+    uint8_t SocketStream::peekInt8(void) const
     {
         uint8_t res = 0;
         if(1 != recv(sock, & res, 1, MSG_PEEK))
         {
             Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("BaseSocket::peekInt8");
+            throw std::runtime_error("SocketStream::peekInt8");
         }
 
         return res;
@@ -307,39 +357,45 @@ namespace LTSM
 
     void InetStream::recvRaw(void* ptr, size_t len) const
     {
-        if(std::ferror(fdin))
+        while(true)
         {
-            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("InetStream::recvRaw");
-        }
+	    size_t real = std::fread(ptr, 1, len, fdin);
+	    if(len == real)
+                break;
 
-	auto real = std::fread(ptr, 1, len, fdin);
-	if(len != real)
-    	{
-	    Application::error("%s: read byte: %d, expected: %d", __FUNCTION__, real, len);
-            throw std::runtime_error("InetStream::recvRaw");
+            if(std::feof(fdin))
+                throw std::runtime_error("InetStream::recvRaw end stream");
+
+            if(std::ferror(fdin))
+            {
+                Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+                throw std::runtime_error("InetStream::recvRaw error");
+            }
+        
+            ptr = static_cast<uint8_t*>(ptr) + real;
+            len -= real;
         }
     }
 
-    void InetStream::sendRaw(const void* buf, size_t len)
+    void InetStream::sendRaw(const void* ptr, size_t len)
     {
-        if(std::ferror(fdout))
+        while(true)
         {
-            Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("InetStream::sendRaw");
-        }
+            size_t real = std::fwrite(ptr, 1, len, fdout);
+            if(len == real)
+                break;
 
-        if(std::feof(fdout))
-        {
-            Application::warning("%s: ended", __FUNCTION__);
-            throw std::runtime_error("InetStream::sendRaw");
-        }
+            if(std::feof(fdout))
+                throw std::runtime_error("InetStream::sendRaw end stream");
 
-        auto real = std::fwrite(buf, 1, len, fdout);
-        if(len != real)
-        {
-            Application::error("%s: write byte: %d, expected: %d", __FUNCTION__, real, len);
-            throw std::runtime_error("InetStream::sendRaw");
+            if(std::ferror(fdout))
+            {
+                Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
+                throw std::runtime_error("InetStream::sendRaw error");
+            }
+
+            ptr = static_cast<const uint8_t*>(ptr) + real;
+            len -= real;
         }
     }
 
@@ -356,17 +412,15 @@ namespace LTSM
 
     uint8_t InetStream::peekInt8(void) const
     {
+        int res = std::fgetc(fdin);
+
+        if(std::feof(fdin))
+            throw std::runtime_error("InetStream::peekInt8 end stream");
+
         if(std::ferror(fdin))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("InetStream::peekInt8");
-        }
-
-        int res = std::fgetc(fdin);
-        if(std::feof(fdin))
-        {
-            Application::warning("%s: ended", __FUNCTION__);
-            throw std::runtime_error("InetStream::peekInt8");
+            throw std::runtime_error("InetStream::peekInt8 error");
         }
 
         std::ungetc(res, fdin);
@@ -407,11 +461,6 @@ namespace LTSM
         return clientSock;
     }
 
-    int ProxySocket::proxyBridgeSocket(void) const
-    {
-        return bridgeSock;
-    }
-
     bool ProxySocket::proxyRunning(void) const
     {
 	return loopTransmission;
@@ -432,12 +481,12 @@ namespace LTSM
             {
 		try
         	{
-            	    if(! this->enterEventLoopAsync())
+            	    if(! this->transmitDataIteration())
         		this->loopTransmission = false;
         	}
         	catch(const std::exception & err)
         	{
-		    Application::error("exception: %s", err.what());
+		    Application::error("proxy exception: %s", err.what());
         	    this->loopTransmission = false;
 		}
                 catch(...)
@@ -451,24 +500,25 @@ namespace LTSM
         });
     }
 
-    bool ProxySocket::enterEventLoopAsync(void)
+    bool ProxySocket::transmitDataIteration(void)
     {
-        buf.clear();
+        if(fdin == nullptr || std::feof(fdin) || std::ferror(fdin))
+            return false;
+
+        int dataSz = 0;
 
     	// inetFd -> bridgeSock
-    	while(hasInput())
+    	if(NetworkStream::hasInput(fileno(fdin)))
     	{
-    	    uint8_t ch = recvInt8();
-    	    buf.push_back(ch);
-	}
-
-        if(buf.size())
-        {
-            if(static_cast<ssize_t>(buf.size()) != send(bridgeSock, buf.data(), buf.size(), 0))
+            dataSz = NetworkStream::hasData(fileno(fdin));
+            if(dataSz <= 0)
             {
-                Application::error("%s: send error: %s", __FUNCTION__, strerror(errno));
+                Application::warning("%s: stream ended", __FUNCTION__);
                 return false;
             }
+
+            auto buf = recvData(dataSz);
+            FileDescriptor::write(bridgeSock, buf.data(), buf.size());
 
 #ifdef LTSM_DEBUG
             if(! checkError())
@@ -479,39 +529,40 @@ namespace LTSM
 #endif
         }
 
-        if(checkError())
+        if(fdout == nullptr || std::feof(fdout) || std::ferror(fdout))
             return false;
 
     	// bridgeSock -> inetFd
-        while(NetworkStream::hasInput(bridgeSock))
+        if(NetworkStream::hasInput(bridgeSock))
         {
-            // tcp frame
-            buf.resize(1492);
-
-            auto len = recv(bridgeSock, buf.data(), buf.size(), MSG_DONTWAIT);
-            if(len < 0)
+            dataSz = NetworkStream::hasData(bridgeSock);
+            if(dataSz <= 0)
             {
-                Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
+                Application::warning("%s: stream ended", __FUNCTION__);
                 return false;
             }
 
-            if(0 < len)
-            {
-                sendRaw(buf.data(), len);
-                sendFlush();
-            
+            std::vector<uint8_t> buf(dataSz);
+            FileDescriptor::read(bridgeSock, buf.data(), buf.size());
+
+            sendRaw(buf.data(), buf.size());
+            sendFlush();
+
 #ifdef LTSM_DEBUG
-                if(! checkError())
-                {
-                    std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), len, 2);
-                    Application::debug("from local: [%s]", str.c_str());
-                }
-#endif
+            if(! checkError())
+            {
+                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), len, 2);
+                Application::debug("from local: [%s]", str.c_str());
             }
+#endif
         }
-            
-        return ! checkError();
-    }       
+
+        // no action
+        if(dataSz == 0)
+            std::this_thread::sleep_for(1ms);
+
+        return true;
+    }
 
     int ProxySocket::connectUnixSocket(const char* path)
     {   
@@ -553,53 +604,71 @@ namespace LTSM
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
             Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), path);
+            close(fd);
             return -1;
         }
             
         if(0 != listen(fd, 5))
         {   
             Application::error("%s: listen error: %s", __FUNCTION__, strerror(errno));
+            close(fd);
             return -1;
         }
-        Application::info("listen unix sock: %s", path);
-        
+
+        Application::info("%s: listen unix sock: %s", __FUNCTION__, path);
+        return fd;
+    }
+
+    int acceptClientUnixSocket(int fd)
+    {
         int sock = accept(fd, nullptr, nullptr);
         if(0 > sock)
             Application::error("%s: accept error: %s", __FUNCTION__, strerror(errno));
         else
-            Application::debug("accept unix sock: %s", path);
-        
-        close(fd);
+            Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+
         return sock;
     }
 
     bool ProxySocket::proxyInitUnixSockets(const std::string & path)
     {   
-        socketPath = path;
-        std::future<int> job = std::async(std::launch::async, ProxySocket::listenUnixSocket, socketPath.c_str());
-        
-        Application::debug("wait server socket: %s", socketPath.c_str());
-        
-        // wait create socket 3000 ms, 10 ms pause
-        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10, [=](){ return ! std::filesystem::is_socket(socketPath.c_str()); }))
+        int srvfd = ProxySocket::listenUnixSocket(path.c_str());
+        if(0 > srvfd)
             return false;
-        
+
+        if(! std::filesystem::is_socket(path.c_str()))
+        {
+            Application::error("%s: socket failed, path: %s", __FUNCTION__, path.c_str());
+            return false;
+        }
+
+        socketPath = path;
+        std::future<int> job = std::async(std::launch::async, acceptClientUnixSocket, srvfd);
+
         bridgeSock = -1;
         // socket fd: client part
         clientSock = connectUnixSocket(socketPath.c_str());
+
         if(0 < clientSock)
         {
             while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
+
             // socket fd: server part
             bridgeSock = job.get();
-
-            if(0 < bridgeSock)
-		fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
-
-            return 0 < bridgeSock;
         }   
+        else
+	{
+            Application::error("%s: failed", __FUNCTION__);
+        }
 
-	Application::error("%s: failed", __FUNCTION__);
+        close(srvfd);
+
+        if(0 < bridgeSock)
+	{
+            fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
+            return true;
+        }
+
         return false;
     }
  

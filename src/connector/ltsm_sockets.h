@@ -35,7 +35,7 @@
 #include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220719
+#define LTSM_SOCKETS_VERSION 20220720
 
 namespace LTSM
 {
@@ -43,7 +43,8 @@ namespace LTSM
     class NetworkStream : protected ByteOrderInterface
     {
     protected:
-        static bool             hasInput(int);
+        static bool             hasInput(int fd);
+        static int              hasData(int fd);
 
         inline void             getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
         inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
@@ -97,16 +98,22 @@ namespace LTSM
         std::string	        recvString(size_t) const;
     };
 
-    /// @brief: base socket
-    class BaseSocket : public NetworkStream
+    namespace FileDescriptor
+    {
+        void			write(int fd, const void*, ssize_t);
+        void	                read(int fd, void*, ssize_t);
+    };
+
+    /// @brief: socket stream
+    class SocketStream : public NetworkStream
     {
     protected:
         int                     sock;
         std::vector<uint8_t>    buf;
 
     public:
-        BaseSocket(int fd = 0);
-        ~BaseSocket();
+        SocketStream(int fd = 0);
+        ~SocketStream();
 
         void                    setupTLS(gnutls_session_t) const override;
 
@@ -148,24 +155,23 @@ namespace LTSM
     };
 
     /// @brief: proxy socket: stdin/stdout to local socket
-    class ProxySocket : private InetStream
+    class ProxySocket : protected InetStream
     {
+    protected:
         std::atomic<bool>       loopTransmission;
         std::thread             loopThread;
         int                     bridgeSock;
         int                     clientSock;
         std::string             socketPath;
-        std::vector<uint8_t>    buf;
 
     protected:
-        bool                    enterEventLoopAsync(void);
+        bool                    transmitDataIteration(void);
 
     public:
         ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
         ~ProxySocket();
             
         int                     proxyClientSocket(void) const;
-        int                     proxyBridgeSocket(void) const;
         bool                    proxyInitUnixSockets(const std::string &);
         bool                    proxyRunning(void) const;
 

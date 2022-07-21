@@ -501,12 +501,12 @@ namespace LTSM
 	    }
 	    catch(const std::exception & err)
 	    {
-		Application::error("exception: %s", err.what());
+		Application::error("xcb exception: %s", err.what());
 		return false;
 	    }
 	    catch(...)
 	    {
-		Application::error("exception: %s", "unknown");
+		Application::error("xcb exception: %s", "unknown");
                 return false;
             }
 

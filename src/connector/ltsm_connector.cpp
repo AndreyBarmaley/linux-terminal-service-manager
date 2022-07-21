@@ -149,12 +149,13 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-	    Application::error("exception: %s", err.what());
-	    res = EXIT_FAILURE;
+	    Application::error("connector exception: %s", err.what());
+            // terminated connection: exit normal
+	    res = EXIT_SUCCESS;
         }
         catch(...)
         {
-	    Application::error("exception: %s", "unknown");
+	    Application::error("connector exception: %s", "unknown");
 	    res = EXIT_FAILURE;
         }
 
@@ -215,7 +216,7 @@ namespace LTSM
 	}
 	catch(const std::exception & err)
 	{
-            Application::error("exception: %s", err.what());
+            Application::error("xcb exception: %s", err.what());
 	    return false;
 	}
 
@@ -400,7 +401,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("local exception: %s", err.what());
+        LTSM::Application::error("other exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

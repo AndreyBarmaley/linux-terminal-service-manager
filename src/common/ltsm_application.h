@@ -23,6 +23,7 @@
 #ifndef _LTSM_APPLICATION_
 #define _LTSM_APPLICATION_
 
+#include <mutex>
 #include <string>
 
 #include <stdio.h>
@@ -37,6 +38,7 @@ namespace LTSM
     class Application
     {
     protected:
+        static std::mutex _logging;
         static DebugLevel _debug;
         int		_argc;
         const char**	_argv;
@@ -52,6 +54,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
+                const std::lock_guard<std::mutex> lock(_logging);
 		fprintf(stderr, "[info]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -66,6 +69,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
+                const std::lock_guard<std::mutex> lock(_logging);
 		fprintf(stderr, "[notice]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -79,6 +83,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
+                const std::lock_guard<std::mutex> lock(_logging);
 		fprintf(stderr, "[warning]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -92,6 +97,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
+                const std::lock_guard<std::mutex> lock(_logging);
 		fprintf(stderr, "[error]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -105,6 +111,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
+                const std::lock_guard<std::mutex> lock(_logging);
 		fprintf(stderr, "[debug]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");

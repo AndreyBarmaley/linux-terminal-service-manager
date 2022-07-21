@@ -602,7 +602,7 @@ namespace LTSM
                                 catch(const std::exception & err)
                                 {
                                     error = true;
-                                    Application::error("exception: %s", err.what());
+                                    Application::error("vnc exception: %s", err.what());
                                 }
                                 catch(...)
                                 {

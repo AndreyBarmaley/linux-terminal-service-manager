@@ -67,7 +67,7 @@ namespace LTSM
             desktopResizeMode = DesktopResizeMode::Undefined;
 
 	if(0 < fd)
-            socket.reset(new BaseSocket(fd));
+            socket.reset(new SocketStream(fd));
 	else
 	    socket.reset(new InetStream());
 
