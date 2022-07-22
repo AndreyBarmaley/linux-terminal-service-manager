@@ -67,6 +67,8 @@ namespace LTSM
 
     namespace Connector
     {
+        static std::string              homeRuntime(void);
+
         /* Connector::SignalProxy */
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {

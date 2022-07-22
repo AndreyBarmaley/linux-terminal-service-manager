@@ -376,7 +376,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        const std::string home = Tools::getenv("HOME", "/tmp");
+        auto home = Connector::homeRuntime();
 	const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
         if(! proxyInitUnixSockets(socketFile.string()))

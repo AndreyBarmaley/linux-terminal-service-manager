@@ -158,7 +158,7 @@ namespace LTSM
 
 	Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
-        const std::string home = Tools::getenv("HOME", "/tmp");
+        auto home = Connector::homeRuntime();
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
         if(! proxyInitUnixSockets(socketFile.string()))

@@ -24,6 +24,9 @@
 // shm access flags
 #include <sys/stat.h>
 
+#include <sys/types.h>
+#include <pwd.h>
+
 #include <poll.h>
 #include <unistd.h>
 
@@ -102,6 +105,16 @@ namespace LTSM
         return -1;
     }
 
+    std::string Connector::homeRuntime(void)
+    {
+        std::string home("/tmp");
+
+        if(struct passwd* st = getpwuid(getuid()))
+            home = st->pw_gid;
+
+        return home;
+    }
+
     int Connector::Service::start(void)
     {
         auto conn = sdbus::createSystemBusConnection();
@@ -113,7 +126,16 @@ namespace LTSM
 
         std::unique_ptr<SignalProxy> connector;
         Application::setDebugLevel(_config.getString("connector:debug"));
+
+        auto uid = getuid();
         Application::info("connector version: %d", LTSM::service_version);
+
+        if(0 < uid)
+        {
+            auto home = Connector::homeRuntime();
+            Application::debug("uid: %d, gid: %d, working dir: %s", uid, getgid(), home.c_str());
+            chdir(home.c_str());
+        }
 
         // protocol up
         if(_type == "auto")
