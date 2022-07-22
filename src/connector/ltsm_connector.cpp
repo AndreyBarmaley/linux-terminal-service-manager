@@ -130,7 +130,7 @@ namespace LTSM
         auto uid = getuid();
         Application::info("connector version: %d", LTSM::service_version);
 
-        if(0 < uid)
+        //if(0 < uid)
         {
             auto home = Connector::homeRuntime();
             Application::debug("uid: %d, gid: %d, working dir: %s", uid, getgid(), home.c_str());
