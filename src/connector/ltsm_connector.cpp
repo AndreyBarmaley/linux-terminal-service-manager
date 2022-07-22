@@ -110,7 +110,7 @@ namespace LTSM
         std::string home("/tmp");
 
         if(struct passwd* st = getpwuid(getuid()))
-            home = st->pw_gid;
+            home.assign(st->pw_dir);
 
         return home;
     }
