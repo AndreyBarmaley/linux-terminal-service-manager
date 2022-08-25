@@ -25,7 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
          sudo apt-get -y install wget libexpat1 libpam0g-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
-           libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev libsdl2-image-dev qtbase5-dev
+           libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
+           libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev
          sudo wget http://ftp.us.debian.org/debian/pool/main/s/sdbus-cpp/libsdbus-c++-dev_0.8.3-4~bpo10+1_amd64.deb \
            http://ftp.us.debian.org/debian/pool/main/s/sdbus-cpp/libsdbus-c++-bin_0.8.3-4~bpo10+1_amd64.deb \
            http://ftp.us.debian.org/debian/pool/main/s/sdbus-cpp/libsdbus-c++0_0.8.3-4~bpo10+1_amd64.deb
@@ -51,7 +52,9 @@ jobs:
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
       - name: Run build-wrapper
         run: |
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }}<insert_your_clean_build_command>
+          mkdir build
+          cmake -S . -B build
+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build --config Release
       - name: Run sonar-scanner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
