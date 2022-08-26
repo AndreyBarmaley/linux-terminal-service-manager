@@ -1,20 +1,19 @@
 name: SonarCloud Build
 on:
   push:
-    branches:
-      - master
+    branches: [ main ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [ main ]
+
+env:
+    SONAR_SCANNER_VERSION: 4.6.2.2472
+    SONAR_SERVER_URL: "https://sonarcloud.io"
+    BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
+    BUILD_TYPE: Release
 
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
-    env:
-      SONAR_SCANNER_VERSION: 4.6.2.2472
-      SONAR_SERVER_URL: "https://sonarcloud.io"
-      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
-      BUILD_TYPE: Release
     steps:
       - uses: actions/checkout@v2
         with:
@@ -32,6 +31,12 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 11
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v1
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
       - name: Download and set up sonar-scanner
         env:
           SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
