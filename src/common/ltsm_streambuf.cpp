@@ -28,13 +28,13 @@
 
 namespace LTSM
 {
-    std::string ByteArray::hexstring(const std::string & sep, bool prefix) const
+    std::string ByteArray::hexstring(std::string_view sep, bool prefix) const
     {
-        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2);
+        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep);
     }
 
     /* BinaryBuf */
-    BinaryBuf & BinaryBuf::append(const std::string & s)
+    BinaryBuf & BinaryBuf::append(std::string_view s)
     {
         insert(end(), s.begin(), s.end());
         return *this;
@@ -305,7 +305,7 @@ namespace LTSM
         return *this;
     }
 
-    MemoryStream & MemoryStream::write(const std::string & v)
+    MemoryStream & MemoryStream::write(std::string_view v)
     {
         putRaw(v.data(), v.size());
         return *this;

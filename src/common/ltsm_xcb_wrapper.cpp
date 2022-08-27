@@ -482,9 +482,9 @@ namespace LTSM
     }
 
     /* XCB::Connector */
-    XCB::Connector::Connector(const char* addr) : _conn(nullptr), _setup(nullptr)
+    XCB::Connector::Connector(std::string_view addr) : _conn(nullptr), _setup(nullptr)
     {
-        _conn = xcb_connect(addr, nullptr);
+        _conn = xcb_connect(addr.data(), nullptr);
 
         if(xcb_connection_has_error(_conn))
         {
@@ -526,9 +526,9 @@ namespace LTSM
         return _setup;
     }
 
-    bool XCB::Connector::testConnection(const char* addr)
+    bool XCB::Connector::testConnection(std::string_view addr)
     {
-        auto conn = xcb_connect(addr, nullptr);
+        auto conn = xcb_connect(addr.data(), nullptr);
         int err = xcb_connection_has_error(conn);
         xcb_disconnect(conn);
         return err == 0;
@@ -584,14 +584,14 @@ namespace LTSM
 	return xcb_get_maximum_request_length(_conn);
     }
 
-    bool XCB::Connector::checkAtom(const std::string & name) const
+    bool XCB::Connector::checkAtom(std::string_view name) const
     {
         return XCB_ATOM_NONE != getAtom(name, false);
     }
 
-    xcb_atom_t XCB::Connector::getAtom(const std::string & name, bool create) const
+    xcb_atom_t XCB::Connector::getAtom(std::string_view name, bool create) const
     {
-	auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn, create ? 0 : 1, name.size(), name.c_str());
+	auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn, create ? 0 : 1, name.size(), name.data());
 
 	if(auto err = xcbReply.error())
         {
@@ -1099,7 +1099,7 @@ namespace LTSM
     }
 
     /* XCB::RootDisplay */
-    XCB::RootDisplay::RootDisplay(const std::string & addr) : Connector(addr.c_str()), _screen(nullptr),
+    XCB::RootDisplay::RootDisplay(std::string_view addr) : Connector(addr), _screen(nullptr),
         _format(nullptr), _visual(nullptr), _minKeycode(0), _maxKeycode(0)
 #ifdef LTSM_WITH_XKBCOMMON
         , _xkbctx{ nullptr, xkb_context_unref }, _xkbmap{ nullptr, xkb_keymap_unref }, _xkbstate{ nullptr, xkb_state_unref }, _xkbdevid(-1)
@@ -2228,7 +2228,7 @@ namespace LTSM
     }
 
     /* XCB::RootDisplayExt */
-    XCB::RootDisplayExt::RootDisplayExt(const std::string & addr) : RootDisplay(addr),
+    XCB::RootDisplayExt::RootDisplayExt(std::string_view addr) : RootDisplay(addr),
         _atoms{ XCB_ATOM_NONE }, _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
         _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
     {

@@ -46,7 +46,7 @@ namespace LTSM
         _debug = lvl;
     }
             
-    void Application::setDebugLevel(const std::string & level)
+    void Application::setDebugLevel(std::string_view level)
     {
         if(level == "info")
             _debug = DebugLevel::SyslogInfo;

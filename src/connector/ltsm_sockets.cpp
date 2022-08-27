@@ -53,7 +53,7 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     /* NetworkStream */
-    bool NetworkStream::hasInput(int fd)
+    bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
         if(0 > fd)
             return false;
@@ -61,18 +61,18 @@ namespace LTSM
         struct pollfd fds = {0};
         fds.fd = fd;
         fds.events = POLLIN;
-        int res = poll(& fds, 1, 0);
+        int res = poll(& fds, 1, timeoutMS);
 
         if(0 > res)
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("InetStream::recvRaw error");
+            throw std::runtime_error("NetworkStream::hasInput error");
         }
 
         return 0 < res;
     }
 
-    int NetworkStream::hasData(int fd)
+    size_t NetworkStream::hasData(int fd)
     {
         if(0 > fd)
             return 0;
@@ -81,10 +81,10 @@ namespace LTSM
         if(0 > ioctl(fd, FIONREAD, & count))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw std::runtime_error("InetStream::recvRaw error");
+            throw std::runtime_error("NetworkStream::hasData error");
         }
 
-        return count;
+        return count < 0 ? 0 : count;
     }
 
     NetworkStream & NetworkStream::sendInt8(uint8_t val)
@@ -123,7 +123,7 @@ namespace LTSM
     uint8_t NetworkStream::recvInt8(void) const
     {
         uint8_t byte;
-        recvRaw(& byte, 1);
+        recvData(& byte, 1);
         return byte;
     }
 
@@ -180,17 +180,61 @@ namespace LTSM
 	return *this;
     }
 
+    void NetworkStream::setReadTimeout(size_t ms)
+    {
+        rcvTimeout = ms;
+    }
+
     std::vector<uint8_t> NetworkStream::recvData(size_t length) const
     {
         std::vector<uint8_t> res(length, 0);
-        recvRaw(res.data(), res.size());
+        recvData(res.data(), res.size());
         return res;
+    }
+
+    void NetworkStream::recvData(void* ptr, size_t len) const
+    {
+        if(rcvTimeout)
+            recvRaw(ptr, len, rcvTimeout);
+        else
+            recvRaw(ptr, len);
+    }
+
+    void NetworkStream::recvRaw(void* ptr, size_t len, size_t timeout) const
+    {
+        auto startp = std::chrono::steady_clock::now();
+        auto timeoutms = std::chrono::milliseconds(timeout);
+
+        while(len)
+        {
+            size_t real = hasData();
+
+            if(real)
+            {
+                real = std::min(real, len);
+                recvRaw(ptr, real);
+
+                ptr = static_cast<uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            if(timeoutms < std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startp))
+            {
+                Application::error("%s: timeout error", __FUNCTION__);
+                throw std::runtime_error("NetworkStream::recvRaw timeout");
+            }
+            else
+            {
+                std::this_thread::sleep_for(1ms);
+            }
+        }
     }
 
     std::string NetworkStream::recvString(size_t length) const
     {
         std::string res(length, 0);
-        recvRaw(& res[0], length);
+        recvData(& res[0], length);
         return res;
     }
 
@@ -275,6 +319,11 @@ namespace LTSM
         return NetworkStream::hasInput(sock);
     }
 
+    size_t SocketStream::hasData(void) const
+    {
+        return NetworkStream::hasData(sock);
+    }
+
     void SocketStream::recvRaw(void* ptr, size_t len) const
     {
         FileDescriptor::read(sock, ptr, len);
@@ -353,6 +402,11 @@ namespace LTSM
     {
         return fdin == nullptr || std::feof(fdin) || std::ferror(fdin) ?
                 false : NetworkStream::hasInput(fileno(fdin));
+    }
+
+    size_t InetStream::hasData(void) const
+    {
+        return NetworkStream::hasData(fileno(fdin));
     }
 
     void InetStream::recvRaw(void* ptr, size_t len) const
@@ -505,13 +559,13 @@ namespace LTSM
         if(fdin == nullptr || std::feof(fdin) || std::ferror(fdin))
             return false;
 
-        int dataSz = 0;
+        size_t dataSz = 0;
 
     	// inetFd -> bridgeSock
     	if(NetworkStream::hasInput(fileno(fdin)))
     	{
             dataSz = NetworkStream::hasData(fileno(fdin));
-            if(dataSz <= 0)
+            if(dataSz == 0)
             {
                 Application::warning("%s: stream ended", __FUNCTION__);
                 return false;
@@ -536,7 +590,7 @@ namespace LTSM
         if(NetworkStream::hasInput(bridgeSock))
         {
             dataSz = NetworkStream::hasData(bridgeSock);
-            if(dataSz <= 0)
+            if(dataSz == 0)
             {
                 Application::warning("%s: stream ended", __FUNCTION__);
                 return false;
@@ -564,7 +618,7 @@ namespace LTSM
         return true;
     }
 
-    int ProxySocket::connectUnixSocket(const char* path)
+    int ProxySocket::connectUnixSocket(std::string_view path)
     {   
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > sock)
@@ -576,17 +630,17 @@ namespace LTSM
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        std::strcpy(sockaddr.sun_path, path);
+        std::strncpy(sockaddr.sun_path, path.data(), path.size());
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
-            Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), path);
+            Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), path.data());
         else
             Application::debug("%s: fd: %d", __FUNCTION__, sock);
 
         return sock;
     }
 
-    int ProxySocket::listenUnixSocket(const char* path)
+    int ProxySocket::listenUnixSocket(std::string_view path)
     {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > fd)
@@ -598,12 +652,12 @@ namespace LTSM
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        std::strcpy(sockaddr.sun_path, path);
+        std::strncpy(sockaddr.sun_path, path.data(), path.size());
         
         std::filesystem::remove(path);
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), path);
+            Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), path.data());
             close(fd);
             return -1;
         }
@@ -615,7 +669,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::info("%s: listen unix sock: %s", __FUNCTION__, path);
+        Application::info("%s: listen unix sock: %s", __FUNCTION__, path.data());
         return fd;
     }
 
@@ -630,15 +684,15 @@ namespace LTSM
         return sock;
     }
 
-    bool ProxySocket::proxyInitUnixSockets(const std::string & path)
+    bool ProxySocket::proxyInitUnixSockets(std::string_view path)
     {   
-        int srvfd = ProxySocket::listenUnixSocket(path.c_str());
+        int srvfd = ProxySocket::listenUnixSocket(path);
         if(0 > srvfd)
             return false;
 
-        if(! std::filesystem::is_socket(path.c_str()))
+        if(! std::filesystem::is_socket(path))
         {
-            Application::error("%s: socket failed, path: %s", __FUNCTION__, path.c_str());
+            Application::error("%s: socket failed, path: %s", __FUNCTION__, path.data());
             return false;
         }
 
@@ -647,7 +701,7 @@ namespace LTSM
 
         bridgeSock = -1;
         // socket fd: client part
-        clientSock = connectUnixSocket(socketPath.c_str());
+        clientSock = connectUnixSocket(socketPath);
 
         if(0 < clientSock)
         {
@@ -881,7 +935,7 @@ namespace LTSM
         }
 
         /* TLS::Stream */
-        Stream::Stream(const NetworkStream* bs) : layer(bs), handshake(false)
+        Stream::Stream(const NetworkStream* bs) : layer(bs), handshake(false), peek(-1)
         {
             if(! bs)
                 throw std::invalid_argument("tls stream failed");
@@ -966,6 +1020,67 @@ namespace LTSM
             return (tls ? 0 < gnutls_record_check_pending(tls->session) : false) || layer->hasInput();
         }
 
+        size_t Stream::hasData(void) const
+        {
+            return gnutls_record_check_pending(tls->session);
+        }
+
+        void Stream::recvRaw(void* ptr, size_t len, size_t timeoutMS) const
+        {
+            if(0 >= gnutls_record_check_pending(tls->session))
+            {
+                void* recv_ptr; void* send_ptr;
+                gnutls_transport_get_ptr2(tls->session, & recv_ptr, & send_ptr);
+
+                struct pollfd fds = {0};
+                fds.fd = (long) recv_ptr;
+                fds.events = POLLIN;
+
+                int ret = poll(& fds, 1, timeoutMS);
+
+                if(0 > ret)
+                {
+                    Application::error("%s: poll error: %s", __FUNCTION__, strerror(errno));
+                    throw std::runtime_error("TLS::Stream::recvRaw error");
+                }
+                else
+                if(0 == ret)
+                {
+                    Application::error("%s: timeout error", __FUNCTION__);
+                    throw std::runtime_error("TLS::Stream::recvRaw timeout");
+                }
+            }
+
+            recvRaw(ptr, len);
+        }
+
+        void Stream::recvRaw(void* ptr, size_t len) const
+        {
+            if(0 <= peek)
+            {
+                auto buf = static_cast<uint8_t*>(ptr);
+                *buf = 0xFF & peek;
+                ptr = buf + 1;
+                len = len - 1;
+                peek = -1;
+            }
+
+            ssize_t ret = 0;
+            while((ret = gnutls_record_recv(tls->session, ptr, len)) < 0)
+            {
+                if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                    continue;
+                break;
+            }
+
+            if(ret != static_cast<ssize_t>(len))
+            {
+                Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
+                if(gnutls_error_is_fatal(ret))
+            	    throw std::runtime_error("TLS::Stream::recvRaw");
+            }
+        }
+
         void Stream::sendRaw(const void* ptr, size_t len)
         {
             ssize_t ret = 0;
@@ -984,44 +1099,24 @@ namespace LTSM
             }
         }
 
-        void Stream::recvRaw(void* ptr, size_t len) const
-        {
-            ssize_t ret = 0;
-            while((ret = gnutls_record_recv(tls->session, ptr, len)) < 0)
-            {
-                if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
-                    continue;
-                break;
-            }
-
-            if(ret != static_cast<ssize_t>(len))
-            {
-                Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
-                if(gnutls_error_is_fatal(ret))
-            	    throw std::runtime_error("TLS::Stream::recvRaw");
-            }
-        }
-
         uint8_t Stream::peekInt8(void) const
         {
-            uint8_t res = 0;
-#if (GNUTLS_VERSION_NUMBER < 0x030605)
-            Application::error("gnutls_record_recv_early_data added for 3.6.5, your version: %d.%d.%d", GNUTLS_VERSION_MAJOR, GNUTLS_VERSION_MINOR, GNUTLS_VERSION_PATCH);
-#else
-            auto ret = gnutls_record_recv_early_data(tls->session, & res, 1);
-            if(ret != 1)
+            if(0 > peek)
             {
-                Application::error("gnutls_record_recv_early_data error: %s", gnutls_strerror(ret));
-            	throw std::runtime_error("TLS::Stream::peekInt8");
+                uint8_t val;
+                recvRaw(& val, 1);
+                peek = val;
             }
-#endif
-            return res;
+                
+            return peek;
         }
 
         void Stream::sendFlush(void)
         {
-            gnutls_record_cork(tls->session);
+            // flush send data
             gnutls_record_uncork(tls->session, 0);
+            // cached send data
+            gnutls_record_cork(tls->session);
         }
 
         std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & data, const std::string & str)

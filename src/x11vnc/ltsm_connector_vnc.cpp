@@ -103,6 +103,11 @@ namespace LTSM
         return loopMessage ? streamIn->hasInput() : false;
     }
 
+    size_t Connector::VNC::hasData(void) const
+    {
+        return loopMessage ? streamIn->hasData() : false;
+    }
+
     uint8_t Connector::VNC::peekInt8(void) const
     {
         return loopMessage ? streamIn->peekInt8() : 0;

@@ -96,7 +96,7 @@ namespace LTSM
         fds.fd = fd;
         fds.events = POLLIN;
         // has input
-        if(0 < poll(& fds, 1, 0))
+        if(0 < poll(& fds, 1, 1))
         {
             int val = std::fgetc(stdin);
             std::ungetc(val, stdin);
@@ -134,7 +134,8 @@ namespace LTSM
         {
             auto home = Connector::homeRuntime();
             Application::debug("uid: %d, gid: %d, working dir: %s", uid, getgid(), home.c_str());
-            chdir(home.c_str());
+            if(0 != chdir(home.c_str()))
+                Application::warning("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
         }
 
         // protocol up

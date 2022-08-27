@@ -21,12 +21,14 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_CONNECTOR_
-#define _LTSM_CONNECTOR_
+#ifndef _LTSM_X11VNC_
+#define _LTSM_X11VNC_
 
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
+
+#define LTSM_X11VNC_VERSION 20220826
 
 namespace LTSM
 {

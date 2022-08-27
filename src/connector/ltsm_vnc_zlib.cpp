@@ -118,6 +118,11 @@ namespace LTSM
 	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
+        size_t DeflateStream::hasData(void) const
+        {
+	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+
         uint8_t DeflateStream::peekInt8(void) const
         {
 	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));

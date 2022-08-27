@@ -59,6 +59,7 @@ namespace LTSM
             void                setLevel(size_t level);
 
             bool                hasInput(void) const override;
+            size_t              hasData(void) const override;
             void                sendRaw(const void*, size_t) override;
             
         private:

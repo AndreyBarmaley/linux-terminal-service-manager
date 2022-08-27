@@ -49,6 +49,7 @@ namespace LTSM
     //
     void connectorHelp(const char* prog)
     {
+        std::cout << "version: " << LTSM_X11VNC_VERSION << std::endl;
         std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage]" << std::endl;
     }
 

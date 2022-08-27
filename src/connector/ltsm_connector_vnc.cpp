@@ -97,9 +97,23 @@ namespace LTSM
         }
     }
 
+    void Connector::VNC::recvRaw(void* ptr, size_t len, size_t timeout) const
+    {
+        if(loopMessage)
+        {
+            streamIn->recvRaw(ptr, len, timeout);
+            netStatRx += len;
+        }
+    }
+
     bool Connector::VNC::hasInput(void) const
     {
         return loopMessage ? streamIn->hasInput() : false;
+    }
+
+    size_t Connector::VNC::hasData(void) const
+    {
+        return loopMessage ? streamIn->hasData() : 0;
     }
 
     uint8_t Connector::VNC::peekInt8(void) const
@@ -110,17 +124,23 @@ namespace LTSM
     bool Connector::VNC::clientAuthVnc(void)
     {
         std::vector<uint8_t> challenge = TLS::randomKey(16);
-        std::vector<uint8_t> response(16);
         
-        std::string tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
-        Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
+        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+        {
+            auto tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
+            Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
+        }
 
         sendRaw(challenge.data(), challenge.size());
         sendFlush();
      
-        recvRaw(response.data(), response.size());
-        tmp = Tools::buffer2hexstring<uint8_t>(response.data(), response.size(), 2);
-        Application::debug("%s: response: %s", __FUNCTION__, tmp.c_str());
+        auto response = recvData(16);
+
+        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+        {
+            auto tmp = Tools::buffer2hexstring<uint8_t>(response.data(), response.size(), 2);
+            Application::debug("%s: response: %s", __FUNCTION__, tmp.c_str());
+        }
 
         std::ifstream ifs(_config->getString("passwdfile"), std::ifstream::in);
         while(ifs.good())
@@ -129,9 +149,13 @@ namespace LTSM
             std::getline(ifs, pass);
             
             auto crypt = TLS::encryptDES(challenge, pass);
-            tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
-            Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
-        
+
+            if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+            {
+                auto tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
+                Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
+            }
+
             if(crypt == response)
                 return true;
         }
@@ -259,6 +283,13 @@ namespace LTSM
 	}
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
+
+        if(_config->hasKey("socket:read:timeout_ms"))
+        {
+            auto val = _config->getInteger("socket:read:timeout_ms", 0);
+            setReadTimeout(val);
+            Application::info("set socket read timeout: %dms", val);
+        }
 
         encodingThreads = _config->getInteger("vnc:encoding:threads", 2);
         if(encodingThreads < 1)

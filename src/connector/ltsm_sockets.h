@@ -29,28 +29,31 @@
 #include <vector>
 #include <thread>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <cstdint>
 
 #include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220720
+#define LTSM_SOCKETS_VERSION 20220827
 
 namespace LTSM
 {
     /// @brief: network stream interface
     class NetworkStream : protected ByteOrderInterface
     {
+        size_t                  rcvTimeout;
+
     protected:
-        static bool             hasInput(int fd);
-        static int              hasData(int fd);
+        static bool             hasInput(int fd, int timeoutMS = 1);
+        static size_t           hasData(int fd);
 
         inline void             getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
         inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
-        NetworkStream() {}
+        NetworkStream() : rcvTimeout(0) {}
         virtual ~NetworkStream() {}
 
         virtual void            setupTLS(gnutls_session_t) const {}
@@ -75,6 +78,7 @@ namespace LTSM
         virtual void		sendRaw(const void*, size_t) = 0;
 
         virtual bool            hasInput(void) const = 0;
+        virtual size_t          hasData(void) const = 0;
         virtual uint8_t		peekInt8(void) const = 0;
 
         inline uint16_t         recvIntBE16(void) const { return getIntBE16(); }
@@ -92,10 +96,15 @@ namespace LTSM
 
         void                    recvSkip(size_t) const;
         std::vector<uint8_t>    recvData(size_t) const;
+        void                    recvData(void* ptr, size_t len) const;
+
         virtual void            recvRaw(void*, size_t) const = 0;
+        virtual void            recvRaw(void* ptr, size_t len, size_t timeout /* ms */) const;
 
         NetworkStream &         sendString(const std::string &);
         std::string	        recvString(size_t) const;
+
+        void                    setReadTimeout(size_t ms);
     };
 
     namespace FileDescriptor
@@ -120,6 +129,7 @@ namespace LTSM
         void                    setSocket(int fd) { sock = fd; }
 
         bool                    hasInput(void) const override;
+        size_t                  hasData(void) const override;
         uint8_t	                peekInt8(void) const override;
 
         void			sendRaw(const void*, size_t) override;
@@ -145,6 +155,7 @@ namespace LTSM
         void                    setupTLS(gnutls_session_t) const override;
 
         bool                    hasInput(void) const override;
+        size_t                  hasData(void) const override;
         uint8_t		        peekInt8(void) const override;
 
         void                    sendFlush(void) override;
@@ -172,15 +183,15 @@ namespace LTSM
         ~ProxySocket();
             
         int                     proxyClientSocket(void) const;
-        bool                    proxyInitUnixSockets(const std::string &);
+        bool                    proxyInitUnixSockets(std::string_view path);
         bool                    proxyRunning(void) const;
 
         void                    proxyStartEventLoop(void);
         void                    proxyStopEventLoop(void);
         void                    proxyShutdown(void);
 
-        static int              connectUnixSocket(const char* path);
-        static int              listenUnixSocket(const char* path);
+        static int              connectUnixSocket(std::string_view path);
+        static int              listenUnixSocket(std::string_view path);
     };
 
     /// transport layer security
@@ -209,6 +220,7 @@ namespace LTSM
             const NetworkStream* layer;
             bool                handshake;
             std::unique_ptr<BaseContext> tls;
+            mutable int         peek;
 
         public:
             Stream(const NetworkStream*);
@@ -219,11 +231,13 @@ namespace LTSM
                                                         const std::string & keyFile, const std::string & crlFile, int debug);
 
             bool                hasInput(void) const override;
+            size_t              hasData(void) const override;
             void                sendFlush(void) override;
             uint8_t	        peekInt8(void) const override;
 
             void		sendRaw(const void*, size_t) override;
             void                recvRaw(void*, size_t) const override;
+            void                recvRaw(void* ptr, size_t len, size_t timeout /* ms */) const override;
 
 	    std::string		sessionDescription(void) const;
         };

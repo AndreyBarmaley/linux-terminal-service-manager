@@ -129,7 +129,7 @@ namespace LTSM
 		    {
 			if(char* ptr = SDL_GetClipboardText())
 			{
-                            int len = std::strlen(ptr);
+                            int len = SDL_strlen(ptr);
 			    selbuf.assign(ptr, ptr + len);
 			    XCB::RootDisplayExt::setClipboardEvent(selbuf);
 			    SDL_free(ptr);

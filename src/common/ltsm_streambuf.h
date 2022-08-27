@@ -24,11 +24,12 @@
 #define _LTSM_STREAMBUF_
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20220719
+#define LTSM_STREAMBUF_VERSION 20220827
 
 namespace LTSM
 {
@@ -43,7 +44,7 @@ namespace LTSM
         virtual uint8_t* data(void) = 0;
         virtual const uint8_t* data(void) const = 0;
 
-        std::string     hexstring(const std::string & sep = ", ", bool prefix = true) const;
+        std::string     hexstring(std::string_view sep = ", ", bool prefix = true) const;
     };
 
     /// @brief: raw array wrapper
@@ -91,7 +92,7 @@ namespace LTSM
 
         BinaryBuf &     append(const uint8_t*, size_t);
         BinaryBuf &     append(const std::vector<uint8_t> &);
-        BinaryBuf &     append(const std::string &);
+        BinaryBuf &     append(std::string_view);
         std::string     tostring(void) const;
         BinaryBuf       copy(void) const;
 
@@ -211,7 +212,7 @@ namespace LTSM
 
         MemoryStream &  write(const char*, size_t);
         MemoryStream &  write(const uint8_t*, size_t);
-        MemoryStream &  write(const std::string &);
+        MemoryStream &  write(std::string_view);
         MemoryStream &  write(const std::vector<uint8_t> &);
         /// @brief: fill version
         MemoryStream & fill(size_t, char);

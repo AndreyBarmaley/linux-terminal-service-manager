@@ -29,6 +29,7 @@
 #include <thread>
 #include <atomic>
 #include <vector>
+#include <string_view>
 
 #include "xcb/xcb.h"
 #include "xcb/shm.h"
@@ -386,7 +387,7 @@ namespace LTSM
             const xcb_setup_t*      _setup;
 
         public:
-            Connector(const char* addr);
+            Connector(std::string_view addr);
             virtual ~Connector();
 
             size_t	            pixmapDepth(size_t bitsPerPixel) const;
@@ -429,12 +430,12 @@ namespace LTSM
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
             XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
-	    xcb_atom_t              getAtom(const std::string &, bool create = true) const;
-	    bool                    checkAtom(const std::string &) const;
+	    xcb_atom_t              getAtom(std::string_view, bool create = true) const;
+	    bool                    checkAtom(std::string_view) const;
 	    std::string	            getAtomName(xcb_atom_t) const;
 	    size_t                  getMaxRequest(void) const;
 
-            static bool             testConnection(const char* addr);
+            static bool             testConnection(std::string_view addr);
 
             PropertyReply           getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0, uint32_t length = 0xFFFFFFFF);
             xcb_atom_t              getPropertyType(xcb_window_t win, xcb_atom_t prop);
@@ -466,7 +467,7 @@ namespace LTSM
 #endif
 
         public:
-            RootDisplay(const std::string & addr);
+            RootDisplay(std::string_view addr);
             ~RootDisplay();
 
             uint16_t		    width(void) const;
@@ -550,7 +551,7 @@ namespace LTSM
             bool                     selectionRequestAction(xcb_selection_request_event_t*);
 
 	public:
-	    RootDisplayExt(const std::string & addr);
+	    RootDisplayExt(std::string_view addr);
             ~RootDisplayExt();
 
             GenericEvent             poolEvent(void) override;

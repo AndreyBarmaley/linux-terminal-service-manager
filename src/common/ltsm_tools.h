@@ -27,6 +27,7 @@
 #include <chrono>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <iomanip>
 #include <iterator>
 #include <algorithm>
@@ -47,16 +48,15 @@ namespace LTSM
             int             cur;
 
         public:
-            StringFormat(const std::string &);
+            StringFormat(std::string_view);
 
-            StringFormat & arg(const std::string &);
-            StringFormat & arg(const char*);
+            StringFormat & arg(std::string_view);
             StringFormat & arg(int);
             StringFormat & arg(double, int prec);
 
-            StringFormat & replace(const char*, int);
-            StringFormat & replace(const char*, const std::string &);
-            StringFormat & replace(const char*, double, int prec);
+            StringFormat & replace(std::string_view, int);
+            StringFormat & replace(std::string_view, std::string_view);
+            StringFormat & replace(std::string_view, double, int prec);
         };
 
         struct StreamBitsPack
@@ -74,35 +74,35 @@ namespace LTSM
             const std::vector<uint8_t> & toVector(void) const;
         };
 
-        std::list<std::string> split(const std::string & str, const std::string & sep);
-        std::list<std::string> split(const std::string & str, int sep);
+        std::list<std::string> split(std::string_view str, std::string_view sep);
+        std::list<std::string> split(std::string_view str, int sep);
 
         std::string     join(const std::list<std::string> &);
-        std::string     join(const std::list<std::string> &, const std::string & sep);
+        std::string     join(const std::list<std::string> &, std::string_view sep);
 
         std::string     lower(std::string);
-        std::string     runcmd(const std::string &);
+        std::string     runcmd(std::string_view);
 
-        std::string     escaped(const std::string &, bool quote);
+        std::string     escaped(std::string_view, bool quote);
         std::string     unescaped(std::string);
 
-        std::string     replace(const std::string & src, const char* pred, const std::string & val);
-        std::string     replace(const std::string & src, const char* pred, int val);
+        std::string     replace(const std::string & src, std::string_view pred, std::string_view val);
+        std::string     replace(const std::string & src, std::string_view pred, int val);
 
-        std::string     getenv(const char*, const char* = nullptr);
+        std::string     getenv(const char* name, const char* def = nullptr);
 
         std::string     hex(int value, int width = 8);
 
         uint32_t        crc32b(const uint8_t* ptr, size_t size);
         uint32_t        crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
-        bool            checkUnixSocket(const std::string &);
+        bool            checkUnixSocket(std::string_view);
 
         size_t		maskShifted(size_t mask);
         size_t		maskMaxValue(uint32_t mask);
 
 	template<typename Int>
-	std::string buffer2hexstring(const Int* data, size_t length, size_t width = 8, const std::string & sep = ",", bool prefix = true)
+	std::string buffer2hexstring(const Int* data, size_t length, size_t width = 8, std::string_view sep = ",", bool prefix = true)
 	{
     	    std::ostringstream os;
     	    for(size_t it = 0; it != length; ++it)

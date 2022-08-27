@@ -56,7 +56,7 @@ namespace LTSM
         return os.str();
     }
 
-    std::string Tools::join(const std::list<std::string> & list, const std::string & sep)
+    std::string Tools::join(const std::list<std::string> & list, std::string_view sep)
     {
         std::ostringstream os;
 
@@ -71,22 +71,22 @@ namespace LTSM
         return os.str();
     }
 
-    std::string Tools::replace(const std::string & src, const char* pred, const std::string & val)
+    std::string Tools::replace(const std::string & src, std::string_view pred, std::string_view val)
     {
         std::string res = src;
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(pred))) res.replace(pos, std::strlen(pred), val);
+        while(std::string::npos != (pos = res.find(pred))) res.replace(pos, pred.size(), val);
 
         return res;
     }
 
-    std::string Tools::replace(const std::string & src, const char* pred, int val)
+    std::string Tools::replace(const std::string & src, std::string_view pred, int val)
     {
         return replace(src, pred, std::to_string(val));
     }
 
-    std::list<std::string> Tools::split(const std::string & str, const std::string & sep)
+    std::list<std::string> Tools::split(std::string_view str, std::string_view sep)
     {
         std::list<std::string> list;
         auto itbeg = str.begin();
@@ -105,20 +105,20 @@ namespace LTSM
         return list;
     }
 
-    std::list<std::string> Tools::split(const std::string & str, int sep)
+    std::list<std::string> Tools::split(std::string_view str, int sep)
     {
         return split(str, std::string(1, sep));
     }
 
-    std::string Tools::runcmd(const std::string & cmd)
+    std::string Tools::runcmd(std::string_view cmd)
     {
         char buffer[128];
         std::string result;
-        std::shared_ptr<FILE> pipe(popen(cmd.c_str(), "r"), pclose);
+        std::shared_ptr<FILE> pipe(popen(cmd.data(), "r"), pclose);
 
         if(!pipe)
         {
-            Application::error("popen failed: %s", cmd.c_str());
+            Application::error("popen failed: %s", cmd.data());
             return result;
         }
 
@@ -134,17 +134,17 @@ namespace LTSM
         return result;
     }
 
-    Tools::StringFormat::StringFormat(const std::string & str) : cur(1)
+    Tools::StringFormat::StringFormat(std::string_view str) : cur(1)
     {
         append(str);
     }
 
-    Tools::StringFormat & Tools::StringFormat::arg(const char* val)
-    {
-        return arg(val ? std::string(val) : std::string("(null)"));
-    }
+//    Tools::StringFormat & Tools::StringFormat::arg(std::string_view val)
+//    {
+//        return arg(val ? std::string(val) : std::string("(null)"));
+//    }
 
-    Tools::StringFormat & Tools::StringFormat::arg(const std::string & val)
+    Tools::StringFormat & Tools::StringFormat::arg(std::string_view val)
     {
         auto it1 = begin();
         auto it2 = end();
@@ -173,7 +173,7 @@ namespace LTSM
                 }
                 catch(const std::invalid_argument &)
                 {
-                    Application::error("format failed: `%s', arg: `%s'", this->c_str(), val.c_str());
+                    Application::error("format failed: `%s', arg: `%s'", this->c_str(), val.data());
                     return *this;
                 }
 
@@ -207,23 +207,23 @@ namespace LTSM
         return arg(std::to_string(val));
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(const char* id, const std::string & val)
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, std::string_view val)
     {
         std::string res = *this;
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(id))) res.replace(pos, std::strlen(id), val);
+        while(std::string::npos != (pos = res.find(id))) res.replace(pos, id.size(), val);
 
         std::swap(*this, res);
         return *this;
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(const char* id, int val)
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, int val)
     {
         return replace(id, std::to_string(val));
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(const char* id, double val, int prec)
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, double val, int prec)
     {
         if(prec)
         {
@@ -252,7 +252,7 @@ namespace LTSM
         return stream.str();
     }
 
-    std::string Tools::escaped(const std::string & str, bool quote)
+    std::string Tools::escaped(std::string_view str, bool quote)
     {   
         std::ostringstream os;
         
@@ -369,7 +369,7 @@ namespace LTSM
         return ~res;
     }
 
-    bool Tools::checkUnixSocket(const std::string & path)
+    bool Tools::checkUnixSocket(std::string_view path)
     {
         // check present
 	if(std::filesystem::is_socket(path))
@@ -382,7 +382,7 @@ namespace LTSM
                 struct sockaddr_un address;
                 std::memset(&address, 0, sizeof(struct sockaddr_un));
                 address.sun_family = AF_UNIX;
-                std::strcpy(address.sun_path, path.c_str());
+                std::strncpy(address.sun_path, path.data(), path.size());
 
                 int res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
                 close(socket_fd);

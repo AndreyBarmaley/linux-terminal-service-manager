@@ -25,6 +25,7 @@
 
 #include <mutex>
 #include <string>
+#include <string_view>
 
 #include <stdio.h>
 #include <syslog.h>
@@ -54,7 +55,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
-                const std::lock_guard<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[info]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -69,7 +70,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
-                const std::lock_guard<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[notice]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -83,7 +84,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
-                const std::lock_guard<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[warning]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -97,7 +98,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
-                const std::lock_guard<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[error]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -111,7 +112,7 @@ namespace LTSM
         {
 	    if(_debug == DebugLevel::Console)
 	    {
-                const std::lock_guard<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[debug]\t");
 		fprintf(stderr, format, (vals)...);
 		fprintf(stderr, "\n");
@@ -128,7 +129,7 @@ namespace LTSM
 
         static bool isDebugLevel(const DebugLevel &);
         static void setDebugLevel(const DebugLevel &);
-        static void setDebugLevel(const std::string &);
+        static void setDebugLevel(std::string_view level);
 
         virtual int start(void) = 0;
     };
