@@ -382,7 +382,7 @@ namespace LTSM
                 struct sockaddr_un address;
                 std::memset(&address, 0, sizeof(struct sockaddr_un));
                 address.sun_family = AF_UNIX;
-                std::strncpy(address.sun_path, path.data(), path.size());
+                std::strncpy(address.sun_path, path.data(), size(address.sun_path) - 1);
 
                 int res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
                 close(socket_fd);

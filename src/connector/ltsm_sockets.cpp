@@ -630,7 +630,7 @@ namespace LTSM
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        std::strncpy(sockaddr.sun_path, path.data(), path.size());
+        std::strncpy(sockaddr.sun_path, path.data(), sizeof(sockaddr.sun_path) - 1);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
             Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), path.data());
@@ -652,7 +652,7 @@ namespace LTSM
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        std::strncpy(sockaddr.sun_path, path.data(), path.size());
+        std::strncpy(sockaddr.sun_path, path.data(), size(sockaddr.sun_path) - 1);
         
         std::filesystem::remove(path);
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
