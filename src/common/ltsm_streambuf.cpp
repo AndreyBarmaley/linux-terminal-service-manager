@@ -101,8 +101,9 @@ namespace LTSM
         getRaw(& v, 2);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         return swap16(v);
-#endif
+#else
         return v;
+#endif
     }
 
     uint32_t ByteOrderInterface::getIntLE32(void) const
@@ -111,8 +112,9 @@ namespace LTSM
         getRaw(& v, 4);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         return swap32(v);
-#endif
+#else
         return v;
+#endif
     }
 
     uint64_t ByteOrderInterface::getIntLE64(void) const
@@ -121,8 +123,9 @@ namespace LTSM
         getRaw(& v, 8);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         return swap64(v);
-#endif
+#else
         return v;
+#endif
     }
 
     uint16_t ByteOrderInterface::getIntBE16(void) const
@@ -131,8 +134,9 @@ namespace LTSM
         getRaw(& v, 2);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return swap16(v);
-#endif
+#else
         return v;
+#endif
     }
 
     uint32_t ByteOrderInterface::getIntBE32(void) const
@@ -141,8 +145,9 @@ namespace LTSM
         getRaw(& v, 4);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return swap32(v);
-#endif
+#else
         return v;
+#endif
     }
 
     uint64_t ByteOrderInterface::getIntBE64(void) const
@@ -151,8 +156,9 @@ namespace LTSM
         getRaw(& v, 8);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         return swap64(v);
-#endif
+#else
         return v;
+#endif
     }
 
     void ByteOrderInterface::putIntLE16(uint16_t v)
