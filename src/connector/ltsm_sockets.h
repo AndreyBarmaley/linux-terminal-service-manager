@@ -101,7 +101,7 @@ namespace LTSM
         virtual void            recvRaw(void*, size_t) const = 0;
         virtual void            recvRaw(void* ptr, size_t len, size_t timeout /* ms */) const;
 
-        NetworkStream &         sendString(const std::string &);
+        NetworkStream &         sendString(std::string_view);
         std::string	        recvString(size_t) const;
 
         void                    setReadTimeout(size_t ms);
@@ -142,8 +142,8 @@ namespace LTSM
     class InetStream : public NetworkStream
     {
     protected:
-        FILE*                   fdin;
-        FILE*                   fdout;
+        FILE*                   fdin = nullptr;
+        FILE*                   fdout = nullptr;
         std::array<char, 1492>  fdbuf;
 
         void                    inetFdClose(void);
@@ -198,13 +198,13 @@ namespace LTSM
     namespace TLS
     {
         std::vector<uint8_t>    randomKey(size_t);
-        std::vector<uint8_t>    encryptDES(const std::vector<uint8_t> & crypt, const std::string & key);
+        std::vector<uint8_t>    encryptDES(const std::vector<uint8_t> & crypt, std::string_view key);
 
         /// @brief: tls context
         struct BaseContext
         {
-            gnutls_session_t    session;
-            gnutls_dh_params_t  dhparams;
+            gnutls_session_t    session = nullptr;
+            gnutls_dh_params_t  dhparams = nullptr;
 
             BaseContext(int debug = 0);
             virtual ~BaseContext();
@@ -218,9 +218,9 @@ namespace LTSM
         {
         protected:
             const NetworkStream* layer;
-            bool                handshake;
             std::unique_ptr<BaseContext> tls;
-            mutable int         peek;
+            bool                handshake = false;
+            mutable int         peek = -1;
 
         public:
             Stream(const NetworkStream*);

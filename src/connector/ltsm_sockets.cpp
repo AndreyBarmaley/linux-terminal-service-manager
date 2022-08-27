@@ -174,7 +174,7 @@ namespace LTSM
 	return *this;
     }
 
-    NetworkStream & NetworkStream::sendString(const std::string & str)
+    NetworkStream & NetworkStream::sendString(std::string_view str)
     {
         sendRaw(str.data(), str.size());
 	return *this;
@@ -207,9 +207,7 @@ namespace LTSM
 
         while(len)
         {
-            size_t real = hasData();
-
-            if(real)
+            if(size_t real = hasData())
             {
                 real = std::min(real, len);
                 recvRaw(ptr, real);
@@ -360,7 +358,7 @@ namespace LTSM
     }
 
     /* InetStream */
-    InetStream::InetStream() : fdin(nullptr), fdout(nullptr)
+    InetStream::InetStream()
     {
         int fnin = dup(fileno(stdin));
         int fnout = dup(fileno(stdout));
@@ -478,7 +476,7 @@ namespace LTSM
         }
 
         std::ungetc(res, fdin);
-        return res;
+        return static_cast<uint8_t>(res);
     }
 
     /* ProxySocket */
@@ -736,7 +734,7 @@ namespace LTSM
         }
 
         /* TLS::BaseContext */
-        BaseContext::BaseContext(int debug) : session(nullptr), dhparams(nullptr)
+        BaseContext::BaseContext(int debug)
         {
             Application::info("gnutls version usage: %s", GNUTLS_VERSION);
             int ret = gnutls_global_init();
@@ -937,7 +935,7 @@ namespace LTSM
         }
 
         /* TLS::Stream */
-        Stream::Stream(const NetworkStream* bs) : layer(bs), handshake(false), peek(-1)
+        Stream::Stream(const NetworkStream* bs) : layer(bs)
         {
             if(! bs)
                 throw std::invalid_argument("tls stream failed");
@@ -1110,7 +1108,7 @@ namespace LTSM
                 peek = val;
             }
                 
-            return peek;
+            return static_cast<uint8_t>(peek);
         }
 
         void Stream::sendFlush(void)
@@ -1121,7 +1119,7 @@ namespace LTSM
             gnutls_record_cork(tls->session);
         }
 
-        std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & data, const std::string & str)
+        std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & data, std::string_view str)
         {
             gnutls_cipher_hd_t ctx;
 
