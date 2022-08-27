@@ -236,8 +236,8 @@ namespace LTSM
 
         std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const
         {
-            size_t bw = width <= cols ? 1 : width / cols;
-            size_t bh = height <= rows? 1 : height / rows;
+            uint16_t bw = width <= cols ? 1 : width / cols;
+            uint16_t bh = height <= rows? 1 : height / rows;
             return divideBlocks(Size(bw, bh));
         }
 
@@ -245,12 +245,12 @@ namespace LTSM
         {
             std::list<Region> res;
 
-            size_t cw = sz.width > width ? width : sz.width;
-            size_t ch = sz.height > height? height: sz.height;
+            int cw = sz.width > width ? width : sz.width;
+            int ch = sz.height > height? height: sz.height;
 
-            for(size_t yy = 0; yy < height; yy += ch)
+            for(uint16_t yy = 0; yy < height; yy += ch)
             {
-                for(size_t xx = 0; xx < width; xx += cw)
+                for(uint16_t xx = 0; xx < width; xx += cw)
                 {
                     uint16_t fixedw = std::min(width - xx, cw);
                     uint16_t fixedh = std::min(height - yy, ch);
@@ -286,7 +286,7 @@ namespace LTSM
     {
         if(xcb) xcb_shm_detach(conn, xcb);
         if(addr) shmdt(addr);
-        if(0 < shm) shmctl(shm, IPC_RMID, 0);
+        if(0 < shm) shmctl(shm, IPC_RMID, nullptr);
     }
 
     XCB::SHM::SHM(int shmid, uint8_t* addr, xcb_connection_t* conn)
@@ -341,7 +341,7 @@ namespace LTSM
     XCB::Damage::Damage(xcb_drawable_t win, int level, xcb_connection_t* conn)
     {
         auto id = xcb_generate_id(conn);
-        auto cookie = xcb_damage_create_checked(conn, id, win, level);
+        auto cookie = xcb_damage_create_checked(conn, id, win, static_cast<uint8_t>(level));
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
         {
@@ -353,7 +353,7 @@ namespace LTSM
         }
     }
 
-    bool XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid)
+    bool XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid) const
     {
         auto cookie = xcb_damage_add_checked(connection(), winid, regid);
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
@@ -364,7 +364,7 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::Damage::subtractRegion(xcb_xfixes_region_t repair, xcb_xfixes_region_t parts)
+    bool XCB::Damage::subtractRegion(xcb_xfixes_region_t repair, xcb_xfixes_region_t parts) const
     {
         auto cookie = xcb_damage_subtract_checked(connection(), xid(), repair, parts);
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
@@ -553,7 +553,7 @@ namespace LTSM
             return SHM();
         }
 
-        uint8_t* shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, 0, 0));
+        uint8_t* shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, 0));
         // man shmat: check result
         if(shmaddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
         {
@@ -576,7 +576,7 @@ namespace LTSM
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const xcb_rectangle_t* rect, size_t num)
     {
-	return XFixesRegion(rect, num, _conn);
+	return XFixesRegion(rect, static_cast<uint32_t>(num), _conn);
     }
 
     size_t XCB::Connector::getMaxRequest(void) const
@@ -660,9 +660,9 @@ namespace LTSM
         return GenericEvent(xcb_poll_for_event(_conn));
     }
 
-    bool XCB::Connector::checkExtension(const Module & module) const
+    bool XCB::Connector::checkExtension(const Module & mod) const
     {
-        if(module == Module::TEST)
+        if(mod == Module::TEST)
         {
             auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
             if(! _test || ! _test->present)
@@ -683,7 +683,7 @@ namespace LTSM
 	    }
         }
         else
-        if(module == Module::DAMAGE)
+        if(mod == Module::DAMAGE)
         {
             auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
             if(! _damage || ! _damage->present)
@@ -704,7 +704,7 @@ namespace LTSM
 	    }
         }
         else
-        if(module == Module::XFIXES)
+        if(mod == Module::XFIXES)
         {
             auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
             if(! _xfixes || ! _xfixes->present)
@@ -725,7 +725,7 @@ namespace LTSM
 	    }
         }
         else
-        if(module == Module::RANDR)
+        if(mod == Module::RANDR)
         {
             auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
             if(! _randr || ! _randr->present)
@@ -746,7 +746,7 @@ namespace LTSM
 	    }
         }
         else
-        if(module == Module::SHM)
+        if(mod == Module::SHM)
         {
             auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
 	    if(! _shm || ! _shm->present)
@@ -767,7 +767,7 @@ namespace LTSM
 	    }
         }
         else
-        if(module == Module::XKB)
+        if(mod == Module::XKB)
         {
 #ifdef LTSM_WITH_XKBCOMMON
             auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
@@ -796,14 +796,14 @@ namespace LTSM
         return false;
     }
 
-    int XCB::Connector::eventNotify(const GenericEvent & ev, const Module & module) const
+    int XCB::Connector::eventNotify(const GenericEvent & ev, const Module & mod) const
     {
         // clear bit
         auto response_type = ev ? ev->response_type & ~0x80 : 0;
 
         if(0 < response_type)
         {
-            if(module == Module::DAMAGE)
+            if(mod == Module::DAMAGE)
             {
                 // for receive it, usage:
                 // RootDisplay::createDamageNotify
@@ -812,7 +812,7 @@ namespace LTSM
                     return XCB_DAMAGE_NOTIFY;
             }
             else
-            if(module == Module::XFIXES)
+            if(mod == Module::XFIXES)
             {
                 // for receive it, usage input filter:
                 // xcb_xfixes_select_selection_input(xcb_xfixes_selection_event_mask_t)
@@ -825,7 +825,7 @@ namespace LTSM
                         return type;
             }
             else
-            if(module == Module::RANDR)
+            if(mod == Module::RANDR)
             {
                 // for receive it, usage input filter:
                 // xcb_xrandr_select_input(xcb_randr_notify_mask_t)
@@ -836,7 +836,7 @@ namespace LTSM
                     if(_randr && response_type == _randr->first_event + type) return type;
             }
             else
-            if(module == Module::XKB)
+            if(mod == Module::XKB)
             {
                 // for receive it, usage input filter:
                 // xcb_xkb_select_events(xcb_xkb_event_type_t)
@@ -928,48 +928,48 @@ namespace LTSM
 #endif
     }
 
-    int XCB::Connector::eventErrorOpcode(const GenericEvent & ev, const Module & module) const
+    int XCB::Connector::eventErrorOpcode(const GenericEvent & ev, const Module & mod) const
     {
         if(ev && ev->response_type == 0)
         {
             auto error = ev.toerror();
 
-            if(module == Module::TEST)
+            if(mod == Module::TEST)
             {
                 auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
                 if(_test && error->major_code == _test->major_opcode)
                     return error->minor_code;
             }
             else
-            if(module == Module::DAMAGE)
+            if(mod == Module::DAMAGE)
             {
                 auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
                 if(_damage && error->major_code == _damage->major_opcode)
                     return error->minor_code;
             }
             else
-            if(module == Module::XFIXES)
+            if(mod == Module::XFIXES)
             {
                 auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
                 if(_xfixes && error->major_code == _xfixes->major_opcode)
                     return error->minor_code;
             }
             else
-            if(module == Module::RANDR)
+            if(mod == Module::RANDR)
             {
                 auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
                 if(_randr && error->major_code == _randr->major_opcode)
                     return error->minor_code;
             }
             else
-            if(module == Module::SHM)
+            if(mod == Module::SHM)
             {
                 auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
                 if(_shm && error->major_code == _shm->major_opcode)
                     return error->minor_code;
             }
             else
-            if(module == Module::XKB)
+            if(mod == Module::XKB)
             {
 #ifdef LTSM_WITH_XKBCOMMON
         	auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);

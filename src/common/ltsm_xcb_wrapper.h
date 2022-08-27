@@ -274,8 +274,8 @@ namespace LTSM
             Damage() {}
             Damage(xcb_drawable_t, int level, xcb_connection_t*);
 
-            bool                    addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid);
-            bool                    subtractRegion(xcb_xfixes_region_t regid, xcb_xfixes_region_t parts);
+            bool                    addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid) const;
+            bool                    subtractRegion(xcb_xfixes_region_t regid, xcb_xfixes_region_t parts) const;
 
             uint32_t                xid(void) const { return get() ? get()->xcb : 0; }
             xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }

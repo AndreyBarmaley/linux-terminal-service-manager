@@ -30,7 +30,7 @@ namespace LTSM
 {
     std::string ByteArray::hexstring(std::string_view sep, bool prefix) const
     {
-        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep);
+        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep, prefix);
     }
 
     /* BinaryBuf */

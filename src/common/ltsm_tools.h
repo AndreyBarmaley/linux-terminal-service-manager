@@ -45,7 +45,7 @@ namespace LTSM
     {
         class StringFormat : public std::string
         {
-            int             cur;
+            int             cur = 1;
 
         public:
             StringFormat(std::string_view);
@@ -62,7 +62,7 @@ namespace LTSM
         struct StreamBitsPack
         {
             std::vector<uint8_t> vecbuf;
-            size_t               bitpos;
+            size_t               bitpos = 7;
         
             StreamBitsPack();
         

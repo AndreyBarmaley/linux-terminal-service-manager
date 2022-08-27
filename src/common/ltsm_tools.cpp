@@ -107,12 +107,12 @@ namespace LTSM
 
     std::list<std::string> Tools::split(std::string_view str, int sep)
     {
-        return split(str, std::string(1, sep));
+        return split(str, std::string(1, static_cast<char>(sep)));
     }
 
     std::string Tools::runcmd(std::string_view cmd)
     {
-        char buffer[128];
+        std::array<char, 128> buffer = {0};
         std::string result;
         std::shared_ptr<FILE> pipe(popen(cmd.data(), "r"), pclose);
 
@@ -124,8 +124,8 @@ namespace LTSM
 
         while(!std::feof(pipe.get()))
         {
-            if(std::fgets(buffer, sizeof(buffer), pipe.get()))
-                result.append(buffer);
+            if(std::fgets(buffer.data(), buffer.size(), pipe.get()))
+                result.append(buffer.data());
         }
 
 	if(result.size() && result.back() == '\n')
@@ -134,15 +134,10 @@ namespace LTSM
         return result;
     }
 
-    Tools::StringFormat::StringFormat(std::string_view str) : cur(1)
+    Tools::StringFormat::StringFormat(std::string_view str)
     {
         append(str);
     }
-
-//    Tools::StringFormat & Tools::StringFormat::arg(std::string_view val)
-//    {
-//        return arg(val ? std::string(val) : std::string("(null)"));
-//    }
 
     Tools::StringFormat & Tools::StringFormat::arg(std::string_view val)
     {
@@ -238,9 +233,9 @@ namespace LTSM
     std::string Tools::getenv(const char* name, const char* def)
     {
         std::string res(def ? def : "");
-        const char* env = std::getenv(name);
 
-        if(env) res.assign(env);
+        if(auto env = std::getenv(name))
+            res.assign(env);
 
         return res;
     }
@@ -314,39 +309,7 @@ namespace LTSM
         
         return str;
     }
-/*
-    template<typename InputIterator>
-    InputIterator   random_n(InputIterator first, InputIterator last)
-    {
-        auto dist = std::distance(first, last);
-        InputIterator res = first;
 
-        if(1 < dist)
-        {
-            auto randomIndex = std::rand() / (RAND_MAX + 1.0) * (dist + 1);
-            std::advance(res, randomIndex);
-        }
-        return res;
-    }
-
-    std::string Tools::randomHexString(size_t width)
-    {
-	const char charsets[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabctefghijklmnopqrstuvwxyz";
-	
-	std::string res;
-	res.reserve(width);
-
-	while(width--)
-	{
-	    auto beg = std::begin(charsets);
-	    auto end = std::end(charsets);
-	    auto it = random_n(beg, end);
-	    res.push_back(it != end ? *it : 'X');
-	}
-
-	return res;
-    }
-*/
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size)
     {
         return crc32b(ptr, size, 0xEDB88320);
@@ -395,7 +358,7 @@ namespace LTSM
     }
 
     // StreamBitsPack
-    Tools::StreamBitsPack::StreamBitsPack() : bitpos(7)
+    Tools::StreamBitsPack::StreamBitsPack()
     {
         vecbuf.reserve(32);
     }
@@ -441,61 +404,6 @@ namespace LTSM
     {
         return vecbuf;
     }
-/*
-    #include <zlib.h>
-    std::vector<uint8_t> Tools::zlibCompress(const uint8_t* ptr, size_t size)
-    {
-        std::vector<uint8_t> res;
-
-        if(ptr && size)
-        {
-            res.resize(compressBound(size));
-            uLong dstsz = res.size();
-            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                 reinterpret_cast<const Bytef*>(ptr), size);
-
-            if(ret == Z_OK)
-                res.resize(dstsz);
-            else
-            {
-                res.clear();
-                Application::error("zlib error code: %d", ret);
-            }
-        }
-
-        return res;
-    }
-
-    std::vector<uint8_t> Tools::zlibUncompress(const uint8_t* ptr, size_t size, size_t realsz)
-    {
-        std::vector<uint8_t> res;
-
-        if(ptr && size)
-        {
-            res.resize(realsz ? realsz : size * 7);
-            uLong dstsz = res.size();
-            int ret = Z_BUF_ERROR;
-
-            while(Z_BUF_ERROR ==
-                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                      reinterpret_cast<const Bytef*>(ptr), size)))
-            {
-                dstsz = res.size() * 2;
-                res.resize(dstsz);
-            }
-
-            if(ret == Z_OK)
-                res.resize(dstsz);
-            else
-            {
-                res.clear();
-                Application::error("zlib error code: %d", ret);
-            }
-        }
-
-        return res;
-    }
-*/
 
     size_t Tools::maskShifted(size_t mask)
     {

@@ -50,6 +50,9 @@ namespace LTSM
         Application(const char* ident, int argc, const char** argv);
         virtual ~Application();
 
+        Application(Application &) = delete;
+        Application & operator= (const Application &) = delete;
+
         template<typename... Values>
         static void info(const char* format, Values && ... vals)
         {
@@ -57,12 +60,12 @@ namespace LTSM
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[info]\t");
-		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
             if(_debug != DebugLevel::Quiet)
-                syslog(LOG_INFO, format, (vals)...);
+                syslog(LOG_INFO, format, vals...);
         }
 
         template<typename... Values>
@@ -72,11 +75,11 @@ namespace LTSM
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[notice]\t");
-		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
-        	syslog(LOG_NOTICE, format, (vals)...);
+        	syslog(LOG_NOTICE, format, vals...);
         }
 
         template<typename... Values>
@@ -86,11 +89,11 @@ namespace LTSM
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[warning]\t");
-		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
-        	syslog(LOG_WARNING, format, (vals)...);
+        	syslog(LOG_WARNING, format, vals...);
         }
 
         template<typename... Values>
@@ -100,11 +103,11 @@ namespace LTSM
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[error]\t");
-		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
-        	syslog(LOG_ERR, format, (vals)...);
+        	syslog(LOG_ERR, format, vals...);
         }
 
         template<typename... Values>
@@ -114,12 +117,12 @@ namespace LTSM
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[debug]\t");
-		fprintf(stderr, format, (vals)...);
+		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
 	    if(_debug == DebugLevel::SyslogDebug)
-                syslog(LOG_DEBUG, format, (vals)...);
+                syslog(LOG_DEBUG, format, vals...);
         }
 
         void openlog(void) const
