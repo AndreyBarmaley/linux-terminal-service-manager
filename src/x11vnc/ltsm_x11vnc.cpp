@@ -188,7 +188,7 @@ namespace LTSM
         }
     }
 
-    int Connector::Service::startSocket(int port)
+    int Connector::Service::startSocket(int port) const
     {
         int fd = socket(PF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0);
         if(0 > fd)
@@ -233,7 +233,7 @@ namespace LTSM
 
                 try
                 {
-                    std::unique_ptr<DisplayProxy> connector(new Connector::VNC(sock, _config));
+                    auto connector = std::make_unique<Connector::VNC>(sock, _config);
 	            res = connector->communication();
                 }
                 catch(const std::exception & err)
@@ -256,13 +256,13 @@ namespace LTSM
         return 0;
     }
 
-    int Connector::Service::startInetd(void)
+    int Connector::Service::startInetd(void) const
     {
 	int res = EXIT_FAILURE;
 
         try
         {
-            std::unique_ptr<DisplayProxy> connector(new Connector::VNC(-1, _config));
+            auto connector = std::make_unique<Connector::VNC>(-1, _config);
 	    res = connector->communication();
         }
         catch(const std::exception & err)
@@ -281,10 +281,8 @@ namespace LTSM
     {
         Application::info("x11vnc version: %d", LTSM::service_version);
 
-        if(_config.getBoolean("background"))
-        {
-            if(fork()) return 0;
-        }
+        if(_config.getBoolean("background") && fork())
+            return 0;
 
         return _config.getBoolean("inetd") ?
             startInetd() : startSocket(_config.getInteger("port"));

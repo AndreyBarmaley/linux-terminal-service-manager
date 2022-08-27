@@ -55,8 +55,8 @@ namespace LTSM
             DeflateStream();
     
             std::vector<uint8_t> syncFlush(void) const;
-            void                prepareSize(size_t);
-            void                setLevel(size_t level);
+            void                prepareSize(size_t) const;
+            void                setLevel(size_t level) const;
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;

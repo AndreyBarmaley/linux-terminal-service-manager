@@ -28,7 +28,7 @@
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 
-#define LTSM_X11VNC_VERSION 20220826
+#define LTSM_X11VNC_VERSION 20220827
 
 namespace LTSM
 {
@@ -69,8 +69,8 @@ namespace LTSM
         {
             JsonObject                  _config;
 
-            int    		        startInetd(void);
-            int    		        startSocket(int port);
+            int    		        startInetd(void) const;
+            int    		        startSocket(int port) const;
 
         public:
             Service(int argc, const char** argv);

@@ -33,15 +33,15 @@ namespace LTSM
     {
         Context::Context()
         {
-            zalloc = 0;
-            zfree = 0;
-            opaque = 0;
+            zalloc = nullptr;
+            zfree = nullptr;
+            opaque = nullptr;
             total_in = 0;
             total_out = 0;
             avail_in = 0;
-            next_in = 0;
+            next_in = nullptr;
             avail_out = 0;
-            next_out = 0;
+            next_out = nullptr;
             data_type = Z_BINARY;
 
             outbuf.reserve(4 * 1024);
@@ -61,12 +61,12 @@ namespace LTSM
             next_out = zip.data();
             avail_out = zip.size();
     
-            int prev = total_out;
+            auto prev = total_out;
             int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
             if(ret < Z_OK)
                 throw std::runtime_error(Tools::StringFormat("%1: deflate failed, code: %2").arg(__FUNCTION__).arg(ret));
         
-            size_t zipsz = total_out - prev;
+            auto zipsz = total_out - prev;
             zip.resize(zipsz);
         
             outbuf.clear();
@@ -87,12 +87,12 @@ namespace LTSM
                 throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
         }
 
-        void DeflateStream::setLevel(size_t level)
+        void DeflateStream::setLevel(size_t level) const
         {
             deflateParams(zlib.get(), 9 < level ? 9 : level, Z_DEFAULT_STRATEGY);
         }
 
-	void DeflateStream::prepareSize(size_t len)
+	void DeflateStream::prepareSize(size_t len) const
 	{
 	    if(len < zlib->outbuf.capacity()) zlib->outbuf.reserve(len);
 	}
