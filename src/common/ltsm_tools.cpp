@@ -204,7 +204,7 @@ namespace LTSM
 
     Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, std::string_view val)
     {
-        std::string res = *this;
+        std::string res(begin(), end());
         size_t pos = std::string::npos;
 
         while(std::string::npos != (pos = res.find(id))) res.replace(pos, id.size(), val);

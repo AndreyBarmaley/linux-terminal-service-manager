@@ -1570,7 +1570,7 @@ namespace LTSM
             return 0;
         }
 
-        std::string_view cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(width).arg(height));
+        std::string cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(width).arg(height));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
         params.remove_if([](auto & val)
         {
