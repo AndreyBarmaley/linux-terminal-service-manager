@@ -119,7 +119,7 @@ namespace LTSM
         // BaseSpinLock
         class SpinLock
         {
-            std::atomic<bool> flag{0};
+            std::atomic<bool> flag{false};
 
         public:
             bool tryLock(void) noexcept 
@@ -152,10 +152,10 @@ namespace LTSM
 	{
 	protected:
 	    std::thread         thread;
-	    std::atomic<bool>   processed;
+	    std::atomic<bool>   processed{false};
 
 	public:
-	    BaseTimer() : processed(false) {}
+	    BaseTimer() {}
             ~BaseTimer() { stop(true); }
     
 	    std::thread::id 	getId(void) const
@@ -176,7 +176,7 @@ namespace LTSM
 	    template <class TimeType = std::chrono::milliseconds, class Func>
 	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call)
 	    {
-    		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
+    		auto ptr = std::make_unique<BaseTimer>();
     		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]()
     		{
         	    timer->processed = true;
@@ -206,7 +206,7 @@ namespace LTSM
 	    template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
 	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call, Args&&... args)
 	    {
-    		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
+    		auto ptr = std::make_unique<BaseTimer>();
     		ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
 		    call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]()
     		{
@@ -215,8 +215,8 @@ namespace LTSM
         	    while(timer->processed)
         	    {
             		std::this_thread::sleep_for(TimeType(1));
-            		auto cur = std::chrono::steady_clock::now();
-            		if(TimeType(delay) <= cur - start)
+
+            		if(TimeType(delay) <= std::chrono::steady_clock::now() - start)
             		{
 			    if(!timer->processed)
 				break;
@@ -241,8 +241,7 @@ namespace LTSM
             auto now = std::chrono::steady_clock::now();
     	    while(call())
     	    {
-            	auto cur = std::chrono::steady_clock::now();
-            	if(TimeType(delay) <= cur - now)
+            	if(TimeType(delay) <= std::chrono::steady_clock::now() - now)
             	    return false;
 
         	std::this_thread::sleep_for(TimeType(pause));
