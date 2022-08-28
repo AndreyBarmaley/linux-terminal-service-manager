@@ -8,6 +8,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_XKB_COMMON "usage xkb layouts" OFF)
+option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
+
+if(LTSM_BUILD_COVERAGE_TESTS)
+    set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
+endif()
 
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)

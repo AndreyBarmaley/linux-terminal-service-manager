@@ -66,8 +66,10 @@ jobs:
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
       - name: Run tests to generate coverage statistics
         run: |
-          ./build/coverage_test1
-          ./build/coverage_test2
+          ./LTSM_service &
+          echo "123" | ./LTSM_connector
+          killall LTSM_service
+          fg
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube > coverage.xml
