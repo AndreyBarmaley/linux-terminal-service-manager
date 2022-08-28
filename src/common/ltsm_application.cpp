@@ -40,12 +40,12 @@ namespace LTSM
     {
         return _debug == lvl;
     }
-                
+
     void Application::setDebugLevel(const DebugLevel & lvl)
     {
         _debug = lvl;
     }
-            
+
     void Application::setDebugLevel(std::string_view level)
     {
         if(level == "info")
@@ -61,7 +61,7 @@ namespace LTSM
     Application::Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
     {
         ::openlog(_ident, 0, _facility);
-	std::srand(std::time(0));
+        std::srand(std::time(0));
     }
 
     Application::~Application()
@@ -93,11 +93,13 @@ namespace LTSM
         if(confPath.empty())
         {
             for(auto path :
-                { "config.json", "/etc/ltsm/config.json" })
+                { "config.json", "/etc/ltsm/config.json"
+                })
             {
-		auto st = std::filesystem::status(path);
+                auto st = std::filesystem::status(path);
+
                 if(std::filesystem::file_type::not_found != st.type() &&
-		    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
+                   (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                 {
                     confPath.assign(path);
                     break;
@@ -107,9 +109,10 @@ namespace LTSM
             if(confPath.empty())
             {
                 auto local = std::filesystem::path(argv[0]).parent_path() / "config.json";
-		auto st = std::filesystem::status(local);
+                auto st = std::filesystem::status(local);
+
                 if(std::filesystem::file_type::not_found != st.type() &&
-		    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
+                   (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                     confPath.assign(local);
             }
         }
@@ -125,29 +128,54 @@ namespace LTSM
 
         _config = jsonFile.toObject();
         std::string str = _config.getString("logging:facility");
-	int facility = 0;
+        int facility = 0;
 
         if(6 == str.size() && 0 == str.compare(0, 5, "local"))
         {
             switch(str[5])
             {
-                case '0': facility = LOG_LOCAL0; break;
-                case '1': facility = LOG_LOCAL1; break;
-                case '2': facility = LOG_LOCAL2; break;
-                case '3': facility = LOG_LOCAL3; break;
-                case '4': facility = LOG_LOCAL4; break;
-                case '5': facility = LOG_LOCAL5; break;
-                case '6': facility = LOG_LOCAL6; break;
-                case '7': facility = LOG_LOCAL7; break;
-                default: break;
+                case '0':
+                    facility = LOG_LOCAL0;
+                    break;
+
+                case '1':
+                    facility = LOG_LOCAL1;
+                    break;
+
+                case '2':
+                    facility = LOG_LOCAL2;
+                    break;
+
+                case '3':
+                    facility = LOG_LOCAL3;
+                    break;
+
+                case '4':
+                    facility = LOG_LOCAL4;
+                    break;
+
+                case '5':
+                    facility = LOG_LOCAL5;
+                    break;
+
+                case '6':
+                    facility = LOG_LOCAL6;
+                    break;
+
+                case '7':
+                    facility = LOG_LOCAL7;
+                    break;
+
+                default:
+                    break;
             }
         }
 
-	if(0 < facility)
+        if(0 < facility)
         {
-	    closelog();
-    	    ::openlog(_ident, 0, facility);
-	    _facility = facility;
-	}
+            closelog();
+            ::openlog(_ident, 0, facility);
+            _facility = facility;
+        }
     }
 }

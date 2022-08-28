@@ -32,8 +32,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
- #include "spice/protocol.h"
- #include "spice-server/spice.h"
+#include "spice/protocol.h"
+#include "spice-server/spice.h"
 #ifdef __cplusplus
 }
 #endif
@@ -52,12 +52,15 @@ struct SpiceTimer : protected LTSM::Tools::BaseTimer
 public:
     SpiceTimer(SpiceTimerFunc func, void* data) : callback(func), opaque(data) {}
 
-    void stop(void) { if(ptr) ptr->stop(); }
+    void stop(void)
+    {
+        if(ptr) ptr->stop();
+    }
 
     void start(uint32_t ms)
     {
-	if(callback)
-	    ptr = BaseTimer::create<std::chrono::milliseconds>(ms, false, callback, opaque);
+        if(callback)
+            ptr = BaseTimer::create<std::chrono::milliseconds>(ms, false, callback, opaque);
     }
 };
 
@@ -65,7 +68,7 @@ namespace LTSM
 {
     SpiceTimer* cbTimerAdd(SpiceTimerFunc func, void* opaque)
     {
-	auto timer = new SpiceTimer(func, opaque);
+        auto timer = new SpiceTimer(func, opaque);
         Application::debug("timer add: %p", timer);
         return timer;
     }
@@ -110,6 +113,7 @@ namespace LTSM
         SpiceClientCallback(int fd, const std::string & remoteaddr, const JsonObject & config, Connector::SPICE* connector)
         {
             reds = spice_server_new();
+
             if(! reds)
             {
                 Application::error("%s: failure", "spice_server_new");
@@ -120,24 +124,20 @@ namespace LTSM
             core.base.description = "LTSM SPICE client callback";
             core.base.major_version = SPICE_INTERFACE_CORE_MAJOR;
             core.base.minor_version = SPICE_INTERFACE_CORE_MINOR;
-
             core.timer_add = cbTimerAdd;
             core.timer_start = cbTimerStart;
             core.timer_cancel = cbTimerCancel;
             core.timer_remove = cbTimerRemove;
             core.channel_event = cbChannelEvent;
-
-/*
-            core.watch_add = BaseWatch::watchAdd;
-            core.watch_update_mask = BaseWatch::watchUpdateMask;
-            core.watch_remove = BaseWatch::watchRemove;
-*/
-
+            /*
+                        core.watch_add = BaseWatch::watchAdd;
+                        core.watch_update_mask = BaseWatch::watchUpdateMask;
+                        core.watch_remove = BaseWatch::watchRemove;
+            */
             spice_server_init(reds, & core);
             spice_server_set_agent_mouse(reds, 1);
             spice_server_set_agent_copypaste(reds, 1);
             spice_server_set_agent_file_xfer(reds, 0);
-
             spice_server_add_client(reds, fd, 1);
         }
 
@@ -156,8 +156,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-	Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
-
+        Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
         auto home = Connector::homeRuntime();
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
@@ -172,7 +171,6 @@ namespace LTSM
         {
             //if(freeRdpClient->isShutdown())
             //    loopMessage = false;
-
             if(! proxyRunning())
                 loopMessage = false;
 
@@ -181,7 +179,6 @@ namespace LTSM
         }
 
         proxyStopEventLoop();
-
         Application::debug("under construction, remoteaddr: %s\n", _remoteaddr.c_str());
         return EXIT_SUCCESS;
     }

@@ -34,7 +34,6 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
-#include <exception>
 #include <filesystem>
 
 #include "xcb/xtest.h"
@@ -58,8 +57,8 @@ namespace LTSM
     {
         PointIterator & PointIterator::operator++(void)
         {
-	    if(! isValid())
-		return *this;
+            if(! isValid())
+                return *this;
 
             if(x < limit.width)
                 x++;
@@ -69,11 +68,11 @@ namespace LTSM
                 x = 0;
                 y++;
 
-        	if(y == limit.height)
-		{
-		    x = -1;
-		    y = -1;
-		}
+                if(y == limit.height)
+                {
+                    x = -1;
+                    y = -1;
+                }
             }
 
             return *this;
@@ -81,8 +80,8 @@ namespace LTSM
 
         PointIterator & PointIterator::operator--(void)
         {
-	    if(! isValid())
-		return *this;
+            if(! isValid())
+                return *this;
 
             if(x > 0)
                 x--;
@@ -92,11 +91,11 @@ namespace LTSM
                 x = limit.width - 1;
                 y--;
 
-        	if(y == 0)
-		{
-		    x = -1;
-		    y = -1;
-		}
+                if(y == 0)
+                {
+                    x = -1;
+                    y = -1;
+                }
             }
 
             return *this;
@@ -106,31 +105,35 @@ namespace LTSM
         {
             return Region(reg.x - pt.x, reg.y - pt.y, reg.width, reg.height);
         }
-         
+
         Region operator+ (const Region & reg, const Point & pt)
         {
             return Region(reg.x + pt.x, reg.y + pt.y, reg.width, reg.height);
         }
 
         void Region::reset(void)
-	{
-	    x = -1; y = -1;
-	    width = 0; height = 0;
-	}
+        {
+            x = -1;
+            y = -1;
+            width = 0;
+            height = 0;
+        }
 
         void Region::assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-	{
-	    x = rx; y = ry;
-	    width = rw; height = rh;
-	}
+        {
+            x = rx;
+            y = ry;
+            width = rw;
+            height = rh;
+        }
 
         void Region::assign(const Region & reg)
-	{
-	    *this = reg;
-	}
+        {
+            *this = reg;
+        }
 
         Region Region::align(size_t val) const
-	{
+        {
             Region res(x, y, width, height);
 
             if(auto alignX = x % val)
@@ -138,13 +141,16 @@ namespace LTSM
                 res.x -= alignX;
                 res.width += alignX;
             }
+
             if(auto alignY = y % val)
             {
                 res.y -= alignY;
                 res.height += alignY;
             }
+
             if(auto alignW = res.width % val)
                 res.width += val - alignW;
+
             if(auto alignH = res.height % val)
                 res.height += val - alignH;
 
@@ -152,12 +158,12 @@ namespace LTSM
         }
 
         void Region::join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-	{
-	    join({rx, ry, rw, rh});
-	}
+        {
+            join({rx, ry, rw, rh});
+        }
 
         void Region::join(const Region & reg)
-	{
+        {
             if(invalid())
             {
                 x = reg.x;
@@ -165,8 +171,7 @@ namespace LTSM
                 width = reg.width;
                 height = reg.height;
             }
-            else
-            if(! reg.empty() && *this != reg)
+            else if(! reg.empty() && *this != reg)
             {
                 /* Horizontal union */
                 auto xm = std::min(x, reg.x);
@@ -177,28 +182,28 @@ namespace LTSM
                 height = std::max(y + height, reg.y + reg.height) - ym;
                 y = ym;
             }
- 	}
+        }
 
         bool Region::empty(void) const
-	{
-	    return width == 0 || height == 0;
-	}
+        {
+            return width == 0 || height == 0;
+        }
 
         bool Region::invalid(void) const
-	{
-	    return x == -1 && y == -1 && empty();
-	}
+        {
+            return x == -1 && y == -1 && empty();
+        }
 
         Region Region::intersected(const Region & reg) const
-	{
+        {
             Region res;
             intersection(*this, reg, & res);
             return res;
-	}
+        }
 
         bool Region::intersects(const Region & reg1, const Region & reg2)
-	{
-	    // check reg1.empty || reg2.empty
+        {
+            // check reg1.empty || reg2.empty
             if(reg1.empty() || reg2.empty())
                 return false;
 
@@ -211,11 +216,11 @@ namespace LTSM
                 return false;
 
             return true;
-	}
+        }
 
         bool Region::intersection(const Region & reg1, const Region & reg2, Region* res)
-	{
-    	    bool intersects = Region::intersects(reg1, reg2);
+        {
+            bool intersects = Region::intersects(reg1, reg2);
 
             if(! intersects)
                 return false;
@@ -226,27 +231,24 @@ namespace LTSM
             // horizontal intersection
             res->x = std::max(reg1.x, reg2.x);
             res->width = std::min(reg1.x + reg1.width, reg2.x + reg2.width) - res->x;
-
             // vertical intersection
             res->y = std::max(reg1.y, reg2.y);
             res->height = std::min(reg1.y + reg1.height, reg2.y + reg2.height) - res->y;
-
             return ! res->empty();
-	}
+        }
 
         std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const
         {
             uint16_t bw = width <= cols ? 1 : width / cols;
-            uint16_t bh = height <= rows? 1 : height / rows;
+            uint16_t bh = height <= rows ? 1 : height / rows;
             return divideBlocks(Size(bw, bh));
         }
 
         std::list<Region> Region::divideBlocks(const Size & sz) const
         {
             std::list<Region> res;
-
             int cw = sz.width > width ? width : sz.width;
-            int ch = sz.height > height? height: sz.height;
+            int ch = sz.height > height ? height : sz.height;
 
             for(uint16_t yy = 0; yy < height; yy += ch)
             {
@@ -257,15 +259,16 @@ namespace LTSM
                     res.emplace_back(x + xx, y + yy, fixedw, fixedh);
                 }
             }
-                
+
             return res;
         }
- 
+
         size_t HasherKeyCodes::operator()(const KeyCodes & kc) const
         {
             if(kc.get())
             {
                 size_t len = 0;
+
                 while(*(kc.get() + len) != NULL_KEYCODE) len++;
 
                 return Tools::crc32b(kc.get(), len);
@@ -277,7 +280,7 @@ namespace LTSM
         void error(const char* func, const GenericError & err)
         {
             Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
-                           func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
+                               func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
         }
     }
 
@@ -285,7 +288,9 @@ namespace LTSM
     XCB::shm_t::~shm_t()
     {
         if(xcb) xcb_shm_detach(conn, xcb);
+
         if(addr) shmdt(addr);
+
         if(0 < shm) shmctl(shm, IPC_RMID, nullptr);
     }
 
@@ -293,23 +298,20 @@ namespace LTSM
     {
         auto id = xcb_generate_id(conn);
         auto cookie = xcb_shm_attach_checked(conn, id, shmid, 0);
+
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_shm_attach", err);
-        }
         else
-        {
             reset(new shm_t(shmid, addr, conn, id));
-        }
     }
 
     XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, uint32_t planeMask) const
     {
         auto xcbReply = getReplyFunc1(xcb_shm_get_image, connection(), winid, reg.x, reg.y, reg.width, reg.height,
-                                    planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
+                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
         PixmapInfoReply res;
 
-	if(auto err = xcbReply.error())
+        if(auto err = xcbReply.error())
         {
             XCB::error("xcb_shm_get_image", err);
             return res;
@@ -328,13 +330,9 @@ namespace LTSM
         auto cookie = xcb_create_gc_checked(conn, id, win, value_mask, value_list);
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_create_gc", err);
-        }
         else
-        {
             reset(new gc_t(conn, id));
-        }
     }
 
     /* XCB::Damage */
@@ -344,34 +342,34 @@ namespace LTSM
         auto cookie = xcb_damage_create_checked(conn, id, win, static_cast<uint8_t>(level));
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_damage_create", err);
-        }
         else
-        {
             reset(new damage_t(conn, id));
-        }
     }
 
     bool XCB::Damage::addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid) const
     {
         auto cookie = xcb_damage_add_checked(connection(), winid, regid);
+
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
         {
             error("xcb_damage_add", err);
             return false;
         }
+
         return true;
     }
 
     bool XCB::Damage::subtractRegion(xcb_xfixes_region_t repair, xcb_xfixes_region_t parts) const
     {
         auto cookie = xcb_damage_subtract_checked(connection(), xid(), repair, parts);
+
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
         {
             error("xcb_damage_subtract", err);
             return false;
         }
+
         return true;
     }
 
@@ -379,18 +377,13 @@ namespace LTSM
     XCB::XFixesRegion::XFixesRegion(const Region & reg, xcb_connection_t* conn)
     {
         const xcb_rectangle_t rect{reg.x, reg.y, reg.width, reg.height};
-
         auto id = xcb_generate_id(conn);
         auto cookie = xcb_xfixes_create_region_checked(conn, id, 1, & rect);
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_xfixes_create_region", err);
-        }
         else
-        {
             reset(new xfixes_region_t(conn, id));
-        }
     }
 
     XCB::XFixesRegion::XFixesRegion(const xcb_rectangle_t* rects, uint32_t count, xcb_connection_t* conn)
@@ -399,13 +392,9 @@ namespace LTSM
         auto cookie = xcb_xfixes_create_region_checked(conn, id, count, rects);
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_xfixes_create_region", err);
-        }
         else
-        {
             reset(new xfixes_region_t(conn, id));
-        }
     }
 
     XCB::XFixesRegion::XFixesRegion(xcb_window_t win, xcb_shape_kind_t kind, xcb_connection_t* conn)
@@ -414,13 +403,9 @@ namespace LTSM
         auto cookie = xcb_xfixes_create_region_from_window_checked(conn, id, win, kind);
 
         if(auto err = GenericError(xcb_request_check(conn, cookie)))
-        {
             error("xcb_xfixes_create_region", err);
-        }
         else
-        {
             reset(new xfixes_region_t(conn, id));
-        }
     }
 
     XCB::XFixesRegion XCB::XFixesRegion::intersect(xcb_xfixes_region_t reg2) const
@@ -430,13 +415,9 @@ namespace LTSM
         XCB::XFixesRegion res;
 
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
-        {
             error("xcb_xfixes_intersect_region", err);
-        }
         else
-        {
             res.reset(new xfixes_region_t(connection(), id));
-        }
 
         return res;
     }
@@ -448,13 +429,9 @@ namespace LTSM
         XCB::XFixesRegion res;
 
         if(auto err = GenericError(xcb_request_check(connection(), cookie)))
-        {
             error("xcb_xfixes_union_region", err);
-        }
         else
-        {
             res.reset(new xfixes_region_t(connection(), id));
-        }
 
         return res;
     }
@@ -470,33 +447,37 @@ namespace LTSM
         auto ptr2 = kc.get();
 
         if(! ptr1 || ! ptr2) return false;
+
         if(ptr1 == ptr2) return true;
 
         while(*ptr1 != NULL_KEYCODE && *ptr2 != NULL_KEYCODE)
         {
             if(*ptr1 != *ptr2) return false;
-            ptr1++; ptr2++;
+
+            ptr1++;
+            ptr2++;
         }
 
         return *ptr1 == *ptr2;
     }
 
     /* XCB::Connector */
-    XCB::Connector::Connector(std::string_view addr) : _conn(nullptr), _setup(nullptr)
+    XCB::Connector::Connector(std::string_view addr)
     {
         _conn = xcb_connect(addr.data(), nullptr);
 
         if(xcb_connection_has_error(_conn))
         {
             Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", addr);
-            throw std::runtime_error("XCB::Connector");
+            throw connector_error("XCB::Connector");
         }
 
         _setup = xcb_get_setup(_conn);
+
         if(! _setup)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
-            throw std::runtime_error("XCB::Connector");
+            throw connector_error("XCB::Connector");
         }
     }
 
@@ -547,13 +528,15 @@ namespace LTSM
     XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode)
     {
         int shmid = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
+
         if(shmid == -1)
         {
             Application::error("shmget failed, size: %d, error: %s", shmsz, strerror(errno));
             return SHM();
         }
 
-        uint8_t* shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, 0));
+        auto shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, 0));
+
         // man shmat: check result
         if(shmaddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
         {
@@ -571,17 +554,17 @@ namespace LTSM
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const Region & reg)
     {
-	return XFixesRegion(reg, _conn);
+        return XFixesRegion(reg, _conn);
     }
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const xcb_rectangle_t* rect, size_t num)
     {
-	return XFixesRegion(rect, static_cast<uint32_t>(num), _conn);
+        return XFixesRegion(rect, static_cast<uint32_t>(num), _conn);
     }
 
     size_t XCB::Connector::getMaxRequest(void) const
     {
-	return xcb_get_maximum_request_length(_conn);
+        return xcb_get_maximum_request_length(_conn);
     }
 
     bool XCB::Connector::checkAtom(std::string_view name) const
@@ -591,38 +574,38 @@ namespace LTSM
 
     xcb_atom_t XCB::Connector::getAtom(std::string_view name, bool create) const
     {
-	auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn, create ? 0 : 1, name.size(), name.data());
+        auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn, create ? 0 : 1, name.size(), name.data());
 
-	if(auto err = xcbReply.error())
+        if(auto err = xcbReply.error())
         {
             extendedError(err, "xcb_intern_atom");
             return XCB_ATOM_NONE;
         }
 
-	return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
+        return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
     }
 
     std::string XCB::Connector::getAtomName(xcb_atom_t atom) const
     {
-	if(atom == XCB_ATOM_NONE)
-	    return std::string("NONE");
+        if(atom == XCB_ATOM_NONE)
+            return std::string("NONE");
 
-	auto xcbReply = getReplyFunc2(xcb_get_atom_name, _conn, atom);
+        auto xcbReply = getReplyFunc2(xcb_get_atom_name, _conn, atom);
 
-	if(auto err = xcbReply.error())
+        if(auto err = xcbReply.error())
         {
             extendedError(err, "xcb_get_atom_name");
             return std::string();
         }
 
-	if(auto reply = xcbReply.reply())
-	{
-	    const char* name = xcb_get_atom_name_name(reply.get());
-	    size_t len = xcb_get_atom_name_name_length(reply.get());
-	    return std::string(name, len);
-	}
+        if(auto reply = xcbReply.reply())
+        {
+            const char* name = xcb_get_atom_name_name(reply.get());
+            size_t len = xcb_get_atom_name_name_length(reply.get());
+            return std::string(name, len);
+        }
 
-	return std::string();
+        return std::string();
     }
 
     void XCB::Connector::extendedError(const GenericError & gen, const char* func) const
@@ -644,7 +627,6 @@ namespace LTSM
                            (unsigned int) err->resource_id, (unsigned int) err->sequence);
         xcb_errors_context_free(err_ctx);
 #else
-
         Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
                            func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
 #endif
@@ -652,7 +634,7 @@ namespace LTSM
 
     int XCB::Connector::hasError(void) const
     {
-	return xcb_connection_has_error(_conn);
+        return xcb_connection_has_error(_conn);
     }
 
     XCB::GenericEvent XCB::Connector::poolEvent(void)
@@ -665,10 +647,11 @@ namespace LTSM
         if(mod == Module::TEST)
         {
             auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
+
             if(! _test || ! _test->present)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_test_get_version, _conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
+            auto xcbReply = getReplyFunc2(xcb_test_get_version, _conn, XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
             if(auto err = xcbReply.error())
             {
@@ -676,20 +659,20 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
-	    {
-    	        Application::debug("used %s extension, version: %d.%d", "TEST", reply->major_version, reply->minor_version);
-    	        return true;
-	    }
+            if(auto reply = xcbReply.reply())
+            {
+                Application::debug("used %s extension, version: %d.%d", "TEST", reply->major_version, reply->minor_version);
+                return true;
+            }
         }
-        else
-        if(mod == Module::DAMAGE)
+        else if(mod == Module::DAMAGE)
         {
             auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+
             if(! _damage || ! _damage->present)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_damage_query_version, _conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
+            auto xcbReply = getReplyFunc2(xcb_damage_query_version, _conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
             if(auto err = xcbReply.error())
             {
@@ -697,20 +680,20 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
-	    {
-    	        Application::debug("used %s extension, version: %d.%d", "DAMAGE", reply->major_version, reply->minor_version);
-    	        return true;
-	    }
+            if(auto reply = xcbReply.reply())
+            {
+                Application::debug("used %s extension, version: %d.%d", "DAMAGE", reply->major_version, reply->minor_version);
+                return true;
+            }
         }
-        else
-        if(mod == Module::XFIXES)
+        else if(mod == Module::XFIXES)
         {
             auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+
             if(! _xfixes || ! _xfixes->present)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, _conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
+            auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, _conn, XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
             if(auto err = xcbReply.error())
             {
@@ -718,20 +701,20 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
+            if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "XFIXES", reply->major_version, reply->minor_version);
-    	        return true;
-	    }
+                Application::debug("used %s extension, version: %d.%d", "XFIXES", reply->major_version, reply->minor_version);
+                return true;
+            }
         }
-        else
-        if(mod == Module::RANDR)
+        else if(mod == Module::RANDR)
         {
             auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+
             if(! _randr || ! _randr->present)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_randr_query_version, _conn, XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
+            auto xcbReply = getReplyFunc2(xcb_randr_query_version, _conn, XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
             if(auto err = xcbReply.error())
             {
@@ -739,20 +722,20 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
-	    {
-    	        Application::debug("used %s extension, version: %d.%d", "RANDR", reply->major_version, reply->minor_version);
-    	        return true;
-	    }
+            if(auto reply = xcbReply.reply())
+            {
+                Application::debug("used %s extension, version: %d.%d", "RANDR", reply->major_version, reply->minor_version);
+                return true;
+            }
         }
-        else
-        if(mod == Module::SHM)
+        else if(mod == Module::SHM)
         {
             auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
-	    if(! _shm || ! _shm->present)
+
+            if(! _shm || ! _shm->present)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_shm_query_version, _conn);
+            auto xcbReply = getReplyFunc2(xcb_shm_query_version, _conn);
 
             if(auto err = xcbReply.error())
             {
@@ -760,21 +743,21 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
+            if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "SHM", reply->major_version, reply->minor_version);
-    	        return true;
-	    }
+                Application::debug("used %s extension, version: %d.%d", "SHM", reply->major_version, reply->minor_version);
+                return true;
+            }
         }
-        else
-        if(mod == Module::XKB)
+        else if(mod == Module::XKB)
         {
 #ifdef LTSM_WITH_XKBCOMMON
             auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
-	    if(! _xkb)
+
+            if(! _xkb)
                 return false;
 
-	    auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, _conn, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
+            auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, _conn, XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
             if(auto err = xcbReply.error())
             {
@@ -782,13 +765,14 @@ namespace LTSM
                 return false;
             }
 
-	    if(auto reply = xcbReply.reply())
+            if(auto reply = xcbReply.reply())
             {
-	        Application::debug("used %s extension, version: %d.%d", "XKB", reply->serverMajor, reply->serverMinor);
-    	        return true;
-	    }
+                Application::debug("used %s extension, version: %d.%d", "XKB", reply->serverMajor, reply->serverMinor);
+                return true;
+            }
+
 #else
-	    Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
+            Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
             return true;
 #endif
         }
@@ -808,11 +792,11 @@ namespace LTSM
                 // for receive it, usage:
                 // RootDisplay::createDamageNotify
                 auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+
                 if(_damage && response_type == _damage->first_event + XCB_DAMAGE_NOTIFY)
                     return XCB_DAMAGE_NOTIFY;
             }
-            else
-            if(mod == Module::XFIXES)
+            else if(mod == Module::XFIXES)
             {
                 // for receive it, usage input filter:
                 // xcb_xfixes_select_selection_input(xcb_xfixes_selection_event_mask_t)
@@ -820,40 +804,44 @@ namespace LTSM
                 //
                 auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
                 auto types = { XCB_XFIXES_SELECTION_NOTIFY, XCB_XFIXES_CURSOR_NOTIFY };
+
                 for(auto & type : types)
                     if(_xfixes && response_type == _xfixes->first_event + type)
                         return type;
             }
-            else
-            if(mod == Module::RANDR)
+            else if(mod == Module::RANDR)
             {
                 // for receive it, usage input filter:
                 // xcb_xrandr_select_input(xcb_randr_notify_mask_t)
                 //
                 auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
                 auto types = { XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_RANDR_NOTIFY };
+
                 for(auto & type : types)
                     if(_randr && response_type == _randr->first_event + type) return type;
             }
-            else
-            if(mod == Module::XKB)
+            else if(mod == Module::XKB)
             {
                 // for receive it, usage input filter:
                 // xcb_xkb_select_events(xcb_xkb_event_type_t)
 #ifdef LTSM_WITH_XKBCOMMON
-        	auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
+                auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
+
                 if(_xkb && response_type == _xkb->first_event)
-		{
-		    auto types = { XCB_XKB_NEW_KEYBOARD_NOTIFY, XCB_XKB_MAP_NOTIFY, XCB_XKB_STATE_NOTIFY, XCB_XKB_CONTROLS_NOTIFY, XCB_XKB_INDICATOR_STATE_NOTIFY,
-			XCB_XKB_INDICATOR_MAP_NOTIFY, XCB_XKB_NAMES_NOTIFY, XCB_XKB_COMPAT_MAP_NOTIFY, XCB_XKB_BELL_NOTIFY, XCB_XKB_ACTION_MESSAGE, XCB_XKB_ACCESS_X_NOTIFY, XCB_XKB_EXTENSION_DEVICE_NOTIFY };
-		    auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-            	    for(auto & type : types)
-			if(xn->any.xkb_type == type) return type;
-		}
+                {
+                    auto types = { XCB_XKB_NEW_KEYBOARD_NOTIFY, XCB_XKB_MAP_NOTIFY, XCB_XKB_STATE_NOTIFY, XCB_XKB_CONTROLS_NOTIFY, XCB_XKB_INDICATOR_STATE_NOTIFY,
+                                   XCB_XKB_INDICATOR_MAP_NOTIFY, XCB_XKB_NAMES_NOTIFY, XCB_XKB_COMPAT_MAP_NOTIFY, XCB_XKB_BELL_NOTIFY, XCB_XKB_ACTION_MESSAGE, XCB_XKB_ACCESS_X_NOTIFY, XCB_XKB_EXTENSION_DEVICE_NOTIFY
+                                 };
+                    auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
+
+                    for(auto & type : types)
+                        if(xn->any.xkb_type == type) return type;
+                }
+
 #else
-		Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
+                Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
 #endif
-	    }
+            }
         }
 
         return -1;
@@ -904,27 +892,27 @@ namespace LTSM
     bool XCB::Connector::isXkbStateNotify(const GenericEvent & ev) const
     {
 #ifdef LTSM_WITH_XKBCOMMON
-	return XCB_XKB_STATE_NOTIFY == eventNotify(ev, Module::XKB);
+        return XCB_XKB_STATE_NOTIFY == eventNotify(ev, Module::XKB);
 #else
-	return false;
+        return false;
 #endif
     }
 
     bool XCB::Connector::isXkbKeyboardNotify(const GenericEvent & ev) const
     {
 #ifdef LTSM_WITH_XKBCOMMON
-	return XCB_XKB_NEW_KEYBOARD_NOTIFY == eventNotify(ev, Module::XKB);
+        return XCB_XKB_NEW_KEYBOARD_NOTIFY == eventNotify(ev, Module::XKB);
 #else
-	return false;
+        return false;
 #endif
     }
 
     bool XCB::Connector::isXkbMapNotify(const GenericEvent & ev) const
     {
 #ifdef LTSM_WITH_XKBCOMMON
-	return XCB_XKB_MAP_NOTIFY == eventNotify(ev, Module::XKB);
+        return XCB_XKB_MAP_NOTIFY == eventNotify(ev, Module::XKB);
 #else
-	return false;
+        return false;
 #endif
     }
 
@@ -937,48 +925,50 @@ namespace LTSM
             if(mod == Module::TEST)
             {
                 auto _test = xcb_get_extension_data(_conn, &xcb_test_id);
+
                 if(_test && error->major_code == _test->major_opcode)
                     return error->minor_code;
             }
-            else
-            if(mod == Module::DAMAGE)
+            else if(mod == Module::DAMAGE)
             {
                 auto _damage = xcb_get_extension_data(_conn, &xcb_damage_id);
+
                 if(_damage && error->major_code == _damage->major_opcode)
                     return error->minor_code;
             }
-            else
-            if(mod == Module::XFIXES)
+            else if(mod == Module::XFIXES)
             {
                 auto _xfixes = xcb_get_extension_data(_conn, &xcb_xfixes_id);
+
                 if(_xfixes && error->major_code == _xfixes->major_opcode)
                     return error->minor_code;
             }
-            else
-            if(mod == Module::RANDR)
+            else if(mod == Module::RANDR)
             {
                 auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+
                 if(_randr && error->major_code == _randr->major_opcode)
                     return error->minor_code;
             }
-            else
-            if(mod == Module::SHM)
+            else if(mod == Module::SHM)
             {
                 auto _shm = xcb_get_extension_data(_conn, &xcb_shm_id);
+
                 if(_shm && error->major_code == _shm->major_opcode)
                     return error->minor_code;
             }
-            else
-            if(mod == Module::XKB)
+            else if(mod == Module::XKB)
             {
 #ifdef LTSM_WITH_XKBCOMMON
-        	auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
+                auto _xkb = xcb_get_extension_data(_conn, &xcb_xkb_id);
+
                 if(_xkb && error->major_code == _xkb->major_opcode)
                     return error->minor_code;
+
 #else
-		Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
+                Application::warning("%s extension not usage, build width option: %s", "XKB", "LTSM_BUILD_XKB_COMMON");
 #endif
-	    }
+            }
         }
 
         return -1;
@@ -989,9 +979,7 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
 
         return xcbReply.reply();
     }
@@ -1007,11 +995,8 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_ATOM, offset, 1);
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
                 return *res;
@@ -1025,11 +1010,8 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
                 return *res;
@@ -1044,13 +1026,11 @@ namespace LTSM
         std::string res;
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
+
             if(ptr) res.assign(ptr);
         }
 
@@ -1063,15 +1043,11 @@ namespace LTSM
         std::list<std::string> res;
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             int len = xcb_get_property_value_length(reply.get());
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
-
             res = Tools::split(std::string(ptr, ptr + len - (ptr[len - 1] ? 0 : 1 /* remove last nul */)), 0);
         }
 
@@ -1084,11 +1060,8 @@ namespace LTSM
         std::vector<uint8_t> res;
 
         if(xcbReply.error())
-        {
             extendedError(xcbReply.error(), "xcb_get_property");
-        }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             int len = xcb_get_property_value_length(reply.get());
             auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
@@ -1099,20 +1072,20 @@ namespace LTSM
     }
 
     /* XCB::RootDisplay */
-    XCB::RootDisplay::RootDisplay(std::string_view addr) : Connector(addr), _screen(nullptr),
-        _format(nullptr), _visual(nullptr), _minKeycode(0), _maxKeycode(0)
+    XCB::RootDisplay::RootDisplay(std::string_view addr) : Connector(addr)
 #ifdef LTSM_WITH_XKBCOMMON
-        , _xkbctx{ nullptr, xkb_context_unref }, _xkbmap{ nullptr, xkb_keymap_unref }, _xkbstate{ nullptr, xkb_state_unref }, _xkbdevid(-1)
+        , _xkbctx { nullptr, xkb_context_unref }, _xkbmap { nullptr, xkb_keymap_unref }, _xkbstate { nullptr, xkb_state_unref }
 #endif
     {
         _minKeycode = _setup->min_keycode;
         _maxKeycode = _setup->max_keycode;
 
         _screen = xcb_setup_roots_iterator(_setup).data;
+
         if(! _screen)
         {
             Application::error("%s: %s failed", __FUNCTION__, "root screen");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         // init format
@@ -1128,7 +1101,7 @@ namespace LTSM
         if(! _format)
         {
             Application::error("%s: %s failed", __FUNCTION__, "init format");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         // init visual
@@ -1147,113 +1120,120 @@ namespace LTSM
         if(! _visual)
         {
             Application::error("%s: %s failed", __FUNCTION__, "init visual");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         // check extensions
         if(! checkExtension(Module::SHM))
         {
             Application::error("%s: %s failed", __FUNCTION__, "SHM extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         if(! checkExtension(Module::DAMAGE))
         {
             Application::error("%s: %s failed", __FUNCTION__, "DAMAGE extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         if(! checkExtension(Module::XFIXES))
         {
             Application::error("%s: %s failed", __FUNCTION__, "XFIXES extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         if(! checkExtension(Module::TEST))
         {
             Application::error("%s: %s failed", __FUNCTION__, "TEST extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         if(! checkExtension(Module::RANDR))
         {
             Application::error("%s: %s failed", __FUNCTION__, "RANDR extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
 #ifdef LTSM_WITH_XKBCOMMON
+
         if(! checkExtension(Module::XKB))
         {
             Application::error("%s: %s failed", __FUNCTION__, "XKB extension");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
-/*
-	uint8_t _xkbevent;
-	if(0 == xkb_x11_setup_xkb_extension(_conn, XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION,
-			    XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, nullptr, nullptr, & _xkbevent, nullptr))
-	{
-            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_setup_xkb_extension");
-	}
-*/
+        /*
+        	uint8_t _xkbevent;
+        	if(0 == xkb_x11_setup_xkb_extension(_conn, XKB_X11_MIN_MAJOR_XKB_VERSION, XKB_X11_MIN_MINOR_XKB_VERSION,
+        			    XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, nullptr, nullptr, & _xkbevent, nullptr))
+        	{
+                    Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_setup_xkb_extension");
+        	}
+        */
 
         _xkbdevid = xkb_x11_get_core_keyboard_device_id(_conn);
+
         if(_xkbdevid < 0)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         _xkbctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
+
         if(! _xkbctx)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_context_new");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
-                
+
         _xkbmap.reset(xkb_x11_keymap_new_from_device(_xkbctx.get(), _conn, _xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+
         if(!_xkbmap)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
-	_xkbstate.reset(xkb_x11_state_new_from_device(_xkbmap.get(), _conn, _xkbdevid));
+        _xkbstate.reset(xkb_x11_state_new_from_device(_xkbmap.get(), _conn, _xkbdevid));
+
         if(!_xkbstate)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
-            throw std::runtime_error("XCB::RootDisplay");
+            throw connector_error("XCB::RootDisplay");
         }
 
         uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
-                        XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
+                                       XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
         uint16_t required_events = (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
-     
+
         auto cookie = xcb_xkb_select_events_checked(_conn, _xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
-	if(auto errorReq = checkRequest(cookie))
-        {
+
+        if(auto errorReq = checkRequest(cookie))
             extendedError(errorReq, "xcb_xkb_select_events");
-        }
+
 #endif
 
         auto wsz = size();
 
         // create randr notify
-        xcb_randr_select_input(_conn, _screen->root, 
-            XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+        xcb_randr_select_input(_conn, _screen->root,
+                               XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
 
         // create damage notify
         _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
+
         if(_damage)
         {
             auto fixreg = XFixesRegion({0, 0, wsz.width, wsz.height}, _conn);
+
             if(fixreg) _damage.addRegion(_screen->root, fixreg.xid());
         }
 
         // init shm
-        const int bpp = bitsPerPixel() >> 3;
-        const int pagesz = 4096;
-        const size_t shmsz = ((wsz.width * wsz.height * bpp / pagesz) + 1) * pagesz;
+        const size_t bpp = bitsPerPixel() >> 3;
+        const size_t pagesz = 4096;
+        const size_t shmsz = ((wsz.width* wsz.height* bpp / pagesz) + 1) * pagesz;
 
         _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
@@ -1261,17 +1241,17 @@ namespace LTSM
     XCB::RootDisplay::~RootDisplay()
     {
         resetInputs();
-	xcb_flush(_conn);
+        xcb_flush(_conn);
     }
 
     void XCB::RootDisplay::resetInputs(void)
     {
-	// release all buttons
-	for(int button = 1; button <= 5; button++)
-    	    xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+        // release all buttons
+        for(uint8_t button = 1; button <= 5; button++)
+            xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
 
-	// release all keys
-        for(size_t key = _minKeycode;  key <= _maxKeycode; key++)
+        // release all keys
+        for(int key = _minKeycode;  key <= _maxKeycode; key++)
             xcb_test_fake_input(_conn, XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
 
         xcb_flush(_conn);
@@ -1347,7 +1327,6 @@ namespace LTSM
             return _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
 
         size_t pitch = reg.width * (bitsPerPixel() >> 2);
-        //size_t reqLength = sizeof(xcb_get_image_request_t) + pitch * reg.height;
         auto maxReqLength = xcb_get_maximum_request_length(_conn);
         PixmapInfoReply res;
 
@@ -1357,55 +1336,54 @@ namespace LTSM
             return res;
         }
 
-        PixmapInfoBuffer* info = nullptr;
-	uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
+        uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
 
         for(int16_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
         {
-	    // last rows
-	    if(yy + allowRows > reg.y + reg.height)
-		allowRows = reg.y + reg.height - yy;
+            // last rows
+            if(yy + allowRows > reg.y + reg.height)
+                allowRows = reg.y + reg.height - yy;
 
-	    auto xcbReply = getReplyFunc2(xcb_get_image, _conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
+            auto xcbReply = getReplyFunc2(xcb_get_image, _conn, XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
-	    if(auto err = xcbReply.error())
-    	    {
-        	extendedError(err, "xcb_get_image");
-		break;
-    	    }
+            if(auto err = xcbReply.error())
+            {
+                extendedError(err, "xcb_get_image");
+                break;
+            }
 
             if(auto reply = xcbReply.reply())
             {
-                if(! info)
-                    info = new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch);
+                if(! res)
+                    res.reset(new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch));
 
+                auto info = static_cast<PixmapInfoBuffer*>(res.get());
                 auto length = xcb_get_image_data_length(reply.get());
                 auto data = xcb_get_image_data(reply.get());
-
                 info->_pixels.insert(info->_pixels.end(), data, data + length);
             }
         }
 
-        res.reset(info);
         return res;
     }
 
     bool XCB::RootDisplay::damageAdd(const xcb_rectangle_t* rects, size_t counts)
     {
-	if(_damage && rects && counts)
-	{
-    	    auto fixreg = XFixesRegion(rects, counts, _conn);
-	    return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
-	}
-	return false;
+        if(_damage && rects && counts)
+        {
+            auto fixreg = XFixesRegion(rects, static_cast<uint32_t>(counts), _conn);
+            return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
+        }
+
+        return false;
     }
 
     bool XCB::RootDisplay::damageAdd(const Region & reg)
     {
         if(_damage)
         {
-    	    auto fixreg = XFixesRegion(region().intersected(reg), _conn);
-	    return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
+            auto fixreg = XFixesRegion(region().intersected(reg), _conn);
+            return fixreg ? _damage.addRegion(_screen->root, fixreg.xid()) : false;
         }
 
         return false;
@@ -1413,18 +1391,19 @@ namespace LTSM
 
     bool XCB::RootDisplay::damageSubtrack(const Region & reg)
     {
-	if(_damage)
-	{
-    	    auto fixreg = XFixesRegion(reg, _conn);
-	    return fixreg ? _damage.subtractRegion(fixreg.xid(), XCB_XFIXES_REGION_NONE) : false;
-	}
-	return false;
+        if(_damage)
+        {
+            auto fixreg = XFixesRegion(reg, _conn);
+            return fixreg ? _damage.subtractRegion(fixreg.xid(), XCB_XFIXES_REGION_NONE) : false;
+        }
+
+        return false;
     }
 
     std::vector<xcb_randr_output_t> XCB::RootDisplay::getRandrOutputs(void) const
     {
-	auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
-	std::vector<xcb_randr_output_t> res;
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
+        std::vector<xcb_randr_output_t> res;
 
         if(auto err = xcbReply.error())
         {
@@ -1432,20 +1411,20 @@ namespace LTSM
             return res;
         }
 
-	if(auto reply = xcbReply.reply())
+        if(auto reply = xcbReply.reply())
         {
             xcb_randr_output_t* ptr = xcb_randr_get_screen_resources_outputs(reply.get());
             int len = xcb_randr_get_screen_resources_outputs_length(reply.get());
-	    res.assign(ptr, ptr + len);
-	}
+            res.assign(ptr, ptr + len);
+        }
 
-	return res;
+        return res;
     }
 
     XCB::RandrOutputInfo XCB::RootDisplay::getRandrOutputInfo(const xcb_randr_output_t & id) const
     {
         auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
-	RandrOutputInfo res;
+        RandrOutputInfo res;
 
         if(auto err = xcbReply.error())
         {
@@ -1455,24 +1434,22 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-            uint8_t* ptr = xcb_randr_get_output_info_name(reply.get());
+            auto ptr = xcb_randr_get_output_info_name(reply.get());
             int len = xcb_randr_get_output_info_name_length(reply.get());
+            res.name.assign(reinterpret_cast<const char*>(ptr), len);
+            res.connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
+            res.crtc = reply->crtc;
+            res.mm_width = reply->mm_width;
+            res.mm_height = reply->mm_height;
+        }
 
-	    res.name.assign(reinterpret_cast<const char*>(ptr), len);
-
-	    res.connected = reply->connection == XCB_RANDR_CONNECTION_CONNECTED;
-	    res.crtc = reply->crtc;
-	    res.mm_width = reply->mm_width;
-	    res.mm_height = reply->mm_height;
-	}
-
-	return res;
+        return res;
     }
 
     std::vector<xcb_randr_mode_t> XCB::RootDisplay::getRandrOutputModes(const xcb_randr_output_t & id) const
     {
         auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
-	std::vector<xcb_randr_mode_t> res;
+        std::vector<xcb_randr_mode_t> res;
 
         if(auto err = xcbReply.error())
         {
@@ -1482,18 +1459,18 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-    	    xcb_randr_mode_t* ptr = xcb_randr_get_output_info_modes(reply.get());
-	    int len = xcb_randr_get_output_info_modes_length(reply.get());
-	    res.assign(ptr, ptr + len);
-	}
+            xcb_randr_mode_t* ptr = xcb_randr_get_output_info_modes(reply.get());
+            int len = xcb_randr_get_output_info_modes_length(reply.get());
+            res.assign(ptr, ptr + len);
+        }
 
-	return res;
+        return res;
     }
 
     std::vector<xcb_randr_mode_info_t> XCB::RootDisplay::getRandrModesInfo(void) const
     {
-	auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
-	std::vector<xcb_randr_mode_info_t> res;
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, _conn, _screen->root);
+        std::vector<xcb_randr_mode_info_t> res;
 
         if(auto err = xcbReply.error())
         {
@@ -1503,10 +1480,10 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-	    xcb_randr_mode_info_t* ptr = xcb_randr_get_screen_resources_modes(reply.get());
-	    int len = xcb_randr_get_screen_resources_modes_length(reply.get());
-	    res.assign(ptr, ptr + len);
-	}
+            xcb_randr_mode_info_t* ptr = xcb_randr_get_screen_resources_modes(reply.get());
+            int len = xcb_randr_get_screen_resources_modes_length(reply.get());
+            res.assign(ptr, ptr + len);
+        }
 
         return res;
     }
@@ -1514,7 +1491,7 @@ namespace LTSM
     std::vector<xcb_randr_crtc_t> XCB::RootDisplay::getRandrOutputCrtcs(const xcb_randr_output_t & id) const
     {
         auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, _conn, id, XCB_CURRENT_TIME);
-	std::vector<xcb_randr_mode_t> res;
+        std::vector<xcb_randr_mode_t> res;
 
         if(auto err = xcbReply.error())
         {
@@ -1524,18 +1501,18 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-    	    xcb_randr_mode_t* ptr = xcb_randr_get_output_info_crtcs(reply.get());
-	    int len = xcb_randr_get_output_info_crtcs_length(reply.get());
-	    res.assign(ptr, ptr + len);
-	}
+            xcb_randr_mode_t* ptr = xcb_randr_get_output_info_crtcs(reply.get());
+            int len = xcb_randr_get_output_info_crtcs_length(reply.get());
+            res.assign(ptr, ptr + len);
+        }
 
-	return res;
+        return res;
     }
 
     XCB::RandrScreenInfo XCB::RootDisplay::getRandrScreenInfo(void) const
     {
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, _conn, _screen->root);
-	XCB::RandrScreenInfo res;
+        XCB::RandrScreenInfo res;
 
         if(auto err = xcbReply.error())
         {
@@ -1545,19 +1522,19 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-	    res.config_timestamp = reply->config_timestamp;
+            res.config_timestamp = reply->config_timestamp;
             res.sizeID = reply->sizeID;
             res.rotation = reply->rotation;
             res.rate = reply->rate;
-	}
+        }
 
-	return res;
+        return res;
     }
 
     std::vector<xcb_randr_screen_size_t> XCB::RootDisplay::getRandrScreenSizes(RandrScreenInfo* info) const
     {
         auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, _conn, _screen->root);
-	std::vector<xcb_randr_screen_size_t> res;
+        std::vector<xcb_randr_screen_size_t> res;
 
         if(auto err = xcbReply.error())
         {
@@ -1569,90 +1546,83 @@ namespace LTSM
         {
             xcb_randr_screen_size_t* ptr = xcb_randr_get_screen_info_sizes(reply.get());
             int len = xcb_randr_get_screen_info_sizes_length(reply.get());
-	    res.assign(ptr, ptr + len);
+            res.assign(ptr, ptr + len);
 
-	    if(info)
-	    {
-		info->config_timestamp = reply->config_timestamp;
-        	info->sizeID = reply->sizeID;
-        	info->rotation = reply->rotation;
-        	info->rate = reply->rate;
-	    }
-	}
+            if(info)
+            {
+                info->config_timestamp = reply->config_timestamp;
+                info->sizeID = reply->sizeID;
+                info->rotation = reply->rotation;
+                info->rate = reply->rate;
+            }
+        }
 
-	return res;
+        return res;
     }
 
     xcb_randr_mode_t XCB::RootDisplay::createRandrMode(uint16_t width, uint16_t height)
     {
         auto cvt = "/usr/bin/cvt";
+
         if(! std::filesystem::exists(cvt))
         {
             Application::error("%s: utility not found: %s", __FUNCTION__, cvt);
             return 0;
         }
 
-        auto cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(width).arg(height));
+        std::string_view cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(width).arg(height));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
-        params.remove_if([](auto & val){ return val.empty(); });
-    
+        params.remove_if([](auto & val)
+        {
+            return val.empty();
+        });
+
         // params: Modeline "1024x600_60.00"   49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync
         if(params.size() != 13)
         {
             Application::error("%s: incorrect cvt format, params: %d", __FUNCTION__, params.size());
             return 0;
         }
-            
+
         xcb_randr_mode_info_t mode_info;
         mode_info.id = 0;
         mode_info.hskew = 0;
         mode_info.mode_flags = 0;
-
         auto it = std::next(params.begin(), 2);
         float clock = std::stof(*it);
         mode_info.dot_clock =  clock * 1000000;
-  
         it = std::next(it);
         mode_info.width = std::stod(*it);
-  
         it = std::next(it);
         mode_info.hsync_start = std::stod(*it);
-  
         it = std::next(it);
         mode_info.hsync_end = std::stod(*it);
-  
         it = std::next(it);
         mode_info.htotal = std::stod(*it);
-  
         it = std::next(it);
         mode_info.height = std::stod(*it);
-        
         it = std::next(it);
         mode_info.vsync_start = std::stod(*it);
-        
         it = std::next(it);
         mode_info.vsync_end = std::stod(*it);
-        
         it = std::next(it);
         mode_info.vtotal = std::stod(*it);
-        
         it = std::next(it);
+
         if(*it == "-hsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_NEGATIVE;
-        else
-        if(*it == "+hsync")
+        else if(*it == "+hsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_POSITIVE;
 
         it = std::next(it);
+
         if(*it == "-vsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_NEGATIVE;
-        else
-        if(*it == "+vsync")
+        else if(*it == "+vsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
 
         auto name = Tools::StringFormat("%1x%2_60").arg(mode_info.width).arg(mode_info.height);
         mode_info.name_len = name.size();
-
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, _conn, _screen->root, mode_info, name.size(), name.data());
 
         if(auto err = xcbReply.error())
@@ -1660,14 +1630,14 @@ namespace LTSM
             extendedError(err, "xcb_randr_create_mode");
             return 0;
         }
-            
+
         if(auto reply = xcbReply.reply())
-        {   
+        {
             Application::debug("%s: id: %08x, width: %d, height: %d", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
-	return 0;
+        return 0;
     }
 
     bool XCB::RootDisplay::addRandrOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t  & mode)
@@ -1676,12 +1646,12 @@ namespace LTSM
 
         if(auto errorReq = checkRequest(cookie))
         {
-	    extendedError(errorReq, "xcb_randr_add_output_mode");
+            extendedError(errorReq, "xcb_randr_add_output_mode");
             return false;
         }
 
         Application::debug("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
-	return true;
+        return true;
     }
 
     bool XCB::RootDisplay::destroyRandrMode(const xcb_randr_mode_t & mode)
@@ -1690,12 +1660,12 @@ namespace LTSM
 
         if(auto errorReq = checkRequest(cookie))
         {
-	    extendedError(errorReq, "xcb_randr_destroy_mode_checked");
+            extendedError(errorReq, "xcb_randr_destroy_mode_checked");
             return false;
         }
 
         Application::debug("%s: id: %08x", __FUNCTION__, mode);
-	return true;
+        return true;
     }
 
     bool XCB::RootDisplay::deleteRandrOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t & mode)
@@ -1704,108 +1674,116 @@ namespace LTSM
 
         if(auto errorReq = checkRequest(cookie))
         {
-	    extendedError(errorReq, "xcb_randr_delete_output_mode_checked");
+            extendedError(errorReq, "xcb_randr_delete_output_mode_checked");
             return false;
         }
 
         Application::debug("%s: id: %08x, output: %08x", __FUNCTION__, mode, output);
-	return true;
+        return true;
     }
 
     bool XCB::RootDisplay::setRandrScreenSize(uint16_t width, uint16_t height)
     {
-	// align size
-	if(auto alignW = width % 8)
-                width += 8 - alignW;
+        // align size
+        if(auto alignW = width % 8)
+            width += 8 - alignW;
 
-	auto screenSizes = getRandrScreenSizes();
-        auto its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+        auto screenSizes = getRandrScreenSizes();
+        auto its = std::find_if(screenSizes.begin(), screenSizes.end(), [ = ](auto & ss)
+        {
+            return ss.width == width && ss.height == height;
+        });
+        xcb_randr_mode_t mode = 0;
+        xcb_randr_output_t output = 0;
 
-	xcb_randr_mode_t mode = 0;
-	xcb_randr_output_t output = 0;
-
-	// not found
+        // not found
         if(its == screenSizes.end())
         {
-	    // add new mode
-	    auto outputs = getRandrOutputs();
-            auto ito = std::find_if(outputs.begin(), outputs.end(), [this](auto & id){ return this->getRandrOutputInfo(id).connected; });
+            // add new mode
+            auto outputs = getRandrOutputs();
+            auto ito = std::find_if(outputs.begin(), outputs.end(), [this](auto & id)
+            {
+                return this->getRandrOutputInfo(id).connected;
+            });
 
-	    if(ito == outputs.end())
-	    {
-            	Application::error("%s: connected output not found, outputs count: %d", __FUNCTION__, outputs.size());
-		return false;
-	    }
+            if(ito == outputs.end())
+            {
+                Application::error("%s: connected output not found, outputs count: %d", __FUNCTION__, outputs.size());
+                return false;
+            }
 
-	    output = *ito;
-	    mode = createRandrMode(width, height);
+            output = *ito;
+            mode = createRandrMode(width, height);
 
-	    if(0 == mode)
-		return false;
+            if(0 == mode)
+                return false;
 
-	    if(! addRandrOutputMode(output, mode))
-	    {
-            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
-		destroyRandrMode(mode);
-		return false;
-	    }
+            if(! addRandrOutputMode(output, mode))
+            {
+                Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+                destroyRandrMode(mode);
+                return false;
+            }
 
-	    // fixed size
-	    auto modes = getRandrModesInfo();
-	    auto itm = std::find_if(modes.begin(), modes.end(), [=](auto & val){ return val.id == mode; });
-	    if(itm == modes.end())
-	    {
-            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
-		deleteRandrOutputMode(output, mode);
-		destroyRandrMode(mode);
-		return false;
-	    }
+            // fixed size
+            auto modes = getRandrModesInfo();
+            auto itm = std::find_if(modes.begin(), modes.end(), [ = ](auto & val)
+            {
+                return val.id == mode;
+            });
 
-	    width = (*itm).width;
-	    height = (*itm).height;
+            if(itm == modes.end())
+            {
+                Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+                deleteRandrOutputMode(output, mode);
+                destroyRandrMode(mode);
+                return false;
+            }
 
-	    // rescan info
-	    screenSizes = getRandrScreenSizes();
-    	    its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss){ return ss.width == width && ss.height == height; });
+            width = (*itm).width;
+            height = (*itm).height;
+            // rescan info
+            screenSizes = getRandrScreenSizes();
+            its = std::find_if(screenSizes.begin(), screenSizes.end(), [ = ](auto & ss)
+            {
+                return ss.width == width && ss.height == height;
+            });
 
-    	    if(its == screenSizes.end())
-    	    {
-            	Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
-		//for(auto & sz : screenSizes)
-            	//    Application::debug("%s: available modes: [%d, %d]", __FUNCTION__, sz.width, sz.height);
-		deleteRandrOutputMode(output, mode);
-		destroyRandrMode(mode);
-		return false;
-	    }
-	}
+            if(its == screenSizes.end())
+            {
+                Application::error("%s: runtime error, modes: [%d, %d]", __FUNCTION__, width, height);
+                deleteRandrOutputMode(output, mode);
+                destroyRandrMode(mode);
+                return false;
+            }
+        }
 
-        int sizeID = std::distance(screenSizes.begin(), its);
-	auto screenInfo = getRandrScreenInfo();
-
-	// clear old damages
-	damageSubtrack(region());
-
+        auto sizeID = std::distance(screenSizes.begin(), its);
+        auto screenInfo = getRandrScreenInfo();
+        // clear old damages
+        damageSubtrack(region());
         auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, _conn, _screen->root, XCB_CURRENT_TIME,
-                                screenInfo.config_timestamp, sizeID, screenInfo.rotation /*XCB_RANDR_ROTATION_ROTATE_0*/, 0);
+                                       screenInfo.config_timestamp, sizeID, screenInfo.rotation /*XCB_RANDR_ROTATION_ROTATE_0*/, 0);
 
         if(auto err = xcbReply2.error())
         {
-    	    extendedError(err, "xcb_randr_set_screen_config");
-	    return false;
-	}
+            extendedError(err, "xcb_randr_set_screen_config");
+            return false;
+        }
 
-	auto nsz = size();
-	if(nsz != Size(width, height))
-	{
-    	    Application::error("%s: failed, size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
-	    damageAdd({0, 0, nsz.width, nsz.height});
-	    //deleteRandrOutputMode(output, mode);
-	    //destroyRandrMode(mode);
-	    return false;
-	}
+        auto nsz = size();
+
+        if(nsz != Size(width, height))
+        {
+            Application::error("%s: failed, size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+            damageAdd({0, 0, nsz.width, nsz.height});
+            //deleteRandrOutputMode(output, mode);
+            //destroyRandrMode(mode);
+            return false;
+        }
 
         Application::debug("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
-	return true;
+        return true;
     }
 
     XCB::GenericEvent XCB::RootDisplay::poolEvent(void)
@@ -1816,62 +1794,60 @@ namespace LTSM
         {
             auto wsz = size();
             auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
+
             if(notify->area.x + notify->area.width > wsz.width || notify->area.y + notify->area.height > wsz.height)
             {
-        	Application::warning("damage notify: [%d,%d,%d,%d] discard", notify->area.x, notify->area.y, notify->area.width, notify->area.height);
+                Application::warning("damage notify: [%d,%d,%d,%d] discard", notify->area.x, notify->area.y, notify->area.width, notify->area.height);
                 xcb_discard_reply(_conn, notify->sequence);
                 return GenericEvent();
             }
-         }
-        else
-        if(isRandrCRTCNotify(ev))
+        }
+        else if(isRandrCRTCNotify(ev))
         {
             auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                
             xcb_randr_crtc_change_t cc = notify->u.cc;
+
             if(0 < cc.width && 0 < cc.height)
             {
                 auto wsz = size();
+
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
-        	    Application::warning("xcb crc change notify: [%d,%d] discard, current: [%d,%d]", cc.width, cc.height, wsz.width, wsz.height);
+                    Application::warning("xcb crc change notify: [%d,%d] discard, current: [%d,%d]", cc.width, cc.height, wsz.width, wsz.height);
                     xcb_discard_reply(_conn, notify->sequence);
                     return GenericEvent();
                 }
 
-        	Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
-
+                Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
                 // init shm
-                const int bpp = bitsPerPixel() >> 3;
-                const int pagesz = 4096;
+                const size_t bpp = bitsPerPixel() >> 3;
+                const size_t pagesz = 4096;
                 const size_t shmsz = ((cc.width * cc.height * bpp / pagesz) + 1) * pagesz;
                 _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-
                 // create damage notify
                 _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
-		damageAdd({0, 0, cc.width, cc.height});
+                damageAdd({0, 0, cc.width, cc.height});
             }
         }
 
 #ifdef LTSM_WITH_XKBCOMMON
-	int xkbev = eventNotify(ev, Module::XKB);
+        int xkbev = eventNotify(ev, Module::XKB);
         bool resetMapState = false;
 
         if(XCB_XKB_MAP_NOTIFY == xkbev)
         {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
             Application::debug("%s: xkb notify: %s, min keycode: %d, max keycode: %d, changed: 0x%04x", __FUNCTION__, "map",
-                                        mn->minKeyCode, mn->maxKeyCode, mn->changed);
+                               mn->minKeyCode, mn->maxKeyCode, mn->changed);
             resetMapState = true;
             _minKeycode = mn->minKeyCode;
             _maxKeycode = mn->maxKeyCode;
         }
-        else
-        if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
+        else if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
         {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
             Application::debug("%s: xkb notify: %s, devid: %d, old devid: %d, min keycode: %d, max keycode: %d, changed: 0x%04x", __FUNCTION__, "new keyboard",
-                                        kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed);
+                               kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed);
 
             if(kn->deviceID == _xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
             {
@@ -1880,14 +1856,13 @@ namespace LTSM
                 _maxKeycode = kn->maxKeyCode;
             }
         }
-        else
-        if(xkbev == XCB_XKB_STATE_NOTIFY)
+        else if(xkbev == XCB_XKB_STATE_NOTIFY)
         {
             Application::debug("%s: xkb notify: %s", __FUNCTION__, "state");
-
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
             xkb_state_update_mask(_xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
-                                                      sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+                                  sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+
             if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
             {
                 // changed layout group
@@ -1900,27 +1875,23 @@ namespace LTSM
             // free state first
             _xkbstate.reset();
             _xkbmap.reset();
-
             // set new
             _xkbmap.reset(xkb_x11_keymap_new_from_device(_xkbctx.get(), _conn, _xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-	    if(_xkbmap)
-	    {
+
+            if(_xkbmap)
+            {
                 _xkbstate.reset(xkb_x11_state_new_from_device(_xkbmap.get(), _conn, _xkbdevid));
 
-    		if(_xkbstate)
-                {
-        	    Application::debug("%s: keyboard updated, device id: %d", __FUNCTION__, _xkbdevid);
-		}
+                if(_xkbstate)
+                    Application::debug("%s: keyboard updated, device id: %d", __FUNCTION__, _xkbdevid);
                 else
-        	    Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
+                    Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
             }
-	    else
-    	    {
-        	Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
-    	    }
+            else
+                Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
         }
-#endif
 
+#endif
         return ev;
     }
 
@@ -1940,9 +1911,8 @@ namespace LTSM
         {
             const void* buffer = xcb_xkb_get_names_value_list(reply.get());
             xcb_xkb_get_names_value_list_t list;
-
             xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
-                                            reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
+                                                reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
             int groups = xcb_xkb_get_names_value_list_groups_length(reply.get(), & list);
 
             // current symbol atom: list.symbolsName;
@@ -1950,6 +1920,7 @@ namespace LTSM
             for(int ii = 0; ii < groups; ++ii)
                 res.emplace_back(getAtomName(list.groups[ii]));
         }
+
 #endif
         return res;
     }
@@ -1960,21 +1931,24 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn, XCB_XKB_ID_USE_CORE_KBD);
 
         if(xcbReply.error())
-            throw std::runtime_error("xcb_xkb_get_state");
+            throw connector_error("xcb_xkb_get_state");
 
         if(auto reply = xcbReply.reply())
             return reply->group;
+
 #endif
         return -1;
     }
 
-    bool XCB::RootDisplay::switchXkbLayoutGroup(int group)
+    bool XCB::RootDisplay::switchXkbLayoutGroup(int group) const
     {
 #ifdef LTSM_WITH_XKBCOMMON
+
         // next
         if(group < 0)
         {
             auto names = getXkbNames();
+
             if(2 > names.size())
                 return false;
 
@@ -1982,6 +1956,7 @@ namespace LTSM
         }
 
         auto cookie = xcb_xkb_latch_lock_state_checked(_conn, XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
+
         if(auto errorReq = checkRequest(cookie))
         {
             extendedError(errorReq, "xcb_xkb_latch_lock_state");
@@ -1995,14 +1970,14 @@ namespace LTSM
 
     xcb_keycode_t XCB::RootDisplay::keysymToKeycode(xcb_keysym_t keysym) const
     {
-	return keysymGroupToKeycode(keysym, getXkbLayoutGroup());
+        return keysymGroupToKeycode(keysym, getXkbLayoutGroup());
     }
 
     std::pair<xcb_keycode_t, int> XCB::RootDisplay::keysymToKeycodeGroup(xcb_keysym_t keysym) const
     {
-	auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
-
+        auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _minKeycode, _maxKeycode - _minKeycode + 1);
+
         if(auto err = xcbReply.error())
         {
             extendedError(err, "xcb_get_keyboard_mapping");
@@ -2010,6 +1985,7 @@ namespace LTSM
         }
 
         auto reply = xcbReply.reply();
+
         if(! reply)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping");
@@ -2017,45 +1993,46 @@ namespace LTSM
         }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
-	if(! keysyms)
-	{
+
+        if(! keysyms)
+        {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
             return empty;
-	}
+        }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
-	if(1 > keysymsPerKeycode)
-	{
+
+        if(1 > keysymsPerKeycode)
+        {
             Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
             return empty;
-	}
+        }
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-
         Application::debug("%s: keysym: 0x%08x, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                                __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
+                           __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
+        // shifted/unshifted
+        int groupsCount = keysymsPerKeycode >> 1;
 
-	// shifted/unshifted
-	int groupsCount = keysymsPerKeycode >> 1;
         for(int group = 0; group < groupsCount; ++group)
         {
-	    for(int ii = 0; ii < keycodesCount; ++ii)
-    	    {
-		auto keycode = _minKeycode + ii;
-        	int index = ii * keysymsPerKeycode + group * 2;
+            for(int ii = 0; ii < keycodesCount; ++ii)
+            {
+                auto keycode = _minKeycode + ii;
+                int index = ii * keysymsPerKeycode + group * 2;
 
-        	if(index + 1 >= keysymsLength)
-        	{
-            	    Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
-            	    return empty;
-        	}
+                if(index + 1 >= keysymsLength)
+                {
+                    Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                                       __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                    return empty;
+                }
 
-        	// check normal/shifted keysyms
-    		if(keysym == keysyms[index] || keysym == keysyms[index + 1])
-            	    return std::make_pair(keycode, group);
-	    }
+                // check normal/shifted keysyms
+                if(keysym == keysyms[index] || keysym == keysyms[index + 1])
+                    return std::make_pair(keycode, group);
+            }
         }
 
         Application::warning("%s: keysym not found 0x%08x, group names: [%s]", __FUNCTION__, keysym, Tools::join(getXkbNames(), ",").c_str());
@@ -2065,6 +2042,7 @@ namespace LTSM
     xcb_keycode_t XCB::RootDisplay::keysymGroupToKeycode(xcb_keysym_t keysym, int group) const
     {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn, _minKeycode, _maxKeycode - _minKeycode + 1);
+
         if(auto err = xcbReply.error())
         {
             extendedError(err, "xcb_get_keyboard_mapping");
@@ -2072,6 +2050,7 @@ namespace LTSM
         }
 
         auto reply = xcbReply.reply();
+
         if(! reply)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping");
@@ -2079,21 +2058,24 @@ namespace LTSM
         }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
-	if(! keysyms)
-	{
+
+        if(! keysyms)
+        {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
             return NULL_KEYCODE;
-	}
+        }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
-	if(1 > keysymsPerKeycode)
-	{
+
+        if(1 > keysymsPerKeycode)
+        {
             Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
             return NULL_KEYCODE;
-	}
+        }
 
         // [shifted, unshifted] pairs
         int groupsCount = keysymsPerKeycode >> 1;
+
         if(0 > group || groupsCount <= group)
         {
             Application::error("%s: unknown group: %d, groups count: %d", __FUNCTION__, group, groupsCount);
@@ -2102,19 +2084,18 @@ namespace LTSM
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-
         Application::debug("%s: keysym: 0x%08x, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d, group names: [%s]",
-				__FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount, Tools::join(getXkbNames(), ",").c_str());
+                           __FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount, Tools::join(getXkbNames(), ",").c_str());
 
         for(int ii = 0; ii < keycodesCount; ++ii)
         {
-	    auto keycode = _minKeycode + ii;
+            auto keycode = _minKeycode + ii;
             int index = ii * keysymsPerKeycode + group * 2;
 
             if(index + 1 >= keysymsLength)
             {
                 Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+                                   __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                 return NULL_KEYCODE;
             }
 
@@ -2133,35 +2114,35 @@ namespace LTSM
 
     void XCB::RootDisplay::fakeInputKeycode(xcb_keycode_t keycode, bool pressed)
     {
-	fakeInputTest(pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
+        fakeInputTest(pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
     }
 
     void XCB::RootDisplay::fakeInputKeysym(xcb_keysym_t keysym, bool pressed)
     {
         auto keycode = keysymToKeycode(keysym);
+
         if(keycode == NULL_KEYCODE)
         {
-            auto keycodeGroup = keysymToKeycodeGroup(keysym);
-            if(keycodeGroup.first != NULL_KEYCODE)
-            {
-    		if(pressed)
-		    Application::debug("%s: keysym 0x%08x was found the another group %d, switched it", __FUNCTION__, keysym, keycodeGroup.second);
+            auto [keysymKeycode, keysymGroup] = keysymToKeycodeGroup(keysym);
 
-                switchXkbLayoutGroup(keycodeGroup.second);
-                keycode = keycodeGroup.first;
+            if(keysymKeycode != NULL_KEYCODE)
+            {
+                if(pressed)
+                    Application::debug("%s: keysym 0x%08x was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
+
+                switchXkbLayoutGroup(keysymGroup);
+                keycode = keysymKeycode;
             }
         }
 
         if(keycode != NULL_KEYCODE)
-	{
-	    fakeInputKeycode(keycode, pressed);
-	}
+            fakeInputKeycode(keycode, pressed);
     }
 
     void XCB::RootDisplay::fakeInputButton(int button, const Point & pos)
     {
-        xcb_test_fake_input(_conn, XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
-        xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
+        xcb_test_fake_input(_conn, XCB_BUTTON_PRESS, static_cast<uint8_t>(button), XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
+        xcb_test_fake_input(_conn, XCB_BUTTON_RELEASE, static_cast<uint8_t>(button), XCB_CURRENT_TIME, _screen->root, pos.x, pos.y, 0);
         xcb_flush(_conn);
     }
 
@@ -2169,7 +2150,8 @@ namespace LTSM
     /// @param detail: keycode or left 1, middle 2, right 3, scrollup 4, scrolldw 5
     bool XCB::RootDisplay::fakeInputTest(int type, int detail, int posx, int posy)
     {
-        auto cookie = xcb_test_fake_input_checked(_conn, type, detail, XCB_CURRENT_TIME, _screen->root, posx, posy, 0);
+        auto cookie = xcb_test_fake_input_checked(_conn, static_cast<uint8_t>(type), static_cast<uint8_t>(detail), XCB_CURRENT_TIME, _screen->root,
+                      static_cast<int16_t>(posx), static_cast<int16_t>(posy), 0);
         auto errorReq = checkRequest(cookie);
 
         if(! errorReq)
@@ -2195,7 +2177,7 @@ namespace LTSM
 
     void XCB::RootDisplay::fillBackground(int r, int g, int b)
     {
-	fillRegion(r, g, b, region());
+        fillRegion(r, g, b, region());
     }
 
     void XCB::RootDisplay::fillRegion(int r, int g, int b, const Region & reg)
@@ -2229,67 +2211,64 @@ namespace LTSM
 
     /* XCB::RootDisplayExt */
     XCB::RootDisplayExt::RootDisplayExt(std::string_view addr) : RootDisplay(addr),
-        _atoms{ XCB_ATOM_NONE }, _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
+        _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
         _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
     {
-	const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-	const uint32_t values[] = { _screen->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE }; 
+        const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+        const uint32_t values[] = { _screen->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE };
+        _selwin = xcb_generate_id(_conn);
+        auto cookie = xcb_create_window_checked(_conn, 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
+                                                XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, mask, values);
+        auto errorReq = checkRequest(cookie);
 
-	_selwin = xcb_generate_id(_conn);
-	auto cookie = xcb_create_window_checked(_conn, 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
-			    XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, mask, values);
-
-	auto errorReq = checkRequest(cookie);
-	if(! errorReq)
+        if(! errorReq)
         {
-	    _atomPrimary = getAtom("PRIMARY");
-	    _atomClipboard = getAtom("CLIPBOARD");
-	    _atomBuffer = getAtom("XSEL_DATA");
-	    _atomTargets = getAtom("TARGETS");
-	    _atomText = getAtom("TEXT");
-	    _atomTextPlain = getAtom("text/plain;charset=utf-8");
-	    _atomUTF8 = getAtom("UTF8_STRING");
-
+            _atomPrimary = getAtom("PRIMARY");
+            _atomClipboard = getAtom("CLIPBOARD");
+            _atomBuffer = getAtom("XSEL_DATA");
+            _atomTargets = getAtom("TARGETS");
+            _atomText = getAtom("TEXT");
+            _atomTextPlain = getAtom("text/plain;charset=utf-8");
+            _atomUTF8 = getAtom("UTF8_STRING");
             // set _wm_name
-	    const std::string name("LTSM_SEL");
-	    xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, _selwin,
-				getAtom("_NET_WM_NAME"), _atomUTF8, 8, name.size(), name.data());
-
-	    xcb_flush(_conn);
-
+            const std::string name("LTSM_SEL");
+            xcb_change_property(_conn, XCB_PROP_MODE_REPLACE, _selwin,
+                                getAtom("_NET_WM_NAME"), _atomUTF8, 8, name.size(), name.data());
+            xcb_flush(_conn);
             // run periodic timer (555ms)
             _timerClipCheck = Tools::BaseTimer::create<std::chrono::milliseconds>(555, true,
-                        [this]()
-                        {
-                            this->getSelectionEvent(this->_atomPrimary);
-                            this->getSelectionEvent(this->_atomClipboard);
-                        });
+                              [this]()
+            {
+                this->getSelectionEvent(this->_atomPrimary);
+                this->getSelectionEvent(this->_atomClipboard);
+            });
         }
         else
-	{
-    	    extendedError(errorReq, "xcb_create_window");
+        {
+            extendedError(errorReq, "xcb_create_window");
             _selwin = 0;
-	}
+        }
     }
 
     XCB::RootDisplayExt::~RootDisplayExt()
     {
         _timerClipCheck->stop(true);
 
-	if(_selwin)
+        if(_selwin)
             xcb_destroy_window(_conn, _selwin);
     }
 
     bool XCB::RootDisplayExt::selectionClearAction(xcb_selection_clear_event_t* ev)
     {
-	if(ev && ev->owner == _selwin)
+        if(ev && ev->owner == _selwin)
         {
-	    _selbuf.clear();
+            _selbuf.clear();
 
             if(Application::isDebugLevel(DebugLevel::Console) ||
-                Application::isDebugLevel(DebugLevel::SyslogInfo))
+               Application::isDebugLevel(DebugLevel::SyslogInfo))
                 Application::debug("%s: %s", __FUNCTION__, "event");
- 	    return true;
+
+            return true;
         }
 
         return false;
@@ -2297,35 +2276,33 @@ namespace LTSM
 
     xcb_window_t XCB::RootDisplayExt::getOwnerSelection(const xcb_atom_t & atomSel)
     {
-	auto xcbReply = getReplyFunc2(xcb_get_selection_owner, _conn, atomSel);
+        auto xcbReply = getReplyFunc2(xcb_get_selection_owner, _conn, atomSel);
 
-    	if(auto err = xcbReply.error())
-    	{
-    	    extendedError(err, "xcb_get_selection_owner");
-	    return XCB_WINDOW_NONE;
-	}
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err, "xcb_get_selection_owner");
+            return XCB_WINDOW_NONE;
+        }
 
-	return xcbReply.reply()  ? xcbReply.reply()->owner : XCB_WINDOW_NONE;
+        return xcbReply.reply()  ? xcbReply.reply()->owner : XCB_WINDOW_NONE;
     }
 
     bool XCB::RootDisplayExt::sendNotifyTargets(const xcb_selection_request_event_t & ev)
     {
-	auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
-    		    XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & _atomTargets); /* send list: _atomTargets, _atomText, _atomTextPlain, _atomUTF8 */
+        auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
+                      XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & _atomTargets); /* send list: _atomTargets, _atomText, _atomTextPlain, _atomUTF8 */
 
-    	auto errorReq = checkRequest(cookie);
-    	if(errorReq)
-	{
-    	    extendedError(errorReq, "xcb_change_property");
-	    return false;
-	}
+        if(auto errorReq = checkRequest(cookie))
+        {
+            extendedError(errorReq, "xcb_change_property");
+            return false;
+        }
 
-	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
-            .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property };
-
-	xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-	xcb_flush(_conn);
-
+        xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+                                                .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property
+                                              };
+        xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(_conn);
         return true;
     }
 
@@ -2334,155 +2311,149 @@ namespace LTSM
         size_t length = _selbuf.size();
         size_t maxreq = getMaxRequest();
         auto chunk = std::min(maxreq, length);
-       
-	auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, _selbuf.data());
-    	auto errorReq = checkRequest(cookie);
+        auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, _selbuf.data());
 
-    	if(errorReq)
-	{
-    	    extendedError(errorReq, "xcb_change_property");
-	    return false;
-	}
+        if(auto errorReq = checkRequest(cookie))
+        {
+            extendedError(errorReq, "xcb_change_property");
+            return false;
+        }
 
-	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
-            .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property };
+        xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+                                                .time = ev.time, .requestor = ev.requestor, .selection = ev.selection, .target = ev.target, .property = ev.property
+                                              };
+        xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(_conn);
 
-	xcb_send_event(_conn, 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-	xcb_flush(_conn);
-    
         if(Application::isDebugLevel(DebugLevel::Console) ||
-            Application::isDebugLevel(DebugLevel::SyslogInfo))
-	{
-	    auto prop = getAtomName(ev.property);
-	    std::string log(_selbuf.begin(), _selbuf.end());
+           Application::isDebugLevel(DebugLevel::SyslogInfo))
+        {
+            auto prop = getAtomName(ev.property);
+            std::string log(_selbuf.begin(), _selbuf.end());
             Application::debug("xcb put selection, size: %d, content: `%s', to window: 0x%08x, property: `%s'", _selbuf.size(), log.c_str(), ev.requestor, prop.c_str());
-	}
+        }
 
         return true;
     }
 
     bool XCB::RootDisplayExt::selectionRequestAction(xcb_selection_request_event_t* ev)
     {
-	if(ev->selection == _atomClipboard || ev->selection == _atomPrimary)
-	{
-	    if(ev->target == _atomTargets)
-		return sendNotifyTargets(*ev);
-	    else
-	    if((ev->target == _atomText || ev->target == _atomTextPlain || ev->target == _atomUTF8) &&
-		ev->property != XCB_ATOM_NONE && ! _selbuf.empty())
-		return sendNotifySelData(*ev);
-	}
+        if(ev->selection == _atomClipboard || ev->selection == _atomPrimary)
+        {
+            if(ev->target == _atomTargets)
+                return sendNotifyTargets(*ev);
+            else if((ev->target == _atomText || ev->target == _atomTextPlain || ev->target == _atomUTF8) &&
+                    ev->property != XCB_ATOM_NONE && ! _selbuf.empty())
+                return sendNotifySelData(*ev);
+        }
 
-	// other variants: discard request
-	xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
-            .time = ev->time, .requestor = ev->requestor, .selection = ev->selection, .target = ev->target, .property = XCB_ATOM_NONE };
-
-	xcb_send_event(_conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-	xcb_flush(_conn);
+        // other variants: discard request
+        xcb_selection_notify_event_t notify = { .response_type = XCB_SELECTION_NOTIFY, .pad0 = 0, .sequence = 0,
+                                                .time = ev->time, .requestor = ev->requestor, .selection = ev->selection, .target = ev->target, .property = XCB_ATOM_NONE
+                                              };
+        xcb_send_event(_conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(_conn);
 
         if(Application::isDebugLevel(DebugLevel::Console) ||
-            Application::isDebugLevel(DebugLevel::SyslogInfo))
-	{
-	    auto sel = getAtomName(ev->selection);
-	    auto tgt = getAtomName(ev->target);
-	    auto prop = getAtomName(ev->property);
-	    Application::error("xcb discard selection: `%s', target: `%s', property: `%s', window: 0x%08x", sel.c_str(), tgt.c_str(), prop.c_str(), ev->requestor);
-	}
+           Application::isDebugLevel(DebugLevel::SyslogInfo))
+        {
+            auto sel = getAtomName(ev->selection);
+            auto tgt = getAtomName(ev->target);
+            auto prop = getAtomName(ev->property);
+            Application::error("xcb discard selection: `%s', target: `%s', property: `%s', window: 0x%08x", sel.c_str(), tgt.c_str(), prop.c_str(), ev->requestor);
+        }
 
-	return false;
+        return false;
     }
 
     bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf, const xcb_atom_t & atomSel)
     {
-	_selbuf.assign(buf.begin(), buf.end());
+        _selbuf.assign(buf.begin(), buf.end());
 
-	if(_selbuf.empty())
-	    return false;
+        if(_selbuf.empty())
+            return false;
 
-	// take owner
-	auto owner = getOwnerSelection(atomSel);
-	if(owner != _selwin)
-	{
-    	    xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
-	    xcb_flush(_conn);
-	}
+        // take owner
+        if(getOwnerSelection(atomSel) != _selwin)
+        {
+            xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
+            xcb_flush(_conn);
+        }
 
-	return true;
+        return true;
     }
 
     bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf)
     {
         // sync primary and clipboard
-	return setClipboardEvent(buf, _atomPrimary) && setClipboardEvent(buf, _atomClipboard);
+        return setClipboardEvent(buf, _atomPrimary) && setClipboardEvent(buf, _atomClipboard);
     }
 
     bool XCB::RootDisplayExt::getSelectionEvent(const xcb_atom_t & atomSel)
     {
-	auto owner = getOwnerSelection(atomSel);
-	if(owner == XCB_WINDOW_NONE || owner == _selwin)
-	    return false;
+        auto owner = getOwnerSelection(atomSel);
 
-	xcb_delete_property(_conn, _selwin, _atomBuffer);
-	xcb_convert_selection(_conn, _selwin, atomSel, _atomUTF8, _atomBuffer, XCB_CURRENT_TIME);
+        if(owner == XCB_WINDOW_NONE || owner == _selwin)
+            return false;
 
-	xcb_flush(_conn);
-	return true;
+        xcb_delete_property(_conn, _selwin, _atomBuffer);
+        xcb_convert_selection(_conn, _selwin, atomSel, _atomUTF8, _atomBuffer, XCB_CURRENT_TIME);
+        xcb_flush(_conn);
+        return true;
     }
 
     bool XCB::RootDisplayExt::selectionNotifyAction(xcb_selection_notify_event_t* ev)
     {
-	if(! ev || ev->property == XCB_ATOM_NONE)
-	    return false;
+        if(! ev || ev->property == XCB_ATOM_NONE)
+            return false;
 
         // get type
         auto type = getPropertyType(_selwin, _atomBuffer);
-	if(XCB_ATOM_NONE == type)
+
+        if(XCB_ATOM_NONE == type)
             return false;
 
         if(type != _atomUTF8 && type != _atomText && type != _atomTextPlain)
         {
-	    auto name = getAtomName(type);
+            auto name = getAtomName(type);
             Application::error("xcb selection notify action, unsupported type: %d, `%s'", type, name.c_str());
             return false;
         }
 
         // get data
-	auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, type, 0, ~0);
+        auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, type, 0, ~0);
 
-	if(auto err = xcbReply.error())
-	{
-	    extendedError(err, "xcb_get_property");
-	}
-        else
-        if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err, "xcb_get_property");
+        else if(auto reply = xcbReply.reply())
         {
-	    bool ret = false;
+            bool ret = false;
             auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
             int length = xcb_get_property_value_length(reply.get());
 
-	    if(ptrbuf && 0 < length)
-	    {
-	        // check equal
-	        if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
-		    ret = false;
+            if(ptrbuf && 0 < length)
+            {
+                // check equal
+                if(length == _selbuf.size() && std::equal(_selbuf.begin(), _selbuf.end(), ptrbuf))
+                    ret = false;
                 else
-	        {
-		    _selbuf.assign(ptrbuf, ptrbuf + length);
-		    ret = true;
+                {
+                    _selbuf.assign(ptrbuf, ptrbuf + length);
+                    ret = true;
 
                     if(Application::isDebugLevel(DebugLevel::Console) ||
-                        Application::isDebugLevel(DebugLevel::SyslogInfo))
-		    {
-		        std::string log(_selbuf.begin(), _selbuf.end());
+                       Application::isDebugLevel(DebugLevel::SyslogInfo))
+                    {
+                        std::string log(_selbuf.begin(), _selbuf.end());
                         Application::debug("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
-		    }
-	        }
-	    }
+                    }
+                }
+            }
 
-	    if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
-	        extendedError(errorReq, "xcb_delete_property");
+            if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
+                extendedError(errorReq, "xcb_delete_property");
 
-	    return ret;
+            return ret;
         }
 
         return false;

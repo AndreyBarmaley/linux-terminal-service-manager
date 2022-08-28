@@ -119,22 +119,22 @@ namespace LTSM
     {
         return getType() == JsonType::Boolean;
     }
-    
+
     bool JsonValue::isInteger(void) const
     {
         return getType() == JsonType::Integer;
     }
-    
+
     bool JsonValue::isDouble(void) const
     {
         return getType() == JsonType::Double;
     }
-        
+
     bool JsonValue::isString(void) const
     {
         return getType() == JsonType::String;
     }
-        
+
     bool JsonValue::isObject(void) const
     {
         return getType() == JsonType::Object;
@@ -279,6 +279,7 @@ namespace LTSM
     bool JsonString::getBoolean(void) const
     {
         auto content = getString();
+
         if(content.compare(0, 4, "fals") == 0)
             return false;
 
@@ -331,12 +332,12 @@ namespace LTSM
     }
 
     /* JsonInteger */
-    JsonType JsonInteger::getType(void) const 
+    JsonType JsonInteger::getType(void) const
     {
         return JsonType::Integer;
     }
 
-    int JsonInteger::getInteger(void) const 
+    int JsonInteger::getInteger(void) const
     {
         return std::any_cast<int>(value);
     }
@@ -344,35 +345,35 @@ namespace LTSM
     std::string JsonInteger::getString(void) const
     {
         return std::to_string(getInteger());
-    }   
-            
-    double JsonInteger::getDouble(void) const 
+    }
+
+    double JsonInteger::getDouble(void) const
     {
         return getInteger();
-    }   
-            
-    bool JsonInteger::getBoolean(void) const 
+    }
+
+    bool JsonInteger::getBoolean(void) const
     {
         return getInteger();
-    }        
+    }
 
     /* JsonBoolean */
-    JsonType JsonBoolean::getType(void) const 
+    JsonType JsonBoolean::getType(void) const
     {
         return JsonType::Boolean;
     }
 
-    bool JsonBoolean::getBoolean(void) const 
+    bool JsonBoolean::getBoolean(void) const
     {
         return std::any_cast<bool>(value);
     }
 
-    int JsonBoolean::getInteger(void) const 
+    int JsonBoolean::getInteger(void) const
     {
         return getBoolean() ? 1 : 0;
     }
 
-    std::string JsonBoolean::getString(void) const 
+    std::string JsonBoolean::getString(void) const
     {
         return getBoolean() ? "true" : "false";
     }
@@ -667,6 +668,7 @@ namespace LTSM
             if((*it).second)
             {
                 os << Tools::escaped((*it).first, true) << ": " << (*it).second->toString();
+
                 if(std::next(it) != content.end()) os << ", ";
             }
         }
@@ -750,10 +752,22 @@ namespace LTSM
     }
 
     /* JsonArray */
-    int JsonArray::getInteger(void) const { return 0; }
-    std::string JsonArray::getString(void) const { return ""; }
-    double JsonArray::getDouble(void) const { return 0; }
-    bool JsonArray::getBoolean(void) const { return false; }
+    int JsonArray::getInteger(void) const
+    {
+        return 0;
+    }
+    std::string JsonArray::getString(void) const
+    {
+        return "";
+    }
+    double JsonArray::getDouble(void) const
+    {
+        return 0;
+    }
+    bool JsonArray::getBoolean(void) const
+    {
+        return false;
+    }
 
     JsonArray::JsonArray(const JsonArray & ja)
     {
@@ -987,8 +1001,8 @@ namespace LTSM
 
     std::string JsonContent::stringToken(const JsmnToken & tok) const
     {
-	if(0 > tok.start() || 1 > tok.size())
-	    return std::string();
+        if(0 > tok.start() || 1 > tok.size())
+            return std::string();
 
         return content.substr(tok.start(), tok.size());
     }
@@ -1039,11 +1053,11 @@ namespace LTSM
 
             while(counts-- && itval != end())
             {
-                if(! (*itkey).isKey())
-		{
-		    auto str = stringToken(*itkey);
+                if(!(*itkey).isKey())
+                {
+                    auto str = stringToken(*itkey);
                     Application::error("not key, index: %d, `%s'", std::distance(begin(), itkey), str.c_str());
-		}
+                }
 
                 auto key = Tools::unescaped(stringToken(*itkey));
                 auto valp = getValue(itval, nullptr);

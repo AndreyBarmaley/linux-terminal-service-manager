@@ -128,8 +128,8 @@ namespace LTSM
                 result.append(buffer.data());
         }
 
-	if(result.size() && result.back() == '\n')
-	    result.erase(std::prev(result.end()));
+        if(result.size() && result.back() == '\n')
+            result.erase(std::prev(result.end()));
 
         return result;
     }
@@ -238,34 +238,60 @@ namespace LTSM
     }
 
     std::string Tools::escaped(std::string_view str, bool quote)
-    {   
+    {
         std::ostringstream os;
-        
+
         // start quote
         if(quote)
             os << "\"";
-    
+
         // variants: \\, \", \/, \t, \n, \r, \f, \b
         for(auto & ch : str)
         {
             switch(ch)
             {
-                case '\\': os << "\\\\"; break;
-                case '"':  os << "\\\""; break;
-                case '/':  os << "\\/"; break;
-                case '\t': os << "\\t"; break;
-                case '\n': os << "\\n"; break;
-                case '\r': os << "\\r"; break;
-                case '\f': os << "\\f"; break;
-                case '\b': os << "\\b"; break;
-                default: os << ch; break;
+                case '\\':
+                    os << "\\\\";
+                    break;
+
+                case '"':
+                    os << "\\\"";
+                    break;
+
+                case '/':
+                    os << "\\/";
+                    break;
+
+                case '\t':
+                    os << "\\t";
+                    break;
+
+                case '\n':
+                    os << "\\n";
+                    break;
+
+                case '\r':
+                    os << "\\r";
+                    break;
+
+                case '\f':
+                    os << "\\f";
+                    break;
+
+                case '\b':
+                    os << "\\b";
+                    break;
+
+                default:
+                    os << ch;
+                    break;
             }
         }
 
         // end quote
         if(quote)
             os << "\"";
-    
+
         return os.str();
     }
 
@@ -278,25 +304,58 @@ namespace LTSM
         for(auto it = str.begin(); it != str.end(); ++it)
         {
             auto itn = std::next(it);
+
             if(itn == str.end()) break;
 
             if(*it == '\\')
             {
                 switch(*itn)
                 {
-                    case '\\': str.erase(itn); break;
-                    case '"': str.erase(itn); *it = '"'; break;
-                    case '/': str.erase(itn); *it = '/'; break;
-                    case 't': str.erase(itn); *it = '\t'; break;
-                    case 'n': str.erase(itn); *it = '\n'; break;
-                    case 'r': str.erase(itn); *it = '\r'; break;
-                    case 'f': str.erase(itn); *it = '\f'; break;
-                    case 'b': str.erase(itn); *it = '\b'; break;
-                    default: break;
+                    case '\\':
+                        str.erase(itn);
+                        break;
+
+                    case '"':
+                        str.erase(itn);
+                        *it = '"';
+                        break;
+
+                    case '/':
+                        str.erase(itn);
+                        *it = '/';
+                        break;
+
+                    case 't':
+                        str.erase(itn);
+                        *it = '\t';
+                        break;
+
+                    case 'n':
+                        str.erase(itn);
+                        *it = '\n';
+                        break;
+
+                    case 'r':
+                        str.erase(itn);
+                        *it = '\r';
+                        break;
+
+                    case 'f':
+                        str.erase(itn);
+                        *it = '\f';
+                        break;
+
+                    case 'b':
+                        str.erase(itn);
+                        *it = '\b';
+                        break;
+
+                    default:
+                        break;
                 }
             }
         }
-        
+
         return str;
     }
 
@@ -307,7 +366,7 @@ namespace LTSM
 
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic)
     {
-        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [=](uint32_t crc, int val)
+        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [ = ](uint32_t crc, int val)
         {
             crc ^= val;
 
@@ -325,7 +384,7 @@ namespace LTSM
     bool Tools::checkUnixSocket(const std::filesystem::path & path)
     {
         // check present
-	if(std::filesystem::is_socket(path))
+        if(std::filesystem::is_socket(path))
         {
             int socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 
@@ -341,7 +400,6 @@ namespace LTSM
                     Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
 
                 std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
-
                 int res = connect(socket_fd, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un));
                 close(socket_fd);
                 return res == 0;
@@ -356,13 +414,14 @@ namespace LTSM
     {
         vecbuf.reserve(32);
     }
-        
+
     void Tools::StreamBitsPack::pushBit(bool v)
-    {   
+    {
         if(bitpos == 7)
             vecbuf.push_back(0);
 
         uint8_t mask = 1 << bitpos;
+
         if(v) vecbuf.back() |= mask;
 
         if(bitpos == 0)
@@ -372,7 +431,7 @@ namespace LTSM
     }
 
     void Tools::StreamBitsPack::pushAlign(void)
-    {   
+    {
         bitpos = 7;
     }
 
@@ -391,7 +450,7 @@ namespace LTSM
     bool Tools::StreamBitsPack::empty(void) const
     {
         return vecbuf.empty() ||
-                (vecbuf.size() == 1 && bitpos == 7);
+               (vecbuf.size() == 1 && bitpos == 7);
     }
 
     const std::vector<uint8_t> & Tools::StreamBitsPack::toVector(void) const

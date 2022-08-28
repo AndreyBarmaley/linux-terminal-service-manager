@@ -129,7 +129,6 @@ namespace LTSM
     {
         newsz_w = std::max(newsz_w, 640);
         newsz_h = std::max(newsz_h, 480);
-
         int winsz_w, winsz_h;
         SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
 
@@ -137,13 +136,12 @@ namespace LTSM
         {
             int dispsz_w = newsz_w;
             int dispsz_h = newsz_h;
-
             SDL_SetWindowSize(_window, newsz_w, newsz_h);
 
             if(_display)
                 SDL_DestroyTexture(_display);
 
-             if(_renderer)
+            if(_renderer)
                 SDL_DestroyRenderer(_renderer);
 
             if(nullptr != (_renderer = SDL_CreateRenderer(_window, -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE))))
@@ -154,7 +152,6 @@ namespace LTSM
                     SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
                     renderClear(& black);
                     renderReset();
-
                     return true;
                 }
                 else
@@ -279,7 +276,7 @@ namespace LTSM
         int winsz_w, winsz_h, rendsz_w, rendsz_h;
         SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
 
-	if(0 != SDL_QueryTexture(_display, nullptr, nullptr, &rendsz_w, &rendsz_h))
+        if(0 != SDL_QueryTexture(_display, nullptr, nullptr, &rendsz_w, &rendsz_h))
             std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
         else
         {

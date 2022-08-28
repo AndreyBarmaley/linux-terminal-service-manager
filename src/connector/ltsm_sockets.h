@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <memory>
 #include <cstdint>
+#include <stdexcept>
 
 #include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
@@ -41,6 +42,11 @@
 
 namespace LTSM
 {
+    struct network_error : public std::runtime_error
+    {
+        network_error(const char* what) : std::runtime_error(what){}
+    };
+
     /// @brief: network stream interface
     class NetworkStream : protected ByteOrderInterface
     {

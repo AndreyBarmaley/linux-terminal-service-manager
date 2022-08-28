@@ -44,10 +44,10 @@
 
 #include "ltsm_connector_vnc.h"
 #ifdef LTSM_WITH_RDP
- #include "ltsm_connector_rdp.h"
+#include "ltsm_connector_rdp.h"
 #endif
 #ifdef LTSM_WITH_SPICE
- #include "ltsm_connector_spice.h"
+#include "ltsm_connector_spice.h"
 #endif
 
 using namespace std::chrono_literals;
@@ -64,6 +64,7 @@ namespace LTSM
 #ifdef LTSM_WITH_SPICE
         proto.emplace_back("SPICE");
 #endif
+
         if(1 < proto.size())
             proto.emplace_back("AUTO");
 
@@ -95,6 +96,7 @@ namespace LTSM
         struct pollfd fds = {0};
         fds.fd = fd;
         fds.events = POLLIN;
+
         // has input
         if(0 < poll(& fds, 1, 1))
         {
@@ -102,6 +104,7 @@ namespace LTSM
             std::ungetc(val, stdin);
             return val;
         }
+
         return -1;
     }
 
@@ -118,6 +121,7 @@ namespace LTSM
     int Connector::Service::start(void)
     {
         auto conn = sdbus::createSystemBusConnection();
+
         if(! conn)
         {
             Application::error("%s: %s", "Service::start", "dbus create connection failed");
@@ -126,14 +130,13 @@ namespace LTSM
 
         std::unique_ptr<SignalProxy> connector;
         Application::setDebugLevel(_config.getString("connector:debug"));
-
         auto uid = getuid();
         Application::info("connector version: %d", LTSM::service_version);
-
         //if(0 < uid)
         {
             auto home = Connector::homeRuntime();
             Application::debug("uid: %d, gid: %d, working dir: %s", uid, getgid(), home.c_str());
+
             if(0 != chdir(home.c_str()))
                 Application::warning("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
         }
@@ -144,42 +147,51 @@ namespace LTSM
             _type = "vnc";
             int first = autoDetectType();
 #ifdef LTSM_WITH_RDP
+
             if(first  == 0x03)
                 _type = "rdp";
+
 #endif
 #ifdef LTSM_WITH_SPICE
+
             if(first == 0x52)
                 _type = "spice";
+
 #endif
         }
 
 #ifdef LTSM_WITH_RDP
+
         if(_type == "rdp")
             connector.reset(new Connector::RDP(conn.get(), _config));
+
 #endif
 #ifdef LTSM_WITH_SPICE
+
         if(_type == "spice")
             connector.reset(new Connector::SPICE(conn.get(), _config));
+
 #endif
+
         if(! connector)
             connector.reset(new Connector::VNC(conn.get(), _config));
 
-	int res = 0;
+        int res = 0;
 
         try
         {
-	    res = connector->communication();
+            res = connector->communication();
         }
         catch(const std::exception & err)
         {
-	    Application::error("connector exception: %s", err.what());
+            Application::error("connector exception: %s", err.what());
             // terminated connection: exit normal
-	    res = EXIT_SUCCESS;
+            res = EXIT_SUCCESS;
         }
         catch(...)
         {
-	    Application::error("connector exception: %s", "unknown");
-	    res = EXIT_FAILURE;
+            Application::error("connector exception: %s", "unknown");
+            res = EXIT_FAILURE;
         }
 
         return res;
@@ -211,12 +223,12 @@ namespace LTSM
 
     bool Connector::SignalProxy::isAllowXcbMessages(void) const
     {
-	return ! _xcbDisableMessages;
+        return ! _xcbDisableMessages;
     }
 
     void Connector::SignalProxy::setEnableXcbMessages(bool f)
     {
-	_xcbDisableMessages = ! f;
+        _xcbDisableMessages = ! f;
     }
 
     bool Connector::SignalProxy::xcbConnect(int screen)
@@ -226,33 +238,35 @@ namespace LTSM
         Application::debug("%s: xauthfile request: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-
         std::string socketFormat = _config->getString("xvfb:socket");
         std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
 
-	if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
-                Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
+        if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&]()
+    {
+        return ! Tools::checkUnixSocket(socketPath);
+        }))
+        Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
 
-	try
-	{
-    	    _xcbDisplay.reset(new XCB::RootDisplayExt(Tools::StringFormat(":%1").arg(screen)));
-	}
-	catch(const std::exception & err)
-	{
+        try
+        {
+            _xcbDisplay.reset(new XCB::RootDisplayExt(Tools::StringFormat(":%1").arg(screen)));
+        }
+        catch(const std::exception & err)
+        {
             Application::error("xcb exception: %s", err.what());
-	    return false;
-	}
+            return false;
+        }
 
         Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
-
         int color = _config->getInteger("display:solid", 0x4e7db7);
-        if(0 != color)
-	    _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
 
-	if(0 < width && 0 < height && _xcbDisplay->size() != XCB::Size(width, height))
-	    _xcbDisplay->setRandrScreenSize(width, height);
+        if(0 != color)
+            _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
+
+        if(0 < width && 0 < height && _xcbDisplay->size() != XCB::Size(width, height))
+            _xcbDisplay->setRandrScreenSize(width, height);
 
         _display = screen;
         return true;
@@ -265,31 +279,29 @@ namespace LTSM
             Application::info("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
             // disable message loop
             bool extDisable = _xcbDisableMessages;
-
             _xcbDisableMessages = true;
-	    _xcbDisplay->resetInputs();
-
+            _xcbDisplay->resetInputs();
             int oldDisplay = _display;
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
 
             if(newDisplay < 0)
                 throw std::runtime_error("user session request failure");
 
-	    if(newDisplay != oldDisplay)
-	    {
-        	// wait xcb old operations ended
-    		std::this_thread::sleep_for(100ms);
+            if(newDisplay != oldDisplay)
+            {
+                // wait xcb old operations ended
+                std::this_thread::sleep_for(100ms);
 
-        	if(! xcbConnect(newDisplay))
-            	    throw std::runtime_error("xcb connect failed");
+                if(! xcbConnect(newDisplay))
+                    throw std::runtime_error("xcb connect failed");
 
-        	busConnectorSwitched(oldDisplay, newDisplay);
-		_display = newDisplay;
-	    }
+                busConnectorSwitched(oldDisplay, newDisplay);
+                _display = newDisplay;
+            }
 
-	    // 
-	    if(! extDisable)
-    		_xcbDisableMessages = false;
+            //
+            if(! extDisable)
+                _xcbDisableMessages = false;
         }
     }
 
@@ -298,24 +310,21 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("dbus signal: clear render primitives, display: %d", display);
+
             for(auto & ptr : _renderPrimitives)
-	    {
-        	if(ptr->type == RenderType::RenderRect)
-		{
-            	    if(auto prim = static_cast<RenderRect*>(ptr.get()))
-            	    {
-		    	onAddDamage(prim->toRegion());
-            	    }
-		}
-		else
-            	if(ptr->type == RenderType::RenderText)
-		{
-            	    if(auto prim = static_cast<RenderText*>(ptr.get()))
-            	    {
-		    	onAddDamage(prim->toRegion());
-            	    }
+            {
+                if(ptr->type == RenderType::RenderRect)
+                {
+                    if(auto prim = static_cast<RenderRect*>(ptr.get()))
+                        onAddDamage(prim->toRegion());
                 }
-	    }
+                else if(ptr->type == RenderType::RenderText)
+                {
+                    if(auto prim = static_cast<RenderText*>(ptr.get()))
+                        onAddDamage(prim->toRegion());
+                }
+            }
+
             _renderPrimitives.clear();
         }
     }
@@ -330,7 +339,7 @@ namespace LTSM
             const int16_t ry = std::get<1>(rect);
             const uint16_t rw = std::get<2>(rect);
             const uint16_t rh = std::get<3>(rect);
-	    onAddDamage({rx,ry,rw,rh});
+            onAddDamage({rx, ry, rw, rh});
         }
     }
 
@@ -345,7 +354,7 @@ namespace LTSM
             const uint16_t rh = _systemfont.height;
             const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> rt{rx, ry, rw, rh};
             _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rt, color));
-	    onAddDamage({rx,ry,rw,rh});
+            onAddDamage({rx, ry, rw, rh});
         }
     }
 
@@ -353,8 +362,11 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-	    std::thread([=](){ this->busConnectorAlive(display); }).detach();
-	}
+            std::thread([ = ]()
+            {
+                this->busConnectorAlive(display);
+            }).detach();
+        }
     }
 
     void Connector::SignalProxy::onDebugLevel(const std::string & level)
@@ -379,6 +391,7 @@ namespace LTSM
                     if(auto prim = static_cast<RenderRect*>(ptr.get()))
                     {
                         XCB::Region section;
+
                         if(XCB::Region::intersection(fb.region(), prim->toRegion(), & section))
                         {
                             if(prim->fill)
@@ -387,19 +400,18 @@ namespace LTSM
                                 fb.drawRect(section - fb.region().topLeft(), prim->color);
                         }
                     }
-                    
+
                     break;
 
                 case RenderType::RenderText:
                     if(auto prim = static_cast<RenderText*>(ptr.get()))
                     {
                         const XCB::Region reg = prim->toRegion();
+
                         if(XCB::Region::intersection(fb.region(), reg, nullptr))
-                        {
                             fb.renderText(prim->text, prim->color, reg.topLeft() - fb.region().topLeft());
-                        }
                     }
-                    
+
                     break;
 
                 default:

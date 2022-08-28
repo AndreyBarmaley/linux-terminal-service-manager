@@ -35,6 +35,7 @@ namespace LTSM
         : bitsPerPixel(bpp), depth(dep), flags(0), redShift(rshift), greenShift(gshift), blueShift(bshift), redMax(rmax), greenMax(gmax), blueMax(bmax)
     {
         if(be) flags |= BigEndian;
+
         if(trucol) flags |= TrueColor;
     }
 
@@ -42,6 +43,7 @@ namespace LTSM
         : bitsPerPixel(bpp), depth(dep), flags(0), redShift(0), greenShift(0), blueShift(0), redMax(0), greenMax(0), blueMax(0)
     {
         if(be) flags |= BigEndian;
+
         if(trucol) flags |= TrueColor;
 
         redMax = Tools::maskMaxValue(rmask);
@@ -96,9 +98,10 @@ namespace LTSM
                 case 32:
                     if(auto ptr = static_cast<uint32_t*>(offset))
                         std::fill(ptr, ptr + length, pixel);
+
                     break;
 
-               case 24:
+                case 24:
                     if(auto ptr = static_cast<uint8_t*>(offset))
                     {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -110,6 +113,7 @@ namespace LTSM
                         uint8_t v2 = pixel >> 8;
                         uint8_t v3 = pixel;
 #endif
+
                         while(length--)
                         {
                             *ptr++ = v1;
@@ -117,16 +121,19 @@ namespace LTSM
                             *ptr++ = v3;
                         }
                     }
+
                     break;
 
                 case 16:
                     if(auto ptr = static_cast<uint16_t*>(offset))
                         std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
+
                     break;
 
                 case 8:
                     if(auto ptr = static_cast<uint8_t*>(offset))
                         std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
+
                     break;
 
                 default:
@@ -145,7 +152,8 @@ namespace LTSM
     void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat & fmt)
     {
         XCB::Region reg;
-	if(XCB::Region::intersection(region(), reg0, & reg))
+
+        if(XCB::Region::intersection(region(), reg0, & reg))
         {
             auto raw = pixelFormat().convertFrom(fmt, pixel);
 
@@ -163,7 +171,8 @@ namespace LTSM
     void FrameBuffer::fillColor(const XCB::Region & reg0, const Color & col)
     {
         XCB::Region reg;
-	if(XCB::Region::intersection(region(), reg0, & reg))
+
+        if(XCB::Region::intersection(region(), reg0, & reg))
         {
             auto raw = pixelFormat().pixel(col);
 
@@ -175,10 +184,10 @@ namespace LTSM
     void FrameBuffer::drawRect(const XCB::Region & reg0, const Color & col)
     {
         XCB::Region reg;
-	if(XCB::Region::intersection(region(), reg0, & reg))
+
+        if(XCB::Region::intersection(region(), reg0, & reg))
         {
             auto raw = pixelFormat().pixel(col);
-
             setPixelRow(reg.topLeft(), raw, reg.width);
             setPixelRow(reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width);
 
@@ -209,16 +218,21 @@ namespace LTSM
 
                     if(big_endian)
                     {
-                        res |= buf[0]; res <<= 8;
-                        res |= buf[1]; res <<= 8;
+                        res |= buf[0];
+                        res <<= 8;
+                        res |= buf[1];
+                        res <<= 8;
                         res |= buf[2];
                     }
                     else
                     {
-                        res |= buf[2]; res <<= 8;
-                        res |= buf[1]; res <<= 8;
+                        res |= buf[2];
+                        res <<= 8;
+                        res |= buf[1];
+                        res <<= 8;
                         res |= buf[0];
                     }
+
                     return res;
                 }
 
@@ -239,39 +253,39 @@ namespace LTSM
 
     std::list<PixelLength> FrameBuffer::toRLE(const XCB::Region & reg) const
     {
-	std::list<PixelLength> res;
+        std::list<PixelLength> res;
 
-	for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-	{
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        {
             auto pix = pixel(reg.topLeft() + coord);
 
-	    if(0 < coord.x && res.back().pixel() == pix)
-		res.back().second++;
-	    else
-		res.emplace_back(pix, 1);
-	}
+            if(0 < coord.x && res.back().pixel() == pix)
+                res.back().second++;
+            else
+                res.emplace_back(pix, 1);
+        }
 
-	return res;
+        return res;
     }
 
     void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos)
     {
-	auto dst = XCB::Region(pos, reg.toSize()).intersected(region());
+        auto dst = XCB::Region(pos, reg.toSize()).intersected(region());
 
-	if(pixelFormat() != fb.pixelFormat())
-	{
-	    for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
+        if(pixelFormat() != fb.pixelFormat())
+        {
+            for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
                 setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), fb.pixelFormat());
-	}
-	else
-	{
-    	    for(int row = 0; row < dst.height; ++row)
-    	    {
-        	auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
-        	size_t length = dst.width * fb.bytePerPixel();
+        }
+        else
+        {
+            for(int row = 0; row < dst.height; ++row)
+            {
+                auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
+                size_t length = dst.width * fb.bytePerPixel();
                 std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x * bytePerPixel());
-    	    }
-	}
+            }
+        }
     }
 
     ColorMap FrameBuffer::colourMap(void) const
@@ -279,7 +293,7 @@ namespace LTSM
         ColorMap map;
         const PixelFormat & fmt = pixelFormat();
 
-	for(auto coord = coordBegin(); coord.isValid(); ++coord)
+        for(auto coord = coordBegin(); coord.isValid(); ++coord)
         {
             auto pix = pixel(coord);
             map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
@@ -292,7 +306,7 @@ namespace LTSM
     {
         PixelMapWeight map;
 
-	for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
         {
             auto pix = pixel(reg.topLeft() + coord);
             auto it = map.find(pix);
@@ -301,14 +315,14 @@ namespace LTSM
                 (*it).second += 1;
             else
                 map.emplace(pix, 1);
-	}
+        }
 
         return map;
     }
 
     bool FrameBuffer::allOfPixel(uint32_t pixel, const XCB::Region & reg) const
     {
-	for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
             if(pixel != this->pixel(reg.topLeft() + coord)) return false;
 
         return true;
@@ -393,11 +407,13 @@ namespace LTSM
     uint8_t* FrameBuffer::pitchData(size_t row) const
     {
         uint32_t col = 0;
+
         if(! owner)
         {
             col = bytePerPixel() * fbreg.x;
             row = fbreg.y + row;
         }
+
         return fbptr->buffer + (fbptr->pitch * row) + col;
     }
 

@@ -30,6 +30,7 @@
 #include <atomic>
 #include <vector>
 #include <string_view>
+#include <stdexcept>
 
 #include "xcb/xcb.h"
 #include "xcb/shm.h"
@@ -380,11 +381,16 @@ namespace LTSM
 	    RandrScreenInfo() : config_timestamp(0), sizeID(0), rotation(0), rate(0) {}
 	};
 
+        struct connector_error : public std::runtime_error
+        {
+            connector_error(const char* what) : std::runtime_error(what){}
+        };
+
         class Connector
         {
         protected:
-            xcb_connection_t*       _conn;
-            const xcb_setup_t*      _setup;
+            xcb_connection_t*       _conn = nullptr;
+            const xcb_setup_t*      _setup = nullptr;
 
         public:
             Connector(std::string_view addr);
@@ -449,21 +455,21 @@ namespace LTSM
         class RootDisplay : public Connector
         {
 	protected:
-            xcb_screen_t*           _screen;
-            xcb_format_t*           _format;
-            xcb_visualtype_t*       _visual;
+            xcb_screen_t*           _screen = nullptr;
+            xcb_format_t*           _format = nullptr;
+            xcb_visualtype_t*       _visual = nullptr;
 
             Damage                  _damage;
             SHM                     _shm;
 
-            xcb_keycode_t           _minKeycode;
-            xcb_keycode_t           _maxKeycode;
+            xcb_keycode_t           _minKeycode = 0;
+            xcb_keycode_t           _maxKeycode = 0;
 
 #ifdef LTSM_WITH_XKBCOMMON
             std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
             std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> _xkbmap;
 	    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
-	    int32_t                 _xkbdevid;
+	    int32_t                 _xkbdevid = -1;
 #endif
 
         public:
@@ -498,7 +504,7 @@ namespace LTSM
 	    std::pair<xcb_keycode_t, int>
                                     keysymToKeycodeGroup(xcb_keysym_t keysym) const;
             int                     getXkbLayoutGroup(void) const;
-            bool                    switchXkbLayoutGroup(int group = -1);
+            bool                    switchXkbLayoutGroup(int group = -1) const;
             std::list<std::string>  getXkbNames(void) const;
 
 	    std::vector<xcb_randr_output_t>      getRandrOutputs(void) const;
@@ -531,7 +537,7 @@ namespace LTSM
             std::unique_ptr<Tools::BaseTimer>
                                     _timerClipCheck;
 
-	    xcb_atom_t              _atoms[7];
+	    xcb_atom_t              _atoms[7] = { XCB_ATOM_NONE };
 	    xcb_atom_t &            _atomPrimary;
 	    xcb_atom_t &            _atomClipboard;
 	    xcb_atom_t &            _atomBuffer;

@@ -25,6 +25,7 @@
 
 #include <string>
 #include <string_view>
+#include <stdexcept>
 #include <vector>
 #include <utility>
 #include <cstdint>
@@ -238,6 +239,11 @@ namespace LTSM
             putRaw(arr, N);
             return *this;
         }
+    };
+
+    struct streambuf_error : public std::runtime_error
+    {
+        streambuf_error(const char* what) : std::runtime_error(what){}
     };
 
     /// @brief: read only StreamBuf

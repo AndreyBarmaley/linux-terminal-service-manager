@@ -20,8 +20,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#include <stdexcept>
-
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_streambuf.h"
@@ -66,7 +64,7 @@ namespace LTSM
     {
         return std::vector<uint8_t>::size();
     }
-        
+
     uint8_t* BinaryBuf::data(void)
     {
         return std::vector<uint8_t>::data();
@@ -268,10 +266,8 @@ namespace LTSM
     {
         auto len = last();
         auto begin = v.size();
-
         v.resize(begin + len);
         getRaw(v.data() + begin, len);
-
         return *this;
     }
 
@@ -327,6 +323,7 @@ namespace LTSM
     {
         while(len--)
             writeInt8(c);
+
         return *this;
     }
 
@@ -383,14 +380,13 @@ namespace LTSM
             throw std::out_of_range("StreamBufRef: getRaw");
 
         auto dst = static_cast<uint8_t*>(ptr);
-
         std::copy_n(it1, len, dst);
         it1 = std::next(it1, len);
     }
 
     void StreamBufRef::putRaw(const void* ptr, size_t len)
     {
-        throw std::runtime_error("StreamBufRef: putRaw disabled");
+        throw streambuf_error("StreamBufRef: putRaw disabled");
     }
 
     BinaryBuf StreamBufRef::read(size_t len) const
@@ -403,7 +399,6 @@ namespace LTSM
 
         auto it0 = it1;
         it1 = std::next(it1, len);
-
         return BinaryBuf(it0, it1);
     }
 
@@ -453,7 +448,6 @@ namespace LTSM
             throw std::out_of_range("StreamBuf: getRaw");
 
         auto dst = static_cast<uint8_t*>(ptr);
-
         std::copy_n(it, len, dst);
         it = std::next(it, len);
     }
@@ -461,13 +455,10 @@ namespace LTSM
     void StreamBuf::putRaw(const void* ptr, size_t len)
     {
         auto offset = std::distance(vec.begin(), it);
-
         auto src = static_cast<const uint8_t*>(ptr);
         auto vsz = vec.size();
-
         vec.resize(vsz + len);
         auto dst = std::next(vec.begin(), vsz);
-
         std::copy_n(src, len, dst);
         it = std::next(vec.begin(), offset);
     }
@@ -482,7 +473,6 @@ namespace LTSM
 
         auto it0 = it;
         it = std::next(it, len);
-
         return BinaryBuf(it0, it);
     }
 

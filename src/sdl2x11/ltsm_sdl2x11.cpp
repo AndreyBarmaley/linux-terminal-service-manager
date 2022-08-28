@@ -71,6 +71,7 @@ namespace LTSM
                     break;
 
                 case SDL_KEYDOWN:
+
                     // fast close
                     if(ev.key()->keysym.sym == SDLK_ESCAPE)
                     {
@@ -122,17 +123,18 @@ namespace LTSM
 
                     break;
 
-		case SDL_CLIPBOARDUPDATE:
-		    if(SDL_HasClipboardText())
-		    {
-			if(char* ptr = SDL_GetClipboardText())
-			{
+                case SDL_CLIPBOARDUPDATE:
+                    if(SDL_HasClipboardText())
+                    {
+                        if(char* ptr = SDL_GetClipboardText())
+                        {
                             auto len = SDL_strlen(ptr);
-			    XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t>(ptr, ptr + len));
-			    SDL_free(ptr);
-			}
-		    }
-		    break;
+                            XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t>(ptr, ptr + len));
+                            SDL_free(ptr);
+                        }
+                    }
+
+                    break;
 
                 case SDL_QUIT:
                     throw std::string("sdl quit");
@@ -155,46 +157,45 @@ namespace LTSM
             {
                 bool delay = ! sdlEventProcessing(quit);
 
-        	while(auto ev = XCB::RootDisplayExt::poolEvent())
-		{
-        	    if(XCB::RootDisplayExt::isDamageNotify(ev))
-        	    {
-            		const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
-                	damage.join(notify->area.x, notify->area.y, notify->area.width, notify->area.height);
-        	    }
-                    else
-                    if(XCB::RootDisplayExt::isRandrCRTCNotify(ev))
+                while(auto ev = XCB::RootDisplayExt::poolEvent())
+                {
+                    if(XCB::RootDisplayExt::isDamageNotify(ev))
+                    {
+                        const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
+                        damage.join(notify->area.x, notify->area.y, notify->area.width, notify->area.height);
+                    }
+                    else if(XCB::RootDisplayExt::isRandrCRTCNotify(ev))
                     {
                         auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-
                         xcb_randr_crtc_change_t cc = notify->u.cc;
+
                         if(0 < cc.width && 0 < cc.height)
                         {
                             SDL::Window::resize(cc.width, cc.height);
-                	    damage.assign(0, 0, cc.width, cc.height);
-        		    txShadow = createTexture(cc.width, cc.height, txFormat);
+                            damage.assign(0, 0, cc.width, cc.height);
+                            txShadow = createTexture(cc.width, cc.height, txFormat);
                         }
                     }
-                    else
-                    if(XCB::RootDisplayExt::isSelectionNotify(ev))
+                    else if(XCB::RootDisplayExt::isSelectionNotify(ev))
                     {
                         auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
+
                         if(XCB::RootDisplayExt::selectionNotifyAction(notify))
                         {
-			    auto & selbuf2 = XCB::RootDisplayExt::getSelectionData();
-			    SDL_SetClipboardText(std::string(selbuf2.begin(), selbuf2.end()).c_str());
-			}
+                            auto & selbuf2 = XCB::RootDisplayExt::getSelectionData();
+                            SDL_SetClipboardText(std::string(selbuf2.begin(), selbuf2.end()).c_str());
+                        }
                     }
                 }
 
                 if(! damage.empty())
                 {
                     delay = false;
+
                     if(auto reply = copyRootImageRegion(damage))
                     {
                         const size_t alignRowBytes = reply->size() > (damage.width * damage.height * bytePerPixel) ?
-                            reply->size() / damage.height - damage.width * bytePerPixel : 0;
-
+                                                     reply->size() / damage.height - damage.width * bytePerPixel : 0;
                         const SDL_Rect rect = { damage.x, damage.y, damage.width, damage.height };
                         txShadow.updateRect(& rect, reply->data(), damage.width * bytePerPixel + alignRowBytes);
                         renderTexture(txShadow.get());

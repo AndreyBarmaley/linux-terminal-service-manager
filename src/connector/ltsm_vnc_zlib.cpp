@@ -43,7 +43,6 @@ namespace LTSM
             avail_out = 0;
             next_out = nullptr;
             data_type = Z_BINARY;
-
             outbuf.reserve(4 * 1024);
         }
 
@@ -56,23 +55,20 @@ namespace LTSM
         {
             next_in = outbuf.data();
             avail_in = outbuf.size();
-
             std::vector<uint8_t> zip(deflateBound(this, outbuf.size()));
             next_out = zip.data();
             avail_out = zip.size();
-    
             auto prev = total_out;
             int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
+
             if(ret < Z_OK)
                 throw std::runtime_error(Tools::StringFormat("%1: deflate failed, code: %2").arg(__FUNCTION__).arg(ret));
-        
+
             auto zipsz = total_out - prev;
             zip.resize(zipsz);
-        
             outbuf.clear();
             next_out = nullptr;
             avail_out = 0;
-    
             return zip;
         }
 
@@ -81,8 +77,8 @@ namespace LTSM
         {
             auto ptr = new Context();
             zlib.reset(ptr);
-
             int ret = deflateInit2(ptr, Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+
             if(ret < Z_OK)
                 throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
         }
@@ -92,10 +88,10 @@ namespace LTSM
             deflateParams(zlib.get(), 9 < level ? 9 : level, Z_DEFAULT_STRATEGY);
         }
 
-	void DeflateStream::prepareSize(size_t len) const
-	{
-	    if(len < zlib->outbuf.capacity()) zlib->outbuf.reserve(len);
-	}
+        void DeflateStream::prepareSize(size_t len) const
+        {
+            if(len < zlib->outbuf.capacity()) zlib->outbuf.reserve(len);
+        }
 
         std::vector<uint8_t> DeflateStream::syncFlush(void) const
         {
@@ -110,22 +106,22 @@ namespace LTSM
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const
         {
-	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
         bool DeflateStream::hasInput(void) const
         {
-	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
         size_t DeflateStream::hasData(void) const
         {
-	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
 
         uint8_t DeflateStream::peekInt8(void) const
         {
-	    throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
         }
     }
 } // LTSM
