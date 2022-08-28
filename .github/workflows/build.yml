@@ -68,8 +68,6 @@ jobs:
         run: |
           ./LTSM_connector
           ./LTSM_x11vnc
-          ./LTSM_helper
-          ./LTSM_sessions
           ./LTSM_sdl2x11
       - name: Collect coverage into one XML report
         run: |
