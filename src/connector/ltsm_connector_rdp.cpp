@@ -379,7 +379,7 @@ namespace LTSM
         auto home = Connector::homeRuntime();
 	const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-        if(! proxyInitUnixSockets(socketFile.string()))
+        if(! proxyInitUnixSockets(socketFile))
             return EXIT_FAILURE;
  
 	Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
@@ -816,7 +816,6 @@ namespace LTSM
 	    default:
 		Application::error("%s: %s failed", __FUNCTION__, "pixel format");
         	throw std::runtime_error("RDP::clientUpdateBitmapInterleaved");
-		break;
 	}
 
         // planar activate

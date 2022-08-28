@@ -190,7 +190,10 @@ namespace LTSM
         : ProxyInterfaces(*conn, LTSM::dbus_service_name, LTSM::dbus_object_path), _conn(conn), _config(& jo), _display(0),
           _conntype(type), _xcbDisableMessages(true)
     {
-        _remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
+        _remoteaddr.assign("local");
+
+        if(auto env = std::getenv("REMOTE_ADDR"))
+            _remoteaddr.assign(env);
     }
 
     std::string Connector::SignalProxy::checkFileOption(const std::string & param) const
@@ -223,10 +226,9 @@ namespace LTSM
         Application::debug("%s: xauthfile request: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        const std::string addr = Tools::StringFormat(":%1").arg(screen);
 
         std::string socketFormat = _config->getString("xvfb:socket");
-        std::string socketPath = Tools::replace(socketFormat, "%{display}", screen);
+        std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
 
@@ -235,7 +237,7 @@ namespace LTSM
 
 	try
 	{
-    	    _xcbDisplay.reset(new XCB::RootDisplayExt(addr));
+    	    _xcbDisplay.reset(new XCB::RootDisplayExt(Tools::StringFormat(":%1").arg(screen)));
 	}
 	catch(const std::exception & err)
 	{

@@ -399,12 +399,8 @@ namespace LTSM
 
     bool Manager::Object::checkXvfbSocket(int display)
     {
-	if(0 < display)
-        {
-	    std::string socketPath = Tools::replace(_config->getString("xvfb:socket"), "%{display}", display);
-    	    return Tools::checkUnixSocket(socketPath);
-	}
-	return false;
+    	return 0 < display ?
+            Tools::checkUnixSocket(Tools::replace(_config->getString("xvfb:socket"), "%{display}", display)) : false;
     }
 
     bool Manager::Object::checkXvfbLocking(int display)

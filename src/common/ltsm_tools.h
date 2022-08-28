@@ -28,6 +28,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <iomanip>
 #include <iterator>
 #include <algorithm>
@@ -37,6 +38,7 @@
 #include <atomic>
 #include <thread>
 #include <utility>
+#include <filesystem>
 #include <functional>
 
 namespace LTSM
@@ -89,14 +91,12 @@ namespace LTSM
         std::string     replace(const std::string & src, std::string_view pred, std::string_view val);
         std::string     replace(const std::string & src, std::string_view pred, int val);
 
-        std::string     getenv(const char* name, const char* def = nullptr);
-
         std::string     hex(int value, int width = 8);
 
         uint32_t        crc32b(const uint8_t* ptr, size_t size);
         uint32_t        crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
-        bool            checkUnixSocket(std::string_view);
+        bool            checkUnixSocket(const std::filesystem::path &);
 
         size_t		maskShifted(size_t mask);
         size_t		maskMaxValue(uint32_t mask);
@@ -177,7 +177,7 @@ namespace LTSM
 	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call)
 	    {
     		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
-    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::move(call)]()
+    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]()
     		{
         	    timer->processed = true;
         	    auto start = std::chrono::steady_clock::now();
@@ -208,7 +208,7 @@ namespace LTSM
 	    {
     		auto ptr = std::unique_ptr<BaseTimer>(new BaseTimer());
     		ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
-		    call = std::move(call), args = std::make_tuple(std::forward<Args>(args)...)]()
+		    call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]()
     		{
         	    timer->processed = true;
         	    auto start = std::chrono::steady_clock::now();

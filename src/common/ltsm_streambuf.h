@@ -29,7 +29,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20220827
+#define LTSM_STREAMBUF_VERSION 20220828
 
 namespace LTSM
 {
@@ -221,7 +221,7 @@ namespace LTSM
         MemoryStream &  operator<<(const uint16_t &);
         MemoryStream &  operator<<(const uint32_t &);
         MemoryStream &  operator<<(const uint64_t &);
-        MemoryStream &  operator<<(const std::string &);
+        MemoryStream &  operator<<(const std::string_view &);
         MemoryStream &  operator<<(const std::vector<uint8_t> &);
 
         /// @brief: fixed data from array

@@ -161,11 +161,11 @@ namespace LTSM
         auto home = Connector::homeRuntime();
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
-        if(! proxyInitUnixSockets(socketFile.string()))
+        if(! proxyInitUnixSockets(socketFile))
             return EXIT_SUCCESS;
 
+        proxyStartEventLoop();
         // create x11 connect
-
 
         // all ok
         while(loopMessage)
@@ -173,15 +173,14 @@ namespace LTSM
             //if(freeRdpClient->isShutdown())
             //    loopMessage = false;
 
-            if(! ProxySocket::enterEventLoopAsync())
+            if(! proxyRunning())
                 loopMessage = false;
-
-            // dbus processing
-            _conn->enterEventLoopAsync();
 
             // wait
             std::this_thread::sleep_for(1ms);
         }
+
+        proxyStopEventLoop();
 
         Application::debug("under construction, remoteaddr: %s\n", _remoteaddr.c_str());
         return EXIT_SUCCESS;

@@ -30,13 +30,14 @@
 #include <thread>
 #include <string>
 #include <string_view>
+#include <filesystem>
 #include <memory>
 #include <cstdint>
 
 #include "gnutls/gnutls.h"
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220827
+#define LTSM_SOCKETS_VERSION 20220828
 
 namespace LTSM
 {
@@ -173,7 +174,7 @@ namespace LTSM
         std::thread             loopThread;
         int                     bridgeSock;
         int                     clientSock;
-        std::string             socketPath;
+        std::filesystem::path   socketPath;
 
     protected:
         bool                    transmitDataIteration(void);
@@ -183,15 +184,15 @@ namespace LTSM
         ~ProxySocket();
             
         int                     proxyClientSocket(void) const;
-        bool                    proxyInitUnixSockets(std::string_view path);
+        bool                    proxyInitUnixSockets(const std::filesystem::path &);
         bool                    proxyRunning(void) const;
 
         void                    proxyStartEventLoop(void);
         void                    proxyStopEventLoop(void);
         void                    proxyShutdown(void);
 
-        static int              connectUnixSocket(std::string_view path);
-        static int              listenUnixSocket(std::string_view path);
+        static int              connectUnixSocket(const std::filesystem::path &);
+        static int              listenUnixSocket(const std::filesystem::path &);
     };
 
     /// transport layer security

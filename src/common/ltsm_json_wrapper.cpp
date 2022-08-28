@@ -151,7 +151,7 @@ namespace LTSM
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const std::string & st)
+    JsonArray & operator<< (JsonArray & jv, const std::string_view & st)
     {
         jv.addString(st);
         return jv;
@@ -403,12 +403,7 @@ namespace LTSM
         reset(new JsonDouble(v));
     }
 
-    JsonValuePtr::JsonValuePtr(const char* v)
-    {
-        reset(new JsonString(v));
-    }
-
-    JsonValuePtr::JsonValuePtr(const std::string & v)
+    JsonValuePtr::JsonValuePtr(std::string_view v)
     {
         reset(new JsonString(v));
     }
@@ -557,9 +552,9 @@ namespace LTSM
         return false;
     }
 
-    bool JsonObject::hasKey(const std::string & key) const
+    bool JsonObject::hasKey(std::string_view key) const
     {
-        return content.end() != content.find(key);
+        return content.end() != content.find(std::string(key));
     }
 
     std::list<std::string> JsonObject::keys(void) const
@@ -572,91 +567,91 @@ namespace LTSM
         return res;
     }
 
-    bool JsonObject::isNull(const std::string & key) const
+    bool JsonObject::isNull(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isNull();
     }
 
-    bool JsonObject::isBoolean(const std::string & key) const
+    bool JsonObject::isBoolean(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isBoolean();
     }
 
-    bool JsonObject::isInteger(const std::string & key) const
+    bool JsonObject::isInteger(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isInteger();
     }
 
-    bool JsonObject::isDouble(const std::string & key) const
+    bool JsonObject::isDouble(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isDouble();
     }
 
-    bool JsonObject::isString(const std::string & key) const
+    bool JsonObject::isString(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isString();
     }
 
-    bool JsonObject::isObject(const std::string & key) const
+    bool JsonObject::isObject(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isObject();
     }
 
-    bool JsonObject::isArray(const std::string & key) const
+    bool JsonObject::isArray(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv && jv->isArray();
     }
 
-    const JsonValue* JsonObject::getValue(const std::string & key) const
+    const JsonValue* JsonObject::getValue(std::string_view key) const
     {
-        auto it = content.find(key);
+        auto it = content.find(std::string(key));
         return it != content.end() ? (*it).second.get() : nullptr;
     }
 
-    JsonType JsonObject::getType(const std::string & key) const
+    JsonType JsonObject::getType(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getType() : JsonType::Null;
     }
 
-    int JsonObject::getInteger(const std::string & key, int def) const
+    int JsonObject::getInteger(std::string_view key, int def) const
     {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getInteger() : def;
     }
 
-    std::string JsonObject::getString(const std::string & key, std::string def) const
+    std::string JsonObject::getString(std::string_view key, std::string def) const
     {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getString() : def;
     }
 
-    double JsonObject::getDouble(const std::string & key, double def) const
+    double JsonObject::getDouble(std::string_view key, double def) const
     {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getDouble() : def;
     }
 
-    bool JsonObject::getBoolean(const std::string & key, bool def) const
+    bool JsonObject::getBoolean(std::string_view key, bool def) const
     {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getBoolean() : def;
     }
 
-    const JsonObject* JsonObject::getObject(const std::string & key) const
+    const JsonObject* JsonObject::getObject(std::string_view key) const
     {
         auto jv = dynamic_cast<const JsonObject*>(getValue(key));
         return jv;
     }
 
-    const JsonArray* JsonObject::getArray(const std::string & key) const
+    const JsonArray* JsonObject::getArray(std::string_view key) const
     {
         auto jv = dynamic_cast<const JsonArray*>(getValue(key));
         return jv;
@@ -865,7 +860,7 @@ namespace LTSM
         content.emplace_back(val);
     }
 
-    void JsonArray::addString(const std::string & val)
+    void JsonArray::addString(std::string_view val)
     {
         content.emplace_back(val);
     }
@@ -930,9 +925,9 @@ namespace LTSM
         return size();
     }
 
-    bool JsonContent::parseString(const std::string & str)
+    bool JsonContent::parseString(std::string_view str)
     {
-        return parseBinary(str.c_str(), str.size());
+        return parseBinary(str.data(), str.size());
     }
 
     bool JsonContent::parseBinary(const char* str, size_t len)
@@ -972,7 +967,7 @@ namespace LTSM
         return true;
     }
 
-    bool JsonContent::readFile(const std::string & file)
+    bool JsonContent::readFile(const std::filesystem::path & file)
     {
         std::ifstream is(file);
 
@@ -1069,7 +1064,7 @@ namespace LTSM
 
         if(tok.isPrimitive())
         {
-            const std::string & val = stringToken(tok);
+            auto val = stringToken(tok);
 
             if(!(*it).isValue())
                 Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
@@ -1103,7 +1098,7 @@ namespace LTSM
         }
         else
         {
-            std::string val = stringToken(tok);
+            auto val = stringToken(tok);
 
             if(!(*it).isValue())
                 Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
@@ -1144,13 +1139,13 @@ namespace LTSM
     }
 
     /* JsonContentFile */
-    JsonContentFile::JsonContentFile(const std::string & file)
+    JsonContentFile::JsonContentFile(const std::filesystem::path & file)
     {
         readFile(file);
     }
 
     /* JsonContentString */
-    JsonContentString::JsonContentString(const std::string & str)
+    JsonContentString::JsonContentString(std::string_view str)
     {
         parseString(str);
     }

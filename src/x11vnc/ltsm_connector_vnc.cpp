@@ -306,7 +306,7 @@ namespace LTSM
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
 
         // RFB 6.1.1 version
-        const std::string version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
+        auto version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
         sendString(version).sendFlush();
         std::string magick = recvString(12);
         Application::debug("RFB 6.1.1, handshake version: %s", magick.c_str());

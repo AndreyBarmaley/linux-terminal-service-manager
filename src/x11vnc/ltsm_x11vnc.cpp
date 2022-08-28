@@ -292,7 +292,10 @@ namespace LTSM
     Connector::DisplayProxy::DisplayProxy(const JsonObject & jo)
         : _config(& jo), _xcbDisableMessages(true)
     {
-        _remoteaddr = Tools::getenv("REMOTE_ADDR", "local");
+        _remoteaddr.assign("local");
+
+        if(auto env = std::getenv("REMOTE_ADDR"))
+            _remoteaddr.assign(env);
     }
 
     bool Connector::DisplayProxy::xcbConnect(void)

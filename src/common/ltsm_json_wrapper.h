@@ -26,16 +26,18 @@
 #include <any>
 #include <list>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <utility>
 #include <typeindex>
 #include <initializer_list>
+#include <filesystem>
 
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20210912
+#define JSON_WRAPPER 20220828
 
 namespace LTSM
 {
@@ -121,7 +123,7 @@ namespace LTSM
         JsonPrimitive(const bool & v) : value(v) {}
         JsonPrimitive(const int & v) : value(v) {}
         JsonPrimitive(const double & v) : value(v) {}
-        JsonPrimitive(const std::string & v) : value(std::make_any<std::string>(v)) {}
+        JsonPrimitive(std::string_view v) : value(std::make_any<std::string>(v)) {}
 
         std::string             toString(void) const override;
     };
@@ -130,7 +132,7 @@ namespace LTSM
     class JsonString : public JsonPrimitive
     {
     public:
-        JsonString(const std::string & val) : JsonPrimitive(val) {}
+        JsonString(std::string_view val) : JsonPrimitive(val) {}
 
         JsonType		getType(void) const override;
         std::string             toString(void) const override;
@@ -197,8 +199,7 @@ namespace LTSM
         JsonValuePtr(int);
         JsonValuePtr(bool);
         JsonValuePtr(double);
-        JsonValuePtr(const char*);
-        JsonValuePtr(const std::string &);
+        JsonValuePtr(std::string_view);
         JsonValuePtr(const JsonArray &);
         JsonValuePtr(const JsonObject &);
         JsonValuePtr(JsonValue*);
@@ -257,7 +258,7 @@ namespace LTSM
         bool			isValid(size_t index) const;
 
         void			addInteger(const int &);
-        void			addString(const std::string &);
+        void			addString(std::string_view);
         void			addDouble(const double &);
         void			addBoolean(const bool &);
 
@@ -328,7 +329,7 @@ namespace LTSM
     };
 
     JsonArray & operator<< (JsonArray &, const int &);
-    JsonArray & operator<< (JsonArray &, const std::string &);
+    JsonArray & operator<< (JsonArray &, const std::string_view &);
     JsonArray & operator<< (JsonArray &, const double &);
     JsonArray & operator<< (JsonArray &, const bool &);
 
@@ -370,26 +371,26 @@ namespace LTSM
         bool			isValid(void) const override;
 
         std::string		toString(void) const override;
-        bool			hasKey(const std::string &) const;
+        bool			hasKey(std::string_view) const;
         std::list<std::string>	keys(void) const;
 
-        const JsonValue*	getValue(const std::string &) const;
-        const JsonObject*	getObject(const std::string &) const;
-        const JsonArray*	getArray(const std::string &) const;
+        const JsonValue*	getValue(std::string_view) const;
+        const JsonObject*	getObject(std::string_view) const;
+        const JsonArray*	getArray(std::string_view) const;
 
-        bool			isNull(const std::string &) const;
-        bool			isBoolean(const std::string &) const;
-        bool			isInteger(const std::string &) const;
-        bool			isDouble(const std::string &) const;
-        bool			isString(const std::string &) const;
-        bool			isObject(const std::string &) const;
-        bool			isArray(const std::string &) const;
+        bool			isNull(std::string_view) const;
+        bool			isBoolean(std::string_view) const;
+        bool			isInteger(std::string_view) const;
+        bool			isDouble(std::string_view) const;
+        bool			isString(std::string_view) const;
+        bool			isObject(std::string_view) const;
+        bool			isArray(std::string_view) const;
 
-        JsonType		getType(const std::string &) const;
-        int                 	getInteger(const std::string &, int def = 0) const;
-        std::string         	getString(const std::string &, std::string def = "") const;
-        double              	getDouble(const std::string &, double def = 0) const;
-        bool                	getBoolean(const std::string &, bool def = false) const;
+        JsonType		getType(std::string_view) const;
+        int                 	getInteger(std::string_view, int def = 0) const;
+        std::string         	getString(std::string_view, std::string def = "") const;
+        double              	getDouble(std::string_view, double def = 0) const;
+        bool                	getBoolean(std::string_view, bool def = false) const;
 
         void			addNull(const std::string &);
         void			addInteger(const std::string &, const int &);
@@ -402,14 +403,14 @@ namespace LTSM
         void                    join(const JsonObject &);
 
         template<typename T>
-        std::vector<T> getStdVector(const std::string & key) const
+        std::vector<T> getStdVector(std::string_view key) const
         {
             const JsonArray* jarr = getArray(key);
             return jarr ? jarr->toStdVector<T>() : std::vector<T>();
         }
 
         template<typename T>
-        std::list<T> getStdList(const std::string & key) const
+        std::list<T> getStdList(std::string_view key) const
         {
             const JsonArray* jarr = getArray(key);
             return jarr ? jarr->toStdList<T>() : std::list<T>();
@@ -430,9 +431,9 @@ namespace LTSM
     public:
         JsonContent() {}
 
-        bool			parseString(const std::string &);
+        bool			parseString(std::string_view);
         bool			parseBinary(const char*, size_t);
-        bool			readFile(const std::string &);
+        bool			readFile(const std::filesystem::path &);
 
         bool			isObject(void) const;
         bool			isArray(void) const;
@@ -447,14 +448,14 @@ namespace LTSM
     class JsonContentString : public JsonContent
     {
     public:
-        JsonContentString(const std::string &);
+        JsonContentString(std::string_view);
     };
 
     /* JsonContentFile */
     class JsonContentFile : public JsonContent
     {
     public:
-        JsonContentFile(const std::string &);
+        JsonContentFile(const std::filesystem::path &);
     };
 }
 

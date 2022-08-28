@@ -1650,7 +1650,7 @@ namespace LTSM
         if(*it == "+vsync")
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
 
-        std::string name = Tools::StringFormat("%1x%2_60").arg(mode_info.width).arg(mode_info.height);
+        auto name = Tools::StringFormat("%1x%2_60").arg(mode_info.width).arg(mode_info.height);
         mode_info.name_len = name.size();
 
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, _conn, _screen->root, mode_info, name.size(), name.data());

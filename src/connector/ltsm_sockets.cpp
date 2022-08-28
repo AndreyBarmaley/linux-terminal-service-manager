@@ -616,8 +616,8 @@ namespace LTSM
         return true;
     }
 
-    int ProxySocket::connectUnixSocket(std::string_view path)
-    {   
+    int ProxySocket::connectUnixSocket(const std::filesystem::path & path)
+    {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > sock)
         {
@@ -628,18 +628,22 @@ namespace LTSM
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        sockaddr.sun_path[sizeof(sockaddr.sun_path) - 1] = 0;
-        std::strncpy(sockaddr.sun_path, path.data(), std::min(path.size(), sizeof(sockaddr.sun_path) - 2));
+
+        const std::string & native = path.native();
+        if(native.size() > sizeof(sockaddr.sun_path) - 1)
+            Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+
+        std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
-            Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), path.data());
+            Application::error("%s: connect error: %s, socket path: %s", __FUNCTION__, strerror(errno), sockaddr.sun_path);
         else
             Application::debug("%s: fd: %d", __FUNCTION__, sock);
 
         return sock;
     }
 
-    int ProxySocket::listenUnixSocket(std::string_view path)
+    int ProxySocket::listenUnixSocket(const std::filesystem::path & path)
     {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > fd)
@@ -648,16 +652,21 @@ namespace LTSM
             return -1;
         }
 
+        std::filesystem::remove(path);
+
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
-        sockaddr.sun_path[sizeof(sockaddr.sun_path) - 1] = 0;
-        std::strncpy(sockaddr.sun_path, path.data(), std::min(path.size(), sizeof(sockaddr.sun_path) - 2));
 
-        std::filesystem::remove(path);
+        const std::string & native = path.native();
+        if(native.size() > sizeof(sockaddr.sun_path) - 1)
+            Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+
+        std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
+
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), path.data());
+            Application::error("%s: bind error: %s, socket path: %s", __FUNCTION__, strerror(errno), sockaddr.sun_path);
             close(fd);
             return -1;
         }
@@ -669,7 +678,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::info("%s: listen unix sock: %s", __FUNCTION__, path.data());
+        Application::info("%s: listen unix sock: %s", __FUNCTION__, sockaddr.sun_path);
         return fd;
     }
 
@@ -684,15 +693,15 @@ namespace LTSM
         return sock;
     }
 
-    bool ProxySocket::proxyInitUnixSockets(std::string_view path)
-    {   
+    bool ProxySocket::proxyInitUnixSockets(const std::filesystem::path & path)
+    {
         int srvfd = ProxySocket::listenUnixSocket(path);
         if(0 > srvfd)
             return false;
 
         if(! std::filesystem::is_socket(path))
         {
-            Application::error("%s: socket failed, path: %s", __FUNCTION__, path.data());
+            Application::error("%s: socket failed, path: %s", __FUNCTION__, path.c_str());
             return false;
         }
 

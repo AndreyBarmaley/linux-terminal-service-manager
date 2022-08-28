@@ -230,16 +230,6 @@ namespace LTSM
         return replace(id, std::to_string(val));
     }
 
-    std::string Tools::getenv(const char* name, const char* def)
-    {
-        std::string res(def ? def : "");
-
-        if(auto env = std::getenv(name))
-            res.assign(env);
-
-        return res;
-    }
-
     std::string Tools::hex(int value, int width)
     {
         std::ostringstream stream;
@@ -332,7 +322,7 @@ namespace LTSM
         return ~res;
     }
 
-    bool Tools::checkUnixSocket(std::string_view path)
+    bool Tools::checkUnixSocket(const std::filesystem::path & path)
     {
         // check present
 	if(std::filesystem::is_socket(path))
@@ -342,13 +332,17 @@ namespace LTSM
             if(0 < socket_fd)
             {
                 // check open
-                struct sockaddr_un address;
-                std::memset(&address, 0, sizeof(struct sockaddr_un));
-                address.sun_family = AF_UNIX;
-                address.sun_path[sizeof(address.sun_path) - 1] = 0;
-                std::strncpy(address.sun_path, path.data(), std::min(path.size(), sizeof(address.sun_path) - 2));
+                struct sockaddr_un sockaddr;
+                std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
+                sockaddr.sun_family = AF_UNIX;
+                const std::string & native = path.native();
 
-                int res = connect(socket_fd, (struct sockaddr*) &address,  sizeof(struct sockaddr_un));
+                if(native.size() > sizeof(sockaddr.sun_path) - 1)
+                    Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+
+                std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
+
+                int res = connect(socket_fd, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un));
                 close(socket_fd);
                 return res == 0;
             }

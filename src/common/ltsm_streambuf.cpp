@@ -354,7 +354,7 @@ namespace LTSM
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const std::string & v)
+    MemoryStream & MemoryStream::operator<<(const std::string_view & v)
     {
         putRaw(v.data(), v.size());
         return *this;
