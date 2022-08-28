@@ -63,11 +63,14 @@ jobs:
       - name: Run build-wrapper
         run: |
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -DLTSM_BUILD_COVERAGE_TESTS=ON
       - name: Run tests to generate coverage statistics
         run: |
           ./LTSM_connector
           ./LTSM_x11vnc
+          ./LTSM_helper
+          ./LTSM_sessions
+          ./LTSM_sdl2x11
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube > coverage.xml
