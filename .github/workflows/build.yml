@@ -75,12 +75,12 @@ jobs:
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
           sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/config.json
-          sed -i -e 's|ltsm-xvfb|root|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-shm|adm|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/config.json
           echo "sudo actions"
-          sudo groupadd -r ltsm-dbus
-          sudo groupadd -r ltsm-shm
           sudo groupadd -r ltsm-auth
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
@@ -88,14 +88,6 @@ jobs:
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
           sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
           echo "::endgroup::"
-      - name: Run system services
-        run: |
-          whoami
-          groups
-          ps ax
-          sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
-          sudo /usr/bin/dbus-uuidgen --ensure
-          sudo /usr/bin/dbus-daemon --fork --system
       - name: Run tests to generate coverage statistics
         env:
           PORT: 5900
@@ -107,10 +99,12 @@ jobs:
           sudo ./LTSM_service &
           echo "run socat connector"
           socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
+          echo "service log"
+          journalctl -t LTSM_service
           echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:0 test.jpg
-          echo "tail log"
-          sudo tail /var/log/syslog
+          echo "connector log"
+          journalctl -t LTSM_connector
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
