@@ -86,7 +86,16 @@ jobs:
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
+          sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
           echo "::endgroup::"
+      - name: Run system services
+        run: |
+          whoami
+          groups
+          ps ax
+          sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
+          sudo /usr/bin/dbus-uuidgen --ensure
+          sudo /usr/bin/dbus-daemon --fork --system
       - name: Run tests to generate coverage statistics
         env:
           PORT: 5900
@@ -95,7 +104,7 @@ jobs:
         run: |
           echo "::group::scripts"
           echo "run ltsm service"
-          ./LTSM_service &
+          sudo ./LTSM_service &
           echo "run socat connector"
           socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           echo "get vnc screenshot"
