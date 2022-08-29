@@ -95,28 +95,18 @@ jobs:
         shell: bash
         run: |
           echo "::group::scripts"
-          echo "run system services"
-          sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
-          sudo /usr/bin/dbus-uuidgen --ensure
-          sudo /usr/bin/dbus-daemon --fork --system
-          echo config
-          cat ${{github.workspace}}/etc/ltsm/config.json
+          #echo "run system services"
+          #sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
+          #sudo /usr/bin/dbus-uuidgen --ensure
+          #sudo /usr/bin/dbus-daemon --fork --system
           echo "run ltsm service"
           sudo ./LTSM_service &
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
-          echo "var log"
-          ls /var/log
-          echo "system log"
-          sudo tail /var/log/syslog
-          echo "service log"
-          journalctl -t LTSM_service
           echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:7 test.jpg
           echo "system log"
-          sudo tail /var/log/syslog
-          echo "connector log"
-          journalctl -t LTSM_connector
+          grep -i ltsm /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
