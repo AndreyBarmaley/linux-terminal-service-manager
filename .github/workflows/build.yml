@@ -70,22 +70,22 @@ jobs:
       - name: Prepare LTSM coverage tests
         run: |
           echo "::group::scripts"
+          echo "generate certs"
+          openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout ${{github.workspace}}/etc/ltsm/server.key -out ${{github.workspace}}/etc/ltsm/server.crt
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
           sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/config.json
-          sed -i -e 's|ltsm-shm|root|' ${{github.workspace}}/etc/ltsm/config.json
-          sed -i -e 's|ltsm-auth|root|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e 's|ltsm-xvfb|root|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/config.json
           echo "sudo actions"
+          sudo groupadd -r ltsm-dbus
+          sudo groupadd -r ltsm-shm
+          sudo groupadd -r ltsm-auth
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
-          sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
-          echo "generate certs"
-          sudo openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
           echo "::endgroup::"
       - name: Run tests to generate coverage statistics
         env:
@@ -94,9 +94,6 @@ jobs:
         shell: bash
         run: |
           echo "::group::scripts"
-          echo "run dbus service"
-          /usr/bin/dbus-uuidgen --ensure
-          /usr/bin/dbus-daemon --fork --system
           echo "run ltsm service"
           ./LTSM_service &
           echo "run socat connector"
