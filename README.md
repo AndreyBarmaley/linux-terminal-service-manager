@@ -12,8 +12,9 @@ main dependencies:
 ## Developer indicators
 [![Build Status](https://github.com/AndreyBarmaley/linux-terminal-service-manager/actions/workflows/cmake.yml/badge.svg)](https://github.com/AndreyBarmaley/linux-terminal-service-manager/actions)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=bugs)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
-[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
-[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/andreyafletdinov)
 
 # Demo access
