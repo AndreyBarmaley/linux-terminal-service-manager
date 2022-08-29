@@ -21,52 +21,28 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_VNC_ZLIB_
-#define _LTSM_VNC_ZLIB_
+#ifndef _LTSM_VNC2IMAGE_
+#define _LTSM_VNC2IMAGE_
 
-#include <memory>
-#include <vector>
+#include "ltsm_global.h"
+#include "ltsm_application.h"
+#include "ltsm_framebuffer.h"
 
-#include <zlib.h>
-
-#include "ltsm_sockets.h"
+#define LTSM_VNC2IMAGE_VERSION 20220829
 
 namespace LTSM
 {
-    namespace ZLib
+    class Vnc2Image : public Application
     {
-        struct Context : z_stream
-        {
-            std::vector<uint8_t> outbuf;
-            
-            Context();
-            ~Context();
-            
-            std::vector<uint8_t> syncFlush(bool finish = false);
-        };
-        
-        /// @brief: zlib compress output stream only (VNC version)
-        class DeflateStream : public NetworkStream
-        {
-        protected:
-            std::unique_ptr<Context> zlib;
-            
-        public:
-            DeflateStream();
-    
-            std::vector<uint8_t> syncFlush(void) const;
-            void                prepareSize(size_t) const;
-            void                setLevel(size_t level) const;
+        JsonObject              _config;
 
-            bool                hasInput(void) const override;
-            size_t              hasData(void) const override;
-            void                sendRaw(const void*, size_t) override;
-            
-        private:
-            void                recvRaw(void*, size_t) const override;
-            uint8_t             peekInt8(void) const override;
-        };
-    }
+        int    		        startSocket(string_view host, int port) const;
+
+    public:
+        Vnc2Image(int argc, const char** argv);
+
+        int    		        start(void);
+    };
 }
 
-#endif // _LTSM__VNC_ZLIB_
+#endif // _LTSM_CONNECTOR_

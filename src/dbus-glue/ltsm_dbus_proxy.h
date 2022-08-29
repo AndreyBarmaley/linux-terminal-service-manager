@@ -86,6 +86,13 @@ public:
         return result;
     }
 
+    bool busShutdownService()
+    {
+        bool result;
+        proxy_.callMethod("busShutdownService").onInterface(INTERFACE_NAME).storeResultsTo(result);
+        return result;
+    }
+
     bool busShutdownDisplay(const int32_t& display)
     {
         bool result;

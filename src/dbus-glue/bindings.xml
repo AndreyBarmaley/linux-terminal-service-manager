@@ -18,6 +18,9 @@
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="success" direction="out" />
         </method>
+        <method name="busShutdownService">
+            <arg type="b" name="success" direction="out" />
+        </method>
         <method name="busShutdownDisplay">
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="success" direction="out" />

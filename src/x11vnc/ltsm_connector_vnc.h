@@ -34,7 +34,6 @@
 
 #include "ltsm_x11vnc.h"
 #include "ltsm_sockets.h"
-#include "ltsm_vnc_zlib.h"
 
 namespace LTSM
 {
@@ -160,6 +159,8 @@ namespace LTSM
             int                 encodingThreads;
             mutable size_t      netStatRx;
             mutable size_t      netStatTx;
+            bool                clientTrueColor = true;
+            bool                clientBigEndian = false;
             std::atomic<int>    pressedMask;
             std::atomic<bool>   loopMessage;
 	    std::atomic<bool>   fbUpdateProcessing;

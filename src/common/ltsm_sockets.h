@@ -35,7 +35,14 @@
 #include <cstdint>
 #include <stdexcept>
 
+#ifdef LTSM_SOCKET_ZLIB
+#include <zlib.h>
+#endif
+
+#ifdef LTSM_SOCKET_TLS
 #include "gnutls/gnutls.h"
+#endif
+
 #include "ltsm_streambuf.h"
 
 #define LTSM_SOCKETS_VERSION 20220828
@@ -63,8 +70,9 @@ namespace LTSM
         NetworkStream() : rcvTimeout(0) {}
         virtual ~NetworkStream() {}
 
+#ifdef LTSM_SOCKET_TLS
         virtual void            setupTLS(gnutls_session_t) const {}
-
+#endif
         inline NetworkStream &  sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
         inline NetworkStream &  sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
         inline NetworkStream &  sendIntBE64(uint64_t x) { putIntBE64(x); return *this; }
@@ -131,8 +139,9 @@ namespace LTSM
         SocketStream(int fd = 0);
         ~SocketStream();
 
+#ifdef LTSM_SOCKET_TLS
         void                    setupTLS(gnutls_session_t) const override;
-
+#endif
         void                    setSocket(int fd) { sock = fd; }
 
         bool                    hasInput(void) const override;
@@ -159,8 +168,9 @@ namespace LTSM
         InetStream();
         ~InetStream();
 
+#ifdef LTSM_SOCKET_TLS
         void                    setupTLS(gnutls_session_t) const override;
-
+#endif
         bool                    hasInput(void) const override;
         size_t                  hasData(void) const override;
         uint8_t		        peekInt8(void) const override;
@@ -201,6 +211,7 @@ namespace LTSM
         static int              listenUnixSocket(const std::filesystem::path &);
     };
 
+#ifdef LTSM_SOCKET_TLS
     /// transport layer security
     namespace TLS
     {
@@ -271,7 +282,66 @@ namespace LTSM
             bool                initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
         };
     } // TLS
+#endif // LTSM_SOCKET_TLS
 
+#ifdef LTSM_SOCKET_ZLIB
+    namespace ZLib
+    {
+        struct Context : z_stream
+        {
+            std::vector<uint8_t> buf;
+
+            Context();
+            ~Context();
+            
+            std::vector<uint8_t> deflateFlush(bool finish = false);
+            void inflateFlush(const std::vector<uint8_t> &);
+        };
+        
+        /// @brief: zlib compress output stream only
+        class DeflateStream : public NetworkStream
+        {
+        protected:
+            std::unique_ptr<Context> zlib;
+            
+        public:
+            DeflateStream();
+    
+            std::vector<uint8_t> syncFlush(void) const;
+            void                prepareSize(size_t) const;
+            void                setLevel(size_t level) const;
+
+            bool                hasInput(void) const override;
+            size_t              hasData(void) const override;
+            void                sendRaw(const void*, size_t) override;
+            
+        private:
+            void                recvRaw(void*, size_t) const override;
+            uint8_t             peekInt8(void) const override;
+        };
+
+        /// @brief: zlib compress input stream only
+        class InflateStream : public NetworkStream
+        {
+        protected:
+            std::unique_ptr<Context> zlib;
+            mutable std::vector<uint8_t>::iterator it;
+
+        public:
+            InflateStream();
+            ~InflateStream();
+
+            void                appendData(const std::vector<uint8_t> &);
+
+            bool                hasInput(void) const override;
+            size_t              hasData(void) const override;
+            void                recvRaw(void*, size_t) const override;
+
+        private:
+            void                sendRaw(const void*, size_t) override;
+        };
+    } // Zlib
+#endif // LTSM_SOCKET_ZLIB
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

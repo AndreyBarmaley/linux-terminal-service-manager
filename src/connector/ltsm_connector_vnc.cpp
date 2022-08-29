@@ -66,9 +66,7 @@ namespace LTSM
     }
 
     /* Connector::VNC */
-    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "vnc"), streamIn(nullptr), streamOut(nullptr), encodingDebug(0), encodingThreads(2), netStatRx(0), netStatTx(0), clipboardEnable(true),
-          pressedMask(0), loopMessage(true), loginWidgetStarted(false), fbUpdateProcessing(false), sendBellFlag(false), desktopResizeMode(DesktopResizeMode::Undefined)
+    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo) : SignalProxy(conn, jo, "vnc")
     {
         socket.reset(new InetStream());
         streamIn = streamOut = socket.get();
@@ -189,7 +187,7 @@ namespace LTSM
         // client req
         int majorVer = recvInt8();
         int minorVer = recvInt8();
-        Application::debug("RFB 6.2.19, client vencrypt version: %d.%d", majorVer, minorVer);
+        Application::debug("RFB 1.7.2.19, client vencrypt version: %d.%d", majorVer, minorVer);
 
         if(majorVer != 0 || (minorVer < 1 || minorVer > 2))
         {
@@ -345,12 +343,19 @@ namespace LTSM
                 Application::error("keymap invalid: %s", file.c_str());
         }
 
-        // RFB 6.1.1 version
+        // RFB 1.7.1.1 version
+        int protover = 38;
         auto version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
         sendString(version).sendFlush();
         std::string magick = recvString(12);
-        Application::debug("RFB 6.1.1, handshake version: %s", magick.c_str());
+        Application::debug("RFB 1.7.1.1, handshake version: %s", magick.c_str());
 
+        if(magick == Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(3))
+            protover = 33;
+        else
+        if(magick == Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(7))
+            protover = 37;
+        else
         if(magick != version)
         {
             Application::error("%s", "handshake failure");
@@ -385,63 +390,77 @@ namespace LTSM
 
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
         // init server format
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
-                                   visual->red_mask, visual->green_mask, visual->blue_mask);
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
         bool tlsDisable = _config->getBoolean("vnc:gnutls:disable", false);
 
-        // RFB 6.1.2 security
-        if(tlsDisable)
+        // RFB 1.7.1.2 security
+        if(protover == 33)
         {
-            sendInt8(1);
-            sendInt8(RFB::SECURITY_TYPE_NONE);
-            sendFlush();
+            tlsDisable = true;
+            sendIntBE32(RFB::SECURITY_TYPE_NONE);
         }
         else
         {
-            sendInt8(2);
-            sendInt8(RFB::SECURITY_TYPE_VENCRYPT);
-            sendInt8(RFB::SECURITY_TYPE_NONE);
-            sendFlush();
+            if(tlsDisable)
+            {
+                sendInt8(1);
+                sendInt8(RFB::SECURITY_TYPE_NONE);
+            }
+            else
+            {
+                sendInt8(2);
+                sendInt8(RFB::SECURITY_TYPE_VENCRYPT);
+                sendInt8(RFB::SECURITY_TYPE_NONE);
+            }
         }
+        sendFlush();
 
-        int clientSecurity = recvInt8();
-        Application::debug("RFB 6.1.2, client security: 0x%02x", clientSecurity);
-
-        if(clientSecurity == RFB::SECURITY_TYPE_NONE)
-            sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-        else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT)
+        if(protover != 33)
         {
-            if(! clientAuthVenCrypt())
-                return EXIT_FAILURE;
+            int clientSecurity = recvInt8();
+            Application::debug("RFB 1.7.1.2, client security: 0x%02x", clientSecurity);
 
-            encryptionInfo = tls->sessionDescription();
-            sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-        }
-        else
-        {
-            const std::string err("no matching security types");
-            sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-            Application::error("error: %s", err.c_str());
-            return EXIT_FAILURE;
+            if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE)
+            {
+                // RFB 1.7.1.3 security result
+                if(clientSecurity == RFB::SECURITY_TYPE_NONE)
+                    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT)
+                {
+                    if(! clientAuthVenCrypt())
+                        return EXIT_FAILURE;
+
+                    encryptionInfo = tls->sessionDescription();
+                    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                }
+                else
+                {
+                    const std::string err("no matching security types");
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                    Application::error("error: %s", err.c_str());
+                    return EXIT_FAILURE;
+                }
+            }
         }
 
         busSetEncryptionInfo(screen, encryptionInfo);
-        // RFB 6.3.1 client init
+        // RFB 1.7.3.1 client init
         int clientSharedFlag = recvInt8();
-        Application::debug("RFB 6.3.1, client shared: 0x%02x", clientSharedFlag);
-        // RFB 6.3.2 server init
+        Application::debug("RFB 1.7.3.1, client shared: 0x%02x", clientSharedFlag);
+        // RFB 1.7.3.2 server init
         auto wsz = _xcbDisplay->size();
         sendIntBE16(wsz.width);
         sendIntBE16(wsz.height);
-        Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                           serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian(), serverFormat.trueColor(),
+        Application::debug("server send: pixel format, bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+                           serverFormat.bitsPerPixel, _xcbDisplay->depth(), big_endian,
                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
         clientFormat = serverFormat;
         // send pixel format
         sendInt8(serverFormat.bitsPerPixel);
-        sendInt8(serverFormat.depth);
-        sendInt8(serverFormat.bigEndian());
-        sendInt8(serverFormat.trueColor());
+        sendInt8(_xcbDisplay->depth());
+        sendInt8(big_endian ? 1 : 0);
+        // true color
+        sendInt8(1);
         sendIntBE16(serverFormat.redMax);
         sendIntBE16(serverFormat.greenMax);
         sendIntBE16(serverFormat.blueMax);
@@ -458,11 +477,7 @@ namespace LTSM
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [ = ]()
-    {
-        _conn->enterEventLoopAsync();
-            return ! this->loginWidgetStarted;
-        }))
+                [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
         {
             Application::info("connector starting: %s", "something went wrong...");
             return EXIT_FAILURE;
@@ -631,7 +646,7 @@ namespace LTSM
                         {
                             fbUpdateProcessing = true;
                             // background job
-                            std::thread([ = ]()
+                            std::thread([=]()
                             {
                                 bool error = false;
 
@@ -683,7 +698,7 @@ namespace LTSM
     void Connector::VNC::clientSetPixelFormat(void)
     {
         waitSendingFBUpdate();
-        // RFB: 6.4.1
+        // RFB: 1.7.4.1
         // skip padding
         recvSkip(3);
         auto bitsPerPixel = recvInt8();
@@ -698,7 +713,7 @@ namespace LTSM
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("RFB 6.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+        Application::notice("RFB 1.7.4.1, set pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                             bitsPerPixel, depth, bigEndian, trueColor, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel)
@@ -715,7 +730,9 @@ namespace LTSM
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
             throw std::runtime_error(Tools::StringFormat("%1: unsupported pixel format").arg(__FUNCTION__));
 
-        clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
+        clientTrueColor = trueColor;
+        clientBigEndian = bigEndian;
+        clientFormat = PixelFormat(bitsPerPixel, redMax, greenMax, blueMax, 0, redShift, greenShift, blueShift, 0);
 
         if(colourMap.size()) colourMap.clear();
     }
@@ -723,12 +740,12 @@ namespace LTSM
     bool Connector::VNC::clientSetEncodings(void)
     {
         waitSendingFBUpdate();
-        // RFB: 6.4.2
+        // RFB: 1.7.4.2
         // skip padding
         recvSkip(1);
         int previousType = prefEncodingsPair.second;
         int numEncodings = recvIntBE16();
-        Application::notice("RFB 6.4.2, set encodings, counts: %d", numEncodings);
+        Application::notice("RFB 1.7.4.2, set encodings, counts: %d", numEncodings);
         clientEncodings.clear();
         clientEncodings.reserve(numEncodings);
 
@@ -741,10 +758,7 @@ namespace LTSM
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
 
                 if(std::any_of(disabledEncodings.begin(), disabledEncodings.end(),
-                               [&](auto & str)
-            {
-                return enclower == Tools::lower(str);
-                }))
+                               [&](auto & str) { return enclower == Tools::lower(str); }))
                 {
                     Application::warning("RFB request encodings: %s (disabled)", RFB::encodingName(encoding));
                     continue;
@@ -793,10 +807,7 @@ namespace LTSM
         Application::notice("server select encoding: %s", RFB::encodingName(prefEncodingsPair.second));
 
         if(std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                       [ = ](auto & val)
-    {
-        return val == RFB::ENCODING_CONTINUOUS_UPDATES;
-    }))
+                       [=](auto & val) { return val == RFB::ENCODING_CONTINUOUS_UPDATES; }))
         {
             // RFB 1.7.7.15
             // The server must send a EndOfContinuousUpdates message the first time
@@ -810,13 +821,13 @@ namespace LTSM
 
     bool Connector::VNC::clientFramebufferUpdate(void)
     {
-        // RFB: 6.4.3
+        // RFB: 1.7.4.3
         int incremental = recvInt8();
         clientRegion.x = recvIntBE16();
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug("RFB 6.4.3, request update fb, region [%d, %d, %d, %d], incremental: %d",
+        Application::debug("RFB 1.7.4.3, request update fb, region [%d, %d, %d, %d], incremental: %d",
                            clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         bool fullUpdate = incremental == 0;
         auto serverRegion = _xcbDisplay->region();
@@ -827,10 +838,7 @@ namespace LTSM
 
             if(desktopResizeMode == DesktopResizeMode::Undefined &&
                std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                           [ = ](auto & val)
-        {
-            return  val == RFB::ENCODING_EXT_DESKTOP_SIZE;
-        }))
+                           [=](auto & val) { return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; }))
             {
                 desktopResizeMode = DesktopResizeMode::ServerInform;
             }
@@ -848,11 +856,11 @@ namespace LTSM
 
     void Connector::VNC::clientKeyEvent(void)
     {
-        // RFB: 6.4.4
+        // RFB: 1.7.4.4
         int pressed = recvInt8();
         recvSkip(2);
         int keysym = recvIntBE32();
-        Application::debug("RFB 6.4.4, key event (%s), keysym: 0x%08x", (pressed ? "pressed" : "released"), keysym);
+        Application::debug("RFB 1.7.4.4, key event (%s), keysym: 0x%08x", (pressed ? "pressed" : "released"), keysym);
 
         if(isAllowXcbMessages())
         {
@@ -876,11 +884,11 @@ namespace LTSM
 
     void Connector::VNC::clientPointerEvent(void)
     {
-        // RFB: 6.4.5
+        // RFB: 1.7.4.5
         int mask = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
         int posx = recvIntBE16();
         int posy = recvIntBE16();
-        Application::debug("RFB 6.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
+        Application::debug("RFB 1.7.4.5, pointer event, mask: 0x%02x, posx: %d, posy: %d", mask, posx, posy);
 
         if(isAllowXcbMessages())
         {
@@ -920,11 +928,11 @@ namespace LTSM
 
     void Connector::VNC::clientCutTextEvent(void)
     {
-        // RFB: 6.4.6
+        // RFB: 1.7.4.6
         // skip padding
         recvSkip(3);
         size_t length = recvIntBE32();
-        Application::debug("RFB 6.4.6, cut text event, length: %d", length);
+        Application::debug("RFB 1.7.4.6, cut text event, length: %d", length);
 
         if(isAllowXcbMessages() && clipboardEnable)
         {
@@ -962,7 +970,7 @@ namespace LTSM
         int height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::notice("RFB 6.4.x, set desktop event, size [%dx%d], screens: %d", width, height, numOfScreens);
+        Application::notice("RFB 1.7.4.x, set desktop event, size [%dx%d], screens: %d", width, height, numOfScreens);
         screensInfo.resize(numOfScreens);
 
         // screens array
@@ -988,7 +996,7 @@ namespace LTSM
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
         Application::notice("server send: colour map, first: %d, colour map length: %d", first, colourMap.size());
-        // RFB: 6.5.2
+        // RFB: 1.7.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
         sendInt8(0); // padding
         sendIntBE16(first); // first color
@@ -1008,7 +1016,7 @@ namespace LTSM
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
         Application::notice("server send: %s", "bell");
-        // RFB: 6.5.3
+        // RFB: 1.7.5.3
         sendInt8(RFB::SERVER_BELL);
         sendFlush();
     }
@@ -1017,7 +1025,7 @@ namespace LTSM
     {
         const std::lock_guard<std::mutex> lock(sendGlobal);
         Application::info("server send: cut text, length: %d", buf.size());
-        // RFB: 6.5.4
+        // RFB: 1.7.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
         sendInt8(0); // padding
         sendInt8(0); // padding
@@ -1057,7 +1065,7 @@ namespace LTSM
             if(reply->size() != reg.width * reg.height * bytePerPixel)
                 throw std::runtime_error(Tools::StringFormat("%1: region not aligned").arg(__FUNCTION__));
 
-            // RFB: 6.5.1
+            // RFB: 1.7.5.1
             sendInt8(RFB::SERVER_FB_UPDATE);
             // padding
             sendInt8(0);
@@ -1088,12 +1096,12 @@ namespace LTSM
 
     int Connector::VNC::sendPixel(uint32_t pixel)
     {
-        if(clientFormat.trueColor())
+        if(clientTrueColor)
         {
             switch(clientFormat.bytePerPixel())
             {
                 case 4:
-                    if(clientFormat.bigEndian())
+                    if(clientBigEndian)
                         sendIntBE32(clientFormat.convertFrom(serverFormat, pixel));
                     else
                         sendIntLE32(clientFormat.convertFrom(serverFormat, pixel));
@@ -1101,7 +1109,7 @@ namespace LTSM
                     return 4;
 
                 case 2:
-                    if(clientFormat.bigEndian())
+                    if(clientBigEndian)
                         sendIntBE16(clientFormat.convertFrom(serverFormat, pixel));
                     else
                         sendIntLE16(clientFormat.convertFrom(serverFormat, pixel));
@@ -1124,7 +1132,7 @@ namespace LTSM
 
     int Connector::VNC::sendCPixel(uint32_t pixel)
     {
-        if(clientFormat.trueColor() && clientFormat.bitsPerPixel == 32)
+        if(clientTrueColor && clientFormat.bitsPerPixel == 32)
         {
             auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);
             auto red = clientFormat.red(pixel2);

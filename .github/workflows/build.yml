@@ -10,6 +10,7 @@ env:
     SONAR_SERVER_URL: "https://sonarcloud.io"
     BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     BUILD_TYPE: Release
+    DEBIAN_FRONTEND: noninteractive
 
 jobs:
   build:
@@ -24,7 +25,9 @@ jobs:
          sudo apt-get -y upgrade
       - name: Install dependencies
         run: |
-         sudo apt-get -y install wget curl unzip libexpat1 libpam0g-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
+         sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity vncsnapshot \
+           xserver-xorg-video-dummy xserver-xorg xterm x11-xserver-utils dbus-x11 \
+           libexpat1 libpam0g-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev
       - name: Set up JDK 11
@@ -64,11 +67,39 @@ jobs:
         run: |
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DLTSM_BUILD_COVERAGE_TESTS=ON
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      - name: Prepare LTSM coverage tests
+        run: |
+          groupadd -r ltsm-shm
+          groupadd -r ltsm-dbus
+          groupadd -r ltsm-auth
+          useradd -c "LTSM xvfb user" -d /var/lib/ltsm -g ltsm-shm -G ltsm-auth,ltsm-dbus -l -m -N -r -s /sbin/nologin ltsm-xvfb
+          useradd demo1 -p "$(openssl passwd -1 demo)"
+          cp -r ${{github.workspace}}/etc/ltsm /etc
+          cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
+          cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
+          sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
+          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' /etc/ltsm/config.json
+          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' /etc/ltsm/config.json
+          sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
+          openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
+          chown ltsm-xvfb.root /etc/ltsm/server.key && chmod 640 /etc/ltsm/server.key
+          chmod +x /etc/ltsm/xclients
+          mkdir -p /usr/libexec/ltsm
+          ln -s ${{github.workspace}}/LTSM_helper /usr/libexec/ltsm
+          ln -s ${{github.workspace}}/LTSM_connector /usr/local/sbin
+          /usr/sbin/rsyslogd -i /var/run/syslogd.pid
+          mkdir /run/dbus
+          chown messagebus. /run/dbus
+          /usr/bin/dbus-uuidgen --ensure
+          /usr/bin/dbus-daemon --fork --system
       - name: Run tests to generate coverage statistics
         run: |
-          ./LTSM_connector
-          ./LTSM_x11vnc
-          ./LTSM_sdl2x11
+          ./LTSM_service --background
+          socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
+          # get vnc screenshot
+          vncsnapshot 127.0.0.1:0 test.jpg
+          dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
+          sleep 5
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube > coverage.xml

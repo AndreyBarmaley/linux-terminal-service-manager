@@ -24,6 +24,8 @@
 #define _LTSM_SERVICE_
 
 #include <chrono>
+#include <string_view>
+#include <filesystem>
 
 #include <security/pam_appl.h>
 #include "alexab_safe_ptr.h"
@@ -102,47 +104,48 @@ namespace LTSM
 
     namespace Manager
     {
-        std::tuple<int, int, std::string, std::string>
-                                        getUserInfo(const std::string &);
-        int                             getGroupGid(const std::string &);
-        std::list<std::string>          getGroupMembers(const std::string &);
+        std::tuple<int, int, std::filesystem::path, std::string>
+                                        getUserInfo(std::string_view);
+        int                             getGroupGid(std::string_view);
+        std::list<std::string>          getGroupMembers(std::string_view);
 
         class Object : public XvfbSessions, public sdbus::AdaptorInterfaces<Service_adaptor>
         {
-	    const Application*		_app;
-            const JsonObject*		_config;
-	    SessionPolicy		_sessionPolicy;
-            int                         _loginFailuresConf;
-            int                         _helperIdleTimeout;
-            bool                        _helperAutoComplete;
-            int                         _helperAutoCompeteMinUid;
-            int                         _helperAutoCompeteMaxUid;
+	    const Application*		_app = nullptr;
+            const JsonObject*		_config = nullptr;
+	    SessionPolicy		_sessionPolicy = SessionPolicy::AuthLock;
+            int                         _loginFailuresConf = 0;
+            int                         _helperIdleTimeout = 0;
+            bool                        _helperAutoComplete = false;
+            int                         _helperAutoCompeteMinUid = 0;
+            int                         _helperAutoCompeteMaxUid = 0;
             std::string                 _helperTitle;
             std::string                 _helperDateFormat;
             std::vector<std::string>    _helperAccessUsersList;
 	    std::list<PidStatus>	_childEnded;
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
+            std::atomic<bool>           _running = false;
 
         protected:
             void                        closefds(void) const;
 	    void			openlog(void) const;
-            int		                getFreeDisplay(void);
+            int		                getFreeDisplay(void) const;
 	    void			closeSystemSession(int display, XvfbSession &);
-            std::string			createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
-            std::string                 createSessionConnInfo(const std::string & home, const XvfbSession*);
-            int				runXvfbDisplay(int display, int width, int height, const std::string & xauthFile, const std::string & userLogin);
-            int				runLoginHelper(int display, const std::string & xauthFile, const std::string & userLogin);
-            int				runUserSession(int display, const std::string & sessionBin, const XvfbSession &);
+            std::filesystem::path	createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
+            std::filesystem::path       createSessionConnInfo(const std::filesystem::path & home, const XvfbSession*);
+            int				runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userLogin);
+            int				runLoginHelper(int display, const std::filesystem::path & xauthFile, const std::string & userLogin);
+            int				runUserSession(int display, const std::filesystem::path & sessionBin, const XvfbSession &);
 	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
-	    bool			runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
+	    bool			runSystemScript(int dysplay, const std::string & user, const std::string & cmd) const;
 	    bool			runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args = nullptr);
-	    void			setFileOwner(const std::string & file, int uid, int gid);
-            bool			waitXvfbStarting(int display, uint32_t waitms);
+	    void			setFileOwner(const std::filesystem::path & file, int uid, int gid);
+            bool			waitXvfbStarting(int display, uint32_t waitms) const;
             bool	                switchToUser(const std::string &);
-            bool			checkXvfbSocket(int display);
-            bool			checkXvfbLocking(int display);
-            bool                        checkFileReadable(const std::string &);
-	    void			removeXvfbSocket(int display);
+            bool			checkXvfbSocket(int display) const;
+            bool			checkXvfbLocking(int display) const;
+            bool                        checkFileReadable(const std::filesystem::path &) const;
+	    void			removeXvfbSocket(int display) const;
             bool			displayShutdown(int display, bool emitSignal, XvfbSession*);
             std::list<std::string>      getSystemUsersList(int uidMin, int uidMax) const;
             bool                        pamAuthenticate(const int32_t & display, const std::string & login, const std::string & password);
@@ -156,9 +159,12 @@ namespace LTSM
             ~Object();
 
             void                        signalChildEnded(int pid, int status);
+            bool                        isRunning(void) const;
+            void                        shutdown(void) { busShutdownService(); }
 
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
+            bool                        busShutdownService(void) override;
             int32_t                     busStartLoginSession(const std::string & remoteAddr, const std::string & connType) override;
             int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;

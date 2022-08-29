@@ -23,6 +23,7 @@
 
 #include <cctype>
 #include <algorithm>
+#include <exception>
 
 #include "ltsm_tools.h"
 #include "ltsm_font_psf.h"
@@ -31,42 +32,107 @@
 
 namespace LTSM
 {
-    PixelFormat::PixelFormat(int bpp, int dep, bool be, bool trucol, int rmax, int gmax, int bmax, int rshift, int gshift, int bshift)
-        : bitsPerPixel(bpp), depth(dep), flags(0), redShift(rshift), greenShift(gshift), blueShift(bshift), redMax(rmax), greenMax(gmax), blueMax(bmax)
+    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPerPixel(bpp)
     {
-        if(be) flags |= BigEndian;
-
-        if(trucol) flags |= TrueColor;
-    }
-
-    PixelFormat::PixelFormat(int bpp, int dep, bool be, bool trucol, int rmask, int gmask, int bmask)
-        : bitsPerPixel(bpp), depth(dep), flags(0), redShift(0), greenShift(0), blueShift(0), redMax(0), greenMax(0), blueMax(0)
-    {
-        if(be) flags |= BigEndian;
-
-        if(trucol) flags |= TrueColor;
-
         redMax = Tools::maskMaxValue(rmask);
         greenMax = Tools::maskMaxValue(gmask);
         blueMax = Tools::maskMaxValue(bmask);
+        alphaMax = Tools::maskMaxValue(amask);
         redShift = Tools::maskShifted(rmask);
         greenShift = Tools::maskShifted(gmask);
         blueShift = Tools::maskShifted(bmask);
+        alphaShift = Tools::maskShifted(amask);
     }
 
-    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt)
-        : allocated(true), pitch(0), buffer(nullptr), format(fmt)
+    PixelFormat::PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift)
+        : redMax(rmax), greenMax(gmax), blueMax(bmax), alphaMax(amax), redShift(rshift), greenShift(gshift), blueShift(bshift), alphaShift(ashift), bitsPerPixel(bpp)
     {
-        pitch = fmt.bytePerPixel() * fbsz.width;
+    }
+
+    uint32_t PixelFormat::rmask(void) const
+    {
+        return static_cast<uint32_t>(redMax) << redShift;
+    }
+    
+    uint32_t PixelFormat::gmask(void) const
+    {
+        return static_cast<uint32_t>(greenMax) << greenShift;
+    }
+    
+    uint32_t PixelFormat::bmask(void) const
+    {
+        return static_cast<uint32_t>(blueMax) << blueShift;
+    }
+               
+    uint32_t PixelFormat::amask(void) const
+    {   
+        return static_cast<uint32_t>(alphaMax) << alphaShift;
+    }
+
+    uint32_t PixelFormat::red(int pixel) const
+    {
+        return (pixel >> redShift) & redMax;
+    }
+                
+    uint32_t PixelFormat::green(int pixel) const
+    {
+        return (pixel >> greenShift) & greenMax;
+    }
+        
+    uint32_t PixelFormat::blue(int pixel) const
+    {
+        return (pixel >> blueShift) & blueMax;
+    }
+        
+    uint32_t PixelFormat::alpha(int pixel) const
+    {
+        return (pixel >> alphaShift) & alphaMax;
+    }
+
+    uint32_t PixelFormat::bytePerPixel(void) const
+    {
+        return bitsPerPixel >> 3;
+    }
+
+    Color PixelFormat::color(int pixel) const
+    {
+        return Color(red(pixel), green(pixel), blue(pixel), alpha(pixel));
+    }
+
+    uint32_t PixelFormat::pixel(const Color & col) const
+    {
+        return ((static_cast<int>(col.x) * alphaMax / 0xFF) << alphaShift) | ((static_cast<int>(col.r) * redMax / 0xFF) << redShift) |
+               ((static_cast<int>(col.g) * greenMax / 0xFF) << greenShift) | ((static_cast<int>(col.b) * blueMax / 0xFF) << blueShift);
+    }
+
+    uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
+    {
+        if(pf != *this)
+        {
+            uint32_t r = pf.redMax ? (pf.red(pixel) * redMax) / pf.redMax : 0;
+            uint32_t g = pf.greenMax ? (pf.green(pixel) * greenMax) / pf.greenMax : 0;
+            uint32_t b = pf.blueMax ? (pf.blue(pixel) * blueMax) / pf.blueMax : 0;
+            uint32_t a = pf.alphaMax ? (pf.alpha(pixel) * alphaMax) / pf.alphaMax : 0;
+            return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
+        }
+        
+        return pixel;
+    }
+
+    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt)
+    {
+        uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
+        pitch = std::max(pitch1, pitch2);
         size_t length = pitch * fbsz.height;
         buffer = new uint8_t[length];
         std::fill(buffer, buffer + length, 0);
+        allocated = 1;
     }
 
-    fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt)
-        : allocated(false), pitch(0), buffer(ptr), format(fmt)
+    fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), buffer(ptr)
     {
-        pitch = fmt.bytePerPixel() * fbsz.width;
+        uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
+        pitch = std::max(pitch1, pitch2);
     }
 
     fbinfo_t::~fbinfo_t()
@@ -92,6 +158,12 @@ namespace LTSM
             // fix out of range
             length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
             auto bpp = bitsPerPixel();
+
+            if(length > static_cast<size_t>(fbreg.width) - pos.x)
+            {
+                Application::error("%s: out of range, x: %d, width: %d, length: %d", __FUNCTION__, pos.x, fbreg.width, length);
+                throw std::out_of_range("FrameBuffer::setPixelRow");
+            }
 
             switch(bpp)
             {
@@ -137,25 +209,30 @@ namespace LTSM
                     break;
 
                 default:
-                    Application::error("unknown bpp: %d", bpp);
-                    break;
+                    Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
+                    throw std::invalid_argument("FrameBuffer::setPixelRow");
             }
         }
+        else
+        {
+            Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
+            throw std::out_of_range("FrameBuffer::setPixelRow");
+         }
     }
 
-    void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat & fmt)
+    void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat* fmt)
     {
-        auto raw = pixelFormat().convertFrom(fmt, pixel);
+        auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
         setPixelRow(pos, raw, 1);
     }
 
-    void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat & fmt)
+    void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat* fmt)
     {
         XCB::Region reg;
 
         if(XCB::Region::intersection(region(), reg0, & reg))
         {
-            auto raw = pixelFormat().convertFrom(fmt, pixel);
+            auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
 
             for(int yy = 0; yy < reg.height; ++yy)
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
@@ -243,12 +320,13 @@ namespace LTSM
                     return *static_cast<uint8_t*>(ptr);
 
                 default:
-                    Application::error("unknown bpp: %d", bpp);
-                    break;
+                    Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
+                    throw std::invalid_argument("FrameBuffer::pixel");
             }
         }
 
-        return 0;
+        Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
+        throw std::out_of_range("FrameBuffer::pixel");
     }
 
     std::list<PixelLength> FrameBuffer::toRLE(const XCB::Region & reg) const
@@ -275,7 +353,7 @@ namespace LTSM
         if(pixelFormat() != fb.pixelFormat())
         {
             for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
-                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), fb.pixelFormat());
+                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
         }
         else
         {

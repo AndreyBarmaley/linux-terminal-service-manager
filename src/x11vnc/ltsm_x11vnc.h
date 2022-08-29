@@ -63,21 +63,20 @@ namespace LTSM
 	    bool			isAllowXcbMessages(void) const;
 	    void			setEnableXcbMessages(bool f);
         };
-
-        /* Connector::Service */
-        class Service : public Application
-        {
-            JsonObject                  _config;
-
-            int    		        startInetd(void) const;
-            int    		        startSocket(int port) const;
-
-        public:
-            Service(int argc, const char** argv);
-
-            int    		        start(void);
-        };
     }
+
+    class X11Vnc : public Application
+    {
+        JsonObject              _config;
+
+        int    		        startInetd(void) const;
+        int    		        startSocket(int port) const;
+
+    public:
+        X11Vnc(int argc, const char** argv);
+
+        int    		        start(void);
+    };
 }
 
 #endif // _LTSM_CONNECTOR_

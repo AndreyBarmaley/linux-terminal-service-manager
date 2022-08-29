@@ -128,43 +128,43 @@ namespace LTSM
             switch(type)
             {
                 case RFB::ENCODING_ZLIB:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingZLib(fb);
                     }, type);
 
                 case RFB::ENCODING_HEXTILE:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingHextile(fb, false);
                     }, type);
 
                 case RFB::ENCODING_ZLIBHEX:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingHextile(fb, true);
                     }, type);
 
                 case RFB::ENCODING_CORRE:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingRRE(fb, true);
                     }, type);
 
                 case RFB::ENCODING_RRE:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingRRE(fb, false);
                     }, type);
 
                 case RFB::ENCODING_TRLE:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingTRLE(fb, false);
                     }, type);
 
                 case RFB::ENCODING_ZRLE:
-                    return std::make_pair([ = ](const FrameBuffer & fb)
+                    return std::make_pair([=](const FrameBuffer & fb)
                     {
                         return this->sendEncodingTRLE(fb, true);
                     }, type);
@@ -174,7 +174,7 @@ namespace LTSM
             }
         }
 
-        return std::make_pair([ = ](const FrameBuffer & fb)
+        return std::make_pair([=](const FrameBuffer & fb)
         {
             return this->sendEncodingRaw(fb);
         }, RFB::ENCODING_RAW);
@@ -921,7 +921,7 @@ namespace LTSM
         }
 
         bool extended = std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                                    [ = ](auto & val)
+                                    [=](auto & val)
         {
             return  val == RFB::ENCODING_EXT_DESKTOP_SIZE;
         });

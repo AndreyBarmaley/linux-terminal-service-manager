@@ -34,7 +34,6 @@
 
 #include "ltsm_sockets.h"
 #include "ltsm_connector.h"
-#include "ltsm_vnc_zlib.h"
 
 namespace LTSM
 {
@@ -153,21 +152,23 @@ namespace LTSM
 	    std::unique_ptr<ZLib::DeflateStream> zlib;	/// zlib layer
             std::unique_ptr<JsonObject> keymap;
 
-	    NetworkStream* 	streamIn;
-	    NetworkStream* 	streamOut;
+	    NetworkStream* 	streamIn = nullptr;
+	    NetworkStream* 	streamOut = nullptr;
 
-            int                 encodingDebug;
-            int                 encodingThreads;
-            mutable size_t      netStatRx;
-            mutable size_t      netStatTx;
-            bool                clipboardEnable;
-            std::atomic<int>    pressedMask;
-            std::atomic<bool>   loopMessage;
-            std::atomic<bool>   loginWidgetStarted;
-	    std::atomic<bool>   fbUpdateProcessing;
-	    std::atomic<bool>	sendBellFlag;
+            int                 encodingDebug = 0;
+            int                 encodingThreads = 2;
+            mutable size_t      netStatRx = 0;
+            mutable size_t      netStatTx = 0;
+            bool                clipboardEnable = true;
+            bool                clientTrueColor = true;
+            bool                clientBigEndian = false;
+            std::atomic<int>    pressedMask{0};
+            std::atomic<bool>   loopMessage{true};
+            std::atomic<bool>   loginWidgetStarted{false};
+	    std::atomic<bool>   fbUpdateProcessing{false};
+	    std::atomic<bool>	sendBellFlag{false};
 	    std::atomic<DesktopResizeMode>
-                                desktopResizeMode;
+                                desktopResizeMode{DesktopResizeMode::Undefined};
             PixelFormat         serverFormat;
             PixelFormat         clientFormat;
             XCB::Region         clientRegion;

@@ -314,8 +314,7 @@ namespace LTSM
         }
 
         // init server format
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
-                                   visual->red_mask, visual->green_mask, visual->blue_mask);
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
         bool tlsDisable = _config->getBoolean("notls", false);
         bool noAuth = _config->getBoolean("noauth", false);
 
@@ -365,15 +364,16 @@ namespace LTSM
         auto wsz = _xcbDisplay->size();
         sendIntBE16(wsz.width);
         sendIntBE16(wsz.height);
-        Application::debug("server send: pixel format, bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                           serverFormat.bitsPerPixel, serverFormat.depth, serverFormat.bigEndian(), serverFormat.trueColor(),
+        Application::debug("server send: pixel format, bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+                           serverFormat.bitsPerPixel, _xcbDisplay->depth(), big_endian,
                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
         clientFormat = serverFormat;
         // send pixel format
         sendInt8(serverFormat.bitsPerPixel);
-        sendInt8(serverFormat.depth);
-        sendInt8(serverFormat.bigEndian());
-        sendInt8(serverFormat.trueColor());
+        sendInt8(_xcbDisplay->depth());
+        sendInt8(big_endian);
+        // true color
+        sendInt8(1);
         sendIntBE16(serverFormat.redMax);
         sendIntBE16(serverFormat.greenMax);
         sendIntBE16(serverFormat.blueMax);
@@ -548,7 +548,7 @@ namespace LTSM
                         {
                             fbUpdateProcessing = true;
                             // background job
-                            std::thread([ = ]()
+                            std::thread([=]()
                             {
                                 try
                                 {
@@ -625,7 +625,9 @@ namespace LTSM
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
             throw std::runtime_error("clientSetPixelFormat: unsupported pixel format");
 
-        clientFormat = PixelFormat(bitsPerPixel, depth, bigEndian, trueColor, redMax, greenMax, blueMax, redShift, greenShift, blueShift);
+        clientTrueColor = trueColor;
+        clientBigEndian = bigEndian;
+        clientFormat = PixelFormat(bitsPerPixel, redMax, greenMax, blueMax, 0, redShift, greenShift, blueShift, 0);
 
         if(colourMap.size()) colourMap.clear();
     }
@@ -651,10 +653,7 @@ namespace LTSM
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
 
                 if(std::any_of(disabledEncodings.begin(), disabledEncodings.end(),
-                               [&](auto & str)
-            {
-                return enclower == Tools::lower(str);
-                }))
+                               [&](auto & str) { return enclower == Tools::lower(str); }))
                 {
                     Application::warning("RFB request encodings: %s (disabled)", RFB::encodingName(encoding));
                     continue;
@@ -703,10 +702,7 @@ namespace LTSM
         Application::notice("server select encoding: %s", RFB::encodingName(prefEncodingsPair.second));
 
         if(std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                       [ = ](auto & val)
-    {
-        return val == RFB::ENCODING_CONTINUOUS_UPDATES;
-    }))
+                       [=](auto & val) { return val == RFB::ENCODING_CONTINUOUS_UPDATES; }))
         {
             // RFB 1.7.7.15
             // The server must send a EndOfContinuousUpdates message the first time
@@ -742,10 +738,7 @@ namespace LTSM
 
             if(desktopResizeMode == DesktopResizeMode::Undefined &&
                std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                           [ = ](auto & val)
-        {
-            return  val == RFB::ENCODING_EXT_DESKTOP_SIZE;
-        }))
+                           [=](auto & val) { return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; }))
             {
                 desktopResizeMode = DesktopResizeMode::ServerInform;
             }
@@ -1000,12 +993,12 @@ namespace LTSM
 
     int Connector::VNC::sendPixel(uint32_t pixel)
     {
-        if(clientFormat.trueColor())
+        if(clientTrueColor)
         {
             switch(clientFormat.bytePerPixel())
             {
                 case 4:
-                    if(clientFormat.bigEndian())
+                    if(clientBigEndian)
                         sendIntBE32(clientFormat.convertFrom(serverFormat, pixel));
                     else
                         sendIntLE32(clientFormat.convertFrom(serverFormat, pixel));
@@ -1013,7 +1006,7 @@ namespace LTSM
                     return 4;
 
                 case 2:
-                    if(clientFormat.bigEndian())
+                    if(clientBigEndian)
                         sendIntBE16(clientFormat.convertFrom(serverFormat, pixel));
                     else
                         sendIntLE16(clientFormat.convertFrom(serverFormat, pixel));
@@ -1037,7 +1030,7 @@ namespace LTSM
 
     int Connector::VNC::sendCPixel(uint32_t pixel)
     {
-        if(clientFormat.trueColor() && clientFormat.bitsPerPixel == 32)
+        if(clientTrueColor && clientFormat.bitsPerPixel == 32)
         {
             auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);
             auto red = clientFormat.red(pixel2);

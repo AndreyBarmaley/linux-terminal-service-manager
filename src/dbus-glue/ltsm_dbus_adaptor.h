@@ -26,6 +26,7 @@ protected:
         object_.registerMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withInputParamNames("remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const std::string& remoteAddr, const std::string& connType){ return this->busStartLoginSession(remoteAddr, connType); });
         object_.registerMethod("busCreateAuthFile").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("path").implementedAs([this](const int32_t& display){ return this->busCreateAuthFile(display); });
         object_.registerMethod("busShutdownConnector").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownConnector(display); });
+        object_.registerMethod("busShutdownService").onInterface(INTERFACE_NAME).withOutputParamNames("success").implementedAs([this](){ return this->busShutdownService(); });
         object_.registerMethod("busShutdownDisplay").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownDisplay(display); });
         object_.registerMethod("busStartUserSession").onInterface(INTERFACE_NAME).withInputParamNames("display", "userName", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType){ return this->busStartUserSession(display, userName, remoteAddr, connType); });
         object_.registerMethod("busSendMessage").onInterface(INTERFACE_NAME).withInputParamNames("display", "message").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& message){ return this->busSendMessage(display, message); });
@@ -151,6 +152,7 @@ private:
     virtual int32_t busStartLoginSession(const std::string& remoteAddr, const std::string& connType) = 0;
     virtual std::string busCreateAuthFile(const int32_t& display) = 0;
     virtual bool busShutdownConnector(const int32_t& display) = 0;
+    virtual bool busShutdownService() = 0;
     virtual bool busShutdownDisplay(const int32_t& display) = 0;
     virtual int32_t busStartUserSession(const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual bool busSendMessage(const int32_t& display, const std::string& message) = 0;

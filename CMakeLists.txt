@@ -9,9 +9,13 @@ option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_XKB_COMMON "usage xkb layouts" OFF)
 option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
+option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
+option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
+    set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
+    #set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
 endif()
 
 include(FindPkgConfig)
@@ -102,10 +106,7 @@ find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
 
 add_executable(LTSM_connector
-    src/connector/ltsm_sockets.cpp
     src/connector/ltsm_connector.cpp
-    src/connector/ltsm_framebuffer.cpp
-    src/connector/ltsm_vnc_zlib.cpp
     src/connector/ltsm_vnc_encodings.cpp
     src/connector/ltsm_connector_vnc.cpp)
 
@@ -127,8 +128,10 @@ if(LTSM_WITH_SPICE)
 endif()
 
 target_sources(LTSM_connector PUBLIC ${LTSM_common})
-target_compile_options(LTSM_connector PUBLIC ${GNUTLS_DEFINITIONS})
+target_compile_options(LTSM_connector PUBLIC "-DLTSM_SOCKET_TLS")
+target_compile_options(LTSM_connector PUBLIC "-DLTSM_SOCKET_ZLIB")
 target_compile_options(LTSM_connector PUBLIC "-DLTSM_WITH_SDBUS")
+target_compile_options(LTSM_connector PUBLIC ${GNUTLS_DEFINITIONS})
 
 target_include_directories(LTSM_connector PUBLIC src/common)
 target_include_directories(LTSM_connector PUBLIC src/dbus-glue)
@@ -192,28 +195,55 @@ add_executable(LTSM_sessions
 target_link_libraries(LTSM_sessions Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-# LTSM x11vnc
-project(LTSM_x11vnc VERSION 20210805.1)
+if(LTSM_BUILD_X11VNC)
+    # LTSM x11vnc
+    project(LTSM_x11vnc VERSION 20210805.1)
 
-add_executable(LTSM_x11vnc
-    src/connector/ltsm_vnc_zlib.cpp
-    src/connector/ltsm_sockets.cpp
-    src/connector/ltsm_framebuffer.cpp
-    src/x11vnc/ltsm_vnc_encodings.cpp
-    src/x11vnc/ltsm_connector_vnc.cpp
-    src/x11vnc/ltsm_x11vnc.cpp)
+    add_executable(LTSM_x11vnc
+        src/x11vnc/ltsm_vnc_encodings.cpp
+        src/x11vnc/ltsm_connector_vnc.cpp
+        src/x11vnc/ltsm_x11vnc.cpp)
 
-target_sources(LTSM_x11vnc PUBLIC ${LTSM_common})
-target_compile_options(LTSM_x11vnc PUBLIC ${GNUTLS_DEFINITIONS})
+    target_sources(LTSM_x11vnc PUBLIC ${LTSM_common})
+    target_compile_options(LTSM_x11vnc PUBLIC "-DLTSM_SOCKET_TLS")
+    target_compile_options(LTSM_x11vnc PUBLIC "-DLTSM_SOCKET_ZLIB")
+    target_compile_options(LTSM_x11vnc PUBLIC ${GNUTLS_DEFINITIONS})
 
-target_include_directories(LTSM_x11vnc PUBLIC src/common)
-target_include_directories(LTSM_x11vnc PUBLIC ${GNUTLS_INCLUDE_DIR})
-target_include_directories(LTSM_x11vnc PUBLIC src/dbus-glue)
-target_include_directories(LTSM_x11vnc PUBLIC src/x11vnc)
-target_include_directories(LTSM_x11vnc PUBLIC src/connector)
+    target_include_directories(LTSM_x11vnc PUBLIC src/common)
+    target_include_directories(LTSM_x11vnc PUBLIC ${GNUTLS_INCLUDE_DIR})
+    target_include_directories(LTSM_x11vnc PUBLIC src/x11vnc)
+    target_include_directories(LTSM_x11vnc PUBLIC src/connector)
 
-target_link_libraries(LTSM_x11vnc LTSM_common)
-target_link_libraries(LTSM_x11vnc ${GNUTLS_LIBRARIES})
-target_link_libraries(LTSM_x11vnc z)
+    target_link_libraries(LTSM_x11vnc LTSM_common)
+    target_link_libraries(LTSM_x11vnc ${GNUTLS_LIBRARIES})
+    target_link_libraries(LTSM_x11vnc z)
 
-set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+if(LTSM_BUILD_VNC2IMAGE)
+    # LTSM vnc2image
+    project(LTSM_vnc2image VERSION 20210805.1)
+
+    add_executable(LTSM_vnc2image
+        src/vnc2image/ltsm_vnc_encodings.cpp
+        src/vnc2image/ltsm_connector_vnc.cpp
+        src/vnc2image/ltsm_vnc2image.cpp)
+
+    target_sources(LTSM_vnc2image PUBLIC ${LTSM_common})
+    target_compile_options(LTSM_vnc2image PUBLIC "-DLTSM_SOCKET_TLS")
+    target_compile_options(LTSM_vnc2image PUBLIC "-DLTSM_SOCKET_ZLIB")
+    target_compile_options(LTSM_vnc2image PUBLIC ${GNUTLS_DEFINITIONS})
+
+    target_include_directories(LTSM_vnc2image PUBLIC src/common)
+    target_include_directories(LTSM_vnc2image PUBLIC ${GNUTLS_INCLUDE_DIR})
+    target_include_directories(LTSM_vnc2image PUBLIC src/dbus-glue)
+    target_include_directories(LTSM_vnc2image PUBLIC src/vnc2image)
+    target_include_directories(LTSM_vnc2image PUBLIC src/connector)
+
+    target_link_libraries(LTSM_vnc2image LTSM_common)
+    target_link_libraries(LTSM_vnc2image ${GNUTLS_LIBRARIES})
+    target_link_libraries(LTSM_vnc2image z)
+
+    set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()

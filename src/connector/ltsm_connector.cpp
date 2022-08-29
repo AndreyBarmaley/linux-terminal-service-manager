@@ -243,11 +243,8 @@ namespace LTSM
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
 
-        if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&]()
-    {
-        return ! Tools::checkUnixSocket(socketPath);
-        }))
-        Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
+        if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
+            Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
 
         try
         {
@@ -309,7 +306,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::info("dbus signal: clear render primitives, display: %d", display);
+            Application::debug("dbus signal: clear render primitives, display: %d", display);
 
             for(auto & ptr : _renderPrimitives)
             {
@@ -333,7 +330,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::info("dbus signal: add fill rect, display: %d", display);
+            Application::debug("dbus signal: add fill rect, display: %d", display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             const int16_t rx = std::get<0>(rect);
             const int16_t ry = std::get<1>(rect);
@@ -347,7 +344,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::info("dbus signal: add render text, display: %d", display);
+            Application::debug("dbus signal: add render text, display: %d", display);
             const int16_t rx = std::get<0>(pos);
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
@@ -362,7 +359,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            std::thread([ = ]()
+            std::thread([=]()
             {
                 this->busConnectorAlive(display);
             }).detach();

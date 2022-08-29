@@ -5,6 +5,8 @@ target_sources(LTSM_common PUBLIC ltsm_json_wrapper.cpp)
 target_sources(LTSM_common PUBLIC ltsm_tools.cpp)
 target_sources(LTSM_common PUBLIC ltsm_streambuf.cpp)
 target_sources(LTSM_common PUBLIC ltsm_xcb_wrapper.cpp)
+target_sources(LTSM_common PUBLIC ltsm_sockets.cpp)
+target_sources(LTSM_common PUBLIC ltsm_framebuffer.cpp)
 
 if(LTSM_BUILD_XCB_ERRORS)
     target_sources(LTSM_common PUBLIC libxcb-errors/xcb_errors.c libxcb-errors/extensions.c)

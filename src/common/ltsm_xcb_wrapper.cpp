@@ -1689,7 +1689,7 @@ namespace LTSM
             width += 8 - alignW;
 
         auto screenSizes = getRandrScreenSizes();
-        auto its = std::find_if(screenSizes.begin(), screenSizes.end(), [ = ](auto & ss)
+        auto its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss)
         {
             return ss.width == width && ss.height == height;
         });
@@ -1727,7 +1727,7 @@ namespace LTSM
 
             // fixed size
             auto modes = getRandrModesInfo();
-            auto itm = std::find_if(modes.begin(), modes.end(), [ = ](auto & val)
+            auto itm = std::find_if(modes.begin(), modes.end(), [=](auto & val)
             {
                 return val.id == mode;
             });
@@ -1744,7 +1744,7 @@ namespace LTSM
             height = (*itm).height;
             // rescan info
             screenSizes = getRandrScreenSizes();
-            its = std::find_if(screenSizes.begin(), screenSizes.end(), [ = ](auto & ss)
+            its = std::find_if(screenSizes.begin(), screenSizes.end(), [=](auto & ss)
             {
                 return ss.width == width && ss.height == height;
             });

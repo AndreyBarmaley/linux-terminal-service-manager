@@ -534,16 +534,11 @@ namespace LTSM
 
         Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
         // init server format
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), _xcbDisplay->depth(), big_endian, true,
-                                   visual->red_mask, visual->green_mask, visual->blue_mask);
+        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [ = ]()
-    {
-        _conn->enterEventLoopAsync();
-            return ! this->helperStartedFlag;
-        }))
+                [=]() { _conn->enterEventLoopAsync(); return ! this->helperStartedFlag; }))
         {
             Application::error("connector starting: %s", "something went wrong...");
             return false;
@@ -561,7 +556,7 @@ namespace LTSM
 
             // wait client update canceled, 1000ms, 10 ms pause
             if(clientUpdatePartFlag)
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 10, [ = ]()
+                Tools::waitCallable<std::chrono::milliseconds>(1000, 10, [=]()
             {
                 return !!this->clientUpdatePartFlag;
             });

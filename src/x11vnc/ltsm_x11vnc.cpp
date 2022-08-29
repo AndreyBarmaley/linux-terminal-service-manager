@@ -53,8 +53,8 @@ namespace LTSM
         std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage]" << std::endl;
     }
 
-    /* Connector::Service */
-    Connector::Service::Service(int argc, const char** argv)
+    /* X11Vnc */
+    X11Vnc::X11Vnc(int argc, const char** argv)
         : Application("ltsm_x11vnc", argc, argv)
     {
         _config.addString("display", ":0");
@@ -173,7 +173,7 @@ namespace LTSM
         }
     }
 
-    int Connector::Service::startSocket(int port) const
+    int X11Vnc::startSocket(int port) const
     {
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
@@ -246,7 +246,7 @@ namespace LTSM
         return 0;
     }
 
-    int Connector::Service::startInetd(void) const
+    int X11Vnc::startInetd(void) const
     {
         int res = EXIT_FAILURE;
 
@@ -267,9 +267,9 @@ namespace LTSM
         return res;
     }
 
-    int Connector::Service::start(void)
+    int X11Vnc::start(void)
     {
-        Application::info("x11vnc version: %d", LTSM::service_version);
+        Application::info("x11vnc version: %d", LTSM_X11VNC_VERSION);
 
         if(_config.getBoolean("background") && fork())
             return 0;
@@ -330,7 +330,7 @@ int main(int argc, const char** argv)
 
     try
     {
-        LTSM::Connector::Service app(argc, argv);
+        LTSM::X11Vnc app(argc, argv);
         res = app.start();
     }
     catch(const std::exception & err)

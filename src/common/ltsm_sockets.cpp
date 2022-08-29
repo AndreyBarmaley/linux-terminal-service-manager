@@ -30,8 +30,10 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#ifdef LTSM_SOCKET_TLS
 #include "gnutls/gnutls.h"
 #include "gnutls/crypto.h"
+#endif
 
 #include <poll.h>
 #include <fcntl.h>
@@ -305,10 +307,12 @@ namespace LTSM
             close(sock);
     }
 
+#ifdef LTSM_SOCKET_TLS
     void SocketStream::setupTLS(gnutls_session_t sess) const
     {
         gnutls_transport_set_int(sess, sock);
     }
+#endif
 
     bool SocketStream::hasInput(void) const
     {
@@ -391,10 +395,12 @@ namespace LTSM
         }
     }
 
+#ifdef LTSM_SOCKET_TLS
     void InetStream::setupTLS(gnutls_session_t sess) const
     {
         gnutls_transport_set_int2(sess, fileno(fdin), fileno(fdout));
     }
+#endif
 
     bool InetStream::hasInput(void) const
     {
@@ -743,6 +749,7 @@ namespace LTSM
         return false;
     }
 
+#ifdef LTSM_SOCKET_TLS
     namespace TLS
     {
         void gnutls_log(int level, const char* str)
@@ -1191,5 +1198,183 @@ namespace LTSM
         }
 
     } // TLS
+#endif
 
+#ifdef LTSM_SOCKET_ZLIB
+    namespace ZLib
+    {
+        Context::Context()
+        {
+            zalloc = nullptr;
+            zfree = nullptr;
+            opaque = nullptr;
+            total_in = 0;
+            total_out = 0;
+            avail_in = 0;
+            next_in = nullptr;
+            avail_out = 0;
+            next_out = nullptr;
+            data_type = Z_BINARY;
+            buf.reserve(4 * 1024);
+        }
+
+        Context::~Context()
+        {
+            deflateEnd(this);
+        }
+
+        std::vector<uint8_t> Context::deflateFlush(bool finish)
+        {
+            next_in = buf.data();
+            avail_in = buf.size();
+            std::vector<uint8_t> zip(deflateBound(this, buf.size()));
+            next_out = zip.data();
+            avail_out = zip.size();
+            auto prev = total_out;
+            int ret = deflate(this, finish ? Z_FINISH : Z_SYNC_FLUSH);
+
+            if(ret < Z_OK)
+                throw std::runtime_error(Tools::StringFormat("%1: deflate failed, code: %2").arg(__FUNCTION__).arg(ret));
+
+            auto zipsz = total_out - prev;
+            zip.resize(zipsz);
+            buf.clear();
+            next_out = nullptr;
+            avail_out = 0;
+            return zip;
+        }
+
+        void Context::inflateFlush(const std::vector<uint8_t> & zip)
+        {
+            std::array<uint8_t, 1024> tmp;
+            next_in = (Bytef*) zip.data();
+            avail_in = zip.size();
+
+            do
+            {
+                next_out = tmp.data();
+                avail_out = tmp.size();
+                int ret = inflate(this, Z_NO_FLUSH);
+
+                if(ret < Z_OK)
+                    throw std::runtime_error(Tools::StringFormat("%1: inflate failed, code: %2").arg(__FUNCTION__).arg(ret));
+
+                buf.insert(buf.end(), tmp.begin(), std::next(tmp.begin(), (tmp.size() - avail_out)));
+            }
+            while(avail_in > 0);
+
+            next_in = nullptr;
+            avail_in = 0;
+            next_out = nullptr;
+            avail_out = 0;
+        }
+
+        /* Zlib::DeflateStream */
+        DeflateStream::DeflateStream()
+        {
+            auto ptr = new Context();
+            zlib.reset(ptr);
+            int ret = deflateInit2(ptr, Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+
+            if(ret < Z_OK)
+                throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
+        }
+
+        void DeflateStream::setLevel(size_t level) const
+        {
+            deflateParams(zlib.get(), 9 < level ? 9 : level, Z_DEFAULT_STRATEGY);
+        }
+
+        void DeflateStream::prepareSize(size_t len) const
+        {
+            if(len < zlib->buf.capacity()) zlib->buf.reserve(len);
+        }
+
+        std::vector<uint8_t> DeflateStream::syncFlush(void) const
+        {
+            return zlib->deflateFlush();
+        }
+
+        void DeflateStream::sendRaw(const void* ptr, size_t len)
+        {
+            auto buf2 = reinterpret_cast<const uint8_t*>(ptr);
+            zlib->buf.insert(zlib->buf.end(), buf2, buf2 + len);
+        }
+
+        void DeflateStream::recvRaw(void* ptr, size_t len) const
+        {
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+
+        bool DeflateStream::hasInput(void) const
+        {
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+
+        size_t DeflateStream::hasData(void) const
+        {
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+
+        uint8_t DeflateStream::peekInt8(void) const
+        {
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+
+        /* Zlib::InflateStream */
+        InflateStream::InflateStream(void)
+        {
+            auto ptr = new Context();
+            zlib.reset(ptr);
+            it = zlib->buf.begin();
+    
+            int ret = inflateInit2(ptr, MAX_WBITS);
+            if(ret < Z_OK)
+                throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
+        }
+    
+        InflateStream::~InflateStream()
+        {
+            inflateEnd(zlib.get());
+        }
+    
+        void InflateStream::appendData(const std::vector<uint8_t> & zip)
+        {
+            if(it < zlib->buf.end())
+                zlib->buf.erase(it, zlib->buf.end());
+            else
+                zlib->buf.clear();
+
+            zlib->inflateFlush(zip);
+            // fixed pos
+            it = zlib->buf.begin();
+        }
+
+        void InflateStream::recvRaw(void* ptr, size_t len) const
+        {
+            size_t total = std::distance(it, zlib->buf.end());
+
+            if(total < len)
+                throw std::runtime_error(Tools::StringFormat("%1: read bytes: %1, expected: %2, buf: %3").arg(total).arg(len).arg(zlib->buf.size()));
+
+            auto buf2 = reinterpret_cast<uint8_t*>(ptr);
+            while(len--) *buf2++ = *it++;
+        }
+
+        size_t InflateStream::hasData(void) const
+        {
+            return it < zlib->buf.end() ? std::distance(it, zlib->buf.end()) : 0;
+        }
+
+        bool InflateStream::hasInput(void) const
+        {
+            return it < zlib->buf.end();
+        }
+
+        void InflateStream::sendRaw(const void* ptr, size_t len)
+        {
+            throw std::runtime_error(Tools::StringFormat("%1: disabled").arg(__FUNCTION__));
+        }
+    } // ZLib
+#endif
 } // LTSM
