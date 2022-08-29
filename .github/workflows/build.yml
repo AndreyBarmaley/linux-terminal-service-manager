@@ -82,7 +82,8 @@ jobs:
           sudo sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' /etc/ltsm/config.json
           sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
           sudo openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
-          sudo chown ltsm-xvfb.root /etc/ltsm/server.key && chmod 640 /etc/ltsm/server.key
+          sudo chown ltsm-xvfb.root /etc/ltsm/server.key
+          sudo chmod 640 /etc/ltsm/server.key
           sudo chmod +x /etc/ltsm/xclients
           sudo mkdir -p /usr/libexec/ltsm
           sudo ln -s ${{github.workspace}}/LTSM_helper /usr/libexec/ltsm
@@ -95,7 +96,7 @@ jobs:
       - name: Run tests to generate coverage statistics
         run: |
           sudo ./LTSM_service --background
-          socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
+          sudo socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           # get vnc screenshot
           vncsnapshot 127.0.0.1:0 test.jpg
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
