@@ -89,8 +89,8 @@ jobs:
           sudo ln -s ${{github.workspace}}/LTSM_helper /usr/libexec/ltsm
           sudo ln -s ${{github.workspace}}/LTSM_connector /usr/local/sbin
           sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
-          sudo mkdir /run/dbus
-          sudo chown messagebus. /run/dbus
+          #sudo mkdir /run/dbus
+          #sudo chown messagebus. /run/dbus
           sudo /usr/bin/dbus-uuidgen --ensure
           sudo /usr/bin/dbus-daemon --fork --system
       - name: Run tests to generate coverage statistics
