@@ -69,18 +69,25 @@ jobs:
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
       - name: Prepare LTSM coverage tests
         run: |
+          echo "::group::scripts"
+          echo "groupadd ltsm-shm,ltsm-dbus,ltsm-auth"
           sudo groupadd -r ltsm-shm
           sudo groupadd -r ltsm-dbus
           sudo groupadd -r ltsm-auth
+          echo "useradd ltsm"
           sudo useradd -c "LTSM xvfb user" -d /var/lib/ltsm -g ltsm-shm -G ltsm-auth,ltsm-dbus -l -m -N -r -s /sbin/nologin ltsm-xvfb
+          echo "useradd demo"
           sudo useradd demo1 -p "$(openssl passwd -1 demo)"
+          echo "copy ltsm files"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
+          echo "fixed ltsm"
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
           sudo sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' /etc/ltsm/config.json
           sudo sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' /etc/ltsm/config.json
           sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
+          echo "generate certs"
           sudo openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
           sudo chown ltsm-xvfb.root /etc/ltsm/server.key
           sudo chmod 640 /etc/ltsm/server.key
@@ -88,19 +95,33 @@ jobs:
           sudo mkdir -p /usr/libexec/ltsm
           sudo ln -s ${{github.workspace}}/LTSM_helper /usr/libexec/ltsm
           sudo ln -s ${{github.workspace}}/LTSM_connector /usr/local/sbin
-          sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
+          #sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
           #sudo mkdir /run/dbus
           #sudo chown messagebus. /run/dbus
           sudo /usr/bin/dbus-uuidgen --ensure
-          sudo /usr/bin/dbus-daemon --fork --system
+          echo "::endgroup::"
       - name: Run tests to generate coverage statistics
+        env:
+          PORT: 5900
+          SOCAT_DEFAULT_LISTEN_IP: 127.0.0.1
+        shell: bash
         run: |
+          echo "::group::scripts"
+          echo "run dbus service"
+          sudo /usr/bin/dbus-daemon --fork --system
+          echo "run ltsm service"
           sudo ./LTSM_service --background
+          echo "tail log"
+          tail /var/log/syslog
+          echo "run socat connector"
           sudo socat TCP4-LISTEN:5900,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
-          # get vnc screenshot
+          echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:0 test.jpg
+          echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
+          echo "wait"
           sleep 5
+          echo "::endgroup::"
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube > coverage.xml
