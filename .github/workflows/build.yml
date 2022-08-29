@@ -101,7 +101,7 @@ jobs:
           echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:0 test.jpg
           echo "tail log"
-          tail /var/log/syslog
+          sudo tail /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
