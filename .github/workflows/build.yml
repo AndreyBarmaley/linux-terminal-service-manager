@@ -71,21 +71,21 @@ jobs:
         run: |
           echo "::group::scripts"
           echo "copy ltsm files"
+          chmod +x ${{github.workspace}}/etc/ltsm/xclients
+          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-shm|root|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-auth|root|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|ltsm-xvfb|root|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/config.json
+          echo "sudo actions"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
-          echo "fixed ltsm"
-          sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
-          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' /etc/ltsm/config.json
-          sed -i -e 's|ltsm-shm|root|' /etc/ltsm/config.json
-          sed -i -e 's|ltsm-auth|root|' /etc/ltsm/config.json
-          sed -i -e 's|ltsm-xvfb|root|' /etc/ltsm/config.json
-          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' /etc/ltsm/config.json
-          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" /etc/ltsm/config.json
-          sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
+          sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
+          sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
           echo "generate certs"
-          openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
-          chmod +x /etc/ltsm/xclients
+          sudo openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout /etc/ltsm/server.key -out /etc/ltsm/server.crt
           echo "::endgroup::"
       - name: Run tests to generate coverage statistics
         env:
