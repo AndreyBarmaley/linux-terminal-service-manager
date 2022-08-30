@@ -101,14 +101,16 @@ jobs:
           ./LTSM_test_json --config ./src/tests/json/test.json
           echo "::endgroup::"
           echo "::group::test services"
-          echo "run system services"
-          sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
-          sudo /usr/bin/dbus-uuidgen --ensure
-          sudo /usr/bin/dbus-daemon --fork --system
+          #echo "run system services"
+          #sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
+          #sudo /usr/bin/dbus-uuidgen --ensure
+          #sudo /usr/bin/dbus-daemon --fork --system
           echo "run ltsm service"
           sudo ./LTSM_service &
+          sleep 5
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
+          sleep 5
           echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:7 test.jpg
           echo "system log"
