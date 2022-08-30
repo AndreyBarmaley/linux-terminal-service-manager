@@ -15,6 +15,7 @@ option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
+    set(LTSM_BUILD_XKB_COMMON ON CACHE BOOL "usage xkb layouts" FORCE)
     set(LTSM_BUILD_TESTS ON CACHE BOOL "build test utilities" FORCE)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
     #set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
