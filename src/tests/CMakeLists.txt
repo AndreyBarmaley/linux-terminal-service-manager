@@ -1,4 +1,4 @@
-foreach(DIR IN ITEMS json streambuf unixsocket framebuf xcb)
+foreach(DIR IN ITEMS json streambuf unixsocket framebuf)
     add_executable(LTSM_test_${DIR} ${DIR}/main.cpp)
 
     target_compile_options(LTSM_test_${DIR} PRIVATE ${EXTRA_CFLAGS})
