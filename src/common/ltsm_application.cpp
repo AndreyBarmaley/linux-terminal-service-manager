@@ -22,9 +22,7 @@
 
 #include <unistd.h>
 
-#include <ctime>
 #include <cstring>
-#include <cstdlib>
 #include <iostream>
 #include <filesystem>
 
@@ -61,12 +59,18 @@ namespace LTSM
     Application::Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
     {
         ::openlog(_ident, 0, _facility);
-        std::srand(std::time(0));
     }
 
     Application::~Application()
     {
         closelog();
+    }
+
+    void Application::reopenSyslog(int facility)
+    {
+        closelog();
+        ::openlog(_ident, 0, facility);
+        _facility = facility;
     }
 
     ApplicationJsonConfig::ApplicationJsonConfig(const char* ident, int argc, const char** argv)
@@ -85,16 +89,13 @@ namespace LTSM
 
         if(confPath.empty())
         {
-            const char* env = std::getenv("LTSM_CONFIG");
-
-            if(env) confPath.assign(env);
+            if(const char* env = std::getenv("LTSM_CONFIG"))
+                confPath.assign(env);
         }
 
         if(confPath.empty())
         {
-            for(auto path :
-                { "config.json", "/etc/ltsm/config.json"
-                })
+            for(auto path : { "config.json", "/etc/ltsm/config.json" })
             {
                 auto st = std::filesystem::status(path);
 
@@ -172,10 +173,6 @@ namespace LTSM
         }
 
         if(0 < facility)
-        {
-            closelog();
-            ::openlog(_ident, 0, facility);
-            _facility = facility;
-        }
+            reopenSyslog(facility);
     }
 }

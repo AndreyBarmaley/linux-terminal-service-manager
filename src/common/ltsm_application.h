@@ -38,13 +38,16 @@ namespace LTSM
 
     class Application
     {
+        int		_argc = 0;
+        const char**	_argv = nullptr;
+        const char*     _ident = nullptr;
+	int		_facility = LOG_USER;
+
     protected:
         static std::mutex _logging;
         static DebugLevel _debug;
-        int		_argc;
-        const char**	_argv;
-        const char*     _ident;
-	int		_facility;
+
+        void            reopenSyslog(int facility);
 
     public:
         Application(const char* ident, int argc, const char** argv);

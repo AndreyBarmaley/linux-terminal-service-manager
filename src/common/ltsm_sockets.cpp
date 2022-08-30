@@ -779,7 +779,7 @@ namespace LTSM
             gnutls_global_deinit();
         }
 
-        bool BaseContext::initSession(const std::string & priority, int mode)
+        bool BaseContext::initSession(std::string_view priority, int mode)
         {
             int ret = gnutls_init(& session, mode);
 
@@ -793,12 +793,12 @@ namespace LTSM
                 ret = gnutls_set_default_priority(session);
             else
             {
-                ret = gnutls_priority_set_direct(session, priority.c_str(), nullptr);
+                ret = gnutls_priority_set_direct(session, priority.data(), nullptr);
 
                 if(ret != GNUTLS_E_SUCCESS)
                 {
                     const char* compat = "NORMAL:+ANON-ECDH:+ANON-DH";
-                    Application::error("gnutls_priority_set_direct error: %s, priority: %s", gnutls_strerror(ret), priority.c_str());
+                    Application::error("gnutls_priority_set_direct error: %s, priority: %s", gnutls_strerror(ret), priority.data());
                     Application::info("reuse compat priority: %s", compat);
                     ret = gnutls_priority_set_direct(session, compat, nullptr);
                 }
@@ -836,7 +836,7 @@ namespace LTSM
                 gnutls_anon_free_server_credentials(cred);
         }
 
-        bool AnonCredentials::initSession(const std::string & priority, int mode)
+        bool AnonCredentials::initSession(std::string_view priority, int mode)
         {
             Application::info("gnutls init session: %s", "AnonTLS");
 
@@ -872,7 +872,7 @@ namespace LTSM
                 gnutls_certificate_free_credentials(cred);
         }
 
-        bool X509Credentials::initSession(const std::string & priority, int mode)
+        bool X509Credentials::initSession(std::string_view priority, int mode)
         {
             if(caFile.empty() || ! std::filesystem::exists(caFile))
             {
@@ -971,12 +971,12 @@ namespace LTSM
                 gnutls_bye(tls->session, GNUTLS_SHUT_WR);
         }
 
-        bool Stream::initAnonHandshake(const std::string & priority, int debug)
+        bool Stream::initAnonHandshake(std::string_view priority, bool srvmode, int debug)
         {
             int ret = 0;
             tls.reset(new AnonCredentials(debug));
 
-            if(! tls->initSession(priority, GNUTLS_SERVER))
+            if(! tls->initSession(priority, srvmode ? GNUTLS_SERVER : GNUTLS_CLIENT))
             {
                 tls.reset();
                 return false;
@@ -1000,12 +1000,12 @@ namespace LTSM
             return true;
         }
 
-        bool Stream::initX509Handshake(const std::string & priority, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
+        bool Stream::initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
         {
             int ret = 0;
             tls.reset(new X509Credentials(caFile, certFile, keyFile, crlFile, debug));
 
-            if(! tls->initSession(priority, GNUTLS_SERVER))
+            if(! tls->initSession(priority, srvmode ? GNUTLS_SERVER : GNUTLS_CLIENT))
             {
                 tls.reset();
                 return false;
@@ -1369,6 +1369,11 @@ namespace LTSM
         bool InflateStream::hasInput(void) const
         {
             return it < zlib->buf.end();
+        }
+
+        uint8_t InflateStream::peekInt8(void) const
+        {
+            return *it;
         }
 
         void InflateStream::sendRaw(const void* ptr, size_t len)

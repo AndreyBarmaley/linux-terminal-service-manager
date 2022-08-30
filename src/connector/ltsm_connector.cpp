@@ -392,9 +392,9 @@ namespace LTSM
                         if(XCB::Region::intersection(fb.region(), prim->toRegion(), & section))
                         {
                             if(prim->fill)
-                                fb.fillColor(section - fb.region().topLeft(), prim->color);
+                                fb.fillColor(section - fb.region().topLeft(), Color(prim->color));
                             else
-                                fb.drawRect(section - fb.region().topLeft(), prim->color);
+                                fb.drawRect(section - fb.region().topLeft(), Color(prim->color));
                         }
                     }
 
@@ -406,7 +406,7 @@ namespace LTSM
                         const XCB::Region reg = prim->toRegion();
 
                         if(XCB::Region::intersection(fb.region(), reg, nullptr))
-                            fb.renderText(prim->text, prim->color, reg.topLeft() - fb.region().topLeft());
+                            fb.renderText(prim->text, Color(prim->color), reg.topLeft() - fb.region().topLeft());
                     }
 
                     break;

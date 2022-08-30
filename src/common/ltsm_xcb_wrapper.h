@@ -45,6 +45,8 @@
 #include "xkbcommon/xkbcommon-x11.h"
 #endif
 
+#include "ltsm_tools.h"
+
 namespace LTSM
 {
     namespace XCB

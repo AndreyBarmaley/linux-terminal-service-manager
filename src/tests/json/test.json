@@ -1,0 +1,16 @@
+{
+    "test:array": [ 1, 2, 3 ,4 ,5 ,6 ,7 ,8 ,9 ],
+    "test:object": { 
+        "test:int": 111,
+        "test:string": "test test test",
+        "test:false": false,
+        "test:double": 555.67890,
+        "test:arr": [ false, 1, 2, 3, 4, "5", 6, 7, "8", 9 ],
+        "test:obj": { "posx": 11, "posy": 22 }
+    },
+    "test:string": "xyz %{display}, $var1, ${var2}, '123', \\., \"long string\", the end",
+    "test:int": 1234567,
+    "test:double": 1.234567,
+    "test:true": true,
+    "test:false": false
+}

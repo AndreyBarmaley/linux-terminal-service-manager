@@ -37,7 +37,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20220828
+#define JSON_WRAPPER 20220830
 
 namespace LTSM
 {
@@ -62,6 +62,7 @@ namespace LTSM
     };
 
     enum class JsonType { Null, Integer, Double, String, Boolean, Object, Array };
+    const char* jsonTypeString(const JsonType &);
 
     class JsonContent;
     class JsonObject;
@@ -425,8 +426,11 @@ namespace LTSM
     protected:
         std::string		stringToken(const JsmnToken &) const;
         jsmntok_t*		toJsmnTok(void);
-        std::pair<JsonValue*, int>
-    				getValue(const const_iterator &, JsonContainer* cont) const;
+
+        std::pair<JsonValuePtr, int> getValueArray(const const_iterator &, JsonContainer* cont) const;
+        std::pair<JsonValuePtr, int> getValueObject(const const_iterator &, JsonContainer* cont) const;
+        std::pair<JsonValuePtr, int> getValuePrimitive(const const_iterator &, JsonContainer* cont) const;
+        std::pair<JsonValuePtr, int> getValue(const const_iterator &, JsonContainer* cont) const;
 
     public:
         JsonContent() {}

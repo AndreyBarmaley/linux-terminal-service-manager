@@ -44,7 +44,7 @@ namespace LTSM
         Color(uint8_t cr, uint8_t cg, uint8_t cb, uint8_t ca = 0) : r(cr), g(cg), b(cb), x(ca) {}
 
 #ifdef LTSM_WITH_SDBUS
-        Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple) : x(0)
+        explicit Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple) : x(0)
         {
             std::tie(r, g, b) = tuple;
         }
@@ -96,7 +96,7 @@ namespace LTSM
 
         uint8_t             bitsPerPixel = 0;
 
-        PixelFormat() {}
+        PixelFormat() = default;
         PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask);
         PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift);
 
@@ -133,6 +133,9 @@ namespace LTSM
         fbinfo_t(const XCB::Size &, const PixelFormat & fmt, uint32_t pitch2 = 0);
         fbinfo_t(uint8_t* ptr, const XCB::Size &, const PixelFormat & fmt, uint32_t pitch2 = 0);
         ~fbinfo_t();
+
+        fbinfo_t(const fbinfo_t &) = delete;
+        fbinfo_t & operator=(const fbinfo_t &) = delete;
     };
 
     struct PixelLength : std::pair<uint32_t /* pixel */, uint32_t /* length */>
@@ -145,7 +148,6 @@ namespace LTSM
 
     class FrameBuffer
     {
-    protected:
         std::shared_ptr<fbinfo_t> fbptr;
 	XCB::Region	fbreg;
         bool            owner;

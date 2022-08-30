@@ -45,7 +45,7 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220828
+#define LTSM_SOCKETS_VERSION 20220830
 
 namespace LTSM
 {
@@ -228,7 +228,7 @@ namespace LTSM
             virtual ~BaseContext();
 
             std::string         sessionDescription(void) const;
-            virtual bool        initSession(const std::string & priority, int mode = GNUTLS_SERVER);
+            virtual bool        initSession(std::string_view priority, int mode = GNUTLS_SERVER);
         };
 
         /// @brief: tls stream
@@ -244,8 +244,8 @@ namespace LTSM
             Stream(const NetworkStream*);
             ~Stream();
 
-            bool                initAnonHandshake(const std::string & priority, int debug);
-            bool                initX509Handshake(const std::string & priority, const std::string & caFile, const std::string & certFile,
+            bool                initAnonHandshake(std::string_view priority, bool srvmode, int debug);
+            bool                initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile,
                                                         const std::string & keyFile, const std::string & crlFile, int debug);
 
             bool                hasInput(void) const override;
@@ -267,7 +267,7 @@ namespace LTSM
             AnonCredentials(int debug = 0) : BaseContext(debug), cred(nullptr) {}
             ~AnonCredentials();
 
-            bool                initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
+            bool                initSession(std::string_view priority, int mode = GNUTLS_SERVER) override;
         };
 
         struct X509Credentials : BaseContext
@@ -279,7 +279,7 @@ namespace LTSM
                 : BaseContext(debug), cred(nullptr), caFile(ca), certFile(cert), keyFile(key), crlFile(crl) {}
             ~X509Credentials();
 
-            bool                initSession(const std::string & priority, int mode = GNUTLS_SERVER) override;
+            bool                initSession(std::string_view priority, int mode = GNUTLS_SERVER) override;
         };
     } // TLS
 #endif // LTSM_SOCKET_TLS
@@ -336,6 +336,7 @@ namespace LTSM
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
             void                recvRaw(void*, size_t) const override;
+            uint8_t             peekInt8(void) const override;
 
         private:
             void                sendRaw(const void*, size_t) override;

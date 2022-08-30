@@ -224,7 +224,7 @@ namespace LTSM
         // init hasdshake
         tls.reset(new TLS::Stream(socket.get()));
 
-        if(tls->initAnonHandshake(tlsPriority, tlsDebug))
+        if(tls->initAnonHandshake(tlsPriority, true /* server mode */, tlsDebug))
         {
             streamIn = streamOut = tls.get();
             return noAuth ? true : clientAuthVnc();

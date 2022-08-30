@@ -20,6 +20,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <tuple>
 #include <cctype>
 #include <sstream>
 #include <fstream>
@@ -106,6 +107,21 @@ namespace LTSM
                 break;
         }
 
+        return "unknown";
+    }
+
+    const char* jsonTypeString(const JsonType & type)
+    {
+        switch(type)
+        {
+            case JsonType::Null: return "null";
+            case JsonType::Integer: return "integer";
+            case JsonType::Double: return "double";
+            case JsonType::String: return "string";
+            case JsonType::Boolean: return "boolean";
+            case JsonType::Object: return "object";
+            case JsonType::Array: return "array";
+        }
         return "unknown";
     }
 
@@ -448,41 +464,37 @@ namespace LTSM
 
     void JsonValuePtr::assign(const JsonValuePtr & v)
     {
-        JsonValue* val = nullptr;
-
         switch(v->getType())
         {
             default:
             case JsonType::Null:
-                val = new JsonNull();
+                reset(new JsonNull());
                 break;
 
             case JsonType::Integer:
-                val = new JsonInteger(*static_cast<JsonInteger*>(v.get()));
+                reset(new JsonInteger(*static_cast<JsonInteger*>(v.get())));
                 break;
 
             case JsonType::Boolean:
-                val = new JsonBoolean(*static_cast<JsonBoolean*>(v.get()));
+                reset(new JsonBoolean(*static_cast<JsonBoolean*>(v.get())));
                 break;
 
             case JsonType::Double:
-                val = new JsonDouble(*static_cast<JsonDouble*>(v.get()));
+                reset(new JsonDouble(*static_cast<JsonDouble*>(v.get())));
                 break;
 
             case JsonType::String:
-                val = new JsonString(*static_cast<JsonString*>(v.get()));
+                reset(new JsonString(*static_cast<JsonString*>(v.get())));
                 break;
 
             case JsonType::Object:
-                val = new JsonObject(*static_cast<JsonObject*>(v.get()));
+                reset(new JsonObject(*static_cast<JsonObject*>(v.get())));
                 break;
 
             case JsonType::Array:
-                val = new JsonArray(*static_cast<JsonArray*>(v.get()));
+                reset(new JsonArray(*static_cast<JsonArray*>(v.get())));
                 break;
         }
-
-        reset(val);
     }
 
     /* JsonObject */
@@ -571,7 +583,7 @@ namespace LTSM
     bool JsonObject::isNull(std::string_view key) const
     {
         const JsonValue* jv = getValue(key);
-        return jv && jv->isNull();
+        return !jv || jv->isNull();
     }
 
     bool JsonObject::isBoolean(std::string_view key) const
@@ -1017,111 +1029,114 @@ namespace LTSM
         return isValid() && front().isObject();
     }
 
-    std::pair<JsonValue*, int>
+    std::pair<JsonValuePtr, int>
+    JsonContent::getValueArray(const const_iterator & it, JsonContainer* cont) const
+    {
+        int counts = (*it).counts();
+        int skip = 1;
+        auto itval = it + skip;
+        JsonArray* arr = cont ? static_cast<JsonArray*>(cont) : new JsonArray();
+
+        while(counts-- && itval != end())
+        {
+            auto [ptr, count] = getValue(itval, nullptr);
+
+            if(ptr)
+                arr->content.emplace_back(std::move(ptr));
+
+            skip += count;
+            itval = it + skip;
+        }
+
+        return std::make_pair(JsonValuePtr(cont ? nullptr : arr), skip);
+    }
+
+    std::pair<JsonValuePtr, int>
+    JsonContent::getValueObject(const const_iterator & it, JsonContainer* cont) const
+    {
+        int counts = (*it).counts();
+        int skip = 1;
+        auto itkey = it + skip;
+        auto itval = itkey + 1;
+        JsonObject* obj = cont ? static_cast<JsonObject*>(cont) : new JsonObject();
+
+        while(counts-- && itval != end())
+        {
+            if(!(*itkey).isKey())
+            {
+                auto str = stringToken(*itkey);
+                Application::error("not key, index: %d, `%s'", std::distance(begin(), itkey), str.c_str());
+            }
+
+            auto key = Tools::unescaped(stringToken(*itkey));
+            auto [ptr, count] = getValue(itval, nullptr);
+
+            if(ptr)
+                obj->content.emplace(key, std::move(ptr));
+
+            skip += 1 + count;
+            itkey = it + skip;
+            itval = itkey + 1;
+        }
+
+        return std::make_pair(JsonValuePtr(cont ? nullptr : obj), skip);
+    }
+
+    std::pair<JsonValuePtr, int>
+    JsonContent::getValuePrimitive(const const_iterator & it, JsonContainer* cont) const
+    {
+        auto val = stringToken(*it);
+
+        if(! (*it).isValue())
+            Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
+
+        size_t dotpos = val.find(".");
+
+        try
+        {
+            if(std::string::npos != dotpos)
+            {
+                double vald = std::stod(val);
+                return std::make_pair(JsonValuePtr(vald), 1);
+            }
+            else
+            {
+                int vali = std::stoi(val, nullptr, 0);
+                return std::make_pair(JsonValuePtr(vali), 1);
+            }
+        }
+        catch(const std::invalid_argument &)
+        {
+            if(Tools::lower(val).compare(0, 5, "false") == 0)
+                return std::make_pair(JsonValuePtr(false), 1);
+
+            if(Tools::lower(val).compare(0, 4, "true") == 0)
+                return std::make_pair(JsonValuePtr(true), 1);
+        }
+
+        return std::make_pair(JsonValuePtr(), 1);
+    }
+
+    std::pair<JsonValuePtr, int>
     JsonContent::getValue(const const_iterator & it, JsonContainer* cont) const
     {
         const JsmnToken & tok = *it;
 
         if(tok.isArray())
-        {
-            int counts = tok.counts();
-            int skip = 1;
-            auto itval = it + skip;
-            JsonArray* arr = cont ? static_cast<JsonArray*>(cont) : new JsonArray();
-
-            while(counts-- && itval != end())
-            {
-                auto valp = getValue(itval, nullptr);
-
-                if(valp.first)
-                    arr->content.emplace_back(valp.first);
-
-                skip += valp.second;
-                itval = it + skip;
-            }
-
-            return std::make_pair(arr, skip);
-        }
+            return getValueArray(it, cont);
 
         if(tok.isObject())
-        {
-            int counts = tok.counts();
-            int skip = 1;
-            auto itkey = it + skip;
-            auto itval = itkey + 1;
-            JsonObject* obj = cont ? static_cast<JsonObject*>(cont) : new JsonObject();
-
-            while(counts-- && itval != end())
-            {
-                if(!(*itkey).isKey())
-                {
-                    auto str = stringToken(*itkey);
-                    Application::error("not key, index: %d, `%s'", std::distance(begin(), itkey), str.c_str());
-                }
-
-                auto key = Tools::unescaped(stringToken(*itkey));
-                auto valp = getValue(itval, nullptr);
-
-                if(valp.first)
-                    obj->content.emplace(key, valp.first);
-
-                skip += 1 + valp.second;
-                itkey = it + skip;
-                itval = itkey + 1;
-            }
-
-            return std::make_pair(obj, skip);
-        }
-
-        JsonValue* res = nullptr;
-        int skip = 0;
+            return getValueObject(it, cont);
 
         if(tok.isPrimitive())
-        {
-            auto val = stringToken(tok);
+            return getValuePrimitive(it, cont);
+    
+        auto val = stringToken(tok);
 
-            if(!(*it).isValue())
-                Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
+        if(! tok.isValue())
+            Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
 
-            size_t dotpos = val.find(".");
-
-            try
-            {
-                if(std::string::npos != dotpos)
-                {
-                    double vald = std::stod(val);
-                    res = new JsonDouble(vald);
-                }
-                else
-                {
-                    int vali = std::stoi(val, nullptr, 0);
-                    res = new JsonInteger(vali);
-                }
-            }
-            catch(const std::invalid_argument &)
-            {
-                if(Tools::lower(val).compare(0, 5, "false") == 0)
-                    res = new JsonBoolean(false);
-                else if(Tools::lower(val).compare(0, 4, "true") == 0)
-                    res = new JsonBoolean(true);
-                else
-                    res = new JsonNull();
-            }
-
-            skip = 1;
-        }
-        else
-        {
-            auto val = stringToken(tok);
-
-            if(!(*it).isValue())
-                Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
-
-            res = new JsonString(Tools::unescaped(val));
-            skip = 1;
-        }
-
-        return std::make_pair(res, skip);
+        return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
     }
 
     JsonObject JsonContent::toObject(void) const
@@ -1129,11 +1144,7 @@ namespace LTSM
         JsonObject res;
 
         if(isObject())
-        {
-            auto valp = getValue(begin(), & res);
-
-            if(valp.first && valp.first != & res) delete valp.first;
-        }
+            getValue(begin(), & res);
 
         return res;
     }
@@ -1143,11 +1154,7 @@ namespace LTSM
         JsonArray res;
 
         if(isArray())
-        {
-            auto valp = getValue(begin(), & res);
-
-            if(valp.first && valp.first != & res) delete valp.first;
-        }
+            getValue(begin(), & res);
 
         return res;
     }

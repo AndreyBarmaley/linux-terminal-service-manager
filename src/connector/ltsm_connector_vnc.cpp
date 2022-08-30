@@ -267,8 +267,8 @@ namespace LTSM
         // init hasdshake
         tls.reset(new TLS::Stream(socket.get()));
         bool tlsInitHandshake = x509Mode ?
-                                tls->initX509Handshake(tlsPriority, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
-                                tls->initAnonHandshake(tlsPriority, tlsDebug);
+                                tls->initX509Handshake(tlsPriority, true /* server mode */, tlsCAFile, tlsCertFile, tlsKeyFile, tlsCRLFile, tlsDebug) :
+                                tls->initAnonHandshake(tlsPriority, true /* server mode */, tlsDebug);
 
         if(tlsInitHandshake)
             streamIn = streamOut = tls.get();
