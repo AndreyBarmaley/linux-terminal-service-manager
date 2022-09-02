@@ -729,6 +729,11 @@ namespace LTSM
         addValue<JsonObject>(key, val);
     }
 
+    void JsonObject::swap(JsonObject & jo)
+    {
+        content.swap(jo.content);
+    }
+
     void JsonObject::join(const JsonObject & jo)
     {
         for(auto & pair : jo.content)
@@ -909,6 +914,11 @@ namespace LTSM
     void JsonArray::addObject(const JsonObject & val)
     {
         content.emplace_back(val);
+    }
+
+    void JsonArray::swap(JsonArray & ja)
+    {
+        content.swap(ja.content);
     }
 
     void JsonArray::join(const JsonArray & ja)

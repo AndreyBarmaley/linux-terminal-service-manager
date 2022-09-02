@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <thread>
 #include <chrono>
+
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -40,9 +41,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_x11vnc.h"
-#include "ltsm_connector_vnc.h"
-
-using namespace std::chrono_literals;
+#include "ltsm_connector_x11vnc.h"
 
 namespace LTSM
 {
@@ -223,7 +222,7 @@ namespace LTSM
 
                 try
                 {
-                    auto connector = std::make_unique<Connector::VNC>(sock, _config);
+                    auto connector = std::make_unique<Connector::X11VNC>(sock, _config);
                     res = connector->communication();
                 }
                 catch(const std::exception & err)
@@ -252,7 +251,7 @@ namespace LTSM
 
         try
         {
-            auto connector = std::make_unique<Connector::VNC>(-1, _config);
+            auto connector = std::make_unique<Connector::X11VNC>(-1, _config);
             res = connector->communication();
         }
         catch(const std::exception & err)

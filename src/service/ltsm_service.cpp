@@ -22,6 +22,7 @@
 
 #include <pwd.h>
 #include <grp.h>
+#include <poll.h>
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
@@ -30,6 +31,8 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/inotify.h>
 
 #include <cctype>
 #include <chrono>
@@ -191,40 +194,142 @@ namespace LTSM
         return res;
     }
 
+    int Manager::Object::getFreeDisplay(void) const
+    {
+        int min = _config->getInteger("display:min", 55);
+        int max = _config->getInteger("display:max", 99);
+
+        if(max < min) std::swap(max, min);
+
+        std::vector<int> ranges(max - min, 0);
+        std::iota(ranges.begin(), ranges.end(), min);
+        auto it = std::find_if(ranges.begin(), ranges.end(), [&](auto display)
+        {
+            return ! checkXvfbLocking(display) && ! checkXvfbSocket(display);
+        });
+        return it != ranges.end() ? *it : -1;
+    }
+
+    std::tuple<int, int, std::filesystem::path, std::string> Manager::getUserInfo(std::string_view user)
+    {
+        if(user.size())
+        {
+            struct passwd* st = getpwnam(user.data());
+
+            if(st)
+                return std::make_tuple<int, int, std::filesystem::path, std::string>(st->pw_uid, st->pw_gid, st->pw_dir, st->pw_shell);
+
+            Application::error("getpwnam failed, user: %s, error: %s", user.data(), strerror(errno));
+        }
+
+        return std::make_tuple<int, int, std::string, std::string>(-1, -1, "", "");
+    }
+
+    int Manager::getGroupGid(std::string_view group)
+    {
+        if(group.size())
+        {
+            struct group* group_st = getgrnam(group.data());
+
+            if(group_st)
+                return group_st->gr_gid;
+
+            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
+        }
+
+        return -1;
+    }
+
+    std::list<std::string> Manager::getGroupMembers(std::string_view group)
+    {
+        std::list<std::string> res;
+        struct group* group_st = getgrnam(group.data());
+
+        if(! group_st)
+        {
+            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
+            return res;
+        }
+
+        if(group_st->gr_mem)
+        {
+            while(const char* memb =  *(group_st->gr_mem))
+            {
+                res.emplace_back(memb);
+                group_st->gr_mem++;
+            }
+        }
+
+        return res;
+    }
+
+    std::list<std::string> Manager::getSystemUsersRange(int uidMin, int uidMax)
+    {
+        std::list<std::string> logins;
+        setpwent();
+
+        if(uidMin > uidMax)
+            std::swap(uidMin, uidMax);
+
+        while(struct passwd* st = getpwent())
+        {
+            if((uidMin <= 0 || uidMin <= st->pw_uid) && (uidMax <= 0 || st->pw_uid <= uidMax))
+                logins.emplace_back(st->pw_name);
+        }
+
+        endpwent();
+        return logins;
+    }
+
+    void Manager::closefds(void)
+    {
+        long fdlimit = sysconf(_SC_OPEN_MAX);
+
+        for(int fd = STDERR_FILENO + 1; fd < fdlimit; fd++)
+            close(fd);
+    }
+
+    bool Manager::checkFileReadable(const std::filesystem::path & file)
+    {
+        auto st = std::filesystem::status(file);
+        return std::filesystem::file_type::not_found != st.type() &&
+               (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
+    }
+
+    void Manager::setFileOwner(const std::filesystem::path & file, int uid, int gid)
+    {
+        if(0 != chown(file.c_str(), uid, gid))
+            Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
+    }
+
+    bool Manager::runSystemScript(int display, const std::string & user, const std::string & cmd)
+    {
+        if(cmd.empty())
+            return false;
+
+        if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20))))
+        {
+            Application::warning("command not found: `%s'", cmd.c_str());
+            return false;
+        }
+
+        auto str = Tools::replace(cmd, "%{display}", display);
+        str = Tools::replace(str, "%{user}", user);
+        std::thread([str = std::move(str), screen = display]()
+        {
+            int ret = std::system(str.c_str());
+            Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
+        }).detach();
+        return true;
+    }
+
     /* Manager::Object */
     Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, const Application & app)
         : AdaptorInterfaces(conn, LTSM::dbus_object_path), _app(& app), _config(& jo)
     {
-        _loginFailuresConf = _config->getInteger("login:failures_count", 0);
-        _helperIdleTimeout = _config->getInteger("helper:idletimeout", 0);
-        _helperAutoComplete = _config->getBoolean("helper:autocomplete", false);
-        _helperAutoCompeteMinUid = _config->getInteger("autocomplete:min", 0);
-        _helperAutoCompeteMaxUid = _config->getInteger("autocomplete:max", 0);
-        _helperAccessUsersList = _config->getStdVector<std::string>("helper:accesslist");
-        _helperTitle = _config->getString("helper:title", "X11 Remote Desktop Service");
-        _helperDateFormat = _config->getString("helper:dateformat");
-
-        if(0 > _loginFailuresConf) _loginFailuresConf = 0;
-
-        if(0 > _helperIdleTimeout) _helperIdleTimeout = 0;
-
-        if(0 > _helperAutoCompeteMinUid) _helperAutoCompeteMinUid = 0;
-
-        if(0 > _helperAutoCompeteMaxUid) _helperAutoCompeteMaxUid = 0;
-
-        auto policy = _config->getString("session:policy");
-
-        if(Tools::lower(policy) == "authtake")
-            _sessionPolicy = SessionPolicy::AuthTake;
-        else if(Tools::lower(policy) == "authshare")
-            _sessionPolicy = SessionPolicy::AuthShare;
-
-        auto itend = std::remove_if(_helperAccessUsersList.begin(), _helperAccessUsersList.end(), [](auto & str)
-        {
-            return str.empty();
-        });
-        _helperAccessUsersList.erase(itend, _helperAccessUsersList.end());
+        // registry
         registerAdaptor();
+
         // check sessions timepoint limit
         timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [this]()
         {
@@ -252,6 +357,11 @@ namespace LTSM
     bool Manager::Object::isRunning(void) const
     {
         return _running;
+    }
+
+    void Manager::Object::shutdown(void)
+    {
+        busShutdownService();
     }
 
     void Manager::Object::openlog(void) const
@@ -417,21 +527,6 @@ namespace LTSM
         return true;
     }
 
-    void Manager::Object::closefds(void) const
-    {
-        long fdlimit = sysconf(_SC_OPEN_MAX);
-
-        for(int fd = STDERR_FILENO + 1; fd < fdlimit; fd++)
-            close(fd);
-    }
-
-    bool Manager::Object::checkFileReadable(const std::filesystem::path & file) const
-    {
-        auto st = std::filesystem::status(file);
-        return std::filesystem::file_type::not_found != st.type() &&
-               (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
-    }
-
     bool Manager::Object::checkXvfbSocket(int display) const
     {
         return 0 < display ?
@@ -459,75 +554,6 @@ namespace LTSM
         }
     }
 
-    int Manager::Object::getFreeDisplay(void) const
-    {
-        int min = _config->getInteger("display:min", 55);
-        int max = _config->getInteger("display:max", 99);
-
-        if(max < min) std::swap(max, min);
-
-        std::vector<int> ranges(max - min, 0);
-        std::iota(ranges.begin(), ranges.end(), min);
-        auto it = std::find_if(ranges.begin(), ranges.end(), [&](auto display)
-        {
-            return ! checkXvfbLocking(display) && ! checkXvfbSocket(display);
-        });
-        return it != ranges.end() ? *it : -1;
-    }
-
-    std::tuple<int, int, std::filesystem::path, std::string> Manager::getUserInfo(std::string_view user)
-    {
-        if(user.size())
-        {
-            struct passwd* st = getpwnam(user.data());
-
-            if(st)
-                return std::make_tuple<int, int, std::filesystem::path, std::string>(st->pw_uid, st->pw_gid, st->pw_dir, st->pw_shell);
-
-            Application::error("getpwnam failed, user: %s, error: %s", user.data(), strerror(errno));
-        }
-
-        return std::make_tuple<int, int, std::string, std::string>(-1, -1, "", "");
-    }
-
-    int Manager::getGroupGid(std::string_view group)
-    {
-        if(group.size())
-        {
-            struct group* group_st = getgrnam(group.data());
-
-            if(group_st)
-                return group_st->gr_gid;
-
-            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
-        }
-
-        return -1;
-    }
-
-    std::list<std::string> Manager::getGroupMembers(std::string_view group)
-    {
-        std::list<std::string> res;
-        struct group* group_st = getgrnam(group.data());
-
-        if(! group_st)
-        {
-            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
-            return res;
-        }
-
-        if(group_st->gr_mem)
-        {
-            while(const char* memb =  *(group_st->gr_mem))
-            {
-                res.emplace_back(memb);
-                group_st->gr_mem++;
-            }
-        }
-
-        return res;
-    }
-
     bool Manager::Object::displayShutdown(int display, bool emitSignal, XvfbSession* xvfb)
     {
         if(! xvfb)
@@ -537,7 +563,6 @@ namespace LTSM
             return false;
 
         Application::notice("display shutdown: %d", display);
-        xvfb->shutdown = true;
 
         if(emitSignal) emitShutdownConnector(display);
 
@@ -549,9 +574,9 @@ namespace LTSM
             closeSystemSession(display, *xvfb);
 
         // script run in thread
-        std::thread([=]()
+        std::thread([=, xvfb2 = xvfb]()
         {
-            std::this_thread::sleep_for(300ms);
+            std::this_thread::sleep_for(100ms);
             this->removeXvfbDisplay(display);
             this->removeXvfbSocket(display);
             this->emitDisplayRemoved(display);
@@ -560,6 +585,7 @@ namespace LTSM
                 runSystemScript(display, user, _config->getString("system:logoff"));
 
             Application::debug("display shutdown complete: %d", display);
+            const_cast<XvfbSession*>(xvfb)->shutdown = true;
         }).detach();
         return true;
     }
@@ -655,12 +681,6 @@ namespace LTSM
         return ltsmInfo;
     }
 
-    void Manager::Object::setFileOwner(const std::filesystem::path & file, int uid, int gid)
-    {
-        if(0 != chown(file.c_str(), uid, gid))
-            Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
-    }
-
     void Manager::Object::runSessionScript(int display, const std::string & user, const std::string & cmd)
     {
         if(cmd.size())
@@ -680,27 +700,6 @@ namespace LTSM
                     Application::warning("command not found: `%s'", cmd.c_str());
             }
         }
-    }
-
-    bool Manager::Object::runSystemScript(int display, const std::string & user, const std::string & cmd) const
-    {
-        if(cmd.empty())
-            return false;
-
-        if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20))))
-        {
-            Application::warning("command not found: `%s'", cmd.c_str());
-            return false;
-        }
-
-        auto str = Tools::replace(cmd, "%{display}", display);
-        str = Tools::replace(str, "%{user}", user);
-        std::thread([str = std::move(str), screen = display]()
-        {
-            int ret = std::system(str.c_str());
-            Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
-        }).detach();
-        return true;
     }
 
     int Manager::Object::runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userXvfb)
@@ -1098,8 +1097,14 @@ namespace LTSM
         xvfb->gid = gid;
         xvfb->user.assign(userName);
         xvfb->tpstart = std::chrono::system_clock::now();
-        xvfb->pid2 = runUserSession(oldScreen, sessionBin, *xvfb);
 
+        auto policy = _config->getString("session:policy");
+        if(Tools::lower(policy) == "authtake")
+            xvfb->policy = SessionPolicy::AuthTake;
+        else if(Tools::lower(policy) == "authshare")
+            xvfb->policy = SessionPolicy::AuthShare;
+
+        xvfb->pid2 = runUserSession(oldScreen, sessionBin, *xvfb);
         if(xvfb->pid2 < 0)
         {
             Application::error("user session failed, result: %d", xvfb->pid2);
@@ -1238,6 +1243,32 @@ namespace LTSM
         return true;
     }
 
+    bool Manager::Object::busShutdownService(void)
+    {
+        Application::info("manager terminated: %s, service pid: %d", "start", getpid());
+
+        // terminate connectors
+        for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
+        {
+            auto & [ display, session] = *it;
+            if(! session.shutdown)
+                displayShutdown(display, true, & session);
+        }
+
+        // wait sessions
+        if(int sessions = std::count_if(_xvfb->begin(), _xvfb->end(), [](auto & val){ return ! val.second.shutdown; }))
+        {
+            Application::info("wait displays shutdown: %d sessions", sessions);
+            while(std::any_of(_xvfb->begin(), _xvfb->end(), [](auto & val){ return ! val.second.shutdown; }))
+                std::this_thread::sleep_for(100ms);
+        }
+
+        _running = false;
+        Application::info("manager terminated: %s, service pid: %d", "complete", getpid());
+
+        return true;
+    }
+
     bool Manager::Object::busSendMessage(const int32_t & display, const std::string & message)
     {
         Application::info("send message, display: %d, message: %s", display, message.c_str());
@@ -1301,21 +1332,6 @@ namespace LTSM
         return true;
     }
 
-    bool Manager::Object::busShutdownService(void)
-    {
-        Application::info("manager terminated, pid: %d", getpid());
-
-        // terminate connectors
-
-        std::thread([&]()
-        {
-            std::this_thread::sleep_for(50ms);
-            _running = false;
-        }).detach();
-
-        return true;
-    }
-
     bool Manager::Object::busConnectorAlive(const int32_t & display)
     {
         std::thread([=]()
@@ -1366,66 +1382,88 @@ namespace LTSM
 
     bool Manager::Object::helperIdleTimeoutAction(const int32_t & display)
     {
-        Application::info("helper idle action, timeout: %d sec, display: %d", _helperIdleTimeout, display);
+        Application::info("helper idle action compete, display: %d", display);
         displayShutdown(display, true, nullptr);
         return true;
     }
 
     std::string Manager::Object::helperGetTitle(const int32_t & display)
     {
-        return _helperTitle;
+        return _config->getString("helper:title", "X11 Remote Desktop Service");
     }
 
     std::string Manager::Object::helperGetDateFormat(const int32_t & display)
     {
-        return _helperDateFormat;
+        return _config->getString("helper:dateformat");
     }
 
     int32_t Manager::Object::helperGetIdleTimeoutSec(const int32_t & display)
     {
-        return _helperIdleTimeout;
+        int helperIdleTimeout = _config->getInteger("helper:idletimeout", 0);
+        if(0 > helperIdleTimeout) helperIdleTimeout = 0;
+
+        return helperIdleTimeout;
     }
 
     bool Manager::Object::helperIsAutoComplete(const int32_t & display)
     {
-        return _helperAutoComplete;
+        return _config->getBoolean("helper:autocomplete", false);
     }
 
-    std::list<std::string> Manager::Object::getSystemUsersList(int uidMin, int uidMax) const
+    std::list<std::string> Manager::Object::getAllowLogins(void) const
     {
-        std::list<std::string> logins;
-        setpwent();
+        // filtered uids: "access:uid:min", "access:uid:max"
+        auto systemLogins = getSystemUsersRange(_config->getInteger("access:uid:min", 0), _config->getInteger("access:uid:max", 0));
 
-        while(struct passwd* st = getpwent())
+        // filtered access list: "access:users"
+        auto allowLogins = _config->getStdList<std::string>("access:users");
+        if(! allowLogins.empty())
         {
-            if((uidMin <= 0 || uidMin <= st->pw_uid) && (uidMax <= 0 || st->pw_uid <= uidMax))
-                logins.emplace_back(st->pw_name);
+            auto itend = std::remove_if(allowLogins.begin(), allowLogins.end(),
+                                    [](auto & str){ return str.empty(); });
+            allowLogins.erase(itend, allowLogins.end());
+
+            if(! allowLogins.empty())
+            {
+                allowLogins.sort();
+                allowLogins.unique();
+
+                systemLogins.sort();
+                std::list<std::string> res;
+
+                res.resize(std::min(systemLogins.size(), allowLogins.size()));
+                auto it = std::set_intersection(systemLogins.begin(), systemLogins.end(), allowLogins.begin(), allowLogins.end(), res.begin());
+                res.erase(it, res.end());
+                res.swap(systemLogins);
+            }
         }
 
-        endpwent();
-        return logins;
+        // filtered access group: "access:group"
+        if(_config->hasKey("access:group"))
+        {
+            auto groupLogins = getGroupMembers(_config->getString("access:group"));
+            if(! groupLogins.empty())
+            {
+                groupLogins.sort();
+                groupLogins.unique();
+
+                systemLogins.sort();
+                std::list<std::string> res;
+
+                res.resize(std::min(systemLogins.size(), groupLogins.size()));
+                auto it = std::set_intersection(systemLogins.begin(), systemLogins.end(), groupLogins.begin(), groupLogins.end(), res.begin());
+                res.erase(it, res.end());
+                res.swap(systemLogins);
+            }
+        }
+
+        return systemLogins;
     }
 
     std::vector<std::string> Manager::Object::helperGetUsersList(const int32_t & display)
     {
-        auto logins = getSystemUsersList(_helperAutoCompeteMinUid, _helperAutoCompeteMaxUid);
-
-        if(! _helperAccessUsersList.empty())
-        {
-            auto allows = _helperAccessUsersList;
-            auto itend = std::remove_if(allows.begin(), allows.end(), [&](auto & user)
-            {
-                return std::none_of(logins.begin(), logins.end(),
-                                    [&](auto & login)
-                {
-                    return login == user;
-                });
-            });
-            allows.erase(itend, allows.end());
-            return allows;
-        }
-
-        return std::vector<std::string>(logins.begin(), logins.end());
+        auto allowLogins = getAllowLogins();
+        return std::vector<std::string>(allowLogins.begin(), allowLogins.end());
     }
 
     bool Manager::Object::busCheckAuthenticate(const int32_t & display, const std::string & login, const std::string & password)
@@ -1502,25 +1540,17 @@ namespace LTSM
     {
         std::string pamService = _config->getString("pam:service");
 
-        if(! _helperAccessUsersList.empty() &&
-           std::none_of(_helperAccessUsersList.begin(), _helperAccessUsersList.end(), [&](auto & val){ return val == login; }))
-        {
-            Application::error("checking helper:accesslist, username not found: %s, display: %d", login.c_str(), display);
-            emitLoginFailure(display, "login deny");
-            return false;
-        }
-        auto users = helperGetUsersList(display);
-
+        auto users = getAllowLogins();
         if(users.empty())
         {
-            Application::error("%s", "system users list is empty, the login is blocked.");
-            emitLoginFailure(display, "login blocked");
+            Application::error("allow logins list empty, the login is blocked: %s, display: %d", login.c_str(), display);
+            emitLoginFailure(display, "login disabled");
             return false;
         }
 
         if(std::none_of(users.begin(), users.end(), [&](auto & val){ return val == login; }))
         {
-            Application::error("checking system users, username not found: %s, display: %d", login.c_str(), display);
+            Application::error("allow logins failed, username not found: %s, display: %d", login.c_str(), display);
             emitLoginFailure(display, "login not found");
             return false;
         }
@@ -1528,6 +1558,9 @@ namespace LTSM
         if(auto xvfbLogin = getXvfbInfo(display))
         {
             Application::info("pam authenticate, display: %d, username: %s", display, login.c_str());
+
+            int loginFailuresConf = _config->getInteger("login:failures_count", 0);
+            if(0 > loginFailuresConf) loginFailuresConf = 0;
 
             // close prev session
             if(xvfbLogin->pamh)
@@ -1558,7 +1591,7 @@ namespace LTSM
                 emitLoginFailure(display, err);
                 xvfbLogin->loginFailures += 1;
 
-                if(_loginFailuresConf < xvfbLogin->loginFailures)
+                if(loginFailuresConf < xvfbLogin->loginFailures)
                 {
                     Application::error("login failures limit, shutdown display: %d", display);
                     emitLoginFailure(display, "failures limit");
@@ -1569,7 +1602,7 @@ namespace LTSM
             }
 
             // auth success
-            if(0 < _loginFailuresConf)
+            if(0 < loginFailuresConf)
                 xvfbLogin->loginFailures = 0;
 
             // check connection policy
@@ -1745,6 +1778,11 @@ namespace LTSM
                 std::cout << "usage: " << argv[0] << " --config <path> [--background]" << std::endl;
                 throw 0;
             }
+
+            if(0 == std::strcmp(argv[it], "--background"))
+            {
+                isBackground = true;
+            }
         }
 
         // check present executable files
@@ -1803,8 +1841,78 @@ namespace LTSM
         return false;
     }
 
+    bool Manager::Service::inotifyWatchConfigStart(void)
+    {
+        std::string filename = _config.getString("config:path", "/etc/ltsm/config.json");
+
+        int fd = inotify_init();
+        if(0 > fd)
+        {
+            Application::error("inotify init failed, error: %s", strerror(errno));
+            return false;
+        }
+
+        int wd = inotify_add_watch(fd, filename.c_str(), IN_CLOSE_WRITE);
+        if(0 > wd)
+        {
+            Application::error("inotify add watch failed, error: %s", strerror(errno));
+            return false;
+        }
+
+        Application::info("watch inotify started, config file: %s", filename.c_str());
+
+        timerInotifyWatchConfig = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [fd1 = fd, jconfig = & _config]()
+        {
+            struct pollfd fds = {0};
+            fds.fd = fd1;
+            fds.events = POLLIN;
+            // 3ms timeout
+            int res = poll(& fds, 1, 3);
+
+            if(0 > res)
+            {
+                Application::error("inotify poll failed, error: %s", strerror(errno));
+            }
+            else
+            if(0 < res)
+            {
+                int avail;
+                ioctl(fd1, FIONREAD, &avail);
+
+                if(0 < avail)
+                {
+                    // read all inotify_event
+                    char buffer[avail];
+                    avail = read(fd1, buffer, avail);
+
+                    auto filename = jconfig->getString("config:path", "/etc/ltsm/config.json");
+                    JsonContentFile jsonFile(filename);
+
+                    if(! jsonFile.isValid() || ! jsonFile.isObject())
+                    {
+                        Application::error("reload config %s, file: %s", "failed", filename.c_str());
+                    }
+                    else
+                    {
+                        auto jo = jsonFile.toObject();
+                        const_cast<JsonObject*>(jconfig)->swap(jo);
+
+                        Application::info("reload config %s, file: %s", "success", filename.c_str());
+                        Application::setDebugLevel(jconfig->getString("service:debug"));
+                    }
+                }
+            }
+        });
+
+        inotify_rm_watch(fd, wd);
+        return true;
+    }
+
     int Manager::Service::start(void)
     {
+        if(isBackground && fork())
+            return 0;
+
         if(0 < getuid())
         {
             std::cerr << "need root privileges" << std::endl;
@@ -1812,7 +1920,6 @@ namespace LTSM
         }
 
         auto conn = sdbus::createSystemBusConnection(LTSM::dbus_service_name);
-
         if(! conn)
         {
             Application::error("%s", "dbus create connection failed");
@@ -1834,10 +1941,14 @@ namespace LTSM
 
         signal(SIGTERM, signalHandler);
         signal(SIGCHLD, signalHandler);
-        signal(SIGINT,  signalHandler);
+        signal(SIGINT,  isBackground ? SIG_IGN : signalHandler);
         signal(SIGHUP,  SIG_IGN);
+
         createXauthDir();
         objAdaptor.reset(new Manager::Object(*conn, _config, *this));
+
+        inotifyWatchConfigStart();
+
         isRunning = true;
         Application::setDebugLevel(_config.getString("service:debug"));
         Application::info("manager version: %d", LTSM::service_version);
@@ -1879,16 +1990,8 @@ namespace LTSM
 int main(int argc, const char** argv)
 {
     LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+
     int res = 0;
-
-    for(int it = 1; it < argc; ++it)
-    {
-        if(0 == std::strcmp(argv[it], "--background"))
-        {
-            if(fork()) return res;
-        }
-    }
-
     try
     {
         LTSM::Manager::Service app(argc, argv);

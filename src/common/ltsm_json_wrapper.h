@@ -37,7 +37,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20220830
+#define JSON_WRAPPER 20220902
 
 namespace LTSM
 {
@@ -266,6 +266,7 @@ namespace LTSM
         void			addArray(const JsonArray &);
         void			addObject(const JsonObject &);
         void                    join(const JsonArray &);
+        void                    swap(JsonArray &);
 
         template<typename T>
         std::vector<T> toStdVector(void) const
@@ -402,6 +403,7 @@ namespace LTSM
         void			addArray(const std::string &, const JsonArray &);
         void			addObject(const std::string &, const JsonObject &);
         void                    join(const JsonObject &);
+        void                    swap(JsonObject &);
 
         template<typename T>
         std::vector<T> getStdVector(std::string_view key) const

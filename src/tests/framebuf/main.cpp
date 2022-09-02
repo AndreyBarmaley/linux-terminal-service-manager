@@ -16,16 +16,7 @@ int rand2(int min, int max)
     return min + std::rand() / (RAND_MAX + 1.0) * (max - min + 1);
 }
 
-struct RegionPixel : std::pair<XCB::Region, uint32_t>
-{
-    RegionPixel(const XCB::Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
-    RegionPixel() {}
-
-    const uint32_t &    pixel(void) const { return second; }
-    const XCB::Region & region(void) const { return first; }
-};
-
-RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pixelFormat)
+XCB::RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pixelFormat)
 {
     uint8_t cr = rand2(0, 255);
     uint8_t cg = rand2(0, 255);
@@ -34,7 +25,7 @@ RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pixelFo
     auto col = Color(cr, cg, cb, 0xFF);
     auto reg = XCB::Region(rand2(0, wsz.width - 1), rand2(0, wsz.height - 1), 32, 32);
 
-    return RegionPixel(reg, pixelFormat.pixel(col));
+    return XCB::RegionPixel(reg, pixelFormat.pixel(col));
 }
 
 FrameBuffer generate(const PixelFormat & pf)

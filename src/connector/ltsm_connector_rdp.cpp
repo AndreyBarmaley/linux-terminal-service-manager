@@ -205,13 +205,7 @@ namespace LTSM
 
                 if(jc.isValid() && jc.isObject())
                 {
-                    context->keymap = new JsonObject();
-                    auto jo = jc.toObject();
-
-                    for(auto & key : jo.keys())
-                        if(auto map = jo.getObject(key))
-                            context->keymap->join(*map);
-
+                    context->keymap = new JsonObject(jc.toObject());
                     Application::notice("keymap loaded: %s, items: %d", keymapFile.c_str(), context->keymap->size());
                 }
             }
@@ -1030,7 +1024,7 @@ namespace LTSM
         {
             uint32_t keysym = static_cast<uint32_t>(flags) << 16 | code;
 
-            // local keymap priority "vnc:keymap:file"
+            // local keymap priority "rdp:keymap:file"
             if(auto value = (context->keymap ? context->keymap->getValue(Tools::hex(keysym, 8)) : nullptr))
             {
                 // no wait xcb replies

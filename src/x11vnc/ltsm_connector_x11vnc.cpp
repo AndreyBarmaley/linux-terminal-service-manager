@@ -27,48 +27,27 @@
 #include <iostream>
 
 #include "ltsm_tools.h"
-#include "ltsm_connector.h"
-#include "ltsm_connector_vnc.h"
+#include "ltsm_x11vnc.h"
+#include "ltsm_connector_x11vnc.h"
 
 using namespace std::chrono_literals;
 
 namespace LTSM
 {
-    /* Connector::VNC */
-    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo) : SignalProxy(conn, jo, "vnc")
+    /* Connector::X11VNC */
+    Connector::X11VNC::X11VNC(int fd, const JsonObject & jo)
+        : DisplayProxy(jo)
     {
-        registerProxy();
+        if(! jo.getBoolean("DesktopResized"))
+            desktopResizeModeDisable();
     }
 
-    Connector::VNC::~VNC()
+    int Connector::X11VNC::communication(void)
     {
-        if(0 < _display) busConnectorTerminated(_display);
-
-        unregisterProxy();
-        clientDisconnectedEvent(_display);
-    }
-
-    int Connector::VNC::communication(void)
-    {
-        if(0 >= busGetServiceVersion())
-        {
-            Application::error("%s: bus service failure", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
-
-        if(_config->hasKey("socket:read:timeout_ms"))
-        {
-            auto val = _config->getInteger("socket:read:timeout_ms", 0);
-            setReadTimeout(val);
-            Application::info("%s: set socket read timeout: %dms", __FUNCTION__, val);
-        }
 
         setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
         setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
-
-        bool clipboardEnable = _config->getBoolean("vnc:clipboard", true);
         std::string encryptionInfo = "none";
 
         serverSelectEncodings();
@@ -77,10 +56,9 @@ namespace LTSM
         setDisabledEncodings(_config->getStdList<std::string>("vnc:encoding:blacklist"));
         setPrefferedEncodings(_config->getStdList<std::string>("vnc:encoding:preflist"));
 
-        // load keymap
-        if(_config->hasKey("vnc:keymap:file"))
+        if(_config->hasKey("keymapfile"))
         {
-            auto file = _config->getString("vnc:keymap:file");
+            auto file = _config->getString("keymapfile");
             JsonContentFile jc(file);
 
             if(jc.isValid() && jc.isObject())
@@ -92,22 +70,10 @@ namespace LTSM
                 Application::error("%s: keymap invalid: %s", __FUNCTION__, file.c_str());
         }
 
-        // RFB 6.1.1 version
-        int protover = serverHandshakeVersion();
-        if(protover == 0)
-            return EXIT_FAILURE;
-
         // Xvfb: session request
-        int screen = busStartLoginSession(_remoteaddr, "vnc");
-        if(screen <= 0)
+        if(! xcbConnect())
         {
-            Application::error("%s: login session request: failure", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
-        if(! xcbConnect(screen))
-        {
-            Application::error("%s: xcb connect: failed", __FUNCTION__);
+            Application::error("%s: xcb connect failed", __FUNCTION__);
             return EXIT_FAILURE;
         }
 
@@ -118,41 +84,39 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        Application::debug("%s: login session request success, display: %d", __FUNCTION__, screen);
         Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+
+        // RFB 6.1.1 version
+        int protover = serverHandshakeVersion();
+        if(protover == 0)
+            return EXIT_FAILURE;
 
         // init server format
         serverSetPixelFormat(PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0));
 
         // RFB 6.1.2 security
         RFB::SecurityInfo secInfo;
-        secInfo.authNone = true;
-        secInfo.authVnc = false;
-        secInfo.authVenCrypt = ! _config->getBoolean("vnc:gnutls:disable", false);
-        secInfo.tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        secInfo.tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
-        secInfo.caFile = _config->getString("vnc:gnutls:cafile");
-        secInfo.certFile = _config->getString("vnc:gnutls:certfile");
-        secInfo.keyFile = _config->getString("vnc:gnutls:keyfile");
-        secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
-        secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
+        secInfo.authNone = _config->getBoolean("noauth", false);
+        secInfo.authVnc = _config->hasKey("passwdfile");
+        secInfo.passwdFile = _config->getString("passwdfile");
+        secInfo.authVenCrypt = ! _config->getBoolean("notls", false);
+        secInfo.tlsPriority = "NORMAL:+ANON-ECDH:+ANON-DH";
+        secInfo.tlsAnonMode = true;
+        secInfo.tlsDebug = 0;
+
+        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+            secInfo.tlsDebug = 1;
+        else
+        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+            secInfo.tlsDebug = 3;
 
         if(! serverSecurityInit(protover, secInfo))
             return EXIT_FAILURE;
 
-        busSetEncryptionInfo(screen, serverEncryptionInfo());
-
         // RFB 6.3.1 client init
-        serverClientInit("X11 Remote Desktop");
-
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
-        {
-            Application::info("%s: something went wrong...", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
+        serverClientInit("X11VNC Remote Desktop");
         Application::info("%s: wait RFB messages...", __FUNCTION__);
+
         // xcb on
         setEnableXcbMessages(true);
         XCB::Region damageRegion(0, 0, 0, 0);
@@ -182,7 +146,7 @@ namespace LTSM
 
                             if(isClientEncodings(RFB::ENCODING_CONTINUOUS_UPDATES))
                             {
-                                // RFB 6.7.15
+                                // RFB 1.7.7.15
                                 // The server must send a EndOfContinuousUpdates message the first time
                                 // it sees a SetEncodings message with the ContinuousUpdates pseudo-encoding,
                                 // in order to inform the client that the extension is supported.
@@ -220,7 +184,7 @@ namespace LTSM
                         break;
 
                     case RFB::CLIENT_CUT_TEXT:
-                        clientCutTextEvent(isAllowXcbMessages(), clipboardEnable);
+                        clientCutTextEvent(isAllowXcbMessages(), true);
                         clientUpdateReq = true;
                         break;
 
@@ -231,11 +195,10 @@ namespace LTSM
 
                     case RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES:
                         clientEnableContinuousUpdates();
-                        //clientUpdateReq = true;
                         break;
 
                     default:
-                        throw std::runtime_error(Tools::StringFormat("%1: RFB unknown message: %2").arg(__FUNCTION__).arg(Tools::hex(msgType, 2)));
+                        throw std::runtime_error(std::string("RFB unknown message: ").append(Tools::hex(msgType, 2)));
                 }
             }
 
@@ -244,7 +207,7 @@ namespace LTSM
                 if(auto err = _xcbDisplay->hasError())
                 {
                     setEnableXcbMessages(false);
-                    Application::error("%s: xcb display error, code: %d", __FUNCTION__, err);
+                    Application::error("%s: xcb display error connection: %d", __FUNCTION__, err);
                     break;
                 }
 
@@ -272,11 +235,10 @@ namespace LTSM
 
                         if(0 < cc.width && 0 < cc.height)
                         {
-                            busDisplayResized(_display, cc.width, cc.height);
                             desktopResizeModeChange(XCB::Size(cc.width, cc.height));
                         }
                     }
-                    else if(_xcbDisplay->isSelectionNotify(ev) && clipboardEnable)
+                    else if(_xcbDisplay->isSelectionNotify(ev))
                     {
                         auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
 
@@ -324,8 +286,6 @@ namespace LTSM
                 }
             }
 
-            // dbus processing
-            _conn->enterEventLoopAsync();
             // wait
             std::this_thread::sleep_for(1ms);
         }
@@ -333,74 +293,18 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
-    void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)
-    {
-        if(0 < _display && display == _display)
-        {
-            setEnableXcbMessages(false);
-            waitUpdateProcess();
-            SignalProxy::onLoginSuccess(display, userName);
-            setEnableXcbMessages(true);
-
-            // fix new session size
-            if(_xcbDisplay->size() != clientRegion.toSize())
-            {
-                if(_xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
-                    Application::notice("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
-            }
-
-            // full update
-            _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
-            Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
-        }
-    }
-
-    void Connector::VNC::onShutdownConnector(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            setEnableXcbMessages(false);
-            waitUpdateProcess();
-            loopMessage = false;
-            Application::notice("%s: dbus signal, display: %d", __FUNCTION__, display);
-        }
-    }
-
-    void Connector::VNC::onHelperWidgetStarted(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
-            loginWidgetStarted = true;
-        }
-    }
-
-    void Connector::VNC::onSendBellSignal(const int32_t & display)
-    {
-        if(0 < _display && display == _display)
-        {
-            Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
-            sendBellFlag = true;
-        }
-    }
-
-    void Connector::VNC::serviceStop(void)
+    void Connector::X11VNC::serviceStop(void)
     {
         loopMessage = false;
     }
 
-    bool Connector::VNC::serviceAlive(void) const
+    bool Connector::X11VNC::serviceAlive(void) const
     {
         return loopMessage;
     }
 
-    XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void) const
+    XCB::RootDisplayExt* Connector::X11VNC::xcbDisplay(void) const
     {
         return _xcbDisplay.get();
-    }
-
-    void Connector::VNC::serverPostProcessingFrameBuffer(FrameBuffer & fb)
-    {
-        renderPrimitivesToFB(fb);
     }
 }

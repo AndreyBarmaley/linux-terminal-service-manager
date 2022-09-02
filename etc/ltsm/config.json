@@ -16,7 +16,7 @@
     "vnc:gnutls:crlfile": "server.crl",
     "vnc:gnutls:certfile": "server.crt",
     "vnc:gnutls:keyfile": "server.key",
-    "vnc:keymap:file": "",
+    "#vnc:keymap:file": "/etc/ltsm/keymap_vnc.json",
     "vnc:clipboard": true,
 
     "rdp:wlog:level": "error",
@@ -27,7 +27,7 @@
     "rdp:encryption:level": "compatible",
     "rdp:server:certfile": "server.crt",
     "rdp:server:keyfile": "server.key",
-    "rdp:keymap:file": "",
+    "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
     "rdp:clipboard": true,
 
     "group:shm": "ltsm-shm",
@@ -35,11 +35,13 @@
     "user:xvfb": "ltsm-xvfb",
     "pam:service": "ltsm",
 
+    "#access:group": "ts-users",
+    "access:uid:min": 100,
+    "access:uid:max": 9999,
+    "#access:users": [ "user1", "user2" ],
+
     "helper:autocomplete": true,
     "helper:idletimeout": 100,
-    "helper:accesslist": [ ],
-    "autocomplete:min": 100,
-    "autocomplete:max": 10000,
     "helper:path": "/usr/libexec/ltsm/LTSM_helper",
     "helper:args": "",
     "helper:dateformat": "dddd dd MMMM, hh:mm:ss",

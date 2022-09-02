@@ -21,50 +21,43 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_CONNECTOR_VNC_
-#define _LTSM_CONNECTOR_VNC_
+#ifndef _LTSM_CONNECTOR_X11VNC_
+#define _LTSM_CONNECTOR_X11VNC_
 
 #include <memory>
 #include <atomic>
+#include <functional>
 
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
-#include "ltsm_connector.h"
+#include "ltsm_x11vnc.h"
 
 namespace LTSM
 {
     namespace Connector
     {
         /* Connector::VNC */
-        class VNC : public SignalProxy, protected RFB::ServerEncoding
+        class X11VNC : public DisplayProxy, protected RFB::ServerEncoding
         {
             std::unique_ptr<JsonObject> keymap;
 
             std::atomic<bool>   loopMessage{true};
-            std::atomic<bool>   loginWidgetStarted{false};
 	    std::atomic<bool>	sendBellFlag{false};
             XCB::Region         clientRegion;
 
         protected:
-	    // rfb server encoding
+            // rfb server encoding
             XCB::RootDisplayExt* xcbDisplay(void) const override;
             bool                serviceAlive(void) const override;
             void                serviceStop(void) override;
-            void                serverPostProcessingFrameBuffer(FrameBuffer &) override;
-
-            // dbus virtual signals
-            void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
-            void                onShutdownConnector(const int32_t & display) override;
-            void                onHelperWidgetStarted(const int32_t & display) override;
-            void                onSendBellSignal(const int32_t & display) override;
 
         public:
-            VNC(sdbus::IConnection* conn, const JsonObject & jo);
-            ~VNC();
+            X11VNC(int fd, const JsonObject & jo);
+            ~X11VNC() {}
 
             int		        communication(void) override;
         };
     }
 }
 
-#endif // _LTSM_CONNECTOR_VNC_
+#endif // _LTSM_CONNECTOR_X11VNC_

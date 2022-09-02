@@ -140,6 +140,15 @@ namespace LTSM
             }
         };
 
+        struct RegionPixel : std::pair<XCB::Region, uint32_t>
+        {
+            RegionPixel(const XCB::Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
+            RegionPixel() {}
+        
+            const uint32_t &    pixel(void) const { return second; }
+            const XCB::Region & region(void) const { return first; }
+        };
+
         struct object_t
         {
             uint32_t                xcb;

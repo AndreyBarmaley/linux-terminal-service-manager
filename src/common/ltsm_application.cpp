@@ -50,13 +50,15 @@ namespace LTSM
             _debug = DebugLevel::SyslogInfo;
         else if(level == "debug")
             _debug = DebugLevel::SyslogDebug;
+        else if(level == "trace")
+            _debug = DebugLevel::SyslogTrace;
         else if(level == "console")
             _debug = DebugLevel::Console;
         else
             _debug = DebugLevel::Quiet;
     }
 
-    Application::Application(const char* ident, int argc, const char** argv) : _argc(argc), _argv(argv), _ident(ident), _facility(LOG_USER)
+    Application::Application(const char* ident, int argc, const char** argv) : _ident(ident), _facility(LOG_USER)
     {
         ::openlog(_ident, 0, _facility);
     }
@@ -128,6 +130,8 @@ namespace LTSM
             throw std::runtime_error("json parse error");
 
         _config = jsonFile.toObject();
+        _config.addString("config:path", confPath);
+
         std::string str = _config.getString("logging:facility");
         int facility = 0;
 

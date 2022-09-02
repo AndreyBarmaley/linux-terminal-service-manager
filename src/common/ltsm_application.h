@@ -34,12 +34,10 @@
 
 namespace LTSM
 {
-    enum class DebugLevel { Quiet, Console, SyslogInfo, SyslogDebug };
+    enum class DebugLevel { Quiet, Console, SyslogInfo, SyslogDebug, SyslogTrace };
 
     class Application
     {
-        int		_argc = 0;
-        const char**	_argv = nullptr;
         const char*     _ident = nullptr;
 	int		_facility = LOG_USER;
 

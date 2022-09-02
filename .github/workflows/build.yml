@@ -87,7 +87,6 @@ jobs:
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
-          sudo sed -i -e 's|module(load="imklog"|#module(load="imklog"|' /etc/rsyslog.conf
           echo "::endgroup::"
       - name: Run tests to generate coverage statistics
         env:
@@ -101,10 +100,6 @@ jobs:
           ./LTSM_test_json --config ./src/tests/json/test.json
           echo "::endgroup::"
           echo "::group::test services"
-          #echo "run system services"
-          #sudo /usr/sbin/rsyslogd -i /var/run/syslogd.pid
-          #sudo /usr/bin/dbus-uuidgen --ensure
-          #sudo /usr/bin/dbus-daemon --fork --system
           echo "run ltsm service"
           sudo ./LTSM_service &
           sleep 5
@@ -114,11 +109,12 @@ jobs:
           echo "get vnc screenshot"
           vncsnapshot 127.0.0.1:7 test.jpg
           echo "system log"
+          sleep 5
           grep -i ltsm /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
-          sleep 5
+          sleep 10
           echo "::endgroup::"
       - name: Collect coverage into one XML report
         run: |
