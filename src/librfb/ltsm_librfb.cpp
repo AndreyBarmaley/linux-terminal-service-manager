@@ -893,7 +893,6 @@ namespace LTSM
             Application::error("%s: not usable", __FUNCTION__);
 
         throw std::runtime_error("sendPixel: unknown format");
-        return 0;
     }
 
     int RFB::ServerEncoding::sendCPixel(uint32_t pixel)
