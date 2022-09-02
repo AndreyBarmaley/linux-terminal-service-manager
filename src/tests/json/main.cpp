@@ -10,39 +10,49 @@
 
 using namespace LTSM;
 
-class Test1App : public ApplicationJsonConfig
+class Test1App : public Application
 {
+    JsonObject  config;
+
 public:
-    Test1App(const char* ident, int argc, const char** argv) : ApplicationJsonConfig(ident, argc, argv)
+    Test1App(const char* ident, int argc, const char** argv) : Application(ident, argc, argv)
     {
+        const char* file = 1 < argc ? argv[1] : "test.json";
+
+        JsonContentFile jsonFile(file);
+
+        if(! jsonFile.isValid() || ! jsonFile.isObject())
+            throw std::invalid_argument("json parse error");
+
+        config = jsonFile.toObject();
     }
 
     int start(void) override
     {
-        auto arr1 = config().getArray("test:array");
-        auto obj1 = config().getObject("test:object");
+        auto arr1 = config.getArray("test:array");
+        auto obj1 = config.getObject("test:object");
 
         std::cout << "test Object::isArray" << std::endl;
-        assert(config().isArray("test:array"));
+        assert(config.isArray("test:array"));
         assert(obj1->isArray("test:arr"));
 
         std::cout << "test Object::isObject" << std::endl;
-        assert(config().isObject("test:object"));
+        assert(config.isObject("test:object"));
         assert(obj1->isObject("test:obj"));
 
         auto arr2 = obj1->getArray("test:arr");
         auto obj2 = obj1->getObject("test:obj");
 
         std::cout << "test Object::isString" << std::endl;
-        assert(config().isString("test:string"));
+        assert(config.isString("test:string"));
         std::cout << "test Object::isInteger" << std::endl;
-        assert(config().isInteger("test:int"));
+        assert(config.isInteger("test:int"));
         std::cout << "test Object::isDouble" << std::endl;
-        assert(config().isDouble("test:double"));
+        assert(config.isDouble("test:double"));
         std::cout << "test Object::isBoolean" << std::endl;
-        assert(config().isBoolean("test:true"));
+        assert(config.isBoolean("test:true"));
         std::cout << "test Object::isNull" << std::endl;
-        assert(config().isNull("test:null"));
+        assert(config.isNull("test:null"));
 
         std::cout << "test Object::getArray" << std::endl;
         assert(arr1);
@@ -51,28 +61,28 @@ public:
         assert(obj1);
 
         std::cout << "test Object::getInteger" << std::endl;
-        assert(config().getInteger("test:int") == 1234567);
+        assert(config.getInteger("test:int") == 1234567);
         assert(obj1->getInteger("test:int") == 111);
 
         std::cout << "test Object::getDouble" << std::endl;
-        assert(config().getDouble("test:double") == 1.234567);
+        assert(config.getDouble("test:double") == 1.234567);
         assert(obj1->getDouble("test:double") == 555.6789);
 
         std::cout << "test Object::getBoolean true" << std::endl;
-        assert(config().getBoolean("test:true"));
+        assert(config.getBoolean("test:true"));
         assert(! obj1->getBoolean("test:false"));
 
         std::cout << "test Object::getBoolean false" << std::endl;
-        assert(! config().getBoolean("test:false"));
+        assert(! config.getBoolean("test:false"));
 
-        std::cout << "test Object::keys" << std::endl;
-        assert(config().keys().size() == 7);
+        std::cout << "test Object::keys" << " [" << Tools::join(config.keys(), ",") << "]" << std::endl;
+        assert(config.keys().size() == 7);
 
         std::cout << "test Object::getStdVector<int>" << std::endl;
-        assert(config().getStdVector<int>("test:array").size() == 9);
+        assert(config.getStdVector<int>("test:array").size() == 9);
 
         std::cout << "test Object::getStdList<int>" << std::endl;
-        assert(config().getStdList<int>("test:array").size() == 9);
+        assert(config.getStdList<int>("test:array").size() == 9);
 
         std::cout << "test Array::getInteger" << std::endl;
         assert(arr1->getInteger(0) == 1 && arr1->getInteger(8) == 9);
