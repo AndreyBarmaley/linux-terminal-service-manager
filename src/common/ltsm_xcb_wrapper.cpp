@@ -525,7 +525,7 @@ namespace LTSM
         return GC(win, _conn, value_mask, value_list);
     }
 
-    XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode)
+    XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode, bool readOnly)
     {
         int shmid = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
 
@@ -535,7 +535,7 @@ namespace LTSM
             return SHM();
         }
 
-        auto shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, 0));
+        auto shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, (readOnly ? SHM_RDONLY : 0)));
 
         // man shmat: check result
         if(shmaddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
@@ -1782,7 +1782,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
+        Application::info("%s: set size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
         return true;
     }
 

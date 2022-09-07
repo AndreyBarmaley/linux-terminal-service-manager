@@ -72,8 +72,8 @@ namespace LTSM
     class JsonValue
     {
     public:
-        JsonValue() {}
-        virtual ~JsonValue() {}
+        JsonValue() = default;
+        virtual ~JsonValue() = default;
 
         virtual JsonType        getType(void) const = 0;
         virtual std::string     toString(void) const = 0;
@@ -121,10 +121,10 @@ namespace LTSM
         std::any                value;
 
     public:
-        JsonPrimitive(const bool & v) : value(v) {}
-        JsonPrimitive(const int & v) : value(v) {}
-        JsonPrimitive(const double & v) : value(v) {}
-        JsonPrimitive(std::string_view v) : value(std::make_any<std::string>(v)) {}
+        explicit JsonPrimitive(const bool & v) : value(v) {}
+        explicit JsonPrimitive(const int & v) : value(v) {}
+        explicit JsonPrimitive(const double & v) : value(v) {}
+        explicit JsonPrimitive(std::string_view v) : value(std::make_any<std::string>(v)) {}
 
         std::string             toString(void) const override;
     };
@@ -186,7 +186,7 @@ namespace LTSM
     class JsonContainer : public JsonValue
     {
     public:
-        JsonContainer() {}
+        JsonContainer() = default;
 
         virtual bool		isValid(void) const { return false; }
         virtual size_t		size(void) const = 0;
@@ -197,13 +197,13 @@ namespace LTSM
     struct JsonValuePtr : std::unique_ptr<JsonValue>
     {
         JsonValuePtr();
-        JsonValuePtr(int);
-        JsonValuePtr(bool);
-        JsonValuePtr(double);
-        JsonValuePtr(std::string_view);
-        JsonValuePtr(const JsonArray &);
-        JsonValuePtr(const JsonObject &);
-        JsonValuePtr(JsonValue*);
+        explicit JsonValuePtr(int);
+        explicit JsonValuePtr(bool);
+        explicit JsonValuePtr(double);
+        explicit JsonValuePtr(std::string_view);
+        explicit JsonValuePtr(const JsonArray &);
+        explicit JsonValuePtr(const JsonObject &);
+        explicit JsonValuePtr(JsonValue*);
         JsonValuePtr(const JsonValuePtr &);
         JsonValuePtr(JsonValuePtr &&) noexcept;
 
@@ -227,7 +227,7 @@ namespace LTSM
         friend class JsonContent;
 
     public:
-        JsonArray() {}
+        JsonArray() = default;
         JsonArray(const JsonArray &);
         JsonArray(JsonArray && ja) noexcept;
 
@@ -266,7 +266,7 @@ namespace LTSM
         void			addArray(const JsonArray &);
         void			addObject(const JsonObject &);
         void                    join(const JsonArray &);
-        void                    swap(JsonArray &);
+        void                    swap(JsonArray &) noexcept;
 
         template<typename T>
         std::vector<T> toStdVector(void) const
@@ -360,7 +360,7 @@ namespace LTSM
         }
 
     public:
-        JsonObject() {}
+        JsonObject() = default;
         JsonObject(const JsonObject &);
         JsonObject(JsonObject && jo) noexcept;
 
@@ -403,7 +403,7 @@ namespace LTSM
         void			addArray(const std::string &, const JsonArray &);
         void			addObject(const std::string &, const JsonObject &);
         void                    join(const JsonObject &);
-        void                    swap(JsonObject &);
+        void                    swap(JsonObject &) noexcept;
 
         template<typename T>
         std::vector<T> getStdVector(std::string_view key) const
@@ -435,7 +435,7 @@ namespace LTSM
         std::pair<JsonValuePtr, int> getValue(const const_iterator &, JsonContainer* cont) const;
 
     public:
-        JsonContent() {}
+        JsonContent() = default;
 
         bool			parseString(std::string_view);
         bool			parseBinary(const char*, size_t);

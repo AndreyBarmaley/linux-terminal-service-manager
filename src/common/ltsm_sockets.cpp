@@ -71,7 +71,7 @@ namespace LTSM
             throw network_error("NetworkStream::hasInput error");
         }
 
-        return 0 < res;
+        return 0 < res && (fds.revents & POLLIN);
     }
 
     size_t NetworkStream::hasData(int fd)

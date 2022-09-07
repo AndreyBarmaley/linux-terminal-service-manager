@@ -443,7 +443,7 @@ namespace LTSM
             virtual GenericEvent    poolEvent(void);
 
             GC                      createGC(xcb_drawable_t winid, uint32_t value_mask = 0, const void* value_list = nullptr);
-            SHM                     createSHM(size_t, int mode = 0600);
+            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = true);
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
             XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);

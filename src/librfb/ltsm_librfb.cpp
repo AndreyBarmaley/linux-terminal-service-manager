@@ -733,15 +733,16 @@ namespace LTSM
         Application::notice("%s: size [%dx%d], screens: %d", __FUNCTION__, width, height, numOfScreens);
 
         // screens array
-        std::vector<RFB::ScreenInfo> screens(numOfScreens);
-        for(auto & info : screens)
+        std::vector<RFB::ScreenInfo> screens;
+        for(int it = 0; it < numOfScreens; it++)
         {
-            info.id = recvIntBE32();
-            info.xpos = recvIntBE16();
-            info.ypos = recvIntBE16();
-            info.width = recvIntBE16();
-            info.height = recvIntBE16();
-            info.flags = recvIntBE32();
+            uint32_t id = recvIntBE32();
+            uint16_t xpos = recvIntBE16();
+            uint16_t ypos = recvIntBE16();
+            uint16_t width = recvIntBE16();
+            uint16_t height = recvIntBE16();
+            uint32_t flags = recvIntBE32();
+            screens.emplace_back(id, width, height);
         }
 
         desktopResizeModeSet(RFB::DesktopResizeMode::ClientRequest, screens);
@@ -928,24 +929,33 @@ namespace LTSM
         return res + 1;
     }
 
+    RFB::DesktopResizeMode RFB::ServerEncoding::desktopResizeMode(void) const
+    {
+        return desktopMode;
+    }
+
     void RFB::ServerEncoding::desktopResizeModeDisable(void)
     {
         desktopMode = DesktopResizeMode::Disabled;
     }
 
-    void RFB::ServerEncoding::desktopResizeModeSet(const DesktopResizeMode & mode, std::vector<RFB::ScreenInfo> screens)
+    void RFB::ServerEncoding::desktopResizeModeSet(const DesktopResizeMode & mode, const std::vector<RFB::ScreenInfo> & screens)
     {
-        desktopMode = DesktopResizeMode::ServerInform;
-        screensInfo.swap(screens);
+        if(screens.size())
+        {
+            desktopMode = mode;
+            desktopScreenInfo = screens.front();
+        }
     }
 
     bool RFB::ServerEncoding::desktopResizeModeChange(const XCB::Size & sz)
     {
         if(DesktopResizeMode::Undefined != desktopMode &&
                DesktopResizeMode::Disabled != desktopMode &&
-               (screensInfo.empty() || (screensInfo.front().width != sz.width || screensInfo.front().height != sz.height)))
+               (desktopScreenInfo.width != sz.width || desktopScreenInfo.height != sz.height))
         {
-            screensInfo.push_back({ .width = sz.width, .height = sz.height });
+            desktopScreenInfo.width = sz.width;
+            desktopScreenInfo.height = sz.height;
             desktopMode = DesktopResizeMode::ServerInform;
             return true;
         }

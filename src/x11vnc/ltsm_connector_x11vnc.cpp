@@ -163,11 +163,13 @@ namespace LTSM
 
                     case RFB::CLIENT_REQUEST_FB_UPDATE:
                         {
-                            bool fullUpdate;
-                            std::tie(fullUpdate, clientRegion) = clientFramebufferUpdate();
+                            auto [ fullUpdate, region ] = clientFramebufferUpdate();
 
                             if(fullUpdate)
                                 damageRegion = _xcbDisplay->region();
+
+                            if(region != clientRegion)
+                                damageRegion = clientRegion = region;
 
                             clientUpdateReq = true;
                         }
@@ -259,7 +261,15 @@ namespace LTSM
                 // server action
                 if(! isUpdateProcessed())
                 {
-                    sendEncodingDesktopSize(isAllowXcbMessages());
+                    switch(desktopResizeMode())
+                    {
+                        case RFB::DesktopResizeMode::ServerInform:
+                        case RFB::DesktopResizeMode::ClientRequest:
+                            sendEncodingDesktopSize(isAllowXcbMessages());
+                            break;
+
+                            default: break;
+                    }
 
                     if(sendBellFlag)
                     {

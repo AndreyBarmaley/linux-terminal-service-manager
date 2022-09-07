@@ -897,10 +897,6 @@ namespace LTSM
     /* pseudo encodings DesktopSize/Extended */
     bool RFB::ServerEncoding::sendEncodingDesktopSize(bool xcbAllow)
     {
-        if(DesktopResizeMode::Undefined == desktopMode ||
-            DesktopResizeMode::Disabled == desktopMode || DesktopResizeMode::Success == desktopMode)
-            return false;
-
         int status = 0;
         int error = 0;
         int screenId = 0;
@@ -922,19 +918,17 @@ namespace LTSM
         {
             status = 1;
 
-            if(1 != screensInfo.size())
+            if(0 == desktopScreenInfo.width || 0 == desktopScreenInfo.height)
             {
                 // invalid screen layout
                 error = 3;
             }
             else
             {
-                auto & info = screensInfo.front();
-                screenId = info.id;
-                screenFlags = info.flags;
+                screenId = desktopScreenInfo.id;
                 error = 0;
 
-                if(info.width != width || info.height != height)
+                if(desktopScreenInfo.width != width || desktopScreenInfo.height != height)
                 {
                     // need resize
                     if(! xcbAllow)
@@ -942,7 +936,7 @@ namespace LTSM
                         // resize is administratively prohibited
                         error = 1;
                     }
-                    else if(xcbDisplay()->setRandrScreenSize(info.width, info.height))
+                    else if(xcbDisplay()->setRandrScreenSize(desktopScreenInfo.width, desktopScreenInfo.height))
                     {
                         auto nsize = xcbDisplay()->size();
                         width = nsize.width;
@@ -959,7 +953,6 @@ namespace LTSM
         if(desktopMode == DesktopResizeMode::ServerInform)
         {
             status = 0;
-            screensInfo.clear();
         }
         else
             Application::error("%s: unknown action for DesktopResizeMode::%s", __FUNCTION__, RFB::desktopResizeModeString(desktopMode));
@@ -1008,14 +1001,6 @@ namespace LTSM
         }
 
         sendFlush();
-
-        if(0 == error)
-        {
-            // fix damage
-            auto newreg = xcbDisplay()->region();
-            xcbDisplay()->damageAdd(newreg);
-            Application::debug("%s: added damage [%d,%d]", __FUNCTION__, newreg.width, newreg.height);
-        }
 
         desktopMode = DesktopResizeMode::Success;
         return true;

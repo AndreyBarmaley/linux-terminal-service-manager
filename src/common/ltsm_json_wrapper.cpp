@@ -574,8 +574,8 @@ namespace LTSM
     {
         std::list<std::string> res;
 
-        for(auto it = content.begin(); it != content.end(); ++it)
-            res.push_back((*it).first);
+        for(auto & [key, value] : content)
+            res.push_back(key);
 
         return res;
     }
@@ -729,41 +729,41 @@ namespace LTSM
         addValue<JsonObject>(key, val);
     }
 
-    void JsonObject::swap(JsonObject & jo)
+    void JsonObject::swap(JsonObject & jo) noexcept
     {
         content.swap(jo.content);
     }
 
     void JsonObject::join(const JsonObject & jo)
     {
-        for(auto & pair : jo.content)
+        for(auto & [key, valptr] : jo.content)
         {
-            if(pair.second->isArray())
+            if(valptr->isArray())
             {
-                auto it = content.find(pair.first);
+                auto it = content.find(key);
 
                 if(it != content.end() && (*it).second->isArray())
-                    static_cast<JsonArray*>((*it).second.get())->join(static_cast<const JsonArray &>(*pair.second.get()));
+                    static_cast<JsonArray*>((*it).second.get())->join(static_cast<const JsonArray &>(*valptr.get()));
                 else
-                    content.emplace(pair.first, pair.second);
+                    content.emplace(key, valptr);
             }
-            else if(pair.second->isObject())
+            else if(valptr->isObject())
             {
-                auto it = content.find(pair.first);
+                auto it = content.find(key);
 
                 if(it != content.end() && (*it).second->isArray())
-                    static_cast<JsonObject*>((*it).second.get())->join(static_cast<const JsonObject &>(*pair.second.get()));
+                    static_cast<JsonObject*>((*it).second.get())->join(static_cast<const JsonObject &>(*valptr.get()));
                 else
-                    content.emplace(pair.first, pair.second);
+                    content.emplace(key, valptr);
             }
             else
             {
-                auto it = content.find(pair.first);
+                auto it = content.find(key);
 
                 if(it != content.end())
-                    (*it).second = pair.second;
+                    (*it).second = valptr;
                 else
-                    content.emplace(pair.first, pair.second);
+                    content.emplace(key, valptr);
             }
         }
     }
@@ -916,7 +916,7 @@ namespace LTSM
         content.emplace_back(val);
     }
 
-    void JsonArray::swap(JsonArray & ja)
+    void JsonArray::swap(JsonArray & ja) noexcept
     {
         content.swap(ja.content);
     }

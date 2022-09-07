@@ -117,11 +117,13 @@ namespace LTSM
 	struct ScreenInfo
 	{
             uint32_t		id = 0;
-            uint16_t		xpos = 0;
-            uint16_t		ypos = 0;
             uint16_t		width = 0;
             uint16_t		height = 0;
-            uint32_t		flags = 0;
+
+            ScreenInfo() = default;
+            ScreenInfo(uint32_t id1, uint16_t width1, uint16_t height1) : id(id1), width(width1), height(height1) {}
+
+            bool operator== (const ScreenInfo & si) const { return id == si.id && width == si.width && height == si.height; }
 	};
 
         enum class DesktopResizeMode { Undefined, Disabled, Success, ServerInform, ClientRequest };
@@ -152,8 +154,6 @@ namespace LTSM
         {
             std::list< std::future<void> >
                                 encodingJobs;
-	    std::vector<RFB::ScreenInfo>
-                                screensInfo;
             std::vector<int>    clientEncodings;
             std::list<std::string> disabledEncodings;
             std::list<std::string> prefferedEncodings;
@@ -171,6 +171,7 @@ namespace LTSM
             std::atomic<bool>   fbUpdateProcessing{false};
 	    std::atomic<DesktopResizeMode>
                                 desktopMode{DesktopResizeMode::Undefined};
+	    RFB::ScreenInfo     desktopScreenInfo;
             mutable size_t      netStatRx = 0;
             mutable size_t      netStatTx = 0;
             int                 encodingDebug = 0;
@@ -218,8 +219,9 @@ namespace LTSM
 
             bool                desktopResizeModeInit(void);
             void                desktopResizeModeDisable(void);
-            void                desktopResizeModeSet(const DesktopResizeMode &, std::vector<RFB::ScreenInfo>);
+            void                desktopResizeModeSet(const DesktopResizeMode &, const std::vector<RFB::ScreenInfo> &);
             bool                desktopResizeModeChange(const XCB::Size &);
+            DesktopResizeMode   desktopResizeMode(void) const;
 
             bool                serverAuthVncInit(const std::string &);
             bool                serverAuthVenCryptInit(const SecurityInfo &);

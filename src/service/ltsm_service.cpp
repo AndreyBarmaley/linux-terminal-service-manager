@@ -1874,7 +1874,7 @@ namespace LTSM
                 Application::error("inotify poll failed, error: %s", strerror(errno));
             }
             else
-            if(0 < res)
+            if(0 < res && (fds.revents & POLLIN))
             {
                 int avail;
                 ioctl(fd1, FIONREAD, &avail);
@@ -1958,6 +1958,8 @@ namespace LTSM
             conn->enterEventLoopAsync();
             std::this_thread::sleep_for(1ms);
         }
+
+        timerInotifyWatchConfig->stop();
 
         // service stopped from signal
         if(objAdaptor->isRunning())
