@@ -38,7 +38,7 @@
     "#access:group": "ts-users",
     "access:uid:min": 100,
     "access:uid:max": 9999,
-    "#access:users": [ "user1", "user2" ],
+    "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
     "helper:autocomplete": true,
     "helper:idletimeout": 100,
