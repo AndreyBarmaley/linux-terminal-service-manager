@@ -28,7 +28,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-       sudo apt-get -y install wget libexpat1 libpam0g-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
+       sudo apt-get -y install wget libexpat1 libpam0g-dev llibgnutlsxx28 ibgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
          libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
          libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev
 
