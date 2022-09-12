@@ -152,7 +152,13 @@ namespace LTSM
 	XCB::Region	fbreg;
         bool            owner;
 
+    protected:
+        FrameBuffer() : owner(false) {}
+
     public:
+        FrameBuffer(const FrameBuffer & fb)
+             : fbptr(fb.fbptr), fbreg(fb.fbreg), owner(fb.owner) {}
+
         FrameBuffer(const XCB::Region & reg, const FrameBuffer & fb)
             : fbptr(fb.fbptr), fbreg(reg.topLeft() + fb.fbreg.topLeft(), reg.toSize()), owner(false) {}
 
@@ -179,6 +185,7 @@ namespace LTSM
 
         uint32_t        pixel(const XCB::Point &) const;
 
+        FrameBuffer     copyRegion(const XCB::Region* = nullptr) const;
         ColorMap        colourMap(void) const;
         PixelMapWeight  pixelMapWeight(const XCB::Region &) const;
 	std::list<PixelLength> toRLE(const XCB::Region &) const;
@@ -217,5 +224,13 @@ namespace LTSM
  #define ARGB32  LTSM::PixelFormat(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
  #define ABGR32  LTSM::PixelFormat(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000)
 #endif
+
+#ifdef LTSM_WITH_PNG
+namespace PNG
+{
+    bool save(const LTSM::FrameBuffer & fb, std::string_view file);
+}
+#endif
+
 
 #endif // _LTSM_FRAMEBUFFER_

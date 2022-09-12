@@ -142,6 +142,13 @@ public:
         return result;
     }
 
+    bool busSetLoginsDisable(const bool& action)
+    {
+        bool result;
+        proxy_.callMethod("busSetLoginsDisable").onInterface(INTERFACE_NAME).withArguments(action).storeResultsTo(result);
+        return result;
+    }
+
     std::string busEncryptionInfo(const int32_t& display)
     {
         std::string result;

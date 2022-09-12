@@ -25,7 +25,7 @@ jobs:
          sudo apt-get -y upgrade
       - name: Install dependencies
         run: |
-         sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity vncsnapshot \
+         sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity \
            xserver-xorg-video-dummy xserver-xorg xterm x11-xserver-utils dbus-x11 \
            libexpat1 libpam0g-dev libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
@@ -107,7 +107,7 @@ jobs:
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           sleep 5
           echo "get vnc screenshot"
-          vncsnapshot 127.0.0.1:7 test.jpg
+          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
           echo "system log"
           sleep 5
           grep -i ltsm /var/log/syslog

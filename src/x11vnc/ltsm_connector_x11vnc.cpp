@@ -36,7 +36,7 @@ namespace LTSM
 {
     /* Connector::X11VNC */
     Connector::X11VNC::X11VNC(int fd, const JsonObject & jo)
-        : DisplayProxy(jo)
+        : DisplayProxy(jo), RFB::ServerEncoder(fd)
     {
         if(! jo.getBoolean("DesktopResized"))
             desktopResizeModeDisable();

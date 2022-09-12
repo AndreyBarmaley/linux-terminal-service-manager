@@ -29,6 +29,8 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #ifdef LTSM_SOCKET_TLS
 #include "gnutls/gnutls.h"
@@ -183,11 +185,6 @@ namespace LTSM
         return *this;
     }
 
-    void NetworkStream::setReadTimeout(size_t ms)
-    {
-        rcvTimeout = ms;
-    }
-
     std::vector<uint8_t> NetworkStream::recvData(size_t length) const
     {
         std::vector<uint8_t> res(length, 0);
@@ -197,36 +194,7 @@ namespace LTSM
 
     void NetworkStream::recvData(void* ptr, size_t len) const
     {
-        if(rcvTimeout)
-            recvRaw(ptr, len, rcvTimeout);
-        else
-            recvRaw(ptr, len);
-    }
-
-    void NetworkStream::recvRaw(void* ptr, size_t len, size_t timeout) const
-    {
-        auto startp = std::chrono::steady_clock::now();
-        auto timeoutms = std::chrono::milliseconds(timeout);
-
-        while(len)
-        {
-            if(size_t real = hasData())
-            {
-                real = std::min(real, len);
-                recvRaw(ptr, real);
-                ptr = static_cast<uint8_t*>(ptr) + real;
-                len -= real;
-                continue;
-            }
-
-            if(timeoutms < std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startp))
-            {
-                Application::error("%s: timeout error", __FUNCTION__);
-                throw network_error("NetworkStream::recvRaw timeout");
-            }
-            else
-                std::this_thread::sleep_for(1ms);
-        }
+        recvRaw(ptr, len);
     }
 
     std::string NetworkStream::recvString(size_t length) const
@@ -308,9 +276,9 @@ namespace LTSM
     }
 
 #ifdef LTSM_SOCKET_TLS
-    void SocketStream::setupTLS(gnutls_session_t sess) const
+    void SocketStream::setupTLS(gnutls::session* sess) const
     {
-        gnutls_transport_set_int(sess, sock);
+        sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(sock));
     }
 #endif
 
@@ -363,69 +331,56 @@ namespace LTSM
     /* InetStream */
     InetStream::InetStream()
     {
-        int fnin = dup(fileno(stdin));
-        int fnout = dup(fileno(stdout));
-        fdin  = fdopen(fnin, "rb");
-        fdout = fdopen(fnout, "wb");
+        fdin = dup(fileno(stdin));
+        fdout = dup(fileno(stdout));
+        fin.reset(fdopen(fdin, "rb"));
+        fout.reset(fdopen(fdout, "wb"));
         // reset buffering
-        std::setvbuf(fdin, nullptr, _IONBF, 0);
-        std::clearerr(fdin);
+        std::setvbuf(fin.get(), nullptr, _IONBF, 0);
+        std::clearerr(fin.get());
         // set buffering, optimal for tcp mtu size
-        std::setvbuf(fdout, fdbuf.data(), _IOFBF, fdbuf.size());
-        std::clearerr(fdout);
-    }
-
-    InetStream::~InetStream()
-    {
-        inetFdClose();
+        std::setvbuf(fout.get(), fdbuf.data(), _IOFBF, fdbuf.size());
+        std::clearerr(fout.get());
     }
 
     void InetStream::inetFdClose(void)
     {
-        if(fdin)
-        {
-            std::fclose(fdin);
-            fdin = nullptr;
-        }
-
-        if(fdout)
-        {
-            std::fclose(fdout);
-            fdout = nullptr;
-        }
+        fin.reset();
+        fout.reset();
     }
 
 #ifdef LTSM_SOCKET_TLS
-    void InetStream::setupTLS(gnutls_session_t sess) const
+    void InetStream::setupTLS(gnutls::session* sess) const
     {
-        gnutls_transport_set_int2(sess, fileno(fdin), fileno(fdout));
+        sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(fdin),
+                                reinterpret_cast<gnutls_transport_ptr_t>(fdout));
     }
 #endif
 
     bool InetStream::hasInput(void) const
     {
-        return fdin == nullptr || std::feof(fdin) || std::ferror(fdin) ?
-               false : NetworkStream::hasInput(fileno(fdin));
+        return ! fin || std::feof(fin.get()) || std::ferror(fin.get()) ?
+               false : NetworkStream::hasInput(fdin);
     }
 
     size_t InetStream::hasData(void) const
     {
-        return NetworkStream::hasData(fileno(fdin));
+        return NetworkStream::hasData(fdin);
     }
 
     void InetStream::recvRaw(void* ptr, size_t len) const
     {
         while(true)
         {
-            size_t real = std::fread(ptr, 1, len, fdin);
+            size_t real = std::fread(ptr, 1, len, fin.get());
 
             if(len == real)
                 break;
 
-            if(std::feof(fdin))
+            if(std::feof(fin.get()))
                 throw network_error("InetStream::recvRaw end stream");
 
-            if(std::ferror(fdin))
+            if(std::ferror(fin.get()))
             {
                 Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
                 throw network_error("InetStream::recvRaw error");
@@ -440,15 +395,15 @@ namespace LTSM
     {
         while(true)
         {
-            size_t real = std::fwrite(ptr, 1, len, fdout);
+            size_t real = std::fwrite(ptr, 1, len, fout.get());
 
             if(len == real)
                 break;
 
-            if(std::feof(fdout))
+            if(std::feof(fout.get()))
                 throw network_error("InetStream::sendRaw end stream");
 
-            if(std::ferror(fdout))
+            if(std::ferror(fout.get()))
             {
                 Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
                 throw network_error("InetStream::sendRaw error");
@@ -461,29 +416,29 @@ namespace LTSM
 
     void InetStream::sendFlush(void)
     {
-        std::fflush(fdout);
+        std::fflush(fout.get());
     }
 
     bool InetStream::checkError(void) const
     {
-        return fdin == nullptr || fdout == nullptr || std::ferror(fdin) || std::ferror(fdout) ||
-               std::feof(fdin) || std::feof(fdout);
+        return ! fin || ! fout || std::ferror(fin.get()) || std::ferror(fout.get()) ||
+               std::feof(fin.get()) || std::feof(fout.get());
     }
 
     uint8_t InetStream::peekInt8(void) const
     {
-        int res = std::fgetc(fdin);
+        int res = std::fgetc(fin.get());
 
-        if(std::feof(fdin))
+        if(std::feof(fin.get()))
             throw network_error("InetStream::peekInt8 end stream");
 
-        if(std::ferror(fdin))
+        if(std::ferror(fin.get()))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
             throw network_error("InetStream::peekInt8 error");
         }
 
-        std::ungetc(res, fdin);
+        std::ungetc(res, fin.get());
         return static_cast<uint8_t>(res);
     }
 
@@ -562,15 +517,15 @@ namespace LTSM
 
     bool ProxySocket::transmitDataIteration(void)
     {
-        if(fdin == nullptr || std::feof(fdin) || std::ferror(fdin))
+        if(! fin || std::feof(fin.get()) || std::ferror(fin.get()))
             return false;
 
         size_t dataSz = 0;
 
         // inetFd -> bridgeSock
-        if(NetworkStream::hasInput(fileno(fdin)))
+        if(NetworkStream::hasInput(fdin))
         {
-            dataSz = NetworkStream::hasData(fileno(fdin));
+            dataSz = NetworkStream::hasData(fdin);
 
             if(dataSz == 0)
             {
@@ -591,7 +546,7 @@ namespace LTSM
 #endif
         }
 
-        if(fdout == nullptr || std::feof(fdout) || std::ferror(fdout))
+        if(! fout || std::feof(fout.get()) || std::ferror(fout.get()))
             return false;
 
         // bridgeSock -> inetFd
@@ -627,7 +582,86 @@ namespace LTSM
         return true;
     }
 
-    int ProxySocket::connectUnixSocket(const std::filesystem::path & path)
+    int TCPSocket::connect(std::string_view ipaddr, int port)
+    {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+        if(0 > sock)
+        {
+            Application::error("%s: socket error: %s", __FUNCTION__, strerror(errno));
+            return -1;
+        }
+
+        struct sockaddr_in sockaddr;
+        memset(& sockaddr, 0, sizeof(struct sockaddr_in));
+        sockaddr.sin_family = AF_INET;
+        sockaddr.sin_addr.s_addr = inet_addr(ipaddr.data());
+        sockaddr.sin_port = htons(port);
+
+        if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_in)))
+        {
+            Application::error("%s: %s, ipaddr: %s, port: %d", __FUNCTION__, strerror(errno), ipaddr.data(), port);
+            close(sock);
+            sock = 0;
+        }
+        else
+            Application::debug("%s: fd: %d", __FUNCTION__, sock);
+
+        return sock;
+    }
+
+    std::string TCPSocket::resolvAddress(std::string_view ipaddr)
+    {
+        struct in_addr in;
+
+        if(0 == inet_aton(ipaddr.data(), &in))
+            Application::error("%s: invalid ip address: %s", __FUNCTION__, ipaddr.data());
+        else
+        if(auto hp = gethostbyaddr(& in.s_addr, sizeof(in.s_addr), AF_INET))
+            return std::string(hp->h_name);
+        else
+            Application::error("%s: error: %s, ipaddr: %s", __FUNCTION__, hstrerror(h_errno), ipaddr.data());
+
+        return std::string();
+    }
+
+    std::list<std::string> TCPSocket::resolvHostname2(std::string_view hostname)
+    {
+        std::list<std::string> res;
+        if(auto hp = gethostbyname(hostname.data()))
+        {
+            struct in_addr in;
+            while(hp->h_addr_list && *hp->h_addr_list)
+            {
+                std::copy_n(*hp->h_addr_list, sizeof(in_addr), (char*) & in);
+                res.emplace_back(inet_ntoa(in));
+                hp->h_addr_list++;
+            }
+        }
+        else
+            Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+
+        return res;
+    }
+
+    std::string TCPSocket::resolvHostname(std::string_view hostname)
+    {
+        if(auto hp = gethostbyname(hostname.data()))
+        {
+            struct in_addr in;
+            if(hp->h_addr_list && *hp->h_addr_list)
+            {
+                std::copy_n(*hp->h_addr_list, sizeof(in_addr), (char*) & in);
+                return std::string(inet_ntoa(in));
+            }
+        }
+        else
+            Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+
+        return std::string();
+    }
+
+    int UnixSocket::connect(const std::filesystem::path & path)
     {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -638,9 +672,7 @@ namespace LTSM
         }
 
         struct sockaddr_un sockaddr;
-
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
-
         sockaddr.sun_family = AF_UNIX;
 
         const std::string & native = path.native();
@@ -658,7 +690,7 @@ namespace LTSM
         return sock;
     }
 
-    int ProxySocket::listenUnixSocket(const std::filesystem::path & path)
+    int UnixSocket::listen(const std::filesystem::path & path)
     {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -686,7 +718,7 @@ namespace LTSM
             return -1;
         }
 
-        if(0 != listen(fd, 5))
+        if(0 != ::listen(fd, 5))
         {
             Application::error("%s: listen error: %s", __FUNCTION__, strerror(errno));
             close(fd);
@@ -697,9 +729,9 @@ namespace LTSM
         return fd;
     }
 
-    int acceptClientUnixSocket(int fd)
+    int unixSocketAccept(int fd)
     {
-        int sock = accept(fd, nullptr, nullptr);
+        int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock)
             Application::error("%s: accept error: %s", __FUNCTION__, strerror(errno));
@@ -711,7 +743,7 @@ namespace LTSM
 
     bool ProxySocket::proxyInitUnixSockets(const std::filesystem::path & path)
     {
-        int srvfd = ProxySocket::listenUnixSocket(path);
+        int srvfd = UnixSocket::listen(path);
 
         if(0 > srvfd)
             return false;
@@ -723,10 +755,10 @@ namespace LTSM
         }
 
         socketPath = path;
-        std::future<int> job = std::async(std::launch::async, acceptClientUnixSocket, srvfd);
+        std::future<int> job = std::async(std::launch::async, unixSocketAccept, srvfd);
         bridgeSock = -1;
         // socket fd: client part
-        clientSock = connectUnixSocket(socketPath);
+        clientSock = UnixSocket::connect(socketPath);
 
         if(0 < clientSock)
         {
@@ -757,128 +789,82 @@ namespace LTSM
             Application::info("gnutls debug: %s", str);
         }
 
-        /* TLS::BaseContext */
-        BaseContext::BaseContext(int debug)
+        /* TLS::Stream */
+        Stream::Stream(const NetworkStream* bs) : layer(bs)
         {
-            Application::info("gnutls version usage: %s", GNUTLS_VERSION);
-            int ret = gnutls_global_init();
+            if(! bs)
+                throw std::invalid_argument("tls stream failed");
+        }
+
+        Stream::~Stream()
+        {
+            if(handshake)
+                session->bye(GNUTLS_SHUT_WR);
+        }
+
+        bool Stream::startHandshake(void)
+        {
+            int ret = 0;
+            layer->setupTLS(session.get());
+
+            do
+            {
+                ret = session->handshake();
+            }
+            while(ret < 0 && gnutls_error_is_fatal(ret) == 0);
 
             if(ret < 0)
-                Application::error("gnutls_global_init error: %s", gnutls_strerror(ret));
-
-            gnutls_global_set_log_level(debug);
-            gnutls_global_set_log_function(gnutls_log);
-        }
-
-        BaseContext::~BaseContext()
-        {
-            if(dhparams) gnutls_dh_params_deinit(dhparams);
-
-            if(session) gnutls_deinit(session);
-
-            gnutls_global_deinit();
-        }
-
-        bool BaseContext::initSession(std::string_view priority, int mode)
-        {
-            int ret = gnutls_init(& session, mode);
-
-            if(gnutls_error_is_fatal(ret))
             {
-                Application::error("gnutls_init error: %s", gnutls_strerror(ret));
+                Application::error("gnutls_handshake error: %s", gnutls_strerror(ret));
                 return false;
             }
 
-            if(priority.empty())
-                ret = gnutls_set_default_priority(session);
-            else
-            {
-                ret = gnutls_priority_set_direct(session, priority.data(), nullptr);
-
-                if(ret != GNUTLS_E_SUCCESS)
-                {
-                    const char* compat = "NORMAL:+ANON-ECDH:+ANON-DH";
-                    Application::error("gnutls_priority_set_direct error: %s, priority: %s", gnutls_strerror(ret), priority.data());
-                    Application::info("reuse compat priority: %s", compat);
-                    ret = gnutls_priority_set_direct(session, compat, nullptr);
-                }
-            }
-
-            if(gnutls_error_is_fatal(ret))
-            {
-                Application::error("gnutls_set_default_priority error: %s", gnutls_strerror(ret));
-                return false;
-            }
-
-            ret = gnutls_dh_params_init(&dhparams);
-
-            if(gnutls_error_is_fatal(ret))
-            {
-                Application::error("gnutls_dh_params_init error: %s", gnutls_strerror(ret));
-                return false;
-            }
-
-            ret = gnutls_dh_params_generate2(dhparams, 1024);
-
-            if(gnutls_error_is_fatal(ret))
-            {
-                Application::error("gnutls_dh_params_generate2 error: %s", gnutls_strerror(ret));
-                return false;
-            }
-
+            handshake = true;
             return true;
         }
 
-        /* TLS::AnonCredentials */
-        AnonCredentials::~AnonCredentials()
+        bool Stream::initAnonHandshake(std::string_view priority, bool srvmode, int debug)
         {
-            if(cred)
-                gnutls_anon_free_server_credentials(cred);
-        }
+            Application::info("gnutls version usage: %s", GNUTLS_VERSION);
 
-        bool AnonCredentials::initSession(std::string_view priority, int mode)
-        {
-            Application::info("gnutls init session: %s", "AnonTLS");
+            gnutls_global_set_log_level(debug);
+            gnutls_global_set_log_function(gnutls_log);
 
-            if(BaseContext::initSession(priority, mode))
+            if(priority.empty())
+                priority = "NORMAL:+ANON-ECDH:+ANON-DH";
+
+            if(srvmode)
             {
-                int ret = gnutls_anon_allocate_server_credentials(& cred);
+                Application::debug("%s: tls server mode, priority: %s", __FUNCTION__, priority.data());
+                dhparams.generate(1024);
+                auto ptr = new gnutls::anon_server_credentials();
+                ptr->set_dh_params(dhparams);
+                cred.reset(ptr);
 
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_anon_allocate_server_credentials error: %s", gnutls_strerror(ret));
-                    return false;
-                }
-
-                gnutls_anon_set_server_dh_params(cred, dhparams);
-                ret = gnutls_credentials_set(session, GNUTLS_CRD_ANON, cred);
-
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_credentials_set error: %s", gnutls_strerror(ret));
-                    return false;
-                }
-
-                return true;
+                session = std::make_unique<gnutls::server_session>();
+            }
+            else
+            {
+                Application::debug("%s: tls client mode, priority: %s", __FUNCTION__, priority.data());
+                cred = std::make_unique<gnutls::anon_client_credentials>();
+                session = std::make_unique<gnutls::client_session>();
             }
 
-            return false;
+            session->set_credentials(*cred.get());
+            session->set_priority(priority.data(), NULL);
+
+            return startHandshake();
         }
 
-        /* TLS::X509Credentials */
-        X509Credentials::~X509Credentials()
+        bool Stream::initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
         {
-            if(cred)
-                gnutls_certificate_free_credentials(cred);
-        }
+            Application::info("gnutls version usage: %s", GNUTLS_VERSION);
 
-        bool X509Credentials::initSession(std::string_view priority, int mode)
-        {
-            if(caFile.empty() || ! std::filesystem::exists(caFile))
-            {
-                Application::error("CA file not found: %s", caFile.c_str());
-                return false;
-            }
+            gnutls_global_set_log_level(debug);
+            gnutls_global_set_log_function(gnutls_log);
+
+            if(priority.empty())
+                priority = "NORMAL:+ANON-ECDH:+ANON-DH";
 
             if(certFile.empty() || ! std::filesystem::exists(certFile))
             {
@@ -892,146 +878,38 @@ namespace LTSM
                 return false;
             }
 
-            Application::info("gnutls init session: %s", "X509");
-
-            if(BaseContext::initSession(priority, mode))
+            if(srvmode)
             {
-                int ret = gnutls_certificate_allocate_credentials(& cred);
-
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_certificate_allocate_credentials error: %s", gnutls_strerror(ret));
-                    return false;
-                }
-
-                ret = gnutls_certificate_set_x509_trust_file(cred, caFile.c_str(), GNUTLS_X509_FMT_PEM);
-
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_certificate_set_x509_trust_file error: %s, ca: %s", gnutls_strerror(ret), caFile.c_str());
-                    return false;
-                }
-
-                if(! crlFile.empty() && std::filesystem::exists(crlFile))
-                {
-                    ret = gnutls_certificate_set_x509_crl_file(cred, crlFile.c_str(), GNUTLS_X509_FMT_PEM);
-
-                    if(gnutls_error_is_fatal(ret))
-                    {
-                        Application::error("gnutls_certificate_set_x509_crl_file error: %s, crl: %s", gnutls_strerror(ret), crlFile.c_str());
-                        return false;
-                    }
-                }
-
-                ret = gnutls_certificate_set_x509_key_file(cred, certFile.c_str(), keyFile.c_str(), GNUTLS_X509_FMT_PEM);
-
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_certificate_set_x509_key_file error: %s, cert: %s, key: %s", gnutls_strerror(ret), certFile.c_str(), keyFile.c_str());
-                    return false;
-                }
-
-                /*
-                if(! ocspStatusFile.empty() && std::filesystem::is_regular_file(ocspStatusFile))
-                {
-                    ret = gnutls_certificate_set_ocsp_status_request_file(cred, ocspStatusFile.c_str(), 0);
-                    if(gnutls_error_is_fatal(ret))
-                    {
-                        Application::error("gnutls_certificate_set_ocsp_status_request_file error: %s, ocsp status file: %s", gnutls_strerror(ret), ocspStatusFile.c_str());
-                        return false;
-                    }
-                }
-                */
-                gnutls_certificate_set_dh_params(cred, dhparams);
-                ret = gnutls_credentials_set(session, GNUTLS_CRD_CERTIFICATE, cred);
-
-                if(gnutls_error_is_fatal(ret))
-                {
-                    Application::error("gnutls_credentials_set error: %s", gnutls_strerror(ret));
-                    return false;
-                }
-
-                gnutls_certificate_server_set_request(session, GNUTLS_CERT_IGNORE);
-                return true;
+                cred = std::make_unique<gnutls::certificate_server_credentials>();
+                auto ptr = new gnutls::server_session();
+                ptr->set_certificate_request(GNUTLS_CERT_IGNORE);
+                session.reset(ptr);
+            }
+            else
+            {
+                cred = std::make_unique<gnutls::certificate_client_credentials>();
+                session = std::make_unique<gnutls::client_session>();
             }
 
-            return false;
-        }
+            auto certcred = static_cast<gnutls::certificate_credentials*>(cred.get());
 
-        /* TLS::Stream */
-        Stream::Stream(const NetworkStream* bs) : layer(bs)
-        {
-            if(! bs)
-                throw std::invalid_argument("tls stream failed");
-        }
+            if(std::filesystem::exists(caFile))
+                certcred->set_x509_trust_file(caFile.c_str(), GNUTLS_X509_FMT_PEM);
 
-        Stream::~Stream()
-        {
-            if(tls && handshake)
-                gnutls_bye(tls->session, GNUTLS_SHUT_WR);
-        }
+            certcred->set_x509_key_file(certFile.c_str(), keyFile.c_str(), GNUTLS_X509_FMT_PEM);
 
-        bool Stream::initAnonHandshake(std::string_view priority, bool srvmode, int debug)
-        {
-            int ret = 0;
-            tls.reset(new AnonCredentials(debug));
+            if(std::filesystem::exists(crlFile))
+                certcred->set_x509_crl_file(crlFile.c_str(), GNUTLS_X509_FMT_PEM);
 
-            if(! tls->initSession(priority, srvmode ? GNUTLS_SERVER : GNUTLS_CLIENT))
-            {
-                tls.reset();
-                return false;
-            }
+            session->set_credentials(*cred.get());
+            session->set_priority(priority.data(), NULL);
 
-            layer->setupTLS(tls->session);
-
-            do
-            {
-                ret = gnutls_handshake(tls->session);
-            }
-            while(ret < 0 && gnutls_error_is_fatal(ret) == 0);
-
-            if(ret < 0)
-            {
-                Application::error("gnutls_handshake error: %s", gnutls_strerror(ret));
-                return false;
-            }
-
-            handshake = true;
-            return true;
-        }
-
-        bool Stream::initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
-        {
-            int ret = 0;
-            tls.reset(new X509Credentials(caFile, certFile, keyFile, crlFile, debug));
-
-            if(! tls->initSession(priority, srvmode ? GNUTLS_SERVER : GNUTLS_CLIENT))
-            {
-                tls.reset();
-                return false;
-            }
-
-            layer->setupTLS(tls->session);
-
-            do
-            {
-                ret = gnutls_handshake(tls->session);
-            }
-            while(ret < 0 && gnutls_error_is_fatal(ret) == 0);
-
-            if(ret < 0)
-            {
-                Application::error("gnutls_handshake error: %s", gnutls_strerror(ret));
-                return false;
-            }
-
-            handshake = true;
-            return true;
+            return startHandshake();
         }
 
         std::string Stream::sessionDescription(void) const
         {
-            auto desc = gnutls_session_get_desc(tls->session);
+            auto desc = gnutls_session_get_desc(Session::ptr(session.get()));
             std::string res(desc);
             gnutls_free(desc);
             return res;
@@ -1041,39 +919,12 @@ namespace LTSM
         {
             // gnutls doc: 6.5.1 Asynchronous operation
             // utilize gnutls_record_check_pending, either before the poll system call
-            return (tls ? 0 < gnutls_record_check_pending(tls->session) : false) || layer->hasInput();
+            return 0 < session->check_pending() || layer->hasInput();
         }
 
         size_t Stream::hasData(void) const
         {
-            return gnutls_record_check_pending(tls->session);
-        }
-
-        void Stream::recvRaw(void* ptr, size_t len, size_t timeoutMS) const
-        {
-            if(0 >= gnutls_record_check_pending(tls->session))
-            {
-                void* recv_ptr;
-                void* send_ptr;
-                gnutls_transport_get_ptr2(tls->session, & recv_ptr, & send_ptr);
-                struct pollfd fds = {0};
-                fds.fd = (long) recv_ptr;
-                fds.events = POLLIN;
-                int ret = poll(& fds, 1, timeoutMS);
-
-                if(0 > ret)
-                {
-                    Application::error("%s: poll error: %s", __FUNCTION__, strerror(errno));
-                    throw network_error("TLS::Stream::recvRaw error");
-                }
-                else if(0 == ret)
-                {
-                    Application::error("%s: timeout error", __FUNCTION__);
-                    throw network_error("TLS::Stream::recvRaw timeout");
-                }
-            }
-
-            recvRaw(ptr, len);
+            return session->check_pending();
         }
 
         void Stream::recvRaw(void* ptr, size_t len) const
@@ -1089,7 +940,7 @@ namespace LTSM
 
             ssize_t ret = 0;
 
-            while((ret = gnutls_record_recv(tls->session, ptr, len)) < 0)
+            while((ret = session->recv(ptr, len)) < 0)
             {
                 if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
                     continue;
@@ -1097,12 +948,23 @@ namespace LTSM
                 break;
             }
 
-            if(ret != static_cast<ssize_t>(len))
+            if(0 > ret)
             {
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
                     throw network_error("TLS::Stream::recvRaw");
+            }
+            else
+            // eof
+            if(0 == ret)
+                throw network_error("gnutls_record_recv: read data end");
+
+            if(ret < static_cast<ssize_t>(len))
+            {
+                ptr = static_cast<uint8_t*>(ptr) + ret;
+                len = len - ret;
+                recvRaw(ptr, len);
             }
         }
 
@@ -1110,7 +972,7 @@ namespace LTSM
         {
             ssize_t ret = 0;
 
-            while((ret = gnutls_record_send(tls->session, ptr, len)) < 0)
+            while((ret = session->send(ptr, len)) < 0)
             {
                 if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
                     continue;
@@ -1123,7 +985,7 @@ namespace LTSM
                 Application::error("gnutls_record_send ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
-                    throw network_error("TLS::Stream::sendRaw");
+                    throw network_error("gnutls_record_send");
             }
         }
 
@@ -1142,9 +1004,20 @@ namespace LTSM
         void Stream::sendFlush(void)
         {
             // flush send data
-            gnutls_record_uncork(tls->session, 0);
+            gnutls_record_uncork(Session::ptr(session.get()), 0);
             // cached send data
-            gnutls_record_cork(tls->session);
+            gnutls_record_cork(Session::ptr(session.get()));
+        }
+
+        AnonSession::AnonSession(const NetworkStream* st, std::string_view priority, bool serverMode, int debug) : Stream(st)
+        {
+            initAnonHandshake(priority, serverMode, debug);
+        }
+
+        X509Session::X509Session(const NetworkStream* st, const std::string & cafile, const std::string & cert, const std::string & key,
+                        const std::string & crl, std::string_view priority, bool serverMode, int debug) : Stream(st)
+        {
+            initX509Handshake(priority, serverMode, cafile, cert, key, crl, debug);
         }
 
         std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & data, std::string_view str)
@@ -1218,11 +1091,6 @@ namespace LTSM
             buf.reserve(4 * 1024);
         }
 
-        Context::~Context()
-        {
-            deflateEnd(this);
-        }
-
         std::vector<uint8_t> Context::deflateFlush(bool finish)
         {
             next_in = buf.data();
@@ -1239,8 +1107,11 @@ namespace LTSM
             auto zipsz = total_out - prev;
             zip.resize(zipsz);
             buf.clear();
+            next_in = nullptr;
+            avail_in = 0;
             next_out = nullptr;
             avail_out = 0;
+
             return zip;
         }
 
@@ -1270,19 +1141,22 @@ namespace LTSM
         }
 
         /* Zlib::DeflateStream */
-        DeflateStream::DeflateStream()
+        DeflateStream::DeflateStream(int level)
         {
+            if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level)
+                level = Z_BEST_COMPRESSION;
+
             auto ptr = new Context();
             zlib.reset(ptr);
-            int ret = deflateInit2(ptr, Z_BEST_COMPRESSION, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+            int ret = deflateInit2(ptr, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
 
             if(ret < Z_OK)
                 throw std::runtime_error(Tools::StringFormat("%1: init failed, code: %2").arg(__FUNCTION__).arg(ret));
         }
 
-        void DeflateStream::setLevel(size_t level) const
+        DeflateStream::~DeflateStream()
         {
-            deflateParams(zlib.get(), 9 < level ? 9 : level, Z_DEFAULT_STRATEGY);
+            deflateEnd(zlib.get());
         }
 
         void DeflateStream::prepareSize(size_t len) const
@@ -1290,7 +1164,7 @@ namespace LTSM
             if(len < zlib->buf.capacity()) zlib->buf.reserve(len);
         }
 
-        std::vector<uint8_t> DeflateStream::syncFlush(void) const
+        std::vector<uint8_t> DeflateStream::deflateFlush(void) const
         {
             return zlib->deflateFlush();
         }
@@ -1340,12 +1214,17 @@ namespace LTSM
     
         void InflateStream::appendData(const std::vector<uint8_t> & zip)
         {
-            if(it < zlib->buf.end())
-                zlib->buf.erase(it, zlib->buf.end());
+            if(it != zlib->buf.end())
+            {
+                std::vector<uint8_t> tmp(it, zlib->buf.end());
+                zlib->buf.swap(tmp);
+                zlib->inflateFlush(zip);
+            }
             else
+            {
                 zlib->buf.clear();
-
-            zlib->inflateFlush(zip);
+                zlib->inflateFlush(zip);
+            }
             // fixed pos
             it = zlib->buf.begin();
         }
@@ -1363,12 +1242,12 @@ namespace LTSM
 
         size_t InflateStream::hasData(void) const
         {
-            return it < zlib->buf.end() ? std::distance(it, zlib->buf.end()) : 0;
+            return it != zlib->buf.end() ? std::distance(it, zlib->buf.end()) : 0;
         }
 
         bool InflateStream::hasInput(void) const
         {
-            return it < zlib->buf.end();
+            return it != zlib->buf.end();
         }
 
         uint8_t InflateStream::peekInt8(void) const

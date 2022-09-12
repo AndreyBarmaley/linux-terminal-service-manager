@@ -28,8 +28,7 @@
 #include <atomic>
 #include <functional>
 
-#include "ltsm_librfb.h"
-#include "ltsm_sockets.h"
+#include "librfb_server.h"
 #include "ltsm_x11vnc.h"
 
 namespace LTSM
@@ -37,7 +36,7 @@ namespace LTSM
     namespace Connector
     {
         /* Connector::VNC */
-        class X11VNC : public DisplayProxy, protected RFB::ServerEncoding
+        class X11VNC : public DisplayProxy, protected RFB::ServerEncoder
         {
             std::unique_ptr<JsonObject> keymap;
 

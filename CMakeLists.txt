@@ -18,7 +18,7 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_XKB_COMMON ON CACHE BOOL "usage xkb layouts" FORCE)
     set(LTSM_BUILD_TESTS ON CACHE BOOL "build test utilities" FORCE)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
-    #set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
+    set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
 endif()
 
 include(FindPkgConfig)
@@ -30,7 +30,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 # LTSM common lib
-project(LTSM_common VERSION 20220902.1)
+project(LTSM_common VERSION 20220910.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -80,7 +80,7 @@ link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20220902.1)
+project(LTSM_service VERSION 20220910.1)
 
 find_package(sdbus-c++ REQUIRED)
 find_library(PAM_LIBRARIES NAMES pam)
@@ -94,18 +94,19 @@ target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARI
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20220902.1)
+project(LTSM_connector VERSION 20220910.1)
 
 option(LTSM_WITH_RDP "add rdp protocol support" ON)
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
 
 find_package(sdbus-c++ REQUIRED)
 find_package(GnuTLS REQUIRED)
+find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
 add_executable(LTSM_connector
     src/connector/ltsm_connector.cpp
     src/connector/ltsm_connector_vnc.cpp
-    src/librfb/ltsm_encodings.cpp
+    src/librfb/librfb_server.cpp
     src/librfb/ltsm_librfb.cpp)
 
 if(LTSM_WITH_RDP)
@@ -125,11 +126,11 @@ endif()
 
 target_compile_options(LTSM_connector PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
 target_include_directories(LTSM_connector PRIVATE src/common src/librfb src/dbus-glue ${GNUTLS_INCLUDE_DIR})
-target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLS_LIBRARIES} z)
+target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20220902.1)
+project(LTSM_sdl2x11 VERSION 20220910.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
 target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS} ${SDL2_IMAGE_CFLAGS})
@@ -139,7 +140,7 @@ target_link_libraries(LTSM_sdl2x11 LTSM_common ${SDL2_LIBRARIES} ${SDL2_IMAGE_LI
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20220902.1)
+project(LTSM_helper VERSION 20220910.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -157,7 +158,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20220902.1)
+project(LTSM_sessions VERSION 20220910.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -176,33 +177,35 @@ set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20220902.1)
+    project(LTSM_x11vnc VERSION 20220910.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
         src/x11vnc/ltsm_x11vnc.cpp
-        src/librfb/ltsm_encodings.cpp
+        src/librfb/librfb_server.cpp
         src/librfb/ltsm_librfb.cpp)
 
     target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} src/x11vnc src/connector)
-    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} z)
+    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
 
     set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20220902.1)
+    project(LTSM_vnc2image VERSION 20220910.1)
 
     add_executable(LTSM_vnc2image
-        src/vnc2image/ltsm_vnc_encodings.cpp
-        src/vnc2image/ltsm_connector_vnc.cpp
-        src/vnc2image/ltsm_vnc2image.cpp)
+        src/vnc2image/ltsm_vnc2image.cpp
+        src/librfb/librfb_client.cpp
+        src/librfb/ltsm_librfb.cpp)
 
-    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB ${GNUTLS_DEFINITIONS})
-    target_include_directories(LTSM_vnc2image PRIVATE src/common ${GNUTLS_INCLUDE_DIR} src/dbus-glue src/vnc2image src/connector)
-    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} z)
+    find_package(PNG REQUIRED)
+
+    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
+    target_include_directories(LTSM_vnc2image PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} src/vnc2image src/connector)
+    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

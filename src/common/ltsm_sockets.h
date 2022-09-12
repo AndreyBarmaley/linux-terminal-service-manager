@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <memory>
 #include <cstdint>
+#include <cstdio>
 #include <stdexcept>
 
 #ifdef LTSM_SOCKET_ZLIB
@@ -41,11 +42,12 @@
 
 #ifdef LTSM_SOCKET_TLS
 #include "gnutls/gnutls.h"
+#include "gnutls/gnutlsxx.h"
 #endif
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220830
+#define LTSM_SOCKETS_VERSION 20220910
 
 namespace LTSM
 {
@@ -57,8 +59,6 @@ namespace LTSM
     /// @brief: network stream interface
     class NetworkStream : protected ByteOrderInterface
     {
-        size_t                  rcvTimeout;
-
     protected:
         static bool             hasInput(int fd, int timeoutMS = 1);
         static size_t           hasData(int fd);
@@ -67,11 +67,11 @@ namespace LTSM
         inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
-        NetworkStream() : rcvTimeout(0) {}
+        NetworkStream() {}
         virtual ~NetworkStream() {}
 
 #ifdef LTSM_SOCKET_TLS
-        virtual void            setupTLS(gnutls_session_t) const {}
+        virtual void            setupTLS(gnutls::session*) const {}
 #endif
         inline NetworkStream &  sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
         inline NetworkStream &  sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
@@ -114,12 +114,9 @@ namespace LTSM
         void                    recvData(void* ptr, size_t len) const;
 
         virtual void            recvRaw(void*, size_t) const = 0;
-        virtual void            recvRaw(void* ptr, size_t len, size_t timeout /* ms */) const;
 
         NetworkStream &         sendString(std::string_view);
         std::string	        recvString(size_t) const;
-
-        void                    setReadTimeout(size_t ms);
     };
 
     namespace FileDescriptor
@@ -140,7 +137,7 @@ namespace LTSM
         ~SocketStream();
 
 #ifdef LTSM_SOCKET_TLS
-        void                    setupTLS(gnutls_session_t) const override;
+        void                    setupTLS(gnutls::session*) const override;
 #endif
         void                    setSocket(int fd) { sock = fd; }
 
@@ -158,18 +155,19 @@ namespace LTSM
     class InetStream : public NetworkStream
     {
     protected:
-        FILE*                   fdin = nullptr;
-        FILE*                   fdout = nullptr;
+        std::unique_ptr<FILE, decltype(fclose)*> fin{nullptr, fclose};
+        std::unique_ptr<FILE, decltype(fclose)*> fout{nullptr, fclose};
+        int                     fdin = 0;
+        int                     fdout = 0;
         std::array<char, 1492>  fdbuf;
 
         void                    inetFdClose(void);
 
     public:
         InetStream();
-        ~InetStream();
 
 #ifdef LTSM_SOCKET_TLS
-        void                    setupTLS(gnutls_session_t) const override;
+        void                    setupTLS(gnutls::session*) const override;
 #endif
         bool                    hasInput(void) const override;
         size_t                  hasData(void) const override;
@@ -206,10 +204,21 @@ namespace LTSM
         void                    proxyStartEventLoop(void);
         void                    proxyStopEventLoop(void);
         void                    proxyShutdown(void);
-
-        static int              connectUnixSocket(const std::filesystem::path &);
-        static int              listenUnixSocket(const std::filesystem::path &);
     };
+
+    namespace TCPSocket
+    {
+        std::string             resolvAddress(std::string_view ipaddr);
+        std::string             resolvHostname(std::string_view hostname);
+        std::list<std::string>  resolvHostname2(std::string_view hostname);
+        int                     connect(std::string_view ipaddr, int port);
+    }
+
+    namespace UnixSocket
+    {
+        int                     connect(const std::filesystem::path &);
+        int                     listen(const std::filesystem::path &);
+    }
 
 #ifdef LTSM_SOCKET_TLS
     /// transport layer security
@@ -218,35 +227,39 @@ namespace LTSM
         std::vector<uint8_t>    randomKey(size_t);
         std::vector<uint8_t>    encryptDES(const std::vector<uint8_t> & crypt, std::string_view key);
 
-        /// @brief: tls context
-        struct BaseContext
+        class Session : public gnutls::session
         {
-            gnutls_session_t    session = nullptr;
-            gnutls_dh_params_t  dhparams = nullptr;
-
-            BaseContext(int debug = 0);
-            virtual ~BaseContext();
-
-            std::string         sessionDescription(void) const;
-            virtual bool        initSession(std::string_view priority, int mode = GNUTLS_SERVER);
+        public:
+#if GNUTLS_VERSION_NUMBER < 0x030603
+            static gnutls_session_t ptr(gnutls::session* sess)
+            {
+                return sess->*(& Session::s);
+            }
+#else
+            static gnutls_session_t ptr(gnutls::session* sess)
+            {
+                return sess->ptr();
+            }
+#endif
         };
 
         /// @brief: tls stream
         class Stream : public NetworkStream
         {
-        protected:
-            const NetworkStream* layer;
-            std::unique_ptr<BaseContext> tls;
+        private:
+            bool                startHandshake(void);
+            const NetworkStream* layer = nullptr;
+
+            gnutls::dh_params   dhparams;
+            std::unique_ptr<gnutls::credentials> cred;
+            std::unique_ptr<gnutls::session> session;
+
             bool                handshake = false;
             mutable int         peek = -1;
 
         public:
             Stream(const NetworkStream*);
             ~Stream();
-
-            bool                initAnonHandshake(std::string_view priority, bool srvmode, int debug);
-            bool                initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile,
-                                                        const std::string & keyFile, const std::string & crlFile, int debug);
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
@@ -255,31 +268,25 @@ namespace LTSM
 
             void		sendRaw(const void*, size_t) override;
             void                recvRaw(void*, size_t) const override;
-            void                recvRaw(void* ptr, size_t len, size_t timeout /* ms */) const override;
 
 	    std::string		sessionDescription(void) const;
+
+            bool                initAnonHandshake(std::string_view priority, bool srvmode, int debug);
+            bool                initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile,
+                                                        const std::string & keyFile, const std::string & crlFile, int debug);
         };
 
-        struct AnonCredentials : BaseContext
+        class AnonSession : public Stream
         {
-            gnutls_anon_server_credentials_t cred;
-
-            AnonCredentials(int debug = 0) : BaseContext(debug), cred(nullptr) {}
-            ~AnonCredentials();
-
-            bool                initSession(std::string_view priority, int mode = GNUTLS_SERVER) override;
+        public:
+            AnonSession(const NetworkStream*, std::string_view priority, bool serverMode = true, int debug = 3);
         };
 
-        struct X509Credentials : BaseContext
+        class X509Session : public Stream
         {
-            gnutls_certificate_credentials_t cred;
-            const std::string   caFile, certFile, keyFile, crlFile;
-
-            X509Credentials(const std::string & ca, const std::string & cert, const std::string & key, const std::string & crl, int debug = 0)
-                : BaseContext(debug), cred(nullptr), caFile(ca), certFile(cert), keyFile(key), crlFile(crl) {}
-            ~X509Credentials();
-
-            bool                initSession(std::string_view priority, int mode = GNUTLS_SERVER) override;
+        public:
+            X509Session(const NetworkStream*, const std::string & cafile, const std::string & cert, const std::string & key,
+                        const std::string & crl, std::string_view priority, bool serverMode = true, int debug = 3);
         };
     } // TLS
 #endif // LTSM_SOCKET_TLS
@@ -292,7 +299,6 @@ namespace LTSM
             std::vector<uint8_t> buf;
 
             Context();
-            ~Context();
             
             std::vector<uint8_t> deflateFlush(bool finish = false);
             void inflateFlush(const std::vector<uint8_t> &);
@@ -305,11 +311,11 @@ namespace LTSM
             std::unique_ptr<Context> zlib;
             
         public:
-            DeflateStream();
+            DeflateStream(int level = Z_BEST_COMPRESSION);
+            ~DeflateStream();
     
-            std::vector<uint8_t> syncFlush(void) const;
+            std::vector<uint8_t> deflateFlush(void) const;
             void                prepareSize(size_t) const;
-            void                setLevel(size_t level) const;
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;

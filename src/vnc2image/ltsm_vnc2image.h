@@ -24,6 +24,8 @@
 #ifndef _LTSM_VNC2IMAGE_
 #define _LTSM_VNC2IMAGE_
 
+#include <string>
+
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
@@ -34,9 +36,14 @@ namespace LTSM
 {
     class Vnc2Image : public Application
     {
-        JsonObject              _config;
+        std::string             host{"localhost"};
+        std::string             password;
+        std::string             filename{"screenshot.png"};
+        int                     port = 5900;
+        int                     timeout = 0;
+        bool                    notls = false;
 
-        int    		        startSocket(string_view host, int port) const;
+        int    		        startSocket(std::string_view host, int port) const;
 
     public:
         Vnc2Image(int argc, const char** argv);

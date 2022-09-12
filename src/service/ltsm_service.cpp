@@ -585,7 +585,7 @@ namespace LTSM
                 runSystemScript(display, user, _config->getString("system:logoff"));
 
             Application::debug("display shutdown complete: %d", display);
-            const_cast<XvfbSession*>(xvfb)->shutdown = true;
+            const_cast<XvfbSession*>(xvfb2)->shutdown = true;
         }).detach();
         return true;
     }
@@ -1343,6 +1343,12 @@ namespace LTSM
         return true;
     }
 
+    bool Manager::Object::busSetLoginsDisable(const bool & action)
+    {
+        _loginsDisable = action;
+        return true;
+    }
+
     bool Manager::Object::busConnectorTerminated(const int32_t & display)
     {
         Application::info("connector terminated, display: %d", display);
@@ -1552,6 +1558,13 @@ namespace LTSM
         {
             Application::error("allow logins failed, username not found: %s, display: %d", login.c_str(), display);
             emitLoginFailure(display, "login not found");
+            return false;
+        }
+
+        if(_loginsDisable)
+        {
+            Application::info("logins are disabled by the administrator, username: %s, display: %d", login.c_str(), display);
+            emitLoginFailure(display, "logins are disabled by the administrator");
             return false;
         }
 

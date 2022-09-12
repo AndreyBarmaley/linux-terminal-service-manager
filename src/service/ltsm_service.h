@@ -120,6 +120,7 @@ namespace LTSM
 	    std::list<PidStatus>	_childEnded;
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
             std::atomic<bool>           _running = false;
+            bool                        _loginsDisable = false;
 
         protected:
 	    void			openlog(void) const;
@@ -165,6 +166,7 @@ namespace LTSM
             bool                        busConnectorTerminated(const int32_t & display) override;
             bool                        busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
+	    bool			busSetLoginsDisable(const bool & action) override;
             bool                        busSetDebugLevel(const std::string & level) override;
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;

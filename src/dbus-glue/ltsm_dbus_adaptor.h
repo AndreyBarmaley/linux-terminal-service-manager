@@ -34,6 +34,7 @@ protected:
         object_.registerMethod("busSetEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display", "info").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& info){ return this->busSetEncryptionInfo(display, info); });
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
+        object_.registerMethod("busSetLoginsDisable").onInterface(INTERFACE_NAME).withInputParamNames("action").withOutputParamNames("result").implementedAs([this](const bool& action){ return this->busSetLoginsDisable(action); });
         object_.registerMethod("busEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busEncryptionInfo(display); });
         object_.registerMethod("busDisplayResized").onInterface(INTERFACE_NAME).withInputParamNames("display", "width", "height").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint16_t& width, const uint16_t& height){ return this->busDisplayResized(display, width, height); });
         object_.registerMethod("busConnectorTerminated").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorTerminated(display); });
@@ -160,6 +161,7 @@ private:
     virtual bool busSetEncryptionInfo(const int32_t& display, const std::string& info) = 0;
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;
+    virtual bool busSetLoginsDisable(const bool& action) = 0;
     virtual std::string busEncryptionInfo(const int32_t& display) = 0;
     virtual bool busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) = 0;
     virtual bool busConnectorTerminated(const int32_t& display) = 0;

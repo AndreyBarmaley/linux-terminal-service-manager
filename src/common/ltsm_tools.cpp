@@ -113,8 +113,8 @@ namespace LTSM
     std::string Tools::runcmd(std::string_view cmd)
     {
         std::array<char, 128> buffer = {0};
+        std::unique_ptr<FILE, decltype(pclose)*> pipe{popen(cmd.data(), "r"), pclose};
         std::string result;
-        std::shared_ptr<FILE> pipe(popen(cmd.data(), "r"), pclose);
 
         if(!pipe)
         {
@@ -409,9 +409,22 @@ namespace LTSM
         return false;
     }
 
+    // StreamBits
+    bool Tools::StreamBits::empty(void) const
+    {
+        return vecbuf.empty() ||
+                (vecbuf.size() == 1 && bitpos == 7);
+    }
+        
+    const std::vector<uint8_t> & Tools::StreamBits::toVector(void) const
+    {
+        return vecbuf;
+    }
+
     // StreamBitsPack
     Tools::StreamBitsPack::StreamBitsPack()
     {
+        bitpos = 7;
         vecbuf.reserve(32);
     }
 
@@ -421,7 +434,6 @@ namespace LTSM
             vecbuf.push_back(0);
 
         uint8_t mask = 1 << bitpos;
-
         if(v) vecbuf.back() |= mask;
 
         if(bitpos == 0)
@@ -447,15 +459,59 @@ namespace LTSM
         }
     }
 
-    bool Tools::StreamBitsPack::empty(void) const
+    // StreamBitsUnpack
+    Tools::StreamBitsUnpack::StreamBitsUnpack(const std::vector<uint8_t> & v, size_t counts, size_t field)
     {
-        return vecbuf.empty() ||
-               (vecbuf.size() == 1 && bitpos == 7);
+        // check size
+        size_t bits = field * counts;
+        size_t len = bits >> 3;
+        if((len << 3) < bits) len++;
+
+        if(len < v.size())
+            throw std::runtime_error("stream bits: incorrect data size");
+
+        vecbuf.assign(v.begin(), v.end());
+        bitpos = (len << 3) - bits;
     }
 
-    const std::vector<uint8_t> & Tools::StreamBitsPack::toVector(void) const
+    bool Tools::StreamBitsUnpack::popBit(void)
     {
-        return vecbuf;
+        if(vecbuf.empty())
+            throw std::runtime_error("stream bits: empty data");
+
+        uint8_t mask = 1 << bitpos;
+        bool res = vecbuf.back() & mask;
+
+        if(bitpos == 7)
+        {
+            vecbuf.pop_back();
+            bitpos = 0;
+        }
+        else
+        {
+            bitpos++;
+        }
+
+        return res;
+    }
+
+    int Tools::StreamBitsUnpack::popValue(size_t field)
+    {
+        // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
+        size_t mask1 = 1 << (field - 1);
+        size_t mask2 = 1;
+        int val = 0;
+
+        while(mask1)
+        {
+            if(popBit())
+                val |= mask2;
+
+            mask1 >>= 1;
+            mask2 <<= 1;
+        }
+
+        return val;
     }
 
     size_t Tools::maskShifted(size_t mask)

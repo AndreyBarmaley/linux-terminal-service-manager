@@ -58,13 +58,6 @@ namespace LTSM
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
-        if(_config->hasKey("socket:read:timeout_ms"))
-        {
-            auto val = _config->getInteger("socket:read:timeout_ms", 0);
-            setReadTimeout(val);
-            Application::info("%s: set socket read timeout: %dms", __FUNCTION__, val);
-        }
-
         setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
         setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
 

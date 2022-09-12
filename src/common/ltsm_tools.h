@@ -61,19 +61,30 @@ namespace LTSM
             StringFormat & replace(std::string_view, double, int prec);
         };
 
-        struct StreamBitsPack
+        struct StreamBits
         {
             std::vector<uint8_t> vecbuf;
-            size_t               bitpos = 7;
-        
-            StreamBitsPack();
-        
-            void        pushBit(bool v);
-            void        pushValue(int val, size_t field);
-            void        pushAlign(void);
-        
-            bool        empty(void) const;
+            size_t               bitpos = 0;
+
+            bool empty(void) const;
             const std::vector<uint8_t> & toVector(void) const;
+        };
+
+        struct StreamBitsPack : StreamBits
+        {
+            StreamBitsPack();
+
+            void pushBit(bool v);
+            void pushValue(int val, size_t field);
+            void pushAlign(void);
+        };
+
+        struct StreamBitsUnpack : StreamBits
+        {
+            StreamBitsUnpack(const std::vector<uint8_t> &, size_t counts, size_t field);
+
+            bool popBit(void);
+            int popValue(size_t field);
         };
 
         std::list<std::string> split(std::string_view str, std::string_view sep);

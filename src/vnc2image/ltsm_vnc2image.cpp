@@ -39,8 +39,8 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
-#include "ltsm_x11vnc.h"
-#include "ltsm_connector_vnc.h"
+#include "librfb_client.h"
+#include "ltsm_vnc2image.h"
 
 using namespace std::chrono_literals;
 
@@ -50,17 +50,13 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 0 (ms)] --image <screenshot.png> [--notls]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]" << std::endl;
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
         : Application("ltsm_vnc2image", argc, argv)
     {
-        _config.addString("host", "localhost");
-        _config.addString("image", "screenshot.png");
-        _config.addInteger("port", 5900);
-        _config.addInteger("timeout", 0);
-        _config.addBoolean("notls", false);
+        Application::setDebugLevel(DebugLevel::Quiet);
 
         for(int it = 1; it < argc; ++it)
         {
@@ -71,40 +67,82 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
-                _config.addString("host", argv[it + 1]);
+                host.assign(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc)
             {
-                _config.addString("image", argv[it + 1]);
+                filename.assign("image", argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
             {
-                _config.addString("password", argv[it + 1]);
+                password.assign(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
             {
-                _config.addInteger("port", std::stoi(argv[it + 1]));
+                port = std::stoi(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--timeout") && it + 1 < argc)
             {
-                _config.addInteger("timeout", std::stoi(argv[it + 1]));
+                timeout = std::stoi(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--notls"))
-                _config.addBoolean("notls", true);
+                notls = true;
+            else if(0 == std::strcmp(argv[it], "--debug"))
+                Application::setDebugLevel(DebugLevel::Console);
         }
-
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
     }
 
     int Vnc2Image::start(void)
     {
-        Application::info("vnc2image version: %d", LTSM_VNC2IMAGE_VERSION);
-        startSocket(_config.getInteger("port"));
+        auto ipaddr = TCPSocket::resolvHostname(host);
+        int sockfd = TCPSocket::connect(ipaddr, port);
+
+        if(0 == sockfd)
+            return -1;
+
+        auto vnc = std::make_unique<RFB::ClientDecoder>(sockfd);
+
+        if(! vnc->communication(! notls, "", password))
+            return -1;
+
+        // process rfb message background
+        auto th = std::thread([ptr = vnc.get()]()
+        {
+            try
+            {
+                ptr->messages();
+            }
+            catch(const std::exception & err)
+            {
+                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            }
+            catch(...)
+            {
+                Application::error("%s: unknown exception", __FUNCTION__);
+            }
+        });
+
+        // wait fb update event
+        Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [ptr = vnc.get()](){ return ! ptr->isFBPresent(); });
+
+        // wait timeout
+        if(0 < timeout)
+            std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
+
+        auto fb = vnc->frameBuffer();
+        vnc->shutdown();
+
+        if(! filename.empty())
+            PNG::save(fb, filename);
+
+        th.join();
+
+        return 0;
     }
 }
 

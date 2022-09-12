@@ -150,6 +150,16 @@ namespace LTSM
         return it != end() ? (*it).first : 0;
     }
 
+    FrameBuffer FrameBuffer::copyRegion(const XCB::Region* reg) const
+    {
+        FrameBuffer res;
+        res.fbreg = reg ? XCB::Region(0, 0, reg->width, reg->height) : XCB::Region(0, 0, fbreg.width, fbreg.height);
+        res.fbptr = std::make_shared<fbinfo_t>(res.fbreg.toSize(), pixelFormat());
+        res.owner = true;
+        res.blitRegion(*this, reg ? *reg : res.fbreg, XCB::Point(0, 0));
+        return res;
+    }
+
     void FrameBuffer::setPixelRow(const XCB::Point & pos, uint32_t pixel, size_t length)
     {
         if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
@@ -500,3 +510,52 @@ namespace LTSM
         return owner ? fbptr->pitch : bytePerPixel() * fbreg.width;
     }
 } // LTSM
+
+#ifdef LTSM_WITH_PNG
+#include <png.h>
+namespace PNG
+{
+    bool save(const LTSM::FrameBuffer & fb, std::string_view file)
+    {
+        if(fb.pixelFormat().amask() && fb.pixelFormat() != RGBA32)
+        {
+            LTSM::FrameBuffer back(LTSM::XCB::Size(fb.width(), fb.height()), RGBA32);
+            back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
+            return save(back, file);
+        }
+        else
+        if(fb.pixelFormat() != RGB24)
+        {
+            LTSM::FrameBuffer back(LTSM::XCB::Size(fb.width(), fb.height()), RGB24);
+            back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
+            return save(back, file);
+        }
+
+        // write png
+        png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+        if (!png_ptr)
+            return false;
+
+        png_infop info_ptr = png_create_info_struct(png_ptr);
+        if (!info_ptr)
+            return false;
+
+        setjmp(png_jmpbuf(png_ptr));
+        std::unique_ptr<FILE, decltype(fclose)*> fp{fopen(file.data(), "wb"), fclose};
+
+        png_init_io(png_ptr, fp.get());
+        png_set_IHDR(png_ptr, info_ptr, fb.width(), fb.height(), 8,
+                fb.pixelFormat().amask() ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+        png_write_info(png_ptr, info_ptr);
+
+        for(size_t row = 0; row < fb.height(); row++)
+            png_write_row(png_ptr, fb.pitchData(row));
+
+        png_write_end(png_ptr, nullptr);
+        png_destroy_write_struct(&png_ptr, &info_ptr);
+
+        return true;
+    }
+}
+#endif
