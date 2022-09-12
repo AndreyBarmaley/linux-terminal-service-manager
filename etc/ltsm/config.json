@@ -2,7 +2,6 @@
     "service:debug": "debug",
     "connector:debug": "info",
     "logging:facility": "local6",
-    "#socket:read:timeout_ms": 0,
 
     "vnc:encoding:debug": 0,
     "vnc:encoding:threads": 4,
@@ -51,7 +50,6 @@
     "session:duration_max_sec": 0,
     "session:policy": "authlock",
     "session:path": "/etc/ltsm/xclients",
-    "script:shutdown": "",
 
     "informer:path": "/usr/bin/zenity",
     "informer:args": "--info --no-wrap --text %{msg}",
