@@ -23,7 +23,7 @@ int main()
 {
     auto path = "test2.sock";
 
-    auto fd0 = ProxySocket::listenUnixSocket(path);
+    auto fd0 = UnixSocket::listen(path);
     if(0 == fd0)
     {
         std::cerr << "listen socket failed" << std::endl;
@@ -35,7 +35,7 @@ int main()
     std::future<int> job = std::async(std::launch::async, [=](){ return accept(fd0, nullptr, nullptr); });
     std::this_thread::sleep_for(100ms);
 
-    auto fd2 = ProxySocket::connectUnixSocket(path);
+    auto fd2 = UnixSocket::connect(path);
     if(0 == fd2)
     {
         std::cerr << "client socket failed" << std::endl;
@@ -92,7 +92,7 @@ int main()
     for(int it = 0; it < 100; it++)
         zlib1->sendIntLE64(0x1234567898765432);
 
-    auto buf1 = zlib1->syncFlush();
+    auto buf1 = zlib1->deflateFlush();
     sock1.sendIntBE32(buf1.size()).sendData(buf1).sendFlush();
 
     auto len = sock2.recvIntBE32();

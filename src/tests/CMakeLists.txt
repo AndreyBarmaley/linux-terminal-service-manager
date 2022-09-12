@@ -1,6 +1,9 @@
 foreach(DIR IN ITEMS json streambuf unixsocket framebuf xcb)
     add_executable(LTSM_test_${DIR} ${DIR}/main.cpp)
 
+    find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
+
     target_compile_options(LTSM_test_${DIR} PRIVATE ${EXTRA_CFLAGS})
     target_compile_options(LTSM_test_${DIR} PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB)
 
