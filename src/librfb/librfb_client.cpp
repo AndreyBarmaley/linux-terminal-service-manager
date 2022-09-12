@@ -165,7 +165,7 @@ namespace LTSM
     {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
-        const std::string version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
+        auto version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
         std::string magick = recvString(12);
 
         if(magick.empty())
@@ -934,10 +934,13 @@ namespace LTSM
             length += val;
 
             if(val != 255)
-                return length + 1;
+            {
+                length += 1;
+                break;
+            }
         }
 
-        return 0;
+        return length;
     }
 
     void RFB::ClientDecoder::zlibInflateStart(bool uint16sz)
