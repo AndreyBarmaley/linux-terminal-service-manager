@@ -206,7 +206,7 @@ if(LTSM_BUILD_VNC2IMAGE)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
+    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx PATHS /usr/lib64 /usr/lib/x86_64-linux-gnu REQUIRED)
 
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} src/vnc2image src/connector)
