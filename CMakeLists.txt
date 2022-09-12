@@ -179,6 +179,9 @@ if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
     project(LTSM_x11vnc VERSION 20220910.1)
 
+    find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
+
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
         src/x11vnc/ltsm_x11vnc.cpp
@@ -202,6 +205,8 @@ if(LTSM_BUILD_VNC2IMAGE)
         src/librfb/ltsm_librfb.cpp)
 
     find_package(PNG REQUIRED)
+    find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} src/vnc2image src/connector)
