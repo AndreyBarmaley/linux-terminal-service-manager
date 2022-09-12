@@ -7,7 +7,7 @@ foreach(DIR IN ITEMS json streambuf unixsocket framebuf xcb)
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/common)
 
     target_link_libraries(LTSM_test_${DIR} LTSM_common)
-    target_link_libraries(LTSM_test_${DIR} ${GNUTLS_LIBRARIES})
+    target_link_libraries(LTSM_test_${DIR} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES})
     target_link_libraries(LTSM_test_${DIR} z)
 
     set_target_properties(LTSM_test_${DIR} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../..)
