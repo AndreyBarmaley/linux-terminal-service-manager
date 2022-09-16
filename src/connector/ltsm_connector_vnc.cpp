@@ -85,6 +85,16 @@ namespace LTSM
                 Application::error("%s: keymap invalid: %s", __FUNCTION__, file.c_str());
         }
 
+        // vnc session not activated trigger
+        auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]()
+        {
+            if(this->loopMessage)
+            {
+                Application::error("session timeout trigger: %s", "not activated");
+                throw std::runtime_error("session timeout trigger");
+            }
+        });
+
         // RFB 6.1.1 version
         int protover = serverHandshakeVersion();
         if(protover == 0)
@@ -138,6 +148,8 @@ namespace LTSM
         // RFB 6.3.1 client init
         serverClientInit("X11 Remote Desktop");
 
+        timerNotActivated->stop();
+
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
                 [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
@@ -146,6 +158,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
         Application::info("%s: wait RFB messages...", __FUNCTION__);
+
         // xcb on
         setEnableXcbMessages(true);
         XCB::Region damageRegion(0, 0, 0, 0);
@@ -229,8 +242,20 @@ namespace LTSM
                         //clientUpdateReq = true;
                         break;
 
+#ifdef LTSM_CHANNELS
+                    case RFB::CLIENT_LTSM:
+                        if(! isClientEncodings(RFB::ENCODING_LTSM))
+                        {
+                            Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
+                            throw std::runtime_error("client error");
+                        }
+                        ltsmParseEvent();
+                        break;
+#endif
+
                     default:
-                        throw std::runtime_error(Tools::StringFormat("%1: RFB unknown message: %2").arg(__FUNCTION__).arg(Tools::hex(msgType, 2)));
+                        Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
+                        throw std::runtime_error("unknown message");
                 }
             }
 
@@ -348,6 +373,8 @@ namespace LTSM
             // fix new session size
             if(_xcbDisplay->size() != clientRegion.toSize())
             {
+                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
+
                 if(_xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
                     Application::notice("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
             }
@@ -406,4 +433,33 @@ namespace LTSM
     {
         renderPrimitivesToFB(fb);
     }
+
+#ifdef LTSM_CHANNELS
+    void Connector::VNC::ltsmParseEvent(void)
+    {
+        int version = recvInt8();
+        if(version != 0x01)
+        {
+            Application::error("%s: unknown version: 0x%02x", __FUNCTION__, version);
+            throw std::runtime_error("ltsm event");
+        }
+
+        int channel = recvInt8();
+        int length = recvIntBE16();
+        Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, length);
+
+        auto buf = recvData(length);
+        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+        {
+            auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+            Application::debug("%s: channel content: [%s]", __FUNCTION__, str.c_str());
+        }
+
+        switch(channel)
+        {
+            default:
+                break;
+        }
+    }
+#endif
 }

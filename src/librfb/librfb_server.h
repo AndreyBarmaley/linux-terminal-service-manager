@@ -66,13 +66,15 @@ namespace LTSM
             mutable size_t      netStatTx = 0;
             int                 encodingDebug = 0;
             int                 encodingThreads = 2;
-            bool                clientTrueColor = true;
-            bool                clientBigEndian = false;
             NetworkStream*      streamIn = nullptr;
             NetworkStream*      streamOut = nullptr;
 
             std::pair<RFB::sendEncodingFunc, int>
                                 prefEncodingsPair;
+
+            bool                clientTrueColor = true;
+            bool                clientBigEndian = false;
+
         protected:
             // librfb interface
             virtual XCB::RootDisplayExt* xcbDisplay(void) const = 0;

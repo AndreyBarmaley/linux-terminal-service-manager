@@ -41,7 +41,7 @@ namespace LTSM
         {
             std::atomic<bool>           helperStartedFlag;
             std::atomic<bool>           loopShutdownFlag;
-            std::atomic<bool>           clientUpdatePartFlag;
+            std::atomic<bool>           updatePartFlag;
 	    std::unique_ptr<FreeRdpCallback> freeRdp;
             PixelFormat                 serverFormat;
 	    XCB::Region			damageRegion;
@@ -53,12 +53,15 @@ namespace LTSM
             void                        onShutdownConnector(const int32_t & display) override;
             void                        onHelperWidgetStarted(const int32_t & display) override;
 
-	    bool			clientUpdateEvent(freerdp_peer &, const XCB::Region &);
-	    bool			clientUpdateBitmapPlanar(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
-	    bool			clientUpdateBitmapInterleaved(freerdp_peer &, const XCB::Region &, const XCB::PixmapInfoReply &);
-            void                        clientDesktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
-	    void                	clientDisconnectedEvent(void);
+	    bool			updateEvent(const XCB::Region &);
+	    bool			updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
+	    bool			updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
+            void                        desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
+	    void                	disconnectedEvent(void);
 	    bool			xcbEventLoopAsync(bool nodamage);
+
+            bool                        channelsInit(void);
+            void                        channelsFree(void);
 
         public:
             RDP(sdbus::IConnection* conn, const JsonObject & jo);
@@ -70,15 +73,15 @@ namespace LTSM
 	    void			setAutoLogin(const std::string &, const std::string &);
 
 	    // freerdp callback func
-	    static BOOL			cbClientPostConnect(freerdp_peer* client);
-	    static BOOL			cbClientActivate(freerdp_peer* client);
-	    static BOOL			cbClientAuthenticate(freerdp_peer* client, const char** user, const char** domain, const char** password);
-	    static BOOL			cbClientSynchronizeEvent(rdpInput* input, UINT32 flags);
-	    static BOOL			cbClientKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
-	    static BOOL			cbClientMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
-	    static BOOL			cbClientRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
-	    static BOOL			cbClientSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
-	    static BOOL			cbClientRefreshRequest(freerdp_peer* client);
+	    static BOOL			cbServerPostConnect(freerdp_peer* client);
+	    static BOOL			cbServerActivate(freerdp_peer* client);
+	    static BOOL			cbServerAuthenticate(freerdp_peer* client, const char** user, const char** domain, const char** password);
+	    static BOOL			cbServerSynchronizeEvent(rdpInput* input, UINT32 flags);
+	    static BOOL			cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
+	    static BOOL			cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+	    static BOOL			cbServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
+	    static BOOL			cbServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
+	    static BOOL			cbServerRefreshRequest(freerdp_peer* client);
 	};
     }
 }

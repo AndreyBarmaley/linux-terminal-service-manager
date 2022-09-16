@@ -559,7 +559,7 @@ namespace LTSM
                     Application::debug("%s: server pref encodings: %s", __FUNCTION__, RFB::encodingName(enc));
             }
         }
-        
+
         return true;
     }
 

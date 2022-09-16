@@ -104,7 +104,7 @@ namespace LTSM
         return true;
     }
 
-    bool RFB::ClientDecoder::clientAuthVenCryptInit(std::string_view tlsPriority)
+    bool RFB::ClientDecoder::clientAuthVenCryptInit(std::string_view tlsPriority, int tlsDebug)
     {
         // server VenCrypt version
         int majorVer = recvInt8();
@@ -125,6 +125,12 @@ namespace LTSM
         // rect vencrypt types
         std::vector<int> venCryptTypes;
         int typesCount = recvInt8();
+
+        if(0 >= typesCount)
+        {
+            Application::error("%s: server vencrypt sub-types failure: %d", __FUNCTION__, typesCount);
+            return false;
+        }
 
         while(typesCount--)
             venCryptTypes.push_back(recvIntBE32());
@@ -148,7 +154,7 @@ namespace LTSM
 
         try
         {
-            tls = std::make_unique<TLS::AnonSession>(socket.get(), tlsPriority, false, 5);
+            tls = std::make_unique<TLS::AnonSession>(socket.get(), tlsPriority, false, tlsDebug);
         }
         catch(gnutls::exception & err)
         {
@@ -205,7 +211,8 @@ namespace LTSM
         {
             Application::debug("%s: security: ven crypt", __FUNCTION__);
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
-            clientAuthVenCryptInit(tlsPriority);
+            int tlsDebug = 3;
+            clientAuthVenCryptInit(tlsPriority, tlsDebug);
         }
         else
         if(std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_NONE; }))
@@ -285,12 +292,6 @@ namespace LTSM
             Application::error("%s: unsupported pixel format", __FUNCTION__);
             return false;
         }
-
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        bool big_endian = false;
-#else
-        bool big_endian = true;
-#endif
 
         // bpp: 32, depth: 24, bigendian, truecol, rgb format
         auto clientFormat = PixelFormat(serverFormat.bitsPerPixel, serverFormat.rmask(), serverFormat.gmask(), serverFormat.bmask(), 0);

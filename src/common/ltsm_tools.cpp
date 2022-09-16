@@ -359,6 +359,10 @@ namespace LTSM
         return str;
     }
 
+    uint32_t Tools::crc32b(std::string_view str)
+    {
+        return crc32b((const uint8_t*) str.data(), str.size());
+    }
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size)
     {
         return crc32b(ptr, size, 0xEDB88320);

@@ -12,6 +12,9 @@ option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
+option(LTSM_CHANNELS_SUPPORT "ltsm channels vnc support (dev)" OFF)
+option(LTSM_CHANNEL_RUTOKEN "rutoken support (dev)" OFF)
+option(LTSM_CHANNEL_CUPS "cups support (dev)" OFF)
 
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
@@ -19,6 +22,11 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_TESTS ON CACHE BOOL "build test utilities" FORCE)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
     set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
+endif()
+
+if(NOT LTSM_CHANNELS_SUPPORT)
+    unset(LTSM_CHANNEL_RUTOKEN CACHE)
+    unset(LTSM_CHANNEL_CUPS CACHE)
 endif()
 
 include(FindPkgConfig)
@@ -55,6 +63,18 @@ endif()
 
 if(LTSM_BUILD_XCB_ERRORS)
     add_compile_options(-DLTSM_BUILD_XCB_ERRORS)
+endif()
+
+if(LTSM_CHANNELS_SUPPORT)
+    add_compile_options(-DLTSM_CHANNELS)
+endif()
+
+if(LTSM_CHANNEL_RUTOKEN)
+    add_compile_options(-DLTSM_RUTOKEN)
+endif()
+
+if(LTSM_CHANNEL_CUPS)
+    add_compile_options(-DLTSM_CUPS)
 endif()
 
 add_library(LTSM_common STATIC)

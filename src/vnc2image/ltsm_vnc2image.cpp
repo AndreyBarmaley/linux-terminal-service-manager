@@ -50,7 +50,7 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug] [--priority <string>]" << std::endl;
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
@@ -68,6 +68,11 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
                 host.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else if(0 == std::strcmp(argv[it], "--priority") && it + 1 < argc)
+            {
+                priority.assign(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc)
@@ -107,7 +112,7 @@ namespace LTSM
 
         auto vnc = std::make_unique<RFB::ClientDecoder>(sockfd);
 
-        if(! vnc->communication(! notls, "", password))
+        if(! vnc->communication(! notls, priority, password))
             return -1;
 
         // process rfb message background

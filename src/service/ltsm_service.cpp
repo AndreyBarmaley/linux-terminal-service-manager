@@ -562,6 +562,7 @@ namespace LTSM
         if(!xvfb || xvfb->shutdown)
             return false;
 
+        xvfb->shutdown = true;
         Application::notice("display shutdown: %d", display);
 
         if(emitSignal) emitShutdownConnector(display);
@@ -574,7 +575,7 @@ namespace LTSM
             closeSystemSession(display, *xvfb);
 
         // script run in thread
-        std::thread([=, xvfb2 = xvfb]()
+        std::thread([=]()
         {
             std::this_thread::sleep_for(100ms);
             this->removeXvfbDisplay(display);
@@ -585,7 +586,6 @@ namespace LTSM
                 runSystemScript(display, user, _config->getString("system:logoff"));
 
             Application::debug("display shutdown complete: %d", display);
-            const_cast<XvfbSession*>(xvfb2)->shutdown = true;
         }).detach();
         return true;
     }
@@ -1917,7 +1917,6 @@ namespace LTSM
             }
         });
 
-        inotify_rm_watch(fd, wd);
         return true;
     }
 

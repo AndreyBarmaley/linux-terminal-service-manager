@@ -67,7 +67,7 @@ namespace LTSM
 
         protected:
             bool            clientAuthVncInit(std::string_view pass);
-            bool            clientAuthVenCryptInit(std::string_view tlsPriority);
+            bool            clientAuthVenCryptInit(std::string_view tlsPriority, int);
 
             void            clientPixelFormat(void);
             void            clientSetEncodings(std::initializer_list<int>);

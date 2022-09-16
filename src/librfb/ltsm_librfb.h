@@ -109,6 +109,12 @@ namespace LTSM
         const int ENCODING_COMPRESS2 = -254;
         const int ENCODING_COMPRESS1 = -255;
 
+#ifdef LTSM_CHANNELS
+        const int CLIENT_LTSM = 119;
+        const int SERVER_LTSM = 119;
+        const int ENCODING_LTSM = 0x4C54534D;
+#endif
+
 	struct ScreenInfo
 	{
             uint32_t		id = 0;

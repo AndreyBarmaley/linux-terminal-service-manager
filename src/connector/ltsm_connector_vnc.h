@@ -57,6 +57,9 @@ namespace LTSM
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
 
+#ifdef LTSM_CHANNELS
+            void                ltsmParseEvent(void);
+#endif
         public:
             VNC(sdbus::IConnection* conn, const JsonObject & jo);
             ~VNC();

@@ -537,7 +537,7 @@ namespace LTSM
             FileDescriptor::write(bridgeSock, buf.data(), buf.size());
 #ifdef LTSM_DEBUG
 
-            if(! checkError())
+            if(! checkError() && Application::isDebugLevel(DebugLevel::SyslogTrace))
             {
                 std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from remote: [%s]", str.c_str());
@@ -566,7 +566,7 @@ namespace LTSM
             sendFlush();
 #ifdef LTSM_DEBUG
 
-            if(! checkError())
+            if(! checkError() && Application::isDebugLevel(DebugLevel::SyslogTrace))
             {
                 std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from local: [%s]", str.c_str());
@@ -851,7 +851,7 @@ namespace LTSM
             }
 
             session->set_credentials(*cred.get());
-            session->set_priority(priority.data(), NULL);
+            session->set_priority(priority.data(), nullptr);
 
             return startHandshake();
         }
@@ -902,7 +902,7 @@ namespace LTSM
                 certcred->set_x509_crl_file(crlFile.c_str(), GNUTLS_X509_FMT_PEM);
 
             session->set_credentials(*cred.get());
-            session->set_priority(priority.data(), NULL);
+            session->set_priority(priority.data(), nullptr);
 
             return startHandshake();
         }
@@ -953,7 +953,7 @@ namespace LTSM
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
-                    throw network_error("TLS::Stream::recvRaw");
+                    throw network_error("gnutls_record_recv");
             }
             else
             // eof
@@ -1047,7 +1047,7 @@ namespace LTSM
                 if(int ret = gnutls_cipher_encrypt(ctx, res.data() + offset, std::min(_key.size(), res.size() - offset)))
                 {
                     Application::error("gnutls_cipher_encrypt error: %s", gnutls_strerror(ret));
-                    throw network_error("gnutls_cipher_encrypt2");
+                    throw network_error("gnutls_cipher_encrypt");
                 }
 
                 gnutls_cipher_deinit(ctx);

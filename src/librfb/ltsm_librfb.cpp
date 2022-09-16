@@ -121,6 +121,11 @@ namespace LTSM
             case ENCODING_CONTINUOUS_UPDATES:
                 return "ExtendedContinuousUpdates";
 
+#ifdef LTSM_CHANNELS
+            case ENCODING_LTSM:
+                return "LTSM";
+#endif
+
             default:
                 break;
         }

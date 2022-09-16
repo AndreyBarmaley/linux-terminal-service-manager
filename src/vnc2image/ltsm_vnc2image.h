@@ -39,6 +39,7 @@ namespace LTSM
         std::string             host{"localhost"};
         std::string             password;
         std::string             filename{"screenshot.png"};
+        std::string             priority;
         int                     port = 5900;
         int                     timeout = 0;
         bool                    notls = false;

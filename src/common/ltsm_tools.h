@@ -104,6 +104,7 @@ namespace LTSM
 
         std::string     hex(int value, int width = 8);
 
+        uint32_t        crc32b(std::string_view);
         uint32_t        crc32b(const uint8_t* ptr, size_t size);
         uint32_t        crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
