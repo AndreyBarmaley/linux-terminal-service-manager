@@ -49,7 +49,7 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_X11VNC_VERSION << std::endl;
-        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage]" << std::endl;
+        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]" << std::endl;
     }
 
     /* X11Vnc */
@@ -64,7 +64,9 @@ namespace LTSM
         _config.addBoolean("background", false);
         _config.addBoolean("noauth", false);
         _config.addBoolean("notls", false);
+        _config.addBoolean("nodamage", false);
         _config.addBoolean("DesktopResized", false);
+        _config.addBoolean("ClipBoard", false);
 
         for(int it = 1; it < argc; ++it)
         {
@@ -119,9 +121,11 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--background"))
                 _config.addBoolean("background", true);
             else if(0 == std::strcmp(argv[it], "--nodamage"))
-                _config.addBoolean("xcb:nodamage", true);
+                _config.addBoolean("nodamage", true);
             else if(0 == std::strcmp(argv[it], "+DesktopResized"))
                 _config.addBoolean("DesktopResized", true);
+            else if(0 == std::strcmp(argv[it], "+ClipBoard"))
+                _config.addBoolean("ClipBoard", true);
         }
 
         bool error = false;
@@ -129,7 +133,7 @@ namespace LTSM
         if(_config.getBoolean("inetd"))
             _config.addBoolean("syslog", true);
 
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+        LTSM::Application::setDebugLevel(LTSM::DebugLevel::ConsoleError);
 
         if(_config.getBoolean("syslog"))
         {
@@ -182,14 +186,18 @@ namespace LTSM
             return -1;
         }
 
-        struct sockaddr_in sockaddr;
+        int reuse = 1;
+        int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
+        if(0 > err)
+        {
+            Application::warning("%s: socket reuseaddr failed, error: %s, code: %d", __FUNCTION__, strerror(errno), err);
+        }
 
+        struct sockaddr_in sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_in));
 
         sockaddr.sin_family = AF_INET;
-
         sockaddr.sin_port = htons(port);
-
         sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
@@ -223,7 +231,7 @@ namespace LTSM
                 try
                 {
                     auto connector = std::make_unique<Connector::X11VNC>(sock, _config);
-                    res = connector->communication();
+                    res = connector->rfbCommunication();
                 }
                 catch(const std::exception & err)
                 {
@@ -252,7 +260,7 @@ namespace LTSM
         try
         {
             auto connector = std::make_unique<Connector::X11VNC>(-1, _config);
-            res = connector->communication();
+            res = connector->rfbCommunication();
         }
         catch(const std::exception & err)
         {
@@ -275,51 +283,6 @@ namespace LTSM
 
         return _config.getBoolean("inetd") ?
                startInetd() : startSocket(_config.getInteger("port"));
-    }
-
-    /* Connector::DisplayProxy */
-    Connector::DisplayProxy::DisplayProxy(const JsonObject & jo)
-        : _config(& jo), _xcbDisableMessages(true)
-    {
-        _remoteaddr.assign("local");
-
-        if(auto env = std::getenv("REMOTE_ADDR"))
-            _remoteaddr.assign(env);
-    }
-
-    bool Connector::DisplayProxy::xcbConnect(void)
-    {
-        // FIXM XAUTH
-        std::string xauthFile = _config->getString("authfile");
-        std::string xcbDisplayAddr = _config->getString("display");
-        Application::debug("%s: display addr: `%s'", __FUNCTION__, xcbDisplayAddr.c_str());
-        Application::debug("%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
-        // Xvfb: wait display starting
-        setenv("XAUTHORITY", xauthFile.c_str(), 1);
-
-        try
-        {
-            _xcbDisplay.reset(new XCB::RootDisplayExt(xcbDisplayAddr));
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("exception: %s", err.what());
-            return false;
-        }
-
-        _xcbDisplay->resetInputs();
-        Application::info("%s: display info, size: [%d,%d], depth: %d", __FUNCTION__, _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
-        return true;
-    }
-
-    bool Connector::DisplayProxy::isAllowXcbMessages(void) const
-    {
-        return ! _xcbDisableMessages;
-    }
-
-    void Connector::DisplayProxy::setEnableXcbMessages(bool f)
-    {
-        _xcbDisableMessages = ! f;
     }
 }
 

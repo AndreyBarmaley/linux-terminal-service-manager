@@ -126,9 +126,9 @@ namespace LTSM
         }
     }
 
-    XvfbSession* XvfbSessions::registryXvfbSession(int screen, const XvfbSession & st)
+    XvfbSession* XvfbSessions::registryXvfbSession(int screen, XvfbSession st)
     {
-        auto res = _xvfb->insert({ screen, st });
+        auto res = _xvfb->emplace(screen, std::move(st));
         return & res.first->second;
     }
 
@@ -1011,7 +1011,7 @@ namespace LTSM
         st.gid = gid;
         st.user.assign(userXvfb);
         st.durationlimit = _config->getInteger("session:duration_max_sec", 0);
-        registryXvfbSession(screen, st);
+        registryXvfbSession(screen, std::move(st));
         Application::debug("login session registered, display: %d", screen);
         return screen;
     }
@@ -1638,6 +1638,11 @@ namespace LTSM
                     {
                         // shutdown prev connect
                         emitShutdownConnector(userScreen);
+                        // wait session
+                        Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [=]()
+                        {
+                            return userSess->mode != XvfbMode::SessionSleep;
+                        });
                     }
                 }
             }

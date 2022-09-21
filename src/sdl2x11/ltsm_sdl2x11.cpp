@@ -26,10 +26,10 @@
 #include <iomanip>
 #include <stdexcept>
 
-#include "SDL_image.h"
 #include "xcb/damage.h"
 
 #include "ltsm_tools.h"
+#include "ltsm_application.h"
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -37,18 +37,12 @@ namespace LTSM
 {
     class SDL2X11 : protected XCB::RootDisplayExt, protected SDL::Window
     {
-        SDL::Texture    txShadow;
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        const int txFormat = SDL_PIXELFORMAT_ARGB32;
-#else
-        const int txFormat = SDL_PIXELFORMAT_BGRA32;
-#endif
+        std::unique_ptr<char, void(*)(void*)> clipboard{ nullptr, SDL_free };
 
     public:
         SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
             : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h)
         {
-            txShadow = createTexture(width(), height(), txFormat);
         }
 
         bool sdlFakeInputTest(int type, const SDL_Keysym & keysym)
@@ -126,19 +120,18 @@ namespace LTSM
                 case SDL_CLIPBOARDUPDATE:
                     if(SDL_HasClipboardText())
                     {
-                        if(char* ptr = SDL_GetClipboardText())
+                        clipboard.reset(SDL_GetClipboardText());
+
+                        if(clipboard)
                         {
-                            auto len = SDL_strlen(ptr);
-                            XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t>(ptr, ptr + len));
-                            SDL_free(ptr);
+                            auto len = SDL_strlen(clipboard.get());
+                            XCB::RootDisplayExt::setClipboardEvent((const uint8_t*) clipboard.get(), len);
                         }
                     }
-
                     break;
 
                 case SDL_QUIT:
-                    throw std::string("sdl quit");
-                    break;
+                    throw sdl_error("sdl quit");
 
                 default:
                     break;
@@ -173,7 +166,6 @@ namespace LTSM
                         {
                             SDL::Window::resize(cc.width, cc.height);
                             damage.assign(0, 0, cc.width, cc.height);
-                            txShadow = createTexture(cc.width, cc.height, txFormat);
                         }
                     }
                     else if(XCB::RootDisplayExt::isSelectionNotify(ev))
@@ -196,10 +188,14 @@ namespace LTSM
                     {
                         const size_t alignRowBytes = reply->size() > (damage.width * damage.height * bytePerPixel) ?
                                                      reply->size() / damage.height - damage.width * bytePerPixel : 0;
-                        const SDL_Rect rect = { damage.x, damage.y, damage.width, damage.height };
-                        txShadow.updateRect(& rect, reply->data(), damage.width * bytePerPixel + alignRowBytes);
-                        renderTexture(txShadow.get());
+
+                        SDL_Rect dstrt = { damage.x, damage.y, damage.width, damage.height };
+                        auto tx = createTexture(damage.width, damage.height, TEXTURE_FMT);
+                        tx.updateRect(nullptr, reply->data(), damage.width * bytePerPixel + alignRowBytes);
+
+                        renderTexture(tx.get(), nullptr, nullptr, & dstrt);
                         renderPresent();
+
                         XCB::RootDisplayExt::damageSubtrack(damage);
                     }
 
@@ -217,7 +213,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height>" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -229,6 +225,8 @@ int main(int argc, const char** argv)
     std::string xauth;
     std::string geometry;
     std::string title = "SDL2X11";
+
+    LTSM::Application::setDebugLevel(LTSM::DebugLevel::ConsoleError);
 
     if(auto val = getenv("SDL2X11_SCALE"))
     {
@@ -254,7 +252,9 @@ int main(int argc, const char** argv)
 
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--debug"))
+                LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+            else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
                 xauth.assign(argv[it + 1]);
             else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
                 title.assign(argv[it + 1]);
@@ -297,19 +297,20 @@ int main(int argc, const char** argv)
     if(argc < 2 || display < 0 || xauth.empty())
         return printHelp(argv[0]);
 
+    if(0 > SDL_Init(SDL_INIT_VIDEO))
+        return -1;
+
     try
     {
         LTSM::SDL2X11 app(display, title, winsz_w, winsz_h);
         return app.start();
     }
-    catch(int errcode)
+    catch(const std::exception & err)
     {
-        return errcode;
+        std::cerr << "exception: " << err.what() << std::endl;
     }
-    catch(const std::string & str)
-    {
-        std::cerr << "exception: " << str << std::endl;
-    }
+
+    SDL_Quit();
 
     return 0;
 }

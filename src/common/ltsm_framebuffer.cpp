@@ -69,22 +69,22 @@ namespace LTSM
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
-    uint32_t PixelFormat::red(int pixel) const
+    uint8_t PixelFormat::red(int pixel) const
     {
         return (pixel >> redShift) & redMax;
     }
                 
-    uint32_t PixelFormat::green(int pixel) const
+    uint8_t PixelFormat::green(int pixel) const
     {
         return (pixel >> greenShift) & greenMax;
     }
         
-    uint32_t PixelFormat::blue(int pixel) const
+    uint8_t PixelFormat::blue(int pixel) const
     {
         return (pixel >> blueShift) & blueMax;
     }
         
-    uint32_t PixelFormat::alpha(int pixel) const
+    uint8_t PixelFormat::alpha(int pixel) const
     {
         return (pixel >> alphaShift) & alphaMax;
     }
@@ -101,18 +101,26 @@ namespace LTSM
 
     uint32_t PixelFormat::pixel(const Color & col) const
     {
-        return ((static_cast<int>(col.x) * alphaMax / 0xFF) << alphaShift) | ((static_cast<int>(col.r) * redMax / 0xFF) << redShift) |
-               ((static_cast<int>(col.g) * greenMax / 0xFF) << greenShift) | ((static_cast<int>(col.b) * blueMax / 0xFF) << blueShift);
+        int a = (col.x * alphaMax) >> 8;
+        int r = (col.r * redMax) >> 8;
+        int g = (col.g * greenMax) >> 8;
+        int b = (col.b * blueMax) >> 8;
+        return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
+    }
+
+    uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
+    {
+        return max1 ? (col1 * max2) / max1 : 0;
     }
 
     uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
     {
         if(pf != *this)
         {
-            uint32_t r = pf.redMax ? (pf.red(pixel) * redMax) / pf.redMax : 0;
-            uint32_t g = pf.greenMax ? (pf.green(pixel) * greenMax) / pf.greenMax : 0;
-            uint32_t b = pf.blueMax ? (pf.blue(pixel) * blueMax) / pf.blueMax : 0;
-            uint32_t a = pf.alphaMax ? (pf.alpha(pixel) * alphaMax) / pf.alphaMax : 0;
+            int r = pf.redMax == redMax ? pf.red(pixel) : convertMax(pf.red(pixel), pf.redMax, redMax);
+            int g = pf.greenMax == greenMax ? pf.green(pixel) : convertMax(pf.green(pixel), pf.greenMax, greenMax);
+            int b = pf.blueMax == blueMax ? pf.blue(pixel) : convertMax(pf.blue(pixel), pf.blueMax, blueMax);
+            int a = pf.alphaMax == alphaMax ? pf.alpha(pixel) : convertMax(pf.alpha(pixel), pf.alphaMax, alphaMax);
             return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
         }
         

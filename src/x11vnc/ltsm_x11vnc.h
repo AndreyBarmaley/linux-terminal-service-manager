@@ -24,47 +24,11 @@
 #ifndef _LTSM_X11VNC_
 #define _LTSM_X11VNC_
 
-#include "ltsm_global.h"
 #include "ltsm_application.h"
-#include "ltsm_framebuffer.h"
-
-#define LTSM_X11VNC_VERSION 20220827
+#define LTSM_X11VNC_VERSION 20220920
 
 namespace LTSM
 {
-    namespace Connector
-    {
-        ///@brief codec exception
-        struct CodecFailed
-        {
-            std::string err;
-            CodecFailed(const std::string & str) : err(str) {}
-        };
-
-        /* Connector::DisplayProxy */
-        class DisplayProxy
-        {
-        protected:
-            const JsonObject*           _config;
-            std::string			_remoteaddr;
-
-            std::atomic<bool>           _xcbDisableMessages;
-            XCB::SharedDisplay          _xcbDisplay;
-
-        protected:
-            bool                        xcbConnect(void);
-
-        public:
-            DisplayProxy(const JsonObject &);
-            virtual ~DisplayProxy() {}
-
-    	    virtual int	                communication(void) = 0;
-
-	    bool			isAllowXcbMessages(void) const;
-	    void			setEnableXcbMessages(bool f);
-        };
-    }
-
     class X11Vnc : public Application
     {
         JsonObject              _config;

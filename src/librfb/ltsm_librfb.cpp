@@ -25,27 +25,27 @@
 
 namespace LTSM
 {
-    const char* RFB::desktopResizeModeString(const DesktopResizeMode & mode)
+    int RFB::desktopResizeStatusCode(const DesktopResizeStatus & status)
     {
-        switch(mode)
+        switch(status)
         {
-            case DesktopResizeMode::Disabled:
-                return "Disabled";
-
-            case DesktopResizeMode::Success:
-                return "Success";
-
-            case DesktopResizeMode::ServerInform:
-                return "ServerInform";
-
-            case DesktopResizeMode::ClientRequest:
-                return "ClientRequest";
-
-            default:
-                break;
+            case DesktopResizeStatus::ServerRuntime: return 0;
+            case DesktopResizeStatus::ClientSide:    return 1;
+            case DesktopResizeStatus::OtherClient:   return 2;
         }
+        return 0;
+    }
 
-        return "Undefined";
+    int RFB::desktopResizeErrorCode(const DesktopResizeError & err)
+    {
+        switch(err)
+        {
+            case DesktopResizeError::NoError:             return 0;
+            case DesktopResizeError::ResizeProhibited:    return 1;
+            case DesktopResizeError::OutOfResources:      return 2;
+            case DesktopResizeError::InvalidScreenLayout: return 3;
+        }
+        return 0;
     }
 
     const char* RFB::encodingName(int type)
@@ -121,10 +121,8 @@ namespace LTSM
             case ENCODING_CONTINUOUS_UPDATES:
                 return "ExtendedContinuousUpdates";
 
-#ifdef LTSM_CHANNELS
             case ENCODING_LTSM:
-                return "LTSM";
-#endif
+                return "LTSM (unsupported)";
 
             default:
                 break;

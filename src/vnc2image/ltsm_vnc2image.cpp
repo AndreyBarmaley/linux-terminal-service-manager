@@ -56,7 +56,7 @@ namespace LTSM
     Vnc2Image::Vnc2Image(int argc, const char** argv)
         : Application("ltsm_vnc2image", argc, argv)
     {
-        Application::setDebugLevel(DebugLevel::Quiet);
+        Application::setDebugLevel(DebugLevel::ConsoleError);
 
         for(int it = 1; it < argc; ++it)
         {
@@ -110,44 +110,71 @@ namespace LTSM
         if(0 == sockfd)
             return -1;
 
-        auto vnc = std::make_unique<RFB::ClientDecoder>(sockfd);
-
-        if(! vnc->communication(! notls, priority, password))
-            return -1;
+        RFB::ClientDecoder::setSocketStreamMode(sockfd);
 
         // process rfb message background
-        auto th = std::thread([ptr = vnc.get()]()
+        try
         {
-            try
+            if(rfbHandshake(! notls, priority, password))
             {
-                ptr->messages();
+                tp = std::chrono::steady_clock::now();
+                rfbMessagesLoop();
             }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            }
-            catch(...)
-            {
-                Application::error("%s: unknown exception", __FUNCTION__);
-            }
-        });
-
-        // wait fb update event
-        Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [ptr = vnc.get()](){ return ! ptr->isFBPresent(); });
-
-        // wait timeout
-        if(0 < timeout)
-            std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
-
-        auto fb = vnc->frameBuffer();
-        vnc->shutdown();
-
-        if(! filename.empty())
-            PNG::save(fb, filename);
-
-        th.join();
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+        catch(...)
+        {
+            Application::error("%s: unknown exception", __FUNCTION__);
+        }
 
         return 0;
+    }
+
+    void Vnc2Image::fbUpdateEvent(void)
+    {
+        if(0 < timeout &&
+            std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
+            return;
+
+        if(! filename.empty() && fbPtr)
+            PNG::save(*fbPtr, filename);
+
+        RFB::ClientDecoder::rfbMessagesShutdown();
+    }
+
+    uint16_t Vnc2Image::clientWidth(void) const
+    {
+        return fbPtr->width();
+    }
+
+    uint16_t Vnc2Image::clientHeight(void) const
+    {
+        return fbPtr->height();
+    }
+
+    void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, uint16_t width, uint16_t height)
+    {
+        // receive server pixel format
+        auto format = PixelFormat(pf.bitsPerPixel, pf.rmask(), pf.gmask(), pf.bmask(), 0);
+        fbPtr.reset(new FrameBuffer(XCB::Region(0, 0, width, height), format));
+    }
+
+    void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel)
+    {
+        fbPtr->setPixel(dst, pixel);
+    }
+
+    void Vnc2Image::fillPixel(const XCB::Region & dst, uint32_t pixel)
+    {
+        fbPtr->fillPixel(dst, pixel);
+    }
+
+    const PixelFormat & Vnc2Image::clientPixelFormat(void) const
+    {
+        return fbPtr->pixelFormat();
     }
 }
 

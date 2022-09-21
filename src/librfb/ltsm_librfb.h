@@ -109,26 +109,23 @@ namespace LTSM
         const int ENCODING_COMPRESS2 = -254;
         const int ENCODING_COMPRESS1 = -255;
 
-#ifdef LTSM_CHANNELS
-        const int CLIENT_LTSM = 119;
-        const int SERVER_LTSM = 119;
         const int ENCODING_LTSM = 0x4C54534D;
-#endif
 
 	struct ScreenInfo
 	{
             uint32_t		id = 0;
+            uint16_t		posx = 0;
+            uint16_t		posy = 0;
             uint16_t		width = 0;
             uint16_t		height = 0;
-
-            ScreenInfo() = default;
-            ScreenInfo(uint32_t id1, uint16_t width1, uint16_t height1) : id(id1), width(width1), height(height1) {}
-
-            bool operator== (const ScreenInfo & si) const { return id == si.id && width == si.width && height == si.height; }
+            uint32_t		flags = 0;
 	};
 
-        enum class DesktopResizeMode { Undefined, Disabled, Success, ServerInform, ClientRequest };
-        const char* desktopResizeModeString(const DesktopResizeMode &);
+        enum class DesktopResizeStatus { ServerRuntime, ClientSide, OtherClient };
+        enum class DesktopResizeError { NoError, ResizeProhibited, OutOfResources, InvalidScreenLayout };
+
+        int desktopResizeErrorCode(const DesktopResizeError &);
+        int desktopResizeStatusCode(const DesktopResizeStatus &);
 
         const char* encodingName(int type);
         typedef std::function<void(const FrameBuffer &)> sendEncodingFunc;

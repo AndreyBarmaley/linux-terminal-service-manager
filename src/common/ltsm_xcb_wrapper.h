@@ -443,7 +443,7 @@ namespace LTSM
             virtual GenericEvent    poolEvent(void);
 
             GC                      createGC(xcb_drawable_t winid, uint32_t value_mask = 0, const void* value_list = nullptr);
-            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = true);
+            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = false);
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
             XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
@@ -527,7 +527,7 @@ namespace LTSM
 	    std::vector<xcb_randr_mode_info_t>   getRandrModesInfo(void) const;
 
 
-	    bool	            setRandrScreenSize(uint16_t windth, uint16_t height);
+	    bool                    setRandrScreenSize(uint16_t windth, uint16_t height, uint16_t* sequence = nullptr);
 	    xcb_randr_mode_t        createRandrMode(uint16_t width, uint16_t height);
 	    bool                    destroyRandrMode(const xcb_randr_mode_t  &);
 	    bool                    addRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
@@ -560,7 +560,7 @@ namespace LTSM
 	    xcb_window_t             getOwnerSelection(const xcb_atom_t &);
 
 	    bool                     getSelectionEvent(const xcb_atom_t &);
-	    bool                     setClipboardEvent(const std::vector<uint8_t> &, const xcb_atom_t &);
+	    bool                     setClipboardEvent(std::vector<uint8_t> &&, std::initializer_list<xcb_atom_t>);
 
             bool                     sendNotifyTargets(const xcb_selection_request_event_t &);
             bool                     sendNotifySelData(const xcb_selection_request_event_t &);
@@ -576,7 +576,8 @@ namespace LTSM
             bool                     selectionNotifyAction(xcb_selection_notify_event_t*);
             bool                     isSelectionNotify(const GenericEvent & ev) const;
 
-            bool                         setClipboardEvent(const std::vector<uint8_t> &);
+            bool                         setClipboardEvent(const uint8_t*, size_t);
+            bool                         setClipboardEvent(std::vector<uint8_t> &&);
 	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
 	};
 

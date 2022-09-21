@@ -21,13 +21,11 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include <tuple>
 #include <chrono>
 #include <thread>
-#include <iostream>
+#include <exception>
 
 #include "ltsm_tools.h"
-#include "ltsm_connector.h"
 #include "ltsm_connector_vnc.h"
 
 using namespace std::chrono_literals;
@@ -61,304 +59,7 @@ namespace LTSM
         setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
         setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
 
-        bool clipboardEnable = _config->getBoolean("vnc:clipboard", true);
-        std::string encryptionInfo = "none";
-
-        serverSelectEncodings();
-
-        // set disabled and preffered encodings
-        setDisabledEncodings(_config->getStdList<std::string>("vnc:encoding:blacklist"));
-        setPrefferedEncodings(_config->getStdList<std::string>("vnc:encoding:preflist"));
-
-        // load keymap
-        if(_config->hasKey("vnc:keymap:file"))
-        {
-            auto file = _config->getString("vnc:keymap:file");
-            JsonContentFile jc(file);
-
-            if(jc.isValid() && jc.isObject())
-            {
-                keymap.reset(new JsonObject(jc.toObject()));
-                Application::notice("%s: keymap loaded: %s, items: %d", __FUNCTION__, file.c_str(), keymap->size());
-            }
-            else
-                Application::error("%s: keymap invalid: %s", __FUNCTION__, file.c_str());
-        }
-
-        // vnc session not activated trigger
-        auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]()
-        {
-            if(this->loopMessage)
-            {
-                Application::error("session timeout trigger: %s", "not activated");
-                throw std::runtime_error("session timeout trigger");
-            }
-        });
-
-        // RFB 6.1.1 version
-        int protover = serverHandshakeVersion();
-        if(protover == 0)
-            return EXIT_FAILURE;
-
-        // Xvfb: session request
-        int screen = busStartLoginSession(_remoteaddr, "vnc");
-        if(screen <= 0)
-        {
-            Application::error("%s: login session request: failure", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
-        if(! xcbConnect(screen))
-        {
-            Application::error("%s: xcb connect: failed", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
-        const xcb_visualtype_t* visual = _xcbDisplay->visual();
-        if(! visual)
-        {
-            Application::error("%s: xcb visual empty", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
-        Application::debug("%s: login session request success, display: %d", __FUNCTION__, screen);
-        Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
-
-        // init server format
-        serverSetPixelFormat(PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0));
-
-        // RFB 6.1.2 security
-        RFB::SecurityInfo secInfo;
-        secInfo.authNone = true;
-        secInfo.authVnc = false;
-        secInfo.authVenCrypt = ! _config->getBoolean("vnc:gnutls:disable", false);
-        secInfo.tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        secInfo.tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
-        secInfo.caFile = _config->getString("vnc:gnutls:cafile");
-        secInfo.certFile = _config->getString("vnc:gnutls:certfile");
-        secInfo.keyFile = _config->getString("vnc:gnutls:keyfile");
-        secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
-        secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
-
-        if(! serverSecurityInit(protover, secInfo))
-            return EXIT_FAILURE;
-
-        busSetEncryptionInfo(screen, serverEncryptionInfo());
-
-        // RFB 6.3.1 client init
-        serverClientInit("X11 Remote Desktop");
-
-        timerNotActivated->stop();
-
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
-        {
-            Application::info("%s: something went wrong...", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-        Application::info("%s: wait RFB messages...", __FUNCTION__);
-
-        // xcb on
-        setEnableXcbMessages(true);
-        XCB::Region damageRegion(0, 0, 0, 0);
-        bool clientUpdateReq = false;
-        bool nodamage = _config->getBoolean("xcb:nodamage", false);
-        std::vector<uint8_t> selbuf;
-
-        while(loopMessage)
-        {
-            // RFB: mesage loop
-            if(hasInput())
-            {
-                int msgType = recvInt8();
-
-                switch(msgType)
-                {
-                    case RFB::CLIENT_SET_PIXEL_FORMAT:
-                        clientSetPixelFormat();
-                        damageRegion = _xcbDisplay->region();
-                        clientUpdateReq = true;
-                        break;
-
-                    case RFB::CLIENT_SET_ENCODINGS:
-                        if(clientSetEncodings())
-                        {
-                            serverSelectEncodings();
-
-                            if(isClientEncodings(RFB::ENCODING_CONTINUOUS_UPDATES))
-                            {
-                                // RFB 6.7.15
-                                // The server must send a EndOfContinuousUpdates message the first time
-                                // it sees a SetEncodings message with the ContinuousUpdates pseudo-encoding,
-                                // in order to inform the client that the extension is supported.
-                                //
-                                // serverSendEndContinuousUpdates();
-                            }
-
-                            // full update
-                            damageRegion = _xcbDisplay->region();
-                            clientUpdateReq = true;
-                        }
-
-                        break;
-
-                    case RFB::CLIENT_REQUEST_FB_UPDATE:
-                        {
-                            auto [ fullUpdate, region ] = clientFramebufferUpdate();
-
-                            if(fullUpdate)
-                                damageRegion = _xcbDisplay->region();
-
-                            if(region != clientRegion)
-                                damageRegion = clientRegion = region;
-
-                            clientUpdateReq = true;
-                        }
-                        break;
-
-                    case RFB::CLIENT_EVENT_KEY:
-                        clientKeyEvent(isAllowXcbMessages(), keymap.get());
-                        clientUpdateReq = true;
-                        break;
-
-                    case RFB::CLIENT_EVENT_POINTER:
-                        clientPointerEvent(isAllowXcbMessages());
-                        clientUpdateReq = true;
-                        break;
-
-                    case RFB::CLIENT_CUT_TEXT:
-                        clientCutTextEvent(isAllowXcbMessages(), clipboardEnable);
-                        clientUpdateReq = true;
-                        break;
-
-                    case RFB::CLIENT_SET_DESKTOP_SIZE:
-                        clientSetDesktopSizeEvent();
-                        //clientUpdateReq = true;
-                        break;
-
-                    case RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES:
-                        clientEnableContinuousUpdates();
-                        //clientUpdateReq = true;
-                        break;
-
-#ifdef LTSM_CHANNELS
-                    case RFB::CLIENT_LTSM:
-                        if(! isClientEncodings(RFB::ENCODING_LTSM))
-                        {
-                            Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
-                            throw std::runtime_error("client error");
-                        }
-                        ltsmParseEvent();
-                        break;
-#endif
-
-                    default:
-                        Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
-                        throw std::runtime_error("unknown message");
-                }
-            }
-
-            if(isAllowXcbMessages())
-            {
-                if(auto err = _xcbDisplay->hasError())
-                {
-                    setEnableXcbMessages(false);
-                    Application::error("%s: xcb display error, code: %d", __FUNCTION__, err);
-                    break;
-                }
-
-                // get all damages and join it
-                while(auto ev = _xcbDisplay->poolEvent())
-                {
-                    int shmOpcode = _xcbDisplay->eventErrorOpcode(ev, XCB::Module::SHM);
-
-                    if(0 <= shmOpcode)
-                    {
-                        _xcbDisplay->extendedError(ev.toerror(), "SHM extension");
-                        loopMessage = false;
-                        break;
-                    }
-
-                    if(_xcbDisplay->isDamageNotify(ev))
-                    {
-                        auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
-                        damageRegion.join(notify->area);
-                    }
-                    else if(_xcbDisplay->isRandrCRTCNotify(ev))
-                    {
-                        auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                        xcb_randr_crtc_change_t cc = notify->u.cc;
-
-                        if(0 < cc.width && 0 < cc.height)
-                        {
-                            busDisplayResized(_display, cc.width, cc.height);
-                            desktopResizeModeChange(XCB::Size(cc.width, cc.height));
-                        }
-                    }
-                    else if(_xcbDisplay->isSelectionNotify(ev) && clipboardEnable)
-                    {
-                        auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
-
-                        if(_xcbDisplay->selectionNotifyAction(notify))
-                            selbuf = _xcbDisplay->getSelectionData();
-                    }
-                }
-
-                if(nodamage)
-                {
-                    damageRegion = _xcbDisplay->region();
-                    clientUpdateReq = true;
-                }
-                else if(! damageRegion.empty())
-                    // fix out of screen
-                    damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
-
-                // server action
-                if(! isUpdateProcessed())
-                {
-                    switch(desktopResizeMode())
-                    {
-                        case RFB::DesktopResizeMode::ServerInform:
-                        case RFB::DesktopResizeMode::ClientRequest:
-                            sendEncodingDesktopSize(isAllowXcbMessages());
-                            break;
-
-                            default: break;
-                    }
-
-                    if(sendBellFlag)
-                    {
-                        serverSendBell();
-                        sendBellFlag = false;
-                    }
-
-                    if(selbuf.size())
-                    {
-                        serverSendCutText(selbuf);
-                        selbuf.clear();
-                    }
-
-                    if(clientUpdateReq && ! damageRegion.empty())
-                    {
-                        XCB::Region res;
-
-                        if(XCB::Region::intersection(clientRegion, damageRegion, & res))
-                            serverSendUpdateBackground(res);
-
-                        damageRegion.reset();
-                        clientUpdateReq = false;
-                    }
-                }
-            }
-
-            // dbus processing
-            _conn->enterEventLoopAsync();
-            // wait
-            std::this_thread::sleep_for(1ms);
-        }
-
-        return EXIT_SUCCESS;
+        return rfbCommunication();
     }
 
     void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)
@@ -369,19 +70,22 @@ namespace LTSM
             waitUpdateProcess();
             SignalProxy::onLoginSuccess(display, userName);
             setEnableXcbMessages(true);
+            auto & clientRegion = getClientRegion();
 
             // fix new session size
             if(_xcbDisplay->size() != clientRegion.toSize())
             {
                 Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
 
-                if(_xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
+                if(0 < _xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
                     Application::notice("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
             }
 
             // full update
             _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
             Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
+
+            userSession = userName;
         }
     }
 
@@ -391,7 +95,7 @@ namespace LTSM
         {
             setEnableXcbMessages(false);
             waitUpdateProcess();
-            loopMessage = false;
+            rfbMessagesShutdown();
             Application::notice("%s: dbus signal, display: %d", __FUNCTION__, display);
         }
     }
@@ -410,56 +114,160 @@ namespace LTSM
         if(0 < _display && display == _display)
         {
             Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
-            sendBellFlag = true;
+
+            std::thread([this]{ this->sendBellEvent(); }).detach();
         }
     }
 
-    void Connector::VNC::serviceStop(void)
+    const PixelFormat & Connector::VNC::serverFormat(void) const
     {
-        loopMessage = false;
+        return format;
     }
 
-    bool Connector::VNC::serviceAlive(void) const
-    {
-        return loopMessage;
-    }
-
-    XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void) const
-    {
-        return _xcbDisplay.get();
-    }
-
-    void Connector::VNC::serverPostProcessingFrameBuffer(FrameBuffer & fb)
+    void Connector::VNC::xcbFrameBufferModify(FrameBuffer & fb) const
     {
         renderPrimitivesToFB(fb);
     }
 
-#ifdef LTSM_CHANNELS
-    void Connector::VNC::ltsmParseEvent(void)
+    void Connector::VNC::serverHandshakeVersionEvent(void)
     {
-        int version = recvInt8();
-        if(version != 0x01)
+        // Xvfb: session request
+        int screen = busStartLoginSession(_remoteaddr, "vnc");
+        if(screen <= 0)
         {
-            Application::error("%s: unknown version: 0x%02x", __FUNCTION__, version);
-            throw std::runtime_error("ltsm event");
+            Application::error("%s: login session request: failure", __FUNCTION__);
+            throw std::runtime_error(__FUNCTION__);
         }
 
-        int channel = recvInt8();
-        int length = recvIntBE16();
-        Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, length);
+        Application::info("%s: login session request success, display: %d", __FUNCTION__, screen);
 
-        auto buf = recvData(length);
-        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+        if(! xcbConnect(screen))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
-            Application::debug("%s: channel content: [%s]", __FUNCTION__, str.c_str());
+            Application::error("%s: xcb connect: failed", __FUNCTION__);
+            throw std::runtime_error(__FUNCTION__);
         }
 
-        switch(channel)
+        const xcb_visualtype_t* visual = _xcbDisplay->visual();
+        if(! visual)
         {
-            default:
-                break;
+            Application::error("%s: xcb visual empty", __FUNCTION__);
+            throw std::runtime_error(__FUNCTION__);
+        }
+
+        Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+
+        // init server format
+        format = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+    }
+
+    void Connector::VNC::serverSelectEncodingsEvent(void)
+    {
+        // set disabled and preffered encodings
+        setDisabledEncodings(_config->getStdList<std::string>("vnc:encoding:blacklist"));
+        setPrefferedEncodings(_config->getStdList<std::string>("vnc:encoding:preflist"));
+
+        // load keymap
+        if(_config->hasKey("vnc:keymap:file"))
+        {
+            auto file = _config->getString("vnc:keymap:file");
+            JsonContentFile jc(file);
+
+            if(jc.isValid() && jc.isObject())
+            {
+                auto jo = jc.toObject();
+                for(auto & skey : jo.keys())
+                {
+                    try { keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey)); } catch(const std::exception &) { }
+                }
+            }
         }
     }
-#endif
+
+    void Connector::VNC::serverMainLoopEvent(void)
+    {
+        // dbus processing
+        _conn->enterEventLoopAsync();
+    }
+
+    void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
+    {
+        busDisplayResized(_display, sz.width, sz.height);
+    }
+
+    void Connector::VNC::serverEncodingsEvent(void)
+    {
+    }
+
+    void Connector::VNC::serverConnectedEvent(void)
+    {
+        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
+        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
+                [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
+        {
+            Application::info("%s: wait loginWidgetStarted failed", __FUNCTION__);
+            throw std::runtime_error(__FUNCTION__);
+        }
+    }
+
+    void Connector::VNC::serverSecurityInitEvent(void)
+    {
+        busSetEncryptionInfo(_display, serverEncryptionInfo());
+    }
+
+    RFB::SecurityInfo Connector::VNC::rfbSecurityInfo(void) const
+    {
+        RFB::SecurityInfo secInfo;
+        secInfo.authNone = true;
+        secInfo.authVnc = false;
+        secInfo.authVenCrypt = ! _config->getBoolean("vnc:gnutls:disable", false);
+        secInfo.tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        secInfo.tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
+        secInfo.caFile = _config->getString("vnc:gnutls:cafile");
+        secInfo.certFile = _config->getString("vnc:gnutls:certfile");
+        secInfo.keyFile = _config->getString("vnc:gnutls:keyfile");
+        secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
+        secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
+        return secInfo;
+    }
+
+    bool Connector::VNC::rfbClipboardEnable(void) const
+    {
+        return _config->getBoolean("vnc:clipboard");
+    }
+
+    bool Connector::VNC::rfbDesktopResizeEnabled(void) const
+    {
+        return true;
+    }
+    
+    XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void)
+    {
+        return _xcbDisplay.get();
+    }
+
+    const XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void) const
+    {
+        return _xcbDisplay.get();
+    }
+    
+    bool Connector::VNC::xcbNoDamage(void) const
+    {
+        return _config->getBoolean("vnc:xcb:nodamage", false);
+    }
+
+    bool Connector::VNC::xcbAllow(void) const
+    {
+        return isAllowXcbMessages();
+    }
+        
+    void Connector::VNC::setXcbAllow(bool f)
+    {
+        setEnableXcbMessages(f);
+    }
+            
+    int Connector::VNC::rfbUserKeycode(uint32_t keysym) const
+    {
+        auto it = keymap.find(keysym);
+        return it != keymap.end() ? it->second : 0;
+    }
 }

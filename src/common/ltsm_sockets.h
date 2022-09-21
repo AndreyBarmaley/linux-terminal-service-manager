@@ -47,13 +47,13 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220910
+#define LTSM_SOCKETS_VERSION 20220917
 
 namespace LTSM
 {
     struct network_error : public std::runtime_error
     {
-        network_error(const char* what) : std::runtime_error(what){}
+        explicit network_error(const char* what) : std::runtime_error(what){}
     };
 
     /// @brief: network stream interface
@@ -67,8 +67,8 @@ namespace LTSM
         inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
-        NetworkStream() {}
-        virtual ~NetworkStream() {}
+        NetworkStream() =  default;
+        virtual ~NetworkStream() = default;
 
 #ifdef LTSM_SOCKET_TLS
         virtual void            setupTLS(gnutls::session*) const {}
@@ -133,8 +133,11 @@ namespace LTSM
         std::vector<uint8_t>    buf;
 
     public:
-        SocketStream(int fd = 0);
+        explicit SocketStream(int fd = 0);
         ~SocketStream();
+
+        SocketStream(const SocketStream &) = delete;
+        SocketStream & operator=(const SocketStream &) = delete;
 
 #ifdef LTSM_SOCKET_TLS
         void                    setupTLS(gnutls::session*) const override;
@@ -184,17 +187,17 @@ namespace LTSM
     class ProxySocket : protected InetStream
     {
     protected:
-        std::atomic<bool>       loopTransmission;
+        std::atomic<bool>       loopTransmission{false};
         std::thread             loopThread;
-        int                     bridgeSock;
-        int                     clientSock;
+        int                     bridgeSock = -1;
+        int                     clientSock = -1;
         std::filesystem::path   socketPath;
 
     protected:
         bool                    transmitDataIteration(void);
 
     public:
-        ProxySocket() : loopTransmission(false), bridgeSock(-1), clientSock(-1) {}
+        ProxySocket() = default;
         ~ProxySocket();
             
         int                     proxyClientSocket(void) const;
@@ -217,10 +220,16 @@ namespace LTSM
     namespace UnixSocket
     {
         int                     connect(const std::filesystem::path &);
-        int                     listen(const std::filesystem::path &);
+        int                     listen(const std::filesystem::path &, int conn = 5);
+        int                     accept(int fd);
     }
 
 #ifdef LTSM_SOCKET_TLS
+    struct gnutls_error : public std::runtime_error
+    {
+        explicit gnutls_error(const char* what) : std::runtime_error(what){}
+    };
+
     /// transport layer security
     namespace TLS
     {
@@ -258,7 +267,7 @@ namespace LTSM
             mutable int         peek = -1;
 
         public:
-            Stream(const NetworkStream*);
+            explicit Stream(const NetworkStream*);
             ~Stream();
 
             bool                hasInput(void) const override;
@@ -292,30 +301,26 @@ namespace LTSM
 #endif // LTSM_SOCKET_TLS
 
 #ifdef LTSM_SOCKET_ZLIB
+    struct zlib_error : public std::runtime_error
+    {
+        explicit zlib_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace ZLib
     {
-        struct Context : z_stream
-        {
-            std::vector<uint8_t> buf;
-
-            Context();
-            
-            std::vector<uint8_t> deflateFlush(bool finish = false);
-            void inflateFlush(const std::vector<uint8_t> &);
-        };
-        
         /// @brief: zlib compress output stream only
         class DeflateStream : public NetworkStream
         {
         protected:
-            std::unique_ptr<Context> zlib;
+            z_stream            zs{0};
+            BinaryBuf           bb;
             
         public:
-            DeflateStream(int level = Z_BEST_COMPRESSION);
+            explicit DeflateStream(int level = Z_BEST_COMPRESSION);
             ~DeflateStream();
     
-            std::vector<uint8_t> deflateFlush(void) const;
-            void                prepareSize(size_t) const;
+            std::vector<uint8_t> deflateFlush(void);
+            void                prepareSize(size_t);
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
@@ -330,8 +335,8 @@ namespace LTSM
         class InflateStream : public NetworkStream
         {
         protected:
-            std::unique_ptr<Context> zlib;
-            mutable std::vector<uint8_t>::iterator it;
+            z_stream            zs{0};
+            StreamBuf           sb;
 
         public:
             InflateStream();

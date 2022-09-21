@@ -24,6 +24,7 @@
 #ifndef _LTSM_VNC2IMAGE_
 #define _LTSM_VNC2IMAGE_
 
+#include <chrono>
 #include <string>
 
 #include "ltsm_global.h"
@@ -34,8 +35,11 @@
 
 namespace LTSM
 {
-    class Vnc2Image : public Application
+    class Vnc2Image : public Application, protected RFB::ClientDecoder
     {
+        std::chrono::steady_clock::time_point tp;
+        std::unique_ptr<FrameBuffer> fbPtr;
+
         std::string             host{"localhost"};
         std::string             password;
         std::string             filename{"screenshot.png"};
@@ -44,13 +48,23 @@ namespace LTSM
         int                     timeout = 0;
         bool                    notls = false;
 
+    protected:
+        void                    setPixel(const XCB::Point &, uint32_t pixel) override;
+        void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
+        const PixelFormat &     clientPixelFormat(void) const override;
+        uint16_t                clientWidth(void) const override;
+        uint16_t                clientHeight(void) const override;
+
         int    		        startSocket(std::string_view host, int port) const;
 
     public:
         Vnc2Image(int argc, const char** argv);
 
-        int    		        start(void);
+        void                    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) override;
+        void                    fbUpdateEvent(void) override;
+
+        int    		        start(void) override;
     };
 }
 
-#endif // _LTSM_CONNECTOR_
+#endif // _LTSM_VNC2IMAGE_

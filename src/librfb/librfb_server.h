@@ -37,6 +37,12 @@
 
 namespace LTSM
 {
+    struct XcbFrameBuffer
+    {
+        XCB::PixmapInfoReply reply;
+        FrameBuffer fb;
+    };
+
     namespace RFB
     {
         /// ServerEncoder
@@ -52,16 +58,12 @@ namespace LTSM
             std::unique_ptr<TLS::Stream> tls;           /// tls layer
             std::unique_ptr<ZLib::DeflateStream> zlib;  /// zlib layer
 
-            PixelFormat         serverFormat;
             PixelFormat         clientFormat;
             ColorMap            colourMap;
             std::mutex		encodingBusy;
-            std::mutex          networkBusy;
-            std::atomic<int>    pressedMask{0};
+            std::mutex          sendLock;
+            std::atomic<bool>   rfbMessages{true};
             std::atomic<bool>   fbUpdateProcessing{false};
-	    std::atomic<DesktopResizeMode>
-                                desktopMode{DesktopResizeMode::Undefined};
-	    RFB::ScreenInfo     desktopScreenInfo;
             mutable size_t      netStatRx = 0;
             mutable size_t      netStatTx = 0;
             int                 encodingDebug = 0;
@@ -76,13 +78,11 @@ namespace LTSM
             bool                clientBigEndian = false;
 
         protected:
-            // librfb interface
-            virtual XCB::RootDisplayExt* xcbDisplay(void) const = 0;
-            virtual bool        serviceAlive(void) const = 0;
-            virtual void        serviceStop(void) = 0;
-            virtual void        serverPostProcessingFrameBuffer(FrameBuffer &) {}
+            // ServerEncoder
+            virtual const PixelFormat & serverFormat(void) const = 0;
+            virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
 
-           // network stream interface
+            // network stream interface
             void                sendFlush(void) override;
             void                sendRaw(const void* ptr, size_t len) override;
             void                recvRaw(void* ptr, size_t len) const override;
@@ -106,33 +106,35 @@ namespace LTSM
             void                waitUpdateProcess(void);
 
             bool                serverSelectClientEncoding(void);
-            void                serverSetPixelFormat(const PixelFormat &);
 
-            bool                desktopResizeModeInit(void);
-            void                desktopResizeModeDisable(void);
-            void                desktopResizeModeSet(const DesktopResizeMode &, const std::vector<RFB::ScreenInfo> &);
-            bool                desktopResizeModeChange(const XCB::Size &);
-            DesktopResizeMode   desktopResizeMode(void) const;
+            bool                authVncInit(const std::string &);
+            bool                authVenCryptInit(const SecurityInfo &);
 
-            bool                serverAuthVncInit(const std::string &);
-            bool                serverAuthVenCryptInit(const SecurityInfo &);
-            void                serverSendUpdateBackground(const XCB::Region &);
+            void                sendFrameBufferUpdate(const XcbFrameBuffer &);
+            void                sendColourMap(int first);
+            void                sendBellEvent(void);
+            void                sendCutTextEvent(const std::vector<uint8_t> &);
+            void                sendEndContinuousUpdates(void);
+            void                sendUpdateBackground(const XCB::Region &);
 
-            void                clientSetPixelFormat(void);
-            bool                clientSetEncodings(void);
+            void                recvPixelFormat(void);
+            void                recvSetEncodings(void);
+            void                recvKeyCode(void);
+            void                recvPointer(void);
+            void                recvCutText(void);
+            void                recvFramebufferUpdate(void);
+            void                recvSetContinuousUpdates(void);
+            void                recvSetDesktopSize(void);
 
         public:
             ServerEncoder(int sockfd = 0);
 
             int                 serverHandshakeVersion(void);
             bool                serverSecurityInit(int protover, const SecurityInfo &);
-            void                serverClientInit(std::string_view);
-
-            bool                serverSendFrameBufferUpdate(const XCB::Region &);
-            void                serverSendColourMap(int first);
-            void                serverSendBell(void);
-            void                serverSendCutText(const std::vector<uint8_t> &);
-            void                serverSendEndContinuousUpdates(void);
+            void                serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
+            bool                rfbMessagesProcessing(void) const;
+            void                rfbMessagesLoop(void);
+            void                rfbMessagesShutdown(void);
 
             void                serverSelectEncodings(void);
 
@@ -159,21 +161,24 @@ namespace LTSM
 	    void                sendEncodingTRLESubPlain(const XCB::Region &, const FrameBuffer &, const std::list<PixelLength> &);
 	    void                sendEncodingTRLESubPalette(const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const std::list<PixelLength> &);
 	    void                sendEncodingTRLESubRaw(const XCB::Region &, const FrameBuffer &);
+	    void		sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
 
-	    bool		sendEncodingDesktopSize(bool xcbAllow);
-
-            std::pair<bool, XCB::Region>
-                                clientFramebufferUpdate(void);
-            void                clientKeyEvent(bool xcbAllow, const JsonObject* keymap = nullptr);
-            void                clientPointerEvent(bool xcbAllow);
-            void                clientCutTextEvent(bool xcbAllow, bool clipboardEnable);
-            void                clientSetDesktopSizeEvent(void);
-            void                clientEnableContinuousUpdates(void);
             void                clientDisconnectedEvent(int display);
 
             int                 sendPixel(uint32_t pixel);
             int                 sendCPixel(uint32_t pixel);
             int                 sendRunLength(size_t length);
+
+            // ServerEncoder
+            virtual void        recvPixelFormatEvent(const PixelFormat &, bool bigEndian) {}
+            virtual void        recvSetEncodingsEvent(const std::vector<int> &) {}
+            virtual void        recvKeyEvent(bool pressed, uint32_t keysym) {}
+            virtual void        recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {}
+            virtual void        recvCutTextEvent(const std::vector<uint8_t> &) {}
+            virtual void        recvFramebufferUpdateEvent(bool full, const XCB::Region &) {}
+            virtual void        recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
+            virtual void        recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
+            virtual void        sendFrameBufferUpdateEnd(const XCB::Region &) {}
         };
     }
 }

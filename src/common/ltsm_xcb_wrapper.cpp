@@ -468,7 +468,7 @@ namespace LTSM
 
         if(xcb_connection_has_error(_conn))
         {
-            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", addr);
+            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", addr.data());
             throw connector_error("XCB::Connector");
         }
 
@@ -1235,7 +1235,7 @@ namespace LTSM
         const size_t pagesz = 4096;
         const size_t shmsz = ((wsz.width* wsz.height* bpp / pagesz) + 1) * pagesz;
 
-        _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+        _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false);
     }
 
     XCB::RootDisplay::~RootDisplay()
@@ -1682,7 +1682,7 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::RootDisplay::setRandrScreenSize(uint16_t width, uint16_t height)
+    bool XCB::RootDisplay::setRandrScreenSize(uint16_t width, uint16_t height, uint16_t* sequence)
     {
         // align size
         if(auto alignW = width % 8)
@@ -1771,8 +1771,13 @@ namespace LTSM
             return false;
         }
 
-        auto nsz = size();
+        if(sequence)
+        {
+            *sequence = xcbReply2.reply()->sequence;
+            Application::info("%s: sequence: 0x%04x", __FUNCTION__, *sequence);
+        }
 
+        auto nsz = size();
         if(nsz != Size(width, height))
         {
             Application::error("%s: failed, size: [%d, %d], id: %d", __FUNCTION__, width, height, sizeID);
@@ -1823,7 +1828,7 @@ namespace LTSM
                 const size_t bpp = bitsPerPixel() >> 3;
                 const size_t pagesz = 4096;
                 const size_t shmsz = ((cc.width * cc.height * bpp / pagesz) + 1) * pagesz;
-                _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+                _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false);
                 // create damage notify
                 _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
                 damageAdd({0, 0, cc.width, cc.height});
@@ -2366,27 +2371,34 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf, const xcb_atom_t & atomSel)
+    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> && buf, std::initializer_list<xcb_atom_t> atoms)
     {
-        _selbuf.assign(buf.begin(), buf.end());
+        _selbuf = std::forward<std::vector<uint8_t>>(buf);
 
         if(_selbuf.empty())
             return false;
 
-        // take owner
-        if(getOwnerSelection(atomSel) != _selwin)
+        for(auto atom : atoms)
         {
-            xcb_set_selection_owner(_conn, _selwin, atomSel, XCB_CURRENT_TIME);
-            xcb_flush(_conn);
+            // take owner
+            if(getOwnerSelection(atom) != _selwin)
+                xcb_set_selection_owner(_conn, _selwin, atom, XCB_CURRENT_TIME);
         }
+        xcb_flush(_conn);
 
         return true;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(const std::vector<uint8_t> & buf)
+    bool XCB::RootDisplayExt::setClipboardEvent(const uint8_t* ptr, size_t len)
+    {
+        std::vector<uint8_t> buf(ptr, ptr + len);
+        return setClipboardEvent(std::move(buf), { _atomPrimary, _atomClipboard });
+    }
+
+    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> && buf)
     {
         // sync primary and clipboard
-        return setClipboardEvent(buf, _atomPrimary) && setClipboardEvent(buf, _atomClipboard);
+        return setClipboardEvent(std::move(buf), { _atomPrimary, _atomClipboard });
     }
 
     bool XCB::RootDisplayExt::getSelectionEvent(const xcb_atom_t & atomSel)

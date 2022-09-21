@@ -48,6 +48,9 @@ namespace LTSM
 	PidStatus(int pid, int status) : std::pair<int, int>(pid, status){}
     };
 
+    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep };
+    enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
+
     struct XvfbSession
     {
         int                             pid1 = 0; // xvfb pid
@@ -95,7 +98,7 @@ namespace LTSM
 
         XvfbSession*                    getXvfbInfo(int display);
         std::pair<int, XvfbSession*>    findUserSession(const std::string & username);
-        XvfbSession*                    registryXvfbSession(int display, const XvfbSession &);
+        XvfbSession*                    registryXvfbSession(int display, XvfbSession);
         void                            removeXvfbDisplay(int display);
 
         std::vector<xvfb2tuple>         toSessionsList(void);

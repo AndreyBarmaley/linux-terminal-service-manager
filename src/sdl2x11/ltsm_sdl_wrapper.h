@@ -24,22 +24,31 @@
 #define _SDL_WRAPPER_
 
 #include <memory>
+#include <exception>
+
 #include "SDL.h"
 
 namespace LTSM
 {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_ARGB32;
+#else
+    inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_BGRA32;
+#endif
+
+    struct sdl_error : public std::runtime_error
+    {
+        explicit sdl_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace SDL
     {
         struct Texture : std::shared_ptr<SDL_Texture>
         {
-            Texture(SDL_Texture* ptr = nullptr) : std::shared_ptr<SDL_Texture>(ptr, SDL_DestroyTexture)
-            {
-            }
+            Texture(SDL_Texture* ptr = nullptr)
+                : std::shared_ptr<SDL_Texture>(ptr, SDL_DestroyTexture) {}
 
-            bool            isValid(void) const
-            {
-                return get();
-            }
+            bool            isValid(void) const;
 
             int             width(void) const;
             int             height(void) const;
@@ -49,33 +58,19 @@ namespace LTSM
 
         struct Surface : std::shared_ptr<SDL_Surface>
         {
-            Surface(SDL_Surface* ptr = nullptr) : std::shared_ptr<SDL_Surface>(ptr, SDL_FreeSurface)
-            {
-            }
+            Surface(SDL_Surface* ptr = nullptr)
+                : std::shared_ptr<SDL_Surface>(ptr, SDL_FreeSurface) {}
 
-            bool            isValid(void) const
-            {
-                return get();
-            }
-            int             width(void) const
-            {
-                return get() ? get()->w : 0;
-            }
-            int             height(void) const
-            {
-                return get() ? get()->h : 0;
-            }
-
-            void            savePNG(const std::string &) const;
+            bool            isValid(void) const;
+            int             width(void) const;
+            int             height(void) const;
         };
 
         struct GenericEvent
         {
             const SDL_Event*        ptr;
 
-            GenericEvent(const SDL_Event* ev) : ptr(ev)
-            {
-            }
+            GenericEvent(const SDL_Event* ev) : ptr(ev) {}
 
             bool            		isValid(void) const { return ptr; }
             int             		type(void) const { return ptr ? ptr->type : 0; }
@@ -83,33 +78,41 @@ namespace LTSM
             const SDL_MouseMotionEvent* motion(void) const { return ptr ? & ptr->motion : nullptr; }
             const SDL_MouseButtonEvent* button(void) const { return ptr ? & ptr->button : nullptr; }
             const SDL_MouseWheelEvent*  wheel(void) const { return ptr ? & ptr->wheel : nullptr; }
+            const SDL_WindowEvent*      window(void) const { return ptr ? & ptr->window : nullptr; }
         };
 
         class Window
         {
-            SDL_Window*         _window;
-            SDL_Renderer*	_renderer;
-            SDL_Texture*	_display;
+            std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> _window{ nullptr, SDL_DestroyWindow };
+            std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> _renderer{ nullptr, SDL_DestroyRenderer };
+            std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> _display{ nullptr, SDL_DestroyTexture };
             SDL_Event           _event;
-            bool                _accel;
+            bool                _accel = false;
 
         protected:
 
         public:
-            Window(const char*, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags = 0);
+            Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0);
             ~Window();
 
             bool		isValid(void) const;
             bool                resize(int newsz_w, int newsz_h);
 
+            uint32_t            pixelFormat(void) const;
+            std::pair<int, int> geometry(void) const;
+
+            SDL_Texture*        display(void) { return _display.get(); }
+            SDL_Renderer*       render(void) { return _renderer.get(); }
+            SDL_Window*         get(void) { return _window.get(); }
+
             void		renderClear(const SDL_Color*, SDL_Texture* target = nullptr);
             void		renderColor(const SDL_Color*, const SDL_Rect*, SDL_Texture* target = nullptr);
             void		renderTexture(SDL_Texture* source, const SDL_Rect* srcrt = nullptr, SDL_Texture* target = nullptr, const SDL_Rect* dstrt = nullptr);
 
-            bool		renderReset(SDL_Texture* target = nullptr);
+            void		renderReset(SDL_Texture* target = nullptr);
             void		renderPresent(void);
 
-            Texture             createTexture(int width, int height, uint32_t format = SDL_PIXELFORMAT_ARGB8888) const;
+            Texture             createTexture(int width, int height, uint32_t format = TEXTURE_FMT) const;
 
             GenericEvent        poolEvent(void);
             static int          convertScanCodeToKeySym(SDL_Scancode);

@@ -54,13 +54,13 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendFlush(void)
     {
-        if(serviceAlive())
+        if(rfbMessages)
             streamOut->sendFlush();
     }
 
     void RFB::ServerEncoder::sendRaw(const void* ptr, size_t len)
     {
-        if(serviceAlive())
+        if(rfbMessages)
         {
             streamOut->sendRaw(ptr, len);
             netStatTx += len;
@@ -69,26 +69,26 @@ namespace LTSM
     
     void RFB::ServerEncoder::recvRaw(void* ptr, size_t len) const
     {
-        if(serviceAlive())
+        if(rfbMessages)
         {
             streamIn->recvRaw(ptr, len);
             netStatRx += len;
         }
     }
-    
+
     bool RFB::ServerEncoder::hasInput(void) const
     {
-        return serviceAlive() ? streamIn->hasInput() : false;
+        return rfbMessages ? streamIn->hasInput() : false;
     }
 
     size_t RFB::ServerEncoder::hasData(void) const
     {
-        return serviceAlive() ? streamIn->hasData() : 0;
+        return rfbMessages ? streamIn->hasData() : 0;
     }
     
     uint8_t RFB::ServerEncoder::peekInt8(void) const
     {
-        return serviceAlive() ? streamIn->peekInt8() : 0;
+        return rfbMessages ? streamIn->peekInt8() : 0;
     }
 
     bool RFB::ServerEncoder::isUpdateProcessed(void) const
@@ -102,12 +102,7 @@ namespace LTSM
             std::this_thread::sleep_for(1ms);
     }
 
-    void RFB::ServerEncoder::serverSetPixelFormat(const PixelFormat & pf)
-    {
-        serverFormat = pf;
-    }
-
-    bool RFB::ServerEncoder::serverAuthVncInit(const std::string & passwdFile)
+    bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile)
     {
         std::vector<uint8_t> challenge = TLS::randomKey(16);
 
@@ -152,7 +147,7 @@ namespace LTSM
         return false;
     }
 
-    bool RFB::ServerEncoder::serverAuthVenCryptInit(const SecurityInfo & secInfo)
+    bool RFB::ServerEncoder::authVenCryptInit(const SecurityInfo & secInfo)
     {
         // VenCrypt version
         sendInt8(0).sendInt8(2).sendFlush();
@@ -360,7 +355,7 @@ namespace LTSM
                         return false;
                     }
 
-                    if(! serverAuthVncInit(secInfo.passwdFile))
+                    if(! authVncInit(secInfo.passwdFile))
                     {
                         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                         return false;
@@ -370,7 +365,7 @@ namespace LTSM
                 }
                 else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt)
                 {
-                    if(! serverAuthVenCryptInit(secInfo))
+                    if(! authVenCryptInit(secInfo))
                     {
                         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                         return false;
@@ -391,31 +386,30 @@ namespace LTSM
         return true;
     }
 
-    void RFB::ServerEncoder::serverClientInit(std::string_view desktopName)
+    void RFB::ServerEncoder::serverClientInit(std::string_view desktopName, const XCB::Size & displaySize, int displayDepth, const PixelFormat & pf)
     {
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();
         Application::debug("%s: client shared: 0x%02x", __FUNCTION__, clientSharedFlag);
         // RFB 6.3.2 server init
-        auto wsz = xcbDisplay()->size();
-        sendIntBE16(wsz.width);
-        sendIntBE16(wsz.height);
-        Application::debug("%s: server pixel format, bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                           __FUNCTION__, serverFormat.bitsPerPixel, xcbDisplay()->depth(), big_endian, 
-                            serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
-        clientFormat = serverFormat;
+        sendIntBE16(displaySize.width);
+        sendIntBE16(displaySize.height);
+        Application::notice("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+                           __FUNCTION__, pf.bitsPerPixel, displayDepth, big_endian, 
+                            pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
+        clientFormat = serverFormat();
         // send pixel format
-        sendInt8(serverFormat.bitsPerPixel);
-        sendInt8(xcbDisplay()->depth());
+        sendInt8(pf.bitsPerPixel);
+        sendInt8(displayDepth);
         sendInt8(big_endian ? 1 : 0);
         // true color
         sendInt8(1);
-        sendIntBE16(serverFormat.redMax);
-        sendIntBE16(serverFormat.greenMax);
-        sendIntBE16(serverFormat.blueMax);
-        sendInt8(serverFormat.redShift);
-        sendInt8(serverFormat.greenShift);
-        sendInt8(serverFormat.blueShift);
+        sendIntBE16(pf.redMax);
+        sendIntBE16(pf.greenMax);
+        sendIntBE16(pf.blueMax);
+        sendInt8(pf.redShift);
+        sendInt8(pf.greenShift);
+        sendInt8(pf.blueShift);
         // send padding
         sendInt8(0);
         sendInt8(0);
@@ -424,7 +418,7 @@ namespace LTSM
         sendIntBE32(desktopName.size()).sendString(desktopName).sendFlush();
     }
 
-    void RFB::ServerEncoder::serverSendUpdateBackground(const XCB::Region & area)
+    void RFB::ServerEncoder::sendUpdateBackground(const XCB::Region & area)
     {
         fbUpdateProcessing = true;
         // background job
@@ -434,8 +428,10 @@ namespace LTSM
 
             try
             {
-                this->serverSendFrameBufferUpdate(area);
-                fbUpdateProcessing = false;
+                auto xfb = xcbFrameBuffer(area);
+                this->sendFrameBufferUpdate(xfb);
+                this->sendFrameBufferUpdateEnd(area);
+                this->fbUpdateProcessing = false;
             }
             catch(const std::exception & err)
             {
@@ -448,11 +444,76 @@ namespace LTSM
             }
 
             if(error)
-                this->serviceStop();
+                rfbMessages = false;
         }).detach();
     }
 
-    void RFB::ServerEncoder::clientSetPixelFormat(void)
+    bool RFB::ServerEncoder::rfbMessagesProcessing(void) const
+    {
+        return rfbMessages;
+    }
+
+    void RFB::ServerEncoder::rfbMessagesShutdown(void)
+    {
+        rfbMessages = false;
+    }
+
+    void RFB::ServerEncoder::rfbMessagesLoop(void)
+    {
+        Application::debug("%s: wait remote messages...", __FUNCTION__);
+
+        while(rfbMessages)
+        {
+            if(! hasInput())
+            {
+                std::this_thread::sleep_for(1ms);
+                continue;
+            }
+
+            int msgType = recvInt8();
+    
+            switch(msgType)
+            {
+                case RFB::CLIENT_SET_PIXEL_FORMAT:
+                    recvPixelFormat();
+                    break;
+
+                case RFB::CLIENT_SET_ENCODINGS:
+                    recvSetEncodings();
+                    break;
+
+                case RFB::CLIENT_REQUEST_FB_UPDATE:
+                    recvFramebufferUpdate();
+                    break;
+
+                case RFB::CLIENT_EVENT_KEY:
+                    recvKeyCode();
+                    break;
+
+                case RFB::CLIENT_EVENT_POINTER:
+                    recvPointer();
+                    break;
+
+                case RFB::CLIENT_CUT_TEXT:
+                    recvCutText();
+                    break;
+
+                case RFB::CLIENT_SET_DESKTOP_SIZE:
+                    recvSetDesktopSize();
+                    break;
+
+                case RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES:
+                    recvSetContinuousUpdates();
+                    break;
+
+                default:
+                    Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
+                    rfbMessages = false;
+            }
+        }
+    }
+
+    void RFB::ServerEncoder::recvPixelFormat(void)
     {
         waitUpdateProcess();
         // RFB: 6.4.1
@@ -470,8 +531,8 @@ namespace LTSM
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("%s: bpp: %d, depth: %d, be: %d, truecol: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                            __FUNCTION__, bitsPerPixel, depth, bigEndian, trueColor, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
+        Application::notice("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+                            __FUNCTION__, bitsPerPixel, depth, bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel)
         {
@@ -492,9 +553,10 @@ namespace LTSM
         clientFormat = PixelFormat(bitsPerPixel, redMax, greenMax, blueMax, 0, redShift, greenShift, blueShift, 0);
 
         colourMap.clear();
+        recvPixelFormatEvent(clientFormat, clientBigEndian);
     }
 
-    bool RFB::ServerEncoder::clientSetEncodings(void)
+    void RFB::ServerEncoder::recvSetEncodings(void)
     {
         waitUpdateProcess();
         // RFB: 6.4.2
@@ -560,11 +622,10 @@ namespace LTSM
             }
         }
 
-        return true;
+        recvSetEncodingsEvent(clientEncodings);
     }
 
-    std::pair<bool, XCB::Region>
-    RFB::ServerEncoder::clientFramebufferUpdate(void)
+    void RFB::ServerEncoder::recvFramebufferUpdate(void)
     {
         XCB::Region clientRegion;
 
@@ -574,103 +635,37 @@ namespace LTSM
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
+
         Application::debug("%s: request update, region [%d, %d, %d, %d], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
+
         bool fullUpdate = incremental == 0;
-        auto serverRegion = xcbDisplay()->region();
-
-        if(fullUpdate)
-        {
-            clientRegion = serverRegion;
-            desktopResizeModeInit();
-        }
-        else
-        {
-            clientRegion = serverRegion.intersected(clientRegion);
-
-            if(clientRegion.empty())
-            {
-                Application::warning("%s: client region intersection with display [%d, %d] failed", 
-                                        __FUNCTION__, serverRegion.width, serverRegion.height);
-            }
-        }
-
-        return std::make_pair(fullUpdate, clientRegion);
+        recvFramebufferUpdateEvent(fullUpdate, clientRegion);
     }
 
-    void RFB::ServerEncoder::clientKeyEvent(bool xcbAllow, const JsonObject* keymap)
+    void RFB::ServerEncoder::recvKeyCode(void)
     {
         // RFB: 6.4.4
-        int pressed = recvInt8();
+        bool pressed = recvInt8();
         recvSkip(2);
-        int keysym = recvIntBE32();
+        uint32_t keysym = recvIntBE32();
         Application::debug("%s: action %s, keysym: 0x%08x", __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
 
-        if(xcbAllow)
-        {
-            // local keymap priority "vnc:keymap:file"
-            if(auto value = (keymap ? keymap->getValue(Tools::hex(keysym, 8)) : nullptr))
-            {
-                if(value->isArray())
-                {
-                    auto ja = static_cast<const JsonArray*>(value);
-
-                    for(auto keycode : ja->toStdVector<int>())
-                        xcbDisplay()->fakeInputKeycode(keycode, 0 < pressed);
-                }
-                else
-                    xcbDisplay()->fakeInputKeycode(value->getInteger(), 0 < pressed);
-            }
-            else
-                xcbDisplay()->fakeInputKeysym(keysym, 0 < pressed);
-        }
+        recvKeyEvent(pressed, keysym);
     }
 
-    void RFB::ServerEncoder::clientPointerEvent(bool xcbAllow)
+    void RFB::ServerEncoder::recvPointer(void)
     {
         // RFB: 6.4.5
-        int mask = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
-        int posx = recvIntBE16();
-        int posy = recvIntBE16();
-        Application::debug("%s: mask: 0x%02x, posx: %d, posy: %d", __FUNCTION__, mask, posx, posy);
+        uint8_t buttons = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
+        uint16_t posx = recvIntBE16();
+        uint16_t posy = recvIntBE16();
+        Application::debug("%s: mask: 0x%02x, posx: %d, posy: %d", __FUNCTION__, buttons, posx, posy);
 
-        if(xcbAllow)
-        {
-            if(this->pressedMask ^ mask)
-            {
-                for(int num = 0; num < 8; ++num)
-                {
-                    int bit = 1 << num;
-
-                    if(bit & mask)
-                    {
-                        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
-                            Application::debug("%s: xfb fake input pressed: %d", __FUNCTION__, num + 1);
-
-                        xcbDisplay()->fakeInputTest(XCB_BUTTON_PRESS, num + 1, posx, posy);
-                        this->pressedMask |= bit;
-                    }
-                    else if(bit & pressedMask)
-                    {
-                        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
-                            Application::debug("%s: xfb fake input released: %d", __FUNCTION__, num + 1);
-
-                        xcbDisplay()->fakeInputTest(XCB_BUTTON_RELEASE, num + 1, posx, posy);
-                        this->pressedMask &= ~bit;
-                    }
-                }
-            }
-            else
-            {
-                if(Application::isDebugLevel(DebugLevel::SyslogTrace))
-                    Application::debug("%s: xfb fake input move, posx: %d, posy: %d", __FUNCTION__, posx, posy);
-
-                xcbDisplay()->fakeInputTest(XCB_MOTION_NOTIFY, 0, posx, posy);
-            }
-        }
+        recvPointerEvent(buttons, posx, posy);
     }
 
-    void RFB::ServerEncoder::clientCutTextEvent(bool xcbAllow, bool clipboardEnable)
+    void RFB::ServerEncoder::recvCutText(void)
     {
         // RFB: 6.4.6
         // skip padding
@@ -678,35 +673,26 @@ namespace LTSM
         size_t length = recvIntBE32();
         Application::debug("%s: text length: %d", __FUNCTION__, length);
 
-        if(xcbAllow && clipboardEnable)
-        {
-            size_t maxreq = xcbDisplay()->getMaxRequest();
-            size_t chunk = std::min(maxreq, length);
-            std::vector<uint8_t> buffer;
-            buffer.reserve(chunk);
-
-            for(size_t pos = 0; pos < chunk; ++pos)
-                buffer.push_back(recvInt8());
-
-            recvSkip(length - chunk);
-            xcbDisplay()->setClipboardEvent(buffer);
-        }
-        else
-            recvSkip(length);
+        auto buffer = recvData(length);
+        recvCutTextEvent(buffer);
     }
 
-    void RFB::ServerEncoder::clientEnableContinuousUpdates(void)
+
+    void RFB::ServerEncoder::recvSetContinuousUpdates(void)
     {
         int enable = recvInt8();
         int regx = recvIntBE16();
         int regy = recvIntBE16();
         int regw = recvIntBE16();
         int regh = recvIntBE16();
+
         Application::notice("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
-        throw std::runtime_error("clientEnableContinuousUpdates: not implemented");
+        throw std::runtime_error("recvContinuousUpdates: not implemented");
+
+        recvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
     }
 
-    void RFB::ServerEncoder::clientSetDesktopSizeEvent(void)
+    void RFB::ServerEncoder::recvSetDesktopSize(void)
     {
         // skip padding (one byte!)
         recvSkip(1);
@@ -721,14 +707,15 @@ namespace LTSM
         for(int it = 0; it < numOfScreens; it++)
         {
             uint32_t id = recvIntBE32();
-            recvSkip(4); // uint16_t xpos, uint16_t ypos
+            uint16_t posx = recvIntBE16();
+            uint16_t posy = recvIntBE16();
             uint16_t width = recvIntBE16();
             uint16_t height = recvIntBE16();
-            recvSkip(4); // uint32_t flags
-            screens.emplace_back(id, width, height);
+            uint32_t flags = recvIntBE32();
+            screens.push_back({ .id = id, .posx = posx, .posy = posy, .width = width, .height = height, .flags = flags });
         }
 
-        desktopResizeModeSet(RFB::DesktopResizeMode::ClientRequest, screens);
+        recvSetDesktopSizeEvent(screens);
     }
 
     void RFB::ServerEncoder::clientDisconnectedEvent(int display)
@@ -736,10 +723,10 @@ namespace LTSM
         Application::warning("%s: display: %d", __FUNCTION__, display);
     }
 
-    void RFB::ServerEncoder::serverSendColourMap(int first)
+    void RFB::ServerEncoder::sendColourMap(int first)
     {
-        const std::lock_guard<std::mutex> lock(networkBusy);
         Application::notice("%s: first: %d, colour map length: %d", __FUNCTION__, first, colourMap.size());
+        const std::lock_guard<std::mutex> lock(sendLock);
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
         sendInt8(0); // padding
@@ -756,19 +743,19 @@ namespace LTSM
         sendFlush();
     }
 
-    void RFB::ServerEncoder::serverSendBell(void)
+    void RFB::ServerEncoder::sendBellEvent(void)
     {
-        const std::lock_guard<std::mutex> lock(networkBusy);
         Application::notice("%s: process", __FUNCTION__);
+        const std::lock_guard<std::mutex> lock(sendLock);
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
         sendFlush();
     }
 
-    void RFB::ServerEncoder::serverSendCutText(const std::vector<uint8_t> & buf)
+    void RFB::ServerEncoder::sendCutTextEvent(const std::vector<uint8_t> & buf)
     {
-        const std::lock_guard<std::mutex> lock(networkBusy);
-        Application::info("%s: length text: %d", __FUNCTION__, buf.size());
+        Application::debug("%s: length text: %d", __FUNCTION__, buf.size());
+        const std::lock_guard<std::mutex> lock(sendLock);
         // RFB: 6.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
         sendInt8(0); // padding
@@ -779,63 +766,32 @@ namespace LTSM
         sendFlush();
     }
 
-    void RFB::ServerEncoder::serverSendEndContinuousUpdates(void)
+    void RFB::ServerEncoder::sendEndContinuousUpdates(void)
     {
         // RFB: 6.5.5
         Application::notice("%s: process", __FUNCTION__);
+
+        const std::lock_guard<std::mutex> lock(sendLock);
         sendInt8(RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES).sendFlush();
     }
 
-    bool RFB::ServerEncoder::serverSendFrameBufferUpdate(const XCB::Region & reg)
+    void RFB::ServerEncoder::sendFrameBufferUpdate(const XcbFrameBuffer & xfb)
     {
-        const std::lock_guard<std::mutex> lock(networkBusy);
+        auto & reg = xfb.fb.region();
 
-        if(auto reply = xcbDisplay()->copyRootImageRegion(reg))
-        {
-            const int bytePerPixel = xcbDisplay()->pixmapBitsPerPixel(reply->depth()) >> 3;
+        Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-            if(Application::isDebugLevel(DebugLevel::SyslogTrace))
-            {
-                if(const xcb_visualtype_t* visual = xcbDisplay()->visual(reply->visId()))
-                {
-                    Application::debug("%s: shm request size [%d, %d], reply: length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       __FUNCTION__, reg.width, reg.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask,
-                                       visual->green_mask, visual->blue_mask, visual->colormap_entries);
-                }
+        const std::lock_guard<std::mutex> lock(sendLock);
 
-            }
+        // RFB: 6.5.1
+        sendInt8(RFB::SERVER_FB_UPDATE);
+        // padding
+        sendInt8(0);
 
-            Application::debug("%s: server send fb update: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        // send encodings
+        prefEncodingsPair.first(xfb.fb);
 
-            // fix align
-            if(reply->size() != reg.width * reg.height * bytePerPixel)
-                throw std::runtime_error(Tools::StringFormat("%1: region not aligned").arg(__FUNCTION__));
-
-            // RFB: 6.5.1
-            sendInt8(RFB::SERVER_FB_UPDATE);
-            // padding
-            sendInt8(0);
-            FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
-            serverPostProcessingFrameBuffer(frameBuffer);
-            int encodingLength = 0;
-            // send encodings
-            size_t netStatTx2 = netStatTx;
-            prefEncodingsPair.first(frameBuffer);
-
-            if(Application::isDebugLevel(DebugLevel::SyslogTrace))
-            {
-                size_t rawLength = 14 /* raw header for one region */ + reg.width * reg.height * clientFormat.bytePerPixel();
-                double optimize = 100.0f - (netStatTx - netStatTx2) * 100 / static_cast<double>(rawLength);
-                Application::debug("encoding %s optimize: %.*f%% (send: %d, raw: %d), region(%d, %d)", RFB::encodingName(prefEncodingsPair.second), 2, optimize, encodingLength, rawLength, reg.width, reg.height);
-            }
-
-            sendFlush();
-            xcbDisplay()->damageSubtrack(reg);
-        }
-        else
-            Application::error("%s: failed", __FUNCTION__);
-
-        return true;
+        sendFlush();
     }
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const
@@ -851,22 +807,22 @@ namespace LTSM
             {
                 case 4:
                     if(clientBigEndian)
-                        sendIntBE32(clientFormat.convertFrom(serverFormat, pixel));
+                        sendIntBE32(clientFormat.convertFrom(serverFormat(), pixel));
                     else
-                        sendIntLE32(clientFormat.convertFrom(serverFormat, pixel));
+                        sendIntLE32(clientFormat.convertFrom(serverFormat(), pixel));
 
                     return 4;
 
                 case 2:
                     if(clientBigEndian)
-                        sendIntBE16(clientFormat.convertFrom(serverFormat, pixel));
+                        sendIntBE16(clientFormat.convertFrom(serverFormat(), pixel));
                     else
-                        sendIntLE16(clientFormat.convertFrom(serverFormat, pixel));
+                        sendIntLE16(clientFormat.convertFrom(serverFormat(), pixel));
 
                     return 2;
 
                 case 1:
-                    sendInt8(clientFormat.convertFrom(serverFormat, pixel));
+                    sendInt8(clientFormat.convertFrom(serverFormat(), pixel));
                     return 1;
 
                 default:
@@ -883,7 +839,7 @@ namespace LTSM
     {
         if(clientTrueColor && clientFormat.bitsPerPixel == 32)
         {
-            auto pixel2 = clientFormat.convertFrom(serverFormat, pixel);
+            auto pixel2 = clientFormat.convertFrom(serverFormat(), pixel);
             auto red = clientFormat.red(pixel2);
             auto green = clientFormat.green(pixel2);
             auto blue = clientFormat.blue(pixel2);
@@ -913,53 +869,6 @@ namespace LTSM
 
         sendInt8((length - 1) % 255);
         return res + 1;
-    }
-
-    RFB::DesktopResizeMode RFB::ServerEncoder::desktopResizeMode(void) const
-    {
-        return desktopMode;
-    }
-
-    void RFB::ServerEncoder::desktopResizeModeDisable(void)
-    {
-        desktopMode = DesktopResizeMode::Disabled;
-    }
-
-    void RFB::ServerEncoder::desktopResizeModeSet(const DesktopResizeMode & mode, const std::vector<RFB::ScreenInfo> & screens)
-    {
-        if(screens.size())
-        {
-            desktopMode = mode;
-            desktopScreenInfo = screens.front();
-        }
-    }
-
-    bool RFB::ServerEncoder::desktopResizeModeChange(const XCB::Size & sz)
-    {
-        if(DesktopResizeMode::Undefined != desktopMode &&
-               DesktopResizeMode::Disabled != desktopMode &&
-               (desktopScreenInfo.width != sz.width || desktopScreenInfo.height != sz.height))
-        {
-            desktopScreenInfo.width = sz.width;
-            desktopScreenInfo.height = sz.height;
-            desktopMode = DesktopResizeMode::ServerInform;
-            return true;
-        }
-
-        return false;
-    }
-
-    bool RFB::ServerEncoder::desktopResizeModeInit(void)
-    {
-        if(desktopMode == DesktopResizeMode::Undefined &&
-            std::any_of(clientEncodings.begin(), clientEncodings.end(),
-                           [=](auto & val) { return  val == RFB::ENCODING_EXT_DESKTOP_SIZE; }))
-        {
-            desktopMode = DesktopResizeMode::ServerInform;
-            return true;
-        }
-
-        return false;
     }
 
     bool RFB::ServerEncoder::isClientEncodings(int enc) const
@@ -1104,7 +1013,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendEncodingRawSubRegionRaw(const XCB::Region & reg, const FrameBuffer & fb)
     {
-        if(serverFormat != clientFormat)
+        if(serverFormat() != clientFormat)
         {
             for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
                 sendPixel(fb.pixel(reg.topLeft() + coord));
@@ -1789,114 +1698,47 @@ namespace LTSM
     }
 
     /* pseudo encodings DesktopSize/Extended */
-    bool RFB::ServerEncoder::sendEncodingDesktopSize(bool xcbAllow)
+    void RFB::ServerEncoder::sendEncodingDesktopResize(const DesktopResizeStatus & status, const DesktopResizeError & error, const XCB::Size & desktopSize)
     {
-        int status = 0;
-        int error = 0;
-        int screenId = 0;
-        int screenFlags = 0;
-        int width = 0;
-        int height = 0;
+        auto statusCode = desktopResizeStatusCode(status);
+        auto errorCode = desktopResizeErrorCode(error);
 
-        if(xcbAllow)
-        {
-            auto wsz = xcbDisplay()->size();
-            width = wsz.width;
-            height = wsz.height;
-        }
+        Application::info("%s: status: %d, error: %d, size [%d, %d]", __FUNCTION__, statusCode, errorCode, desktopSize.width, desktopSize.height);
 
-        bool extended = isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE);
-
-        // reply type: initiator client/other
-        if(desktopMode == DesktopResizeMode::ClientRequest)
-        {
-            status = 1;
-
-            if(0 == desktopScreenInfo.width || 0 == desktopScreenInfo.height)
-            {
-                // invalid screen layout
-                error = 3;
-            }
-            else
-            {
-                screenId = desktopScreenInfo.id;
-                error = 0;
-
-                if(desktopScreenInfo.width != width || desktopScreenInfo.height != height)
-                {
-                    // need resize
-                    if(! xcbAllow)
-                    {
-                        // resize is administratively prohibited
-                        error = 1;
-                    }
-                    else if(xcbDisplay()->setRandrScreenSize(desktopScreenInfo.width, desktopScreenInfo.height))
-                    {
-                        auto nsize = xcbDisplay()->size();
-                        width = nsize.width;
-                        height = nsize.height;
-                        error = 0;
-                    }
-                    else
-                        error = 3;
-                }
-            }
-        }
-        else
-        // request: initiator server
-        if(desktopMode == DesktopResizeMode::ServerInform)
-        {
-            status = 0;
-        }
-        else
-            Application::error("%s: unknown action for DesktopResizeMode::%s", __FUNCTION__, RFB::desktopResizeModeString(desktopMode));
+        if(! isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
+            throw std::runtime_error("client not supported ext desktop resize");
 
         // send
-        const std::lock_guard<std::mutex> lock(networkBusy);
+        const std::lock_guard<std::mutex> lock(sendLock);
         sendInt8(RFB::SERVER_FB_UPDATE);
         // padding
         sendInt8(0);
         // number of rects
         sendIntBE16(1);
 
-        if(extended)
-        {
-            Application::notice("%s: ext desktop size [%dx%d], status: %d, error: %d", __FUNCTION__, width, height, status, error);
-            sendIntBE16(status);
-            sendIntBE16(error);
-            sendIntBE16(width);
-            sendIntBE16(height);
-            sendIntBE32(RFB::ENCODING_EXT_DESKTOP_SIZE);
-            // number of screens
-            sendInt8(1);
-            // padding
-            sendZero(3);
-            // id
-            sendIntBE32(screenId);
-            // xpos
-            sendIntBE16(0);
-            // ypos
-            sendIntBE16(0);
-            // width
-            sendIntBE16(width);
-            // height
-            sendIntBE16(height);
-            // flags
-            sendIntBE32(screenFlags);
-        }
-        else
-        {
-            Application::notice("%s: desktop size [%dx%d], status: %d", __FUNCTION__, width, height, status);
-            sendIntBE16(0);
-            sendIntBE16(0);
-            sendIntBE16(width);
-            sendIntBE16(height);
-            sendIntBE32(RFB::ENCODING_DESKTOP_SIZE);
-        }
+        sendIntBE16(statusCode);
+        sendIntBE16(errorCode);
+        sendIntBE16(desktopSize.width);
+        sendIntBE16(desktopSize.height);
+
+        sendIntBE32(RFB::ENCODING_EXT_DESKTOP_SIZE);
+        // number of screens
+        sendInt8(1);
+        // padding
+        sendZero(3);
+        // id
+        sendIntBE32(0);
+        // xpos
+        sendIntBE16(0);
+        // ypos
+        sendIntBE16(0);
+        // width
+        sendIntBE16(desktopSize.width);
+        // height
+        sendIntBE16(desktopSize.height);
+        // flags
+        sendIntBE32(0);
 
         sendFlush();
-
-        desktopMode = DesktopResizeMode::Success;
-        return true;
     }
 }

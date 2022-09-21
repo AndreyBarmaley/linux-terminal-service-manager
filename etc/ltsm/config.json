@@ -16,6 +16,7 @@
     "vnc:gnutls:certfile": "server.crt",
     "vnc:gnutls:keyfile": "server.key",
     "#vnc:keymap:file": "/etc/ltsm/keymap_vnc.json",
+    "#vnc:xcb:nodamage": false,
     "vnc:clipboard": true,
 
     "rdp:wlog:level": "error",

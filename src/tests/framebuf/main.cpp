@@ -46,6 +46,15 @@ FrameBuffer generate(const PixelFormat & pf)
 
 int main(int argc, char** argv)
 {
+    std::cout << "sizeof PixelFormat " << sizeof(LTSM::PixelFormat) << std::endl;
+    std::cout << "sizeof FrameBuffer " << sizeof(LTSM::FrameBuffer) << std::endl;
+    std::cout << "sizeof Region " << sizeof(LTSM::XCB::Region) << std::endl;
+    std::cout << "sizeof unique_ptr " << sizeof(std::unique_ptr<int>) << std::endl;
+    std::cout << "sizeof shared_ptr " << sizeof(std::shared_ptr<int>) << std::endl;
+    std::cout << "sizeof atomic " << sizeof(std::atomic<int>) << std::endl;
+    std::cout << "sizeof string " << sizeof(std::string) << std::endl;
+    std::cout << "sizeof PixmapInfoReply " << sizeof(LTSM::XCB::PixmapInfoReply) << std::endl;
+
     auto today = std::chrono::system_clock::now();
     auto dtn = today.time_since_epoch();
     std::srand(dtn.count());

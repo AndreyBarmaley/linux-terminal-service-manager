@@ -30,7 +30,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20220828
+#define LTSM_STREAMBUF_VERSION 20220919
 
 namespace LTSM
 {
@@ -38,7 +38,7 @@ namespace LTSM
     class ByteArray
     {
     public:
-        virtual ~ByteArray() {}
+        virtual ~ByteArray() = default;
 
         virtual size_t  size(void) const = 0;
 
@@ -77,7 +77,8 @@ namespace LTSM
     /// @brief: extend binary vector
     struct BinaryBuf : ByteArray, std::vector<uint8_t>
     {
-        BinaryBuf() {}
+        BinaryBuf() = default;
+
         BinaryBuf(size_t len, uint8_t val = 0) : std::vector<uint8_t>(len, val) {}
         BinaryBuf(const_iterator it1, const_iterator it2) : std::vector<uint8_t>(it1, it2) {}
         BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
@@ -86,10 +87,12 @@ namespace LTSM
         template<size_t N>
         BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
 
-        BinaryBuf(std::vector<uint8_t> && v) noexcept { swap(v); }
+        template<typename T>
+        BinaryBuf(T && v) noexcept { assign(std::forward<T>(v)); }
 
         BinaryBuf &     operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
-        BinaryBuf &     operator= (std::vector<uint8_t> && v) noexcept { swap(v); return *this; }
+        template<typename T>
+        BinaryBuf &     operator= (T && v) noexcept { assign(std::forward<T>(v)); return *this; }
 
         BinaryBuf &     append(const uint8_t*, size_t);
         BinaryBuf &     append(const std::vector<uint8_t> &);
@@ -112,7 +115,7 @@ namespace LTSM
         virtual void    putRaw(const void* ptr, size_t len) = 0;
 
     public:
-	virtual ~ByteOrderInterface() {}
+	virtual ~ByteOrderInterface() = default;
 
         uint8_t         getInt8(void) const;
         void            putInt8(uint8_t);
@@ -171,7 +174,8 @@ namespace LTSM
         void            readTo(uint8_t*, size_t) const;
 
         virtual BinaryBuf read(size_t = 0) const = 0;
-        virtual void      skip(size_t) const = 0;
+        std::string     readString(size_t = 0) const;
+        virtual void    skip(size_t) const = 0;
 
         const MemoryStream & operator>>(uint8_t &) const;
         const MemoryStream & operator>>(uint16_t &) const;
@@ -243,7 +247,7 @@ namespace LTSM
 
     struct streambuf_error : public std::runtime_error
     {
-        streambuf_error(const char* what) : std::runtime_error(what){}
+        explicit streambuf_error(const char* what) : std::runtime_error(what){}
     };
 
     /// @brief: read only StreamBuf
@@ -257,8 +261,14 @@ namespace LTSM
         void            putRaw(const void* ptr, size_t len) override;
 
     public:
-        StreamBufRef() {}
+        StreamBufRef() = default;
         StreamBufRef(const std::vector<uint8_t> &);
+
+        StreamBufRef(StreamBufRef &&) noexcept;
+        StreamBufRef &  operator=(StreamBufRef &&) noexcept;
+
+        StreamBufRef(const StreamBufRef &) = delete;
+        StreamBufRef &  operator=(const StreamBufRef &) = delete;
 
         bool            bigendian(void) const override { return false; }
         void            reset(const std::vector<uint8_t> &);
@@ -283,6 +293,12 @@ namespace LTSM
         StreamBuf(size_t reserve = 256);
         StreamBuf(const std::vector<uint8_t> &);
 
+        StreamBuf(const StreamBuf &);
+        StreamBuf &     operator=(const StreamBuf &);
+
+        StreamBuf(StreamBuf &&) noexcept;
+        StreamBuf &     operator=(StreamBuf &&) noexcept;
+
         bool            bigendian(void) const override { return false; }
         void            reset(const std::vector<uint8_t> &);
 
@@ -292,7 +308,11 @@ namespace LTSM
         void            skip(size_t) const override;
 
         size_t          tell(void) const;
+
         const BinaryBuf & rawbuf(void) const;
+        BinaryBuf &     rawbuf(void);
+
+        void            shrink(void);
     };
 
 } // _LTSM_STREAMBUF_

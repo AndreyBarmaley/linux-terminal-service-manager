@@ -363,9 +363,29 @@ namespace LTSM
         return *this;
     }
 
+    std::string MemoryStream::readString(size_t len) const
+    {
+        if(len == 0)
+            len = last();
+        std::string str(len, 0x20);
+        readTo(str.data(), str.size());
+        return str;
+    }
+
     /* StreamBufRef */
     StreamBufRef::StreamBufRef(const std::vector<uint8_t> & v) : it1(v.begin()), it2(v.end())
     {
+    }
+
+    StreamBufRef::StreamBufRef(StreamBufRef && sb) noexcept : it1(std::move(sb.it1)), it2(std::move(sb.it2))
+    {
+    }
+
+    StreamBufRef & StreamBufRef::operator=(StreamBufRef && sb) noexcept
+    {
+        it1 = std::move(sb.it1);
+        it2 = std::move(sb.it2);
+        return *this;
     }
 
     void StreamBufRef::reset(const std::vector<uint8_t> & v)
@@ -436,6 +456,30 @@ namespace LTSM
         it = vec.begin();
     }
 
+    StreamBuf::StreamBuf(StreamBuf && sb) noexcept : it(std::move(sb.it)), vec(std::move(sb.vec))
+    {
+    }
+
+    StreamBuf & StreamBuf::operator=(StreamBuf && sb) noexcept
+    {
+        it = std::move(sb.it);
+        vec = std::move(sb.vec);
+        return *this;
+    }
+
+    StreamBuf::StreamBuf(const StreamBuf & sb)
+    {
+        vec.assign(sb.vec.begin(), sb.vec.end());
+        it = std::next(vec.begin(), sb.tell());
+    }
+
+    StreamBuf & StreamBuf::operator=(const StreamBuf & sb)
+    {
+        vec.assign(sb.vec.begin(), sb.vec.end());
+        it = std::next(vec.begin(), sb.tell());
+        return *this;
+    }
+
     void StreamBuf::reset(const std::vector<uint8_t> & v)
     {
         vec.assign(v.begin(), v.end());
@@ -504,8 +548,32 @@ namespace LTSM
         return *it;
     }
 
+    BinaryBuf & StreamBuf::rawbuf(void)
+    {
+        return vec;
+    }
+
     const BinaryBuf & StreamBuf::rawbuf(void) const
     {
         return vec;
+    }
+
+    void StreamBuf::shrink(void)
+    {
+        if(vec.size())
+        {
+            if(it == vec.end())
+            {
+                vec.clear();
+                it = vec.begin();
+            }
+            else
+            if(vec.size() > 10 * last())
+            {
+                std::vector<uint8_t> tmp(it, vec.end());
+                vec.swap(tmp);
+                it = vec.begin();
+            }
+        }
     }
 }

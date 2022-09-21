@@ -105,7 +105,7 @@ namespace LTSM
 
 	    void		        onAddDamage(const XCB::Region &);
             bool                        xcbConnect(int display);
-            void                        renderPrimitivesToFB(FrameBuffer &);
+            void                        renderPrimitivesToFB(FrameBuffer &) const;
 
         public:
             SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);

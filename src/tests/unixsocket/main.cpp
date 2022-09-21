@@ -87,7 +87,7 @@ int main()
     std::cout << "test2 socket::sendInt16LE/recvInt16LE" << std::endl;
     assert(sock1.recvIntLE16() == 0x1234);
 
-    // zlib part
+    // zlib part1
     auto zlib1 = std::make_unique<ZLib::DeflateStream>();
     for(int it = 0; it < 100; it++)
         zlib1->sendIntLE64(0x1234567898765432);
@@ -100,11 +100,29 @@ int main()
     auto zlib2 = std::make_unique<ZLib::InflateStream>();
     zlib2->appendData(buf2);
 
-    std::cout << "test zlib socket::sendInt64LE/recvInt64LE" << std::endl;
+    std::cout << "test1 zlib socket::sendInt64LE/recvInt64LE" << std::endl;
     for(int it = 0; it < 100; it++)
     {
         auto val = zlib2->recvIntLE64();
         assert(val == 0x1234567898765432);
+    }
+
+    // zlib part1
+    for(int it = 0; it < 100; it++)
+        zlib1->sendIntBE16(it);
+
+    buf1 = zlib1->deflateFlush();
+    sock1.sendIntBE32(buf1.size()).sendData(buf1).sendFlush();
+
+    len = sock2.recvIntBE32();
+    buf2 = sock2.recvData(len);
+    zlib2->appendData(buf2);
+
+    std::cout << "test2 zlib socket::sendInt16BE/recvInt16BE" << std::endl;
+    for(int it = 0; it < 100; it++)
+    {
+        auto val = zlib2->recvIntBE16();
+        assert(val == it);
     }
 
     zlib1.reset();

@@ -34,7 +34,7 @@
 
 namespace LTSM
 {
-    enum class DebugLevel { Quiet, Console, SyslogInfo, SyslogDebug, SyslogTrace };
+    enum class DebugLevel { Quiet, Console, ConsoleError, SyslogInfo, SyslogDebug, SyslogTrace };
 
     class Application
     {
@@ -65,7 +65,7 @@ namespace LTSM
 		fprintf(stderr, "\n");
 	    }
 	    else
-            if(_debug != DebugLevel::Quiet)
+	    if(_debug == DebugLevel::SyslogInfo ||  _debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
                 syslog(LOG_INFO, format, vals...);
         }
 
@@ -80,13 +80,15 @@ namespace LTSM
 		fprintf(stderr, "\n");
 	    }
 	    else
+	    if(_debug == DebugLevel::SyslogInfo ||  _debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
         	syslog(LOG_NOTICE, format, vals...);
         }
 
         template<typename... Values>
         static void warning(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console)
+	    if(_debug == DebugLevel::Console ||
+	        _debug == DebugLevel::ConsoleError)
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[warning]\t");
@@ -100,7 +102,8 @@ namespace LTSM
         template<typename... Values>
         static void error(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console)
+	    if(_debug == DebugLevel::Console ||
+	        _debug == DebugLevel::ConsoleError)
 	    {
                 const std::scoped_lock<std::mutex> lock(_logging);
 		fprintf(stderr, "[error]\t");
@@ -122,7 +125,7 @@ namespace LTSM
 		fprintf(stderr, "\n");
 	    }
 	    else
-	    if(_debug == DebugLevel::SyslogDebug)
+	    if(_debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
                 syslog(LOG_DEBUG, format, vals...);
         }
 

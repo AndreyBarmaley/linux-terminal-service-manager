@@ -26,8 +26,9 @@
 
 #include <memory>
 #include <atomic>
+#include <unordered_map>
 
-#include "librfb_server.h"
+#include "librfb_x11server.h"
 #include "ltsm_connector.h"
 
 namespace LTSM
@@ -35,21 +36,30 @@ namespace LTSM
     namespace Connector
     {
         /* Connector::VNC */
-        class VNC : public SignalProxy, protected RFB::ServerEncoder
+        class VNC : public SignalProxy, protected RFB::X11Server
         {
-            std::unique_ptr<JsonObject> keymap;
+            PixelFormat         format;
+            std::unordered_map<uint32_t, int> keymap;
 
-            std::atomic<bool>   loopMessage{true};
+            std::string         userSession;
             std::atomic<bool>   loginWidgetStarted{false};
-	    std::atomic<bool>	sendBellFlag{false};
-            XCB::Region         clientRegion;
 
         protected:
 	    // rfb server encoding
-            XCB::RootDisplayExt* xcbDisplay(void) const override;
-            bool                serviceAlive(void) const override;
-            void                serviceStop(void) override;
-            void                serverPostProcessingFrameBuffer(FrameBuffer &) override;
+            const PixelFormat & serverFormat(void) const override;
+            void                xcbFrameBufferModify(FrameBuffer &) const override;
+
+            // x11server
+            XCB::RootDisplayExt*       xcbDisplay(void) override;
+            const XCB::RootDisplayExt* xcbDisplay(void) const override;
+            bool                xcbNoDamage(void) const override;
+            bool                xcbAllow(void) const override;
+            void                setXcbAllow(bool) override;
+
+            bool                rfbClipboardEnable(void) const override;
+            bool                rfbDesktopResizeEnabled(void) const override;
+            RFB::SecurityInfo   rfbSecurityInfo(void) const override;
+            int                 rfbUserKeycode(uint32_t) const override;
 
             // dbus virtual signals
             void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
@@ -57,9 +67,14 @@ namespace LTSM
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
 
-#ifdef LTSM_CHANNELS
-            void                ltsmParseEvent(void);
-#endif
+            void                serverHandshakeVersionEvent(void) override;
+            void                serverSelectEncodingsEvent(void) override;
+            void                serverSecurityInitEvent(void) override;
+            void                serverConnectedEvent(void) override;
+            void                serverMainLoopEvent(void) override;
+            void                serverDisplayResizedEvent(const XCB::Size &) override;
+            void                serverEncodingsEvent(void) override;
+
         public:
             VNC(sdbus::IConnection* conn, const JsonObject & jo);
             ~VNC();

@@ -378,7 +378,7 @@ namespace LTSM
             _xcbDisplay->damageAdd(reg);
     }
 
-    void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb)
+    void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb) const
     {
         for(auto & ptr : _renderPrimitives)
         {

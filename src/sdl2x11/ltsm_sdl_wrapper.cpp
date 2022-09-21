@@ -21,15 +21,30 @@
  ***************************************************************************/
 
 #include <iostream>
-#include "SDL_image.h"
 
+#include "ltsm_application.h"
 #include "ltsm_sdl_wrapper.h"
 
 namespace LTSM
 {
-    void SDL::Surface::savePNG(const std::string & file) const
+    bool SDL::Surface::isValid(void) const
     {
-        if(isValid()) IMG_SavePNG(get(), file.c_str());
+        return get();
+    }
+
+    int SDL::Surface::width(void) const
+    {
+        return get() ? get()->w : 0;
+    }
+
+    int SDL::Surface::height(void) const
+    {
+        return get() ? get()->h : 0;
+    }
+
+    bool SDL::Texture::isValid(void) const
+    {
+        return get();
     }
 
     int SDL::Texture::width(void) const
@@ -39,7 +54,10 @@ namespace LTSM
             int width = 0;
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr))
-                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+                throw sdl_error("SDL_QueryTexture");
+            }
 
             return width;
         }
@@ -54,7 +72,10 @@ namespace LTSM
             int height = 0;
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height))
-                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+                throw sdl_error("SDL_QueryTexture");
+            }
 
             return height;
         }
@@ -67,62 +88,66 @@ namespace LTSM
         if(isValid())
         {
             if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch))
-                std::cerr << __FUNCTION__ << ": " << "SDL_UpdateTexture" << " error, " << SDL_GetError() << std::endl;
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
+                throw sdl_error("SDL_UpdateTexture");
+            }
         }
     }
 
-    SDL::Window::Window(const char* title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags) : _window(nullptr), _renderer(nullptr), _display(nullptr)
+    SDL::Window::Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags)
     {
-        if(winsz_w <= 0) winsz_w = rendsz_w;
+        if(winsz_w <= 0)
+            winsz_w = rendsz_w;
 
-        if(winsz_h <= 0) winsz_h = rendsz_h;
+        if(winsz_h <= 0)
+            winsz_h = rendsz_h;
 
         // SDL part
-        _window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags);
+        _window.reset(SDL_CreateWindow(title.data(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags));
 
-        if(_window)
+        if(! _window)
         {
-            _accel = true;
-            _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
-
-            if(! _renderer)
-            {
-                _accel = false;
-                _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_SOFTWARE);
-                std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture: " << "switch to sotware render" << std::endl;
-            }
-
-            if(_renderer)
-            {
-                _display = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, rendsz_w, rendsz_h);
-
-                if(_display)
-                {
-                    SDL_Color black = {0, 0, 0, 0};
-                    SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
-                    renderClear(& black);
-                    renderReset();
-                }
-                else
-                    std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture" << " error, " << SDL_GetError() << std::endl;
-            }
-            else
-                std::cerr << __FUNCTION__ << ": " << "SDL_CreateRenderer" << " error, " << SDL_GetError() << std::endl;
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateWindow", SDL_GetError());
+            throw sdl_error("SDL_CreateWindow");
         }
-        else
-            std::cerr << __FUNCTION__ << ": " << "SDL_CreateWindow" << " error, " << SDL_GetError() << std::endl;
+
+        _accel = true;
+        _renderer.reset(SDL_CreateRenderer(_window.get(), -1, SDL_RENDERER_ACCELERATED));
+
+        if(! _renderer)
+        {
+            _accel = false;
+            _renderer.reset(SDL_CreateRenderer(_window.get(), -1, SDL_RENDERER_SOFTWARE));
+            Application::warning("%s: %s hardware accel failed, switch to software", __FUNCTION__, "SDL_CreateRenderTexture");
+        }
+
+        if(! _renderer)
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRender", SDL_GetError());
+            throw sdl_error("SDL_CreateRender");
+        }
+
+        _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, rendsz_w, rendsz_h));
+
+        if(! _display)
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
+            throw sdl_error("SDL_CreateTexture");
+        }
+
+        SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
+
+        SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
+        renderClear(& black, _display.get());
+        renderReset();
     }
 
     SDL::Window::~Window()
     {
-        if(_display)
-            SDL_DestroyTexture(_display);
-
-        if(_renderer)
-            SDL_DestroyRenderer(_renderer);
-
-        if(_window)
-            SDL_DestroyWindow(_window);
+        _display.reset();
+        _renderer.reset();
+        _window.reset();
     }
 
     bool SDL::Window::resize(int newsz_w, int newsz_h)
@@ -130,41 +155,72 @@ namespace LTSM
         newsz_w = std::max(newsz_w, 640);
         newsz_h = std::max(newsz_h, 480);
         int winsz_w, winsz_h;
-        SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
+        SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
 
         if(winsz_w != newsz_w && winsz_h != newsz_h)
         {
             int dispsz_w = newsz_w;
             int dispsz_h = newsz_h;
-            SDL_SetWindowSize(_window, newsz_w, newsz_h);
+            SDL_SetWindowSize(_window.get(), newsz_w, newsz_h);
 
-            if(_display)
-                SDL_DestroyTexture(_display);
+            _display.reset();
+            _renderer.reset();
 
-            if(_renderer)
-                SDL_DestroyRenderer(_renderer);
+            _renderer.reset(SDL_CreateRenderer(_window.get(), -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
 
-            if(nullptr != (_renderer = SDL_CreateRenderer(_window, -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE))))
+            if(! _renderer)
             {
-                if(nullptr != (_display = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h)))
-                {
-                    SDL_Color black = {0, 0, 0, 0};
-                    SDL_SetRenderDrawBlendMode(_renderer, SDL_BLENDMODE_BLEND);
-                    renderClear(& black);
-                    renderReset();
-                    return true;
-                }
-                else
-                    std::cerr << __FUNCTION__ << ": " << "SDL_CreateTexture" << " error, " << SDL_GetError() << std::endl;
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRenderer", SDL_GetError());
+                throw sdl_error("SDL_CreateRenderer");
             }
-            else
-                std::cerr << __FUNCTION__ << ": " << "SDL_CreateRenderer" << " error, " << SDL_GetError() << std::endl;
+
+            _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h));
+
+            if(! _display)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
+                throw sdl_error("SDL_CreateTexture");
+            }
+
+            SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
+
+            SDL_Color black { .r = 0, .g = 0, .b = 0, .a = 0xFF };
+            renderClear(& black, _display.get());
+            renderReset();
+
+            return true;
         }
 
         return false;
     }
 
-    bool SDL::Window::renderReset(SDL_Texture* target)
+    std::pair<int, int> SDL::Window::geometry(void) const
+    {
+        int width, height;
+
+        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, & width, & height))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error("SDL_QueryTexture");
+        }
+
+        return std::make_pair(width, height);
+    }
+
+    uint32_t SDL::Window::pixelFormat(void) const
+    {
+        uint32_t format;
+
+        if(0 != SDL_QueryTexture(_display.get(), & format, nullptr, nullptr, nullptr))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error("SDL_QueryTexture");
+        }
+
+        return format;
+    }
+
+    void SDL::Window::renderReset(SDL_Texture* target)
     {
         if(target)
         {
@@ -172,87 +228,104 @@ namespace LTSM
 
             if(0 != SDL_QueryTexture(target, nullptr, & access, nullptr, nullptr))
             {
-                std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
-                return false;
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+                throw sdl_error("SDL_QueryTexture");
             }
 
             if(access != SDL_TEXTUREACCESS_TARGET)
             {
-                std::cerr << __FUNCTION__ << ": " << "not target texture" << std::endl;
-                return false;
+                Application::error("%s: not target texture", __FUNCTION__);
+                throw sdl_error("renderReset: not target texture");
             }
         }
 
-        if(0 != SDL_SetRenderTarget(_renderer, target))
+        if(0 != SDL_SetRenderTarget(_renderer.get(), target))
         {
-            std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderTarget" << " error, " << SDL_GetError() << std::endl;
-            return false;
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_SetRenderTarget", SDL_GetError());
+            throw sdl_error("SDL_SetRenderTarget");
         }
-
-        return true;
     }
 
     void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target)
     {
-        if(! target)
-            target = _display;
+        renderReset(target ? target : _display.get());
 
-        if(renderReset(target))
+        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a))
         {
-            if(0 == SDL_SetRenderDrawColor(_renderer, col->r, col->g, col->b, col->a))
-            {
-                if(0 != SDL_RenderClear(_renderer))
-                    std::cerr << __FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
-            }
-            else
-                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
+            throw sdl_error("SDL_RenderDrawColor");
+        }
+
+        if(0 != SDL_RenderClear(_renderer.get()))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderClear", SDL_GetError());
+            throw sdl_error("SDL_RenderClear");
         }
     }
 
     void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target)
     {
-        if(! target)
-            target = _display;
+        renderReset(target ? target : _display.get());
 
-        if(renderReset(target))
+        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a))
         {
-            if(0 == SDL_SetRenderDrawColor(_renderer, col->r, col->g, col->b, col->a))
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
+            throw sdl_error("SDL_RenderDrawColor");
+        }
+
+        if(rt->w == 1 && rt->h == 1)
+        {
+            if(0 != SDL_RenderDrawPoint(_renderer.get(), rt->x, rt->y))
             {
-                if(0 != SDL_RenderFillRect(_renderer, rt))
-                    std::cerr << __FUNCTION__ << ": " << "SDL_RenderFillRect" << " error, " << SDL_GetError() << std::endl;
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawPoint", SDL_GetError());
+                throw sdl_error("SDL_RenderDrawPoint");
             }
-            else
-                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
+        }
+        else
+        if(0 != SDL_RenderFillRect(_renderer.get(), rt))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderFillRect", SDL_GetError());
+            throw sdl_error("SDL_RenderFillRect");
         }
     }
 
     void SDL::Window::renderTexture(SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt)
     {
-        if(! target)
-            target = _display;
-
-        if(renderReset(target) && source)
+        if(source)
         {
-            if(0 != SDL_RenderCopy(_renderer, source, srcrt, dstrt))
-                std::cerr << __FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
+            renderReset(target ? target : _display.get());
+
+            if(0 != SDL_RenderCopy(_renderer.get(), source, srcrt, dstrt))
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
+                throw sdl_error("SDL_RenderCopy");
+            }
         }
     }
 
     void SDL::Window::renderPresent(void)
     {
-        if(renderReset())
+        renderReset();
+
+        if(0 != SDL_SetRenderDrawColor(_renderer.get(), 0, 0, 0, 0))
         {
-            if(0 != SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 0))
-                std::cerr << __FUNCTION__ << ": " << "SDL_SetRenderDrawColor" << " error, " << SDL_GetError() << std::endl;
-
-            if(0 != SDL_RenderClear(_renderer))
-                std::cerr << __FUNCTION__ << ": " << "SDL_RenderClear" << " error, " << SDL_GetError() << std::endl;
-
-            if(0 != SDL_RenderCopy(_renderer, _display, nullptr, nullptr))
-                std::cerr << __FUNCTION__ << ": " << "SDL_RenderCopy" << " error, " << SDL_GetError() << std::endl;
-
-            SDL_RenderPresent(_renderer);
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
+            throw sdl_error("SDL_RenderDrawColor");
         }
+
+        if(0 != SDL_RenderClear(_renderer.get()))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderClear", SDL_GetError());
+            throw sdl_error("SDL_RenderClear");
+        }
+
+        if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
+            throw sdl_error("SDL_RenderCopy");
+        }
+
+        SDL_RenderPresent(_renderer.get());
     }
 
     bool SDL::Window::isValid(void) const
@@ -267,22 +340,23 @@ namespace LTSM
 
     SDL::Texture SDL::Window::createTexture(int width, int height, uint32_t format) const
     {
-        return Texture(SDL_CreateTexture(_renderer, format, SDL_TEXTUREACCESS_STATIC, width, height));
+        return Texture(SDL_CreateTexture(_renderer.get(), format, SDL_TEXTUREACCESS_STATIC, width, height));
     }
 
     std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const
     {
         std::pair<int, int> res(0, 0);
         int winsz_w, winsz_h, rendsz_w, rendsz_h;
-        SDL_GetWindowSize(_window, &winsz_w, &winsz_h);
+        SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
 
-        if(0 != SDL_QueryTexture(_display, nullptr, nullptr, &rendsz_w, &rendsz_h))
-            std::cerr << __FUNCTION__ << ": " << "SDL_QueryTexture" << " error, " << SDL_GetError() << std::endl;
-        else
+        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, &rendsz_w, &rendsz_h))
         {
-            res.first = posx * rendsz_w / winsz_w;
-            res.second = posy * rendsz_h / winsz_h;
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
+            throw sdl_error("SDL_QueryTexture");
         }
+
+        res.first = posx * rendsz_w / winsz_w;
+        res.second = posy * rendsz_h / winsz_h;
 
         return res;
     }
@@ -356,10 +430,8 @@ namespace LTSM
 
     int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode)
     {
-        for(auto & pair : sdlKeyMap)
-            if(scancode == pair.scancode)
-                return pair.xksym;
-
-        return 0;
+        auto it = std::find_if(sdlKeyMap.begin(), sdlKeyMap.end(),
+                            [&](auto & pair){ return pair.scancode == scancode; });
+        return it != sdlKeyMap.end() ? (*it).xksym : 0;
     }
 }

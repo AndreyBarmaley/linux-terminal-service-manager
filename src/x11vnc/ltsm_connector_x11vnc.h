@@ -24,37 +24,51 @@
 #ifndef _LTSM_CONNECTOR_X11VNC_
 #define _LTSM_CONNECTOR_X11VNC_
 
+#include <unordered_map>
 #include <memory>
 #include <atomic>
-#include <functional>
 
-#include "librfb_server.h"
-#include "ltsm_x11vnc.h"
+#include "librfb_x11server.h"
 
 namespace LTSM
 {
     namespace Connector
     {
         /* Connector::VNC */
-        class X11VNC : public DisplayProxy, protected RFB::ServerEncoder
+        class X11VNC : public RFB::X11Server
         {
-            std::unique_ptr<JsonObject> keymap;
+            std::unordered_map<uint32_t, int> keymap;
 
-            std::atomic<bool>   loopMessage{true};
-	    std::atomic<bool>	sendBellFlag{false};
-            XCB::Region         clientRegion;
+            const JsonObject*           _config = nullptr;
+            std::string                 _remoteaddr;
+
+            std::atomic<bool>           _xcbDisableMessages{true};
+            XCB::SharedDisplay          _xcbDisplay;
+
+            PixelFormat                _format;
 
         protected:
             // rfb server encoding
-            XCB::RootDisplayExt* xcbDisplay(void) const override;
-            bool                serviceAlive(void) const override;
-            void                serviceStop(void) override;
+            const PixelFormat &        serverFormat(void) const override;
+
+            XCB::RootDisplayExt*       xcbDisplay(void) override;
+            const XCB::RootDisplayExt* xcbDisplay(void) const override;
+            bool                       xcbNoDamage(void) const override;
+            bool                       xcbAllow(void) const override;
+            void                       setXcbAllow(bool) override;
+
+            bool                       rfbClipboardEnable(void) const override;
+            bool                       rfbDesktopResizeEnabled(void) const override;
+            RFB::SecurityInfo          rfbSecurityInfo(void) const override;
+            int                        rfbUserKeycode(uint32_t) const override;
+
+            void                       serverHandshakeVersionEvent(void) override;
+
+            bool                       xcbConnect(void);
+            bool                       loadKeymap(void);
 
         public:
             X11VNC(int fd, const JsonObject & jo);
-            ~X11VNC() {}
-
-            int		        communication(void) override;
         };
     }
 }

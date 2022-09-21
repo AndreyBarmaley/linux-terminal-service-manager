@@ -112,10 +112,10 @@ namespace LTSM
         uint32_t        bmask(void) const;
         uint32_t        amask(void) const;
 
-        uint32_t        red(int pixel) const;
-        uint32_t        green(int pixel) const;
-        uint32_t        blue(int pixel) const;
-        uint32_t        alpha(int pixel) const;
+        uint8_t         red(int pixel) const;
+        uint8_t         green(int pixel) const;
+        uint8_t         blue(int pixel) const;
+        uint8_t         alpha(int pixel) const;
 
         uint32_t        bytePerPixel(void) const;
         Color           color(int pixel) const;
@@ -156,9 +156,6 @@ namespace LTSM
         FrameBuffer() : owner(false) {}
 
     public:
-        FrameBuffer(const FrameBuffer & fb)
-             : fbptr(fb.fbptr), fbreg(fb.fbreg), owner(fb.owner) {}
-
         FrameBuffer(const XCB::Region & reg, const FrameBuffer & fb)
             : fbptr(fb.fbptr), fbreg(reg.topLeft() + fb.fbreg.topLeft(), reg.toSize()), owner(false) {}
 

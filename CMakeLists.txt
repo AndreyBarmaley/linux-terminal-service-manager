@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -Wall -Werror -Wno-sign-compare -Wno-unused-function -Wno-unused-variable -DLTSM_DEBUG")
+set(CMAKE_CXX_FLAGS_PROFILER "-O2 -pg -Wall -Werror -Wno-sign-compare -Wno-unused-function -Wno-unused-variable -DLTSM_DEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-compare -Wno-unused-function -Wno-unused-variable")
 
 option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
@@ -12,9 +13,6 @@ option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
-option(LTSM_CHANNELS_SUPPORT "ltsm channels vnc support (dev)" OFF)
-option(LTSM_CHANNEL_RUTOKEN "rutoken support (dev)" OFF)
-option(LTSM_CHANNEL_CUPS "cups support (dev)" OFF)
 
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
@@ -22,11 +20,6 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_TESTS ON CACHE BOOL "build test utilities" FORCE)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
     set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
-endif()
-
-if(NOT LTSM_CHANNELS_SUPPORT)
-    unset(LTSM_CHANNEL_RUTOKEN CACHE)
-    unset(LTSM_CHANNEL_CUPS CACHE)
 endif()
 
 include(FindPkgConfig)
@@ -38,7 +31,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 # LTSM common lib
-project(LTSM_common VERSION 20220910.1)
+project(LTSM_common VERSION  20220920.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -65,18 +58,6 @@ if(LTSM_BUILD_XCB_ERRORS)
     add_compile_options(-DLTSM_BUILD_XCB_ERRORS)
 endif()
 
-if(LTSM_CHANNELS_SUPPORT)
-    add_compile_options(-DLTSM_CHANNELS)
-endif()
-
-if(LTSM_CHANNEL_RUTOKEN)
-    add_compile_options(-DLTSM_RUTOKEN)
-endif()
-
-if(LTSM_CHANNEL_CUPS)
-    add_compile_options(-DLTSM_CUPS)
-endif()
-
 add_library(LTSM_common STATIC)
 add_subdirectory(src/common)
 
@@ -100,7 +81,7 @@ link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20220910.1)
+project(LTSM_service VERSION 20220920.1)
 
 find_package(sdbus-c++ REQUIRED)
 find_library(PAM_LIBRARIES NAMES pam)
@@ -114,7 +95,7 @@ target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARI
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20220910.1)
+project(LTSM_connector VERSION 20220920.1)
 
 option(LTSM_WITH_RDP "add rdp protocol support" ON)
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
@@ -127,6 +108,7 @@ add_executable(LTSM_connector
     src/connector/ltsm_connector.cpp
     src/connector/ltsm_connector_vnc.cpp
     src/librfb/librfb_server.cpp
+    src/librfb/librfb_x11server.cpp
     src/librfb/ltsm_librfb.cpp)
 
 if(LTSM_WITH_RDP)
@@ -150,17 +132,17 @@ target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20220910.1)
+project(LTSM_sdl2x11 VERSION 20220920.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
-target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS} ${SDL2_IMAGE_CFLAGS})
+target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
 target_include_directories(LTSM_sdl2x11 PRIVATE src/common)
-target_link_libraries(LTSM_sdl2x11 LTSM_common ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES})
+target_link_libraries(LTSM_sdl2x11 LTSM_common ${SDL2_LIBRARIES})
 
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20220910.1)
+project(LTSM_helper VERSION 20220920.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -178,7 +160,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20220910.1)
+project(LTSM_sessions VERSION 20220920.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -197,19 +179,20 @@ set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20220910.1)
+    project(LTSM_x11vnc VERSION 20220920.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
         src/x11vnc/ltsm_x11vnc.cpp
         src/librfb/librfb_server.cpp
+        src/librfb/librfb_x11server.cpp
         src/librfb/ltsm_librfb.cpp)
 
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB ${GNUTLS_DEFINITIONS})
-    target_include_directories(LTSM_x11vnc PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} src/x11vnc src/connector)
+    target_include_directories(LTSM_x11vnc PRIVATE src/common src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
 
     set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -217,7 +200,7 @@ endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20220910.1)
+    project(LTSM_vnc2image VERSION 20220920.1)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
@@ -229,7 +212,7 @@ if(LTSM_BUILD_VNC2IMAGE)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
-    target_include_directories(LTSM_vnc2image PRIVATE src/common src/librfb ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} src/vnc2image src/connector)
+    target_include_directories(LTSM_vnc2image PRIVATE src/common src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
