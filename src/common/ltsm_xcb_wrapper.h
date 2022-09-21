@@ -560,7 +560,7 @@ namespace LTSM
 	    xcb_window_t             getOwnerSelection(const xcb_atom_t &);
 
 	    bool                     getSelectionEvent(const xcb_atom_t &);
-	    bool                     setClipboardEvent(std::vector<uint8_t> &&, std::initializer_list<xcb_atom_t>);
+	    bool                     setClipboardEvent(const uint8_t*, size_t, std::initializer_list<xcb_atom_t>);
 
             bool                     sendNotifyTargets(const xcb_selection_request_event_t &);
             bool                     sendNotifySelData(const xcb_selection_request_event_t &);
@@ -577,7 +577,6 @@ namespace LTSM
             bool                     isSelectionNotify(const GenericEvent & ev) const;
 
             bool                         setClipboardEvent(const uint8_t*, size_t);
-            bool                         setClipboardEvent(std::vector<uint8_t> &&);
 	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
 	};
 

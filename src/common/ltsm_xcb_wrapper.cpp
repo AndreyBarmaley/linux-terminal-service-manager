@@ -2371,9 +2371,9 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> && buf, std::initializer_list<xcb_atom_t> atoms)
+    bool XCB::RootDisplayExt::setClipboardEvent(const uint8_t* buf, size_t len, std::initializer_list<xcb_atom_t> atoms)
     {
-        _selbuf = std::forward<std::vector<uint8_t>>(buf);
+        _selbuf.assign(buf, buf + len);
 
         if(_selbuf.empty())
             return false;
@@ -2389,16 +2389,9 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::RootDisplayExt::setClipboardEvent(const uint8_t* ptr, size_t len)
+    bool XCB::RootDisplayExt::setClipboardEvent(const uint8_t* buf, size_t len)
     {
-        std::vector<uint8_t> buf(ptr, ptr + len);
-        return setClipboardEvent(std::move(buf), { _atomPrimary, _atomClipboard });
-    }
-
-    bool XCB::RootDisplayExt::setClipboardEvent(std::vector<uint8_t> && buf)
-    {
-        // sync primary and clipboard
-        return setClipboardEvent(std::move(buf), { _atomPrimary, _atomClipboard });
+        return setClipboardEvent(buf, len, { _atomPrimary, _atomClipboard });
     }
 
     bool XCB::RootDisplayExt::getSelectionEvent(const xcb_atom_t & atomSel)

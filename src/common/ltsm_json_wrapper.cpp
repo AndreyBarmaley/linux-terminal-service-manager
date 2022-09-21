@@ -1089,7 +1089,11 @@ namespace LTSM
             itval = itkey + 1;
         }
 
-        return std::make_pair(JsonValuePtr(cont ? nullptr : obj), skip);
+        // reset reference
+        if(cont)
+            obj = nullptr;
+        
+        return std::make_pair(JsonValuePtr(nullptr), skip);
     }
 
     std::pair<JsonValuePtr, int>

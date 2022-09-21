@@ -689,7 +689,7 @@ namespace LTSM
         Application::notice("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
         throw std::runtime_error("recvContinuousUpdates: not implemented");
 
-        recvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
+        // recvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
     }
 
     void RFB::ServerEncoder::recvSetDesktopSize(void)
