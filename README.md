@@ -57,3 +57,11 @@ GUI users sessions management utility, and it is a dbus client *ltsm.manager.ser
 ![ltsm_show_session](https://user-images.githubusercontent.com/8620726/123924343-67c27700-d979-11eb-9802-723d043f9f6f.png)  
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
+# LTSM_vnc2sdl
+An experimental graphical client that implements the mechanism of multiple data channels, up to a maximum of 253.
+schemes are supported - unix://, file://, socket://, in the current version, channels are connected only through dbus commands from the server.
+with this mechanism, it is already possible to transfer any data stream in both directions, but the initiator of the channel creation is always the server.
+
+for example, server-side printing (in a remote user session) is implemented in this way - a custom backend is added to cups on the server to configure the printer, which knows which unix socket to print in the user session, from the client side the stream can be sent to the network printer socket://10.10.10.1:9100, also to the local cups or to file:///dev/usb/lp0
+
+I also want to implement a similar scheme of work for the pulseaudio subsystem, for the microphone, and the video stream.
