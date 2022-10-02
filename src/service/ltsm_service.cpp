@@ -122,7 +122,7 @@ namespace LTSM
 
     XvfbSession* XvfbSessions::registryXvfbSession(int screen, XvfbSession && st)
     {
-        auto res = _xvfb->emplace(screen, std::forward<XvfbSession>(st));
+        auto res = _xvfb->emplace(screen, std::move<XvfbSession>(st));
         return & res.first->second;
     }
 
@@ -1785,10 +1785,10 @@ namespace LTSM
                 if(std::filesystem::exists(dstfile))
                 {
                     Application::error("file present and skipping, display: %d, dst file: `%s'", display, dstfile.c_str());
-                    continue;
 
                     busSendNotify(display, "Transfer Skipping", Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
                                             NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
+                    continue;
                 }
 
                 _allowTransfer.emplace_back(filepath);
