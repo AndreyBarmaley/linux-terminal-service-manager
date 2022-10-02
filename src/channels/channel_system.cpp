@@ -1289,13 +1289,7 @@ std::unique_ptr<LTSM::Channel::Connector>
             flags |= O_CREAT | O_EXCL;
         }
 
-        fd = open(path.c_str(), flags);
-
-        if(0 <= fd && (flags & O_CREAT))
-        {
-            auto perm640 = std::filesystem::perms::owner_write | std::filesystem::perms::owner_read | std::filesystem::perms::group_read;
-            std::filesystem::permissions(path, perm640, std::filesystem::perm_options::replace);
-        }
+        fd = open(path.c_str(), flags, S_IRUSR|S_IWUSR|S_IRGRP);
     }
 
     if(0 > fd)
