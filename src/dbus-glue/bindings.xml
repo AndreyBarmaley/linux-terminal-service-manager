@@ -37,6 +37,14 @@
             <arg type="s" name="message" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
+        <method name="busSendNotify">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="summary" direction="in" />
+            <arg type="s" name="body" direction="in" />
+            <arg type="y" name="icontype" direction="in" />
+            <arg type="y" name="urgency" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
         <method name="busSetDebugLevel">
             <arg type="s" name="level" direction="in" />
             <arg type="b" name="result" direction="out" />
@@ -60,6 +68,21 @@
             <arg type="b" name="action" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
+        <method name="busSetSessionEnvironments">
+            <arg type="i" name="display" direction="in" />
+            <arg type="a{ss}" name="map" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetSessionOptions">
+            <arg type="i" name="display" direction="in" />
+            <arg type="a{ss}" name="map" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetSessionKeyboardLayouts">
+            <arg type="i" name="display" direction="in" />
+            <arg type="as" name="layouts" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
         <method name="busEncryptionInfo">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="result" direction="out" />
@@ -81,6 +104,18 @@
         </method>
         <method name="busConnectorAlive">
             <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busTransferFilesRequest">
+            <arg type="i" name="display" direction="in" />
+            <arg type="a(su)" name="files" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busTransferFileStarted">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="tmpfile" direction="in" />
+            <arg type="u" name="filesz" direction="in" />
+            <arg type="s" name="dstfile" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busCheckAuthenticate">
@@ -108,6 +143,19 @@
         </method>
         <method name="busRenderClear">
             <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busCreateChannel">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="client" direction="in" />
+            <arg type="s" name="cmode" direction="in" />
+            <arg type="s" name="server" direction="in" />
+            <arg type="s" name="smode" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busDestroyChannel">
+            <arg type="i" name="display" direction="in" />
+            <arg type="y" name="channel" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="helperIsAutoComplete">
@@ -149,6 +197,10 @@
         <signal name="helperWidgetStarted">
             <arg type="i" name="display" />
         </signal>
+        <signal name="helperWidgetTimezone">
+            <arg type="i" name="display" />
+            <arg type="s" name="tz" />
+        </signal>
         <signal name="helperSetLoginPassword">
             <arg type="i" name="display" />
             <arg type="s" name="login" />
@@ -187,6 +239,35 @@
         </signal>
         <signal name="clearRenderPrimitives">
             <arg type="i" name="display" />
+        </signal>
+        <signal name="createChannel">
+            <arg type="i" name="display" />
+            <arg type="s" name="client" />
+            <arg type="s" name="cmode" />
+            <arg type="s" name="server" />
+            <arg type="s" name="smode" />
+        </signal>
+        <signal name="destroyChannel">
+            <arg type="i" name="display" />
+            <arg type="y" name="channel" />
+        </signal>
+        <signal name="transferAllow">
+            <arg type="i" name="display" />
+            <arg type="s" name="filepath" />
+            <arg type="s" name="tmpfile" />
+            <arg type="s" name="dstdir" />
+        </signal>
+        <signal name="createListenner">
+            <arg type="i" name="display" />
+            <arg type="s" name="client" />
+            <arg type="s" name="cmode" />
+            <arg type="s" name="server" />
+            <arg type="s" name="smode" />
+        </signal>
+        <signal name="destroyListenner">
+            <arg type="i" name="display" />
+            <arg type="s" name="client" />
+            <arg type="s" name="server" />
         </signal>
         <signal name="addRenderRect">
             <arg type="i" name="display" />

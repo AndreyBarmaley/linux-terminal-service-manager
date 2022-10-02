@@ -669,7 +669,7 @@ namespace LTSM
         if(reply->size() != reg.height * reg.width * bytePerPixel)
         {
             Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
-            throw std::runtime_error("RDP::updateBitmapPlanar");
+            throw rdp_error(NS_FuncName);
         }
 
         // planar activate
@@ -685,14 +685,14 @@ namespace LTSM
             if(! context->planar)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_new");
-                throw std::runtime_error("RDP::updateBitmapPlanar");
+                throw rdp_error(NS_FuncName);
             }
         }
 
         if(! freerdp_bitmap_planar_context_reset(context->planar, tileSize, tileSize))
         {
             Application::error("%s: %s failed", __FUNCTION__, "bitmap_planar_context_reset");
-            throw std::runtime_error("RDP::updateBitmapPlanar");
+            throw rdp_error(NS_FuncName);
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
@@ -728,7 +728,7 @@ namespace LTSM
             if(freeRdp->peer->settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw std::runtime_error("RDP::updateBitmapPlanar");
+                throw rdp_error(NS_FuncName);
             }
 
             vec.emplace_back(st);
@@ -755,7 +755,7 @@ namespace LTSM
             if(! freeRdp->peer->update->BitmapUpdate(context, &bitmapUpdate))
             {
                 Application::error("%s: %s failed, length: %d", __FUNCTION__, "BitmapUpdate", totalSize);
-                throw std::runtime_error("RDP::updateBitmapPlanar");
+                throw rdp_error(NS_FuncName);
             }
 
             it1 = it2;
@@ -778,7 +778,7 @@ namespace LTSM
         if(reply->size() != reg.height * reg.width * bytePerPixel)
         {
             Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
-            throw std::runtime_error("RDP::updateBitmapInterleaved");
+            throw rdp_error(NS_FuncName);
         }
 
         size_t pixelFormat = 0;
@@ -807,7 +807,7 @@ namespace LTSM
 
             default:
                 Application::error("%s: %s failed", __FUNCTION__, "pixel format");
-                throw std::runtime_error("RDP::updateBitmapInterleaved");
+                throw rdp_error(NS_FuncName);
         }
 
         // planar activate
@@ -819,14 +819,14 @@ namespace LTSM
             if(! context->interleaved)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_new");
-                throw std::runtime_error("RDP::updateBitmapInterleaved");
+                throw rdp_error(NS_FuncName);
             }
         }
 
         if(! bitmap_interleaved_context_reset(context->interleaved))
         {
             Application::error("%s: %s failed", __FUNCTION__, "bitmap_interleaved_context_reset");
-            throw std::runtime_error("RDP::updateBitmapInterleaved");
+            throw rdp_error(NS_FuncName);
         }
 
         Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
@@ -859,7 +859,7 @@ namespace LTSM
                                       reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, freeRdp->peer->settings->ColorDepth))
             {
                 Application::error("%s: %s failed", __FUNCTION__, "interleaved_compress");
-                throw std::runtime_error("RDP::updateBitmapInterleaved");
+                throw rdp_error(NS_FuncName);
             }
 
             st.bitmapDataStream = data.get();
@@ -868,7 +868,7 @@ namespace LTSM
             if(freeRdp->peer->settings->MultifragMaxRequestSize < st.bitmapLength + 22)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw std::runtime_error("RDP::updateBitmapInterleaved");
+                throw rdp_error(NS_FuncName);
             }
 
             BITMAP_UPDATE bitmapUpdate = {0};
@@ -879,7 +879,7 @@ namespace LTSM
             if(! ret)
             {
                 Application::error("%s: %s failed", __FUNCTION__, "BitmapUpdate");
-                throw std::runtime_error("RDP::updateBitmapInterleaved");
+                throw rdp_error(NS_FuncName);
             }
         }
 

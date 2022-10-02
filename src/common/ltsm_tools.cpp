@@ -25,12 +25,15 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 
+#include <ctime>
 #include <cstdio>
 #include <memory>
 #include <cstring>
+#include <clocale>
 #include <cstdlib>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 #include <numeric>
 #include <iterator>
 #include <stdexcept>
@@ -41,6 +44,74 @@
 
 namespace LTSM
 {
+    std::string Tools::randomHexString(size_t len)
+    {
+        const char* random = "/dev/urandom";
+        std::ifstream ifs(random, std::ifstream::in | std::ifstream::binary);
+        std::vector<uint8_t> buf(len);
+
+        if(! ifs.is_open())
+            std::runtime_error("urandom not found");
+
+        ifs.read(reinterpret_cast<char*>(buf.data()), buf.size());
+        return buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, "", false);
+    }
+
+    std::string Tools::prettyFuncName(std::string_view name)
+    {
+        size_t end = name.find('(');
+        if(end == std::string::npos) end = name.size();
+
+        size_t begin = 0;
+        for(size_t it = end; it; --it)
+        {
+            if(name[it] == 0x20)
+            {
+                begin = it + 1;
+                break;
+            }
+        }
+        
+        auto sub = name.substr(begin, end - begin);
+        return std::string(sub.begin(), sub.end());
+    }
+
+    std::string Tools::getTimeZone(void)
+    {
+        const std::filesystem::path localtime{"/etc/localtime"};
+        std::string str;
+
+        if(auto env = std::getenv("TZ"))
+        {
+            str.assign(env);
+        }
+        else
+        if(std::filesystem::is_symlink(localtime))
+        {
+            auto path = std::filesystem::read_symlink(localtime);
+            auto tz = path.parent_path().filename() / path.filename();
+            str.append(tz.native());
+        }
+        else
+        {
+            time_t ts;
+            struct tm tt;
+            char buf[16]{0};
+
+            ::localtime_r(&ts, &tt);
+            ::strftime(buf, sizeof(buf)-1, "%Z", &tt);
+            str.assign(buf);
+        }
+            
+        return str;
+    }
+
+    std::string Tools::getUsername(void)
+    {
+        auto ptr = std::getenv("USER");
+        return std::string(ptr ? ptr : "");
+    }
+
     std::string Tools::lower(std::string str)
     {
         if(! str.empty())
@@ -49,26 +120,14 @@ namespace LTSM
         return str;
     }
 
-    std::string Tools::join(const std::list<std::string> & list)
+    std::string Tools::join(const std::list<std::string> & cont, std::string_view sep)
     {
-        std::ostringstream os;
-        std::copy(list.begin(), list.end(), std::ostream_iterator<std::string>(os));
-        return os.str();
+        return join(cont.begin(), cont.end(), sep);
     }
 
-    std::string Tools::join(const std::list<std::string> & list, std::string_view sep)
+    std::string Tools::join(const std::vector<std::string> & cont, std::string_view sep)
     {
-        std::ostringstream os;
-
-        for(auto it = list.begin(); it != list.end(); ++it)
-        {
-            os << *it;
-
-            if(std::next(it) != list.end())
-                os << sep;
-        }
-
-        return os.str();
+        return join(cont.begin(), cont.end(), sep);
     }
 
     std::string Tools::replace(const std::string & src, std::string_view pred, std::string_view val)
@@ -472,7 +531,10 @@ namespace LTSM
         if((len << 3) < bits) len++;
 
         if(len < v.size())
-            throw std::runtime_error("stream bits: incorrect data size");
+        {
+            Application::error("%s: %s", __FUNCTION__, "incorrect data size");
+            throw std::out_of_range(NS_FuncName);
+        }
 
         vecbuf.assign(v.begin(), v.end());
         bitpos = (len << 3) - bits;
@@ -481,7 +543,10 @@ namespace LTSM
     bool Tools::StreamBitsUnpack::popBit(void)
     {
         if(vecbuf.empty())
-            throw std::runtime_error("stream bits: empty data");
+        {
+            Application::error("%s: %s", __FUNCTION__, "empty data");
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         uint8_t mask = 1 << bitpos;
         bool res = vecbuf.back() & mask;

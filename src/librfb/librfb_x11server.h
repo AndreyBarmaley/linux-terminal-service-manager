@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *

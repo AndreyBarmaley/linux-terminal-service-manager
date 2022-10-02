@@ -131,7 +131,8 @@ namespace LTSM
                     break;
 
                 case SDL_QUIT:
-                    throw sdl_error("sdl quit");
+                    Application::warning("%s: %s", __FUNCTION__, "SDL quit event");
+                    throw sdl_error(NS_FuncName);
 
                 default:
                     break;

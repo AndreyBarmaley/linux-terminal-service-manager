@@ -282,7 +282,10 @@ namespace LTSM
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
 
             if(newDisplay < 0)
-                throw std::runtime_error("user session request failure");
+            {
+                Application::error("%s: %s", __FUNCTION__, "user session request failure");
+                throw std::runtime_error(NS_FuncName);
+            }
 
             if(newDisplay != oldDisplay)
             {
@@ -290,7 +293,10 @@ namespace LTSM
                 std::this_thread::sleep_for(100ms);
 
                 if(! xcbConnect(newDisplay))
-                    throw std::runtime_error("xcb connect failed");
+                {
+                    Application::error("%s: %s", __FUNCTION__, "xcb connect failed");
+                    throw std::runtime_error(NS_FuncName);
+                }
 
                 busConnectorSwitched(oldDisplay, newDisplay);
                 _display = newDisplay;

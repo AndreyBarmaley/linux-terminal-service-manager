@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
  *   Part of the LTSM: Linux Terminal Service Manager:                     *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
@@ -20,38 +20,11 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_GLOBALS_
-#define _LTSM_GLOBALS_
+#ifndef _LTSM_CHANNELS_
+#define _LTSM_CHANNELS_
 
-namespace LTSM
-{
-    inline static const char* dbus_service_name = "ltsm.manager.service";
-    inline static const char* dbus_object_path = "/ltsm/manager/service";
-
-    inline static const int service_version = 20221001;
-
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    inline static const bool big_endian = false;
-#else
-    inline static const bool big_endian = true;
+#ifdef LTSM_CHANNELS
+ #include "channel_system.h"
 #endif
 
-    namespace NotifyParams
-    {
-        enum IconType { Information, Warning, Error, Question };
-        enum UrgencyLevel { Low = 0, Normal = 1, Critical = 2 };
-    };
-}
-
-#ifdef LTSM_BUILD_STD_MAP
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
 #endif
-
-#endif // _LTSM_GLOBALS_

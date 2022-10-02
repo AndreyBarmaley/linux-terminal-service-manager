@@ -90,9 +90,15 @@ namespace LTSM
             void                        onLoginFailure(const int32_t & display, const std::string & msg) override {}
             void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) override {}
 	    void			onHelperWidgetCentered(const int32_t& display) override {}
+            void                        onHelperWidgetTimezone(const int32_t& display, const std::string&) override {}
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionChanged(const int32_t& display) override {}
 	    void			onDisplayRemoved(const int32_t& display) override {}
+            void                        onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&) override {};
+            void                        onDestroyChannel(const int32_t& display, const uint8_t& channel) override {};
+            void                        onCreateListenner(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&) override {};
+            void                        onDestroyListenner(const int32_t& display, const std::string&, const std::string&) override {};
+            void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {};
 
         protected:
             // dbus virtual signals

@@ -47,12 +47,13 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220917
+#define LTSM_SOCKETS_VERSION 20220925
 
 namespace LTSM
 {
     struct network_error : public std::runtime_error
     {
+        explicit network_error(const std::string & what) : std::runtime_error(what){}
         explicit network_error(const char* what) : std::runtime_error(what){}
     };
 
@@ -60,15 +61,15 @@ namespace LTSM
     class NetworkStream : protected ByteOrderInterface
     {
     protected:
-        static bool             hasInput(int fd, int timeoutMS = 1);
-        static size_t           hasData(int fd);
-
         inline void             getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
         inline void             putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
         NetworkStream() =  default;
         virtual ~NetworkStream() = default;
+
+        static bool             hasInput(int fd, int timeoutMS = 1);
+        static size_t           hasData(int fd);
 
 #ifdef LTSM_SOCKET_TLS
         virtual void            setupTLS(gnutls::session*) const {}
@@ -214,7 +215,10 @@ namespace LTSM
         std::string             resolvAddress(std::string_view ipaddr);
         std::string             resolvHostname(std::string_view hostname);
         std::list<std::string>  resolvHostname2(std::string_view hostname);
-        int                     connect(std::string_view ipaddr, int port);
+        int                     connect(std::string_view ipaddr, uint16_t port);
+        int                     listen(uint16_t port, int conn = 5);
+        int                     listen(std::string_view ipaddr, uint16_t port, int conn = 5);
+        int                     accept(int fd);
     }
 
     namespace UnixSocket
@@ -227,6 +231,7 @@ namespace LTSM
 #ifdef LTSM_SOCKET_TLS
     struct gnutls_error : public std::runtime_error
     {
+        explicit gnutls_error(const std::string & what) : std::runtime_error(what){}
         explicit gnutls_error(const char* what) : std::runtime_error(what){}
     };
 
@@ -303,6 +308,7 @@ namespace LTSM
 #ifdef LTSM_SOCKET_ZLIB
     struct zlib_error : public std::runtime_error
     {
+        explicit zlib_error(const std::string & what) : std::runtime_error(what){}
         explicit zlib_error(const char* what) : std::runtime_error(what){}
     };
 

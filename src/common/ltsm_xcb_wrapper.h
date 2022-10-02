@@ -38,17 +38,21 @@
 #include "xcb/damage.h"
 #include "xcb/xproto.h"
 
-#ifdef LTSM_WITH_XKBCOMMON
 #define explicit dont_use_cxx_explicit
 #include "xcb/xkb.h"
 #undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
-#endif
 
 #include "ltsm_tools.h"
 
 namespace LTSM
 {
+    struct xcb_error : public std::runtime_error
+    {
+        xcb_error(const std::string & what) : std::runtime_error(what){}
+        xcb_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace XCB
     {
 	struct Point
@@ -353,7 +357,6 @@ namespace LTSM
 
         enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
 
-#ifdef LTSM_WITH_XKBCOMMON
 	union xkb_notify_event_t
 	{
     	    /* All XKB events share these fields. */
@@ -370,7 +373,6 @@ namespace LTSM
     	    xcb_xkb_map_notify_event_t		map_notify;
     	    xcb_xkb_state_notify_event_t	state_notify;
 	};
-#endif
 
 	struct RandrOutputInfo
 	{
@@ -391,11 +393,6 @@ namespace LTSM
 	    uint16_t 		rate;
 	    RandrScreenInfo() : config_timestamp(0), sizeID(0), rotation(0), rate(0) {}
 	};
-
-        struct connector_error : public std::runtime_error
-        {
-            connector_error(const char* what) : std::runtime_error(what){}
-        };
 
         class Connector
         {
@@ -476,12 +473,10 @@ namespace LTSM
             xcb_keycode_t           _minKeycode = 0;
             xcb_keycode_t           _maxKeycode = 0;
 
-#ifdef LTSM_WITH_XKBCOMMON
             std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
             std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> _xkbmap;
 	    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
 	    int32_t                 _xkbdevid = -1;
-#endif
 
         public:
             RootDisplay(std::string_view addr);
@@ -516,7 +511,7 @@ namespace LTSM
                                     keysymToKeycodeGroup(xcb_keysym_t keysym) const;
             int                     getXkbLayoutGroup(void) const;
             bool                    switchXkbLayoutGroup(int group = -1) const;
-            std::list<std::string>  getXkbNames(void) const;
+            std::vector<std::string> getXkbNames(void) const;
 
 	    std::vector<xcb_randr_output_t>      getRandrOutputs(void) const;
 	    RandrOutputInfo                      getRandrOutputInfo(const xcb_randr_output_t &) const;
@@ -576,11 +571,50 @@ namespace LTSM
             bool                     selectionNotifyAction(xcb_selection_notify_event_t*);
             bool                     isSelectionNotify(const GenericEvent & ev) const;
 
+            void                         setClipboardClear(void);
             bool                         setClipboardEvent(const uint8_t*, size_t);
+            bool                         setClipboardEvent(std::vector<uint8_t> &&);
 	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
 	};
 
 	typedef std::shared_ptr<RootDisplayExt> SharedDisplay;
+
+        class XkbClient
+        {
+            std::unique_ptr<xcb_connection_t, decltype(xcb_disconnect)*> conn{ nullptr, xcb_disconnect };
+            std::unique_ptr<xkb_context, decltype(xkb_context_unref)*> xkbctx{ nullptr, xkb_context_unref };
+            std::unique_ptr<xkb_keymap, decltype(xkb_keymap_unref)*> xkbmap{ nullptr, xkb_keymap_unref };
+            std::unique_ptr<xkb_state, decltype(xkb_state_unref)*> xkbstate{ nullptr, xkb_state_unref };
+
+            const xcb_query_extension_reply_t* xkbext = nullptr;
+            int32_t xkbdevid = -1;
+            xcb_keycode_t               minKeycode = 0;
+            xcb_keycode_t               maxKeycode = 0;
+
+        public:
+            XkbClient();
+
+            int                         xkbGroup(void) const;
+            std::vector<std::string>    xkbNames(void) const;
+            std::string                 atomName(xcb_atom_t) const;
+
+            bool                        xcbEventProcessing(void);
+
+            std::pair<xcb_keycode_t, int>
+                                        keysymToKeycodeGroup(xcb_keysym_t) const;
+            xcb_keysym_t                keycodeGroupToKeysym(xcb_keycode_t, int group, bool shifted = false) const;
+
+            virtual void                xkbStateChangeEvent(int) {}
+            virtual void                xkbStateResetEvent(void) {}
+
+            template<typename Reply, typename Cookie>
+            ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
+            {
+                return XCB::getReply1<Reply, Cookie>(func, conn.get(), cookie);
+            }
+                
+            #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
+        };
     }
 }
 

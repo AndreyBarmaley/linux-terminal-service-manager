@@ -24,8 +24,10 @@
 #define _LTSM_SERVICE_
 
 #include <chrono>
-#include <string_view>
+#include <future>
+#include <exception>
 #include <filesystem>
+#include <string_view>
 
 #include <security/pam_appl.h>
 #include "alexab_safe_ptr.h"
@@ -38,15 +40,16 @@
 
 namespace LTSM
 {
+    struct service_error : public std::runtime_error
+    {
+        explicit service_error(const std::string & what) : std::runtime_error(what){}
+        explicit service_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace Manager
     {
         class Object;
     }
-
-    struct PidStatus : std::pair<int, int>
-    {
-	PidStatus(int pid, int status) : std::pair<int, int>(pid, status){}
-    };
 
     enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep };
     enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
@@ -65,14 +68,22 @@ namespace LTSM
 	bool				checkconn = false;
 
         std::string                     user;
+        std::string                     display;
         std::string                     xauthfile;
         std::string                     mcookie;
         std::string                     remoteaddr;
         std::string                     conntype;
         std::string                     encryption;
 
+        std::unordered_map<std::string, std::string>
+                                        environments;
+
+        std::unordered_map<std::string, std::string>
+                                        options;
+
         XvfbMode                        mode = XvfbMode::SessionLogin;
 	SessionPolicy			policy = SessionPolicy::AuthLock;
+        bool                            allowTransfer = true;
 
         std::chrono::system_clock::time_point tpstart;
 
@@ -87,6 +98,11 @@ namespace LTSM
     typedef sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>
             xvfb2tuple;
 
+    typedef std::pair<int, std::vector<uint8_t>> StatusStdout;
+
+    typedef std::pair<pid_t, std::future<int>> PidStatus;
+    typedef std::pair<pid_t, std::future<StatusStdout>> PidStatusStdout;
+
     class XvfbSessions
     {
     protected:
@@ -98,7 +114,7 @@ namespace LTSM
 
         XvfbSession*                    getXvfbInfo(int display);
         std::pair<int, XvfbSession*>    findUserSession(const std::string & username);
-        XvfbSession*                    registryXvfbSession(int display, XvfbSession);
+        XvfbSession*                    registryXvfbSession(int display, XvfbSession &&);
         void                            removeXvfbDisplay(int display);
 
         std::vector<xvfb2tuple>         toSessionsList(void);
@@ -111,19 +127,33 @@ namespace LTSM
         int                             getGroupGid(std::string_view);
         std::list<std::string>          getGroupMembers(std::string_view);
         std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
+        std::list<std::string>          getSessionDbusAddresses(std::string_view);
         void                            closefds(void);
         bool                            checkFileReadable(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, int uid, int gid);
 	bool			        runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
+        bool	                        switchToUser(const std::string &);
+        std::string                     quotedString(std::string_view);
 
         class Object : public XvfbSessions, public sdbus::AdaptorInterfaces<Service_adaptor>
         {
+	    std::list<PidStatus>	_childsRunning;
+            std::mutex                  _lockRunning;
+
+            std::list<std::string>      _allowTransfer;
+            std::mutex                  _lockTransfer;
+
+            std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
+
 	    const Application*		_app = nullptr;
             const JsonObject*		_config = nullptr;
-	    std::list<PidStatus>	_childEnded;
-            std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
             std::atomic<bool>           _running = false;
             bool                        _loginsDisable = false;
+
+            pid_t                       safeRunSessionCommand(const XvfbSession*, const std::filesystem::path &, std::list<std::string>);
+            void                        safeWaitPidBackground(pid_t pid);
+
+            bool                        sessionRunZenity(const XvfbSession*, std::initializer_list<std::string>);
 
         protected:
 	    void			openlog(void) const;
@@ -131,13 +161,10 @@ namespace LTSM
 	    void			closeSystemSession(int display, XvfbSession &);
             std::filesystem::path	createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
             std::filesystem::path       createSessionConnInfo(const std::filesystem::path & home, const XvfbSession*);
-            int				runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userLogin);
-            int				runLoginHelper(int display, const std::filesystem::path & xauthFile, const std::string & userLogin);
+            pid_t                       runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::filesystem::path & sessionBin, const XvfbSession &);
 	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
-	    bool			runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args = nullptr);
             bool			waitXvfbStarting(int display, uint32_t waitms) const;
-            bool	                switchToUser(const std::string &);
             bool			checkXvfbSocket(int display) const;
             bool			checkXvfbLocking(int display) const;
 	    void			removeXvfbSocket(int display) const;
@@ -149,11 +176,12 @@ namespace LTSM
 	    void			sessionsEndedAction(void);
 	    void			sessionsCheckAliveAction(void);
 
+            void                        childEndedEvent(void);
+
         public:
             Object(sdbus::IConnection &, const JsonObject &, const Application &);
             ~Object();
 
-            void                        signalChildEnded(int pid, int status);
             bool                        isRunning(void) const;
             void                        shutdown(void);
 
@@ -174,8 +202,16 @@ namespace LTSM
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
+            bool                        busSetSessionEnvironments(const int32_t& display, const std::map<std::string, std::string>& map) override;
+            bool                        busSetSessionOptions(const int32_t& display, const std::map<std::string, std::string>& map) override;
+            bool                        busSetSessionKeyboardLayouts(const int32_t& display, const std::vector<std::string>& layouts) override;
             bool                        busSendMessage(const int32_t& display, const std::string& message) override;
+            bool                        busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency) override;
 	    bool			busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) override;
+            bool                        busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
+            bool                        busDestroyChannel(const int32_t& display, const uint8_t& channel) override;
+            bool                        busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files) override;
+            bool                        busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile) override;
 
             bool                        helperIdleTimeoutAction(const int32_t & display) override;
             bool                        helperWidgetStartedAction(const int32_t & display) override;
@@ -192,6 +228,10 @@ namespace LTSM
             bool                        busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) override;
             bool                        busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) override;
             bool                        busRenderClear(const int32_t& display) override;
+
+#ifdef LTSM_CHANNELS
+            void                        startSessionChannels(int display);
+#endif
         };
 
         class Service : public ApplicationJsonConfig

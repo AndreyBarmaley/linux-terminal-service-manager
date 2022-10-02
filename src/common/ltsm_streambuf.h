@@ -30,7 +30,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20220919
+#define LTSM_STREAMBUF_VERSION 20220925
 
 namespace LTSM
 {
@@ -247,6 +247,7 @@ namespace LTSM
 
     struct streambuf_error : public std::runtime_error
     {
+        explicit streambuf_error(const std::string & what) : std::runtime_error(what){}
         explicit streambuf_error(const char* what) : std::runtime_error(what){}
     };
 

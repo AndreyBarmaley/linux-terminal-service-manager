@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -471,7 +471,20 @@ namespace LTSM
             }
 
             int msgType = recvInt8();
-    
+
+#ifdef LTSM_CHANNELS
+            if(msgType == RFB::PROTOCOL_LTSM)
+            {
+                if(! isClientEncodings(RFB::ENCODING_LTSM))
+                {
+                    Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
+                    throw rfb_error(NS_FuncName);
+                }
+
+                recvLtsm(*this);
+                continue;
+            }
+#endif
             switch(msgType)
             {
                 case RFB::CLIENT_SET_PIXEL_FORMAT:
@@ -502,7 +515,7 @@ namespace LTSM
                     recvSetDesktopSize();
                     break;
 
-                case RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES:
+                case RFB::CLIENT_CONTINUOUS_UPDATES:
                     recvSetContinuousUpdates();
                     break;
 
@@ -542,11 +555,17 @@ namespace LTSM
                 break;
 
             default:
-                throw std::runtime_error(Tools::StringFormat("%1: unknown client pixel format").arg(__FUNCTION__));
+            {
+                Application::error("%s: %s", __FUNCTION__, " unknown pixel format");
+                throw rfb_error(NS_FuncName);
+            }
         }
         
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
-            throw std::runtime_error(Tools::StringFormat("%1: unsupported pixel format").arg(__FUNCTION__));
+        {
+            Application::error("%s: %s", __FUNCTION__, " unsupported pixel format");
+            throw rfb_error(NS_FuncName);
+        }
 
         clientTrueColor = trueColor;
         clientBigEndian = bigEndian;
@@ -622,6 +641,9 @@ namespace LTSM
             }
         }
 
+        if(isClientEncodings(RFB::ENCODING_CONTINUOUS_UPDATES))
+            sendContinuousUpdates(true);
+
         recvSetEncodingsEvent(clientEncodings);
     }
 
@@ -687,9 +709,11 @@ namespace LTSM
         int regh = recvIntBE16();
 
         Application::notice("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
-        throw std::runtime_error("recvContinuousUpdates: not implemented");
 
-        // recvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
+        continueUpdatesSupport = true;
+        continueUpdatesProcessed = enable;
+
+        recvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
     }
 
     void RFB::ServerEncoder::recvSetDesktopSize(void)
@@ -726,7 +750,7 @@ namespace LTSM
     void RFB::ServerEncoder::sendColourMap(int first)
     {
         Application::notice("%s: first: %d, colour map length: %d", __FUNCTION__, first, colourMap.size());
-        const std::lock_guard<std::mutex> lock(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
         sendInt8(0); // padding
@@ -746,7 +770,7 @@ namespace LTSM
     void RFB::ServerEncoder::sendBellEvent(void)
     {
         Application::notice("%s: process", __FUNCTION__);
-        const std::lock_guard<std::mutex> lock(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
         sendFlush();
@@ -755,7 +779,7 @@ namespace LTSM
     void RFB::ServerEncoder::sendCutTextEvent(const std::vector<uint8_t> & buf)
     {
         Application::debug("%s: length text: %d", __FUNCTION__, buf.size());
-        const std::lock_guard<std::mutex> lock(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
         // RFB: 6.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
         sendInt8(0); // padding
@@ -766,13 +790,15 @@ namespace LTSM
         sendFlush();
     }
 
-    void RFB::ServerEncoder::sendEndContinuousUpdates(void)
+    void RFB::ServerEncoder::sendContinuousUpdates(bool enable)
     {
         // RFB: 6.5.5
-        Application::notice("%s: process", __FUNCTION__);
+        Application::notice("%s: status: %s", __FUNCTION__, (enable ? "enable" : "disable"));
 
-        const std::lock_guard<std::mutex> lock(sendLock);
-        sendInt8(RFB::CLIENT_ENABLE_CONTINUOUS_UPDATES).sendFlush();
+        std::scoped_lock<std::mutex> guard(sendLock);
+        sendInt8(RFB::SERVER_CONTINUOUS_UPDATES).sendFlush();
+
+        continueUpdatesProcessed = enable;
     }
 
     void RFB::ServerEncoder::sendFrameBufferUpdate(const XcbFrameBuffer & xfb)
@@ -781,7 +807,7 @@ namespace LTSM
 
         Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        const std::lock_guard<std::mutex> lock(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         // RFB: 6.5.1
         sendInt8(RFB::SERVER_FB_UPDATE);
@@ -796,7 +822,7 @@ namespace LTSM
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const
     {
-        return tls ? tls->sessionDescription() : std::string();
+        return tls ? tls->sessionDescription() : nullptr;
     }
 
     int RFB::ServerEncoder::sendPixel(uint32_t pixel)
@@ -826,13 +852,14 @@ namespace LTSM
                     return 1;
 
                 default:
+                    Application::error("%s: %s", __FUNCTION__, "unknown pixel format");
                     break;
             }
         }
         else if(colourMap.size())
-            Application::error("%s: not usable", __FUNCTION__);
+            Application::error("%s: %s", __FUNCTION__, "color map not impemented");
 
-        throw std::runtime_error("sendPixel: unknown format");
+        throw rfb_error(NS_FuncName);
     }
 
     int RFB::ServerEncoder::sendCPixel(uint32_t pixel)
@@ -856,7 +883,10 @@ namespace LTSM
     int RFB::ServerEncoder::sendRunLength(size_t length)
     {
         if(0 == length)
-            throw std::runtime_error("sendRunLength: zero");
+        {
+            Application::error("%s: %s", __FUNCTION__, "length is zero");
+            throw rfb_error(NS_FuncName);
+        }
 
         int res = 0;
 
@@ -869,6 +899,11 @@ namespace LTSM
 
         sendInt8((length - 1) % 255);
         return res + 1;
+    }
+
+    bool RFB::ServerEncoder::isContinueUpdates(void) const
+    {
+        return continueUpdatesSupport && continueUpdatesProcessed;
     }
 
     bool RFB::ServerEncoder::isClientEncodings(int enc) const
@@ -996,7 +1031,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendEncodingRawSubRegion(const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
-        const std::lock_guard<std::mutex> lock(encodingBusy);
+        std::scoped_lock<std::mutex> guard(encodingBusy);
 
         if(encodingDebug)
             Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, reg.x, reg.y, reg.width, reg.height);
@@ -1134,7 +1169,10 @@ namespace LTSM
         };
 
         if(map.empty())
-            throw std::runtime_error("VNC::sendEncodingRRESubRegion: pixel map is empty");
+        {
+            Application::error("%s: %s", __FUNCTION__, "pixels map is empty");
+            throw rfb_error(NS_FuncName);
+        }
 
         if(map.size() > 1)
         {
@@ -1148,7 +1186,7 @@ namespace LTSM
                 sendEncodingRawSubRegion(top, reg, fb, jobId);
             else
             {
-                const std::lock_guard<std::mutex> lock(encodingBusy);
+                std::scoped_lock<std::mutex> guard(encodingBusy);
 
                 if(encodingDebug)
                     Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
@@ -1162,7 +1200,7 @@ namespace LTSM
         else
         {
             int back = fb.pixel(reg.topLeft());
-            const std::lock_guard<std::mutex> lock(encodingBusy);
+            std::scoped_lock<std::mutex> guard(encodingBusy);
 
             if(encodingDebug)
                 Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
@@ -1292,12 +1330,15 @@ namespace LTSM
         };
 
         if(map.empty())
-            throw std::runtime_error("VNC::sendEncodingHextileSubRegion: pixel map is empty");
+        {
+            Application::error("%s: %s", __FUNCTION__, "pixels map is empty");
+            throw rfb_error(NS_FuncName);
+        }
 
         if(map.size() == 1)
         {
             // wait thread
-            const std::lock_guard<std::mutex> lock(encodingBusy);
+            std::scoped_lock<std::mutex> guard(encodingBusy);
             sendHeaderHexTile(reg + top, zlibver);
             int back = fb.pixel(reg.topLeft());
 
@@ -1322,7 +1363,7 @@ namespace LTSM
             });
             const size_t hextileRawLength = 1 + reg.width * reg.height * fb.bytePerPixel();
             // wait thread
-            const std::lock_guard<std::mutex> lock(encodingBusy);
+            std::scoped_lock<std::mutex> guard(encodingBusy);
             sendHeaderHexTile(reg + top, zlibver);
 
             if(foreground)
@@ -1450,7 +1491,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendEncodingZLibSubRegion(const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
-        const std::lock_guard<std::mutex> lock(encodingBusy);
+        std::scoped_lock<std::mutex> guard(encodingBusy);
 
         if(encodingDebug)
             Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
@@ -1534,7 +1575,7 @@ namespace LTSM
             this->sendIntBE32(zrle ? RFB::ENCODING_ZRLE : RFB::ENCODING_TRLE);
         };
         // wait thread
-        const std::lock_guard<std::mutex> lock(encodingBusy);
+        std::scoped_lock<std::mutex> guard(encodingBusy);
         sendHeaderTRLE(reg + top, zrle);
 
         if(zrle)
@@ -1706,10 +1747,13 @@ namespace LTSM
         Application::info("%s: status: %d, error: %d, size [%d, %d]", __FUNCTION__, statusCode, errorCode, desktopSize.width, desktopSize.height);
 
         if(! isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
-            throw std::runtime_error("client not supported ext desktop resize");
+        {
+            Application::error("%s: %s", __FUNCTION__, "client not supported ExtDesktopResize encoding");
+            throw rfb_error(NS_FuncName);
+        }
 
         // send
-        const std::lock_guard<std::mutex> lock(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
         sendInt8(RFB::SERVER_FB_UPDATE);
         // padding
         sendInt8(0);
@@ -1741,4 +1785,76 @@ namespace LTSM
 
         sendFlush();
     }
+
+#ifdef LTSM_CHANNELS
+    void RFB::ServerEncoder::sendEncodingLtsmSupported(void)
+    {
+        Application::notice("%s: process", __FUNCTION__);
+        std::scoped_lock<std::mutex> guard(sendLock);
+
+        sendInt8(RFB::SERVER_FB_UPDATE);
+        // padding
+        sendInt8(0);
+        // rects
+        sendIntBE16(1);
+
+        sendIntBE16(0);
+        sendIntBE16(0);
+        sendIntBE16(0);
+        sendIntBE16(0);
+        sendIntBE32(ENCODING_LTSM);
+        // raw size + raw data
+        sendIntBE32(0);
+        sendFlush();
+    }
+
+    void RFB::ServerEncoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)
+    {
+        sendLtsm(*this, sendLock, channel, buf, len);
+    }
+
+    void RFB::ServerEncoder::recvChannelSystem(const std::vector<uint8_t> & buf)
+    {
+        JsonContent jc;
+        jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
+
+        if(! jc.isObject())
+        {
+            Application::error("%s: %s", __FUNCTION__, "json broken");
+            throw std::invalid_argument(NS_FuncName);
+        }
+
+        auto jo = jc.toObject();
+        auto cmd = jo.getString("cmd");
+
+        if(cmd.empty())
+        {
+            Application::error("%s: %s", __FUNCTION__, "format message broken");
+            throw std::invalid_argument(NS_FuncName);
+        }
+
+        Application::info("%s: cmd: %s", __FUNCTION__, cmd.c_str());
+
+        if(cmd == SystemCommand::ClientVariables)
+            systemClientVariables(jo);
+        else
+        if(cmd == SystemCommand::KeyboardChange)
+            systemKeyboardChange(jo);
+        else
+        if(cmd == SystemCommand::TransferFiles)
+            systemTransferFiles(jo);
+        else
+        if(cmd == SystemCommand::ChannelClose)
+            systemChannelClose(jo);
+        else
+        if(cmd == SystemCommand::ChannelConnected)
+            systemChannelConnected(jo);
+        else
+        {
+            Application::error("%s: %s", __FUNCTION__, "unknown cmd");
+            throw std::invalid_argument(NS_FuncName);
+        }
+    }
+#endif
+
 }

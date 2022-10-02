@@ -177,8 +177,8 @@ namespace LTSM
     {
         if(! xcbConnect())
         {
-            Application::error("%s: xcb connect: failed", __FUNCTION__);
-            throw std::runtime_error("serverHandshakeVersionEvent");
+            Application::error("%s: %s", __FUNCTION__, "xcb connect failed");
+            throw rfb_error(NS_FuncName);
         }
     }
 }

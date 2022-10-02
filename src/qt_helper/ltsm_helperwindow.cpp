@@ -20,6 +20,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <stdlib.h>
 #include <syslog.h>
 
 #include <QFile>
@@ -152,6 +153,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         connect(dbusInterfacePtr.data(), SIGNAL(loginFailure(int, const QString &)), this, SLOT(loginFailureCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetCentered(int)), this, SLOT(widgetCenteredCallback(int)));
+        connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetTimezone(int, const QString &)), this, SLOT(widgetTimezoneCallback(int, const QString &)));
         connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &, const bool &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &, const bool &)));
 	connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
 
@@ -229,6 +231,14 @@ void LTSM_HelperWindow::reloadUsersList(void)
             ui->comboBoxUsername->addItems(users);
             ui->comboBoxUsername->setEditText("");
         }
+    }
+}
+
+void LTSM_HelperWindow::widgetTimezoneCallback(int display, const QString & tz)
+{
+    if(display == displayNum)
+    {
+        setenv("TZ", tz.toStdString().c_str(), 1);
     }
 }
 

@@ -22,16 +22,11 @@
 
 #include <pwd.h>
 #include <grp.h>
-#include <poll.h>
 #include <errno.h>
 #include <signal.h>
-#include <unistd.h>
-#include <string.h>
 
 #include <sys/wait.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
+#include <sys/fcntl.h>
 #include <sys/inotify.h>
 
 #include <cctype>
@@ -48,6 +43,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
+#include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -61,9 +57,8 @@ namespace LTSM
         {
             int status;
             // kill session
-            Application::debug("kill helper, pid: %d", pid2);
+            Application::debug("%s: kill %s, pid: %d", __FUNCTION__, "helper", pid2);
             kill(pid2, SIGTERM);
-            waitpid(pid2, &status, 0);
             pid2 = 0;
         }
 
@@ -71,9 +66,8 @@ namespace LTSM
         {
             int status;
             // kill xvfb
-            Application::debug("kill xvfb pid: %d", pid1);
+            Application::debug("%s: kill %s, pid: %d", __FUNCTION__, "xvfb", pid1);
             kill(pid1, SIGTERM);
-            waitpid(pid1, &status, 0);
             pid1 = 0;
         }
 
@@ -126,9 +120,9 @@ namespace LTSM
         }
     }
 
-    XvfbSession* XvfbSessions::registryXvfbSession(int screen, XvfbSession st)
+    XvfbSession* XvfbSessions::registryXvfbSession(int screen, XvfbSession && st)
     {
-        auto res = _xvfb->emplace(screen, std::move(st));
+        auto res = _xvfb->emplace(screen, std::forward<XvfbSession>(st));
         return & res.first->second;
     }
 
@@ -219,7 +213,7 @@ namespace LTSM
             if(st)
                 return std::make_tuple<int, int, std::filesystem::path, std::string>(st->pw_uid, st->pw_gid, st->pw_dir, st->pw_shell);
 
-            Application::error("getpwnam failed, user: %s, error: %s", user.data(), strerror(errno));
+            Application::error("%s: %s failed, user: %s, error: %s, code: %d", __FUNCTION__, "getpwnam", user.data(), strerror(errno), errno);
         }
 
         return std::make_tuple<int, int, std::string, std::string>(-1, -1, "", "");
@@ -234,10 +228,47 @@ namespace LTSM
             if(group_st)
                 return group_st->gr_gid;
 
-            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
+            Application::error("%s: %s failed, group: %s, error: %s, code: %d", __FUNCTION__, "getgrnam", group.data(), strerror(errno), errno);
         }
 
         return -1;
+    }
+
+    std::list<std::string> Manager::getSessionDbusAddresses(std::string_view user)
+    {
+        std::filesystem::path home;
+        std::tie(std::ignore, std::ignore, home, std::ignore) = getUserInfo(user);
+
+        auto dbusPath = std::filesystem::path(home) / ".dbus" / "session-bus";
+        std::list<std::string> dbusAddresses;
+
+        if(std::filesystem::is_directory(dbusPath))
+        {
+            std::string_view dbusLabel = "DBUS_SESSION_BUS_ADDRESS='";
+
+            for(auto const & dirEntry : std::filesystem::directory_iterator{dbusPath})
+            {
+                std::ifstream ifs(dirEntry.path());
+                std::string line;
+
+                while(std::getline(ifs, line))
+                {
+                    auto pos = line.find(dbusLabel);
+                    if(pos != std::string::npos)
+                    {
+                        dbusAddresses.emplace_back(line.substr(pos + dbusLabel.size()));
+                        // remove last \'
+                        dbusAddresses.back().pop_back();
+                    }
+                }
+            }
+        }
+        else
+        {
+            Application::error("%s: directory not found, path: %s", __FUNCTION__, dbusPath.c_str());
+        }
+
+        return dbusAddresses;
     }
 
     std::list<std::string> Manager::getGroupMembers(std::string_view group)
@@ -247,7 +278,7 @@ namespace LTSM
 
         if(! group_st)
         {
-            Application::error("getgrnam failed, group: %s, error: %s", group.data(), strerror(errno));
+            Application::error("%s: %s failed, group: %s, error: %s, code: %d", __FUNCTION__, "getgrnam", group.data(), strerror(errno), errno);
             return res;
         }
 
@@ -291,15 +322,14 @@ namespace LTSM
 
     bool Manager::checkFileReadable(const std::filesystem::path & file)
     {
-        auto st = std::filesystem::status(file);
-        return std::filesystem::file_type::not_found != st.type() &&
-               (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
+        return std::filesystem::exists(file) &&
+            (std::filesystem::status(file).permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
     }
 
     void Manager::setFileOwner(const std::filesystem::path & file, int uid, int gid)
     {
         if(0 != chown(file.c_str(), uid, gid))
-            Application::error("chown failed, file: %s, uid: %d, gid: %d, error: %s", file.c_str(), uid, gid, strerror(errno));
+            Application::error("%s: %s failed, file: %s, uid: %d, gid: %d, error: %s, code: %d", __FUNCTION__, "chown", file.c_str(), uid, gid, strerror(errno), errno);
     }
 
     bool Manager::runSystemScript(int display, const std::string & user, const std::string & cmd)
@@ -323,6 +353,356 @@ namespace LTSM
         return true;
     }
 
+    std::string Manager::quotedString(std::string_view str)
+    {
+        // quoted input values
+        std::ostringstream os;
+        os << std::quoted(str);
+        return os.str();
+    }
+
+    bool Manager::switchToUser(const std::string & user)
+    {
+        auto [uid, gid, home, shell] = getUserInfo(user);
+
+        Application::debug("%s: uid: %d, gid: %d, home:`%s', shell: `%s'", __FUNCTION__, uid, gid, home.c_str(), shell.c_str());
+
+        if(uid < 0)
+        {
+            Application::error("%s: user not found: %s", user.c_str());
+            return false;
+        }
+
+        // set groups
+        std::string sgroups;
+        gid_t groups[8];
+        int ngroups = 8;
+        int ret = getgrouplist(user.c_str(), gid, groups, & ngroups);
+
+        if(0 < ret)
+        {
+            setgroups(ret, groups);
+
+            for(int it = 0; it < ret; ++it)
+            {
+                sgroups.append(std::to_string(groups[it]));
+
+                if(it + 1 < ret) sgroups.append(",");
+            }
+        }
+
+        if(0 != chdir(home.c_str()))
+            Application::error("%s: %s failed, home: `%s', error: %s, code: %d", __FUNCTION__, "chdir", home.c_str(), strerror(errno), errno);
+
+        if(0 != setgid(gid))
+        {
+            Application::error("%s: %s failed, gid: %d, error: %s, code: %d", __FUNCTION__, "setgid", gid, strerror(errno), errno);
+            return false;
+        }
+
+        if(0 != setuid(uid))
+        {
+            Application::error("%s: %s failed, uid: %d, error: %s, code: %d", __FUNCTION__, "setuid", uid, strerror(errno), errno);
+            return false;
+        }
+
+        setenv("USER", user.c_str(), 1);
+        setenv("LOGNAME", user.c_str(), 1);
+        setenv("HOME", home.c_str(), 1);
+        setenv("SHELL", shell.c_str(), 1);
+        setenv("TERM", "linux", 1);
+
+        Application::debug("%s: groups: (%s), current dir: `%s'", __FUNCTION__, sgroups.c_str(), get_current_dir_name());
+        return true;
+    }
+
+    /// RunAs namespace
+    class RunAs
+    {
+    public:
+        static int waitPid(pid_t pid)
+        {
+            // waitpid
+            int status;
+            int ret = waitpid(pid, &status, 0);
+        
+            if(0 > ret)
+            {
+                Application::error("%s: %s failed, pid: %d, error: %s, code: %d", __FUNCTION__, "waitpid", pid, strerror(errno), errno);
+            }
+            else
+            {
+                if(WIFSIGNALED(status))
+                {
+                    Application::error("%s: process killed, pid: %d", __FUNCTION__, pid);
+                }
+                else
+                {
+                    Application::debug("%s: process ended, pid: %d, status: %d", __FUNCTION__, pid, status);
+                }
+            }
+
+            return status;
+        }
+
+    private:
+        static void childProcess(const XvfbSession* xvfb, int pipeout, const std::filesystem::path & cmd, std::list<std::string> params)
+        {
+            openlog("ltsm_service", 0, LOG_USER);
+
+            Application::notice("%s: pid: %d, cmd: `%s %s'", __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params, " ").c_str());
+
+            long fdlimit = sysconf(_SC_OPEN_MAX);
+            for(int fd = STDERR_FILENO + 1; fd < fdlimit; fd++)
+                if(fd != pipeout) close(fd);
+
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGCHLD, SIG_DFL);
+            signal(SIGINT, SIG_IGN);
+            signal(SIGHUP, SIG_IGN);
+
+            if(Manager::switchToUser(xvfb->user))
+            {
+                for(auto & [key, val] : xvfb->environments)
+                    setenv(key.c_str(), val.c_str(), 1);
+
+                setenv("XAUTHORITY", xvfb->xauthfile.c_str(), 1);
+                setenv("DISPLAY", xvfb->display.c_str(), 1);
+                setenv("LTSM_REMOTEADDR", xvfb->remoteaddr.c_str(), 1);
+                setenv("LTSM_TYPECONN", xvfb->conntype.c_str(), 1);
+
+                std::vector<const char*> argv;
+                argv.reserve(params.size() + 2);
+
+                // create argv[]
+                argv.push_back(cmd.c_str());
+                for(auto & val : params)
+                    if(! val.empty()) argv.push_back(val.c_str());
+                argv.push_back(nullptr);
+
+                int null = open("/dev/null", 0);
+                if(0 <= null)
+                {
+                    if(0 > dup2(null, STDERR_FILENO))
+                        Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
+                    close(null);
+                }
+
+                // close stdout
+                if(0 > pipeout)
+                {
+                    null = open("/dev/null", 0);
+                    if(0 <= null)
+                    {
+                        if(0 > dup2(null, STDOUT_FILENO))
+                            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
+                        close(null);
+                    }
+                }
+                else
+                // redirect stdout
+                {
+                    if(0 > dup2(pipeout, STDOUT_FILENO))
+                        Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
+                    close(pipeout);
+                }
+
+                int res = execv(cmd.c_str(), (char* const*) argv.data());
+                if(res < 0)
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "execv", strerror(errno), errno);
+            }
+
+            closelog();
+        }
+
+        static StatusStdout jobWaitStdout(pid_t pid, int fd)
+        {
+            bool error = false;
+            bool loop = true;
+
+            const size_t block = 1024;
+            std::vector<uint8_t> res(block);
+            uint8_t* ptr = res.data();
+            size_t last = block;
+
+            while(loop && !error)
+            {
+                int ret = read(fd, ptr, last);
+
+                if(ret < 0)
+                {
+                    if(EAGAIN != errno && EINTR != errno)
+                    {
+                        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "read", strerror(errno), errno);
+                        error = true;
+                    }
+                    // EAGAIN or EINTR continue
+                    continue;
+                }
+
+                // end stream
+                if(ret == 0)
+                {
+                    res.resize(res.size() - last);
+                    loop = false;
+                    continue;
+                }
+
+                ptr += ret;
+                last -= ret;
+
+                if(last == 0)
+                {
+                    auto pos = res.size();
+                    res.resize(res.size() + block);
+                    last = block;
+                    ptr = res.data() + pos;
+                }
+            }
+
+            if(error)
+                res.clear();
+
+            int status = waitPid(pid);
+
+            return std::make_pair(status, std::move(res));
+        }
+
+    public:
+        static PidStatusStdout sessionCommandStdout(const XvfbSession* xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
+        {
+            if(! xvfb)
+            {
+                Application::error("%s: xvfb session null", __FUNCTION__);
+                throw service_error(NS_FuncName);
+            }
+
+            if(! std::filesystem::exists(cmd))
+            {
+                Application::error("%s: command not found: `%s'", __FUNCTION__, cmd.c_str());
+                throw service_error(NS_FuncName);
+            }
+
+            auto & userName = xvfb->user;
+            Application::info("%s: request for user: %s, display: %s, cmd: `%s'", __FUNCTION__, userName.c_str(), xvfb->display.c_str(), cmd.c_str());
+            auto [uid, gid, home, shell] = Manager::getUserInfo(userName);
+
+            if(0 > uid)
+            {
+                Application::error("%s: username not found: %s, uid: %d, gid: %d", __FUNCTION__, userName.c_str(), uid, gid);
+                throw service_error(NS_FuncName);
+            }
+
+            if(! std::filesystem::is_directory(home))
+            {
+                Application::error("%s: home not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
+                throw service_error(NS_FuncName);
+            }
+
+            // run login session or autorized session only
+            if(xvfb->mode != XvfbMode::SessionLogin && ! xvfb->pamh)
+            {
+                Application::error("%s: session not authorized, user: %s", __FUNCTION__, userName.c_str());
+                throw service_error(NS_FuncName);
+            }
+
+            int pipefd[2];
+            if(0 > pipe(pipefd))
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pipe", strerror(errno), errno);
+                throw service_error(NS_FuncName);
+            }
+
+            pid_t pid = fork();
+
+            if(pid < 0)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+                throw service_error(NS_FuncName);
+            }
+
+            if(0 == pid)
+            {
+                closelog();
+                close(pipefd[0]);
+                childProcess(xvfb, pipefd[1], cmd, std::move(params));
+                // child ended
+                std::exit(0);
+            }
+        
+            // main thread processed
+            close(pipefd[1]);
+
+            if(0 > fcntl(pipefd[0], F_SETFL, fcntl(pipefd[0], F_GETFL, 0) | O_NONBLOCK))
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fcntl", strerror(errno), errno);
+
+            // planned get stdout from running job
+            auto future = std::async(std::launch::async, jobWaitStdout, pid, pipefd[0]);
+            return std::make_pair(pid, std::move(future));
+        }
+
+        static PidStatus sessionCommand(const XvfbSession* xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
+        {
+            if(! xvfb)
+            {
+                Application::error("%s: xvfb session null", __FUNCTION__);
+                throw service_error(NS_FuncName);
+            }
+
+            if(! std::filesystem::exists(cmd))
+            {
+                Application::error("%s: command not found: `%s'", __FUNCTION__, cmd.c_str());
+                throw service_error(NS_FuncName);
+            }
+
+            auto & userName = xvfb->user;
+            Application::info("%s: request for user: %s, display: %s, cmd: `%s'", __FUNCTION__, userName.c_str(), xvfb->display.c_str(), cmd.c_str());
+            auto [uid, gid, home, shell] = Manager::getUserInfo(userName);
+
+            if(0 > uid)
+            {
+                Application::error("%s: username not found: %s, uid: %d, gid: %d", __FUNCTION__, userName.c_str(), uid, gid);
+                throw service_error(NS_FuncName);
+            }
+
+            if(! std::filesystem::is_directory(home))
+            {
+                Application::error("%s: home not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
+                throw service_error(NS_FuncName);
+            }
+
+            pid_t pid = fork();
+
+            if(pid < 0)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+                throw service_error(NS_FuncName);
+            }
+
+            if(0 == pid)
+            {
+                closelog();
+                childProcess(xvfb, -1, cmd, std::move(params));
+                // child ended
+                std::exit(0);
+            }
+        
+            // main thread processed
+            auto future = std::async(std::launch::async, [pid]
+            {
+                int status;
+                // waitpid
+                int ret = waitpid(pid, & status, 0);
+                if(0 > ret && errno != ECHILD)
+                    Application::error("%s: %s failed, pid: %d, error: %s, code: %d", __FUNCTION__, "waitpid", pid, strerror(errno), errno);
+                return status;
+            });
+
+            return std::make_pair(pid, std::move(future));
+        }
+
+    }; // RunAs
+
     /* Manager::Object */
     Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, const Application & app)
         : AdaptorInterfaces(conn, LTSM::dbus_object_path), _app(& app), _config(& jo)
@@ -336,7 +716,7 @@ namespace LTSM
             this->sessionsTimeLimitAction();
         });
         // check sessions killed
-        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(5, true, [this]()
+        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(1, true, [this]()
         {
             this->sessionsEndedAction();
         });
@@ -419,32 +799,37 @@ namespace LTSM
     void Manager::Object::sessionsEndedAction(void)
     {
         // childEnded
-        if(! _childEnded.empty())
+        if(! _childsRunning.empty())
         {
-            for(const auto & [ pid, status] : _childEnded)
+            std::scoped_lock<std::mutex> guard(_lockRunning);
+
+            _childsRunning.remove_if([this](auto & pidStatus)
             {
-                // post debug: for signal handler
-                Application::debug("signal child ended, pid: %d, status: %d", pid, status);
+                if(pidStatus.second.wait_for(std::chrono::milliseconds(3)) != std::future_status::ready)
+                    return false;
+
                 // find child
-                auto it = std::find_if(_xvfb->begin(), _xvfb->end(), [pid1 = pid](auto & pair)
+                auto it = std::find_if(this->_xvfb->begin(), this->_xvfb->end(), [pid2 = pidStatus.first](auto & pair)
                 {
-                    return pair.second.pid2 == pid1;
+                    return pair.second.pid2 == pid2;
                 });
 
-                if(it != _xvfb->end())
+                pidStatus.second.wait();
+
+                if(it != this->_xvfb->end())
                 {
                     auto & [ display, session] = *it;
 
                     // skip login helper, or arnormal shutdown only
-                    if(session.mode != XvfbMode::SessionLogin || 0 < status)
+                    if(session.mode != XvfbMode::SessionLogin || 0 < pidStatus.second.get())
                     {
                         session.pid2 = 0;
-                        displayShutdown(display, true, & session);
+                        this->displayShutdown(display, true, & session);
                     }
                 }
-            }
 
-            _childEnded.clear();
+                return true;
+            });
         }
     }
 
@@ -473,58 +858,6 @@ namespace LTSM
                 }
             }
         }
-    }
-
-    bool Manager::Object::switchToUser(const std::string & user)
-    {
-        auto [uid, gid, home, shell] = getUserInfo(user);
-
-        if(uid < 0)
-        {
-            Application::error("system user not found: %s", user.c_str());
-            return false;
-        }
-
-        // set groups
-        std::string sgroups;
-        gid_t groups[8];
-        int ngroups = 8;
-        int ret = getgrouplist(user.c_str(), gid, groups, & ngroups);
-
-        if(0 < ret)
-        {
-            setgroups(ret, groups);
-
-            for(int it = 0; it < ret; ++it)
-            {
-                sgroups.append(std::to_string(groups[it]));
-
-                if(it + 1 < ret) sgroups.append(",");
-            }
-        }
-
-        if(0 != setgid(gid))
-        {
-            Application::error("setgid failed, gid: %d, error: %s", gid, strerror(errno));
-            return false;
-        }
-
-        if(0 != setuid(uid))
-        {
-            Application::error("setuid failed, uid: %d, error: %s", uid, strerror(errno));
-            return false;
-        }
-
-        if(0 != chdir(home.c_str()))
-            Application::warning("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
-
-        setenv("USER", user.c_str(), 1);
-        setenv("LOGNAME", user.c_str(), 1);
-        setenv("HOME", home.c_str(), 1);
-        setenv("SHELL", shell.c_str(), 1);
-        setenv("TERM", "linux", 1);
-        Application::debug("switched to user: %s, uid: %d, gid: %d, groups: (%s), current dir: `%s'", user.c_str(), getuid(), getgid(), sgroups.c_str(), get_current_dir_name());
-        return true;
     }
 
     bool Manager::Object::checkXvfbSocket(int display) const
@@ -681,28 +1014,56 @@ namespace LTSM
         return ltsmInfo;
     }
 
+    pid_t Manager::Object::safeRunSessionCommand(const XvfbSession* xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
+    {
+        try
+        {
+            std::scoped_lock<std::mutex> guard(_lockRunning);
+            _childsRunning.emplace_back(
+                            RunAs::sessionCommand(xvfb, cmd, std::move(params)));
+            return _childsRunning.back().first;
+        }
+        catch(const std::system_error &)
+        {
+            Application::error("%s: failed, check thread limit", __FUNCTION__);
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: failed, exception: %s", __FUNCTION__, err.what());
+        }
+
+        return 0;    
+    }
+
+    void Manager::Object::safeWaitPidBackground(pid_t pid)
+    {
+        // create wait pid task
+        std::packaged_task<int(pid_t)> waitPidTask(RunAs::waitPid);
+
+        std::scoped_lock<std::mutex> guard(_lockRunning);
+        _childsRunning.emplace_back(std::make_pair(pid, waitPidTask.get_future()));
+
+        std::thread(std::move(waitPidTask), pid).detach();
+    }
+
     void Manager::Object::runSessionScript(int display, const std::string & user, const std::string & cmd)
     {
         if(cmd.size())
         {
-            auto str = Tools::replace(cmd, "%{display}", display);
-            str = Tools::replace(str, "%{user}", user);
-            auto args = Tools::split(str, 0x20);
+            auto params = Tools::split(Tools::replace(
+                                Tools::replace(cmd, "%{display}", display), "%{user}", user), 0x20);
 
-            if(args.size())
+            if(! params.empty())
             {
-                auto bin = args.front();
-                args.pop_front();
+                auto bin = params.front();
+                params.pop_front();
 
-                if(std::filesystem::exists(bin))
-                    runAsCommand(display, bin, &args);
-                else
-                    Application::warning("command not found: `%s'", cmd.c_str());
+                safeRunSessionCommand(getXvfbInfo(display), bin, std::move(params));
             }
         }
     }
 
-    int Manager::Object::runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userXvfb)
+    pid_t Manager::Object::runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userXvfb)
     {
         std::string xvfbBin = _config->getString("xvfb:path");
         std::string xvfbArgs = _config->getString("xvfb:args");
@@ -712,8 +1073,9 @@ namespace LTSM
         xvfbArgs = Tools::replace(xvfbArgs, "%{height}", height);
         xvfbArgs = Tools::replace(xvfbArgs, "%{authfile}", xauthFile.native());
         Application::debug("xvfb args: `%s'", xvfbArgs.c_str());
+
         closelog();
-        int pid = fork();
+        pid_t pid = fork();
         openlog();
 
         if(0 == pid)
@@ -724,10 +1086,26 @@ namespace LTSM
             signal(SIGCHLD, SIG_DFL);
             signal(SIGINT, SIG_IGN);
             signal(SIGHUP, SIG_IGN);
-            Application::debug("child exec, type: %s, uid: %d", "xvfb", getuid());
+            Application::debug("%s: uid: %d, gid: ", __FUNCTION__, getuid(), getgid());
 
             if(switchToUser(userXvfb))
             {
+                int null = open("/dev/null", 0);
+                if(0 <= null)
+                {
+                    if(0 > dup2(null, STDERR_FILENO))
+                        Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
+                    close(null);
+                }
+
+                null = open("/dev/null", 0);
+                if(0 <= null)
+                {
+                    if(0 > dup2(null, STDOUT_FILENO))
+                        Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
+                    close(null);
+                }
+
                 // create argv
                 std::list<std::string> list = Tools::split(xvfbArgs, 0x20);
                 std::vector<const char*> argv;
@@ -740,83 +1118,17 @@ namespace LTSM
                 argv.push_back(nullptr);
 
                 if(! checkFileReadable(xauthFile))
-                    Application::error("access failed, file: %s, user: %s, error: %s", xauthFile.c_str(), userXvfb.c_str(), strerror(errno));
+                    Application::error("%s: access failed, file: %s, user: %s, error: %s", __FUNCTION__, xauthFile.c_str(), userXvfb.c_str(), strerror(errno));
 
                 int res = execv(xvfbBin.c_str(), (char* const*) argv.data());
 
                 if(res < 0)
-                    Application::error("execv failed: %s", strerror(errno));
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "execv", strerror(errno), errno);
             }
 
             closelog();
-            _exit(0);
-            // child end
-        }
-
-        return pid;
-    }
-
-    int Manager::Object::runLoginHelper(int display, const std::filesystem::path & xauthFile, const std::string & userLogin)
-    {
-        std::string helperBin = _config->getString("helper:path");
-        std::string helperArgs = _config->getString("helper:args");
-
-        if(helperArgs.size())
-        {
-            helperArgs = Tools::replace(helperArgs, "%{display}", display);
-            helperArgs = Tools::replace(helperArgs, "%{authfile}", xauthFile.native());
-            Application::debug("helper args: %s", helperArgs.c_str());
-        }
-
-        closelog();
-        int pid = fork();
-        openlog();
-
-        if(0 == pid)
-        {
-            // child mode
-            closefds();
-            signal(SIGTERM, SIG_DFL);
-            signal(SIGCHLD, SIG_DFL);
-            signal(SIGINT, SIG_IGN);
-            signal(SIGHUP, SIG_IGN);
-            Application::debug("child exec, type: %s, uid: %d", "helper", getuid());
-
-            if(switchToUser(userLogin))
-            {
-                std::string strdisplay = std::string(":").append(std::to_string(display));
-                setenv("XAUTHORITY", xauthFile.c_str(), 1);
-                setenv("DISPLAY", strdisplay.c_str(), 1);
-
-                if(! checkFileReadable(xauthFile))
-                    Application::error("access failed, file: %s, user: %s, error: %s", xauthFile.c_str(), userLogin.c_str(), strerror(errno));
-
-                // create argv
-                int res = 0;
-
-                if(helperArgs.size())
-                {
-                    std::list<std::string> list = Tools::split(helperArgs, 0x20);
-                    std::vector<const char*> argv;
-                    argv.reserve(list.size() + 2);
-                    argv.push_back(helperBin.c_str());
-
-                    for(auto & str : list)
-                        argv.push_back(str.c_str());
-
-                    argv.push_back(nullptr);
-                    res = execv(helperBin.c_str(), (char* const*) argv.data());
-                }
-                else
-                    res = execl(helperBin.c_str(), helperBin.c_str(), (char*) nullptr);
-
-                if(res < 0)
-                    Application::error("execv failed: %s", strerror(errno));
-            }
-
-            closelog();
-            _exit(0);
-            // child end
+            // child exit
+            std::exit(0);
         }
 
         return pid;
@@ -842,21 +1154,24 @@ namespace LTSM
             {
                 Application::error("system error: %s", "root access deny");
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             if(! std::filesystem::is_directory(home))
             {
                 Application::error("home not found: `%s', user: %s", home.c_str(), xvfb.user.c_str());
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             if(0 != initgroups(xvfb.user.c_str(), gid))
             {
                 Application::error("initgroups failed, user: %s, gid: %d, error: %s", xvfb.user.c_str(), gid, strerror(errno));
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             // open session
@@ -864,29 +1179,32 @@ namespace LTSM
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_setcred failed, user: %s, display: %d, error: %s", xvfb.user.c_str(), display, pam_strerror(xvfb.pamh, ret));
+                Application::error("pam_setcred failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 pam_end(xvfb.pamh, ret);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             ret = pam_open_session(xvfb.pamh, 0);
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_open_session failed, user: %s, display: %d, error: %s", xvfb.user.c_str(), display, pam_strerror(xvfb.pamh, ret));
+                Application::error("pam_open_session failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 ret = pam_setcred(xvfb.pamh, PAM_DELETE_CRED);
                 pam_end(xvfb.pamh, ret);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             ret = pam_setcred(xvfb.pamh, PAM_REINITIALIZE_CRED);
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_setcred failed, user: %s, display: %d, error: %s", xvfb.user.c_str(), display, pam_strerror(xvfb.pamh, ret));
+                Application::error("pam_setcred failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 ret = pam_close_session(xvfb.pamh, 0);
                 pam_end(xvfb.pamh, ret);
-                _exit(0);
+                // child exit
+                std::exit(0);
             }
 
             // child mode
@@ -900,11 +1218,14 @@ namespace LTSM
             // assign groups
             if(switchToUser(xvfb.user))
             {
-                std::string strdisplay = std::string(":").append(std::to_string(display));
+                for(auto & [key, val] : xvfb.environments)
+                    setenv(key.c_str(), val.c_str(), 1);
+
                 setenv("XAUTHORITY", xvfb.xauthfile.c_str(), 1);
-                setenv("DISPLAY", strdisplay.c_str(), 1);
+                setenv("DISPLAY", xvfb.display.c_str(), 1);
                 setenv("LTSM_REMOTEADDR", xvfb.remoteaddr.c_str(), 1);
                 setenv("LTSM_TYPECONN", xvfb.conntype.c_str(), 1);
+
                 createSessionConnInfo(home, & xvfb);
                 int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
 
@@ -913,8 +1234,8 @@ namespace LTSM
             }
 
             closelog();
-            _exit(0);
-            // child end
+            // child exit
+            std::exit(0);
         }
 
         return pid;
@@ -964,8 +1285,7 @@ namespace LTSM
             setFileOwner(socketPath, uid, getGroupGid(groupAuth));
         }
 
-        int pid1 = runXvfbDisplay(screen, width, height, xauthFile, userXvfb);
-
+        auto pid1 = runXvfbDisplay(screen, width, height, xauthFile, userXvfb);
         if(0 > pid1)
         {
             Application::error("fork failed, result: %d", pid1);
@@ -974,7 +1294,10 @@ namespace LTSM
         }
 
         // parent continue
-        Application::debug("xvfb child started, pid: %d, display: %d", pid1, screen);
+        Application::debug("xvfb started, pid: %d, display: %d", pid1, screen);
+
+        // registered xvfb job
+        safeWaitPidBackground(pid1);
 
         // wait Xvfb display starting
         if(! waitXvfbStarting(screen, 5000 /* 5 sec */))
@@ -984,25 +1307,15 @@ namespace LTSM
             return -1;
         }
 
-        // running login helper
-        int pid2 = runLoginHelper(screen, xauthFile, userXvfb);
-
-        if(0 > pid2)
-        {
-            Application::error("fork failed, result: %d", pid2);
-            std::filesystem::remove(xauthFile);
-            return -1;
-        }
-
         // parent continue
-        Application::debug("helper child started, pid: %d, display: %d", pid2, screen);
-        // registry screen
         struct XvfbSession st;
+
         st.pid1 = pid1;
-        st.pid2 = pid2;
+        st.pid2 = 0;
         st.width = width;
         st.height = height;
         st.xauthfile = xauthFile;
+        st.display = std::string(":").append(std::to_string(screen));
         st.mcookie = mcookie;
         st.remoteaddr = remoteAddr;
         st.conntype = connType;
@@ -1011,8 +1324,24 @@ namespace LTSM
         st.gid = gid;
         st.user.assign(userXvfb);
         st.durationlimit = _config->getInteger("session:duration_max_sec", 0);
-        registryXvfbSession(screen, std::move(st));
-        Application::debug("login session registered, display: %d", screen);
+
+        // registry screen
+        auto xvfb = registryXvfbSession(screen, std::move(st));
+
+        std::string helperArgs = _config->getString("helper:args");
+        if(helperArgs.size())
+        {
+            helperArgs = Tools::replace(helperArgs, "%{display}", screen);
+            helperArgs = Tools::replace(helperArgs, "%{authfile}", xauthFile.native());
+            Application::debug("helper args: %s", helperArgs.c_str());
+        }
+
+        // runas login helper
+        xvfb->pid2 = safeRunSessionCommand(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
+        if(0 == xvfb->pid2)
+            return -1;
+
+        // Application::debug("login helper registered, display: %d", screen);
         return screen;
     }
 
@@ -1042,7 +1371,6 @@ namespace LTSM
         if(0 <= userScreen && checkXvfbSocket(userScreen) && userSess)
         {
             // parent continue
-            //XvfbSession* xvfb = getXvfbInfo(userScreen);
             userSess->remoteaddr = remoteAddr;
             userSess->conntype = connType;
             userSess->mode = XvfbMode::SessionOnline;
@@ -1052,13 +1380,15 @@ namespace LTSM
             Application::debug("user session connected, display: %d", userScreen);
             emitSessionReconnect(remoteAddr, connType);
             emitSessionChanged(userScreen);
+#ifdef LTSM_CHANNELS
+            startSessionChannels(userScreen);
+#endif
             runSessionScript(userScreen, userName, _config->getString("session:connect"));
             return userScreen;
         }
 
         // get owner screen
         XvfbSession* xvfb = getXvfbInfo(oldScreen);
-
         if(! xvfb)
         {
             Application::error("display not found: %d", oldScreen);
@@ -1111,110 +1441,22 @@ namespace LTSM
             return -1;
         }
 
+        // registered session job
+        safeWaitPidBackground(xvfb->pid2);
+
         // parent continue
         Application::debug("user session child started, pid: %d, display: %d", xvfb->pid2, oldScreen);
-        registryXvfbSession(oldScreen, *xvfb);
         runSystemScript(oldScreen, userName, _config->getString("system:logon"));
         runSystemScript(oldScreen, userName, _config->getString("system:connect"));
+
         Application::debug("user session registered, display: %d", oldScreen);
         emitSessionChanged(oldScreen);
+#ifdef LTSM_CHANNELS
+        startSessionChannels(oldScreen);
+#endif
         runSessionScript(oldScreen, userName, _config->getString("session:connect"));
+
         return oldScreen;
-    }
-
-    bool Manager::Object::runAsCommand(int display, const std::string & cmd, const std::list<std::string>* args)
-    {
-        auto xvfb = getXvfbInfo(display);
-
-        if(! xvfb)
-        {
-            Application::error("session not found, display: %d", display);
-            return false;
-        }
-
-        auto & userName = xvfb->user;
-        Application::info("runas request, user: %s, cmd: %s", userName.c_str(), cmd.c_str());
-        auto [uid, gid, home, shell] = getUserInfo(userName);
-
-        if(0 > uid)
-        {
-            Application::error("username not found: %s, uid: %d, gid: %d", userName.c_str(), uid, gid);
-            return false;
-        }
-
-        if(! std::filesystem::is_directory(home))
-        {
-            Application::error("home not found: `%s', user: %s", home.c_str(), userName.c_str());
-            return false;
-        }
-
-        if(xvfb->mode != XvfbMode::SessionLogin && ! xvfb->pamh)
-        {
-            Application::error("pam not started, display: %d, user: %s", display, userName.c_str());
-            return false;
-        }
-
-        // fork
-        closelog();
-        int pid = fork();
-        openlog();
-
-        if(pid < 0)
-        {
-            Application::error("fork failed, error: %s", strerror(errno));
-            return false;
-        }
-        else if(0 == pid)
-        {
-            Application::notice("runas started, pid: %d", getpid());
-            // child mode
-            closefds();
-            signal(SIGTERM, SIG_DFL);
-            signal(SIGCHLD, SIG_DFL);
-            signal(SIGINT, SIG_IGN);
-            signal(SIGHUP, SIG_IGN);
-            Application::debug("child exec, type: %s, uid: %d", "runas", getuid());
-
-            // assign groups
-            if(switchToUser(userName))
-            {
-                std::string addr = std::string(":").append(std::to_string(display));
-                setenv("XAUTHORITY", xvfb->xauthfile.c_str(), 1);
-                setenv("DISPLAY", addr.c_str(), 1);
-                setenv("LTSM_REMOTEADDR", xvfb->remoteaddr.c_str(), 1);
-                setenv("LTSM_TYPECONN", xvfb->conntype.c_str(), 1);
-
-                if(args)
-                {
-                    // create argv
-                    std::vector<const char*> argv;
-                    argv.reserve(args->size() + 2);
-                    argv.push_back(cmd.c_str());
-
-                    for(auto & str : *args)
-                        argv.push_back(str.c_str());
-
-                    argv.push_back(nullptr);
-                    int res = execv(cmd.c_str(), (char* const*) argv.data());
-
-                    if(res < 0)
-                        Application::error("execv failed: %s", strerror(errno));
-                }
-                else
-                {
-                    int res = execl(cmd.c_str(), cmd.c_str(), (char*) nullptr);
-
-                    if(res < 0)
-                        Application::error("execl failed: %s", strerror(errno));
-                }
-            }
-
-            closelog();
-            _exit(0);
-            // child end
-        }
-
-        return true;
     }
 
     int32_t Manager::Object::busGetServiceVersion(void)
@@ -1266,7 +1508,28 @@ namespace LTSM
         _running = false;
         Application::info("manager terminated: %s, service pid: %d", "complete", getpid());
 
+        if(! _childsRunning.empty())
+        {
+            std::scoped_lock<std::mutex> guard(_lockRunning);
+            Application::error("%s: running childs: %d, killed process", __FUNCTION__, _childsRunning.size());
+
+            for(auto & [pid, futureStatus] : _childsRunning)
+                kill(pid, SIGTERM);
+
+            std::this_thread::sleep_for(100ms);
+
+            for(auto & [pid, futureStatus] : _childsRunning)
+                futureStatus.wait();
+        }
+
         return true;
+    }
+
+    bool Manager::Object::sessionRunZenity(const XvfbSession* xvfb, std::initializer_list<std::string> params)
+    {
+        std::filesystem::path zenity = _config->getString("zenity:path", "/usr/bin/zenity");
+
+        return 0 != safeRunSessionCommand(xvfb, zenity, std::move(params));
     }
 
     bool Manager::Object::busSendMessage(const int32_t & display, const std::string & message)
@@ -1275,32 +1538,26 @@ namespace LTSM
 
         if(auto xvfb = getXvfbInfo(display))
         {
-            // runAsCommand
-            std::string informerBin = _config->getString("informer:path");
-
-            if(std::filesystem::exists(informerBin))
+            if(xvfb->mode == XvfbMode::SessionLogin)
             {
-                auto args = Tools::split(_config->getString("informer:args"), 0x20);
-                auto it = std::find_if(args.begin(), args.end(), [](auto & str)
-                {
-                    return str == "%{msg}";
-                });
-
-                // quoted string
-                if(it != args.end())
-                {
-                    std::ostringstream os;
-                    os << std::quoted(message);
-                    *it = os.str();
-                }
-
-                return runAsCommand(display, informerBin, &args);
+                Application::error("%s: login session skipped, display: %d", __FUNCTION__, display);
+                return false;
             }
+
+            if(! xvfb->pamh)
+            {
+                Application::error("%s: unknown session, display: %d", __FUNCTION__, display);
+                return false;
+            }
+
+            // new mode: zenity info
+            if(sessionRunZenity(xvfb, { "--info", "--no-wrap", "--text", quotedString(message) }))
+                return true;
 
             // compat mode: create spool file only
             std::filesystem::path home;
             std::tie(std::ignore, std::ignore, home, std::ignore) = Manager::getUserInfo(xvfb->user);
-            auto  dtn = std::chrono::system_clock::now().time_since_epoch();
+            auto dtn = std::chrono::system_clock::now().time_since_epoch();
             auto file = std::filesystem::path(home) / ".ltsm" / "messages" / std::to_string(dtn.count());
             auto dir = file.parent_path();
 
@@ -1324,12 +1581,15 @@ namespace LTSM
                 ofs << message;
                 ofs.close();
                 setFileOwner(file, xvfb->uid, xvfb->gid);
+                return true;
             }
             else
+            {
                 Application::error("can't create file: %s", file.c_str());
+            }
         }
 
-        return true;
+        return false;
     }
 
     bool Manager::Object::busConnectorAlive(const int32_t & display)
@@ -1377,6 +1637,324 @@ namespace LTSM
         Application::info("connector switched, old display: %d, new display: %d", oldDisplay, newDisplay);
         displayShutdown(oldDisplay, false, nullptr);
         return true;
+    }
+
+    bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
+    {
+        Application::info("transfer files request, display: %d, count: %d", display, files.size());
+
+        auto xvfb = getXvfbInfo(display);
+        if(! xvfb)
+        {
+            Application::error("%s: display not found: %d", __FUNCTION__, display);
+            return false;
+        }
+
+        if(! xvfb->allowTransfer)
+        {
+            Application::error("%s: display %d, transfer reject", __FUNCTION__, display);
+
+            busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
+                            NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
+        if(_config->hasKey("transfer:group:only"))
+        {
+            auto members = Manager::getGroupMembers(_config->getString("transfer:group:only"));
+            if(std::none_of(members.begin(), members.end(), [&](auto & user) { return user == xvfb->user; }))
+            {
+                Application::error("%s: display %d, transfer reject", __FUNCTION__, display);
+
+                busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
+                                NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                return false;
+            }
+        }
+
+        std::filesystem::path zenity = this->_config->getString("zenity:path", "/usr/bin/zenity");
+        auto msg = std::string("Can you receive remote files?(").append(std::to_string(files.size())).append(")");
+        std::future<int> zenityQuestionResult;
+
+        auto emitTransferReject = [this, display](const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
+        {
+            for(auto & info : files)
+                this->emitTransferAllow(display, std::get<0>(info), "", "");
+        };
+
+        try
+        {
+            auto pidStatus = RunAs::sessionCommand(xvfb, zenity, { "--question", "--default-cancel", "--text", msg });
+            zenityQuestionResult = std::move(pidStatus.second);
+        }
+        catch(const std::system_error &)
+        {
+            Application::error("%s: failed, check thread limit", __FUNCTION__);
+            emitTransferReject(files);
+            return false;
+        }
+        catch(const std::exception &)
+        {
+            emitTransferReject(files);
+            return false;
+        }
+
+        //run background
+        std::thread([this, zenity, display, files, emitTransferReject = std::move(emitTransferReject), zenityQuestionResult = std::move(zenityQuestionResult)]() mutable
+        {
+            // wait zenity question
+            zenityQuestionResult.wait();
+            int status = zenityQuestionResult.get();
+
+            // yes = 0, no: 256
+            if(status == 256)
+            {
+                emitTransferReject(files);
+                return;
+            }
+
+            // zenity select directory
+            std::future<StatusStdout> zenitySelectDirectoryResult;
+            bool error = false;
+
+            try
+            {
+                auto pair = RunAs::sessionCommandStdout(this->getXvfbInfo(display), zenity, { "--file-selection", "--directory", "--title", "Select directory" });
+                zenitySelectDirectoryResult = std::move(pair.second);
+            }
+            catch(const std::system_error &)
+            {
+                Application::error("%s: failed, check thread limit", __FUNCTION__);
+                emitTransferReject(files);
+                return;
+            }
+            catch(const std::exception &)
+            {
+                emitTransferReject(files);
+                return;
+            }
+
+            // wait file selection
+            zenitySelectDirectoryResult.wait();
+            // get StatusStdout
+            auto ret = zenitySelectDirectoryResult.get();
+            status = ret.first;
+
+            // ok = 0, cancel: 256
+            if(status == 256)
+            {
+                emitTransferReject(files);
+                return;
+            }
+
+            // get dstdir
+            auto & buf = ret.second;
+            auto end = buf.back() == 0x0a ? std::prev(buf.end()) : buf.end();
+            std::filesystem::path dstdir(std::string(buf.begin(), end));
+
+            if(! std::filesystem::is_directory(dstdir))
+            {
+                Application::error("selected directory not found: %s, display: %d", dstdir.c_str(), display);
+                emitTransferReject(files);
+                return;
+            }
+
+            std::scoped_lock<std::mutex> guard(_lockTransfer);
+            for(auto & info : files)
+            {
+                auto tmpname = std::filesystem::temp_directory_path() / std::string("transfer_").append( Tools::randomHexString(8));
+                Application::debug("transfer file request, display: %d, select dir: `%s', tmp name: `%s'", display, dstdir.c_str(), tmpname.c_str());
+
+                auto filepath = std::get<0>(info);
+                auto filesize = std::get<1>(info);
+
+                // check disk space limited
+                //size_t ftotal = std::accumulate(files.begin(), files.end(), 0, [](size_t sum, auto & val){ return sum += std::get<1>(val); });
+                auto spaceInfo = std::filesystem::space(dstdir);
+                if(spaceInfo.available < filesize)
+                {
+                    busSendNotify(display, "Transfer Rejected", "not enough disk space",
+                                            NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                    break;
+                }
+
+                // check dstdir writeable / filename present
+                auto filename = std::filesystem::path(filepath).filename();
+                auto dstfile = std::filesystem::path(dstdir) / filename;
+
+                if(std::filesystem::exists(dstfile))
+                {
+                    Application::error("file present and skipping, display: %d, dst file: `%s'", display, dstfile.c_str());
+                    continue;
+
+                    busSendNotify(display, "Transfer Skipping", Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
+                                            NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
+                }
+
+                _allowTransfer.emplace_back(filepath);
+                emitTransferAllow(display, filepath, tmpname, dstdir);
+            }
+        }).detach();
+
+        return true;
+    }
+
+    bool Manager::Object::busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
+    {
+        Application::info("transfer file started, display: %d, tmp file: `%s', dst file: `%s'", display, tmpfile.c_str(), dstfile.c_str());
+
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            std::thread([this, xvfb, display, tmpfile, dstfile, filesz]
+            {
+                bool error = false;
+
+                while(!error)
+                {
+                    if(std::filesystem::exists(tmpfile) &&
+                        std::filesystem::file_size(tmpfile) >= filesz)
+                        break;
+
+                    // FIXME create progress informer session
+
+                    if(xvfb->mode != XvfbMode::SessionOnline)
+                    {
+                        this->busSendNotify(display, "Transfer Error", Tools::StringFormat("transfer connection is lost"),
+                                            NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                        error = true;
+                        continue;
+                    }
+
+                    std::this_thread::sleep_for(350ms);
+                }
+
+                if(! error)
+                {
+                    try
+                    {
+                        // move tmpfile to dstfile
+                        std::filesystem::rename(tmpfile, dstfile);
+                    }
+                    catch(...)
+                    {
+                    }
+
+                    int uid, gid;
+
+                    std::tie(uid, gid, std::ignore, std::ignore) = getUserInfo(xvfb->user);
+                    setFileOwner(dstfile, uid, gid);
+
+                    this->busSendNotify(display, "Transfer Complete",
+                        Tools::StringFormat("new file added: <a href='file://%1'>%2</a>").arg(dstfile).arg(std::filesystem::path(dstfile).filename().c_str()),
+                                            NotifyParams::Information, NotifyParams::UrgencyLevel::Normal);
+                }
+            }).detach();
+        }
+
+        std::scoped_lock<std::mutex> guard(_lockTransfer);
+        _allowTransfer.remove(tmpfile);
+
+        return true;
+    }
+
+    bool Manager::Object::busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency)
+    {
+#ifdef SDBUS_ADDRESS_SUPPORT
+        // urgency:  NotifyParams::UrgencyLevel { Low, Normal, Critical }
+        // icontype: NotifyParams::IconType { Information, Warning, Error, Question }
+
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            if(xvfb->mode == XvfbMode::SessionLogin)
+            {
+                Application::error("%s: login session skipped, display: %d", __FUNCTION__, display);
+                return false;
+            }
+
+            if(! xvfb->pamh)
+            {
+                Application::error("%s: unknown session, display: %d", __FUNCTION__, display);
+                return false;
+            }
+
+            pid_t pid = fork();
+
+            if(pid < 0)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+                throw service_error(NS_FuncName);
+            }
+
+            if(0 < pid)
+            {
+                safeWaitPidBackground(pid);
+
+                // main thread return
+                return true;
+            }
+
+            // child mode
+            long fdlimit = sysconf(_SC_OPEN_MAX);
+            for(int fd = STDERR_FILENO + 1; fd < fdlimit; fd++)
+                close(fd);
+
+            std::string notificationIcon("dialog-information");
+
+            switch(icontype)
+            {
+                //case NotifyParams::IconType::Information:
+                case NotifyParams::IconType::Warning:   notificationIcon.assign("dialog-error"); break;
+                case NotifyParams::IconType::Error:     notificationIcon.assign("dialog-warning"); break;
+                case NotifyParams::IconType::Question:  notificationIcon.assign("dialog-question"); break;
+                default: break;
+            }
+
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGCHLD, SIG_DFL);
+            signal(SIGINT, SIG_IGN);
+            signal(SIGHUP, SIG_IGN);
+
+            auto dbusAddresses = Manager::getSessionDbusAddresses(xvfb->user);
+     
+            if(Manager::switchToUser(xvfb->user) && ! dbusAddresses.empty())
+            {
+                auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses, ";"));
+
+                auto destinationName = "org.freedesktop.Notifications";
+                auto objectPath = "/org/freedesktop/Notifications";
+                auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+
+                auto interfaceName = "org.freedesktop.Notifications";
+                auto method = concatenatorProxy->createMethodCall(interfaceName, "Notify");
+
+                std::string applicationName("LTSM");
+                uint32_t replacesID = 0;
+
+                std::vector<std::string> actions;
+                std::map<std::string, sdbus::Variant> hints;
+                int32_t expirationTimeout = -1;
+
+                method << applicationName << replacesID << notificationIcon << summary <<
+                    body << actions << hints << expirationTimeout;
+
+                try
+                {
+                    auto reply = concatenatorProxy->callMethod(method);
+                }
+                catch(const sdbus::Error & err)
+                {
+                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", __FUNCTION__, display, err.getName().c_str(), err.getMessage().c_str());
+                }
+                catch(...)
+                {
+                }
+            }
+
+            // child exit
+            std::exit(0);
+        }
+#endif
+        return false;
     }
 
     bool Manager::Object::helperWidgetStartedAction(const int32_t & display)
@@ -1668,6 +2246,88 @@ namespace LTSM
         return false;
     }
 
+    bool Manager::Object::busSetSessionKeyboardLayouts(const int32_t& display, const std::vector<std::string>& layouts)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            Application::info("%s: display: %d, layouts: [%s]", __FUNCTION__, display, Tools::join(layouts, ",").c_str());
+
+            if(layouts.empty())
+                return false;
+
+            std::ostringstream os;
+            for(auto it = layouts.begin(); it != layouts.end(); ++it)
+            {
+                auto id = Tools::lower((*it).substr(0, 2));
+                if(id == "en") id = "us";
+                os << id;
+                if(std::next(it) != layouts.end())
+                    os << ",";
+            }
+
+            safeRunSessionCommand(xvfb, "/usr/bin/setxkbmap", { "-layout", quotedString(os.str()), "-option", "\"\"" });
+            return true;
+        }
+        return false;
+    }
+
+    bool Manager::Object::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string>& map)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            xvfb->environments.clear();
+
+            for(auto & [key, val] : map)
+            {
+                Application::info("recv environment: %s = `%s'", key.c_str(), val.c_str());
+                xvfb->environments.emplace(key, val);
+
+                if(key == "TZ")
+                    emitHelperWidgetTimezone(display, val);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool Manager::Object::busSetSessionOptions(const int32_t& display, const std::map<std::string, std::string>& map)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            xvfb->options.clear();
+
+            for(auto & [key, val] : map)
+                xvfb->options.emplace(key, val);
+
+            return true;
+        }
+
+        return false;
+    }
+
+#ifdef LTSM_CHANNELS
+    void Manager::Object::startSessionChannels(int display)
+    {
+        if(auto xvfb = getXvfbInfo(display))
+        {
+            if(xvfb->options.end() != xvfb->options.find("printer"))
+            {
+                auto clientUrl = Channel::createUrl(Channel::ConnectorType::Socket, "127.0.0.1:631");
+                auto serverUrl = _config->getString("channel:printer:format", "/var/tmp/ltsm_print_%{user}");
+
+                serverUrl = Tools::replace(serverUrl, "%{display}", display);
+                serverUrl = Tools::replace(serverUrl, "%{user}", xvfb->user);
+
+                auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, std::string("/var/tmp/ltsm_print_").append(xvfb->user));
+
+                emitCreateListenner(display, clientUrl, Channel::ConnectorMode::Write, serverUrl, Channel::ConnectorMode::Read);
+            }
+        }
+    }
+#endif
+
     bool Manager::Object::busSetDebugLevel(const std::string & level)
     {
         Application::info("set debug level: %s", level.c_str());
@@ -1777,9 +2437,30 @@ namespace LTSM
         return true;
     }
 
-    void Manager::Object::signalChildEnded(int pid, int status)
+    bool Manager::Object::busCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
     {
-        _childEnded.emplace_back(pid, status);
+        auto modes = { "ro", "rw", "wo" };
+
+        if(std::none_of(modes.begin(), modes.end(), [&](auto & val){ return cmode == val; }))
+        {
+            Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "client", cmode.c_str());
+            return false;
+        }
+
+        if(std::none_of(modes.begin(), modes.end(), [&](auto & val){ return smode == val; }))
+        {
+            Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "server", smode.c_str());
+            return false;
+        }
+
+        emitCreateChannel(display, client, cmode, server, smode);
+        return true;
+    }
+
+    bool Manager::Object::busDestroyChannel(const int32_t & display, const uint8_t & channel)
+    {
+        emitDestroyChannel(display, channel);
+        return true;
     }
 
     /* Manager::Service */
@@ -1848,7 +2529,6 @@ namespace LTSM
             std::filesystem::permissions(folderPath, std::filesystem::perms::owner_all |
                                          std::filesystem::perms::group_read | std::filesystem::perms::group_exec |
                                          std::filesystem::perms::others_read | std::filesystem::perms::others_exec, std::filesystem::perm_options::replace);
-
             // fix owner
             if(0 != chown(folderPath.c_str(), 0, setgid))
                 Application::error("chown failed, dir: %s, uid: %d, gid: %d, error: %s", folderPath.c_str(), 0, setgid, strerror(errno));
@@ -1879,45 +2559,35 @@ namespace LTSM
 
         Application::info("watch inotify started, config file: %s", filename.c_str());
 
+        if(0 > fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK))
+        {
+            Application::error("%s: fcntl failed, error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            return false;
+        }
+
         timerInotifyWatchConfig = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [fd1 = fd, jconfig = & _config]()
         {
-            struct pollfd fds = {0};
-            fds.fd = fd1;
-            fds.events = POLLIN;
-            // 3ms timeout
-            int res = poll(& fds, 1, 3);
+            // read single inotify_event (16byte)
+            const int bufsz = sizeof(struct inotify_event);
+            char buf[bufsz];
 
-            if(0 > res)
+            auto len = read(fd1, buf, sizeof(buf));
+            if(0 < len)
             {
-                Application::error("inotify poll failed, error: %s", strerror(errno));
-            }
-            else
-            if(0 < res && (fds.revents & POLLIN))
-            {
-                int avail;
-                ioctl(fd1, FIONREAD, &avail);
+                auto filename = jconfig->getString("config:path", "/etc/ltsm/config.json");
+                JsonContentFile jsonFile(filename);
 
-                if(0 < avail)
+                if(! jsonFile.isValid() || ! jsonFile.isObject())
                 {
-                    // read all inotify_event
-                    char buffer[avail];
-                    avail = read(fd1, buffer, avail);
+                    Application::error("reload config %s, file: %s", "failed", filename.c_str());
+                }
+                else
+                {
+                    auto jo = jsonFile.toObject();
+                    const_cast<JsonObject*>(jconfig)->swap(jo);
 
-                    auto filename = jconfig->getString("config:path", "/etc/ltsm/config.json");
-                    JsonContentFile jsonFile(filename);
-
-                    if(! jsonFile.isValid() || ! jsonFile.isObject())
-                    {
-                        Application::error("reload config %s, file: %s", "failed", filename.c_str());
-                    }
-                    else
-                    {
-                        auto jo = jsonFile.toObject();
-                        const_cast<JsonObject*>(jconfig)->swap(jo);
-
-                        Application::info("reload config %s, file: %s", "success", filename.c_str());
-                        Application::setDebugLevel(jconfig->getString("service:debug"));
-                    }
+                    Application::info("reload config %s, file: %s", "success", filename.c_str());
+                    Application::setDebugLevel(jconfig->getString("service:debug"));
                 }
             }
         });
@@ -1957,7 +2627,7 @@ namespace LTSM
             if(dirEntry.is_socket()) std::filesystem::remove(dirEntry);
 
         signal(SIGTERM, signalHandler);
-        signal(SIGCHLD, signalHandler);
+        //signal(SIGCHLD, signalHandler);
         signal(SIGINT,  isBackground ? SIG_IGN : signalHandler);
         signal(SIGHUP,  SIG_IGN);
 
@@ -1995,14 +2665,6 @@ namespace LTSM
     {
         if(sig == SIGTERM || sig == SIGINT)
             isRunning = false;
-        else if(sig == SIGCHLD && isRunning)
-        {
-            int status;
-            pid_t pid = waitpid(-1, &status, WNOHANG);
-
-            if(0 < pid)
-                objAdaptor->signalChildEnded(pid, status);
-        }
     }
 }
 

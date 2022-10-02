@@ -121,7 +121,7 @@ namespace LTSM
         }
 
         if(confPath.empty())
-            throw std::runtime_error("config.json not found");
+            throw std::invalid_argument("config.json not found");
 
         info("used config: %s, running uid: %d", confPath.c_str(), getuid());
         JsonContentFile jsonFile(confPath);

@@ -21,21 +21,9 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-// shm access flags
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-#include <poll.h>
-#include <unistd.h>
-#include <signal.h>
-
-#include <cstdio>
-#include <thread>
 #include <chrono>
 #include <cstring>
 #include <iostream>
-#include <filesystem>
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -145,14 +133,9 @@ namespace LTSM
         RFB::ClientDecoder::rfbMessagesShutdown();
     }
 
-    uint16_t Vnc2Image::clientWidth(void) const
+    XCB::Size Vnc2Image::clientSize(void) const
     {
-        return fbPtr->width();
-    }
-
-    uint16_t Vnc2Image::clientHeight(void) const
-    {
-        return fbPtr->height();
+        return fbPtr->region().toSize();
     }
 
     void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, uint16_t width, uint16_t height)

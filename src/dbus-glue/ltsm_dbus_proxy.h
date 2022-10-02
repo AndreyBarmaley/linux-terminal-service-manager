@@ -23,6 +23,7 @@ protected:
         : proxy_(proxy)
     {
         proxy_.uponSignal("helperWidgetStarted").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetStarted(display); });
+        proxy_.uponSignal("helperWidgetTimezone").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& tz){ this->onHelperWidgetTimezone(display, tz); });
         proxy_.uponSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin){ this->onHelperSetLoginPassword(display, login, pass, autologin); });
         proxy_.uponSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetCentered(display); });
         proxy_.uponSignal("loginFailure").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& msg){ this->onLoginFailure(display, msg); });
@@ -34,6 +35,11 @@ protected:
         proxy_.uponSignal("sessionChanged").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSessionChanged(display); });
         proxy_.uponSignal("displayRemoved").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onDisplayRemoved(display); });
         proxy_.uponSignal("clearRenderPrimitives").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onClearRenderPrimitives(display); });
+        proxy_.uponSignal("createChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateChannel(display, client, cmode, server, smode); });
+        proxy_.uponSignal("destroyChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const uint8_t& channel){ this->onDestroyChannel(display, channel); });
+        proxy_.uponSignal("transferAllow").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir){ this->onTransferAllow(display, filepath, tmpfile, dstdir); });
+        proxy_.uponSignal("createListenner").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateListenner(display, client, cmode, server, smode); });
+        proxy_.uponSignal("destroyListenner").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& server){ this->onDestroyListenner(display, client, server); });
         proxy_.uponSignal("addRenderRect").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ this->onAddRenderRect(display, rect, color, fill); });
         proxy_.uponSignal("addRenderText").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ this->onAddRenderText(display, text, pos, color); });
         proxy_.uponSignal("debugLevel").onInterface(INTERFACE_NAME).call([this](const std::string& level){ this->onDebugLevel(level); });
@@ -42,6 +48,7 @@ protected:
     ~Service_proxy() = default;
 
     virtual void onHelperWidgetStarted(const int32_t& display) = 0;
+    virtual void onHelperWidgetTimezone(const int32_t& display, const std::string& tz) = 0;
     virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) = 0;
     virtual void onHelperWidgetCentered(const int32_t& display) = 0;
     virtual void onLoginFailure(const int32_t& display, const std::string& msg) = 0;
@@ -53,6 +60,11 @@ protected:
     virtual void onSessionChanged(const int32_t& display) = 0;
     virtual void onDisplayRemoved(const int32_t& display) = 0;
     virtual void onClearRenderPrimitives(const int32_t& display) = 0;
+    virtual void onCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
+    virtual void onDestroyChannel(const int32_t& display, const uint8_t& channel) = 0;
+    virtual void onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) = 0;
+    virtual void onCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
+    virtual void onDestroyListenner(const int32_t& display, const std::string& client, const std::string& server) = 0;
     virtual void onAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual void onAddRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;
     virtual void onDebugLevel(const std::string& level) = 0;
@@ -114,6 +126,13 @@ public:
         return result;
     }
 
+    bool busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency)
+    {
+        bool result;
+        proxy_.callMethod("busSendNotify").onInterface(INTERFACE_NAME).withArguments(display, summary, body, icontype, urgency).storeResultsTo(result);
+        return result;
+    }
+
     bool busSetDebugLevel(const std::string& level)
     {
         bool result;
@@ -146,6 +165,27 @@ public:
     {
         bool result;
         proxy_.callMethod("busSetLoginsDisable").onInterface(INTERFACE_NAME).withArguments(action).storeResultsTo(result);
+        return result;
+    }
+
+    bool busSetSessionEnvironments(const int32_t& display, const std::map<std::string, std::string>& map)
+    {
+        bool result;
+        proxy_.callMethod("busSetSessionEnvironments").onInterface(INTERFACE_NAME).withArguments(display, map).storeResultsTo(result);
+        return result;
+    }
+
+    bool busSetSessionOptions(const int32_t& display, const std::map<std::string, std::string>& map)
+    {
+        bool result;
+        proxy_.callMethod("busSetSessionOptions").onInterface(INTERFACE_NAME).withArguments(display, map).storeResultsTo(result);
+        return result;
+    }
+
+    bool busSetSessionKeyboardLayouts(const int32_t& display, const std::vector<std::string>& layouts)
+    {
+        bool result;
+        proxy_.callMethod("busSetSessionKeyboardLayouts").onInterface(INTERFACE_NAME).withArguments(display, layouts).storeResultsTo(result);
         return result;
     }
 
@@ -184,6 +224,20 @@ public:
         return result;
     }
 
+    bool busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
+    {
+        bool result;
+        proxy_.callMethod("busTransferFilesRequest").onInterface(INTERFACE_NAME).withArguments(display, files).storeResultsTo(result);
+        return result;
+    }
+
+    bool busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
+    {
+        bool result;
+        proxy_.callMethod("busTransferFileStarted").onInterface(INTERFACE_NAME).withArguments(display, tmpfile, filesz, dstfile).storeResultsTo(result);
+        return result;
+    }
+
     bool busCheckAuthenticate(const int32_t& display, const std::string& login, const std::string& password)
     {
         bool result;
@@ -216,6 +270,20 @@ public:
     {
         bool result;
         proxy_.callMethod("busRenderClear").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
+    bool busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    {
+        bool result;
+        proxy_.callMethod("busCreateChannel").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode).storeResultsTo(result);
+        return result;
+    }
+
+    bool busDestroyChannel(const int32_t& display, const uint8_t& channel)
+    {
+        bool result;
+        proxy_.callMethod("busDestroyChannel").onInterface(INTERFACE_NAME).withArguments(display, channel).storeResultsTo(result);
         return result;
     }
 

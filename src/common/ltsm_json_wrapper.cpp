@@ -228,7 +228,7 @@ namespace LTSM
 
     std::string JsonNull::getString(void) const
     {
-        return std::string();
+        return "";
     }
 
     double JsonNull::getDouble(void) const
@@ -423,6 +423,16 @@ namespace LTSM
     JsonValuePtr::JsonValuePtr(std::string_view v)
     {
         reset(new JsonString(v));
+    }
+
+    JsonValuePtr::JsonValuePtr(JsonArray && v)
+    {
+        reset(new JsonArray(v));
+    }
+
+    JsonValuePtr::JsonValuePtr(JsonObject && v)
+    {
+        reset(new JsonObject(v));
     }
 
     JsonValuePtr::JsonValuePtr(const JsonArray & v)
@@ -658,6 +668,11 @@ namespace LTSM
         return jv ? jv->getBoolean() : def;
     }
 
+    void JsonObject::removeKey(const std::string & key)
+    {
+        content.erase(key);
+    }
+
     const JsonObject* JsonObject::getObject(std::string_view key) const
     {
         auto jv = dynamic_cast<const JsonObject*>(getValue(key));
@@ -704,9 +719,9 @@ namespace LTSM
         addValue<int>(key, val);
     }
 
-    void JsonObject::addString(const std::string & key, const std::string & val)
+    void JsonObject::addString(const std::string & key, std::string_view val)
     {
-        addValue<std::string>(key, val);
+        addValue<std::string_view>(key, val);
     }
 
     void JsonObject::addDouble(const std::string & key, const double & val)
@@ -719,9 +734,19 @@ namespace LTSM
         addValue<bool>(key, val);
     }
 
+    void JsonObject::addArray(const std::string & key, JsonArray && val)
+    {
+        addValue<JsonArray>(key, val);
+    }
+
     void JsonObject::addArray(const std::string & key, const JsonArray & val)
     {
         addValue<JsonArray>(key, val);
+    }
+
+    void JsonObject::addObject(const std::string & key, JsonObject && val)
+    {
+        addValue<JsonObject>(key, val);
     }
 
     void JsonObject::addObject(const std::string & key, const JsonObject & val)
@@ -906,7 +931,17 @@ namespace LTSM
         content.emplace_back(val);
     }
 
+    void JsonArray::addArray(JsonArray && val)
+    {
+        content.emplace_back(val);
+    }
+
     void JsonArray::addArray(const JsonArray & val)
+    {
+        content.emplace_back(val);
+    }
+
+    void JsonArray::addObject(JsonObject && val)
     {
         content.emplace_back(val);
     }
@@ -1005,16 +1040,14 @@ namespace LTSM
 
     bool JsonContent::readFile(const std::filesystem::path & file)
     {
-        std::ifstream is(file);
+        std::ifstream ifs(file);
 
-        if(is.is_open())
+        if(ifs.is_open())
         {
-            std::string buf;
-            is.seekg(0, std::ios::end);
-            buf.reserve(is.tellg());
-            is.seekg(0, std::ios::beg);
-            buf.assign((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
-            is.close();
+            auto fsz = std::filesystem::file_size(file);
+            std::string buf(fsz, 0x20);
+            ifs.read(buf.data(), buf.size());
+            ifs.close();
             return parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
         }
 
@@ -1024,7 +1057,7 @@ namespace LTSM
     std::string JsonContent::stringToken(const JsmnToken & tok) const
     {
         if(0 > tok.start() || 1 > tok.size())
-            return std::string();
+            return "";
 
         return content.substr(tok.start(), tok.size());
     }

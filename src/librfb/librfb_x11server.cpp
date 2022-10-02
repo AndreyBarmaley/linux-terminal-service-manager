@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -43,8 +43,8 @@ namespace LTSM
         {
             if(this->rfbMessagesProcessing())
             {
-                Application::error("session timeout trigger: %s", "not activated");
-                throw std::runtime_error("session timeout trigger");
+                Application::error("session timeout trigger: %s", "rfbMessagesProcessing");
+                throw rfb_error(NS_FuncName);
             }
         });
 
@@ -81,7 +81,7 @@ namespace LTSM
             }
             catch(const std::exception & err)
             {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                Application::error("%s: exception: %s", "X11Server::rfbCommunication", err.what());
             }
             catch(...)
             {
@@ -195,7 +195,7 @@ namespace LTSM
                 continue;
             }
 
-            if(clientUpdateReq)
+            if(clientUpdateReq || isContinueUpdates())
             {
                 XCB::Region res;
 
@@ -223,24 +223,19 @@ namespace LTSM
     {
         serverSelectEncodings();
 
-        if(isClientEncodings(RFB::ENCODING_CONTINUOUS_UPDATES))
-        {
-            // RFB 6.7.15
-            // The server must send a EndOfContinuousUpdates message the first time
-            // it sees a SetEncodings message with the ContinuousUpdates pseudo-encoding,
-            // in order to inform the client that the extension is supported.
-            //
-            // sendEndContinuousUpdates();
-        }
-
         // full update
         damageRegion = xcbDisplay()->region();
         clientUpdateReq = true;
 
         serverEncodingsEvent();
 
-        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
-            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime, RFB::DesktopResizeError::NoError, xcbDisplay()->size());
+        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled())
+        {
+            std::thread([this]
+            {
+                this->sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime, RFB::DesktopResizeError::NoError, xcbDisplay()->size());
+            }).detach();
+        }
     }
 
     void RFB::X11Server::recvKeyEvent(bool pressed, uint32_t keysym)
@@ -379,8 +374,8 @@ namespace LTSM
         auto pixmapReply = xcbDisplay()->copyRootImageRegion(reg);
         if(! pixmapReply)
         {
-            Application::error("%s: xcb copy region empty", __FUNCTION__);
-            throw std::runtime_error("xcb copy region empty");
+            Application::error("%s: %s", __FUNCTION__, "xcb copy region empty");
+            throw rfb_error(NS_FuncName);
         }
 
         const int bytePerPixel = xcbDisplay()->pixmapBitsPerPixel(pixmapReply->depth()) >> 3;
@@ -399,7 +394,7 @@ namespace LTSM
         if(pixmapReply->size() != reg.width * reg.height * bytePerPixel)
         {
             Application::error("%s: region not aligned, reply size: %d, regw: %d, reg: %d, byte per pixel: %d", __FUNCTION__, pixmapReply->size(), reg.width, reg.height, bytePerPixel);
-            throw std::runtime_error("region not aligned");
+            throw rfb_error(NS_FuncName);
         }
 
         FrameBuffer fb(pixmapReply->data(), reg, serverFormat());

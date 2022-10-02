@@ -1,24 +1,25 @@
-/***************************************************************************
- *   Copyright (C) 2022 by MultiCapture team <public.irkutsk@gmail.com>    *
- *                                                                         *
- *   Part of the MultiCapture engine:                                      *
- *   https://github.com/AndreyBarmaley/multi-capture                       *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- ***************************************************************************/
+/***********************************************************************
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *                                                                     *
+ *   Part of the LTSM: Linux Terminal Service Manager:                 *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
+ *                                                                     *
+ *   This program is free software;                                    *
+ *   you can redistribute it and/or modify it under the terms of the   *
+ *   GNU Affero General Public License as published by the             *
+ *   Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                               *
+ *                                                                     *
+ *   This program is distributed in the hope that it will be useful,   *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of    *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
+ *   See the GNU Affero General Public License for more details.       *
+ *                                                                     *
+ *   You should have received a copy of the                            *
+ *   GNU Affero General Public License along with this program;        *
+ *   if not, write to the Free Software Foundation, Inc.,              *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
+ **********************************************************************/
 
 #ifndef _LIBRFB_CLIENT_
 #define _LIBRFB_CLIENT_
@@ -29,13 +30,18 @@
 
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
+#include "ltsm_channels.h"
 
 namespace LTSM
 {
     namespace RFB
     {
         /* ClientDecoder */
-        class ClientDecoder : protected NetworkStream
+        class ClientDecoder : 
+#ifdef LTSM_CHANNELS
+            public ChannelClient,
+#endif
+            protected NetworkStream
         {
             std::unique_ptr<NetworkStream> socket;           /// socket layer
             std::unique_ptr<TLS::Stream> tls;                /// tls layer
@@ -50,7 +56,11 @@ namespace LTSM
 
             bool            serverTrueColor = true;
             bool            serverBigEndian = false;
-
+            bool            continueUpdatesSupport = false;
+            bool            continueUpdatesProcessed = false;
+#ifdef LTSM_CHANNELS
+            bool            ltsmSupport = false;
+#endif
             // network stream interface
             void            sendFlush(void) override;
             void            sendRaw(const void* ptr, size_t len) override;
@@ -72,11 +82,19 @@ namespace LTSM
             void            sendFrameBufferUpdate(bool incr);
             void            sendFrameBufferUpdate(const XCB::Region &, bool incr);
             void            sendSetDesktopSize(uint16_t width, uint16_t height);
+            void            sendContinuousUpdates(bool enable, const XCB::Region &);
 
             void            recvFBUpdateEvent(void);
             void            recvColorMapEvent(void);
             void            recvBellEvent(void);
             void            recvCutTextEvent(void);
+            void            recvContinuousUpdatesEvent(void);
+
+#ifdef LTSM_CHANNELS
+            void            recvDecodingLtsm(void);
+            void            recvChannelSystem(const std::vector<uint8_t> &) override;
+            bool            isUserSession(void) const override { return true; }
+#endif
 
             void            recvDecodingRaw(const XCB::Region &);
             void            recvDecodingRRE(const XCB::Region &, bool corre);
@@ -98,8 +116,7 @@ namespace LTSM
             virtual void    setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void    fillPixel(const XCB::Region &, uint32_t pixel) = 0;
             virtual const PixelFormat & clientPixelFormat(void) const = 0;
-            virtual uint16_t clientWidth(void) const = 0;
-            virtual uint16_t clientHeight(void) const = 0;
+            virtual XCB::Size clientSize(void) const = 0;
 
         public:
             ClientDecoder() = default;
@@ -108,17 +125,22 @@ namespace LTSM
             bool            rfbMessagesProcessing(void) const;
             void            rfbMessagesLoop(void);
             void            rfbMessagesShutdown(void);
+            bool            isContinueUpdates(void) const;
 
             void            sendKeyEvent(bool pressed, uint32_t keysym);
             void            sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
             void            sendCutTextEvent(const char*, size_t);
+#ifdef LTSM_CHANNELS
+            void            sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+            virtual void    decodingLtsmEvent(const std::vector<uint8_t> &) {}
+#endif
 
             virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) {}
             virtual void    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) {}
             virtual void    fbUpdateEvent(void) {}
             virtual void    setColorMapEvent(const std::vector<Color> &) {}
             virtual void    bellEvent(void) {}
-            virtual void    cutTextEvent(const std::vector<uint8_t> &) {}
+            virtual void    cutTextEvent(std::vector<uint8_t> &&) {}
         };
 
         class ClientDecoderSocket : public ClientDecoder

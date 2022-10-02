@@ -121,8 +121,13 @@ namespace LTSM
             case ENCODING_CONTINUOUS_UPDATES:
                 return "ExtendedContinuousUpdates";
 
+#ifdef LTSM_CHANNELS
+            case ENCODING_LTSM:
+                return "LTSM";
+#else
             case ENCODING_LTSM:
                 return "LTSM (unsupported)";
+#endif
 
             default:
                 break;

@@ -80,7 +80,7 @@ namespace LTSM
             return hasInput(fd, timeoutMS);
 
         Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
-        throw network_error("NetworkStream::hasInput error");
+        throw network_error(NS_FuncName);
     }
 
     size_t NetworkStream::hasData(int fd)
@@ -92,7 +92,7 @@ namespace LTSM
         if(0 > ioctl(fd, FIONREAD, & count))
         {
             Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
-            throw network_error("NetworkStream::hasData error");
+            throw network_error(NS_FuncName);
         }
 
         return count < 0 ? 0 : count;
@@ -194,7 +194,7 @@ namespace LTSM
     std::vector<uint8_t> NetworkStream::recvData(size_t length) const
     {
         std::vector<uint8_t> res(length, 0);
-        recvData(res.data(), res.size());
+        if(length) recvData(res.data(), res.size());
         return res;
     }
 
@@ -206,7 +206,7 @@ namespace LTSM
     std::string NetworkStream::recvString(size_t length) const
     {
         std::string res(length, 0);
-        recvData(& res[0], length);
+        if(length) recvData(& res[0], length);
         return res;
     }
 
@@ -229,14 +229,17 @@ namespace LTSM
 
             // eof
             if(0 == real)
-                throw network_error("FileDescriptor::read data end");
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
 
             // error
             if(EAGAIN == errno || EINTR == errno)
                 continue;
 
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw network_error("FileDescriptor::read error");
+            throw network_error(NS_FuncName);
         }
     }
 
@@ -258,14 +261,17 @@ namespace LTSM
 
             // eof
             if(0 == real)
-                throw network_error("FileDescriptor::write data end");
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
 
             // error
             if(EAGAIN == errno || EINTR == errno)
                 continue;
 
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw network_error("FileDescriptor::write error");
+            throw network_error(NS_FuncName);
         }
     }
 
@@ -328,7 +334,7 @@ namespace LTSM
         if(1 != recv(sock, & res, 1, MSG_PEEK))
         {
             Application::error("%s: recv error: %s", __FUNCTION__, strerror(errno));
-            throw network_error("SocketStream::peekInt8");
+            throw network_error(NS_FuncName);
         }
 
         return res;
@@ -384,12 +390,15 @@ namespace LTSM
                 break;
 
             if(std::feof(fin.get()))
-                throw network_error("InetStream::recvRaw end stream");
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
 
             if(std::ferror(fin.get()))
             {
                 Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-                throw network_error("InetStream::recvRaw error");
+                throw network_error(NS_FuncName);
             }
 
             ptr = static_cast<uint8_t*>(ptr) + real;
@@ -407,12 +416,15 @@ namespace LTSM
                 break;
 
             if(std::feof(fout.get()))
-                throw network_error("InetStream::sendRaw end stream");
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
 
             if(std::ferror(fout.get()))
             {
                 Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-                throw network_error("InetStream::sendRaw error");
+                throw network_error(NS_FuncName);
             }
 
             ptr = static_cast<const uint8_t*>(ptr) + real;
@@ -436,12 +448,15 @@ namespace LTSM
         int res = std::fgetc(fin.get());
 
         if(std::feof(fin.get()))
-            throw network_error("InetStream::peekInt8 end stream");
+        {
+            Application::warning("%s: %s", __FUNCTION__, "end stream");
+            throw network_error(NS_FuncName);
+        }
 
         if(std::ferror(fin.get()))
         {
             Application::error("%s: error: %s", __FUNCTION__, strerror(errno));
-            throw network_error("InetStream::peekInt8 error");
+            throw network_error(NS_FuncName);
         }
 
         std::ungetc(res, fin.get());
@@ -588,7 +603,64 @@ namespace LTSM
         return true;
     }
 
-    int TCPSocket::connect(std::string_view ipaddr, int port)
+    int TCPSocket::listen(uint16_t port, int conn)
+    {
+        return listen("any", port, conn);
+    }
+
+    int TCPSocket::listen(std::string_view ipaddr, uint16_t port, int conn)
+    {
+        int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);            
+        if(0 > fd)
+        {
+            Application::error("%s: socket error: %s", __FUNCTION__, strerror(errno));
+            return -1;
+        }
+            
+        int reuse = 1;
+        int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
+        if(0 > err)
+        {
+            Application::warning("%s: socket reuseaddr failed, error: %s, code: %d", __FUNCTION__, strerror(errno), err);
+        }
+
+        struct sockaddr_in sockaddr;
+        memset(& sockaddr, 0, sizeof(struct sockaddr_in));
+
+        sockaddr.sin_family = AF_INET;
+        sockaddr.sin_port = htons(port);
+        sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.data());
+
+        if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
+        {
+            Application::error("%s: bind error: %s, addr: %s, port: %d", __FUNCTION__, strerror(errno), ipaddr.data(), port);
+            return -1;
+        }
+        
+        if(0 != ::listen(fd, conn))
+        {
+            Application::error("%s: listen error: %s", __FUNCTION__, strerror(errno));
+            close(fd);
+            return -1;
+        }
+
+        Application::info("%s: listen socket, addr: %s, port: %d", __FUNCTION__, ipaddr.data(), port);
+        return fd;
+    }
+
+    int TCPSocket::accept(int fd)
+    {
+        int sock = ::accept(fd, nullptr, nullptr);
+
+        if(0 > sock)
+            Application::error("%s: accept error: %s", __FUNCTION__, strerror(errno));
+        else
+            Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+
+        return sock;
+    }
+
+    int TCPSocket::connect(std::string_view ipaddr, uint16_t port)
     {
         int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -628,7 +700,7 @@ namespace LTSM
         else
             Application::error("%s: error: %s, ipaddr: %s", __FUNCTION__, hstrerror(h_errno), ipaddr.data());
 
-        return std::string();
+        return "";
     }
 
     std::list<std::string> TCPSocket::resolvHostname2(std::string_view hostname)
@@ -664,7 +736,7 @@ namespace LTSM
         else
             Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
 
-        return std::string();
+        return "";
     }
 
     int UnixSocket::connect(const std::filesystem::path & path)
@@ -731,7 +803,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::info("%s: listen unix sock: %s", __FUNCTION__, sockaddr.sun_path);
+        Application::info("%s: listen unix socket, path: %s", __FUNCTION__, sockaddr.sun_path);
         return fd;
     }
 
@@ -799,7 +871,10 @@ namespace LTSM
         Stream::Stream(const NetworkStream* bs) : layer(bs)
         {
             if(! bs)
-                throw std::invalid_argument("tls stream failed");
+            {
+                Application::error("%s: %s", __FUNCTION__, "tls stream failed");
+                throw std::invalid_argument(NS_FuncName);
+            }
         }
 
         Stream::~Stream()
@@ -959,12 +1034,15 @@ namespace LTSM
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
-                    throw gnutls_error("gnutls_record_recv");
+                    throw gnutls_error(NS_FuncName);
             }
             else
             // eof
             if(0 == ret)
-                throw gnutls_error("gnutls_record_recv: read data end");
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw gnutls_error(NS_FuncName);
+            }
 
             if(ret < static_cast<ssize_t>(len))
             {
@@ -991,7 +1069,7 @@ namespace LTSM
                 Application::error("gnutls_record_send ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
-                    throw gnutls_error("gnutls_record_send");
+                    throw gnutls_error(NS_FuncName);
             }
         }
 
@@ -1046,14 +1124,14 @@ namespace LTSM
             {
                 if(int ret = gnutls_cipher_init(& ctx, GNUTLS_CIPHER_DES_CBC, & key, & iv))
                 {
-                    Application::error("gnutls_cipher_init error: %s", gnutls_strerror(ret));
-                    throw gnutls_error("gnutls_cipher_init");
+                    Application::error("%s: %s error: %s", __FUNCTION__, "gnutls_cipher_init", gnutls_strerror(ret));
+                    throw gnutls_error(NS_FuncName);
                 }
 
                 if(int ret = gnutls_cipher_encrypt(ctx, res.data() + offset, std::min(_key.size(), res.size() - offset)))
                 {
-                    Application::error("gnutls_cipher_encrypt error: %s", gnutls_strerror(ret));
-                    throw gnutls_error("gnutls_cipher_encrypt");
+                    Application::error("%s: %s error: %s", __FUNCTION__, "gnutls_cipher_encrypt", gnutls_strerror(ret));
+                    throw gnutls_error(NS_FuncName);
                 }
 
                 gnutls_cipher_deinit(ctx);
@@ -1069,8 +1147,8 @@ namespace LTSM
 
             if(int ret = gnutls_rnd(GNUTLS_RND_KEY, res.data(), res.size()))
             {
-                Application::error("gnutls_rnd error: %s", gnutls_strerror(ret));
-                throw gnutls_error("gnutls_rnd");
+                Application::error("%s: %s error: %s", __FUNCTION__, "gnutls_rnd", gnutls_strerror(ret));
+                throw gnutls_error(NS_FuncName);
             }
 
             return res;
@@ -1096,7 +1174,7 @@ namespace LTSM
             if(ret < Z_OK)
             {
                 Application::error("%s: %s failed, error code: %s", __FUNCTION__, "deflateInit2", ret);
-                throw zlib_error("deflateInit2");
+                throw zlib_error(NS_FuncName);
             }
         }
 
@@ -1124,7 +1202,7 @@ namespace LTSM
             if(ret < Z_OK)
             {
                 Application::error("%s: %s failed, error code: %s", __FUNCTION__, "deflate", ret);
-                throw zlib_error("deflate");
+                throw zlib_error(NS_FuncName);
             }
 
             auto zipsz = zs.total_out - prev;
@@ -1145,26 +1223,26 @@ namespace LTSM
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const
         {
-            Application::error("%s: disabled", __FUNCTION__);
-            throw zlib_error("DeflateStream::recvRaw");
+            Application::error("%s: %s", __FUNCTION__, "disabled");
+            throw zlib_error(NS_FuncName);
         }
 
         bool DeflateStream::hasInput(void) const
         {
-            Application::error("%s: disabled", __FUNCTION__);
-            throw zlib_error("DeflateStream::hasInput");
+            Application::error("%s: %s", __FUNCTION__, "disabled");
+            throw zlib_error(NS_FuncName);
         }
 
         size_t DeflateStream::hasData(void) const
         {
-            Application::error("%s: disabled", __FUNCTION__);
-            throw zlib_error("DeflateStream::hasData");
+            Application::error("%s: %s", __FUNCTION__, "disabled");
+            throw zlib_error(NS_FuncName);
         }
 
         uint8_t DeflateStream::peekInt8(void) const
         {
-            Application::error("%s: disabled", __FUNCTION__);
-            throw zlib_error("DeflateStream::peekInt8");
+            Application::error("%s: %s", __FUNCTION__, "disabled");
+            throw zlib_error(NS_FuncName);
         }
 
         /* Zlib::InflateStream */
@@ -1176,7 +1254,7 @@ namespace LTSM
             if(ret < Z_OK)
             {
                 Application::error("%s: %s failed, error code: %d", __FUNCTION__, "inflateInit2", ret);
-                throw zlib_error("inflateInit2");
+                throw zlib_error(NS_FuncName);
             }
         }
     
@@ -1202,7 +1280,7 @@ namespace LTSM
                 if(ret < Z_OK)
                 {
                     Application::error("%s: %s failed, error code: %d", __FUNCTION__, "inflate", ret);
-                    throw zlib_error("inflate");
+                    throw zlib_error(NS_FuncName);
                 }
 
                 sb.write(tmp.data(), tmp.size() - zs.avail_out);
@@ -1220,7 +1298,7 @@ namespace LTSM
             if(sb.last() < len)
             {
                 Application::error("%s: stream last: %d, expected: %d", __FUNCTION__, sb.last(), len);
-                throw std::invalid_argument("InflateStream::recvRaw");
+                throw std::invalid_argument(NS_FuncName);
             }
 
             sb.readTo(static_cast<uint8_t*>(ptr), len);
@@ -1241,7 +1319,7 @@ namespace LTSM
             if(0 == sb.last())
             {
                 Application::error("%s: stream empty", __FUNCTION__);
-                throw zlib_error("InflateStream::peekInt8");
+                throw zlib_error(NS_FuncName);
             }
 
             return sb.peek();
@@ -1249,8 +1327,8 @@ namespace LTSM
 
         void InflateStream::sendRaw(const void* ptr, size_t len)
         {
-            Application::error("%s: disabled", __FUNCTION__);
-            throw zlib_error("InflateStream::sendRaw");
+            Application::error("%s: %s", __FUNCTION__, "disabled");
+            throw zlib_error(NS_FuncName);
         }
     } // ZLib
 #endif

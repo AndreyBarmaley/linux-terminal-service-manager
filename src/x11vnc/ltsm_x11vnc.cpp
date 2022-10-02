@@ -21,16 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-// shm access flags
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-#include <poll.h>
-#include <unistd.h>
 #include <signal.h>
 
-#include <cstdio>
 #include <thread>
 #include <chrono>
 
@@ -178,49 +170,17 @@ namespace LTSM
 
     int X11Vnc::startSocket(int port) const
     {
-        int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
-
-        if(0 > fd)
-        {
-            Application::error("%s: socket error: %s", __FUNCTION__, strerror(errno));
+        int fd = TCPSocket::listen(port);
+        if(fd < 0)
             return -1;
-        }
-
-        int reuse = 1;
-        int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
-        if(0 > err)
-        {
-            Application::warning("%s: socket reuseaddr failed, error: %s, code: %d", __FUNCTION__, strerror(errno), err);
-        }
-
-        struct sockaddr_in sockaddr;
-        memset(& sockaddr, 0, sizeof(struct sockaddr_in));
-
-        sockaddr.sin_family = AF_INET;
-        sockaddr.sin_port = htons(port);
-        sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
-        {
-            Application::error("%s: bind error: %s, port: %d", __FUNCTION__, strerror(errno), port);
-            return -1;
-        }
-
-        if(0 != listen(fd, 5))
-        {
-            Application::error("%s: listen error: %s", __FUNCTION__, strerror(errno));
-            return -1;
-        }
 
         Application::info("listen inet port: %d", port);
         signal(SIGCHLD, SIG_IGN);
 
-        while(int sock = accept(fd, nullptr, nullptr))
+        while(int sock = TCPSocket::accept(fd))
         {
             if(0 > sock)
-                Application::error("%s: accept error: %s", __FUNCTION__, strerror(errno));
-            else
-                Application::debug("accept inet sock: %d", sock);
+                return -1;
 
             // child
             if(0 == fork())

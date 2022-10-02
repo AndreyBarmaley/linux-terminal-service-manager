@@ -27,6 +27,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
+#include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
 
@@ -85,7 +86,9 @@ namespace LTSM
             _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
             Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
 
-            userSession = userName;
+#ifdef LTSM_CHANNELS
+            userSession =  true;
+#endif
         }
     }
 
@@ -136,7 +139,7 @@ namespace LTSM
         if(screen <= 0)
         {
             Application::error("%s: login session request: failure", __FUNCTION__);
-            throw std::runtime_error(__FUNCTION__);
+            throw vnc_error(NS_FuncName);
         }
 
         Application::info("%s: login session request success, display: %d", __FUNCTION__, screen);
@@ -144,14 +147,14 @@ namespace LTSM
         if(! xcbConnect(screen))
         {
             Application::error("%s: xcb connect: failed", __FUNCTION__);
-            throw std::runtime_error(__FUNCTION__);
+            throw vnc_error(NS_FuncName);
         }
 
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
         if(! visual)
         {
             Application::error("%s: xcb visual empty", __FUNCTION__);
-            throw std::runtime_error(__FUNCTION__);
+            throw vnc_error(NS_FuncName);
         }
 
         Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
@@ -196,6 +199,10 @@ namespace LTSM
 
     void Connector::VNC::serverEncodingsEvent(void)
     {
+#ifdef LTSM_CHANNELS
+        if(isClientEncodings(RFB::ENCODING_LTSM))
+            sendEncodingLtsmSupported();
+#endif
     }
 
     void Connector::VNC::serverConnectedEvent(void)
@@ -204,8 +211,8 @@ namespace LTSM
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
                 [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
         {
-            Application::info("%s: wait loginWidgetStarted failed", __FUNCTION__);
-            throw std::runtime_error(__FUNCTION__);
+            Application::info("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
+            throw vnc_error(NS_FuncName);
         }
     }
 
@@ -270,4 +277,200 @@ namespace LTSM
         auto it = keymap.find(keysym);
         return it != keymap.end() ? it->second : 0;
     }
+
+#ifdef LTSM_CHANNELS
+    bool Connector::VNC::isUserSession(void) const
+    {
+        return userSession;
+    }
+
+    void Connector::VNC::systemClientVariables(const JsonObject & jo)
+    {
+        Application::debug("%s: count: %d", __FUNCTION__, jo.size());
+
+        if(auto env = jo.getObject("environments"))
+            busSetSessionEnvironments(_display, env->toStdMap<std::string>());
+
+        if(auto layouts = jo.getArray("keyboard"))
+            busSetSessionKeyboardLayouts(_display, layouts->toStdVector<std::string>());
+
+        if(auto opts = jo.getObject("options"))
+            busSetSessionOptions(_display, opts->toStdMap<std::string>());
+    }
+
+    void Connector::VNC::systemKeyboardChange(const JsonObject & jo)
+    {
+        auto layout = jo.getString("layout");
+
+        if(isAllowXcbMessages())
+        {
+            Application::debug("%s: layout: %s", __FUNCTION__, layout.c_str());
+
+            auto names = _xcbDisplay->getXkbNames();
+
+            auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
+                        { return Tools::lower(str).substr(0,2) == Tools::lower(layout).substr(0,2); });
+
+            if(it != names.end())
+                _xcbDisplay->switchXkbLayoutGroup(std::distance(names.begin(), it));
+            else
+                Application::error("%s: layout not found: %s, names: [%s]", __FUNCTION__, layout.c_str(), Tools::join(names).c_str());
+        }
+    }
+
+    void Connector::VNC::systemTransferFiles(const JsonObject & jo)
+    {
+        if(isUserSession())
+        {
+            auto fa = jo.getArray("files");
+            if(! fa)
+            {
+                Application::error("%s: incorrect format message", __FUNCTION__);
+                return;
+            }
+
+            Application::debug("%s: files count: %s", __FUNCTION__, fa->size());
+
+            // check transfer disabled
+            if(_config->getBoolean("transfer:file:disabled", false))
+            {
+                Application::error("%s: administrative disable", __FUNCTION__);
+                busSendNotify(_display, "Transfer Disable", "transfer is blocked, contact the administrator",
+                                NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                return;
+            }
+
+            size_t fmax = 0;
+            size_t prettyMb = 0;
+
+            if(_config->hasKey("transfer:file:max"))
+            {
+                fmax = _config->getInteger("transfer:file:max");
+                prettyMb = fmax / (1024 * 1024);
+            }
+
+            std::vector<sdbus::Struct<std::string, uint32_t>> files;
+            std::scoped_lock<std::mutex> guard(lockTransfer);
+
+            for(int it = 0; it < fa->size(); ++it)
+            {
+                auto jo2 = fa->getObject(it);
+                if(! jo2)
+                    continue;
+
+                std::string fname = jo2->getString("file");
+                size_t fsize = jo2->getInteger("size");
+
+                if(std::any_of(transfer.begin(), transfer.end(), [&](auto & st){ return st.first == fname; }))
+                {
+                    Application::warning("%s: found planned and skipped, file: %s", __FUNCTION__, fname.c_str());
+                    continue;
+                }
+
+                // check max size
+                if(fmax && fsize > fmax)
+                {
+                    Application::warning("%s: file size exceeds and skipped, file: %s", __FUNCTION__, fname.c_str());
+                    busSendNotify(_display, "Transfer Skipped", Tools::StringFormat("the file size exceeds, the allowed limit: %1M, file: %2").arg(prettyMb).arg(fname),
+                                NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                    continue;
+                }
+
+                // add planned transfer
+                transfer.emplace_back(fname, fsize);
+                // add target
+                files.emplace_back(std::move(fname), fsize);
+            }
+
+            size_t channels = countFreeChannels();
+
+            if(files.empty())
+            {
+                Application::warning("%s: file list empty", __FUNCTION__);
+            }
+            else
+            if(! channels)
+            {
+                Application::warning("%s: no free channels", __FUNCTION__);
+            }
+            else
+            {
+                if(files.size() > channels)
+                {
+                    Application::warning("%s: files list is large, count: %d, channels: %d", __FUNCTION__, files.size(), channels);
+                    files.resize(channels);
+                }
+
+                // send request to manager
+                busTransferFilesRequest(_display, files);
+            }
+        }
+    }
+
+    void Connector::VNC::onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string & dstdir)
+    {
+        // filepath - client file path
+        // tmpfile - server tmpfile
+        // dstdir - server target directory
+        Application::debug("%s: display: %d", __FUNCTION__, display);
+
+        if(0 < _display && display == _display)
+        {
+            std::scoped_lock<std::mutex> guard(lockTransfer);
+
+            auto it = std::find_if(transfer.begin(), transfer.end(), [&](auto & st){ return st.first == filepath; });
+            if(it == transfer.end())
+            {
+                Application::error("%s: transfer not found, file: %s", __FUNCTION__, filepath.c_str());
+                return;
+            }
+
+            // transfer not canceled
+            if(! dstdir.empty() && ! tmpfile.empty())
+            {
+                // create file transfer channel
+                createChannel(Channel::createUrl(Channel::ConnectorType::File, filepath), Channel::ConnectorMode::ReadOnly,
+                        Channel::createUrl(Channel::ConnectorType::File, tmpfile), Channel::ConnectorMode::WriteOnly);
+
+                auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
+                busTransferFileStarted(_display, tmpfile, (*it).second, dstfile.c_str());
+            }
+
+            // remove planned
+            transfer.erase(it);
+        }
+    }
+
+    void Connector::VNC::onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    {
+        if(0 < _display && display == _display)
+        {
+            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
+        }
+    }
+
+    void Connector::VNC::onDestroyChannel(const int32_t& display, const uint8_t& channel)
+    {
+        if(0 < _display && display == _display)
+        {
+            destroyChannel(channel);
+        }
+    }
+
+    void Connector::VNC::onCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    {
+        if(0 < _display && display == _display)
+        {
+            createListenner(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
+        }
+    }
+
+    void Connector::VNC::onDestroyListenner(const int32_t& display, const std::string& client, const std::string& server)
+    {
+        if(0 < _display && display == _display)
+        {
+            destroyListenner(client, server);
+        }
+    }
+#endif
 }

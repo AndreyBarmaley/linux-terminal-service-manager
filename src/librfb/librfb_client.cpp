@@ -1,24 +1,25 @@
-/***************************************************************************
- *   Copyright (C) 2022 by MultiCapture team <public.irkutsk@gmail.com>    *
- *                                                                         *
- *   Part of the MultiCapture engine:                                      *
- *   https://github.com/AndreyBarmaley/multi-capture                       *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 3 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- ***************************************************************************/
+/***********************************************************************
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *                                                                     *
+ *   Part of the LTSM: Linux Terminal Service Manager:                 *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
+ *                                                                     *
+ *   This program is free software;                                    *
+ *   you can redistribute it and/or modify it under the terms of the   *
+ *   GNU Affero General Public License as published by the             *
+ *   Free Software Foundation; either version 3 of the License, or     *
+ *   (at your option) any later version.                               *
+ *                                                                     *
+ *   This program is distributed in the hope that it will be useful,   *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of    *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
+ *   See the GNU Affero General Public License for more details.       *
+ *                                                                     *
+ *   You should have received a copy of the                            *
+ *   GNU Affero General Public License along with this program;        *
+ *   if not, write to the Free Software Foundation, Inc.,              *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
+ **********************************************************************/
 
 #include <chrono>
 #include <thread>
@@ -300,6 +301,11 @@ namespace LTSM
         return true;
     }
 
+    bool RFB::ClientDecoder::isContinueUpdates(void) const
+    {
+        return continueUpdatesSupport && continueUpdatesProcessed;
+    }
+
     bool RFB::ClientDecoder::rfbMessagesProcessing(void) const
     {
         return rfbMessages;
@@ -313,7 +319,11 @@ namespace LTSM
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
         std::initializer_list<int> encodings = { ENCODING_LAST_RECT,
+#ifdef LTSM_CHANNELS
+                                        ENCODING_LTSM,
+#endif
                                         ENCODING_EXT_DESKTOP_SIZE,
+                                        ENCODING_CONTINUOUS_UPDATES,
                                         ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
                                         ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE, ENCODING_RAW };
 
@@ -330,7 +340,8 @@ namespace LTSM
         {
             auto now = std::chrono::steady_clock::now();
 
-            if(std::chrono::milliseconds(300) <= now - cur)
+            if((! continueUpdatesSupport || ! continueUpdatesProcessed) &&
+                std::chrono::milliseconds(300) <= now - cur)
             {
                 // request incr update
                 sendFrameBufferUpdate(true);
@@ -344,12 +355,21 @@ namespace LTSM
             }
 
             int msgType = recvInt8();
+
+#ifdef LTSM_CHANNELS
+            if(ltsmSupport && msgType == PROTOCOL_LTSM)
+            {
+                recvLtsm(*this);
+                continue;
+            }
+#endif
             switch(msgType)
             {
                 case SERVER_FB_UPDATE:          recvFBUpdateEvent(); break;
                 case SERVER_SET_COLOURMAP:      recvColorMapEvent(); break;
                 case SERVER_BELL:               recvBellEvent(); break;
                 case SERVER_CUT_TEXT:           recvCutTextEvent(); break;
+                case SERVER_CONTINUOUS_UPDATES: recvContinuousUpdatesEvent(); break;
                 default:
                 {
                     Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
@@ -363,11 +383,11 @@ namespace LTSM
     {
         auto & clientFormat = clientPixelFormat();
 
-        Application::debug("%s: bpp: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+        Application::debug("%s: local pixel format: bpp: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                     __FUNCTION__, clientFormat.bitsPerPixel, big_endian,
                     clientFormat.redMax, clientFormat.redShift, clientFormat.greenMax, clientFormat.greenShift, clientFormat.blueMax, clientFormat.blueShift);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         // send pixel format
         sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
@@ -388,9 +408,10 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendEncodings(std::initializer_list<int> encodings)
     {
-        Application::debug("%s: count: %d", __FUNCTION__, encodings.size());
+        for(auto type : encodings)
+            Application::debug("%s: %s", __FUNCTION__, encodingName(type));
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         sendInt8(RFB::CLIENT_SET_ENCODINGS);
         sendZero(1); // padding
@@ -404,7 +425,7 @@ namespace LTSM
     {
         Application::debug("%s: keysym: 0x%08x, pressed: %d", __FUNCTION__, keysym, pressed);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
@@ -418,7 +439,7 @@ namespace LTSM
     {
         Application::debug("%s: pointer: [%d, %d], buttons: 0x%02x", __FUNCTION__, posx, posy, buttons);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         sendInt8(RFB::CLIENT_EVENT_POINTER);
 
@@ -432,7 +453,7 @@ namespace LTSM
     {
         Application::debug("%s: buffer size: %d", __FUNCTION__, len);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         sendInt8(RFB::CLIENT_CUT_TEXT);
         // padding
@@ -442,16 +463,33 @@ namespace LTSM
         sendFlush();
     }
 
+    void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg)
+    {
+        Application::debug("%s: status: %s, region [%d,%d,%d,%d]", __FUNCTION__, (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
+
+        std::scoped_lock<std::mutex> guard(sendLock);
+        sendInt8(CLIENT_CONTINUOUS_UPDATES);
+        sendInt8(enable ? 1 : 0);
+        sendIntBE16(reg.x);
+        sendIntBE16(reg.y);
+        sendIntBE16(reg.width);
+        sendIntBE16(reg.height);
+        sendFlush();
+
+        continueUpdatesProcessed = enable;
+    }
+
     void RFB::ClientDecoder::sendFrameBufferUpdate(bool incr)
     {
-        sendFrameBufferUpdate(XCB::Region(0, 0, clientWidth(), clientHeight()), incr);
+        auto csz = clientSize();
+        sendFrameBufferUpdate(XCB::Region(0, 0, csz.width, csz.height), incr);
     }
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr)
     {
         Application::debug("%s: region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
 
         // send framebuffer update request
         sendInt8(CLIENT_REQUEST_FB_UPDATE);
@@ -494,6 +532,9 @@ namespace LTSM
                 case ENCODING_TRLE:     recvDecodingTRLE(reg, false); break;
                 case ENCODING_ZLIB:     recvDecodingZlib(reg); break;
                 case ENCODING_ZRLE:     recvDecodingTRLE(reg, true); break;
+#ifdef LTSM_CHANNELS
+                case ENCODING_LTSM:     recvDecodingLtsm(); break;
+#endif
                 case ENCODING_LAST_RECT:
                     recvDecodingLastRect(reg);
                     numRects = 0;
@@ -507,7 +548,10 @@ namespace LTSM
                     break;
 
                 default:
-                    throw std::runtime_error("unknown encoding");
+                {
+                    Application::error("%s: %s", __FUNCTION__, "unknown decoding");
+                    throw rfb_error(NS_FuncName);
+                }
             }
         }
 
@@ -557,8 +601,15 @@ namespace LTSM
         if(0 < length)
         {
             auto text = recvData(length);
-            cutTextEvent(text);
+            cutTextEvent(std::move(text));
         }
+    }
+
+    void RFB::ClientDecoder::recvContinuousUpdatesEvent(void)
+    {
+        continueUpdatesSupport = true;
+
+        sendContinuousUpdates(false, { XCB::Point(0,0), clientSize() });
     }
 
     void RFB::ClientDecoder::recvDecodingRaw(const XCB::Region & reg)
@@ -617,7 +668,10 @@ namespace LTSM
             dst.y += reg.y;
 
             if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height)
-                throw std::runtime_error("sub region out of range");
+            {
+                Application::error("%s: %s", __FUNCTION__, "sub region out of range");
+                throw rfb_error(NS_FuncName);
+            }
 
             fillPixel(dst, pixel);
         }
@@ -706,7 +760,10 @@ namespace LTSM
                     dst.y += reg.y;
 
                     if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height)
-                        throw std::runtime_error("sub region out of range");
+                    {
+                        Application::error("%s: %s", __FUNCTION__, "sub region out of range");
+                        throw rfb_error(NS_FuncName);
+                    }
 
                     fillPixel(dst, pixel);
                 }
@@ -820,7 +877,10 @@ namespace LTSM
                         Application::debug("%s: type: %s, pos: [%d,%d], index: %d", __FUNCTION__, "packed palette", pos.x, pos.y, index);
 
                     if(index >= palette.size())
-                        throw std::runtime_error("index out of range");
+                    {
+                        Application::error("%s: %s", __FUNCTION__, "index out of range");
+                        throw rfb_error(NS_FuncName);
+                    }
 
                     setPixel(pos, palette[index]);
                 }
@@ -832,7 +892,8 @@ namespace LTSM
         else
         if((17 <= type && type <= 127) || type == 129)
         {
-            throw std::runtime_error("invalid trle type");
+            Application::error("%s: %s", __FUNCTION__, "invalid trle type");
+            throw rfb_error(NS_FuncName);
         }
         else
         if(128 == type)
@@ -856,7 +917,10 @@ namespace LTSM
                     ++coord;
 
                     if(! coord.isValid() && runLength)
-                        throw std::runtime_error("plain rle: coord out of range");
+                    {
+                        Application::error("%s: %s", __FUNCTION__, "plain rle: coord out of range");
+                        throw rfb_error(NS_FuncName);
+                    }
                 }
             }
 
@@ -890,7 +954,10 @@ namespace LTSM
                 if(index < 128)
                 {
                     if(index >= palette.size())
-                        throw std::runtime_error("index out of range");
+                    {
+                        Application::error("%s: %s", __FUNCTION__, "index out of range");
+                        throw rfb_error(NS_FuncName);
+                    }
 
                     auto pixel = palette[index];
                     setPixel(reg.topLeft() + coord, pixel);
@@ -902,7 +969,10 @@ namespace LTSM
                     index -= 128;
 
                     if(index >= palette.size())
-                        throw std::runtime_error("index out of range");
+                    {
+                        Application::error("%s: %s", __FUNCTION__, "index out of range");
+                        throw rfb_error(NS_FuncName);
+                    }
 
                     auto pixel = palette[index];
                     auto runLength = recvRunLength();
@@ -916,7 +986,10 @@ namespace LTSM
                         ++coord;
 
                         if(! coord.isValid() && runLength)
-                            throw std::runtime_error("rle palette: coord out of range");
+                        {
+                            Application::error("%s: %s", __FUNCTION__, "rle palette: coord out of range");
+                            throw rfb_error(NS_FuncName);
+                        }
                     }
                 }
             }
@@ -952,7 +1025,7 @@ namespace LTSM
     {
         Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
 
-        std::lock_guard<std::mutex> lg(sendLock);
+        std::scoped_lock<std::mutex> guard(sendLock);
         
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
@@ -987,8 +1060,8 @@ namespace LTSM
             default: break;
         }
 
-        Application::error("%s: unknown format", __FUNCTION__);
-        throw std::runtime_error("unknown format");
+        Application::error("%s: %s", __FUNCTION__, "unknown format");
+        throw rfb_error(NS_FuncName);
     }
 
     int RFB::ClientDecoder::recvCPixel(void)
@@ -1053,4 +1126,60 @@ namespace LTSM
     {
         streamIn = tls ? tls.get() : socket.get();
     }
+
+#ifdef LTSM_CHANNELS
+    void RFB::ClientDecoder::recvDecodingLtsm(void)
+    {
+        Application::info("%s: success", __FUNCTION__);
+        ltsmSupport = true;
+
+        size_t len = recvIntBE32();
+        auto data = recvData(len);
+
+        decodingLtsmEvent(data);
+    }
+
+    void RFB::ClientDecoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)
+    {
+        sendLtsm(*this, sendLock, channel, buf, len);
+    }
+
+    void RFB::ClientDecoder::recvChannelSystem(const std::vector<uint8_t> & buf)
+    {
+        JsonContent jc;
+        jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
+
+        if(! jc.isObject())
+        {
+            Application::error("%s: %s", __FUNCTION__, "json broken");
+            throw std::invalid_argument(NS_FuncName);
+        }
+
+        auto jo = jc.toObject();
+        auto cmd = jo.getString("cmd");
+
+        if(cmd.empty())
+        {
+            Application::error("%s: %s", __FUNCTION__, "format message broken");
+            throw std::invalid_argument(NS_FuncName);
+        }
+
+        if(cmd == SystemCommand::ChannelOpen)
+            systemChannelOpen(jo);
+        else
+        if(cmd == SystemCommand::ChannelListen)
+            systemChannelListen(jo);
+        else
+        if(cmd == SystemCommand::ChannelClose)
+            systemChannelClose(jo);
+        else
+        if(cmd == SystemCommand::ChannelConnected)
+            systemChannelConnected(jo);
+        else
+        {
+            Application::error("%s: %s", __FUNCTION__, "unknown cmd");
+            throw std::invalid_argument(NS_FuncName);
+        }
+    }
+#endif
 }

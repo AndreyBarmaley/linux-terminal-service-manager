@@ -24,6 +24,7 @@
 #ifndef _LTSM_LIBRFB_
 #define _LTSM_LIBRFB_
 
+#include <exception>
 #include <functional>
 
 #include "ltsm_framebuffer.h"
@@ -31,6 +32,12 @@
 
 namespace LTSM
 {
+    struct rfb_error : public std::runtime_error
+    {
+        explicit rfb_error(const std::string & what) : std::runtime_error(what){}
+        explicit rfb_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace RFB
     {
         // RFB protocol constant
@@ -65,13 +72,14 @@ namespace LTSM
         const int CLIENT_EVENT_KEY = 4;
         const int CLIENT_EVENT_POINTER = 5;
         const int CLIENT_CUT_TEXT = 6;
-        const int CLIENT_ENABLE_CONTINUOUS_UPDATES = 150;
+        const int CLIENT_CONTINUOUS_UPDATES = 150;
         const int CLIENT_SET_DESKTOP_SIZE = 251;
 
         const int SERVER_FB_UPDATE = 0;
         const int SERVER_SET_COLOURMAP = 1;
         const int SERVER_BELL = 2;
         const int SERVER_CUT_TEXT = 3;
+        const int SERVER_CONTINUOUS_UPDATES = 150;
 
         // RFB protocol constants
         const int ENCODING_RAW = 0;
@@ -110,6 +118,7 @@ namespace LTSM
         const int ENCODING_COMPRESS1 = -255;
 
         const int ENCODING_LTSM = 0x4C54534D;
+        const int PROTOCOL_LTSM = 119;
 
 	struct ScreenInfo
 	{

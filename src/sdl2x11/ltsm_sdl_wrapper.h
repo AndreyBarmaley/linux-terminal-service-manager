@@ -38,6 +38,7 @@ namespace LTSM
 
     struct sdl_error : public std::runtime_error
     {
+        explicit sdl_error(const std::string & what) : std::runtime_error(what){}
         explicit sdl_error(const char* what) : std::runtime_error(what){}
     };
 
@@ -79,6 +80,7 @@ namespace LTSM
             const SDL_MouseButtonEvent* button(void) const { return ptr ? & ptr->button : nullptr; }
             const SDL_MouseWheelEvent*  wheel(void) const { return ptr ? & ptr->wheel : nullptr; }
             const SDL_WindowEvent*      window(void) const { return ptr ? & ptr->window : nullptr; }
+            const SDL_DropEvent*        drop(void) const { return ptr ? & ptr->drop : nullptr; }
         };
 
         class Window
@@ -92,7 +94,7 @@ namespace LTSM
         protected:
 
         public:
-            Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0);
+            Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0, bool accel = true);
             ~Window();
 
             bool		isValid(void) const;

@@ -23,6 +23,7 @@
 #ifndef _LTSM_JSON_WRAPPER_
 #define _LTSM_JSON_WRAPPER_
 
+#include <map>
 #include <any>
 #include <list>
 #include <string>
@@ -31,13 +32,12 @@
 #include <memory>
 #include <utility>
 #include <typeindex>
-#include <initializer_list>
 #include <filesystem>
 
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20220902
+#define JSON_WRAPPER 20221001
 
 namespace LTSM
 {
@@ -81,6 +81,9 @@ namespace LTSM
         virtual std::string     getString(void) const = 0;
         virtual double          getDouble(void) const = 0;
         virtual bool            getBoolean(void) const = 0;
+
+        template<typename T>
+        T                       get(void) const { T t; *this >> t; return t; }
 
         bool                    isNull(void) const;
         bool                    isBoolean(void) const;
@@ -203,6 +206,8 @@ namespace LTSM
         explicit JsonValuePtr(std::string_view);
         explicit JsonValuePtr(const JsonArray &);
         explicit JsonValuePtr(const JsonObject &);
+        explicit JsonValuePtr(JsonArray &&);
+        explicit JsonValuePtr(JsonObject &&);
         explicit JsonValuePtr(JsonValue*);
         JsonValuePtr(const JsonValuePtr &);
         JsonValuePtr(JsonValuePtr &&) noexcept;
@@ -232,10 +237,24 @@ namespace LTSM
         JsonArray(JsonArray && ja) noexcept;
 
         template<typename T>
-        JsonArray(const std::initializer_list<T> & list)
+        JsonArray(const std::list<T> & list)
         {
             content.reserve(list.size());
             for(auto & val : list) content.emplace_back(val);
+        }
+
+        template<typename T>
+        JsonArray(const std::vector<T> & list)
+        {
+            content.reserve(list.size());
+            for(auto & val : list) content.emplace_back(val);
+        }
+
+        template<typename InputIterator>
+        JsonArray(InputIterator it1, InputIterator it2)
+        {
+            content.reserve(std::distance(it1, it2));
+            while(it1 != it2) content.emplace_back(*it1++);
         }
 
         JsonArray &	        operator=(const JsonArray &);
@@ -265,8 +284,21 @@ namespace LTSM
 
         void			addArray(const JsonArray &);
         void			addObject(const JsonObject &);
+        void			addArray(JsonArray &&);
+        void			addObject(JsonObject &&);
+
         void                    join(const JsonArray &);
         void                    swap(JsonArray &) noexcept;
+
+        template<typename Iterator>
+        Iterator                begin(void) { return content.begin(); }
+        template<typename ConstIterator>
+        ConstIterator           begin(void) const { return content.begin(); }
+
+        template<typename Iterator>
+        Iterator                end(void) { return content.end(); }
+        template<typename ConstIterator>
+        ConstIterator           end(void) const { return content.end(); }
 
         template<typename T>
         std::vector<T> toStdVector(void) const
@@ -275,12 +307,7 @@ namespace LTSM
             res.reserve(content.size());
 
             for(auto & ptr : content)
-            {
-                res.push_back(T());
-
-                if(ptr.get())
-                    *ptr.get() >> res.back();
-            }
+                res.emplace_back(ptr->template get<T>());
 
             return res;
         }
@@ -291,41 +318,24 @@ namespace LTSM
             std::list<T> res;
 
             for(auto & ptr : content)
-            {
-                res.push_back(T());
-
-                if(ptr.get())
-                    *ptr.get() >> res.back();
-            }
+                res.emplace_back(ptr->template get<T>());
 
             return res;
         }
 
-        template<class T>
+        template<typename T>
         const JsonArray & operator>> (std::vector<T> & v) const
         {
             for(auto & ptr : content)
-            {
-                v.push_back(T());
-
-                if(ptr.get())
-                    *ptr.get() >> v.back();
-            }
-
+                v.emplace_back(ptr->template get<T>());
             return *this;
         }
 
-        template<class T>
+        template<typename T>
         const JsonArray & operator>> (std::list<T> & v) const
         {
             for(auto & ptr : content)
-            {
-                v.push_back(T());
-
-                if(ptr.get())
-                    *ptr.get() >> v.back();
-            }
-
+                v.emplace_back(ptr->template get<T>());
             return *this;
         }
     };
@@ -376,6 +386,8 @@ namespace LTSM
         bool			hasKey(std::string_view) const;
         std::list<std::string>	keys(void) const;
 
+        void                    removeKey(const std::string &);
+
         const JsonValue*	getValue(std::string_view) const;
         const JsonObject*	getObject(std::string_view) const;
         const JsonArray*	getArray(std::string_view) const;
@@ -396,27 +408,53 @@ namespace LTSM
 
         void			addNull(const std::string &);
         void			addInteger(const std::string &, const int &);
-        void			addString(const std::string &, const std::string &);
+        void			addString(const std::string &, std::string_view);
         void			addDouble(const std::string &, const double &);
         void			addBoolean(const std::string &, const bool &);
 
         void			addArray(const std::string &, const JsonArray &);
+        void			addArray(const std::string &, JsonArray &&);
+
         void			addObject(const std::string &, const JsonObject &);
+        void			addObject(const std::string &, JsonObject &&);
+
         void                    join(const JsonObject &);
         void                    swap(JsonObject &) noexcept;
+
+        template<typename T>
+        std::map<std::string, T> toStdMap(void) const
+        {
+            std::map<std::string, T> res;
+
+            for(auto & [key, ptr] : content)
+                res.emplace(key, ptr->template get<T>());
+
+            return res;
+        }
+
+        template<typename T>
+        std::unordered_map<std::string, T> toStdUnorderedMap(void) const
+        {
+            std::unordered_map<std::string, T> res;
+
+            for(auto & [key, ptr] : content)
+                res.emplace(key, ptr->template get<T>());
+
+            return res;
+        }
 
         template<typename T>
         std::vector<T> getStdVector(std::string_view key) const
         {
             const JsonArray* jarr = getArray(key);
-            return jarr ? jarr->toStdVector<T>() : std::vector<T>();
+            return jarr ? jarr->template toStdVector<T>() : std::vector<T>();
         }
 
         template<typename T>
         std::list<T> getStdList(std::string_view key) const
         {
             const JsonArray* jarr = getArray(key);
-            return jarr ? jarr->toStdList<T>() : std::list<T>();
+            return jarr ? jarr->template toStdList<T>() : std::list<T>();
         }
     };
 

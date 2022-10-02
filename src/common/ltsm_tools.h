@@ -43,8 +43,15 @@
 
 namespace LTSM
 {
+
     namespace Tools
     {
+        std::string prettyFuncName(std::string_view);
+        std::string randomHexString(size_t len);
+
+        std::string getTimeZone(void);
+        std::string getUsername(void);
+
         class StringFormat : public std::string
         {
             int             cur = 1;
@@ -90,8 +97,29 @@ namespace LTSM
         std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);
 
-        std::string     join(const std::list<std::string> &);
-        std::string     join(const std::list<std::string> &, std::string_view sep);
+	template<typename Iterator>
+        std::string     join(Iterator it1, Iterator it2, std::string_view sep = "")
+        {
+            std::ostringstream os;
+ 
+            if(sep.empty())
+            {
+                std::copy(it1, it2, std::ostream_iterator<std::string>(os));
+            }
+            else
+            for(auto it = it1; it != it2; ++it)
+            {
+                os << *it;
+ 
+                if(std::next(it) != it2)
+                    os << sep;
+            }
+ 
+            return os.str();
+        }
+
+        std::string     join(const std::list<std::string> &, std::string_view sep = "");
+        std::string     join(const std::vector<std::string> &, std::string_view sep = "");
 
         std::string     lower(std::string);
         std::string     runcmd(std::string_view);
@@ -261,6 +289,8 @@ namespace LTSM
 	    return true;
         }
     }
+
+#define NS_FuncName Tools::prettyFuncName(__PRETTY_FUNCTION__)
 }
 
 #endif // _LTSM_TOOLS_

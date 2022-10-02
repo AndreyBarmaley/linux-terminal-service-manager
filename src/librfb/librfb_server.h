@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -31,6 +31,7 @@
 
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
+#include "ltsm_channels.h"
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_json_wrapper.h"
@@ -46,7 +47,11 @@ namespace LTSM
     namespace RFB
     {
         /// ServerEncoder
-        class ServerEncoder : protected NetworkStream
+        class ServerEncoder :
+#ifdef LTSM_CHANNELS
+            public ChannelClient,
+#endif
+            protected NetworkStream
         {
             std::list< std::future<void> >
                                 encodingJobs;
@@ -76,6 +81,8 @@ namespace LTSM
 
             bool                clientTrueColor = true;
             bool                clientBigEndian = false;
+            bool                continueUpdatesSupport = false;
+            bool                continueUpdatesProcessed = false;
 
         protected:
             // ServerEncoder
@@ -101,6 +108,7 @@ namespace LTSM
             void                setEncodingDebug(int v);
             void                setEncodingThreads(int v);
             bool                isClientEncodings(int) const;
+            bool                isContinueUpdates(void) const;
 
             bool                isUpdateProcessed(void) const;
             void                waitUpdateProcess(void);
@@ -114,8 +122,13 @@ namespace LTSM
             void                sendColourMap(int first);
             void                sendBellEvent(void);
             void                sendCutTextEvent(const std::vector<uint8_t> &);
-            void                sendEndContinuousUpdates(void);
+            void                sendContinuousUpdates(bool enable);
             void                sendUpdateBackground(const XCB::Region &);
+#ifdef LTSM_CHANNELS
+            void                sendEncodingLtsmSupported(void);
+            void                recvChannelSystem(const std::vector<uint8_t> &) override;
+            bool                serverSide(void) const override { return true; }
+#endif
 
             void                recvPixelFormat(void);
             void                recvSetEncodings(void);
@@ -179,6 +192,10 @@ namespace LTSM
             virtual void        recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
             virtual void        recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
             virtual void        sendFrameBufferUpdateEnd(const XCB::Region &) {}
+
+#ifdef LTSM_CHANNELS
+            virtual void        sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+#endif
         };
     }
 }

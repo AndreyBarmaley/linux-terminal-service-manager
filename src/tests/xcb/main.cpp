@@ -119,7 +119,6 @@ public:
         {
             while(auto ev = XCB::RootDisplayExt::poolEvent())
             {
-#ifdef LTSM_WITH_XKBCOMMON
 		if(isXkbKeyboardNotify(ev))
 		{
 		    auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
@@ -141,7 +140,6 @@ public:
 				xn->state_notify.grabMods, xn->state_notify.compatGrabMods, xn->state_notify.lookupMods, xn->state_notify.compatLoockupMods,
 				xn->state_notify.ptrBtnState, xn->state_notify.changed);
 		}
-#endif
 	    }
 
 	    std::this_thread::sleep_for(std::chrono::milliseconds(1));

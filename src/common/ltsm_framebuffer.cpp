@@ -180,7 +180,7 @@ namespace LTSM
             if(length > static_cast<size_t>(fbreg.width) - pos.x)
             {
                 Application::error("%s: out of range, x: %d, width: %d, length: %d", __FUNCTION__, pos.x, fbreg.width, length);
-                throw std::out_of_range("FrameBuffer::setPixelRow");
+                throw std::out_of_range(NS_FuncName);
             }
 
             switch(bpp)
@@ -228,13 +228,13 @@ namespace LTSM
 
                 default:
                     Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
-                    throw std::invalid_argument("FrameBuffer::setPixelRow");
+                    throw std::invalid_argument(NS_FuncName);
             }
         }
         else
         {
             Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
-            throw std::out_of_range("FrameBuffer::setPixelRow");
+            throw std::out_of_range(NS_FuncName);
          }
     }
 
@@ -339,12 +339,12 @@ namespace LTSM
 
                 default:
                     Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
-                    throw std::invalid_argument("FrameBuffer::pixel");
+                    throw std::invalid_argument(NS_FuncName);
             }
         }
 
         Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
-        throw std::out_of_range("FrameBuffer::pixel");
+        throw std::out_of_range(NS_FuncName);
     }
 
     std::list<PixelLength> FrameBuffer::toRLE(const XCB::Region & reg) const

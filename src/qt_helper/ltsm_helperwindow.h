@@ -51,6 +51,7 @@ protected slots:
     void                loginSuccessCallback(int, const QString &);
     void                setLoginPasswordCallback(int, const QString &, const QString &, const bool &);
     void                widgetCenteredCallback(int);
+    void                widgetTimezoneCallback(int, const QString &);
     void        	sessionChangedCallback(int);
     void                setLabelError(const QString &);
     void                reloadUsersList(void);

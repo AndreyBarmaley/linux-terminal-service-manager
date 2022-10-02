@@ -24,8 +24,11 @@
 #ifndef _LTSM_CONNECTOR_VNC_
 #define _LTSM_CONNECTOR_VNC_
 
+#include <list>
+#include <array>
 #include <memory>
 #include <atomic>
+#include <exception>
 #include <unordered_map>
 
 #include "librfb_x11server.h"
@@ -33,16 +36,29 @@
 
 namespace LTSM
 {
+    struct vnc_error : public std::runtime_error
+    {
+        explicit vnc_error(const std::string & what) : std::runtime_error(what){}
+        explicit vnc_error(const char* what) : std::runtime_error(what){}
+    };
+
     namespace Connector
     {
         /* Connector::VNC */
         class VNC : public SignalProxy, protected RFB::X11Server
         {
             PixelFormat         format;
-            std::unordered_map<uint32_t, int> keymap;
 
-            std::string         userSession;
+            std::unordered_map<uint32_t, int>
+                                keymap;
+
+            std::list<std::pair<std::string, size_t>> transfer;
+            std::mutex          lockTransfer;
+
             std::atomic<bool>   loginWidgetStarted{false};
+#ifdef LTSM_CHANNELS
+            std::atomic<bool>   userSession{false};
+#endif
 
         protected:
 	    // rfb server encoding
@@ -66,6 +82,13 @@ namespace LTSM
             void                onShutdownConnector(const int32_t & display) override;
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
+#ifdef LTSM_CHANNELS
+            void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
+            void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
+            void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
+            void                onCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
+            void                onDestroyListenner(const int32_t& display, const std::string& client, const std::string& server) override;
+#endif
 
             void                serverHandshakeVersionEvent(void) override;
             void                serverSelectEncodingsEvent(void) override;
@@ -74,6 +97,14 @@ namespace LTSM
             void                serverMainLoopEvent(void) override;
             void                serverDisplayResizedEvent(const XCB::Size &) override;
             void                serverEncodingsEvent(void) override;
+
+#ifdef LTSM_CHANNELS
+            // rfb channel client
+            bool                isUserSession(void) const override;
+            void                systemTransferFiles(const JsonObject &) override;
+            void                systemClientVariables(const JsonObject &) override;
+            void                systemKeyboardChange(const JsonObject &) override;
+#endif
 
         public:
             VNC(sdbus::IConnection* conn, const JsonObject & jo);

@@ -23,6 +23,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_streambuf.h"
+#include "ltsm_application.h"
 
 namespace LTSM
 {
@@ -397,7 +398,10 @@ namespace LTSM
     void StreamBufRef::getRaw(void* ptr, size_t len) const
     {
         if(last() < len)
-            throw std::out_of_range("StreamBufRef: getRaw");
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         auto dst = static_cast<uint8_t*>(ptr);
         std::copy_n(it1, len, dst);
@@ -406,13 +410,17 @@ namespace LTSM
 
     void StreamBufRef::putRaw(const void* ptr, size_t len)
     {
-        throw streambuf_error("StreamBufRef: putRaw disabled");
+        Application::error("%s: %s", __FUNCTION__, "disabled");
+        throw streambuf_error(NS_FuncName);
     }
 
     BinaryBuf StreamBufRef::read(size_t len) const
     {
         if(last() < len)
-            throw std::out_of_range(std::string("StreamBufRef: read len: ").append(std::to_string(len)));
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         if(len == 0)
             len = last();
@@ -425,7 +433,10 @@ namespace LTSM
     void StreamBufRef::skip(size_t len) const
     {
         if(last() < len)
-            throw std::out_of_range(std::string("StreamBufRef: skip len: ").append(std::to_string(len)));
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         it1 = std::next(it1, len);
     }
@@ -438,7 +449,10 @@ namespace LTSM
     uint8_t StreamBufRef::peek(void) const
     {
         if(it1 == it2)
-            throw std::out_of_range("StreamBufRef: peek");
+        {
+            Application::error("%s: %s", __FUNCTION__, "end stream");
+            throw std::out_of_range(NS_FuncName);
+        }
 
         return *it1;
     }
@@ -489,7 +503,10 @@ namespace LTSM
     void StreamBuf::getRaw(void* ptr, size_t len) const
     {
         if(last() < len)
-            throw std::out_of_range("StreamBuf: getRaw");
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         auto dst = static_cast<uint8_t*>(ptr);
         std::copy_n(it, len, dst);
@@ -510,7 +527,10 @@ namespace LTSM
     BinaryBuf StreamBuf::read(size_t len) const
     {
         if(len > last())
-            throw std::out_of_range(std::string("StreamBuf: read len: ").append(std::to_string(len)));
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         if(len == 0)
             len = last();
@@ -523,7 +543,10 @@ namespace LTSM
     void StreamBuf::skip(size_t len) const
     {
         if(len > last())
-            throw std::out_of_range(std::string("StreamBuf: skip len: ").append(std::to_string(len)));
+        {
+            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            throw std::invalid_argument(NS_FuncName);
+        }
 
         it = std::next(it, len);
     }
@@ -543,7 +566,10 @@ namespace LTSM
     uint8_t StreamBuf::peek(void) const
     {
         if(it == vec.end())
-            throw std::out_of_range("StreamBuf: peek");
+        {
+            Application::error("%s: %s", __FUNCTION__, "end stream");
+            throw std::out_of_range(NS_FuncName);
+        }
 
         return *it;
     }

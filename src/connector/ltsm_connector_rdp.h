@@ -24,6 +24,8 @@
 #ifndef _LTSM_CONNECTOR_RDP_
 #define _LTSM_CONNECTOR_RDP_
 
+#include <exception>
+
 #include "ltsm_sockets.h"
 #include "ltsm_connector.h"
 
@@ -33,6 +35,12 @@
 namespace LTSM
 {
     struct FreeRdpCallback;
+
+    struct rdp_error : public std::runtime_error
+    {
+        explicit rdp_error(const std::string & what) : std::runtime_error(what){}
+        explicit rdp_error(const char* what) : std::runtime_error(what){}
+    };
 
     namespace Connector
     {
