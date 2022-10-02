@@ -122,7 +122,7 @@ namespace LTSM
 
     XvfbSession* XvfbSessions::registryXvfbSession(int screen, XvfbSession && st)
     {
-        auto res = _xvfb->emplace(screen, std::move<XvfbSession>(st));
+        auto res = _xvfb->emplace(screen, std::move(st));
         return & res.first->second;
     }
 
