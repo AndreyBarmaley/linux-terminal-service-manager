@@ -15,7 +15,7 @@ option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 option(LTSM_CHANNELS "ltsm channels support (dev. only)" OFF)
 #option(LTSM_CHANNEL_RUTOKEN "rutoken support (dev)" OFF)
-#option(LTSM_CHANNEL_CUPS "cups support (dev)" OFF)
+option(LTSM_CUPS_BACKEND "cups support (dev)" OFF)
  
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
@@ -23,11 +23,6 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
     set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
 endif()
-
-#if(NOT LTSM_CHANNELS)
-#    unset(LTSM_CHANNEL_RUTOKEN CACHE)
-#    unset(LTSM_CHANNEL_CUPS CACHE)
-#endif()
 
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
@@ -38,7 +33,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 # LTSM common lib
-project(LTSM_common VERSION  20220923.1)
+project(LTSM_common VERSION  20221004.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -69,14 +64,6 @@ if(LTSM_CHANNELS)
     include_directories(src/channels)
 endif()
 
-#if(LTSM_CHANNEL_RUTOKEN)
-#    add_compile_options(-DLTSM_RUTOKEN)
-#endif()
-#
-#if(LTSM_CHANNEL_CUPS)
-#    add_compile_options(-DLTSM_CUPS)
-#endif()
-
 add_library(LTSM_common STATIC)
 add_subdirectory(src/common)
 
@@ -97,7 +84,7 @@ link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20220923.1)
+project(LTSM_service VERSION 20221004.1)
 
 find_library(PAM_LIBRARIES NAMES pam)
 find_package(sdbus-c++ REQUIRED)
@@ -120,7 +107,7 @@ target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARI
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20220923.1)
+project(LTSM_connector VERSION 20221004.1)
 
 option(LTSM_WITH_RDP "add rdp protocol support" ON)
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
@@ -162,7 +149,7 @@ target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20220923.1)
+project(LTSM_sdl2x11 VERSION 20221004.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
 target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
@@ -172,7 +159,7 @@ target_link_libraries(LTSM_sdl2x11 LTSM_common ${SDL2_LIBRARIES})
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20220923.1)
+project(LTSM_helper VERSION 20221004.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -190,7 +177,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20220923.1)
+project(LTSM_sessions VERSION 20221004.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -209,7 +196,7 @@ set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20220923.1)
+    project(LTSM_x11vnc VERSION 20221004.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
@@ -230,7 +217,7 @@ endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20220923.1)
+    project(LTSM_vnc2image VERSION 20221004.1)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
@@ -254,7 +241,7 @@ endif()
 
 if(LTSM_BUILD_VNC2SDL)
     # LTSM vnc2sdl
-    project(LTSM_vnc2sdl VERSION 20220923.1)
+    project(LTSM_vnc2sdl VERSION 20221004.1)
 
     add_executable(LTSM_vnc2sdl
         src/vnc2sdl/ltsm_vnc2sdl.cpp
@@ -280,3 +267,19 @@ if(LTSM_BUILD_VNC2SDL)
 
     set_target_properties(LTSM_vnc2sdl PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
+
+if(LTSM_CUPS_BACKEND)
+    # LTSM_cups_backend
+    project(LTSM_cups_backend VERSION 20221004.1)
+
+    add_executable(LTSM_cups_backend
+        src/cups_backend/main.cpp)
+
+    find_package(Cups REQUIRED)
+
+    target_include_directories(LTSM_cups_backend PRIVATE src/common ${CUPS_INCLUDE_DIR})
+    target_link_libraries(LTSM_cups_backend LTSM_common z)
+
+    set_target_properties(LTSM_cups_backend PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
