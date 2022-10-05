@@ -76,7 +76,7 @@ namespace LTSM
             ~RDP();
 
             int		                communication(void) override;
-	    bool			createX11Session(void);
+	    bool			createX11Session(uint8_t depth);
 	    void			setEncryptionInfo(const std::string &);
 	    void			setAutoLogin(const std::string &, const std::string &);
 
@@ -90,6 +90,12 @@ namespace LTSM
 	    static BOOL			cbServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
 	    static BOOL			cbServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
 	    static BOOL			cbServerRefreshRequest(freerdp_peer* client);
+
+            static BOOL			cbServerClose(freerdp_peer* client);
+            static void			cbServerDisconnect(freerdp_peer* client);
+            static BOOL			cbServerCapabilities(freerdp_peer* client);
+            static BOOL			cbServerAdjustMonitorsLayout(freerdp_peer* client);
+            static BOOL			cbServerClientCapabilities(freerdp_peer* client);
 	};
     }
 }

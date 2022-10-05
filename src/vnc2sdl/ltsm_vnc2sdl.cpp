@@ -85,8 +85,8 @@ namespace LTSM
         if(auto ptr = findParam(argc, argv, "--password", false))
             password.assign(ptr);
 
-        if(auto ptr = findParam(argc, argv, "--printer", false))
-            printer.assign(ptr);
+        if(auto ptr = findParam(argc, argv, "--printer", true))
+            printer = true;
 
         try
         {
@@ -146,7 +146,7 @@ namespace LTSM
         auto ipaddr = TCPSocket::resolvHostname(host);
         int sockfd = TCPSocket::connect(ipaddr, port);
 
-        if(0 == sockfd)
+        if(0 > sockfd)
             return -1;
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
@@ -174,6 +174,7 @@ namespace LTSM
 
         // sdl event
         SDL::GenericEvent ev(nullptr);
+        clipboardStart = std::chrono::steady_clock::now();
 
         while(rfbMessagesProcessing())
         {
@@ -193,13 +194,28 @@ namespace LTSM
 
 #ifdef LTSM_CHANNELS
             if(! dropFiles.empty() &&
-                std::chrono::steady_clock::now() - dropStart > 1500ms)
+                std::chrono::steady_clock::now() - dropStart > 700ms)
             {
                 ChannelClient::sendSystemTransferFiles(dropFiles);
                 dropFiles.clear();
                 sleep = false;
             }
 #endif
+
+            if(SDL_HasClipboardText() &&
+                std::chrono::steady_clock::now() - clipboardStart > 700ms)
+            {
+                clipboardStart = std::chrono::steady_clock::now();
+                std::unique_ptr<char, void(*)(void*)> tmp{ SDL_GetClipboardText(), SDL_free };
+
+                if(! clipboard || std::strcmp(clipboard.get(), tmp.get()))
+                {
+                    clipboard.reset(tmp.release());
+                    auto len = SDL_strlen(clipboard.get());
+                    sendCutTextEvent(clipboard.get(), len);
+                }
+            }
+
             if(sleep)
                 std::this_thread::sleep_for(1ms);
         }
@@ -264,9 +280,10 @@ namespace LTSM
                 break;
 
             case SDL_KEYDOWN:
-                if(ev.key()->keysym.sym == SDLK_ESCAPE)
+                // ctrl + escape -> fast close
+                if(ev.key()->keysym.sym == SDLK_ESCAPE &&
+                    (KMOD_CTRL & SDL_GetModState()))
                 {
-                    // fast close
                     RFB::ClientDecoder::rfbMessagesShutdown();
                     return true;
                 }
@@ -297,19 +314,6 @@ namespace LTSM
                     std::unique_ptr<char, void(*)(void*)> drop{ ev.drop()->file, SDL_free };
                     dropFiles.emplace_back(drop.get());
                     dropStart = std::chrono::steady_clock::now();
-                }
-                break;
-
-            case SDL_CLIPBOARDUPDATE:
-                if(SDL_HasClipboardText())
-                {
-                    clipboard.reset(SDL_GetClipboardText());
-
-                    if(clipboard)
-                    {
-                        auto len = SDL_strlen(clipboard.get());
-                        sendCutTextEvent(clipboard.get(), len);
-                    }
                 }
                 break;
 
@@ -464,7 +468,7 @@ namespace LTSM
     {
         if(! sendOptions)
         {
-            sendSystemClientVariables(clientOptions(), clientEnvironments(), clientKeyboardLayouts());
+            sendSystemClientVariables(clientOptions(), clientEnvironments(), xkbNames());
             sendOptions = true;
         }
     }
@@ -474,53 +478,51 @@ namespace LTSM
         sendSystemKeyboardChange(xkbNames(), group);
     }
 
-    JsonObject Vnc2SDL::clientEnvironments(void) const
+    json_plain Vnc2SDL::clientEnvironments(void) const
     {
         // locale
         std::initializer_list<std::pair<int, std::string>> lcall = { { LC_CTYPE, "LC_TYPE" }, { LC_NUMERIC, "LC_NUMERIC" }, { LC_TIME, "LC_TIME" },
                                         { LC_COLLATE, "LC_COLLATE" }, { LC_MONETARY, "LC_MONETARY" }, { LC_MESSAGES, "LC_MESSAGES" } };
-        JsonObject jo;
+        JsonObjectStream jo;
 
         for(auto & lc : lcall)
         {
             auto ptr = std::setlocale(lc.first, "");
-            jo.addString(lc.second, ptr ? ptr : "C");
+            jo.push(lc.second, ptr ? ptr : "C");
         }
         // lang
         auto lang = std::getenv("LANG");
-        jo.addString("LANG", lang ? lang : "C");
+        jo.push("LANG", lang ? lang : "C");
 
         // timezone
-        jo.addString("TZ", Tools::getTimeZone());
+        jo.push("TZ", Tools::getTimeZone());
 
-        return jo;
+        return jo.flush();
     }
 
-    JsonObject Vnc2SDL::clientOptions(void) const
+    json_plain Vnc2SDL::clientOptions(void) const
     {
         // other
-        JsonObject jo;
-        jo.addString("hostname", "localhost");
-        jo.addString("ipaddr", "127.0.0.1");
-        jo.addString("username", Tools::getUsername());
-        jo.addString("platform", SDL_GetPlatform());
-        jo.addString("printer", printer);
+        JsonObjectStream jo;
+        jo.push("hostname", "localhost");
+        jo.push("ipaddr", "127.0.0.1");
+        jo.push("username", Tools::getUsername());
+        jo.push("platform", SDL_GetPlatform());
 
-//        jo.addBoolean("redirectaudio", false);
-//        jo.addBoolean("redirectmicrofone", false);
-//        jo.addBoolean("redirectvideo", false);
-//        jo.addBoolean("redirectscanner", false);
+        if(printer)
+            jo.push("printer", "socket://127.0.0.1:9100");
 
-//       jo.addString("programVersion", "XXXXX");
-//       jo.addString("programName", "XXXXX");
+//        jo.push("redirectaudio", false);
+//        jo.push("redirectmicrofone", false);
+//        jo.push("redirectvideo", false);
+//        jo.push("redirectscanner", false);
 
-        return jo;
+//       jo.push("programVersion", "XXXXX");
+//       jo.push("programName", "XXXXX");
+
+        return jo.flush();
     }
 
-    JsonArray Vnc2SDL::clientKeyboardLayouts(void) const
-    {
-        return xkbNames();
-    }
 #endif
 }
 

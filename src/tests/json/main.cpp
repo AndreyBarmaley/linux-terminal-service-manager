@@ -107,6 +107,15 @@ public:
         assert(obj.size() == 5);
 
         std::cout << obj.toString() << std::endl;
+
+        std::string teststr("errtert");
+
+        JsonArray jarr;
+        jarr << "test1" << "test2" << "test3" << "test4" << teststr;
+        std::cout << jarr.toString() << std::endl;
+
+        JsonObjectStream jos;
+        std::cout << "json stream: " << jos.push("key1", "string").push("key11",teststr).push("key2", 456).push("key3", 3.147).push("key4", true).push("key5").flush() << std::endl;
         return 0;
     }
 };

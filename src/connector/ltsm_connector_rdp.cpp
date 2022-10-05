@@ -211,14 +211,14 @@ namespace LTSM
             context->clipboard = config.getBoolean("rdp:clipboard", true);
             const std::string keymapFile = config.getString("rdp:keymap:file");
 
-            if(keymapFile.size())
+            if(! keymapFile.empty())
             {
                 JsonContentFile jc(keymapFile);
 
                 if(jc.isValid() && jc.isObject())
                 {
                     context->keymap = new JsonObject(jc.toObject());
-                    Application::notice("keymap loaded: %s, items: %d", keymapFile.c_str(), context->keymap->size());
+                    Application::info("keymap loaded: %s, items: %d", keymapFile.c_str(), context->keymap->size());
                 }
             }
 
@@ -267,6 +267,12 @@ namespace LTSM
 
             peer->PostConnect = Connector::RDP::cbServerPostConnect;
             peer->Activate = Connector::RDP::cbServerActivate;
+            peer->Close = Connector::RDP::cbServerClose;
+            peer->Disconnect = Connector::RDP::cbServerDisconnect;
+            peer->Capabilities = Connector::RDP::cbServerCapabilities;
+            peer->AdjustMonitorsLayout = Connector::RDP::cbServerAdjustMonitorsLayout;
+            peer->ClientCapabilities = Connector::RDP::cbServerClientCapabilities;
+
             peer->input->KeyboardEvent = Connector::RDP::cbServerKeyboardEvent;
             peer->input->MouseEvent = Connector::RDP::cbServerMouseEvent;
             peer->update->RefreshRect = Connector::RDP::cbServerRefreshRect;
@@ -375,7 +381,7 @@ namespace LTSM
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
         proxyStartEventLoop();
         // create FreeRdpCallback
-        Application::notice("%s: %s", __FUNCTION__, "create freerdp context");
+        Application::info("%s: %s", __FUNCTION__, "create freerdp context");
         freeRdp.reset(new FreeRdpCallback(proxyClientSocket(), _remoteaddr, *_config, this));
         auto freeRdpThread = std::thread([ptr = freeRdp.get()] { FreeRdpCallback::enterEventLoop(ptr); });
         damageRegion.assign(0, 0, 0, 0);
@@ -511,10 +517,9 @@ namespace LTSM
         helperSetSessionLoginPassword(_display, login, pass, false);
     }
 
-    bool Connector::RDP::createX11Session(void)
+    bool Connector::RDP::createX11Session(uint8_t depth)
     {
-        int screen = busStartLoginSession(_remoteaddr, "rdp");
-
+        int screen = busStartLoginSession(depth, _remoteaddr, "rdp");
         if(screen <= 0)
         {
             Application::error("%s", "login session request failure");
@@ -579,13 +584,13 @@ namespace LTSM
                 if(_xcbDisplay->setRandrScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
                 {
                     wsz = _xcbDisplay->size();
-                    Application::notice("change session size [%d,%d], display: %d", wsz.width, wsz.height, _display);
+                    Application::info("change session size [%d,%d], display: %d", wsz.width, wsz.height, _display);
                 }
             }
 
             // full update
             _xcbDisplay->damageAdd(_xcbDisplay->region());
-            Application::notice("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
+            Application::info("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
         }
     }
 
@@ -596,7 +601,7 @@ namespace LTSM
             freeRdp->stopEventLoop();
             setEnableXcbMessages(false);
             loopShutdownFlag = true;
-            Application::notice("dbus signal: shutdown connector, display: %d", display);
+            Application::info("dbus signal: shutdown connector, display: %d", display);
         }
     }
 
@@ -654,6 +659,7 @@ namespace LTSM
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
         renderPrimitivesToFB(frameBuffer);
+
         return 24 == reply->depth() ?
                updateBitmapPlanar(reg, reply) : updateBitmapInterleaved(reg, reply);
     }
@@ -661,7 +667,8 @@ namespace LTSM
     bool Connector::RDP::updateBitmapPlanar(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bytePerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth()) >> 3;
+        const int bitsPerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth());
+        const int bytePerPixel = bitsPerPixel >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
         const size_t tileSize = 64;
         const size_t pixelFormat = freeRdp->peer->settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
@@ -695,7 +702,7 @@ namespace LTSM
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
+        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline:%d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -714,7 +721,7 @@ namespace LTSM
             st.destLeft = subreg.x;
             st.destRight = subreg.x + subreg.width - 1;
             st.width = subreg.width;
-            st.bitsPerPixel = freeRdp->peer->settings->ColorDepth;
+            st.bitsPerPixel = bitsPerPixel;
             st.compressed = TRUE;
             st.height = subreg.height;
             st.destTop = subreg.y;
@@ -770,7 +777,8 @@ namespace LTSM
     bool Connector::RDP::updateBitmapInterleaved(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bytePerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth()) >> 3;
+        const int bitsPerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth());
+        const int bytePerPixel = bitsPerPixel >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
         // size fixed: libfreerdp/codec/interleaved.c
         const size_t tileSize = 64;
@@ -783,7 +791,7 @@ namespace LTSM
 
         size_t pixelFormat = 0;
 
-        switch(reply->depth())
+        switch(bitsPerPixel)
         {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 
@@ -856,7 +864,7 @@ namespace LTSM
             st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
 
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
-                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, freeRdp->peer->settings->ColorDepth))
+                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, bitsPerPixel))
             {
                 Application::error("%s: %s failed", __FUNCTION__, "interleaved_compress");
                 throw rdp_error(NS_FuncName);
@@ -909,22 +917,60 @@ namespace LTSM
     // freerdp callback func
     BOOL Connector::RDP::cbServerAuthenticate(freerdp_peer* peer, const char** user, const char** domain, const char** password)
     {
-        Application::notice("%s: peer:%p", __FUNCTION__, peer);
+        Application::info("%s: peer:%p", __FUNCTION__, peer);
+        return TRUE;
+    }
+
+    BOOL Connector::RDP::cbServerCapabilities(freerdp_peer* peer)
+    {
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+
+        auto context = static_cast<ServerContext*>(peer->context);
+        auto connector = context->rdp;
+
+        if(! connector->createX11Session(24))
+        {
+            Application::error("%s: X11 failed", __FUNCTION__);
+            return FALSE;
+        }
+
+        if(! connector->_xcbDisplay)
+            return FALSE;
+
+        peer->settings->ColorDepth = connector->_xcbDisplay->bitsPerPixel();
+
+        return TRUE;
+    }
+
+    BOOL Connector::RDP::cbServerAdjustMonitorsLayout(freerdp_peer* peer)
+    {
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+        return TRUE;
+    }
+
+    BOOL Connector::RDP::cbServerClientCapabilities(freerdp_peer* peer)
+    {
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+
+        auto context = static_cast<ServerContext*>(peer->context);
+        auto connector = context->rdp;
+
+        //peer->settings->ColorDepth = connector->_xcbDisplay->bitsPerPixel();
+        //peer->settings->ColorDepth = 32;
+
+//        if(peer->settings->ColorDepth == 15 || peer->settings->ColorDepth == 16)
+//            context->lowcolor = true;
+
         return TRUE;
     }
 
     BOOL Connector::RDP::cbServerPostConnect(freerdp_peer* peer)
     {
-        Application::notice("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->rdp;
 
-        if(! connector->createX11Session())
-            return FALSE;
-
-        peer->settings->ColorDepth = connector->_xcbDisplay->bitsPerPixel();
         auto wsz = connector->_xcbDisplay->size();
-
         if(wsz.width != peer->settings->DesktopWidth || wsz.height != peer->settings->DesktopHeight)
         {
             Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, peer->settings->DesktopWidth, peer->settings->DesktopHeight, connector->_display);
@@ -948,9 +994,20 @@ namespace LTSM
         return TRUE;
     }
 
+    BOOL Connector::RDP::cbServerClose(freerdp_peer* peer)
+    {
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+        return TRUE;
+    }
+
+    void Connector::RDP::cbServerDisconnect(freerdp_peer* peer)
+    {
+        Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
+    }
+
     BOOL Connector::RDP::cbServerActivate(freerdp_peer* peer)
     {
-        Application::notice("%s: peer:%p", __FUNCTION__, peer);
+        Application::info("%s: peer:%p", __FUNCTION__, peer);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->rdp;
 

@@ -27,17 +27,18 @@
 #include <any>
 #include <list>
 #include <string>
-#include <string_view>
 #include <vector>
 #include <memory>
+#include <sstream>
 #include <utility>
 #include <typeindex>
 #include <filesystem>
+#include <string_view>
 
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20221001
+#define JSON_WRAPPER 20221002
 
 namespace LTSM
 {
@@ -340,10 +341,13 @@ namespace LTSM
         }
     };
 
-    JsonArray & operator<< (JsonArray &, const int &);
+    JsonArray & operator<< (JsonArray &, const char*);
+    JsonArray & operator<< (JsonArray &, const std::string &);
     JsonArray & operator<< (JsonArray &, const std::string_view &);
-    JsonArray & operator<< (JsonArray &, const double &);
-    JsonArray & operator<< (JsonArray &, const bool &);
+    //
+    JsonArray & operator<< (JsonArray &, int);
+    JsonArray & operator<< (JsonArray &, double);
+    JsonArray & operator<< (JsonArray &, bool);
 
     /* JsonObject */
     class JsonObject : public JsonContainer
@@ -500,6 +504,70 @@ namespace LTSM
     {
     public:
         JsonContentFile(const std::filesystem::path &);
+    };
+
+    /* JsonStream */
+    struct json_plain : std::string
+    {
+        json_plain(std::string && str) noexcept : std::string(str) {}
+    };
+
+    class JsonStream
+    {
+    protected:
+        std::ostringstream os;
+        bool comma = false;
+    
+    public:
+        JsonStream() = default;
+        virtual ~JsonStream() = default;
+    
+        virtual json_plain flush(void) = 0;
+        void    reset(void) { os.str(""); }
+    };
+
+    class JsonObjectStream : public JsonStream
+    {
+    public:
+        JsonObjectStream();
+
+        JsonObjectStream & push(std::string_view, const json_plain &);
+        JsonObjectStream & push(std::string_view, const std::string &);
+        JsonObjectStream & push(std::string_view, const std::string_view &);
+        JsonObjectStream & push(std::string_view, const char*);
+        JsonObjectStream & push(std::string_view, int);
+        JsonObjectStream & push(std::string_view, size_t);
+        JsonObjectStream & push(std::string_view, double);
+        JsonObjectStream & push(std::string_view, bool);
+        JsonObjectStream & push(std::string_view);
+
+        json_plain flush(void) override;
+    };
+
+    class JsonArrayStream : public JsonStream
+    {
+    public:
+        JsonArrayStream();
+
+        template <typename Iterator>
+        JsonArrayStream(Iterator it1, Iterator it2)
+        {
+            os << "[";
+            while(it1 != it2)
+                push(*it1++);
+        }
+
+        JsonArrayStream & push(const json_plain &);
+        JsonArrayStream & push(const std::string &);
+        JsonArrayStream & push(const std::string_view &);
+        JsonArrayStream & push(const char*);
+        JsonArrayStream & push(int);
+        JsonArrayStream & push(size_t);
+        JsonArrayStream & push(double);
+        JsonArrayStream & push(bool);
+        JsonArrayStream & push(void);
+
+        json_plain flush(void) override;
     };
 }
 

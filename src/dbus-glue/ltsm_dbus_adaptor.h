@@ -23,7 +23,7 @@ protected:
         : object_(object)
     {
         object_.registerMethod("busGetServiceVersion").onInterface(INTERFACE_NAME).withOutputParamNames("version").implementedAs([this](){ return this->busGetServiceVersion(); });
-        object_.registerMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withInputParamNames("remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const std::string& remoteAddr, const std::string& connType){ return this->busStartLoginSession(remoteAddr, connType); });
+        object_.registerMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withInputParamNames("depth", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const uint8_t& depth, const std::string& remoteAddr, const std::string& connType){ return this->busStartLoginSession(depth, remoteAddr, connType); });
         object_.registerMethod("busCreateAuthFile").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("path").implementedAs([this](const int32_t& display){ return this->busCreateAuthFile(display); });
         object_.registerMethod("busShutdownConnector").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownConnector(display); });
         object_.registerMethod("busShutdownService").onInterface(INTERFACE_NAME).withOutputParamNames("success").implementedAs([this](){ return this->busShutdownService(); });
@@ -77,8 +77,8 @@ protected:
         object_.registerSignal("createChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode");
         object_.registerSignal("destroyChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, uint8_t>("display", "channel");
         object_.registerSignal("transferAllow").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string>("display", "filepath", "tmpfile", "dstdir");
-        object_.registerSignal("createListenner").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode");
-        object_.registerSignal("destroyListenner").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "client", "server");
+        object_.registerSignal("createListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode");
+        object_.registerSignal("destroyListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "client", "server");
         object_.registerSignal("addRenderRect").onInterface(INTERFACE_NAME).withParameters<int32_t, sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>, bool>("display", "rect", "color", "fill");
         object_.registerSignal("addRenderText").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, sdbus::Struct<int16_t, int16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>>("display", "text", "pos", "color");
         object_.registerSignal("debugLevel").onInterface(INTERFACE_NAME).withParameters<std::string>("level");
@@ -167,14 +167,14 @@ public:
         object_.emitSignal("transferAllow").onInterface(INTERFACE_NAME).withArguments(display, filepath, tmpfile, dstdir);
     }
 
-    void emitCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    void emitCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
     {
-        object_.emitSignal("createListenner").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode);
+        object_.emitSignal("createListener").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode);
     }
 
-    void emitDestroyListenner(const int32_t& display, const std::string& client, const std::string& server)
+    void emitDestroyListener(const int32_t& display, const std::string& client, const std::string& server)
     {
-        object_.emitSignal("destroyListenner").onInterface(INTERFACE_NAME).withArguments(display, client, server);
+        object_.emitSignal("destroyListener").onInterface(INTERFACE_NAME).withArguments(display, client, server);
     }
 
     void emitAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill)
@@ -194,7 +194,7 @@ public:
 
 private:
     virtual int32_t busGetServiceVersion() = 0;
-    virtual int32_t busStartLoginSession(const std::string& remoteAddr, const std::string& connType) = 0;
+    virtual int32_t busStartLoginSession(const uint8_t& depth, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual std::string busCreateAuthFile(const int32_t& display) = 0;
     virtual bool busShutdownConnector(const int32_t& display) = 0;
     virtual bool busShutdownService() = 0;

@@ -38,7 +38,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 # LTSM common lib
-project(LTSM_common VERSION  20221001.1)
+project(LTSM_common VERSION  20220923.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -97,7 +97,7 @@ link_libraries(pthread)
 link_libraries(stdc++fs)
 
 # LTSM service
-project(LTSM_service VERSION 20221001.1)
+project(LTSM_service VERSION 20220923.1)
 
 find_library(PAM_LIBRARIES NAMES pam)
 find_package(sdbus-c++ REQUIRED)
@@ -109,13 +109,18 @@ if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
     target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
 endif()
 
-target_include_directories(LTSM_service PRIVATE src/common src/dbus-glue ${PAM_INCLUDE_PATH})
+if(LTSM_CHANNELS)
+    target_compile_options(LTSM_service PRIVATE -DLTSM_CHANNELS)
+    target_sources(LTSM_service PRIVATE src/channels/channel_system.cpp)
+endif()
+
+target_include_directories(LTSM_service PRIVATE src/common src/librfb src/channels src/dbus-glue ${PAM_INCLUDE_PATH})
 target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARIES})
 
 set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM connector
-project(LTSM_connector VERSION 20221001.1)
+project(LTSM_connector VERSION 20220923.1)
 
 option(LTSM_WITH_RDP "add rdp protocol support" ON)
 option(LTSM_WITH_SPICE "add spice protocol support" OFF)
@@ -157,7 +162,7 @@ target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_
 set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sdl2x11
-project(LTSM_sdl2x11 VERSION 20221001.1)
+project(LTSM_sdl2x11 VERSION 20220923.1)
 add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
 target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
@@ -167,7 +172,7 @@ target_link_libraries(LTSM_sdl2x11 LTSM_common ${SDL2_LIBRARIES})
 set_target_properties(LTSM_sdl2x11 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM helper
-project(LTSM_helper VERSION 20221001.1)
+project(LTSM_helper VERSION 20220923.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -185,7 +190,7 @@ target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions
-project(LTSM_sessions VERSION 20221001.1)
+project(LTSM_sessions VERSION 20220923.1)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -204,7 +209,7 @@ set_target_properties(LTSM_sessions PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20221001.1)
+    project(LTSM_x11vnc VERSION 20220923.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
@@ -225,7 +230,7 @@ endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20221001.1)
+    project(LTSM_vnc2image VERSION 20220923.1)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
@@ -249,7 +254,7 @@ endif()
 
 if(LTSM_BUILD_VNC2SDL)
     # LTSM vnc2sdl
-    project(LTSM_vnc2sdl VERSION 20221001.1)
+    project(LTSM_vnc2sdl VERSION 20220923.1)
 
     add_executable(LTSM_vnc2sdl
         src/vnc2sdl/ltsm_vnc2sdl.cpp

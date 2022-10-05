@@ -79,7 +79,7 @@ namespace LTSM
                 Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
 
                 if(0 < _xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
-                    Application::notice("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
+                    Application::info("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
             }
 
             // full update
@@ -135,7 +135,7 @@ namespace LTSM
     void Connector::VNC::serverHandshakeVersionEvent(void)
     {
         // Xvfb: session request
-        int screen = busStartLoginSession(_remoteaddr, "vnc");
+        int screen = busStartLoginSession(24, _remoteaddr, "vnc");
         if(screen <= 0)
         {
             Application::error("%s: login session request: failure", __FUNCTION__);
@@ -173,14 +173,17 @@ namespace LTSM
         if(_config->hasKey("vnc:keymap:file"))
         {
             auto file = _config->getString("vnc:keymap:file");
-            JsonContentFile jc(file);
-
-            if(jc.isValid() && jc.isObject())
+            if(! file.empty())
             {
-                auto jo = jc.toObject();
-                for(auto & skey : jo.keys())
+                JsonContentFile jc(file);
+
+                if(jc.isValid() && jc.isObject())
                 {
-                    try { keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey)); } catch(const std::exception &) { }
+                    auto jo = jc.toObject();
+                    for(auto & skey : jo.keys())
+                    {
+                        try { keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey)); } catch(const std::exception &) { }
+                    }
                 }
             }
         }
@@ -457,19 +460,19 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
     {
         if(0 < _display && display == _display)
         {
-            createListenner(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
+            createListener(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
         }
     }
 
-    void Connector::VNC::onDestroyListenner(const int32_t& display, const std::string& client, const std::string& server)
+    void Connector::VNC::onDestroyListener(const int32_t& display, const std::string& client, const std::string& server)
     {
         if(0 < _display && display == _display)
         {
-            destroyListenner(client, server);
+            destroyListener(client, server);
         }
     }
 #endif

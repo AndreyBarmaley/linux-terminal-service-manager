@@ -47,7 +47,6 @@ namespace LTSM
         std::string             password;
         std::string             priority;
         std::string             certificate;
-        std::string             printer;
 
         std::list<std::string>  dropFiles;
 
@@ -62,6 +61,8 @@ namespace LTSM
                                 keyPress;
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
+        std::chrono::time_point<std::chrono::steady_clock>
+                                clipboardStart;
 
         int                     port = 5900;
         uint16_t                setWidth = 0;
@@ -69,6 +70,7 @@ namespace LTSM
         bool                    accelerated = false;
         bool                    notls = false;
         bool                    fullscreen = false;
+        bool                    printer = false;
 #ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
 #endif
@@ -83,9 +85,8 @@ namespace LTSM
         int                     startSocket(std::string_view host, int port) const;
         void                    sendMouseState(void);
 
-        JsonObject              clientOptions(void) const;
-        JsonObject              clientEnvironments(void) const;
-        JsonArray               clientKeyboardLayouts(void) const;
+        json_plain             clientOptions(void) const;
+        json_plain             clientEnvironments(void) const;
 
     public:
         Vnc2SDL(int argc, const char** argv);

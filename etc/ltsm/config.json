@@ -19,6 +19,12 @@
     "#vnc:xcb:nodamage": false,
     "vnc:clipboard": true,
 
+    "#transfer:file:tmpname": "/var/tmp/%{display}",
+    "transfer:file:disabled": false,
+    "transfer:file:max": 100000000,
+    "#transfer:group:only": "transfer-allow",
+    "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
+
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
     "rdp:security:tls": true,
@@ -52,8 +58,7 @@
     "session:policy": "authlock",
     "session:path": "/etc/ltsm/xclients",
 
-    "informer:path": "/usr/bin/zenity",
-    "informer:args": "--info --no-wrap --text %{msg}",
+    "zenity:path": "/usr/bin/zenity",
 
     "default:width": 1024,
     "default:height": 768,
@@ -80,5 +85,5 @@
     "#system:disconnect": "",
 
     "#system:logon": "/usr/bin/sessreg -a -l :%{display} %{user}",
-    "#system:logoff": "/usr/bin/sessreg -d -l :%{display} %{user}",
+    "#system:logoff": "/usr/bin/sessreg -d -l :%{display} %{user}"
 }

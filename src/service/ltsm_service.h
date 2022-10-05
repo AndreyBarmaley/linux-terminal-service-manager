@@ -60,8 +60,8 @@ namespace LTSM
         int                             pid2 = 0; // session pid
         int                             width = 0;
         int                             height = 0;
-        int                             uid = 0;
-        int                             gid = 0;
+        uid_t                           uid = 0;
+        gid_t                           gid = 0;
         int                             durationlimit = 0;
         int                             loginFailures = 0;
         bool				shutdown = false;
@@ -122,15 +122,18 @@ namespace LTSM
 
     namespace Manager
     {
-        std::tuple<int, int, std::filesystem::path, std::string>
+        std::tuple<uid_t, gid_t, std::filesystem::path, std::string>
                                         getUserInfo(std::string_view);
-        int                             getGroupGid(std::string_view);
+        uid_t                           getUserUid(std::string_view);
+        gid_t                           getUserGid(std::string_view);
+        std::filesystem::path           getUserHome(std::string_view);
+        gid_t                           getGroupGid(std::string_view);
         std::list<std::string>          getGroupMembers(std::string_view);
         std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
         std::list<std::string>          getSessionDbusAddresses(std::string_view);
         void                            closefds(void);
         bool                            checkFileReadable(const std::filesystem::path &);
-	void			        setFileOwner(const std::filesystem::path & file, int uid, int gid);
+	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
 	bool			        runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
         bool	                        switchToUser(const std::string &);
         std::string                     quotedString(std::string_view);
@@ -161,7 +164,7 @@ namespace LTSM
 	    void			closeSystemSession(int display, XvfbSession &);
             std::filesystem::path	createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
             std::filesystem::path       createSessionConnInfo(const std::filesystem::path & home, const XvfbSession*);
-            pid_t                       runXvfbDisplay(int display, int width, int height, const std::filesystem::path & xauthFile, const std::string & userLogin);
+            pid_t                       runXvfbDisplay(int display, uint8_t depth, uint16_t width, uint16_t height, const std::filesystem::path & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::filesystem::path & sessionBin, const XvfbSession &);
 	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
             bool			waitXvfbStarting(int display, uint32_t waitms) const;
@@ -188,7 +191,7 @@ namespace LTSM
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
             bool                        busShutdownService(void) override;
-            int32_t                     busStartLoginSession(const std::string & remoteAddr, const std::string & connType) override;
+            int32_t                     busStartLoginSession(const uint8_t& depth, const std::string & remoteAddr, const std::string & connType) override;
             int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;
             std::string                 busEncryptionInfo(const int32_t & display) override;
@@ -231,6 +234,7 @@ namespace LTSM
 
 #ifdef LTSM_CHANNELS
             void                        startSessionChannels(int display);
+            bool                        startPrinterListener(int display, const XvfbSession &, const std::string & clientUrl);
 #endif
         };
 

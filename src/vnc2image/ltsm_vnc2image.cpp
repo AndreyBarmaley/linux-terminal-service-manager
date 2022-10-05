@@ -95,7 +95,7 @@ namespace LTSM
         auto ipaddr = TCPSocket::resolvHostname(host);
         int sockfd = TCPSocket::connect(ipaddr, port);
 
-        if(0 == sockfd)
+        if(0 > sockfd)
             return -1;
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);

@@ -47,7 +47,7 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20220925
+#define LTSM_SOCKETS_VERSION 20221002
 
 namespace LTSM
 {

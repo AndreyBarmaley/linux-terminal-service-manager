@@ -38,8 +38,8 @@ protected:
         proxy_.uponSignal("createChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateChannel(display, client, cmode, server, smode); });
         proxy_.uponSignal("destroyChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const uint8_t& channel){ this->onDestroyChannel(display, channel); });
         proxy_.uponSignal("transferAllow").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir){ this->onTransferAllow(display, filepath, tmpfile, dstdir); });
-        proxy_.uponSignal("createListenner").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateListenner(display, client, cmode, server, smode); });
-        proxy_.uponSignal("destroyListenner").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& server){ this->onDestroyListenner(display, client, server); });
+        proxy_.uponSignal("createListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateListener(display, client, cmode, server, smode); });
+        proxy_.uponSignal("destroyListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& server){ this->onDestroyListener(display, client, server); });
         proxy_.uponSignal("addRenderRect").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ this->onAddRenderRect(display, rect, color, fill); });
         proxy_.uponSignal("addRenderText").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ this->onAddRenderText(display, text, pos, color); });
         proxy_.uponSignal("debugLevel").onInterface(INTERFACE_NAME).call([this](const std::string& level){ this->onDebugLevel(level); });
@@ -63,8 +63,8 @@ protected:
     virtual void onCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
     virtual void onDestroyChannel(const int32_t& display, const uint8_t& channel) = 0;
     virtual void onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) = 0;
-    virtual void onCreateListenner(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
-    virtual void onDestroyListenner(const int32_t& display, const std::string& client, const std::string& server) = 0;
+    virtual void onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
+    virtual void onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) = 0;
     virtual void onAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual void onAddRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;
     virtual void onDebugLevel(const std::string& level) = 0;
@@ -77,10 +77,10 @@ public:
         return result;
     }
 
-    int32_t busStartLoginSession(const std::string& remoteAddr, const std::string& connType)
+    int32_t busStartLoginSession(const uint8_t& depth, const std::string& remoteAddr, const std::string& connType)
     {
         int32_t result;
-        proxy_.callMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withArguments(remoteAddr, connType).storeResultsTo(result);
+        proxy_.callMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withArguments(depth, remoteAddr, connType).storeResultsTo(result);
         return result;
     }
 

@@ -161,9 +161,15 @@ namespace LTSM
         return getType() == JsonType::Array;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const int & st)
+    JsonArray & operator<< (JsonArray & jv, int st)
     {
         jv.addInteger(st);
+        return jv;
+    }
+
+    JsonArray & operator<< (JsonArray & jv, const char* st)
+    {
+        jv.addString(st);
         return jv;
     }
 
@@ -173,13 +179,19 @@ namespace LTSM
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const double & st)
+    JsonArray & operator<< (JsonArray & jv, const std::string & st)
+    {
+        jv.addString(st);
+        return jv;
+    }
+
+    JsonArray & operator<< (JsonArray & jv, double st)
     {
         jv.addDouble(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const bool & st)
+    JsonArray & operator<< (JsonArray & jv, bool st)
     {
         jv.addBoolean(st);
         return jv;
@@ -1220,5 +1232,173 @@ namespace LTSM
     JsonContentString::JsonContentString(std::string_view str)
     {
         parseString(str);
+    }
+
+    /* JsonObjectStream */
+    JsonObjectStream::JsonObjectStream()
+    {
+        os << "{";
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, const json_plain & val)
+    {
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string & val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string_view & val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, const char* val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, size_t val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, int val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, double val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key, bool val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << (val ? "true" : "false");
+        comma = true;
+        return *this;
+    }
+
+    JsonObjectStream & JsonObjectStream::push(std::string_view key)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(key) << ":" << "null";
+        comma = true;
+        return *this;
+    }
+
+    json_plain JsonObjectStream::flush(void)
+    {   
+        os << "}";
+        return json_plain(os.str());
+    }
+
+    /* JsonArrayStream */
+    JsonArrayStream::JsonArrayStream()
+    {
+        os << "[";
+    }
+
+    JsonArrayStream & JsonArrayStream::push(const json_plain & val)
+    {   
+        if(comma) os << ",";
+        os << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(const std::string & val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(const std::string_view & val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(const char* val)
+    {   
+        if(comma) os << ",";
+        os << std::quoted(val);
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(int val)
+    {   
+        if(comma) os << ",";
+        os << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(size_t val)
+    {   
+        if(comma) os << ",";
+        os << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(double val)
+    {   
+        if(comma) os << ",";
+        os << val;
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(bool val)
+    {
+        if(comma) os << ",";
+        os << (val ? "true" : "false");
+        comma = true;
+        return *this;
+    }
+
+    JsonArrayStream & JsonArrayStream::push(void)
+    {   
+        if(comma) os << ",";
+        os << "null";
+        comma = true;
+        return *this;
+    }
+
+    json_plain JsonArrayStream::flush(void)
+    {
+        os << "]";
+        return json_plain(os.str());
     }
 }

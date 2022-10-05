@@ -6,6 +6,7 @@
             <arg type="i" name="version" direction="out" />
         </method>
         <method name="busStartLoginSession">
+            <arg type="y" name="depth" direction="in" />
             <arg type="s" name="remoteAddr" direction="in" />
             <arg type="s" name="connType" direction="in" />
             <arg type="i" name="display" direction="out" />
@@ -257,14 +258,14 @@
             <arg type="s" name="tmpfile" />
             <arg type="s" name="dstdir" />
         </signal>
-        <signal name="createListenner">
+        <signal name="createListener">
             <arg type="i" name="display" />
             <arg type="s" name="client" />
             <arg type="s" name="cmode" />
             <arg type="s" name="server" />
             <arg type="s" name="smode" />
         </signal>
-        <signal name="destroyListenner">
+        <signal name="destroyListener">
             <arg type="i" name="display" />
             <arg type="s" name="client" />
             <arg type="s" name="server" />

@@ -394,7 +394,7 @@ namespace LTSM
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
+        Application::info("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
                            __FUNCTION__, pf.bitsPerPixel, displayDepth, big_endian, 
                             pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
         clientFormat = serverFormat();
@@ -583,7 +583,7 @@ namespace LTSM
         recvSkip(1);
         int numEncodings = recvIntBE16();
 
-        Application::notice("%s: encoding counts: %d", __FUNCTION__, numEncodings);
+        Application::info("%s: encoding counts: %d", __FUNCTION__, numEncodings);
         clientEncodings.clear();
         clientEncodings.reserve(numEncodings);
 
@@ -708,7 +708,7 @@ namespace LTSM
         int regw = recvIntBE16();
         int regh = recvIntBE16();
 
-        Application::notice("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
+        Application::info("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
 
         continueUpdatesSupport = true;
         continueUpdatesProcessed = enable;
@@ -724,7 +724,7 @@ namespace LTSM
         int height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::notice("%s: size [%dx%d], screens: %d", __FUNCTION__, width, height, numOfScreens);
+        Application::info("%s: size [%dx%d], screens: %d", __FUNCTION__, width, height, numOfScreens);
 
         // screens array
         std::vector<RFB::ScreenInfo> screens;
@@ -749,7 +749,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendColourMap(int first)
     {
-        Application::notice("%s: first: %d, colour map length: %d", __FUNCTION__, first, colourMap.size());
+        Application::info("%s: first: %d, colour map length: %d", __FUNCTION__, first, colourMap.size());
         std::scoped_lock<std::mutex> guard(sendLock);
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
@@ -769,7 +769,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendBellEvent(void)
     {
-        Application::notice("%s: process", __FUNCTION__);
+        Application::info("%s: process", __FUNCTION__);
         std::scoped_lock<std::mutex> guard(sendLock);
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
@@ -793,7 +793,7 @@ namespace LTSM
     void RFB::ServerEncoder::sendContinuousUpdates(bool enable)
     {
         // RFB: 6.5.5
-        Application::notice("%s: status: %s", __FUNCTION__, (enable ? "enable" : "disable"));
+        Application::info("%s: status: %s", __FUNCTION__, (enable ? "enable" : "disable"));
 
         std::scoped_lock<std::mutex> guard(sendLock);
         sendInt8(RFB::SERVER_CONTINUOUS_UPDATES).sendFlush();
@@ -1014,7 +1014,7 @@ namespace LTSM
     void RFB::ServerEncoder::serverSelectEncodings(void)
     {
         serverSelectClientEncoding();
-        Application::notice("%s: select encoding: %s", __FUNCTION__, RFB::encodingName(prefEncodingsPair.second));
+        Application::info("%s: select encoding: %s", __FUNCTION__, RFB::encodingName(prefEncodingsPair.second));
     }
 
     void RFB::ServerEncoder::sendEncodingRaw(const FrameBuffer & fb)
@@ -1789,7 +1789,7 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
     void RFB::ServerEncoder::sendEncodingLtsmSupported(void)
     {
-        Application::notice("%s: process", __FUNCTION__);
+        Application::info("%s: server supported", __FUNCTION__);
         std::scoped_lock<std::mutex> guard(sendLock);
 
         sendInt8(RFB::SERVER_FB_UPDATE);

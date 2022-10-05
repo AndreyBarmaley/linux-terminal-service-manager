@@ -1,4 +1,4 @@
-------------| LTSM CHANNELS DESCRIPTION |---------------
+----------| LTSM CHANNELS DESCRIPTION 0.1 |-------------
 
 [1.1] Client to Server Messages (RFB 1.7.4)
 
@@ -28,10 +28,12 @@ Next communication continues as defined at: LTSM message format [2.0]
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
  4        | u32      | 0x4C54534D | LTSM encoding
+ 4        | u32      |            | length
+ array    | u8       |            | channel data
 ----------+----------+------------+---------------------
 
 If the client supports LTSM encoding, they the server will send this message to confirm LTSM support.
-
+Channel data not used.
 
 [2.0] LTSM message format
 
@@ -80,15 +82,17 @@ Content is JSON format
  TransferFiles          | client -> server
  KeyboardChange         | client -> server
 
+
+
 ------------------------+-------------------
- TokenAttach            | client -> server
- TokenDetach            | client -> server
- TokenCertificates      | server -> client
- TokenCertificates      | client -> server
- TokenEncrypt           | server -> client
- TokenEncrypted         | client -> server
- TokenDecrypt           | server -> client
- TokenDecrypted         | client -> server
+ RutokenAttach          | client -> server
+ RutokenDetach          | client -> server
+ RutokenCertificates    | server -> client
+ RutokenCertificates    | client -> server
+ RutokenEncrypt         | server -> client
+ RutokenEncrypted       | client -> server
+ RutokenDecrypt         | server -> client
+ RutokenDecrypted       | client -> server
 ------------------------+-------------------
 
 [2.1.1] System message CLIENT OPTIONS
@@ -201,5 +205,6 @@ the client requests the ability to transfer the files.
 { "cmd": "KeyboardChange", "layout": "ru" }
 
 all supported keyboard layouts are transmitted in advance via the environment:keyboard.
+
 
 
