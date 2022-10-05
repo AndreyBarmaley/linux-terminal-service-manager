@@ -68,7 +68,7 @@ This is an experimental graphical client that implements the mechanism of multip
 * Implemented file printing (using an additional backend for cups)
  
 The mechanism of pipes is implemented through the abstract schemes unix://, file://, socket://, and the access mode ReadOnly, WriteOnly, ReadWrite.  
-For example, for a normal file transfer, a typical channel is created (client-server): file:///src_file1 (ReadOnly) file:///dst_file2 (WriteOnly), then in the user session, informational GUIs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  
+For example, for a normal file transfer, a typical channel is created (client-server): file:///src_file1 (ReadOnly) file:///dst_file2 (WriteOnly), then in the user session, informational GUI dialogs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  
 Also, using this mechanism, it is possible to transfer any data stream in both directions, but the initiator of creating a channel is always the server.  
 
 So printing from the server side (in a remote user session) is implemented in this way - on the server, cups adds its own backend to configure the printer, which knows which unix socket to print in the user session, from the client side, the stream can be sent to the socket:// network printer 127.0.0.1:9100, also to local cups or file:///dev/usb/lp0. In this scheme, the system administrator configures the printer only once per server.  
