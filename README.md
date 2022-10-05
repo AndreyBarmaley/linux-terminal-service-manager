@@ -58,10 +58,20 @@ GUI users sessions management utility, and it is a dbus client *ltsm.manager.ser
 see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
 
 # LTSM_vnc2sdl
-An experimental graphical client that implements the mechanism of multiple data channels, up to a maximum of 253.
-schemes are supported - unix://, file://, socket://, in the current version, channels are connected only through dbus commands from the server.
-with this mechanism, it is already possible to transfer any data stream in both directions, but the initiator of the channel creation is always the server.
 
-for example, server-side printing (in a remote user session) is implemented in this way - a custom backend is added to cups on the server to configure the printer, which knows which unix socket to print in the user session, from the client side the stream can be sent to the network printer socket://10.10.10.1:9100, also to the local cups or to file:///dev/usb/lp0
+This is an experimental graphical client that implements the mechanism of multiple data channels, up to a maximum of 253.
 
-I also want to implement a similar scheme of work for the pulseaudio subsystem, for the microphone, and the video stream.
+**Main improvements implemented:**
+* Works utf8 clipboard in both directions (problem for most VNC clients)
+* Automatic keyboard layout, client-side layout always takes precedence (nothing needs to be configured on the server-side)
+* File transfer via drag & drop (client side to remote virtual session)
+* Implemented file printing (using an additional backend for cups)
+ 
+The mechanism of pipes is implemented through the abstract schemes unix://, file://, socket://, and the access mode ReadOnly, WriteOnly, ReadWrite.  
+For example, for a normal file transfer, a typical channel is created (client-server): file:///src_file1 (ReadOnly) file:///dst_file2 (WriteOnly), then in the user session, informational GUIs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  
+Also, using this mechanism, it is possible to transfer any data stream in both directions, but the initiator of creating a channel is always the server.  
+
+So printing from the server side (in a remote user session) is implemented in this way - on the server, cups adds its own backend to configure the printer, which knows which unix socket to print in the user session, from the client side, the stream can be sent to the socket:// network printer 127.0.0.1:9100, also to local cups or file:///dev/usb/lp0. In this scheme, the system administrator configures the printer only once per server.  
+
+You can test all implemented features in the docker version.  
+Work is underway to add a pulseaudio subsystem, a microphone, and then a video stream.  
