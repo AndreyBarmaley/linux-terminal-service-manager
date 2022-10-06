@@ -2265,18 +2265,25 @@ namespace LTSM
                 }
             }
 
-            // check access
             ret = pam_acct_mgmt(xvfbLogin->pamh, 0);
-
-            if(ret == PAM_NEW_AUTHTOK_REQD)
-                ret = pam_chauthtok(xvfbLogin->pamh, PAM_CHANGE_EXPIRED_AUTHTOK);
-
-            if(PAM_SUCCESS != ret)
+            if(ret != PAM_SUCCESS)
             {
                 const char* err = pam_strerror(xvfbLogin->pamh, ret);
                 Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_acct_mgmt", err, ret);
                 emitLoginFailure(display, err);
                 return false;
+            }
+
+            if(ret == PAM_NEW_AUTHTOK_REQD)
+            {
+                ret = pam_chauthtok(xvfbLogin->pamh, PAM_CHANGE_EXPIRED_AUTHTOK);
+                if(PAM_SUCCESS != ret)
+                {
+                    const char* err = pam_strerror(xvfbLogin->pamh, ret);
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_chauthtok", err, ret);
+                    emitLoginFailure(display, err);
+                    return false;
+                }
             }
 
             emitLoginSuccess(display, login);
