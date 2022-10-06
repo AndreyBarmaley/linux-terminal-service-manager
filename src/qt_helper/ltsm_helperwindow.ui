@@ -345,6 +345,20 @@ color: rgb(255, 255, 255);</string>
         </item>
        </widget>
       </item>
+      <item>
+       <widget class="QLabel" name="labelXkb">
+        <property name="font">
+         <font>
+          <pointsize>11</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
      </layout>
     </item>
    </layout>

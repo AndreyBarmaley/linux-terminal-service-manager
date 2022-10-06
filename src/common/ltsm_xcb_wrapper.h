@@ -590,6 +590,7 @@ namespace LTSM
             int32_t xkbdevid = -1;
             xcb_keycode_t               minKeycode = 0;
             xcb_keycode_t               maxKeycode = 0;
+            std::atomic<bool>           error{false};
 
         public:
             XkbClient();
@@ -599,6 +600,7 @@ namespace LTSM
             std::string                 atomName(xcb_atom_t) const;
 
             bool                        xcbEventProcessing(void);
+            bool                        xcbError(void) const;
 
             std::pair<xcb_keycode_t, int>
                                         keysymToKeycodeGroup(xcb_keysym_t) const;

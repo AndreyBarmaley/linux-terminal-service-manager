@@ -34,17 +34,13 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     /* Connector::VNC */
-    Connector::VNC::VNC(sdbus::IConnection* conn, const JsonObject & jo) : SignalProxy(conn, jo, "vnc")
-    {
-        registerProxy();
-    }
-
     Connector::VNC::~VNC()
     {
-        if(0 < _display) busConnectorTerminated(_display);
-
-        unregisterProxy();
-        clientDisconnectedEvent(_display);
+        if(0 < _display)
+        {
+            busConnectorTerminated(_display);
+            clientDisconnectedEvent(_display);
+        }
     }
 
     int Connector::VNC::communication(void)
@@ -85,6 +81,9 @@ namespace LTSM
             // full update
             _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
             Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
+
+            idleTimeoutSec = _config->getInteger("idle:timeout:sec", 0);
+            idleSession = std::chrono::steady_clock::now();
 
 #ifdef LTSM_CHANNELS
             userSession =  true;
@@ -191,8 +190,12 @@ namespace LTSM
 
     void Connector::VNC::serverMainLoopEvent(void)
     {
-        // dbus processing
-        _conn->enterEventLoopAsync();
+        // check idle timeout
+        if(idleTimeoutSec && std::chrono::seconds(idleTimeoutSec) < std::chrono::steady_clock::now() - idleSession)
+        {
+            busIdleTimeoutAction(_display);
+            idleSession = std::chrono::steady_clock::now();
+        }
     }
 
     void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
@@ -212,7 +215,7 @@ namespace LTSM
     {
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [=](){ _conn->enterEventLoopAsync(); return ! this->loginWidgetStarted; }))
+                [=](){ return ! this->loginWidgetStarted; }))
         {
             Application::info("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
             throw vnc_error(NS_FuncName);
@@ -279,6 +282,18 @@ namespace LTSM
     {
         auto it = keymap.find(keysym);
         return it != keymap.end() ? it->second : 0;
+    }
+
+    void Connector::VNC::recvKeyEvent(bool pressed, uint32_t keysym)
+    {
+        X11Server::recvKeyEvent(pressed, keysym);
+        idleSession = std::chrono::steady_clock::now();
+    }
+
+    void Connector::VNC::recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
+    {
+        X11Server::recvPointerEvent(mask, posx, posy);
+        idleSession = std::chrono::steady_clock::now();
     }
 
 #ifdef LTSM_CHANNELS

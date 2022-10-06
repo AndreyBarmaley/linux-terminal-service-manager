@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <syslog.h>
 
+#include <thread>
+
 #include <QFile>
 #include <QScreen>
 #include <QCursor>
@@ -31,13 +33,124 @@
 #include <QDesktopWidget>
 #include <QGuiApplication>
 
+#include "ltsm_global.h"
 #include "ltsm_helperwindow.h"
 #include "ui_ltsm_helperwindow.h"
 
+/// LTSM_HelperSDBus
+LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_service_name, LTSM::dbus_object_path)
+{
+    registerProxy();
+}
+
+LTSM_HelperSDBus::~LTSM_HelperSDBus()
+{
+    unregisterProxy();
+}
+
+void LTSM_HelperSDBus::onLoginFailure(const int32_t & display, const std::string & msg)
+{
+    loginFailureCallback(display, QString::fromStdString(msg));
+}
+
+void LTSM_HelperSDBus::onLoginSuccess(const int32_t & display, const std::string & userName)
+{
+    loginSuccessCallback(display, QString::fromStdString(userName));
+}
+
+void LTSM_HelperSDBus::onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin)
+{
+    setLoginPasswordCallback(display, QString::fromStdString(login), QString::fromStdString(pass), autologin);
+}
+
+void LTSM_HelperSDBus::onHelperWidgetCentered(const int32_t& display)
+{
+    widgetCenteredCallback(display);
+}
+
+void LTSM_HelperSDBus::onHelperWidgetTimezone(const int32_t& display, const std::string& tz)
+{
+    widgetTimezoneCallback(display, QString::fromStdString(tz));
+}
+
+void LTSM_HelperSDBus::onSessionChanged(const int32_t& display)
+{
+    sessionChangedCallback(display);
+}
+
+void LTSM_HelperSDBus::onShutdownConnector(const int32_t & display)
+{
+    shutdownConnectorCallback(display);
+}
+
+///
+void LTSM_HelperSDBus::sendAuthenticateInfo(int displayNum, const QString & user, const QString & pass)
+{
+    std::thread([this, display = displayNum, user = user.toStdString(), pass = pass.toStdString()]()
+    {
+        this->busSetAuthenticateInfo(display, user, pass);
+    }).detach();
+}
+
+void LTSM_HelperSDBus::widgetStartedAction(int displayNum)
+{
+    std::thread([this, display = displayNum]()
+    {
+        this->helperWidgetStartedAction(display);
+    }).detach();
+}
+
+void LTSM_HelperSDBus::idleTimeoutAction(int displayNum)
+{
+    std::thread([this, display = displayNum]()
+    {
+        this->helperIdleTimeoutAction(display);
+    }).detach();
+}
+
+QString LTSM_HelperSDBus::getEncryptionInfo(int displayNum)
+{
+    return QString::fromStdString(busEncryptionInfo(displayNum));
+}
+
+int LTSM_HelperSDBus::getServiceVersion(void)
+{
+    return busGetServiceVersion();
+}
+
+bool LTSM_HelperSDBus::isAutoComplete(int displayNum)
+{
+    return helperIsAutoComplete(displayNum);
+}
+
+int LTSM_HelperSDBus::getIdleTimeoutSec(int displayNum)
+{
+    return helperGetIdleTimeoutSec(displayNum);
+}
+
+QString LTSM_HelperSDBus::getTitle(int displayNum)
+{
+    return QString::fromStdString(helperGetTitle(displayNum));
+}
+
+QString LTSM_HelperSDBus::getDateFormat(int displayNum)
+{
+    return QString::fromStdString(helperGetDateFormat(displayNum));
+}
+
+QStringList LTSM_HelperSDBus::getUsersList(int displayNum)
+{
+    QStringList res;
+    for(auto & user : helperGetUsersList(displayNum))
+        res << QString::fromStdString(user);
+    return res;
+}
+
+/// LTSM_HelperWindow
 LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::LTSM_HelperWindow), displayNum(0), idleTimeoutSec(0), currentIdleSec(0),
-    timerOneSec(0), timerReloadUsers(0), errorPause(0), loginAutoComplete(false), initArguments(false), dateFormat("dddd dd MMMM, hh:mm:ss")
+    timerOneSec(0), timer300ms(0), timerReloadUsers(0), errorPause(0), loginAutoComplete(false), initArguments(false), dateFormat("dddd dd MMMM, hh:mm:ss")
 {
     ui->setupUi(this);
     ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
@@ -53,19 +166,13 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
         displayNum = val.remove(0, 1).toInt();
 
     timerOneSec = startTimer(std::chrono::seconds(1));
-    const char* service = "ltsm.manager.service";
-    const char* path = "/ltsm/manager/service";
-    const char* interface = "LTSM.Manager.Service";
+    timer300ms = startTimer(std::chrono::milliseconds(300));
 
-    dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::systemBus()));
+    auto group = xkbGroup();
+    auto names = xkbNames();
 
-    if(! dbusInterfacePtr->isValid())
-    {
-        syslog(LOG_ERR, "dbus interface not found: [%s, %s, %s]", service, path, interface);
-        dbusInterfacePtr.reset();
-        setLabelError(tr("dbus init failed"));
-        idleTimeoutSec = 5;
-    }
+    if(0 <= group && group < names.size())
+        ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
@@ -80,8 +187,7 @@ void LTSM_HelperWindow::loginClicked(void)
     ui->comboBoxUsername->setDisabled(true);
     ui->lineEditPassword->setDisabled(true);
 
-    if(dbusInterfacePtr)
-        auto res = dbusInterfacePtr->call(QDBus::CallMode::NoBlock, "busCheckAuthenticate", displayNum, ui->comboBoxUsername->currentText(), ui->lineEditPassword->text());
+    sendAuthenticateInfo(displayNum, ui->comboBoxUsername->currentText(), ui->lineEditPassword->text());
 }
 
 void LTSM_HelperWindow::usernameChanged(const QString &)
@@ -94,54 +200,37 @@ void LTSM_HelperWindow::passwordChanged(const QString &)
     ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
 }
 
+void LTSM_HelperWindow::setIdleTimeoutSec(int val)
+{
+    idleTimeoutSec = val;
+}
+
 void LTSM_HelperWindow::showEvent(QShowEvent*)
 {
-    if(dbusInterfacePtr)
-        dbusInterfacePtr->call(QDBus::CallMode::NoBlock, "helperWidgetStartedAction", displayNum);
+    widgetStartedAction(displayNum);
 
     auto screen = QGuiApplication::primaryScreen();
     auto pos = (screen->size() - size()) / 2;
     move(pos.width(), pos.height());
 
-    if(dbusInterfacePtr && ! initArguments)
+    if(! initArguments)
     {
-        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "helperGetIdleTimeoutSec", displayNum);
+        idleTimeoutSec = getIdleTimeoutSec(displayNum);
 
-        if(!res.arguments().isEmpty())
-            idleTimeoutSec = res.arguments().front().toInt();
+        auto title = getTitle(displayNum);
 
-        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "helperGetTitle", displayNum);
-
-        if(!res.arguments().isEmpty())
+        if(! title.isEmpty())
         {
-            auto title = res.arguments().front().toString();
-            res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busGetServiceVersion");
-
-            if(! res.arguments().isEmpty())
-                title.replace("%{version}", QString::number(res.arguments().front().toInt()));
+            auto version = getServiceVersion();
+            title.replace("%{version}", QString::number(version));
 
             ui->labelTitle->setText(title);
         }
 
-        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "helperGetDateFormat", displayNum);
+        dateFormat = getDateFormat(displayNum);
+        loginAutoComplete = isAutoComplete(displayNum);
 
-        if(!res.arguments().isEmpty())
-            dateFormat = res.arguments().front().toString();
-
-        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "helperIsAutoComplete", displayNum);
-
-        if(!res.arguments().isEmpty())
-            loginAutoComplete = res.arguments().front().toBool();
-
-        res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncryptionInfo", displayNum);
-	QString encryption;
-
-        if(!res.arguments().isEmpty())
-            encryption = res.arguments().front().toString();
-
-	if(encryption.isEmpty())
-            encryption = "none";
-
+        auto encryption = getEncryptionInfo(displayNum);
         ui->lineEditEncryption->setText(encryption);
 
         if(loginAutoComplete)
@@ -149,13 +238,6 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
             timerReloadUsers = startTimer(std::chrono::minutes(15));
             reloadUsersList();
         }
-
-        connect(dbusInterfacePtr.data(), SIGNAL(loginFailure(int, const QString &)), this, SLOT(loginFailureCallback(int, const QString &)));
-        connect(dbusInterfacePtr.data(), SIGNAL(loginSuccess(int, const QString &)), this, SLOT(loginSuccessCallback(int, const QString &)));
-        connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetCentered(int)), this, SLOT(widgetCenteredCallback(int)));
-        connect(dbusInterfacePtr.data(), SIGNAL(helperWidgetTimezone(int, const QString &)), this, SLOT(widgetTimezoneCallback(int, const QString &)));
-        connect(dbusInterfacePtr.data(), SIGNAL(helperSetLoginPassword(int, const QString &, const QString &, const bool &)), this, SLOT(setLoginPasswordCallback(int, const QString &, const QString &, const bool &)));
-	connect(dbusInterfacePtr.data(), SIGNAL(sessionChanged(int)), this, SLOT(sessionChangedCallback(int)));
 
         initArguments = true;
     }
@@ -177,13 +259,15 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
 
         if(currentIdleSec > idleTimeoutSec)
         {
-            if(dbusInterfacePtr)
-                dbusInterfacePtr->call(QDBus::CallMode::NoBlock, "helperIdleTimeoutAction", displayNum);
-
+            idleTimeoutAction(displayNum);
             close();
         }
     }
-    else if(ev->timerId() == timerReloadUsers)
+    else
+    if(ev->timerId() == timer300ms)
+        xcbEventProcessing();
+    else
+    if(ev->timerId() == timerReloadUsers)
         reloadUsersList();
 }
 
@@ -221,17 +305,8 @@ void LTSM_HelperWindow::reloadUsersList(void)
 {
     ui->comboBoxUsername->clear();
 
-    if(dbusInterfacePtr)
-    {
-        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "helperGetUsersList", displayNum);
-
-        if(!res.arguments().isEmpty())
-        {
-            auto users = res.arguments().front().toStringList();
-            ui->comboBoxUsername->addItems(users);
-            ui->comboBoxUsername->setEditText("");
-        }
-    }
+    ui->comboBoxUsername->addItems(getUsersList(displayNum));
+    ui->comboBoxUsername->setEditText("");
 }
 
 void LTSM_HelperWindow::widgetTimezoneCallback(int display, const QString & tz)
@@ -276,21 +351,16 @@ void LTSM_HelperWindow::setLabelError(const QString & error)
     errorPause = 2;
 }
 
+void LTSM_HelperWindow::shutdownConnectorCallback(int display)
+{
+    if(display == displayNum)
+        close();
+}
+
 void LTSM_HelperWindow::sessionChangedCallback(int display)
 {
-    if(display == displayNum && dbusInterfacePtr)
-    {
-        auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busEncryptionInfo", displayNum);
-	QString encryption;
-
-        if(!res.arguments().isEmpty())
-            encryption = res.arguments().front().toString();
-
-	if(encryption.isEmpty())
-            encryption = "none";
-
-        ui->lineEditEncryption->setText(encryption);
-    }
+    if(display == displayNum)
+        ui->lineEditEncryption->setText(getEncryptionInfo(displayNum));
 }
 
 void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & username)
@@ -312,4 +382,12 @@ void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & lo
         if(autoLogin)
             loginClicked();
     }
+}
+
+void LTSM_HelperWindow::xkbStateChangeEvent(int group)
+{
+    auto names = xkbNames();
+
+    if(0 <= group && group < names.size())
+        ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 }

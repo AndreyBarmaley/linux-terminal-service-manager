@@ -1008,7 +1008,7 @@ bool LTSM::Channel::Connector::remote2local(void)
         }
         else
         {
-            Application::error("%s: channel: 0x%02x, queue large: %d, fixme: `%s'", __FUNCTION__, id, bufwsz, "add send remote decrease speed cmd");
+            Application::error("%s: channel: 0x%02x, queue large: %d, fixme: `%s'", __FUNCTION__, id, bufwsz, "fixme: remote decrease speed");
         }
     }
 

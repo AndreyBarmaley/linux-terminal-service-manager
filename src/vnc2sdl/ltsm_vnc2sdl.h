@@ -25,6 +25,7 @@
 #define _LTSM_VNC2SDL_
 
 #include <chrono>
+#include <thread>
 #include <string>
 #include <memory>
 #include <atomic>
@@ -35,7 +36,7 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
-#define LTSM_VNC2SDL_VERSION 20220920
+#define LTSM_VNC2SDL_VERSION 20221004
 
 namespace LTSM
 {
@@ -51,7 +52,6 @@ namespace LTSM
         std::list<std::string>  dropFiles;
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<char, void(*)(void*)> clipboard{ nullptr, SDL_free };
         std::unique_ptr<FrameBuffer> fb;
 
         XCB::Region             dirty;
@@ -61,8 +61,6 @@ namespace LTSM
                                 keyPress;
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
-        std::chrono::time_point<std::chrono::steady_clock>
-                                clipboardStart;
 
         int                     port = 5900;
         uint16_t                setWidth = 0;

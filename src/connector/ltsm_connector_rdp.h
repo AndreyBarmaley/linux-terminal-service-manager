@@ -47,9 +47,9 @@ namespace LTSM
         /* Connector::RDP */
         class RDP : public SignalProxy, protected ProxySocket
         {
-            std::atomic<bool>           helperStartedFlag;
-            std::atomic<bool>           loopShutdownFlag;
-            std::atomic<bool>           updatePartFlag;
+            std::atomic<bool>           helperStartedFlag{false};
+            std::atomic<bool>           loopShutdownFlag{false};
+            std::atomic<bool>           updatePartFlag{true};
 	    std::unique_ptr<FreeRdpCallback> freeRdp;
             PixelFormat                 serverFormat;
 	    XCB::Region			damageRegion;
@@ -72,7 +72,7 @@ namespace LTSM
             void                        channelsFree(void);
 
         public:
-            RDP(sdbus::IConnection* conn, const JsonObject & jo);
+            RDP(const JsonObject &);
             ~RDP();
 
             int		                communication(void) override;

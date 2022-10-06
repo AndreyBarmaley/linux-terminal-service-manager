@@ -25,6 +25,10 @@
     "#transfer:group:only": "transfer-allow",
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
 
+    "#idle:timeout:sec": 0,
+    "#idle:action:path": "/usr/bin/xlock",
+    "#idle:action:args": [],
+
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
     "rdp:security:tls": true,

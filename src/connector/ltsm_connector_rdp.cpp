@@ -349,18 +349,17 @@ namespace LTSM
     };
 
     /* Connector::RDP */
-    Connector::RDP::RDP(sdbus::IConnection* conn, const JsonObject & jo)
-        : SignalProxy(conn, jo, "rdp"), helperStartedFlag(false), loopShutdownFlag(false), updatePartFlag(true)
+    Connector::RDP::RDP(const JsonObject & jo) : SignalProxy(jo, "rdp")
     {
-        registerProxy();
     }
 
     Connector::RDP::~RDP()
     {
-        if(0 < _display) busConnectorTerminated(_display);
-
-        unregisterProxy();
-        disconnectedEvent();
+        if(0 < _display)
+        {
+            busConnectorTerminated(_display);
+            disconnectedEvent();
+        }
     }
 
 
@@ -416,8 +415,6 @@ namespace LTSM
                     loopShutdownFlag = true;
             }
 
-            // dbus processing
-            _conn->enterEventLoopAsync();
             // wait
             std::this_thread::sleep_for(1ms);
         }
@@ -548,7 +545,7 @@ namespace LTSM
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [=]() { _conn->enterEventLoopAsync(); return ! this->helperStartedFlag; }))
+                [=]() { return ! this->helperStartedFlag; }))
         {
             Application::error("connector starting: %s", "something went wrong...");
             return false;

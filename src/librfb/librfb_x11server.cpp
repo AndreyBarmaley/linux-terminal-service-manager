@@ -41,9 +41,9 @@ namespace LTSM
         // vnc session not activated trigger
         auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]()
         {
-            if(this->rfbMessagesProcessing())
+            if(this->rfbMessagesRunning())
             {
-                Application::error("session timeout trigger: %s", "rfbMessagesProcessing");
+                Application::error("session timeout trigger: %s", "rfbMessagesRunning");
                 throw rfb_error(NS_FuncName);
             }
         });
@@ -97,7 +97,7 @@ namespace LTSM
         {
             serverMainLoopEvent();
 
-            if(! rfbMessagesProcessing())
+            if(! rfbMessagesRunning())
             {
                 mainLoop = false;
                 continue;

@@ -306,7 +306,7 @@ namespace LTSM
         return continueUpdatesSupport && continueUpdatesProcessed;
     }
 
-    bool RFB::ClientDecoder::rfbMessagesProcessing(void) const
+    bool RFB::ClientDecoder::rfbMessagesRunning(void) const
     {
         return rfbMessages;
     }

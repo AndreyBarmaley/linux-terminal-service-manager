@@ -38,19 +38,7 @@ namespace LTSM
     void printHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--printer <target>]" << std::endl;
-    }
-
-    const char* findParam(int argc, const char** argv, std::string_view param, bool single)
-    {
-        auto beg = & argv[0];
-        auto end = beg + argc;
-
-        auto it = std::find_if(beg, end, [&](auto & ptr){ return param == ptr; });
-        if(it == end)
-            return nullptr;
-
-        return single ? *it : *std::next(it);
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--printer <target>]" << std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -58,85 +46,124 @@ namespace LTSM
     {
         Application::setDebugLevel(DebugLevel::SyslogInfo);
 
-        if(auto ptr = findParam(argc, argv, "--help", true))
+        for(int it = 1; it < argc; ++it)
         {
-            printHelp(argv[0]);
-            throw 0;
-        }
-
-        if(auto ptr = findParam(argc, argv, "--accel", true))
-            accelerated = true;
-
-        if(auto ptr = findParam(argc, argv, "--notls", true))
-            notls = true;
-
-        if(auto ptr = findParam(argc, argv, "--fullscreen", true))
-            fullscreen = true;
-
-        if(auto ptr = findParam(argc, argv, "--debug", true))
-            Application::setDebugLevel(DebugLevel::Console);
-
-        if(auto ptr = findParam(argc, argv, "--host", false))
-            host.assign(ptr);
-
-        if(auto ptr = findParam(argc, argv, "--priority", false))
-            priority.assign(ptr);
-
-        if(auto ptr = findParam(argc, argv, "--password", false))
-            password.assign(ptr);
-
-        if(auto ptr = findParam(argc, argv, "--printer", true))
-            printer = true;
-
-        try
-        {
-            if(auto ptr = findParam(argc, argv, "--port", false))
-                port = std::stoi(ptr);
-        }
-        catch(const std::invalid_argument &)
-        {
-            std::cerr << "incorrect port number" << std::endl;
-            port = 5900;
-        }
-
-        if(auto ptr = findParam(argc, argv, "--geometry", false))
-        {
-            size_t idx;
-
-            try
+            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
             {
-                setWidth = std::stoi(ptr, & idx, 0);
-                setHeight = std::stoi(ptr + idx + 1, nullptr, 0);
-            }
-            catch(const std::invalid_argument &)
-            {
-                std::cerr << "invalid geometry" << std::endl;
-                setWidth = setHeight = 0;
+                printHelp(argv[0]);
+                throw 0;
             }
         }
 
-        if(auto ptr = findParam(argc, argv, "--certificate", false))
+        for(int it = 1; it < argc; ++it)
         {
-            std::filesystem::path file(ptr);
-
-            if(std::filesystem::exists(file))
+            if(0 == std::strcmp(argv[it], "--accel"))
+                accelerated = true;
+            else
+            if(0 == std::strcmp(argv[it], "--notls"))
+                notls = true;
+            else
+            if(0 == std::strcmp(argv[it], "--fullscreen"))
+                fullscreen = true;
+            else
+            if(0 == std::strcmp(argv[it], "--printer"))
+                printer = true;
+            else
+            if(0 == std::strcmp(argv[it], "--debug"))
+                Application::setDebugLevel(DebugLevel::Console);
+            else
+            if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
-                std::ifstream ifs(file, std::ios::binary);
-                if(ifs.is_open())
+                host.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--tls_priority") && it + 1 < argc)
+            {
+                priority.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
+            {
+                password.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
+            {
+                try
                 {
-                    auto fsz = std::filesystem::file_size(file);
-                    certificate.resize(fsz);
-                    ifs.read(certificate.data(), certificate.size());
-                    ifs.close();
+                    port = std::stoi(argv[it + 1]);
+                }
+                catch(const std::invalid_argument &)
+                {
+                    std::cerr << "incorrect port number" << std::endl;
+                    port = 5900;
+                }
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--geometry") && it + 1 < argc)
+            {
+                size_t idx;
+
+                try
+                {
+                    setWidth = std::stoi(argv[it + 1], & idx, 0);
+                    setHeight = std::stoi(argv[it + 1] + idx + 1, nullptr, 0);
+                }
+                catch(const std::invalid_argument &)
+                {
+                    std::cerr << "invalid geometry" << std::endl;
+                    setWidth = setHeight = 0;
+                }
+
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--certificate") && it + 1 < argc)
+            {
+                std::filesystem::path file(argv[it + 1]);
+
+                if(std::filesystem::exists(file))
+                {
+                    std::ifstream ifs(file, std::ios::binary);
+                    if(ifs.is_open())
+                    {
+                        auto fsz = std::filesystem::file_size(file);
+                        certificate.resize(fsz);
+                        ifs.read(certificate.data(), certificate.size());
+                        ifs.close();
+                    }
+                    else
+                    {
+                        std::cerr << "error read certificate" << std::endl;
+                    }
                 }
                 else
                 {
-                    std::cerr << "error read certificate" << std::endl;
+                    std::cerr << "certificate not found" << std::endl;
                 }
+
+                it = it + 1;
             }
             else
             {
-                std::cerr << "certificate not found" << std::endl;
+                std::cerr << "unknown params: " << argv[it] << std::endl;
+            }
+        }
+
+        if(fullscreen)
+        {
+            SDL_DisplayMode mode;
+            if(0 == SDL_GetDisplayMode(0, 0, & mode))
+            {
+                setWidth = mode.w;
+                setHeight = mode.h;
+
+                if(setWidth < setHeight)
+                    std::swap(setWidth, setHeight);
             }
         }
     }
@@ -151,11 +178,12 @@ namespace LTSM
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
 
+        // connected
         if(! rfbHandshake(! notls, priority, password))
             return -1;
 
-        // process rfb messages background
-        auto th = std::thread([=]()
+        // rfb thread: process rfb messages
+        auto thrfb = std::thread([=]()
         {
             try
             {
@@ -172,24 +200,53 @@ namespace LTSM
             this->rfbMessagesShutdown();
         });
 
-        // sdl event
-        SDL::GenericEvent ev(nullptr);
-        clipboardStart = std::chrono::steady_clock::now();
-
-        while(rfbMessagesProcessing())
+        // clipboard thread: check clipboard
+        auto thclip = std::thread([this]()
         {
-            bool sleep = false;
+            std::unique_ptr<char, void(*)(void*)> clip{ SDL_GetClipboardText(), SDL_free };
 
-            if(! xcbEventProcessing())
+            while(this->rfbMessagesRunning())
+            {
+                if(SDL_HasClipboardText())
+                {
+                    std::unique_ptr<char, void(*)(void*)> buf{ SDL_GetClipboardText(), SDL_free };
+                    if(! clip || std::strcmp(clip.get(), buf.get()))
+                    {
+                        auto len = SDL_strlen(buf.get());
+                        this->sendCutTextEvent(buf.get(), len);
+                        clip.reset(buf.release());
+                    }
+                }
+
+                std::this_thread::sleep_for(300ms);
+            }
+        });
+
+        // xcb thread: wait xkb event
+        auto thxcb = std::thread([this]()
+        {
+            while(this->rfbMessagesRunning())
+            {
+                xcbEventProcessing();
+                std::this_thread::sleep_for(300ms);
+            }
+        });
+
+        // main thread: sdl processing
+        SDL_Event ev;
+
+        while(true)
+        {
+            if(! rfbMessagesRunning())
                 break;
 
-            if(1)
-            {
-                const std::scoped_lock<std::mutex> lock(lockRender);
-                ev = window->poolEvent();
+            if(xcbError())
+                break;
 
-                if(! sdlEventProcessing(ev))
-                    sleep = true;
+            if(! SDL_PollEvent(& ev))
+            {
+                std::this_thread::sleep_for(1ms);
+                continue;
             }
 
 #ifdef LTSM_CHANNELS
@@ -198,30 +255,26 @@ namespace LTSM
             {
                 ChannelClient::sendSystemTransferFiles(dropFiles);
                 dropFiles.clear();
-                sleep = false;
             }
 #endif
 
-            if(SDL_HasClipboardText() &&
-                std::chrono::steady_clock::now() - clipboardStart > 700ms)
+            if(! sdlEventProcessing(& ev))
             {
-                clipboardStart = std::chrono::steady_clock::now();
-                std::unique_ptr<char, void(*)(void*)> tmp{ SDL_GetClipboardText(), SDL_free };
-
-                if(! clipboard || std::strcmp(clipboard.get(), tmp.get()))
-                {
-                    clipboard.reset(tmp.release());
-                    auto len = SDL_strlen(clipboard.get());
-                    sendCutTextEvent(clipboard.get(), len);
-                }
-            }
-
-            if(sleep)
                 std::this_thread::sleep_for(1ms);
+                continue;
+            }
         }
 
-        if(th.joinable())
-            th.join();
+        rfbMessagesShutdown();
+
+        if(thrfb.joinable())
+            thrfb.join();
+
+        if(thxcb.joinable())
+            thxcb.join();
+
+        if(thclip.joinable())
+            thclip.join();
 
         return 0;
     }
@@ -236,8 +289,7 @@ namespace LTSM
 
     bool Vnc2SDL::sdlEventProcessing(const SDL::GenericEvent & ev)
     {
-        if(! ev.isValid())
-            return false;
+        const std::scoped_lock<std::mutex> lock(lockRender);
 
         switch(ev.type())
         {
@@ -280,8 +332,8 @@ namespace LTSM
                 break;
 
             case SDL_KEYDOWN:
-                // ctrl + escape -> fast close
-                if(ev.key()->keysym.sym == SDLK_ESCAPE &&
+                // ctrl + F10 -> fast close
+                if(ev.key()->keysym.sym == SDLK_F10 &&
                     (KMOD_CTRL & SDL_GetModState()))
                 {
                     RFB::ClientDecoder::rfbMessagesShutdown();
@@ -366,7 +418,12 @@ namespace LTSM
                 }
 
                 fb.reset(new FrameBuffer(sz, format));
-                window->resize(sz.width, sz.height);
+
+                if(fullscreen)
+                    window.reset(new SDL::Window("VNC2SDL", sz.width, sz.height,
+                                    0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
+                else
+                    window->resize(sz.width, sz.height);
 
                 if(contUpdateResume)
                     sendContinuousUpdates(true, {0, 0, sz.width, sz.height});

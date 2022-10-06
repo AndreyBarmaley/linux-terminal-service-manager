@@ -200,6 +200,7 @@ namespace LTSM
             bool                        busConnectorTerminated(const int32_t & display) override;
             bool                        busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
+            bool                        busIdleTimeoutAction(const int32_t& display) override;
 	    bool			busSetLoginsDisable(const bool & action) override;
             bool                        busSetDebugLevel(const std::string & level) override;
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
@@ -225,7 +226,7 @@ namespace LTSM
             std::string                 helperGetDateFormat(const int32_t & display) override;
             bool                        helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
 
-            bool                        busCheckAuthenticate(const int32_t & display, const std::string & login, const std::string & password) override;
+            bool                        busSetAuthenticateInfo(const int32_t & display, const std::string & login, const std::string & password) override;
             std::vector<xvfb2tuple>     busGetSessions(void) override;
 
             bool                        busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) override;

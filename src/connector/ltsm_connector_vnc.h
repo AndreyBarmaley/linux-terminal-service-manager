@@ -55,6 +55,10 @@ namespace LTSM
             std::list<std::pair<std::string, size_t>> transfer;
             std::mutex          lockTransfer;
 
+            std::chrono::time_point<std::chrono::steady_clock>
+                                idleSession;
+            size_t              idleTimeoutSec = 0;
+
             std::atomic<bool>   loginWidgetStarted{false};
 #ifdef LTSM_CHANNELS
             std::atomic<bool>   userSession{false};
@@ -76,6 +80,9 @@ namespace LTSM
             bool                rfbDesktopResizeEnabled(void) const override;
             RFB::SecurityInfo   rfbSecurityInfo(void) const override;
             int                 rfbUserKeycode(uint32_t) const override;
+
+            void                recvKeyEvent(bool pressed, uint32_t keysym) override;
+            void                recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
             // dbus virtual signals
             void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
@@ -107,7 +114,7 @@ namespace LTSM
 #endif
 
         public:
-            VNC(sdbus::IConnection* conn, const JsonObject & jo);
+            VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}
             ~VNC();
 
             int		        communication(void) override;

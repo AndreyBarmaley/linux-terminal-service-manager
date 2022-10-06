@@ -27,11 +27,6 @@ endif()
 include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
-# detect 64 arch
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(LTSM_BUILD_STD_MAP ON CACHE BOOL "enable usage std::unordered_map" FORCE)
-endif()
-
 # LTSM common lib
 project(LTSM_common VERSION  20221004.1)
 
@@ -165,6 +160,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+find_package(sdbus-c++ REQUIRED)
 find_package(Qt5 COMPONENTS Core Gui DBus Widgets REQUIRED)
 
 add_executable(LTSM_helper
@@ -173,7 +169,8 @@ add_executable(LTSM_helper
     src/qt_helper/ltsm_helperwindow.cpp
     src/qt_helper/ltsm_helper.qrc)
 
-target_link_libraries(LTSM_helper Qt5::Core Qt5::Gui Qt5::DBus Qt5::Widgets)
+target_include_directories(LTSM_helper PRIVATE src/common src/dbus-glue)
+target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets SDBusCpp::sdbus-c++)
 set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # LTSM sessions

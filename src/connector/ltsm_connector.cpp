@@ -120,25 +120,16 @@ namespace LTSM
 
     int Connector::Service::start(void)
     {
-        auto conn = sdbus::createSystemBusConnection();
-
-        if(! conn)
-        {
-            Application::error("%s: %s", "Service::start", "dbus create connection failed");
-            return EXIT_FAILURE;
-        }
-
-        std::unique_ptr<SignalProxy> connector;
         Application::setDebugLevel(_config.getString("connector:debug"));
         auto uid = getuid();
-        Application::info("connector version: %d", LTSM::service_version);
+        Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
         //if(0 < uid)
         {
             auto home = Connector::homeRuntime();
-            Application::debug("uid: %d, gid: %d, working dir: %s", uid, getgid(), home.c_str());
+            Application::debug("%s: uid: %d, gid: %d, working dir: %s", __FUNCTION__, uid, getgid(), home.c_str());
 
             if(0 != chdir(home.c_str()))
-                Application::warning("chdir failed, dir: %s, error: %s", home.c_str(), strerror(errno));
+                Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
 
         // protocol up
@@ -160,21 +151,23 @@ namespace LTSM
 #endif
         }
 
+        std::unique_ptr<SignalProxy> connector;
+
 #ifdef LTSM_WITH_RDP
 
         if(_type == "rdp")
-            connector.reset(new Connector::RDP(conn.get(), _config));
+            connector.reset(new Connector::RDP(_config));
 
 #endif
 #ifdef LTSM_WITH_SPICE
 
         if(_type == "spice")
-            connector.reset(new Connector::SPICE(conn.get(), _config));
+            connector.reset(new Connector::SPICE(_config));
 
 #endif
 
         if(! connector)
-            connector.reset(new Connector::VNC(conn.get(), _config));
+            connector.reset(new Connector::VNC(_config));
 
         int res = 0;
 
@@ -184,13 +177,13 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("connector exception: %s", err.what());
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
         }
         catch(...)
         {
-            Application::error("connector exception: %s", "unknown");
+            Application::error("%s: exception: %s", __FUNCTION__, "unknown");
             res = EXIT_FAILURE;
         }
 
@@ -198,14 +191,21 @@ namespace LTSM
     }
 
     /* Connector::SignalProxy */
-    Connector::SignalProxy::SignalProxy(sdbus::IConnection* conn, const JsonObject & jo, const char* type)
-        : ProxyInterfaces(*conn, LTSM::dbus_service_name, LTSM::dbus_object_path), _conn(conn), _config(& jo), _display(0),
+    Connector::SignalProxy::SignalProxy(const JsonObject & jo, const char* type)
+        : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_service_name, LTSM::dbus_object_path), _config(& jo), _display(0),
           _conntype(type), _xcbDisableMessages(true)
     {
         _remoteaddr.assign("local");
 
         if(auto env = std::getenv("REMOTE_ADDR"))
             _remoteaddr.assign(env);
+
+        registerProxy();
+    }
+
+    Connector::SignalProxy::~SignalProxy()
+    {
+        unregisterProxy();
     }
 
     std::string Connector::SignalProxy::checkFileOption(const std::string & param) const
@@ -214,7 +214,7 @@ namespace LTSM
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName))
         {
-            Application::error("file not found: `%s'", fileName.c_str());
+            Application::error("%s: file not found: `%s'", __FUNCTION__, fileName.c_str());
             fileName.clear();
         }
 
@@ -234,8 +234,7 @@ namespace LTSM
     bool Connector::SignalProxy::xcbConnect(int screen)
     {
         std::string xauthFile = busCreateAuthFile(screen);
-        Application::debug("%s: uid: %d, euid: %d, gid: %d, egid: %d", __FUNCTION__, getuid(), geteuid(), getgid(), getegid());
-        Application::debug("%s: xauthfile request: `%s'", __FUNCTION__, xauthFile.c_str());
+        Application::debug("%s: uid: %d, gid: %d", __FUNCTION__, getuid(), getgid());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::string socketFormat = _config->getString("xvfb:socket");
@@ -244,7 +243,7 @@ namespace LTSM
         int height = _config->getInteger("default:height");
 
         if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
-            Application::error("SignalProxy::xcbConnect: checkUnixSocket failed, `%s'", socketPath.c_str());
+            Application::error("%s: checkUnixSocket failed, `%s'", "xcbConnect", socketPath.c_str());
 
         try
         {
@@ -252,17 +251,19 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("xcb exception: %s", err.what());
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
             return false;
         }
 
-        Application::info("xcb display info, size: [%d,%d], depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
+        auto displaySz = _xcbDisplay->size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
+
+        Application::info("%s: display size: [%d,%d], depth: %d", __FUNCTION__, displaySz.width, displaySz.height, _xcbDisplay->depth());
 
         if(0 != color)
             _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
 
-        if(0 < width && 0 < height && _xcbDisplay->size() != XCB::Size(width, height))
+        if(0 < width && 0 < height && displaySz != XCB::Size(width, height))
             _xcbDisplay->setRandrScreenSize(width, height);
 
         _display = screen;
@@ -273,7 +274,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::info("dbus signal: login success, display: %d, username: %s", display, userName.c_str());
+            Application::info("%s: display: %d, username: %s", __FUNCTION__, display, userName.c_str());
             // disable message loop
             bool extDisable = _xcbDisableMessages;
             _xcbDisableMessages = true;
@@ -283,7 +284,7 @@ namespace LTSM
 
             if(newDisplay < 0)
             {
-                Application::error("%s: %s", __FUNCTION__, "user session request failure");
+                Application::error("%s: %s failed", __FUNCTION__, "user session request");
                 throw std::runtime_error(NS_FuncName);
             }
 
@@ -294,7 +295,7 @@ namespace LTSM
 
                 if(! xcbConnect(newDisplay))
                 {
-                    Application::error("%s: %s", __FUNCTION__, "xcb connect failed");
+                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
                     throw std::runtime_error(NS_FuncName);
                 }
 
@@ -312,7 +313,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::debug("dbus signal: clear render primitives, display: %d", display);
+            Application::debug("%s: display: %d", __FUNCTION__, display);
 
             for(auto & ptr : _renderPrimitives)
             {
@@ -336,7 +337,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::debug("dbus signal: add fill rect, display: %d", display);
+            Application::debug("%s: display: %d", __FUNCTION__, display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             const int16_t rx = std::get<0>(rect);
             const int16_t ry = std::get<1>(rect);
@@ -350,7 +351,7 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            Application::debug("dbus signal: add render text, display: %d", display);
+            Application::debug("%s: display: %d", __FUNCTION__, display);
             const int16_t rx = std::get<0>(pos);
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
@@ -374,7 +375,7 @@ namespace LTSM
 
     void Connector::SignalProxy::onDebugLevel(const std::string & level)
     {
-        Application::info("dbus signal: debug level: %s", level.c_str());
+        Application::info("%s: level: %s", __FUNCTION__, level.c_str());
         Application::setDebugLevel(level);
     }
 
@@ -437,12 +438,10 @@ int main(int argc, const char** argv)
     catch(const sdbus::Error & err)
     {
         LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
-        LTSM::Application::info("program: %s", "terminate...");
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("other exception: %s", err.what());
-        LTSM::Application::info("program: %s", "terminate...");
+        LTSM::Application::error("exception: %s", err.what());
     }
     catch(int val)
     {

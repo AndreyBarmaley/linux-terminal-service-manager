@@ -203,6 +203,13 @@ public:
         return result;
     }
 
+    bool busIdleTimeoutAction(const int32_t& display)
+    {
+        bool result;
+        proxy_.callMethod("busIdleTimeoutAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
     bool busConnectorTerminated(const int32_t& display)
     {
         bool result;
@@ -238,10 +245,10 @@ public:
         return result;
     }
 
-    bool busCheckAuthenticate(const int32_t& display, const std::string& login, const std::string& password)
+    bool busSetAuthenticateInfo(const int32_t& display, const std::string& login, const std::string& password)
     {
         bool result;
-        proxy_.callMethod("busCheckAuthenticate").onInterface(INTERFACE_NAME).withArguments(display, login, password).storeResultsTo(result);
+        proxy_.callMethod("busSetAuthenticateInfo").onInterface(INTERFACE_NAME).withArguments(display, login, password).storeResultsTo(result);
         return result;
     }
 

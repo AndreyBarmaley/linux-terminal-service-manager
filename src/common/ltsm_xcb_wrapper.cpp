@@ -2646,11 +2646,17 @@ namespace LTSM
         return empty;
     }
 
+    bool XCB::XkbClient::xcbError(void) const
+    {
+        return error;
+    }
+
     bool XCB::XkbClient::xcbEventProcessing(void)
     {
         if(int err = xcb_connection_has_error(conn.get()))
         {
             Application::error("%s: xcb error: code: %d", __FUNCTION__, err);
+            error = true;
             return false;
         }
 

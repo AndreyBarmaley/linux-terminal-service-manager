@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     t.load(QLocale(), QLatin1String("ltsm_helper"), QLatin1String("_"), QLatin1String(":/i18n"));
     a.installTranslator(& t);
 
-    LTSM_HelperWindow w;
+    LTSM_HelperSDBus w;
     w.show();
     return a.exec();
 }

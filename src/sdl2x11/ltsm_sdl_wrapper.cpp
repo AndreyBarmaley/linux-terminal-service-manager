@@ -308,18 +308,6 @@ namespace LTSM
     {
         renderReset();
 
-        if(0 != SDL_SetRenderDrawColor(_renderer.get(), 0, 0, 0, 0))
-        {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
-            throw sdl_error(NS_FuncName);
-        }
-
-        if(0 != SDL_RenderClear(_renderer.get()))
-        {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderClear", SDL_GetError());
-            throw sdl_error(NS_FuncName);
-        }
-
         if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr))
         {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());

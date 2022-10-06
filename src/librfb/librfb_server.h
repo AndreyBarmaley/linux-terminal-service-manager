@@ -145,7 +145,7 @@ namespace LTSM
             int                 serverHandshakeVersion(void);
             bool                serverSecurityInit(int protover, const SecurityInfo &);
             void                serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
-            bool                rfbMessagesProcessing(void) const;
+            bool                rfbMessagesRunning(void) const;
             void                rfbMessagesLoop(void);
             void                rfbMessagesShutdown(void);
 

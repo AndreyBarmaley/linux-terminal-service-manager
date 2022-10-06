@@ -122,7 +122,7 @@ namespace LTSM
             ClientDecoder() = default;
 
             bool            rfbHandshake(bool tls, std::string_view tlsPriority, std::string_view password = "");
-            bool            rfbMessagesProcessing(void) const;
+            bool            rfbMessagesRunning(void) const;
             void            rfbMessagesLoop(void);
             void            rfbMessagesShutdown(void);
             bool            isContinueUpdates(void) const;

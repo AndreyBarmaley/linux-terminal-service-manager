@@ -73,7 +73,6 @@ namespace LTSM
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {
         protected:
-            sdbus::IConnection*         _conn;
             const JsonObject*           _config;
             int                         _display;
             std::string		        _conntype;
@@ -94,11 +93,11 @@ namespace LTSM
             void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 	    void			onSessionChanged(const int32_t& display) override {}
 	    void			onDisplayRemoved(const int32_t& display) override {}
-            void                        onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&) override {};
+            void                        onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&) override {}
             void                        onDestroyChannel(const int32_t& display, const uint8_t& channel) override {};
-            void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&) override {};
-            void                        onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {};
-            void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {};
+            void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&) override {}
+            void                        onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
+            void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
 
         protected:
             // dbus virtual signals
@@ -114,8 +113,8 @@ namespace LTSM
             void                        renderPrimitivesToFB(FrameBuffer &) const;
 
         public:
-            SignalProxy(sdbus::IConnection*, const JsonObject &, const char* conntype);
-            virtual ~SignalProxy() {}
+            SignalProxy(const JsonObject &, const char* conntype);
+            virtual ~SignalProxy();
 
     	    virtual int	                communication(void) = 0;
 	    std::string         	checkFileOption(const std::string &) const;

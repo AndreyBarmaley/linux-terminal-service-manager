@@ -94,6 +94,10 @@
             <arg type="q" name="height" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
+        <method name="busIdleTimeoutAction">
+            <arg type="i" name="display" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
         <method name="busConnectorTerminated">
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="result" direction="out" />
@@ -119,7 +123,7 @@
             <arg type="s" name="dstfile" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
-        <method name="busCheckAuthenticate">
+        <method name="busSetAuthenticateInfo">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="login" direction="in" />
             <arg type="s" name="password" direction="in" />

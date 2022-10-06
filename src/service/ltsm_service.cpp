@@ -207,6 +207,8 @@ namespace LTSM
 
     std::tuple<uid_t, gid_t, std::filesystem::path, std::string> Manager::getUserInfo(std::string_view user)
     {
+        Application::debug("%s: user: %s", __FUNCTION__, user.data());
+
         if(user.size())
         {
             struct passwd* st = getpwnam(user.data());
@@ -214,7 +216,7 @@ namespace LTSM
             if(st)
                 return std::make_tuple<int, int, std::filesystem::path, std::string>(st->pw_uid, st->pw_gid, st->pw_dir, st->pw_shell);
 
-            Application::error("%s: %s failed, user: %s, error: %s, code: %d", __FUNCTION__, "getpwnam", user.data(), strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam", strerror(errno), errno);
         }
 
         return std::make_tuple<uid_t, gid_t, std::string, std::string>(0, 0, "/tmp", "/bin/false");
@@ -240,6 +242,8 @@ namespace LTSM
 
     gid_t Manager::getGroupGid(std::string_view group)
     {
+        Application::debug("%s: group: %s", __FUNCTION__, group.data());
+
         if(group.size())
         {
             struct group* group_st = getgrnam(group.data());
@@ -247,7 +251,7 @@ namespace LTSM
             if(group_st)
                 return group_st->gr_gid;
 
-            Application::error("%s: %s failed, group: %s, error: %s, code: %d", __FUNCTION__, "getgrnam", group.data(), strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam", strerror(errno), errno);
         }
 
         return 0;
@@ -282,7 +286,7 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: directory not found, path: %s", __FUNCTION__, dbusPath.c_str());
+            Application::error("%s: path not found: `%s'", __FUNCTION__, dbusPath.c_str());
         }
 
         return dbusAddresses;
@@ -290,12 +294,14 @@ namespace LTSM
 
     std::list<std::string> Manager::getGroupMembers(std::string_view group)
     {
+        Application::debug("%s: group: %s", __FUNCTION__, group.data());
+
         std::list<std::string> res;
         struct group* group_st = getgrnam(group.data());
 
         if(! group_st)
         {
-            Application::error("%s: %s failed, group: %s, error: %s, code: %d", __FUNCTION__, "getgrnam", group.data(), strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam", strerror(errno), errno);
             return res;
         }
 
@@ -337,15 +343,19 @@ namespace LTSM
             close(fd);
     }
 
-    bool Manager::checkFileReadable(const std::filesystem::path & file)
+    bool Manager::checkFileReadable(const std::filesystem::path & path)
     {
-        return 0 == access(file.c_str(), R_OK);
+        Application::debug("%s: path: %s", __FUNCTION__, path.c_str());
+
+        return 0 == access(path.c_str(), R_OK);
     }
 
-    void Manager::setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid)
+    void Manager::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid)
     {
-        if(0 != chown(file.c_str(), uid, gid))
-            Application::error("%s: %s failed, file: %s, uid: %d, gid: %d, error: %s, code: %d", __FUNCTION__, "chown", file.c_str(), uid, gid, strerror(errno), errno);
+        Application::debug("%s: path: %s, uid: %d, gid: %d", __FUNCTION__, "chown", path.c_str(), uid, gid);
+
+        if(0 != chown(path.c_str(), uid, gid))
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chown", strerror(errno), errno);
     }
 
     bool Manager::runSystemScript(int display, const std::string & user, const std::string & cmd)
@@ -355,7 +365,7 @@ namespace LTSM
 
         if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20))))
         {
-            Application::warning("command not found: `%s'", cmd.c_str());
+            Application::warning("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
             return false;
         }
 
@@ -364,7 +374,7 @@ namespace LTSM
         std::thread([str = std::move(str), screen = display]()
         {
             int ret = std::system(str.c_str());
-            Application::debug("system cmd: `%s', return code: %d, display: %d", str.c_str(), ret, screen);
+            Application::debug("%s: run command: `%s', return code: %d, display: %d", __FUNCTION__, str.c_str(), ret, screen);
         }).detach();
         return true;
     }
@@ -401,17 +411,17 @@ namespace LTSM
         }
 
         if(0 != chdir(home.c_str()))
-            Application::error("%s: %s failed, home: `%s', error: %s, code: %d", __FUNCTION__, "chdir", home.c_str(), strerror(errno), errno);
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
 
         if(0 != setgid(gid))
         {
-            Application::error("%s: %s failed, gid: %d, error: %s, code: %d", __FUNCTION__, "setgid", gid, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "setgid", strerror(errno), errno);
             return false;
         }
 
         if(0 != setuid(uid))
         {
-            Application::error("%s: %s failed, uid: %d, error: %s, code: %d", __FUNCTION__, "setuid", uid, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "setuid", strerror(errno), errno);
             return false;
         }
 
@@ -431,13 +441,15 @@ namespace LTSM
     public:
         static int waitPid(pid_t pid)
         {
+            Application::debug("%s: pid: %d", __FUNCTION__, pid);
+
             // waitpid
             int status;
             int ret = waitpid(pid, &status, 0);
         
             if(0 > ret)
             {
-                Application::error("%s: %s failed, pid: %d, error: %s, code: %d", __FUNCTION__, "waitpid", pid, strerror(errno), errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "waitpid", strerror(errno), errno);
             }
             else
             {
@@ -588,7 +600,7 @@ namespace LTSM
 
             if(! std::filesystem::exists(cmd))
             {
-                Application::error("%s: command not found: `%s'", __FUNCTION__, cmd.c_str());
+                Application::error("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
                 throw service_error(NS_FuncName);
             }
 
@@ -598,7 +610,7 @@ namespace LTSM
 
             if(! std::filesystem::is_directory(home))
             {
-                Application::error("%s: home not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
+                Application::error("%s: path not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
                 throw service_error(NS_FuncName);
             }
 
@@ -654,7 +666,7 @@ namespace LTSM
 
             if(! std::filesystem::exists(cmd))
             {
-                Application::error("%s: command not found: `%s'", __FUNCTION__, cmd.c_str());
+                Application::error("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
                 throw service_error(NS_FuncName);
             }
 
@@ -664,7 +676,7 @@ namespace LTSM
 
             if(! std::filesystem::is_directory(home))
             {
-                Application::error("%s: home not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
+                Application::error("%s: path not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
                 throw service_error(NS_FuncName);
             }
 
@@ -687,11 +699,15 @@ namespace LTSM
             // main thread processed
             auto future = std::async(std::launch::async, [pid]
             {
+                Application::debug("%s: pid: %d", "AsyncWaitPid", pid);
+
                 int status;
                 // waitpid
                 int ret = waitpid(pid, & status, 0);
+
                 if(0 > ret && errno != ECHILD)
-                    Application::error("%s: %s failed, pid: %d, error: %s, code: %d", __FUNCTION__, "waitpid", pid, strerror(errno), errno);
+                    Application::error("%s: %s failed, error: %s, code: %d", "AsyncWaitPid", "waitpid", strerror(errno), errno);
+
                 return status;
             });
 
@@ -893,7 +909,7 @@ namespace LTSM
             return false;
 
         xvfb->shutdown = true;
-        Application::notice("display shutdown: %d", display);
+        Application::notice("%s: %s, display: %d", __FUNCTION__, "start", display);
 
         if(emitSignal) emitShutdownConnector(display);
 
@@ -915,14 +931,14 @@ namespace LTSM
             if(sysuser != user)
                 runSystemScript(display, user, _config->getString("system:logoff"));
 
-            Application::debug("display shutdown complete: %d", display);
+            Application::debug("%s: %s, display: %d", "displayShutdown", "complete", display);
         }).detach();
         return true;
     }
 
     void Manager::Object::closeSystemSession(int display, XvfbSession & info)
     {
-        Application::info("close system session, user: %s, display: %d", info.user.c_str(), display);
+        Application::info("%s: user: %s, display: %d", __FUNCTION__, info.user.c_str(), display);
         runSessionScript(display, info.user, _config->getString("session:disconnect"));
 
         // PAM close
@@ -959,13 +975,13 @@ namespace LTSM
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", display);
 
         std::filesystem::path xauthFile(xauthFileTemplate);
-        Application::debug("xauthfile path: %s", xauthFile.c_str());
+        Application::debug("%s: path: %s", __FUNCTION__, xauthFile.c_str());
         // create empty xauthFile
         std::ofstream tmp(xauthFile, std::ofstream::binary | std::ofstream::trunc);
 
         if(! tmp.good())
         {
-            Application::error("can't create file: %s", xauthFile.c_str());
+            Application::error("%s: can't create file: %s", __FUNCTION__, xauthFile.c_str());
             tmp.close();
             return "";
         }
@@ -974,10 +990,10 @@ namespace LTSM
         xauthArgs = Tools::replace(xauthArgs, "%{authfile}", xauthFileTemplate);
         xauthArgs = Tools::replace(xauthArgs, "%{display}", display);
         xauthArgs = Tools::replace(xauthArgs, "%{mcookie}", mcookie);
-        Application::debug("xauth args: %s", xauthArgs.c_str());
+        Application::debug("%s: args: %s", __FUNCTION__, xauthArgs.c_str());
         xauthBin.append(" ").append(xauthArgs);
         int ret = std::system(xauthBin.c_str());
-        Application::debug("system cmd: `%s', return code: %d, display: %d", xauthBin.c_str(), ret, display);
+        Application::debug("%s: run command: `%s', return code: %d, display: %d", __FUNCTION__, xauthBin.c_str(), ret, display);
         // set permissons 0440
         std::filesystem::permissions(xauthFile, std::filesystem::perms::owner_read |
                                      std::filesystem::perms::group_read, std::filesystem::perm_options::replace);
@@ -1069,7 +1085,8 @@ namespace LTSM
         xvfbArgs = Tools::replace(xvfbArgs, "%{width}", width);
         xvfbArgs = Tools::replace(xvfbArgs, "%{height}", height);
         xvfbArgs = Tools::replace(xvfbArgs, "%{authfile}", xauthFile.native());
-        Application::debug("xvfb args: `%s'", xvfbArgs.c_str());
+
+        Application::debug("%s: args: `%s'", __FUNCTION__, xvfbArgs.c_str());
 
         closelog();
         pid_t pid = fork();
@@ -1115,7 +1132,7 @@ namespace LTSM
                 argv.push_back(nullptr);
 
                 if(! checkFileReadable(xauthFile))
-                    Application::error("%s: access failed, file: %s, user: %s, error: %s", __FUNCTION__, xauthFile.c_str(), userXvfb.c_str(), strerror(errno));
+                    Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "access", userXvfb.c_str(), strerror(errno));
 
                 int res = execv(xvfbBin.c_str(), (char* const*) argv.data());
 
@@ -1144,12 +1161,12 @@ namespace LTSM
         }
         else if(0 == pid)
         {
-            Application::info("run user session, pid: %d", getpid());
+            Application::info("%s: pid: %d", __FUNCTION__, getpid());
             auto [uid, gid, home, shell] = Manager::getUserInfo(xvfb.user);
 
             if(uid == 0)
             {
-                Application::error("system error: %s", "root access deny");
+                Application::error("%s: deny for root", __FUNCTION__);
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
                 // child exit
                 std::exit(0);
@@ -1157,7 +1174,7 @@ namespace LTSM
 
             if(! std::filesystem::is_directory(home))
             {
-                Application::error("home not found: `%s', user: %s", home.c_str(), xvfb.user.c_str());
+                Application::error("%s: path not found: `%s', user: %s", __FUNCTION__, home.c_str(), xvfb.user.c_str());
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
                 // child exit
                 std::exit(0);
@@ -1165,7 +1182,7 @@ namespace LTSM
 
             if(0 != initgroups(xvfb.user.c_str(), gid))
             {
-                Application::error("initgroups failed, user: %s, gid: %d, error: %s", xvfb.user.c_str(), gid, strerror(errno));
+                Application::error("%s: %s failed, user: %s, gid: %d, error: %s", __FUNCTION__, "initgroups", xvfb.user.c_str(), gid, strerror(errno));
                 pam_end(xvfb.pamh, PAM_SYSTEM_ERR);
                 // child exit
                 std::exit(0);
@@ -1176,7 +1193,7 @@ namespace LTSM
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_setcred failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
+                Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_setcred", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 pam_end(xvfb.pamh, ret);
                 // child exit
                 std::exit(0);
@@ -1186,7 +1203,7 @@ namespace LTSM
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_open_session failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
+                Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_open_session", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 ret = pam_setcred(xvfb.pamh, PAM_DELETE_CRED);
                 pam_end(xvfb.pamh, ret);
                 // child exit
@@ -1197,7 +1214,7 @@ namespace LTSM
 
             if(ret != PAM_SUCCESS)
             {
-                Application::error("pam_setcred failed, user: %s, error: %s", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
+                Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_setcred", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 ret = pam_close_session(xvfb.pamh, 0);
                 pam_end(xvfb.pamh, ret);
                 // child exit
@@ -1210,7 +1227,7 @@ namespace LTSM
             signal(SIGCHLD, SIG_DFL);
             signal(SIGINT, SIG_IGN);
             signal(SIGHUP, SIG_IGN);
-            Application::debug("child exec, type: %s, uid: %d", "session", getuid());
+            Application::debug("%s: child mode, type: %s, uid: %d", __FUNCTION__, "session", getuid());
 
             // assign groups
             if(switchToUser(xvfb.user))
@@ -1227,7 +1244,7 @@ namespace LTSM
                 int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
 
                 if(res < 0)
-                    Application::error("execl failed: %s", strerror(errno));
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "execl", strerror(errno), errno);
             }
 
             closelog();
@@ -1240,14 +1257,15 @@ namespace LTSM
 
     int32_t Manager::Object::busStartLoginSession(const uint8_t & depth, const std::string & remoteAddr, const std::string & connType)
     {
-        Application::info("login session request, remote: %s", remoteAddr.c_str());
+        Application::info("%s: login request, remote: %s, type: %s", __FUNCTION__, remoteAddr.c_str(), connType.c_str());
+
         std::string userXvfb = _config->getString("user:xvfb");
         std::string groupAuth = _config->getString("group:auth");
         // get free screen
         int screen = getFreeDisplay();
         if(0 >= screen)
         {
-            Application::error("system error: %s", "all displays busy");
+            Application::error("%s: all displays busy", __FUNCTION__);
             return -1;
         }
 
@@ -1258,7 +1276,7 @@ namespace LTSM
         int height = _config->getInteger("default:height");
         // get xauthfile
         std::string mcookie = Tools::runcmd(_config->getString("mcookie:path"));
-        Application::debug("use mcookie: %s", mcookie.c_str());
+        Application::debug("%s: use mcookie: %s", __FUNCTION__, mcookie.c_str());
         auto xauthFile = createXauthFile(screen, mcookie, userXvfb, remoteAddr);
 
         if(xauthFile.empty())
@@ -1278,13 +1296,13 @@ namespace LTSM
         auto pid1 = runXvfbDisplay(screen, depth, width, height, xauthFile, userXvfb);
         if(0 > pid1)
         {
-            Application::error("fork failed, result: %d", pid1);
+            Application::error("%s: %s failed, code: %d", __FUNCTION__, "fork", pid1);
             std::filesystem::remove(xauthFile);
             return -1;
         }
 
         // parent continue
-        Application::debug("xvfb started, pid: %d, display: %d", pid1, screen);
+        Application::debug("%s: xvfb started, pid: %d, display: %d", __FUNCTION__, pid1, screen);
 
         // registered xvfb job
         safeWaitPidBackground(pid1);
@@ -1292,7 +1310,7 @@ namespace LTSM
         // wait Xvfb display starting
         if(! waitXvfbStarting(screen, 5000 /* 5 sec */))
         {
-            Application::error("system error: %s", "xvfb not started");
+            Application::error("%s: %s failed", "busStartLoginSession", "waitXvfbStarting");
             std::filesystem::remove(xauthFile);
             return -1;
         }
@@ -1323,7 +1341,6 @@ namespace LTSM
         {
             helperArgs = Tools::replace(helperArgs, "%{display}", screen);
             helperArgs = Tools::replace(helperArgs, "%{authfile}", xauthFile.native());
-            Application::debug("helper args: %s", helperArgs.c_str());
         }
 
         // runas login helper
@@ -1339,12 +1356,12 @@ namespace LTSM
     {
         std::string userXvfb = _config->getString("user:xvfb");
         std::string sessionBin = _config->getString("session:path");
-        Application::info("user session request, remote: %s, user: %s, display: %d", remoteAddr.c_str(), userName.c_str(), oldScreen);
+        Application::info("%s: session request, user: %s, remote: %s, display: %d", __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
         auto [uid, gid, home, shell] = getUserInfo(userName);
 
         if(! std::filesystem::is_directory(home))
         {
-            Application::error("home not found: `%s', user: %s", home.c_str(), userName.c_str());
+            Application::error("%s: path not found: `%s', user: %s", __FUNCTION__, home.c_str(), userName.c_str());
             return -1;
         }
 
@@ -1361,7 +1378,7 @@ namespace LTSM
             // update conn info
             auto file = createSessionConnInfo(home, userSess);
             setFileOwner(file, uid, gid);
-            Application::debug("user session connected, display: %d", userScreen);
+            Application::debug("%s: user session connected, display: %d", __FUNCTION__, userScreen);
             emitSessionReconnect(remoteAddr, connType);
             emitSessionChanged(userScreen);
 #ifdef LTSM_CHANNELS
@@ -1375,19 +1392,19 @@ namespace LTSM
         XvfbSession* xvfb = getXvfbInfo(oldScreen);
         if(! xvfb)
         {
-            Application::error("display not found: %d", oldScreen);
+            Application::error("%s: display not found: %d", __FUNCTION__, oldScreen);
             return -1;
         }
 
         if(xvfb->mode != XvfbMode::SessionLogin)
         {
-            Application::error("session busy, display: %d, user: %s", oldScreen, xvfb->user.c_str());
+            Application::error("%s: session busy, display: %d, user: %s", __FUNCTION__, oldScreen, xvfb->user.c_str());
             return -1;
         }
 
         if(! xvfb->pamh)
         {
-            Application::error("pam not started, display: %d, user: %s", oldScreen, xvfb->user.c_str());
+            Application::error("%s: pam not started, display: %d, user: %s", __FUNCTION__, oldScreen, xvfb->user.c_str());
             return -1;
         }
 
@@ -1421,7 +1438,7 @@ namespace LTSM
         xvfb->pid2 = runUserSession(oldScreen, sessionBin, *xvfb);
         if(xvfb->pid2 < 0)
         {
-            Application::error("user session failed, result: %d", xvfb->pid2);
+            Application::error("%s: user session failed, result: %d", __FUNCTION__, xvfb->pid2);
             return -1;
         }
 
@@ -1429,11 +1446,10 @@ namespace LTSM
         safeWaitPidBackground(xvfb->pid2);
 
         // parent continue
-        Application::debug("user session child started, pid: %d, display: %d", xvfb->pid2, oldScreen);
+        Application::debug("%s: user session started, pid: %d, display: %d", __FUNCTION__, xvfb->pid2, oldScreen);
         runSystemScript(oldScreen, userName, _config->getString("system:logon"));
         runSystemScript(oldScreen, userName, _config->getString("system:connect"));
 
-        Application::debug("user session registered, display: %d", oldScreen);
         emitSessionChanged(oldScreen);
 #ifdef LTSM_CHANNELS
         startSessionChannels(oldScreen);
@@ -1450,28 +1466,28 @@ namespace LTSM
 
     std::string Manager::Object::busCreateAuthFile(const int32_t & display)
     {
-        Application::info("xauthfile request, screen: :%d\n", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
         auto xvfb = getXvfbInfo(display);
         return xvfb ? xvfb->xauthfile : "";
     }
 
     bool Manager::Object::busShutdownDisplay(const int32_t & display)
     {
-        Application::info("shutdown display: %d", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
         displayShutdown(display, true, nullptr);
         return true;
     }
 
     bool Manager::Object::busShutdownConnector(const int32_t & display)
     {
-        Application::info("shutdown connector, display: %d", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
         emitShutdownConnector(display);
         return true;
     }
 
     bool Manager::Object::busShutdownService(void)
     {
-        Application::info("manager terminated: %s, service pid: %d", "start", getpid());
+        Application::info("%s: %s, pid: %d", __FUNCTION__, "starting", getpid());
 
         // terminate connectors
         for(auto it = _xvfb->begin(); it != _xvfb->end(); ++it)
@@ -1484,13 +1500,12 @@ namespace LTSM
         // wait sessions
         if(int sessions = std::count_if(_xvfb->begin(), _xvfb->end(), [](auto & val){ return ! val.second.shutdown; }))
         {
-            Application::info("wait displays shutdown: %d sessions", sessions);
+            Application::info("%s: wait displays: %d", __FUNCTION__, sessions);
             while(std::any_of(_xvfb->begin(), _xvfb->end(), [](auto & val){ return ! val.second.shutdown; }))
                 std::this_thread::sleep_for(100ms);
         }
 
         _running = false;
-        Application::info("manager terminated: %s, service pid: %d", "complete", getpid());
 
         if(! _childsRunning.empty())
         {
@@ -1506,6 +1521,7 @@ namespace LTSM
                 futureStatus.wait();
         }
 
+        Application::notice("%s: %s, pid: %d", __FUNCTION__, "complete", getpid());
         return true;
     }
 
@@ -1518,7 +1534,7 @@ namespace LTSM
 
     bool Manager::Object::busSendMessage(const int32_t & display, const std::string & message)
     {
-        Application::info("send message, display: %d, message: %s", display, message.c_str());
+        Application::info("%s: display: %d, message: `%s'", __FUNCTION__, display, message.c_str());
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -1548,7 +1564,7 @@ namespace LTSM
             {
                 if(! std::filesystem::create_directory(dir))
                 {
-                    Application::error("mkdir failed, dir: %s", dir.c_str());
+                    Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", dir.c_str(), strerror(errno), errno);
                     return false;
                 }
             }
@@ -1568,8 +1584,38 @@ namespace LTSM
             }
             else
             {
-                Application::error("can't create file: %s", file.c_str());
+                Application::error("%s: can't create file: %s", __FUNCTION__, file.c_str());
             }
+        }
+
+        return false;
+    }
+
+    bool Manager::Object::busIdleTimeoutAction(const int32_t& display)
+    {
+        Application::info("%s: display: %d", __FUNCTION__, display);
+
+        if(auto xvfb = getXvfbInfo(display))
+        {
+/*
+            _config->getString("idle:action:path");
+            _config->getArray("idle:action:args");
+
+            try
+            {
+                std::scoped_lock<std::mutex> guard(_lockRunning);
+                PidStatus pidStatus = RunAs::sessionCommand(xvfb, cmd, std::move(params));
+            }
+            catch(const std::system_error &)
+            {
+                Application::error("%s: failed, check thread limit", __FUNCTION__);
+            }
+            catch(const std::exception & err)
+            {
+                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            }
+*/
+            return true;
         }
 
         return false;
@@ -1594,7 +1640,7 @@ namespace LTSM
 
     bool Manager::Object::busConnectorTerminated(const int32_t & display)
     {
-        Application::info("connector terminated, display: %d", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -1616,14 +1662,14 @@ namespace LTSM
 
     bool Manager::Object::busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay)
     {
-        Application::info("connector switched, old display: %d, new display: %d", oldDisplay, newDisplay);
+        Application::info("%s: old display: %d, new display: %d", __FUNCTION__, oldDisplay, newDisplay);
         displayShutdown(oldDisplay, false, nullptr);
         return true;
     }
 
     bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
     {
-        Application::info("transfer files request, display: %d, count: %d", display, files.size());
+        Application::info("%s: display: %d, count: %d", __FUNCTION__, display, files.size());
 
         auto xvfb = getXvfbInfo(display);
         if(! xvfb)
@@ -1705,18 +1751,19 @@ namespace LTSM
 
             try
             {
-                auto pair = RunAs::sessionCommandStdout(this->getXvfbInfo(display), zenity, { "--file-selection", "--directory", "--title", "Select directory" });
+                auto pair = RunAs::sessionCommandStdout(this->getXvfbInfo(display), zenity,
+                                { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" });
                 zenitySelectDirectoryResult = std::move(pair.second);
             }
             catch(const std::system_error &)
             {
-                Application::error("%s: failed, check thread limit", __FUNCTION__);
+                Application::error("%s: failed, check thread limit", "RunZenity");
                 emitTransferReject(files);
                 return;
             }
             catch(const std::exception & err)
             {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                Application::error("%s: exception: %s", "RunZenity", err.what());
                 emitTransferReject(files);
                 return;
             }
@@ -1741,7 +1788,7 @@ namespace LTSM
 
             if(! std::filesystem::is_directory(dstdir))
             {
-                Application::error("selected directory not found: %s, display: %d", dstdir.c_str(), display);
+                Application::error("%s: path not found: `%s', display: %d", "RunZenity", dstdir.c_str(), display);
                 emitTransferReject(files);
                 return;
             }
@@ -1750,7 +1797,7 @@ namespace LTSM
             for(auto & info : files)
             {
                 auto tmpname = std::filesystem::path(xvfbHome) / std::string("transfer_").append( Tools::randomHexString(8));
-                Application::debug("transfer file request, display: %d, select dir: `%s', tmp name: `%s'", display, dstdir.c_str(), tmpname.c_str());
+                Application::debug("%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity", display, dstdir.c_str(), tmpname.c_str());
 
                 auto filepath = std::get<0>(info);
                 auto filesize = std::get<1>(info);
@@ -1771,7 +1818,7 @@ namespace LTSM
 
                 if(std::filesystem::exists(dstfile))
                 {
-                    Application::error("file present and skipping, display: %d, dst file: `%s'", display, dstfile.c_str());
+                    Application::error("%s: file present and skipping, display: %d, dst file: `%s'", "RunZenity", display, dstfile.c_str());
 
                     busSendNotify(display, "Transfer Skipping", Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
                                             NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
@@ -1788,7 +1835,7 @@ namespace LTSM
 
     bool Manager::Object::busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
     {
-        Application::info("transfer file started, display: %d, tmp file: `%s', dst file: `%s'", display, tmpfile.c_str(), dstfile.c_str());
+        Application::debug("%s: display: %d, tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(), dstfile.c_str());
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -1953,14 +2000,14 @@ namespace LTSM
 
     bool Manager::Object::helperWidgetStartedAction(const int32_t & display)
     {
-        Application::info("helper widget started, display: %d", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
         emitHelperWidgetStarted(display);
         return true;
     }
 
     bool Manager::Object::helperIdleTimeoutAction(const int32_t & display)
     {
-        Application::info("helper idle action compete, display: %d", display);
+        Application::info("%s: display: %d", __FUNCTION__, display);
         displayShutdown(display, true, nullptr);
         return true;
     }
@@ -2044,7 +2091,7 @@ namespace LTSM
         return std::vector<std::string>(allowLogins.begin(), allowLogins.end());
     }
 
-    bool Manager::Object::busCheckAuthenticate(const int32_t & display, const std::string & login, const std::string & password)
+    bool Manager::Object::busSetAuthenticateInfo(const int32_t & display, const std::string & login, const std::string & password)
     {
         std::thread([=]()
         {
@@ -2057,13 +2104,13 @@ namespace LTSM
     {
         if(! appdata_ptr)
         {
-            Application::error("pam_conv: %s", "empty data");
+            Application::error("%s: pam error: %s",__FUNCTION__, "empty data");
             return PAM_CONV_ERR;
         }
 
         if(! msg || ! resp)
         {
-            Application::error("pam_conv: %s", "empty params");
+            Application::error("%s: pam error: %s", __FUNCTION__, "empty params");
             return PAM_CONV_ERR;
         }
 
@@ -2084,11 +2131,11 @@ namespace LTSM
             switch(pm->msg_style)
             {
                 case PAM_ERROR_MSG:
-                    Application::error("pam error: %s", pm->msg);
+                    Application::error("%s: pam error: %s", __FUNCTION__, pm->msg);
                     break;
 
                 case PAM_TEXT_INFO:
-                    Application::info("pam info: %s", pm->msg);
+                    Application::info("%s: pam info: %s", __FUNCTION__, pm->msg);
                     break;
 
                 case PAM_PROMPT_ECHO_ON:
@@ -2116,34 +2163,33 @@ namespace LTSM
 
     bool Manager::Object::pamAuthenticate(const int32_t & display, const std::string & login, const std::string & password)
     {
+        Application::info("%s: display: %d, username: %s", __FUNCTION__, display, login.c_str());
         std::string pamService = _config->getString("pam:service");
 
         auto users = getAllowLogins();
         if(users.empty())
         {
-            Application::error("allow logins list empty, the login is blocked: %s, display: %d", login.c_str(), display);
+            Application::error("%s: username not found: %s, display: %d", __FUNCTION__, login.c_str(), display);
             emitLoginFailure(display, "login disabled");
             return false;
         }
 
         if(std::none_of(users.begin(), users.end(), [&](auto & val){ return val == login; }))
         {
-            Application::error("allow logins failed, username not found: %s, display: %d", login.c_str(), display);
+            Application::error("%s: username not found: %s, display: %d", __FUNCTION__, login.c_str(), display);
             emitLoginFailure(display, "login not found");
             return false;
         }
 
         if(_loginsDisable)
         {
-            Application::info("logins are disabled by the administrator, username: %s, display: %d", login.c_str(), display);
-            emitLoginFailure(display, "logins are disabled by the administrator");
+            Application::info("%s: logins disabled, username: %s, display: %d", __FUNCTION__, login.c_str(), display);
+            emitLoginFailure(display, "logins disabled by the administrator");
             return false;
         }
 
         if(auto xvfbLogin = getXvfbInfo(display))
         {
-            Application::info("pam authenticate, display: %d, username: %s", display, login.c_str());
-
             int loginFailuresConf = _config->getInteger("login:failures_count", 0);
             if(0 > loginFailuresConf) loginFailuresConf = 0;
 
@@ -2161,7 +2207,7 @@ namespace LTSM
 
             if(PAM_SUCCESS != ret || ! xvfbLogin->pamh)
             {
-                Application::error("pam_start failed, error: %d", ret);
+                Application::error("%s: %s failed, code: %d", __FUNCTION__,  "pam_start", ret);
                 emitLoginFailure(display, "pam error");
                 return false;
             }
@@ -2172,13 +2218,13 @@ namespace LTSM
             if(PAM_SUCCESS != ret)
             {
                 const char* err = pam_strerror(xvfbLogin->pamh, ret);
-                Application::error("pam_authenticate failed, error: %s", err);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_authenticate", err, ret);
                 emitLoginFailure(display, err);
                 xvfbLogin->loginFailures += 1;
 
                 if(loginFailuresConf < xvfbLogin->loginFailures)
                 {
-                    Application::error("login failures limit, shutdown display: %d", display);
+                    Application::error("%s: login failures limit, display: %d", __FUNCTION__, display);
                     emitLoginFailure(display, "failures limit");
                     displayShutdown(display, true, xvfbLogin);
                 }
@@ -2201,7 +2247,7 @@ namespace LTSM
                 {
                     if(userSess->policy == SessionPolicy::AuthLock)
                     {
-                        Application::error("policy authlock, session busy, user: %s, session: %d, from: %s, display: %d", login.c_str(), userScreen, userSess->remoteaddr.c_str(), display);
+                        Application::error("%s: session busy, policy: %s, user: %s, session display: %d, from: %s, display: %d", __FUNCTION__, "authlock", login.c_str(), userScreen, userSess->remoteaddr.c_str(), display);
                         // informer login display
                         emitLoginFailure(display, std::string("session busy, from: ").append(userSess->remoteaddr));
                         return false;
@@ -2228,7 +2274,7 @@ namespace LTSM
             if(PAM_SUCCESS != ret)
             {
                 const char* err = pam_strerror(xvfbLogin->pamh, ret);
-                Application::error("pam_acct_mgmt error: %s", err);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_acct_mgmt", err, ret);
                 emitLoginFailure(display, err);
                 return false;
             }
@@ -2273,7 +2319,7 @@ namespace LTSM
 
             for(auto & [key, val] : map)
             {
-                Application::info("recv environment: %s = `%s'", key.c_str(), val.c_str());
+                Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), val.c_str());
                 xvfb->environments.emplace(key, val);
 
                 if(key == "TZ")
@@ -2349,7 +2395,7 @@ namespace LTSM
 
     bool Manager::Object::busSetDebugLevel(const std::string & level)
     {
-        Application::info("set debug level: %s", level.c_str());
+        Application::info("%s: level: %s", __FUNCTION__, level.c_str());
         Application::setDebugLevel(level);
         return true;
     }
@@ -2377,7 +2423,7 @@ namespace LTSM
 
     bool Manager::Object::busSetEncryptionInfo(const int32_t & display, const std::string & info)
     {
-        Application::info("set encryption: %s, display: %d", info.c_str(), display);
+        Application::info("%s encryption: %s, display: %d", __FUNCTION__, info.c_str(), display);
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -2391,7 +2437,7 @@ namespace LTSM
 
     bool Manager::Object::busSetSessionDurationSec(const int32_t & display, const uint32_t & duration)
     {
-        Application::info("set session duration: %d, display: %d", duration, display);
+        Application::info("%s: duration: %d, display: %d", __FUNCTION__, duration, display);
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -2406,7 +2452,7 @@ namespace LTSM
 
     bool Manager::Object::busSetSessionPolicy(const int32_t & display, const std::string & policy)
     {
-        Application::info("set session policy: %s, display: %d", policy.c_str(), display);
+        Application::info("%s: policy: %s, display: %d", __FUNCTION__, policy.c_str(), display);
 
         if(auto xvfb = getXvfbInfo(display))
         {
@@ -2417,7 +2463,7 @@ namespace LTSM
             else if(Tools::lower(policy) == "authshare")
                 xvfb->policy = SessionPolicy::AuthShare;
             else
-                Application::error("unknown policy: %s, display: %d", policy.c_str(), display);
+                Application::error("%s: unknown policy: %s, display: %d", __FUNCTION__, policy.c_str(), display);
 
             emitSessionChanged(display);
             return true;
@@ -2428,7 +2474,7 @@ namespace LTSM
 
     bool Manager::Object::helperSetSessionLoginPassword(const int32_t & display, const std::string & login, const std::string & password, const bool & action)
     {
-        Application::info("set session login: %s, display: %d", login.c_str(), display);
+        Application::info("%s: login: %s, display: %d", __FUNCTION__, login.c_str(), display);
         emitHelperSetLoginPassword(display, login, password, action);
         return true;
     }
@@ -2509,11 +2555,10 @@ namespace LTSM
             if(5 < key.size() && 0 == key.substr(key.size() - 5).compare(":path") && 0 != std::isalpha(key.front()) /* skip comment */)
             {
                 auto value = _config.getString(key);
-                Application::debug("checking executable: %s", value.c_str());
 
                 if(! std::filesystem::exists(value))
                 {
-                    Application::error("application not found: `%s'", value.c_str());
+                    Application::error("%s: path not found: `%s'", "CheckProgram", value.c_str());
                     throw 1;
                 }
             }
@@ -2537,7 +2582,7 @@ namespace LTSM
             {
                 if(! std::filesystem::create_directory(folderPath))
                 {
-                    Application::error("mkdir failed, dir: %s", folderPath.c_str());
+                    Application::error("%s: %s failed, path: `%s', error: %s, code: %d", __FUNCTION__, "mkdir", folderPath.c_str(), strerror(errno), errno);
                     return false;
                 }
             }
@@ -2560,18 +2605,18 @@ namespace LTSM
         int fd = inotify_init();
         if(0 > fd)
         {
-            Application::error("inotify init failed, error: %s", strerror(errno));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "inotify_nit", strerror(errno), errno);
             return false;
         }
 
         int wd = inotify_add_watch(fd, filename.c_str(), IN_CLOSE_WRITE);
         if(0 > wd)
         {
-            Application::error("inotify add watch failed, error: %s", strerror(errno));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "inotify_add_watch", strerror(errno), errno);
             return false;
         }
 
-        Application::info("watch inotify started, config file: %s", filename.c_str());
+        Application::info("%s: path: `%s'", __FUNCTION__, filename.c_str());
 
         if(0 > fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK))
         {
@@ -2593,14 +2638,14 @@ namespace LTSM
 
                 if(! jsonFile.isValid() || ! jsonFile.isObject())
                 {
-                    Application::error("reload config %s, file: %s", "failed", filename.c_str());
+                    Application::error("%s: reload config %s, file: %s", "InotifyWatch", "failed", filename.c_str());
                 }
                 else
                 {
                     auto jo = jsonFile.toObject();
                     const_cast<JsonObject*>(jconfig)->swap(jo);
 
-                    Application::info("reload config %s, file: %s", "success", filename.c_str());
+                    Application::info("%s: reload config %s, file: %s", "InotifyWatch", "success", filename.c_str());
                     Application::setDebugLevel(jconfig->getString("service:debug"));
                 }
             }
@@ -2623,7 +2668,7 @@ namespace LTSM
         auto conn = sdbus::createSystemBusConnection(LTSM::dbus_service_name);
         if(! conn)
         {
-            Application::error("%s", "dbus create connection failed");
+            Application::error("%s: dbus connection failed", "ServiceStart");
             return EXIT_FAILURE;
         }
 
@@ -2631,7 +2676,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(xvfbHome))
         {
-            Application::error("for 'user:xvfb' home not found: `%s'", xvfbHome.c_str());
+            Application::error("%s: path not found: `%s'", "ServiceStart", xvfbHome.c_str());
             return EXIT_FAILURE;
         }
 
@@ -2651,7 +2696,7 @@ namespace LTSM
 
         isRunning = true;
         Application::setDebugLevel(_config.getString("service:debug"));
-        Application::info("manager version: %d", LTSM::service_version);
+        Application::info("%s: runtime version: %d", "ServiceStart", LTSM::service_version);
 
         while(isRunning && objAdaptor->isRunning())
         {
@@ -2694,12 +2739,10 @@ int main(int argc, const char** argv)
     catch(const sdbus::Error & err)
     {
         LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
-        LTSM::Application::info("%s", "terminate...");
     }
     catch(const std::exception & err)
     {
         LTSM::Application::error("local exception: %s", err.what());
-        LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)
     {

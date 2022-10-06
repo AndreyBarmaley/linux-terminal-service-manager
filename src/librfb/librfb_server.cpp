@@ -448,7 +448,7 @@ namespace LTSM
         }).detach();
     }
 
-    bool RFB::ServerEncoder::rfbMessagesProcessing(void) const
+    bool RFB::ServerEncoder::rfbMessagesRunning(void) const
     {
         return rfbMessages;
     }
@@ -695,7 +695,11 @@ namespace LTSM
         size_t length = recvIntBE32();
         Application::debug("%s: text length: %d", __FUNCTION__, length);
 
-        auto buffer = recvData(length);
+        // limiting untrusted sources 64k
+        size_t recv = std::min(length, size_t(65535));
+        auto buffer = recvData(recv);
+        recvSkip(length - recv);
+
         recvCutTextEvent(buffer);
     }
 
@@ -822,7 +826,7 @@ namespace LTSM
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const
     {
-        return tls ? tls->sessionDescription() : nullptr;
+        return tls ? tls->sessionDescription() : "none";
     }
 
     int RFB::ServerEncoder::sendPixel(uint32_t pixel)

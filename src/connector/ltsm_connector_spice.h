@@ -44,16 +44,10 @@ namespace LTSM
             void                        onSendBellSignal(const int32_t & display) override {}
 
         public:
-            SPICE(sdbus::IConnection* conn, const JsonObject & jo)
-                : SignalProxy(conn, jo, "spice"), loopMessage(false)
-            {
-                registerProxy();
-            }
+            SPICE(const JsonObject & jo)
+                : SignalProxy(jo, "spice"), loopMessage(false) {}
 
-            ~SPICE()
-            {
-                unregisterProxy();
-            }
+            ~SPICE() = default;
 
             int		                communication(void) override;
         };
