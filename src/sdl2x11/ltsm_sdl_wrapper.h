@@ -81,6 +81,7 @@ namespace LTSM
             const SDL_MouseWheelEvent*  wheel(void) const { return ptr ? & ptr->wheel : nullptr; }
             const SDL_WindowEvent*      window(void) const { return ptr ? & ptr->window : nullptr; }
             const SDL_DropEvent*        drop(void) const { return ptr ? & ptr->drop : nullptr; }
+            const SDL_UserEvent*        user(void) const { return ptr ? & ptr->user : nullptr; }
         };
 
         class Window

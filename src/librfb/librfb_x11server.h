@@ -83,7 +83,7 @@ namespace LTSM
             void                recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
             void                recvCutTextEvent(const std::vector<uint8_t> &) override;
             void                recvFramebufferUpdateEvent(bool full, const XCB::Region &) override;
-            void                sendFrameBufferUpdateEnd(const XCB::Region &) override;
+            void                sendFrameBufferUpdateEvent(const XCB::Region &) override;
             void                recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> &) override;
         };
     }

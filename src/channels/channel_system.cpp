@@ -413,13 +413,18 @@ void LTSM::ChannelClient::systemChannelClose(const JsonObject & jo)
     destroyChannel(channel);
 }
 
-void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, const json_plain & env, const std::vector<std::string> & layouts)
+void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, const json_plain & env, const std::vector<std::string> & layouts, const std::string & group)
 {
     JsonObjectStream jo;
     jo.push("cmd", SystemCommand::ClientVariables);
     jo.push("options", vars);
     jo.push("environments", env);
-    jo.push("keyboard", JsonArrayStream(layouts.begin(), layouts.end()).flush());
+
+    JsonObjectStream jo2;
+    jo2.push("layouts", JsonArrayStream(layouts.begin(), layouts.end()).flush());
+    jo2.push("current", group);
+
+    jo.push("keyboard", jo2.flush());
 
     sendLtsmEvent(Channel::System, jo.flush());
 }

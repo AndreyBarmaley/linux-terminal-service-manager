@@ -1183,7 +1183,7 @@ namespace LTSM
 
             if(ret < Z_OK)
             {
-                Application::error("%s: %s failed, error code: %s", __FUNCTION__, "deflateInit2", ret);
+                Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflateInit2", ret);
                 throw zlib_error(NS_FuncName);
             }
         }
@@ -1211,7 +1211,7 @@ namespace LTSM
 
             if(ret < Z_OK)
             {
-                Application::error("%s: %s failed, error code: %s", __FUNCTION__, "deflate", ret);
+                Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflate", ret);
                 throw zlib_error(NS_FuncName);
             }
 

@@ -28,6 +28,7 @@
 #include <ctime>
 #include <cstdio>
 #include <memory>
+#include <random>
 #include <cstring>
 #include <clocale>
 #include <cstdlib>
@@ -36,6 +37,7 @@
 #include <fstream>
 #include <numeric>
 #include <iterator>
+#include <algorithm>
 #include <stdexcept>
 #include <filesystem>
 
@@ -44,16 +46,28 @@
 
 namespace LTSM
 {
+    std::vector<uint8_t> Tools::randomBytes(size_t bytesCount)
+    {
+        std::vector<uint8_t> rand(256);
+        std::iota(rand.begin(), rand.end(), 0);
+
+        std::vector<uint8_t> res;
+        res.reserve(bytesCount);
+
+        while(bytesCount)
+        {
+            std::shuffle(rand.begin(), rand.end(), std::mt19937{std::random_device{}()});
+            auto size = std::min(bytesCount, rand.size());
+            res.insert(res.end(), rand.begin(), std::next(rand.begin(), size));
+            bytesCount -= size;
+        }
+
+        return res;
+    }
+
     std::string Tools::randomHexString(size_t len)
     {
-        const char* random = "/dev/urandom";
-        std::ifstream ifs(random, std::ifstream::in | std::ifstream::binary);
-        std::vector<uint8_t> buf(len);
-
-        if(! ifs.is_open())
-            std::runtime_error("urandom not found");
-
-        ifs.read(reinterpret_cast<char*>(buf.data()), buf.size());
+        auto buf = randomBytes( len );
         return buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, "", false);
     }
 

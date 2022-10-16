@@ -41,7 +41,7 @@ namespace LTSM
 
     public:
         SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
-            : XCB::RootDisplayExt(std::string(":").append(std::to_string(display))), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h)
+            : XCB::RootDisplayExt(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h)
         {
         }
 
@@ -144,6 +144,7 @@ namespace LTSM
         int start(void)
         {
             const size_t bytePerPixel = bitsPerPixel() >> 3;
+
             bool quit = false;
             XCB::Region damage;
 
@@ -191,7 +192,12 @@ namespace LTSM
                                                      reply->size() / damage.height - damage.width * bytePerPixel : 0;
 
                         SDL_Rect dstrt = { damage.x, damage.y, damage.width, damage.height };
-                        auto tx = createTexture(damage.width, damage.height, TEXTURE_FMT);
+
+                        auto format = SDL_MasksToPixelFormatEnum(reply->bpp, reply->rmask, reply->gmask, reply->bmask, 0);
+                        if(SDL_PIXELFORMAT_UNKNOWN == format)
+                            throw sdl_error("unknown pixel format");
+
+                        auto tx = createTexture(damage.width, damage.height, format);
                         tx.updateRect(nullptr, reply->data(), damage.width * bytePerPixel + alignRowBytes);
 
                         renderTexture(tx.get(), nullptr, nullptr, & dstrt);

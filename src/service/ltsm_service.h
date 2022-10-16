@@ -70,7 +70,6 @@ namespace LTSM
         std::string                     user;
         std::string                     display;
         std::string                     xauthfile;
-        std::string                     mcookie;
         std::string                     remoteaddr;
         std::string                     conntype;
         std::string                     encryption;
@@ -153,8 +152,8 @@ namespace LTSM
             std::atomic<bool>           _running = false;
             bool                        _loginsDisable = false;
 
-            pid_t                       safeRunSessionCommand(const XvfbSession*, const std::filesystem::path &, std::list<std::string>);
-            void                        safeWaitPidBackground(pid_t pid);
+            pid_t                       runSessionCommandSafe(const XvfbSession*, const std::filesystem::path &, std::list<std::string>);
+            void                        waitPidBackgroundSafe(pid_t pid);
 
             bool                        sessionRunZenity(const XvfbSession*, std::initializer_list<std::string>);
 
@@ -162,7 +161,7 @@ namespace LTSM
 	    void			openlog(void) const;
             int		                getFreeDisplay(void) const;
 	    void			closeSystemSession(int display, XvfbSession &);
-            std::filesystem::path	createXauthFile(int display, const std::string & mcookie, const std::string & username, const std::string & remoteaddr);
+            std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie, const std::string & username, const std::string & remoteaddr);
             std::filesystem::path       createSessionConnInfo(const std::filesystem::path & home, const XvfbSession*);
             pid_t                       runXvfbDisplay(int display, uint8_t depth, uint16_t width, uint16_t height, const std::filesystem::path & xauthFile, const std::string & userLogin);
             int				runUserSession(int display, const std::filesystem::path & sessionBin, const XvfbSession &);

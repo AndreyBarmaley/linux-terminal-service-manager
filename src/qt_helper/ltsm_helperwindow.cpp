@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <syslog.h>
 
+#include <chrono>
 #include <thread>
 
 #include <QFile>
@@ -36,6 +37,8 @@
 #include "ltsm_global.h"
 #include "ltsm_helperwindow.h"
 #include "ui_ltsm_helperwindow.h"
+
+using namespace std::chrono_literals;
 
 /// LTSM_HelperSDBus
 LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_service_name, LTSM::dbus_object_path)
@@ -96,6 +99,7 @@ void LTSM_HelperSDBus::widgetStartedAction(int displayNum)
 {
     std::thread([this, display = displayNum]()
     {
+        std::this_thread::sleep_for(300ms);
         this->helperWidgetStartedAction(display);
     }).detach();
 }

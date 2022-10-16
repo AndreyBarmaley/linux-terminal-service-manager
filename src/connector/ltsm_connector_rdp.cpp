@@ -646,25 +646,22 @@ namespace LTSM
         // reply info dump
         if(Application::isDebugLevel(DebugLevel::SyslogDebug))
         {
-            if(const xcb_visualtype_t* visual = _xcbDisplay->visual(reply->visId()))
-            {
-                Application::info("get_image: request size: [%d,%d], reply length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                  reg.width, reg.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
-            }
+            Application::info("get_image: request size: [%d,%d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+                                  reg.width, reg.height, reply->size(), reply->bpp, reply->rmask, reply->gmask, reply->bmask);
         }
 
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
         renderPrimitivesToFB(frameBuffer);
 
-        return 24 == reply->depth() ?
+        return 24 == reply->bpp ?
                updateBitmapPlanar(reg, reply) : updateBitmapInterleaved(reg, reply);
     }
 
     bool Connector::RDP::updateBitmapPlanar(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bitsPerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth());
+        const int bitsPerPixel = reply->bpp;
         const int bytePerPixel = bitsPerPixel >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
         const size_t tileSize = 64;
@@ -699,7 +696,7 @@ namespace LTSM
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline:%d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
+        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bpp, scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -774,7 +771,7 @@ namespace LTSM
     bool Connector::RDP::updateBitmapInterleaved(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bitsPerPixel = _xcbDisplay->pixmapBitsPerPixel(reply->depth());
+        const int bitsPerPixel = reply->bpp;
         const int bytePerPixel = bitsPerPixel >> 3;
         const size_t scanLineBytes = reg.width * bytePerPixel;
         // size fixed: libfreerdp/codec/interleaved.c
@@ -834,7 +831,7 @@ namespace LTSM
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug("%s: area [%d,%d,%d,%d], depth:%d, scanline: %d, bpp:%d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->depth(), scanLineBytes, bytePerPixel);
+        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bpp, scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx

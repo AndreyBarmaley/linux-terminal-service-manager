@@ -418,34 +418,29 @@ namespace LTSM
         sendIntBE32(desktopName.size()).sendString(desktopName).sendFlush();
     }
 
-    void RFB::ServerEncoder::sendUpdateBackground(const XCB::Region & area)
+    bool RFB::ServerEncoder::sendUpdateSafe(const XCB::Region & area)
     {
         fbUpdateProcessing = true;
-        // background job
-        std::thread([=]()
+        bool res = true;
+
+        try
         {
-            bool error = false;
+            auto xfb = xcbFrameBuffer(area);
+            sendFrameBufferUpdate(xfb);
+            sendFrameBufferUpdateEvent(area);
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: vnc exception: %s", __FUNCTION__, err.what());
+            res = false;
+        }
+        catch(...)
+        {
+            res = false;
+        }
 
-            try
-            {
-                auto xfb = xcbFrameBuffer(area);
-                this->sendFrameBufferUpdate(xfb);
-                this->sendFrameBufferUpdateEnd(area);
-                this->fbUpdateProcessing = false;
-            }
-            catch(const std::exception & err)
-            {
-                error = true;
-                Application::error("%s: vnc exception: %s", __FUNCTION__, err.what());
-            }
-            catch(...)
-            {
-                error = true;
-            }
-
-            if(error)
-                rfbMessages = false;
-        }).detach();
+        fbUpdateProcessing = false;
+        return res;
     }
 
     bool RFB::ServerEncoder::rfbMessagesRunning(void) const
@@ -905,7 +900,12 @@ namespace LTSM
         return res + 1;
     }
 
-    bool RFB::ServerEncoder::isContinueUpdates(void) const
+    bool RFB::ServerEncoder::isContinueUpdatesSupport(void) const
+    {
+        return continueUpdatesSupport;
+    }
+
+    bool RFB::ServerEncoder::isContinueUpdatesProcessed(void) const
     {
         return continueUpdatesSupport && continueUpdatesProcessed;
     }

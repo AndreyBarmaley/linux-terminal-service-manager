@@ -139,15 +139,13 @@ namespace LTSM
     {
         // FIXM XAUTH
         std::string xauthFile = _config->getString("authfile");
-        std::string displayAddr = _config->getString("display");
-        Application::debug("%s: display addr: `%s'", __FUNCTION__, displayAddr.c_str());
         Application::debug("%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
 
         try
         {
-            _xcbDisplay.reset(new XCB::RootDisplayExt(displayAddr));
+            _xcbDisplay.reset(new XCB::RootDisplayExt(_config->getInteger("display")));
         }
         catch(const std::exception & err)
         {

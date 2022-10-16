@@ -309,8 +309,22 @@ namespace LTSM
         if(auto env = jo.getObject("environments"))
             busSetSessionEnvironments(_display, env->toStdMap<std::string>());
 
-        if(auto layouts = jo.getArray("keyboard"))
-            busSetSessionKeyboardLayouts(_display, layouts->toStdVector<std::string>());
+        if(auto keyboard = jo.getObject("keyboard"))
+        {
+            auto names = keyboard->getStdVector<std::string>("layouts");
+            busSetSessionKeyboardLayouts(_display, names);
+
+            auto layout = keyboard->getString("current");
+            auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
+                    { return Tools::lower(str).substr(0,2) == Tools::lower(layout).substr(0,2); });
+
+            std::thread([group = std::distance(names.begin(), it), display = _xcbDisplay.get()]()
+            {
+                // wait pause for apply layouts
+                std::this_thread::sleep_for(300ms);
+                display->switchXkbLayoutGroup(group);
+            }).detach();
+        }
 
         if(auto opts = jo.getObject("options"))
             busSetSessionOptions(_display, opts->toStdMap<std::string>());

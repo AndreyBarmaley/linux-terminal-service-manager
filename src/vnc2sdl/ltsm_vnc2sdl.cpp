@@ -200,40 +200,26 @@ namespace LTSM
             this->rfbMessagesShutdown();
         });
 
-        // clipboard thread: check clipboard
-        auto thclip = std::thread([this]()
-        {
-            std::unique_ptr<char, void(*)(void*)> clip{ SDL_GetClipboardText(), SDL_free };
-
-            while(this->rfbMessagesRunning())
-            {
-                if(SDL_HasClipboardText())
-                {
-                    std::unique_ptr<char, void(*)(void*)> buf{ SDL_GetClipboardText(), SDL_free };
-                    if(! clip || std::strcmp(clip.get(), buf.get()))
-                    {
-                        auto len = SDL_strlen(buf.get());
-                        this->sendCutTextEvent(buf.get(), len);
-                        clip.reset(buf.release());
-                    }
-                }
-
-                std::this_thread::sleep_for(300ms);
-            }
-        });
-
         // xcb thread: wait xkb event
         auto thxcb = std::thread([this]()
         {
             while(this->rfbMessagesRunning())
             {
-                xcbEventProcessing();
-                std::this_thread::sleep_for(300ms);
+                if(! xcbEventProcessing())
+                    break;
+
+                std::this_thread::sleep_for(200ms);
             }
         });
 
         // main thread: sdl processing
         SDL_Event ev;
+
+        auto clipDelay = std::chrono::steady_clock::now();
+        std::shared_ptr<char> clipBoard(SDL_GetClipboardText(), SDL_free);
+
+        if(isContinueUpdatesSupport())
+            sendContinuousUpdates(true, { XCB::Point(0,0), clientSize() });
 
         while(true)
         {
@@ -242,12 +228,6 @@ namespace LTSM
 
             if(xcbError())
                 break;
-
-            if(! SDL_PollEvent(& ev))
-            {
-                std::this_thread::sleep_for(1ms);
-                continue;
-            }
 
 #ifdef LTSM_CHANNELS
             if(! dropFiles.empty() &&
@@ -258,10 +238,34 @@ namespace LTSM
             }
 #endif
 
+            if(! SDL_PollEvent(& ev))
+            {
+                std::this_thread::sleep_for(5ms);
+                continue;
+            }
+
             if(! sdlEventProcessing(& ev))
             {
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(5ms);
                 continue;
+            }
+
+            // send clipboard
+            if(std::chrono::steady_clock::now() - clipDelay > 300ms &&
+                ! focusLost && SDL_HasClipboardText())
+            {
+                std::thread([clip = clipBoard, ptr = SDL_GetClipboardText(), this]() mutable
+                {
+                    if(! clip || std::strcmp(clip.get(), ptr))
+                    {
+                        this->sendCutTextEvent(ptr, SDL_strlen(ptr));
+                        clip.reset(ptr);
+                    }
+                    else
+                    {
+                        SDL_free(ptr);
+                    }
+                }).detach();
             }
         }
 
@@ -272,9 +276,6 @@ namespace LTSM
 
         if(thxcb.joinable())
             thxcb.join();
-
-        if(thclip.joinable())
-            thclip.join();
 
         return 0;
     }
@@ -325,10 +326,11 @@ namespace LTSM
             case SDL_WINDOWEVENT:
                 if(SDL_WINDOWEVENT_EXPOSED == ev.window()->event)
                     window->renderPresent();
-/*
-                if(SDL_WINDOWEVENT_SIZE_CHANGED == current.window.event)
-                    resizeWindow(Size(current.window.data1, current.window.data2));
-*/
+                if(SDL_WINDOWEVENT_FOCUS_GAINED == ev.window()->event)
+                    focusLost = false;
+                else
+                if(SDL_WINDOWEVENT_FOCUS_LOST == ev.window()->event)
+                    focusLost = true;
                 break;
 
             case SDL_KEYDOWN:
@@ -339,11 +341,11 @@ namespace LTSM
                     RFB::ClientDecoder::rfbMessagesShutdown();
                     return true;
                 }
-                // key press delay 300 ms
-                if(std::chrono::steady_clock::now() - keyPress < 300ms)
+                // key press delay 200 ms
+                if(std::chrono::steady_clock::now() - keyPress < 200ms)
                 {
-                    std::this_thread::sleep_for(300ms);
                     keyPress = std::chrono::steady_clock::now();
+                    break;
                 }
                 // continue
             case SDL_KEYUP:
@@ -366,6 +368,32 @@ namespace LTSM
                     std::unique_ptr<char, void(*)(void*)> drop{ ev.drop()->file, SDL_free };
                     dropFiles.emplace_back(drop.get());
                     dropStart = std::chrono::steady_clock::now();
+                }
+                break;
+
+            case SDL_USEREVENT:
+                {
+                    // resize event
+                    if(ev.user()->code == 777 || ev.user()->code == 775)
+                    {
+                        XCB::Size sz;
+                        sz.width = (size_t) ev.user()->data1;
+                        sz.height = (size_t) ev.user()->data2;
+                        bool contUpdateResume = ev.user()->code == 777;
+
+                        fb.reset(new FrameBuffer(sz, format));
+
+                        if(fullscreen)
+                            window.reset(new SDL::Window("VNC2SDL", sz.width, sz.height,
+                                    0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
+                        else
+                            window->resize(sz.width, sz.height);
+
+                        if(contUpdateResume)
+                            sendContinuousUpdates(true, {0, 0, sz.width, sz.height});
+                        else
+                            sendFrameBufferUpdate(false);
+                    }
                 }
                 break;
 
@@ -408,27 +436,23 @@ namespace LTSM
                     setWidth == sz.width && setHeight == sz.height)
                     setWidth = setHeight = 0;
 
-                const std::scoped_lock<std::mutex> lock(lockRender);
                 bool contUpdateResume = false;
 
-                if(isContinueUpdates() && fb)
+                if(isContinueUpdatesProcessed() && fb)
                 {
                     sendContinuousUpdates(false, XCB::Region(0, 0, fb->width(), fb->height()));
                     contUpdateResume = true;
                 }
 
-                fb.reset(new FrameBuffer(sz, format));
-
-                if(fullscreen)
-                    window.reset(new SDL::Window("VNC2SDL", sz.width, sz.height,
-                                    0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
-                else
-                    window->resize(sz.width, sz.height);
-
-                if(contUpdateResume)
-                    sendContinuousUpdates(true, {0, 0, sz.width, sz.height});
-                else
-                    sendFrameBufferUpdate(false);
+                // create event for resize (resized in main thread)
+                SDL_Event event;
+                event.type = SDL_USEREVENT;
+                event.user.code = contUpdateResume ? 777 : 775;
+                event.user.data1 = (void*)(ptrdiff_t) sz.width;
+                event.user.data2 = (void*)(ptrdiff_t) sz.height;
+    
+                if(0 > SDL_PushEvent(& event))
+                    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_PushEvent", SDL_GetError());
             }
             else
             {
@@ -456,6 +480,8 @@ namespace LTSM
     {
         Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
 
+        const std::scoped_lock<std::mutex> lock(lockRender);
+
         if(! window)
             window.reset(new SDL::Window("VNC2SDL", width, height, 0, 0, 0, accelerated));
 
@@ -477,7 +503,7 @@ namespace LTSM
 
         bool contUpdateResume = false;
 
-        if(isContinueUpdates() && fb)
+        if(isContinueUpdatesProcessed() && fb)
         {
             sendContinuousUpdates(false, XCB::Region(0, 0, fb->width(), fb->height()));
             contUpdateResume = true;
@@ -492,12 +518,16 @@ namespace LTSM
 
     void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel)
     {
+        const std::scoped_lock<std::mutex> lock(lockRender);
+
         fb->setPixel(dst, pixel);
         dirty.join(dst.x, dst.y, 1, 1);
     }
 
     void Vnc2SDL::fillPixel(const XCB::Region & dst, uint32_t pixel)
     {
+        const std::scoped_lock<std::mutex> lock(lockRender);
+
         fb->fillPixel(dst, pixel);
         dirty.join(dst);
     }
@@ -525,7 +555,10 @@ namespace LTSM
     {
         if(! sendOptions)
         {
-            sendSystemClientVariables(clientOptions(), clientEnvironments(), xkbNames());
+            auto names = xkbNames();
+            auto group = xkbGroup();
+
+            sendSystemClientVariables(clientOptions(), clientEnvironments(), names, (0 <= group && group < names.size() ? names[group] : ""));
             sendOptions = true;
         }
     }

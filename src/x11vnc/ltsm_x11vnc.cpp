@@ -48,7 +48,7 @@ namespace LTSM
     X11Vnc::X11Vnc(int argc, const char** argv)
         : Application("ltsm_x11vnc", argc, argv)
     {
-        _config.addString("display", ":0");
+        _config.addInteger("display", 0);
         _config.addInteger("port", 5900);
         _config.addInteger("threads", 2);
         _config.addBoolean("inetd", false);
@@ -69,7 +69,7 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
-                _config.addString("display", argv[it + 1]);
+                _config.addInteger("display", std::stoi(argv[it + 1]));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc)
@@ -94,7 +94,8 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--threads") && it + 1 < argc)
             {
-                _config.addInteger("threads", std::stoi(argv[it + 1]));
+                auto str = argv[it + 1];
+                _config.addInteger("threads", std::stoi(str[0] == ':' ? str + 1 : str));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)

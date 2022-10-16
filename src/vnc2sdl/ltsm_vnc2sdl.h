@@ -57,8 +57,10 @@ namespace LTSM
         XCB::Region             dirty;
 
         std::mutex              lockRender;
+
         std::chrono::time_point<std::chrono::steady_clock>
                                 keyPress;
+
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
 
@@ -72,6 +74,7 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
 #endif
+        std::atomic<bool>       focusLost = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;

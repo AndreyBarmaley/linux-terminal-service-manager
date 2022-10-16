@@ -125,7 +125,8 @@ namespace LTSM
             bool            rfbMessagesRunning(void) const;
             void            rfbMessagesLoop(void);
             void            rfbMessagesShutdown(void);
-            bool            isContinueUpdates(void) const;
+            bool            isContinueUpdatesSupport(void) const;
+            bool            isContinueUpdatesProcessed(void) const;
 
             void            sendKeyEvent(bool pressed, uint32_t keysym);
             void            sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);

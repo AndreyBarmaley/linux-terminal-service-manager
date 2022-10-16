@@ -19,15 +19,14 @@
     "#vnc:xcb:nodamage": false,
     "vnc:clipboard": true,
 
-    "#transfer:file:tmpname": "/var/tmp/%{display}",
     "transfer:file:disabled": false,
     "transfer:file:max": 100000000,
     "#transfer:group:only": "transfer-allow",
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
 
-    "#idle:timeout:sec": 0,
-    "#idle:action:path": "/usr/bin/xlock",
-    "#idle:action:args": [],
+    "idle:timeout:sec": 0,
+    "idle:action:path": "/usr/bin/xlock",
+    "idle:action:args": [],
 
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
@@ -71,11 +70,7 @@
     "display:max": 99,
     "display:solid": "0x4e7db7",
 
-    "xauth:path": "/usr/bin/xauth",
-    "xauth:args": "-f %{authfile} add :%{display} \".\" %{mcookie}",
     "xauth:file": "/var/run/ltsm/auth_%{pid}.%{remoteaddr}.%{display}",
-
-    "mcookie:path": "/usr/bin/mcookie",
 
     "xvfb:path": "/usr/bin/Xvfb",
     "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",

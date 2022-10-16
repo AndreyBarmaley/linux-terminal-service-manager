@@ -305,24 +305,6 @@ namespace LTSM
             reset(new shm_t(shmid, addr, conn, id));
     }
 
-    XCB::PixmapInfoReply XCB::SHM::getPixmapRegion(xcb_drawable_t winid, const Region & reg, size_t offset, uint32_t planeMask) const
-    {
-        auto xcbReply = getReplyFunc1(xcb_shm_get_image, connection(), winid, reg.x, reg.y, reg.width, reg.height,
-                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, xid(), offset);
-        PixmapInfoReply res;
-
-        if(auto err = xcbReply.error())
-        {
-            XCB::error("xcb_shm_get_image", err);
-            return res;
-        }
-
-        if(auto reply = xcbReply.reply())
-            res = std::make_shared<PixmapInfoSHM>(reply->depth, reply->visual, *this, reply->size);
-
-        return res;
-    }
-
     /* XCB::GC */
     XCB::GC::GC(xcb_drawable_t win, xcb_connection_t* conn, uint32_t value_mask, const void* value_list)
     {
@@ -462,13 +444,29 @@ namespace LTSM
     }
 
     /* XCB::Connector */
-    XCB::Connector::Connector(std::string_view addr)
+    XCB::Connector::Connector(size_t displayNum, const AuthCookie* cookie)
     {
-        _conn = xcb_connect(addr.data(), nullptr);
+        auto displayAddr = std::string( ":" ).append( std::to_string( displayNum ) );
+        
+        if(cookie) 
+        {
+            std::string_view magic{"MIT-MAGIC-COOKIE-1"};
+            xcb_auth_info_t auth;
+            auth.name = (char*) magic.data();
+            auth.namelen = magic.size();
+            auth.data = (char*) cookie->data();
+            auth.datalen = cookie->size();
+                   
+            _conn = xcb_connect_to_display_with_auth_info(displayAddr.c_str(), & auth, nullptr);
+        }
+        else
+        {
+            _conn = xcb_connect(displayAddr.c_str(), nullptr);
+        }   
 
         if(xcb_connection_has_error(_conn))
         {
-            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", addr.data());
+            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
             throw xcb_error(NS_FuncName);
         }
 
@@ -486,7 +484,7 @@ namespace LTSM
         xcb_disconnect(_conn);
     }
 
-    size_t XCB::Connector::pixmapBitsPerPixel(size_t depth) const
+    size_t XCB::Connector::bppFromDepth(size_t depth) const
     {
         for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
             if(fIter.data->depth == depth) return fIter.data->bits_per_pixel;
@@ -494,7 +492,7 @@ namespace LTSM
         return 0;
     }
 
-    size_t XCB::Connector::pixmapDepth(size_t bitsPerPixel) const
+    size_t XCB::Connector::depthFromBpp(size_t bitsPerPixel) const
     {
         for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
             if(fIter.data->bits_per_pixel == bitsPerPixel) return fIter.data->depth;
@@ -1044,8 +1042,8 @@ namespace LTSM
     }
 
     /* XCB::RootDisplay */
-    XCB::RootDisplay::RootDisplay(std::string_view addr) : Connector(addr)
-        , _xkbctx { nullptr, xkb_context_unref }, _xkbmap { nullptr, xkb_keymap_unref }, _xkbstate { nullptr, xkb_state_unref }
+    XCB::RootDisplay::RootDisplay(size_t displayNum, const AuthCookie* auth) : Connector(displayNum, auth),
+        _xkbctx { nullptr, xkb_context_unref }, _xkbmap { nullptr, xkb_keymap_unref }, _xkbstate { nullptr, xkb_state_unref }
     {
         _minKeycode = _setup->min_keycode;
         _maxKeycode = _setup->max_keycode;
@@ -1290,7 +1288,28 @@ namespace LTSM
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
     {
         if(_shm)
-            return _shm.getPixmapRegion(_screen->root, reg, 0, planeMask);
+        {
+            auto xcbReply = getReplyFunc1(xcb_shm_get_image, _conn, _screen->root, reg.x, reg.y, reg.width, reg.height,
+                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, _shm.xid(), 0);
+            PixmapInfoReply res;
+
+            if(auto errorReq = xcbReply.error())
+            {
+                extendedError(errorReq, "xcb_shm_get_image");
+                return res;
+            }
+
+            if(auto reply = xcbReply.reply())
+            {
+                auto visptr = visual(reply->visual);
+                auto bpp = bppFromDepth(reply->depth);
+
+                if(visptr)
+                {
+                    return std::make_shared<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, _shm, reply->size);
+                }
+            }
+        }
 
         size_t pitch = reg.width * (bitsPerPixel() >> 2);
         auto maxReqLength = xcb_get_maximum_request_length(_conn);
@@ -1321,12 +1340,23 @@ namespace LTSM
             if(auto reply = xcbReply.reply())
             {
                 if(! res)
-                    res.reset(new PixmapInfoBuffer(reply->depth, reply->visual, reg.height * pitch));
+                {
+                    auto visptr = visual(reply->visual);
+                    auto bpp = bppFromDepth(reply->depth);
 
-                auto info = static_cast<PixmapInfoBuffer*>(res.get());
+                    if(! visptr)
+                    {
+                        Application::error("%s: unknown visual id: %d", __FUNCTION__, reply->visual);
+                        break;
+                    }
+
+                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, reg.height * pitch));
+                }
+
+                auto info = static_cast<PixmapBuffer*>(res.get());
                 auto length = xcb_get_image_data_length(reply.get());
                 auto data = xcb_get_image_data(reply.get());
-                info->_pixels.insert(info->_pixels.end(), data, data + length);
+                info->pixels.insert(info->pixels.end(), data, data + length);
             }
         }
 
@@ -2183,7 +2213,7 @@ namespace LTSM
     }
 
     /* XCB::RootDisplayExt */
-    XCB::RootDisplayExt::RootDisplayExt(std::string_view addr) : RootDisplay(addr),
+    XCB::RootDisplayExt::RootDisplayExt(size_t displayNum, const AuthCookie* auth) : RootDisplay(displayNum, auth),
         _atomPrimary(_atoms[0]), _atomClipboard(_atoms[1]), _atomBuffer(_atoms[2]),
         _atomTargets(_atoms[3]), _atomText(_atoms[4]), _atomTextPlain(_atoms[5]), _atomUTF8(_atoms[6])
     {

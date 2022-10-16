@@ -78,9 +78,6 @@ namespace LTSM
             std::filesystem::remove(xauthfile);
             xauthfile.clear();
         }
-
-        if(mcookie.size())
-            mcookie.clear();
     }
 
     /* XvfbSessions */
@@ -214,12 +211,12 @@ namespace LTSM
             struct passwd* st = getpwnam(user.data());
 
             if(st)
-                return std::make_tuple<int, int, std::filesystem::path, std::string>(st->pw_uid, st->pw_gid, st->pw_dir, st->pw_shell);
+                return std::make_tuple<uid_t, gid_t, std::filesystem::path, std::string>((uid_t)st->pw_uid, (gid_t)st->pw_gid, st->pw_dir, st->pw_shell);
 
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam", strerror(errno), errno);
         }
 
-        return std::make_tuple<uid_t, gid_t, std::string, std::string>(0, 0, "/tmp", "/bin/false");
+        return std::make_tuple<uid_t, gid_t, std::filesystem::path, std::string>(0, 0, "/tmp", "/bin/false");
     }
 
     uid_t Manager::getUserUid(std::string_view user)
@@ -352,7 +349,7 @@ namespace LTSM
 
     void Manager::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid)
     {
-        Application::debug("%s: path: %s, uid: %d, gid: %d", __FUNCTION__, "chown", path.c_str(), uid, gid);
+        Application::debug("%s: path: %s, uid: %d, gid: %d", __FUNCTION__, path.c_str(), uid, gid);
 
         if(0 != chown(path.c_str(), uid, gid))
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chown", strerror(errno), errno);
@@ -964,41 +961,53 @@ namespace LTSM
         });
     }
 
-    std::filesystem::path Manager::Object::createXauthFile(int display, const std::string & mcookie, const std::string & userName, const std::string & remoteAddr)
+    std::filesystem::path Manager::Object::createXauthFile(int display, const std::vector<uint8_t> & mcookie, const std::string & userName, const std::string & remoteAddr)
     {
         std::string xauthFileTemplate = _config->getString("xauth:file");
-        std::string xauthBin = _config->getString("xauth:path");
-        std::string xauthArgs = _config->getString("xauth:args");
         std::string groupAuth = _config->getString("group:auth");
+
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{pid}", getpid());
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{remoteaddr}", remoteAddr);
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", display);
 
-        std::filesystem::path xauthFile(xauthFileTemplate);
-        Application::debug("%s: path: %s", __FUNCTION__, xauthFile.c_str());
-        // create empty xauthFile
-        std::ofstream tmp(xauthFile, std::ofstream::binary | std::ofstream::trunc);
+        std::filesystem::path xauthFilePath(xauthFileTemplate);
+        Application::debug("%s: path: %s", __FUNCTION__, xauthFilePath.c_str());
 
-        if(! tmp.good())
+        std::ofstream ofs( xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc );
+     
+        if(ofs)
         {
-            Application::error("%s: can't create file: %s", __FUNCTION__, xauthFile.c_str());
-            tmp.close();
+            // create xautfile
+            std::string_view host{"localhost"};
+            std::string_view magic{"MIT-MAGIC-COOKIE-1"};
+        
+            uint16_t hostlen = host.size();
+            uint16_t magclen = magic.size();
+            uint16_t cooklen = mcookie.size();
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            hostlen = __builtin_bswap16(hostlen);
+            magclen = __builtin_bswap16(magclen);
+            cooklen = __builtin_bswap16(cooklen);
+#endif
+            // format: 01 00 [ <host len:be16> [ host ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
+            ofs.put(1).put(0);
+            ofs.write((const char*) &hostlen, 2).write(host.data(), host.size());
+            ofs.write((const char*) &magclen, 2).write(magic.data(), magic.size());
+            ofs.write((const char*) &cooklen, 2).write((const char*) mcookie.data(), mcookie.size());
+            ofs.close();
+        }
+        else
+        {
+            Application::error("%s: create xauthfile failed, path: %s", __FUNCTION__, xauthFilePath.c_str());
             return "";
         }
 
-        // xauth registry
-        xauthArgs = Tools::replace(xauthArgs, "%{authfile}", xauthFileTemplate);
-        xauthArgs = Tools::replace(xauthArgs, "%{display}", display);
-        xauthArgs = Tools::replace(xauthArgs, "%{mcookie}", mcookie);
-        Application::debug("%s: args: %s", __FUNCTION__, xauthArgs.c_str());
-        xauthBin.append(" ").append(xauthArgs);
-        int ret = std::system(xauthBin.c_str());
-        Application::debug("%s: run command: `%s', return code: %d, display: %d", __FUNCTION__, xauthBin.c_str(), ret, display);
         // set permissons 0440
-        std::filesystem::permissions(xauthFile, std::filesystem::perms::owner_read |
+        std::filesystem::permissions(xauthFilePath, std::filesystem::perms::owner_read |
                                      std::filesystem::perms::group_read, std::filesystem::perm_options::replace);
-        setFileOwner(xauthFile, getUserUid(userName), getGroupGid(groupAuth));
-        return xauthFile;
+        setFileOwner(xauthFilePath, getUserUid(userName), getGroupGid(groupAuth));
+
+        return xauthFilePath;
     }
 
     std::filesystem::path Manager::Object::createSessionConnInfo(const std::filesystem::path & home, const XvfbSession* xvfb)
@@ -1026,7 +1035,7 @@ namespace LTSM
         return ltsmInfo;
     }
 
-    pid_t Manager::Object::safeRunSessionCommand(const XvfbSession* xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
+    pid_t Manager::Object::runSessionCommandSafe(const XvfbSession* xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
     {
         try
         {
@@ -1047,7 +1056,7 @@ namespace LTSM
         return 0;    
     }
 
-    void Manager::Object::safeWaitPidBackground(pid_t pid)
+    void Manager::Object::waitPidBackgroundSafe(pid_t pid)
     {
         // create wait pid task
         std::packaged_task<int(pid_t)> waitPidTask(RunAs::waitPid);
@@ -1070,7 +1079,7 @@ namespace LTSM
                 auto bin = params.front();
                 params.pop_front();
 
-                safeRunSessionCommand(getXvfbInfo(display), bin, std::move(params));
+                runSessionCommandSafe(getXvfbInfo(display), bin, std::move(params));
             }
         }
     }
@@ -1274,9 +1283,10 @@ namespace LTSM
 
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
+
+        // generate session key
+        auto mcookie = Tools::randomBytes(128);
         // get xauthfile
-        std::string mcookie = Tools::runcmd(_config->getString("mcookie:path"));
-        Application::debug("%s: use mcookie: %s", __FUNCTION__, mcookie.c_str());
         auto xauthFile = createXauthFile(screen, mcookie, userXvfb, remoteAddr);
 
         if(xauthFile.empty())
@@ -1305,7 +1315,7 @@ namespace LTSM
         Application::debug("%s: xvfb started, pid: %d, display: %d", __FUNCTION__, pid1, screen);
 
         // registered xvfb job
-        safeWaitPidBackground(pid1);
+        waitPidBackgroundSafe(pid1);
 
         // wait Xvfb display starting
         if(! waitXvfbStarting(screen, 5000 /* 5 sec */))
@@ -1324,7 +1334,6 @@ namespace LTSM
         st.height = height;
         st.xauthfile = xauthFile;
         st.display = std::string(":").append(std::to_string(screen));
-        st.mcookie = mcookie;
         st.remoteaddr = remoteAddr;
         st.conntype = connType;
         st.mode = XvfbMode::SessionLogin;
@@ -1344,9 +1353,12 @@ namespace LTSM
         }
 
         // runas login helper
-        xvfb->pid2 = safeRunSessionCommand(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
+        xvfb->pid2 = runSessionCommandSafe(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
         if(0 == xvfb->pid2)
+        {
+            std::filesystem::remove(xauthFile);
             return -1;
+        }
 
         // Application::debug("login helper registered, display: %d", screen);
         return screen;
@@ -1443,7 +1455,7 @@ namespace LTSM
         }
 
         // registered session job
-        safeWaitPidBackground(xvfb->pid2);
+        waitPidBackgroundSafe(xvfb->pid2);
 
         // parent continue
         Application::debug("%s: user session started, pid: %d, display: %d", __FUNCTION__, xvfb->pid2, oldScreen);
@@ -1529,7 +1541,7 @@ namespace LTSM
     {
         std::filesystem::path zenity = _config->getString("zenity:path", "/usr/bin/zenity");
 
-        return 0 != safeRunSessionCommand(xvfb, zenity, std::move(params));
+        return 0 != runSessionCommandSafe(xvfb, zenity, std::move(params));
     }
 
     bool Manager::Object::busSendMessage(const int32_t & display, const std::string & message)
@@ -1599,7 +1611,7 @@ namespace LTSM
         {
 /*
             _config->getString("idle:action:path");
-            _config->getArray("idle:action:args");
+            _config->getStdList<std::string>("idle:action:args");
 
             try
             {
@@ -1922,7 +1934,7 @@ namespace LTSM
 
             if(0 < pid)
             {
-                safeWaitPidBackground(pid);
+                waitPidBackgroundSafe(pid);
 
                 // main thread return
                 return true;
@@ -2312,7 +2324,7 @@ namespace LTSM
                     os << ",";
             }
 
-            safeRunSessionCommand(xvfb, "/usr/bin/setxkbmap", { "-layout", quotedString(os.str()), "-option", "\"\"" });
+            runSessionCommandSafe(xvfb, "/usr/bin/setxkbmap", { "-layout", quotedString(os.str()), "-option", "\"\"" });
             return true;
         }
         return false;

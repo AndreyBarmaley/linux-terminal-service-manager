@@ -20,7 +20,7 @@ using namespace std::chrono_literals;
 class X11Test : public RootDisplayExt
 {
 public:
-    X11Test(const std::string & addr) : RootDisplayExt(addr)
+    X11Test(size_t display) : RootDisplayExt(display)
     {
     }
 
@@ -46,11 +46,8 @@ public:
         if(! reply) return false;
 
         // reply info dump
-        if(const xcb_visualtype_t* visual = RootDisplayExt::visual(reply->visId()))
-        {
-            Application::info("get_image: request size [%d, %d], reply length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                        damage.width, damage.height, reply->size(), reply->depth(), visual->bits_per_rgb_value, visual->red_mask, visual->green_mask, visual->blue_mask, visual->colormap_entries);
-        }
+        Application::info("get_image: request size [%d, %d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+                damage.width, damage.height, reply->size(), reply->bpp, reply->rmask, reply->gmask, reply->bmask);
 
         return true;
     }
@@ -323,8 +320,7 @@ public:
 
     int start(void)
     {
-	const std::string addr = Tools::StringFormat(":%1").arg(screen);
-	auto _xcbDisplay = std::unique_ptr<X11Test>(new X11Test(addr));
+	auto _xcbDisplay = std::unique_ptr<X11Test>(new X11Test(screen));
         if(! _xcbDisplay)
         {
             Application::error("xcb connect: %s", "failed");

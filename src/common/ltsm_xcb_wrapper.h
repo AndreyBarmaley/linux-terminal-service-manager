@@ -297,62 +297,57 @@ namespace LTSM
             xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }
         };
 
-        struct PixmapInfoBase
+        struct PixmapBase
         {
-            size_t                  _depth;
-	    xcb_visualid_t         _visid;
-
-            size_t                 depth(void) const { return _depth; }
-            xcb_visualid_t         visId(void) const { return _visid; }
+            uint32_t               rmask = 0;
+            uint32_t               gmask = 0;
+            uint32_t               bmask = 0;
+            uint8_t                bpp = 0;
 
             virtual uint8_t*       data(void) = 0;
             virtual const uint8_t* data(void) const = 0;
             virtual size_t         size(void) const = 0;
 
-            virtual ~PixmapInfoBase() {}
-            PixmapInfoBase(uint8_t d = 0, xcb_visualid_t v = 0) : _depth(d), _visid(v) {}
+            PixmapBase() = default;
+            PixmapBase(uint32_t r, uint32_t g, uint32_t b, uint8_t p) : rmask(r), gmask(g), bmask(b), bpp(p) {}
+            virtual ~PixmapBase() {}
         };
-        typedef std::shared_ptr<PixmapInfoBase> PixmapInfoReply;
+
+        typedef std::shared_ptr<PixmapBase> PixmapInfoReply;
 
         struct SHM : std::shared_ptr<shm_t>
         {
-            SHM() {}
+            SHM() = default;
             SHM(int shmid, uint8_t* addr, xcb_connection_t*);
 
-            PixmapInfoReply       getPixmapRegion(xcb_drawable_t, const Region &, size_t offset = 0, uint32_t planeMask = 0xFFFFFFFF) const;
-
-            uint8_t*              data(void) { return get() ? get()->addr : nullptr; }
-            const uint8_t*        data(void) const { return get() ? get()->addr : nullptr; }
-
-            xcb_connection_t*     connection(void) const { return get() ? get()->conn : nullptr; }
             uint32_t              xid(void) const { return get() ? get()->xcb : 0; }
         };
 
-        struct PixmapInfoSHM : PixmapInfoBase
+        struct PixmapSHM : PixmapBase
         {
-            SHM                    _shm;
-	    size_t	           _size;
+            SHM                   shm;
+	    size_t	          len = 0;
 
-            uint8_t*               data(void) override { return _shm.data(); }
-            const uint8_t*         data(void) const override { return _shm.data(); }
-            size_t                 size(void) const override { return _size; }
+            uint8_t*              data(void) override { return shm ? shm->addr : nullptr; }
+            const uint8_t*        data(void) const override { return shm ? shm->addr : nullptr; }
+            size_t                size(void) const override { return len; }
 
-            PixmapInfoSHM() : _size(0) {}
-            PixmapInfoSHM(uint8_t depth, xcb_visualid_t vis, const SHM & shm, size_t len)
-                : PixmapInfoBase(depth, vis), _shm(shm), _size(len) {}
+            PixmapSHM() = default;
+            PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, const SHM & sh, size_t sz)
+                : PixmapBase(rmask, gmask, bmask, bpp), shm(sh), len(sz) {}
         };
 
-        struct PixmapInfoBuffer : PixmapInfoBase
+        struct PixmapBuffer : PixmapBase
         {
-            std::vector<uint8_t>  _pixels;
+            std::vector<uint8_t>  pixels;
 
-            uint8_t*              data(void) override { return _pixels.data(); }
-            const uint8_t*        data(void) const override { return _pixels.data(); }
-            size_t                size(void) const override { return _pixels.size(); }
+            uint8_t*              data(void) override { return pixels.data(); }
+            const uint8_t*        data(void) const override { return pixels.data(); }
+            size_t                size(void) const override { return pixels.size(); }
 
-            PixmapInfoBuffer() {}
-            PixmapInfoBuffer(uint8_t depth, xcb_visualid_t vis, size_t res = 0)
-                : PixmapInfoBase(depth, vis) { _pixels.reserve(res); }
+            PixmapBuffer() = default;
+            PixmapBuffer(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, size_t res = 0)
+                : PixmapBase(rmask, gmask, bmask, bpp) { pixels.reserve(res); }
         };
 
         enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
@@ -394,6 +389,8 @@ namespace LTSM
 	    RandrScreenInfo() : config_timestamp(0), sizeID(0), rotation(0), rate(0) {}
 	};
 
+        typedef std::vector<uint8_t> AuthCookie;
+
         class Connector
         {
         protected:
@@ -401,11 +398,11 @@ namespace LTSM
             const xcb_setup_t*      _setup = nullptr;
 
         public:
-            Connector(std::string_view addr);
+            Connector(size_t displayNum, const AuthCookie* = nullptr);
             virtual ~Connector();
 
-            size_t	            pixmapDepth(size_t bitsPerPixel) const;
-            size_t	            pixmapBitsPerPixel(size_t depth) const;
+            size_t	            depthFromBpp(size_t bitsPerPixel) const;
+            size_t	            bppFromDepth(size_t depth) const;
             const xcb_setup_t*      setup(void) const;
 
 	    template<typename Reply, typename Cookie>
@@ -479,7 +476,7 @@ namespace LTSM
 	    int32_t                 _xkbdevid = -1;
 
         public:
-            RootDisplay(std::string_view addr);
+            RootDisplay(size_t displayNum, const AuthCookie* = nullptr);
             ~RootDisplay();
 
             uint16_t		    width(void) const;
@@ -563,7 +560,7 @@ namespace LTSM
             bool                     selectionRequestAction(xcb_selection_request_event_t*);
 
 	public:
-	    RootDisplayExt(std::string_view addr);
+            RootDisplayExt(size_t displayNum, const AuthCookie* = nullptr);
             ~RootDisplayExt();
 
             GenericEvent             poolEvent(void) override;

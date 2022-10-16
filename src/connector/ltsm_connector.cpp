@@ -247,7 +247,7 @@ namespace LTSM
 
         try
         {
-            _xcbDisplay.reset(new XCB::RootDisplayExt(Tools::StringFormat(":%1").arg(screen)));
+            _xcbDisplay.reset(new XCB::RootDisplayExt(screen));
         }
         catch(const std::exception & err)
         {

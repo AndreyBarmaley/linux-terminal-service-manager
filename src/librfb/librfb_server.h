@@ -108,7 +108,8 @@ namespace LTSM
             void                setEncodingDebug(int v);
             void                setEncodingThreads(int v);
             bool                isClientEncodings(int) const;
-            bool                isContinueUpdates(void) const;
+            bool                isContinueUpdatesSupport(void) const;
+            bool                isContinueUpdatesProcessed(void) const;
 
             bool                isUpdateProcessed(void) const;
             void                waitUpdateProcess(void);
@@ -123,7 +124,7 @@ namespace LTSM
             void                sendBellEvent(void);
             void                sendCutTextEvent(const std::vector<uint8_t> &);
             void                sendContinuousUpdates(bool enable);
-            void                sendUpdateBackground(const XCB::Region &);
+            bool                sendUpdateSafe(const XCB::Region &);
 #ifdef LTSM_CHANNELS
             void                sendEncodingLtsmSupported(void);
             void                recvChannelSystem(const std::vector<uint8_t> &) override;
@@ -191,7 +192,7 @@ namespace LTSM
             virtual void        recvFramebufferUpdateEvent(bool full, const XCB::Region &) {}
             virtual void        recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
             virtual void        recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
-            virtual void        sendFrameBufferUpdateEnd(const XCB::Region &) {}
+            virtual void        sendFrameBufferUpdateEvent(const XCB::Region &) {}
 
 #ifdef LTSM_CHANNELS
             virtual void        sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;

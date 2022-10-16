@@ -258,7 +258,7 @@ namespace LTSM
         void            sendLtsmEvent(uint8_t channel, const std::vector<uint8_t> &);
 
         void            sendSystemKeyboardChange(const std::vector<std::string> &, int);
-        void            sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &);
+        void            sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
         bool            sendSystemTransferFiles(std::list<std::string>);
         void            sendSystemChannelOpen(uint8_t channel, const Channel::ConnectorType &, std::string_view path, const Channel::ConnectorMode &);
         void            sendSystemChannelClose(uint8_t channel);

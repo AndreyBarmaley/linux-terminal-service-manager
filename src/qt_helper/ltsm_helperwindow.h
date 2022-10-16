@@ -114,8 +114,8 @@ private:
     void                onClearRenderPrimitives(const int32_t & display) override {}
     void                onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override {}
     void                onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override {}
-    void                onHelperWidgetStarted(const int32_t & display) {}
-    void                onSendBellSignal(const int32_t& display) {}
+    void                onHelperWidgetStarted(const int32_t & display) override {}
+    void                onSendBellSignal(const int32_t& display) override {}
 
 protected:
     // dbus virtual signals

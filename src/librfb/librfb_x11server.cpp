@@ -195,12 +195,19 @@ namespace LTSM
                 continue;
             }
 
-            if(clientUpdateReq || isContinueUpdates())
+            if(clientUpdateReq || isContinueUpdatesProcessed())
             {
                 XCB::Region res;
 
                 if(XCB::Region::intersection(clientRegion, damageRegion, & res))
-                    sendUpdateBackground(res);
+                {
+                    // background job
+                    std::thread([&]()
+                    {
+                        if(! sendUpdateSafe(res))
+                            rfbMessagesShutdown(); 
+                    }).detach();
+                }
 
                 damageRegion.reset();
                 clientUpdateReq = false;
@@ -364,7 +371,7 @@ namespace LTSM
         }
     }
 
-    void RFB::X11Server::sendFrameBufferUpdateEnd(const XCB::Region & reg)
+    void RFB::X11Server::sendFrameBufferUpdateEvent(const XCB::Region & reg)
     {
         xcbDisplay()->damageSubtrack(reg);
     }
@@ -378,16 +385,12 @@ namespace LTSM
             throw rfb_error(NS_FuncName);
         }
 
-        const int bytePerPixel = xcbDisplay()->pixmapBitsPerPixel(pixmapReply->depth()) >> 3;
+        const int bytePerPixel = pixmapReply->bpp >> 3;
 
         if(Application::isDebugLevel(DebugLevel::SyslogTrace))
         {
-            if(const xcb_visualtype_t* visual = xcbDisplay()->visual(pixmapReply->visId()))
-            {
-                Application::debug("%s: shm request size [%d, %d], reply: length: %d, depth: %d, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
-                                       __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->depth(), visual->bits_per_rgb_value, visual->red_mask,
-                                       visual->green_mask, visual->blue_mask, visual->colormap_entries);
-            }
+            Application::debug("%s: shm request size [%d, %d], reply: length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+                            __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bpp, pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
         }
 
         // fix align

@@ -160,11 +160,9 @@ namespace LTSM
 
     FrameBuffer FrameBuffer::copyRegion(const XCB::Region* reg) const
     {
-        FrameBuffer res;
-        res.fbreg = reg ? XCB::Region(0, 0, reg->width, reg->height) : XCB::Region(0, 0, fbreg.width, fbreg.height);
-        res.fbptr = std::make_shared<fbinfo_t>(res.fbreg.toSize(), pixelFormat());
-        res.owner = true;
+        FrameBuffer res(reg ? reg->toSize() : fbreg.toSize(), pixelFormat(), pitchSize());
         res.blitRegion(*this, reg ? *reg : res.fbreg, XCB::Point(0, 0));
+
         return res;
     }
 
@@ -371,7 +369,7 @@ namespace LTSM
         if(pixelFormat() != fb.pixelFormat())
         {
             for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
-                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
+                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & pixelFormat());
         }
         else
         {
