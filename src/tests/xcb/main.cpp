@@ -47,7 +47,7 @@ public:
 
         // reply info dump
         Application::info("get_image: request size [%d, %d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
-                damage.width, damage.height, reply->size(), reply->bpp, reply->rmask, reply->gmask, reply->bmask);
+                damage.width, damage.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
 
         return true;
     }

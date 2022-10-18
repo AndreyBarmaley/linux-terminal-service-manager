@@ -202,9 +202,9 @@ namespace LTSM
                 if(XCB::Region::intersection(clientRegion, damageRegion, & res))
                 {
                     // background job
-                    std::thread([&]()
+                    std::thread([&, reg = std::move(res)]()
                     {
-                        if(! sendUpdateSafe(res))
+                        if(! sendUpdateSafe(reg))
                             rfbMessagesShutdown(); 
                     }).detach();
                 }
@@ -378,6 +378,8 @@ namespace LTSM
 
     XcbFrameBuffer RFB::X11Server::xcbFrameBuffer(const XCB::Region & reg) const
     {
+        Application::debug("%s: region [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+
         auto pixmapReply = xcbDisplay()->copyRootImageRegion(reg);
         if(! pixmapReply)
         {
@@ -385,18 +387,16 @@ namespace LTSM
             throw rfb_error(NS_FuncName);
         }
 
-        const int bytePerPixel = pixmapReply->bpp >> 3;
-
         if(Application::isDebugLevel(DebugLevel::SyslogTrace))
         {
-            Application::debug("%s: shm request size [%d, %d], reply: length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
-                            __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bpp, pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
+            Application::debug("%s: request size [%d, %d], reply: length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+                            __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
         }
 
         // fix align
-        if(pixmapReply->size() != reg.width * reg.height * bytePerPixel)
+        if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel())
         {
-            Application::error("%s: region not aligned, reply size: %d, regw: %d, reg: %d, byte per pixel: %d", __FUNCTION__, pixmapReply->size(), reg.width, reg.height, bytePerPixel);
+            Application::error("%s: region not aligned, reply size: %d, reg size: [%d, %d], byte per pixel: %d", __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);
         }
 

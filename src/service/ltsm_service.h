@@ -235,6 +235,7 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
             void                        startSessionChannels(int display);
             bool                        startPrinterListener(int display, const XvfbSession &, const std::string & clientUrl);
+            bool                        startPulseAudioListener(int display, const XvfbSession &, const std::string & clientUrl);
 #endif
         };
 

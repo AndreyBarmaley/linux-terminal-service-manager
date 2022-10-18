@@ -193,7 +193,7 @@ namespace LTSM
 
                         SDL_Rect dstrt = { damage.x, damage.y, damage.width, damage.height };
 
-                        auto format = SDL_MasksToPixelFormatEnum(reply->bpp, reply->rmask, reply->gmask, reply->bmask, 0);
+                        auto format = SDL_MasksToPixelFormatEnum(reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask, 0);
                         if(SDL_PIXELFORMAT_UNKNOWN == format)
                             throw sdl_error("unknown pixel format");
 

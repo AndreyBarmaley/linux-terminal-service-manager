@@ -66,6 +66,7 @@ This is an experimental graphical client that implements the mechanism of multip
 * Automatic keyboard layout, client-side layout always takes precedence (nothing needs to be configured on the server-side)
 * File transfer via drag & drop (client side to remote virtual session)
 * Implemented file printing (using an additional backend for cups)
+* Implemented audio redirect via pulseaudio (from terminal to client)
  
 The mechanism of pipes is implemented through the abstract schemes unix://, file://, socket://, and the access mode ReadOnly, WriteOnly, ReadWrite.  
 For example, for a normal file transfer, a typical channel is created (client-server): file:///src_file1 (ReadOnly) file:///dst_file2 (WriteOnly), then in the user session, informational GUI dialogs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  

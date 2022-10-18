@@ -2374,6 +2374,10 @@ namespace LTSM
             auto printer = xvfb->options.find("printer");
             if(xvfb->options.end() != printer)
                 startPrinterListener(display, *xvfb, printer->second);
+
+            auto pulseaudio = xvfb->options.find("pulseaudio");
+            if(xvfb->options.end() != pulseaudio)
+                startPulseAudioListener(display, *xvfb, pulseaudio->second);
         }
     }
 
@@ -2407,6 +2411,40 @@ namespace LTSM
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
                                     serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly));
+
+        return true;
+    }
+
+    bool Manager::Object::startPulseAudioListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
+    {
+        auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
+
+        if(clientType == Channel::ConnectorType::Unknown)
+        {
+            Application::error("%s: %s, unknown client url: %s", __FUNCTION__, "pulseaudio", clientUrl.c_str());
+            return false;
+        }
+
+        auto pulseAudioSocket = _config->getString("channel:pulseaudio:format", "/var/run/ltsm/pulse/%{user}");
+        auto socketFolder = std::filesystem::path(pulseAudioSocket).parent_path();
+
+        if(! std::filesystem::is_directory(socketFolder))
+        {
+            std::filesystem::create_directory(socketFolder);
+
+            // fix mode 0750
+            std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
+                                        std::filesystem::perm_options::remove);
+
+            // fix owner xvfb
+            setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), 0);
+        }
+
+        pulseAudioSocket = Tools::replace(pulseAudioSocket, "%{user}", xvfb.user);
+
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
+        emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite));
 
         return true;
     }

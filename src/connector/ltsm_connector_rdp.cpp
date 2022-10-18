@@ -647,29 +647,27 @@ namespace LTSM
         if(Application::isDebugLevel(DebugLevel::SyslogDebug))
         {
             Application::info("get_image: request size: [%d,%d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
-                                  reg.width, reg.height, reply->size(), reply->bpp, reply->rmask, reply->gmask, reply->bmask);
+                                  reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         }
 
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
         renderPrimitivesToFB(frameBuffer);
 
-        return 24 == reply->bpp ?
+        return 24 == reply->bitsPerPixel() ?
                updateBitmapPlanar(reg, reply) : updateBitmapInterleaved(reg, reply);
     }
 
     bool Connector::RDP::updateBitmapPlanar(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bitsPerPixel = reply->bpp;
-        const int bytePerPixel = bitsPerPixel >> 3;
-        const size_t scanLineBytes = reg.width * bytePerPixel;
+        const size_t scanLineBytes = reg.width * reply->bytePerPixel();
         const size_t tileSize = 64;
         const size_t pixelFormat = freeRdp->peer->settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
 
-        if(reply->size() != reg.height * reg.width * bytePerPixel)
+        if(reply->size() != reg.height * reg.width * reply->bytePerPixel())
         {
-            Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+            Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
 
@@ -696,7 +694,7 @@ namespace LTSM
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bpp, scanLineBytes);
+        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -708,20 +706,20 @@ namespace LTSM
         {
             const int16_t localX = subreg.x - reg.x;
             const int16_t localY = subreg.y - reg.y;
-            const size_t offset = localY * scanLineBytes + localX * bytePerPixel;
+            const size_t offset = localY * scanLineBytes + localX * reply->bytePerPixel();
             BITMAP_DATA st = {0};
             // Bitmap data here the screen capture
             // https://msdn.microsoft.com/en-us/library/cc240612.aspx
             st.destLeft = subreg.x;
             st.destRight = subreg.x + subreg.width - 1;
             st.width = subreg.width;
-            st.bitsPerPixel = bitsPerPixel;
+            st.bitsPerPixel = reply->bitsPerPixel();
             st.compressed = TRUE;
             st.height = subreg.height;
             st.destTop = subreg.y;
             st.destBottom = subreg.y + subreg.height - 1;
-            st.cbScanWidth = subreg.width * bytePerPixel;
-            st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
+            st.cbScanWidth = subreg.width * reply->bytePerPixel();
+            st.cbUncompressedSize = subreg.height * subreg.width * reply->bytePerPixel();
             st.bitmapDataStream = freerdp_bitmap_compress_planar(context->planar, reply->data() + offset,
                                   pixelFormat, subreg.width, subreg.height, scanLineBytes, NULL, & st.bitmapLength);
             st.cbCompMainBodySize = st.bitmapLength;
@@ -771,21 +769,19 @@ namespace LTSM
     bool Connector::RDP::updateBitmapInterleaved(const XCB::Region & reg, const XCB::PixmapInfoReply & reply)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        const int bitsPerPixel = reply->bpp;
-        const int bytePerPixel = bitsPerPixel >> 3;
-        const size_t scanLineBytes = reg.width * bytePerPixel;
+        const size_t scanLineBytes = reg.width * reply->bytePerPixel();
         // size fixed: libfreerdp/codec/interleaved.c
         const size_t tileSize = 64;
 
-        if(reply->size() != reg.height * reg.width * bytePerPixel)
+        if(reply->size() != reg.height * reg.width * reply->bytePerPixel())
         {
-            Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, bytePerPixel);
+            Application::error("%s: %s failed, length: %d, size: [%d,%d], bpp: %d", __FUNCTION__, "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
 
         size_t pixelFormat = 0;
 
-        switch(bitsPerPixel)
+        switch(reply->bitsPerPixel())
         {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
 
@@ -831,7 +827,7 @@ namespace LTSM
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bpp, scanLineBytes);
+        Application::debug("%s: area [%d,%d,%d,%d], bits per pixel: %d, scanline: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -843,7 +839,7 @@ namespace LTSM
         {
             const int16_t localX = subreg.x - reg.x;
             const int16_t localY = subreg.y - reg.y;
-            const size_t offset = localY * scanLineBytes + localX * bytePerPixel;
+            const size_t offset = localY * scanLineBytes + localX * reply->bytePerPixel();
             // Bitmap data here the screen capture
             // https://msdn.microsoft.com/en-us/library/cc240612.aspx
             st.destLeft = subreg.x;
@@ -852,13 +848,13 @@ namespace LTSM
             st.destBottom = subreg.y + subreg.height - 1;
             st.width = subreg.width;
             st.height = subreg.height;
-            st.bitsPerPixel = bytePerPixel << 3;
+            st.bitsPerPixel = reply->bitsPerPixel();
             st.compressed = TRUE;
-            st.cbScanWidth = subreg.width * bytePerPixel;
-            st.cbUncompressedSize = subreg.height * subreg.width * bytePerPixel;
+            st.cbScanWidth = subreg.width * reply->bytePerPixel();
+            st.cbUncompressedSize = subreg.height * subreg.width * reply->bytePerPixel();
 
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
-                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, bitsPerPixel))
+                                      reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, reply->bitsPerPixel()))
             {
                 Application::error("%s: %s failed", __FUNCTION__, "interleaved_compress");
                 throw rdp_error(NS_FuncName);

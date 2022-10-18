@@ -309,8 +309,11 @@ namespace LTSM
             virtual size_t         size(void) const = 0;
 
             PixmapBase() = default;
-            PixmapBase(uint32_t r, uint32_t g, uint32_t b, uint8_t p) : rmask(r), gmask(g), bmask(b), bpp(p) {}
+            PixmapBase(uint32_t rm, uint32_t gm, uint32_t bm, uint8_t pp) : rmask(rm), gmask(gm), bmask(bm), bpp(pp) {}
             virtual ~PixmapBase() {}
+
+            uint8_t               bitsPerPixel(void) const { return bpp; }
+            uint8_t               bytePerPixel(void) const { return bpp >> 3; }
         };
 
         typedef std::shared_ptr<PixmapBase> PixmapInfoReply;

@@ -80,7 +80,6 @@ namespace LTSM
 		fprintf(stderr, "\n");
 	    }
 	    else
-	    if(_debug == DebugLevel::SyslogInfo ||  _debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
         	syslog(LOG_NOTICE, format, vals...);
         }
 

@@ -1287,6 +1287,8 @@ namespace LTSM
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
     {
+        Application::debug("%s: region: [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+
         if(_shm)
         {
             auto xcbReply = getReplyFunc1(xcb_shm_get_image, _conn, _screen->root, reg.x, reg.y, reg.width, reg.height,
@@ -1311,17 +1313,19 @@ namespace LTSM
             }
         }
 
-        size_t pitch = reg.width * (bitsPerPixel() >> 2);
-        auto maxReqLength = xcb_get_maximum_request_length(_conn);
+        size_t pitch = reg.width * (bitsPerPixel() >> 3);
         PixmapInfoReply res;
 
         if(pitch == 0)
         {
-            Application::error("copy root image error, empty size: [%d,%d], bpp: %d", reg.width, reg.height, bitsPerPixel());
+            Application::error("%s: copy root image error, empty size: [%d,%d], bpp: %d", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
+        auto maxReqLength = xcb_get_maximum_request_length(_conn);
         uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
+
+        Application::debug("%s: max request size: %d, allow rows: %d", __FUNCTION__, maxReqLength, allowRows);
 
         for(int16_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
         {
@@ -1342,7 +1346,7 @@ namespace LTSM
                 if(! res)
                 {
                     auto visptr = visual(reply->visual);
-                    auto bpp = bppFromDepth(reply->depth);
+                    auto bitsPerPixel = bppFromDepth(reply->depth);
 
                     if(! visptr)
                     {
@@ -1350,12 +1354,15 @@ namespace LTSM
                         break;
                     }
 
-                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, reg.height * pitch));
+                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height * pitch));
                 }
 
                 auto info = static_cast<PixmapBuffer*>(res.get());
-                auto length = xcb_get_image_data_length(reply.get());
+
                 auto data = xcb_get_image_data(reply.get());
+                auto length = xcb_get_image_data_length(reply.get());
+                Application::debug("%s: receive length: %d", __FUNCTION__, length);
+
                 info->pixels.insert(info->pixels.end(), data, data + length);
             }
         }
