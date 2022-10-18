@@ -15,7 +15,7 @@ main dependencies:
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=AndreyBarmaley_linux-terminal-service-manager&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=AndreyBarmaley_linux-terminal-service-manager)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/paypalme/andreyafletdinov)
+[![OpenHub Rating](https://openhub.net/p/linux-terminal-service-manager/widgets/project_thin_badge?format=gif)](https://openhub.net/p/linux-terminal-service-manager)
 
 # Demo access
 ```
