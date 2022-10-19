@@ -364,7 +364,14 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
             if(ltsmSupport && msgType == PROTOCOL_LTSM)
             {
-                recvLtsm(*this);
+                try
+                {
+                    recvLtsm(*this);
+                }
+                catch(const std::exception & err)
+                {
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                }
                 continue;
             }
 #endif

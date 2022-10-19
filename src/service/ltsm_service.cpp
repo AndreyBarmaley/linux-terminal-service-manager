@@ -407,9 +407,6 @@ namespace LTSM
             }
         }
 
-        if(0 != chdir(home.c_str()))
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
-
         if(0 != setgid(gid))
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "setgid", strerror(errno), errno);
@@ -421,6 +418,9 @@ namespace LTSM
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "setuid", strerror(errno), errno);
             return false;
         }
+
+        if(0 != chdir(home.c_str()))
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
 
         setenv("USER", user.c_str(), 1);
         setenv("LOGNAME", user.c_str(), 1);
@@ -1208,23 +1208,24 @@ namespace LTSM
                 std::exit(0);
             }
 
-            ret = pam_open_session(xvfb.pamh, 0);
-
-            if(ret != PAM_SUCCESS)
-            {
-                Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_open_session", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
-                ret = pam_setcred(xvfb.pamh, PAM_DELETE_CRED);
-                pam_end(xvfb.pamh, ret);
-                // child exit
-                std::exit(0);
-            }
-
+/*
             ret = pam_setcred(xvfb.pamh, PAM_REINITIALIZE_CRED);
 
             if(ret != PAM_SUCCESS)
             {
                 Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_setcred", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
                 ret = pam_close_session(xvfb.pamh, 0);
+                pam_end(xvfb.pamh, ret);
+                // child exit
+                std::exit(0);
+            }
+*/
+            ret = pam_open_session(xvfb.pamh, 0);
+
+            if(ret != PAM_SUCCESS)
+            {
+                Application::error("%s: %s failed, user: %s, error: %s", __FUNCTION__, "pam_open_session", xvfb.user.c_str(), pam_strerror(xvfb.pamh, ret));
+                ret = pam_setcred(xvfb.pamh, PAM_DELETE_CRED);
                 pam_end(xvfb.pamh, ret);
                 // child exit
                 std::exit(0);
@@ -2371,6 +2372,7 @@ namespace LTSM
     {
         if(auto xvfb = getXvfbInfo(display))
         {
+
             auto printer = xvfb->options.find("printer");
             if(xvfb->options.end() != printer)
                 startPrinterListener(display, *xvfb, printer->second);
@@ -2383,6 +2385,7 @@ namespace LTSM
 
     bool Manager::Object::startPrinterListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
     {
+        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
         if(clientType == Channel::ConnectorType::Unknown)
@@ -2410,13 +2413,14 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly));
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "slow");
 
         return true;
     }
 
     bool Manager::Object::startPulseAudioListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
     {
+        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
         if(clientType == Channel::ConnectorType::Unknown)
@@ -2429,22 +2433,19 @@ namespace LTSM
         auto socketFolder = std::filesystem::path(pulseAudioSocket).parent_path();
 
         if(! std::filesystem::is_directory(socketFolder))
-        {
             std::filesystem::create_directory(socketFolder);
 
-            // fix mode 0750
-            std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
+        // fix mode 0750
+        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
                                         std::filesystem::perm_options::remove);
-
-            // fix owner xvfb
-            setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), 0);
-        }
+        // fix owner xvfb
+        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), getGroupGid(xvfb.user));
 
         pulseAudioSocket = Tools::replace(pulseAudioSocket, "%{user}", xvfb.user);
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite));
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast");
 
         return true;
     }

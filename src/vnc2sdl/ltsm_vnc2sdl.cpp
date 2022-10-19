@@ -240,19 +240,6 @@ namespace LTSM
                 dropFiles.clear();
             }
 #endif
-
-            if(! SDL_PollEvent(& ev))
-            {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-
-            if(! sdlEventProcessing(& ev))
-            {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
-
             // send clipboard
             if(std::chrono::steady_clock::now() - clipDelay > 300ms &&
                 ! focusLost && SDL_HasClipboardText())
@@ -269,7 +256,22 @@ namespace LTSM
                         SDL_free(ptr);
                     }
                 }).detach();
+
+                clipDelay = std::chrono::steady_clock::now();
             }
+
+            if(! SDL_PollEvent(& ev))
+            {
+                std::this_thread::sleep_for(5ms);
+                continue;
+            }
+
+            if(! sdlEventProcessing(& ev))
+            {
+                std::this_thread::sleep_for(5ms);
+                continue;
+            }
+
         }
 
         rfbMessagesShutdown();
@@ -612,7 +614,7 @@ namespace LTSM
                 auto pulse = std::filesystem::path(runtime) / "pulse" / "native";
 
                 if(std::filesystem::is_socket(pulse))
-                    jo.push("pulseaudio", pulse.native());
+                    jo.push("pulseaudio", std::string("unix://").append(pulse.native()));
                 else
                     Application::warning("%s: pulse socket not found: %s", __FUNCTION__, pulse.c_str());
             }

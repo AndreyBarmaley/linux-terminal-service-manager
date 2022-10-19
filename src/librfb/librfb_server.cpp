@@ -476,7 +476,14 @@ namespace LTSM
                     throw rfb_error(NS_FuncName);
                 }
 
-                recvLtsm(*this);
+                try
+                {
+                    recvLtsm(*this);
+                }
+                catch(const std::exception & err)
+                {
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                }
                 continue;
             }
 #endif

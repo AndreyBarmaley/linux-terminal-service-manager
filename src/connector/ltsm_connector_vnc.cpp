@@ -462,7 +462,7 @@ namespace LTSM
             {
                 // create file transfer channel
                 createChannel(Channel::createUrl(Channel::ConnectorType::File, filepath), Channel::ConnectorMode::ReadOnly,
-                        Channel::createUrl(Channel::ConnectorType::File, tmpfile), Channel::ConnectorMode::WriteOnly);
+                        Channel::createUrl(Channel::ConnectorType::File, tmpfile), Channel::ConnectorMode::WriteOnly, Channel::Speed::Slow);
 
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
                 busTransferFileStarted(_display, tmpfile, (*it).second, dstfile.c_str());
@@ -477,7 +477,8 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
+            // FIXME speed
+            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::Speed::Medium);
         }
     }
 
@@ -489,11 +490,11 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
         if(0 < _display && display == _display)
         {
-            createListener(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode));
+            createListener(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::connectorSpeed(speed));
         }
     }
 

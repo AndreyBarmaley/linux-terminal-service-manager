@@ -78,7 +78,7 @@ protected:
         object_.registerSignal("createChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode");
         object_.registerSignal("destroyChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, uint8_t>("display", "channel");
         object_.registerSignal("transferAllow").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string>("display", "filepath", "tmpfile", "dstdir");
-        object_.registerSignal("createListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode");
+        object_.registerSignal("createListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode", "speed");
         object_.registerSignal("destroyListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "client", "server");
         object_.registerSignal("addRenderRect").onInterface(INTERFACE_NAME).withParameters<int32_t, sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>, bool>("display", "rect", "color", "fill");
         object_.registerSignal("addRenderText").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, sdbus::Struct<int16_t, int16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>>("display", "text", "pos", "color");
@@ -168,9 +168,9 @@ public:
         object_.emitSignal("transferAllow").onInterface(INTERFACE_NAME).withArguments(display, filepath, tmpfile, dstdir);
     }
 
-    void emitCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    void emitCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
-        object_.emitSignal("createListener").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode);
+        object_.emitSignal("createListener").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode, speed);
     }
 
     void emitDestroyListener(const int32_t& display, const std::string& client, const std::string& server)

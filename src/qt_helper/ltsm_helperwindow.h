@@ -106,7 +106,7 @@ private:
     void                onDisplayRemoved(const int32_t& display) override {}
     void                onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&) override {}
     void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override {}
-    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&) override {}
+    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
     void                onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
     void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
     void                onDebugLevel(const std::string & level) override {}

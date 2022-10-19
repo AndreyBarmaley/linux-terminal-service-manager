@@ -68,10 +68,11 @@ namespace LTSM
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly, Default };
 
         // UltraSlow: ~4k/sec, ~16k/sec, ~40k/sec, ~200k/sec, ~800k/sec
-        enum class Speed { UltraSlow, Slow, Medium, Fast, UltraFast };
+        enum class Speed { VerySlow, Slow, Medium, Fast, UltraFast };
 
         ConnectorType connectorType(std::string_view);
         ConnectorMode connectorMode(std::string_view);
+        Speed connectorSpeed(std::string_view);
 
         std::pair<ConnectorType, std::string> parseUrl(std::string_view);
         std::string createUrl(const ConnectorType &, std::string_view);
@@ -84,6 +85,7 @@ namespace LTSM
             ConnectorMode clientMode = ConnectorMode::Default;
             std::string serverUrl;
             std::string clientUrl;
+            Speed speed = Speed::Medium;
             int serverFd = -1;
             bool serverUnix = false;
             uint8_t channel = 0;
@@ -114,6 +116,7 @@ namespace LTSM
         public:
             static const char* typeString(const ConnectorType &);
             static const char* modeString(const ConnectorMode &);
+            static const char* speedString(const Speed &);
 
         protected:
             bool        local2remote(void);
@@ -125,7 +128,7 @@ namespace LTSM
             void        startThreads(const ConnectorMode &);
 
         public:
-            Connector(uint8_t channel, int fd, const ConnectorMode &, ChannelClient &);
+            Connector(uint8_t channel, int fd, const ConnectorMode &, ChannelClient &, const Speed &);
             virtual ~Connector();
 
             uint8_t     channel(void) const { return id; }
@@ -145,9 +148,9 @@ namespace LTSM
         namespace UnixConnector
         {
             std::unique_ptr<Connector>
-                createConnector(uint8_t channel, int fd, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite);
+                createConnector(uint8_t channel, int fd, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite, Speed speed = Speed::Medium);
             std::unique_ptr<Connector>
-                createConnector(uint8_t channel, const std::filesystem::path &, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite);
+                createConnector(uint8_t channel, const std::filesystem::path &, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite, Speed speed = Speed::Medium);
         };
 
         namespace TcpConnector
@@ -155,15 +158,15 @@ namespace LTSM
             std::pair<std::string, int> parseUrl(std::string_view);
 
             std::unique_ptr<Connector>
-                createConnector(uint8_t channel, int fd, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite);
+                createConnector(uint8_t channel, int fd, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite, Speed speed = Speed::Medium);
             std::unique_ptr<Connector>
-                createConnector(uint8_t channel, std::string_view ipaddr, int port, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite);
+                createConnector(uint8_t channel, std::string_view ipaddr, int port, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadWrite, Speed speed = Speed::Medium);
         };
 
         namespace FileConnector
         {
             std::unique_ptr<Connector>
-                createConnector(uint8_t channel, const std::filesystem::path &, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadOnly);
+                createConnector(uint8_t channel, const std::filesystem::path &, ChannelClient &, ConnectorMode mode = ConnectorMode::ReadOnly, Speed speed = Speed::Medium);
         };
 
         class Listener
@@ -177,11 +180,12 @@ namespace LTSM
 
             ChannelClient* owner = nullptr;
 
+            Speed          speed = Speed::Medium;
             int            srvfd = -1;
             bool           isUnix = false;
 
         public:
-            Listener(int fd, bool isunix, ChannelClient &, const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode);
+            Listener(int fd, bool isunix, ChannelClient &, const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed &);
             virtual ~Listener();
 
             static void loopAccept(Listener*);
@@ -192,18 +196,24 @@ namespace LTSM
             const std::string & getClientUrl(void) const { return clientUrl; }
         };
 
-        namespace UnixListener
+        class UnixListener : public Listener
         {
-            std::unique_ptr<Listener>
+            std::filesystem::path path;
+
+        public:
+            UnixListener(const std::filesystem::path &, int fd, ChannelClient &, const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed &);
+            ~UnixListener();
+
+            static std::unique_ptr<Listener>
                 createListener(const std::filesystem::path &, int listen, ChannelClient &,
-                                const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode);
-        } 
+                                const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed &);
+        };
 
         namespace TcpListener
         {
             std::unique_ptr<Listener>
                 createListener(std::string_view url, int listen, ChannelClient &,
-                                const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode);
+                                const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed &);
         }
     }
 
@@ -239,15 +249,15 @@ namespace LTSM
 
         virtual void    systemTransferFiles(const JsonObject &) {}
 
-        bool            createListener(const std::string & client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode);
-        bool            createChannel(const std::string& client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode);
-        bool            createChannelUnix(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &);
-        bool            createChannelUnix(uint8_t channel, int, const Channel::ConnectorMode &);
-        bool            createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &);
-        bool            createChannelSocket(uint8_t channel, std::pair<std::string, int>, const Channel::ConnectorMode &);
-        bool            createChannelSocket(uint8_t channel, int, const Channel::ConnectorMode &);
+        bool            createListener(const std::string & client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode, const Channel::Speed &);
+        bool            createChannel(const std::string& client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode, const Channel::Speed &);
+        bool            createChannelUnix(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Speed &);
+        bool            createChannelUnix(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Speed &);
+        bool            createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Speed &);
+        bool            createChannelSocket(uint8_t channel, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Speed &);
+        bool            createChannelSocket(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Speed &);
 
-        bool            createChannelFromListener(const std::string& client, const Channel::ConnectorMode & cmode, bool isunix, int sock, const Channel::ConnectorMode & smode);
+        bool            createChannelFromListener(const std::string& client, const Channel::ConnectorMode & cmode, bool isunix, int sock, const Channel::ConnectorMode & smode, const Channel::Speed &);
         void            destroyChannel(uint8_t channel);
         void            destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
@@ -260,7 +270,7 @@ namespace LTSM
         void            sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void            sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
         bool            sendSystemTransferFiles(std::list<std::string>);
-        void            sendSystemChannelOpen(uint8_t channel, const Channel::ConnectorType &, std::string_view path, const Channel::ConnectorMode &);
+        void            sendSystemChannelOpen(uint8_t channel, const Channel::ConnectorType &, std::string_view path, const Channel::ConnectorMode &, const Channel::Speed &);
         void            sendSystemChannelClose(uint8_t channel);
         void            sendSystemChannelConnected(uint8_t channel, bool noerror);
 

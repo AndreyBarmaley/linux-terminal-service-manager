@@ -93,7 +93,7 @@ namespace LTSM
             void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
             void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
             void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
-            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
+            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
 #endif
 

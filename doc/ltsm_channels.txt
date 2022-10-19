@@ -97,7 +97,7 @@ Content is JSON format
 
 [2.1.1] System message CLIENT OPTIONS
 
-{ "cmd": "ClientOptions", "options": { "key1": "val1", "key2": "val2" }, "environments": { "env1": "val1", .. }, "keyboard": [ "ru", "fr", "en" ] }
+{ "cmd": "ClientOptions", "options": { "key1": "val1", "key2": "val2" }, "environments": { "env1": "val1", .. }, "keyboard": { "layouts": [ "ru", "fr", "en" ], "current": "ru" }}
 
 With this message, the client provides any information in the form of a key value.
 
@@ -114,7 +114,7 @@ With this message, the client provides any information in the form of a key valu
 ----------------------------
 
 environments: json oblect, append to session environments, TZ, LANG, LC_ and others
-keyboard: json array of strings, keyboard layouts identifiers
+keyboard: json object, keyboard layouts identifiers
 
 [2.2.1] System message CHANNEL CLOSE
 
@@ -126,7 +126,7 @@ keyboard: json array of strings, keyboard layouts identifiers
 
 [2.2.3] System message CHANNEL OPEN
 
-{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string" }
+{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string" }
 
 --------------+-------
  point type   | value
@@ -146,6 +146,17 @@ keyboard: json array of strings, keyboard layouts identifiers
 --------------+------
 
  Default mode - unix: rw, socket: rw, file(present): ro, file(not found): wo
+
+--------------+-------
+ point speed  | value
+--------------+-------
+ VerySlow     | very
+ Slow         | slow
+ Medium       | medium
+ Fast         | fast
+ UltraFast    | ultra
+--------------+------
+
 
 [2.2.3.1] System message CHANNEL OPEN UNIX (unix socket)
 
@@ -205,6 +216,3 @@ the client requests the ability to transfer the files.
 { "cmd": "KeyboardChange", "layout": "ru" }
 
 all supported keyboard layouts are transmitted in advance via the environment:keyboard.
-
-
-

@@ -38,7 +38,7 @@ protected:
         proxy_.uponSignal("createChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateChannel(display, client, cmode, server, smode); });
         proxy_.uponSignal("destroyChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const uint8_t& channel){ this->onDestroyChannel(display, channel); });
         proxy_.uponSignal("transferAllow").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir){ this->onTransferAllow(display, filepath, tmpfile, dstdir); });
-        proxy_.uponSignal("createListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ this->onCreateListener(display, client, cmode, server, smode); });
+        proxy_.uponSignal("createListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed){ this->onCreateListener(display, client, cmode, server, smode, speed); });
         proxy_.uponSignal("destroyListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& server){ this->onDestroyListener(display, client, server); });
         proxy_.uponSignal("addRenderRect").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ this->onAddRenderRect(display, rect, color, fill); });
         proxy_.uponSignal("addRenderText").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ this->onAddRenderText(display, text, pos, color); });
@@ -63,7 +63,7 @@ protected:
     virtual void onCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
     virtual void onDestroyChannel(const int32_t& display, const uint8_t& channel) = 0;
     virtual void onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) = 0;
-    virtual void onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
+    virtual void onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) = 0;
     virtual void onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) = 0;
     virtual void onAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual void onAddRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;
