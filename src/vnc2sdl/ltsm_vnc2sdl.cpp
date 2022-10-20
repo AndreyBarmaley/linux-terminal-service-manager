@@ -38,7 +38,7 @@ namespace LTSM
     void printHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--audio] [--printer]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--audio] [--printer] [--pcscd]" << std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -71,6 +71,9 @@ namespace LTSM
             else
             if(0 == std::strcmp(argv[it], "--audio"))
                 audio = true;
+            else
+            if(0 == std::strcmp(argv[it], "--pcscd"))
+                pcscd = true;
             else
             if(0 == std::strcmp(argv[it], "--debug"))
                 Application::setDebugLevel(DebugLevel::Console);
@@ -606,6 +609,14 @@ namespace LTSM
 
         if(printer)
             jo.push("printer", "socket://127.0.0.1:9100");
+
+        if(pcscd)
+        {
+            auto sock = "/var/run/pcscd/pcscd.comm";
+
+            if(std::filesystem::is_socket(sock))
+                jo.push("pcscd", std::string("unix://").append(sock));
+        }
 
         if(audio)
         {

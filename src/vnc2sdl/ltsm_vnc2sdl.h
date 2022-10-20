@@ -72,6 +72,7 @@ namespace LTSM
         bool                    fullscreen = false;
         bool                    printer = false;
         bool                    audio = false;
+        bool                    pcscd = false;
 #ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
 #endif

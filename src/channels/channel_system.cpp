@@ -59,7 +59,7 @@ LTSM::Channel::ConnectorType LTSM::Channel::connectorType(std::string_view str)
 
 LTSM::Channel::ConnectorMode LTSM::Channel::connectorMode(std::string_view str)
 {
-    for(auto mode : { ConnectorMode::ReadOnly, ConnectorMode::ReadWrite, ConnectorMode::WriteOnly, ConnectorMode::Default })
+    for(auto mode : { ConnectorMode::ReadOnly, ConnectorMode::ReadWrite, ConnectorMode::WriteOnly })
         if(str == Connector::modeString(mode)) return mode;
 
     return ConnectorMode::Unknown;
@@ -91,7 +91,6 @@ const char* LTSM::Channel::Connector::modeString(const ConnectorMode & mode)
     switch(mode)
     {
         // default mode - unix: rw, socket: rw, file(present): ro, file(not found): wo
-        case ConnectorMode::Default:    return "xx";
         case ConnectorMode::ReadWrite:  return "rw";
         case ConnectorMode::ReadOnly:   return "ro";
         case ConnectorMode::WriteOnly:  return "wo";
@@ -534,7 +533,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::list<std::string> files)
     return true;
 }
 
-bool LTSM::ChannelClient::createListener(const std::string & client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode, const Channel::Speed & speed)
+bool LTSM::ChannelClient::createListener(const std::string & client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ListenMode & listen, const Channel::Speed & speed)
 {
     Application::debug("%s: client: %s, server: %s", __FUNCTION__, client.c_str(), server.c_str());
 
@@ -545,7 +544,7 @@ bool LTSM::ChannelClient::createListener(const std::string & client, const Chann
         try
         {
             std::scoped_lock<std::mutex> guard(lockls);
-            listenners.emplace_back(Channel::UnixListener::createListener(serverSuffix, 5, *this, smode, client, cmode, speed));
+            listenners.emplace_back(Channel::UnixListener::createListener(serverSuffix, listen, client, cmode, speed, *this));
         }
         catch(const std::exception & err)
         {
@@ -561,7 +560,7 @@ bool LTSM::ChannelClient::createListener(const std::string & client, const Chann
         try
         {
             std::scoped_lock<std::mutex> guard(lockls);
-            listenners.emplace_back(Channel::TcpListener::createListener(serverSuffix, 5, *this, smode, client, cmode, speed));
+            listenners.emplace_back(Channel::TcpListener::createListener(serverSuffix, listen, client, cmode, speed, *this));
         }
         catch(const std::exception & err)
         {
@@ -716,7 +715,7 @@ bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesyst
 
     try
     {
-        channels.emplace_back(Channel::UnixConnector::createConnector(channel, path, *this, mode, speed));
+        channels.emplace_back(Channel::UnixConnector::createConnector(channel, path, mode, speed, *this));
     }
     catch(const std::exception & err)
     {
@@ -733,7 +732,7 @@ bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, int sock, const Cha
 
     try
     {
-        channels.emplace_back(Channel::UnixConnector::createConnector(channel, sock, *this, mode, speed));
+        channels.emplace_back(Channel::UnixConnector::createConnector(channel, sock, mode, speed, *this));
     }
     catch(const std::exception & err)
     {
@@ -750,7 +749,7 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
 
     try
     {
-        channels.emplace_back(Channel::FileConnector::createConnector(channel, path, *this, mode, speed));
+        channels.emplace_back(Channel::FileConnector::createConnector(channel, path, mode, speed, *this));
     }
     catch(const std::exception & err)
     {
@@ -780,7 +779,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::st
     try
     {
         std::scoped_lock<std::mutex> guard(lockch);
-        channels.emplace_back(Channel::TcpConnector::createConnector(channel, ipAddrPort.first, ipAddrPort.second, *this, mode, speed));
+        channels.emplace_back(Channel::TcpConnector::createConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, speed, *this));
     }
     catch(const std::exception & err)
     {
@@ -798,7 +797,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, int sock, const C
     try
     {
         std::scoped_lock<std::mutex> guard(lockch);
-        channels.emplace_back(Channel::TcpConnector::createConnector(channel, sock, *this, mode, speed));
+        channels.emplace_back(Channel::TcpConnector::createConnector(channel, sock, mode, speed, *this));
     }
     catch(const std::exception & err)
     {
@@ -945,7 +944,7 @@ void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
 }
 
 /// Connector
-LTSM::Channel::Connector::Connector(uint8_t ch, int fd0, const ConnectorMode & mode, ChannelClient & srv, const Speed & speed)
+LTSM::Channel::Connector::Connector(uint8_t ch, int fd0, const ConnectorMode & mode, const Speed & speed, ChannelClient & srv)
     : owner(& srv), fd(fd0), id(ch)
 {
     setSpeed(speed);
@@ -1200,11 +1199,8 @@ void LTSM::Channel::Connector::loopReader(Connector* st)
 
 /// UnixConnector
 std::unique_ptr<LTSM::Channel::Connector>
-    LTSM::Channel::UnixConnector::createConnector(uint8_t channel, const std::filesystem::path & path, ChannelClient & sender, ConnectorMode mode, Speed speed)
+    LTSM::Channel::UnixConnector::createConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
-    if(mode == ConnectorMode::Default)
-        mode = ConnectorMode::ReadWrite;
-
     if(! std::filesystem::is_socket(path))
     {
         Application::error("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "socket not found", channel, path.c_str());
@@ -1220,22 +1216,12 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    if(0 <= fd)
-    {
-        // set permissons 0640
-        auto perm640 = std::filesystem::perms::owner_write | std::filesystem::perms::owner_read | std::filesystem::perms::group_read;
-        std::filesystem::permissions(path, perm640, std::filesystem::perm_options::replace);
-    }
-
-    return std::make_unique<Connector>(channel, fd, mode, sender, speed);
+    return std::make_unique<Connector>(channel, fd, mode, speed, sender);
 }
 
 std::unique_ptr<LTSM::Channel::Connector>
-    LTSM::Channel::UnixConnector::createConnector(uint8_t channel, int sock, ChannelClient & sender, ConnectorMode mode, Speed speed)
+    LTSM::Channel::UnixConnector::createConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
-    if(mode == ConnectorMode::Default)
-        mode = ConnectorMode::ReadWrite;
-
     Application::info("%s: channel: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     if(0 > sock)
@@ -1244,16 +1230,13 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    return std::make_unique<Connector>(channel, sock, mode, sender, speed);
+    return std::make_unique<Connector>(channel, sock, mode, speed, sender);
 }
 
 /// TcpConnector
 std::unique_ptr<LTSM::Channel::Connector>
-    LTSM::Channel::TcpConnector::createConnector(uint8_t channel, std::string_view ipaddr, int port, ChannelClient & sender, ConnectorMode mode, Speed speed)
+    LTSM::Channel::TcpConnector::createConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
-    if(mode == ConnectorMode::Default)
-        mode = ConnectorMode::ReadWrite;
-
     Application::info("%s: channel: 0x%02x, addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipaddr.data(), port, Channel::Connector::modeString(mode));
 
     int fd = TCPSocket::connect(ipaddr, port);
@@ -1263,15 +1246,12 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    return std::make_unique<Connector>(channel, fd, mode, sender, speed);
+    return std::make_unique<Connector>(channel, fd, mode, speed, sender);
 }
 
 std::unique_ptr<LTSM::Channel::Connector>
-    LTSM::Channel::TcpConnector::createConnector(uint8_t channel, int sock, ChannelClient & sender, ConnectorMode mode, Speed speed)
+    LTSM::Channel::TcpConnector::createConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
-    if(mode == ConnectorMode::Default)
-        mode = ConnectorMode::ReadWrite;
-
     Application::info("%s: channel: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     if(0 > sock)
@@ -1280,45 +1260,17 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    return std::make_unique<Connector>(channel, sock, mode, sender, speed);
+    return std::make_unique<Connector>(channel, sock, mode, speed, sender);
 }
 
 /// FileConnector
 std::unique_ptr<LTSM::Channel::Connector>
-    LTSM::Channel::FileConnector::createConnector(uint8_t channel, const std::filesystem::path & path, ChannelClient & sender, ConnectorMode mode, Speed speed)
+    LTSM::Channel::FileConnector::createConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
     if(mode == ConnectorMode::ReadWrite)
     {
         Application::error("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "file mode failed", channel, path.c_str());
         throw channel_error(NS_FuncName);
-    }
-
-    if(mode == ConnectorMode::Default)
-    {
-        // if present: ro, if not found: wo
-        if(std::filesystem::exists(path))
-        {
-            bool allow = std::filesystem::is_regular_file(path) ||
-                        std::filesystem::is_block_file(path) || std::filesystem::is_character_file(path);
-            if(! allow)
-            {
-                Application::error("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "allow only: regular, block or char types file", channel, path.c_str());
-                throw channel_error(NS_FuncName);
-            }
-
-            if(0 != access(path.c_str(), W_OK))
-            {
-                Application::warning("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "file not writable, switch mode: ro", channel, path.c_str());
-                mode = ConnectorMode::ReadOnly;
-            }
-            else
-            {
-                Application::error("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "file read error", channel, path.c_str());
-                throw channel_error(NS_FuncName);
-            }
-        }
-        else
-            mode = ConnectorMode::WriteOnly;
     }
 
     if(mode == ConnectorMode::ReadOnly &&
@@ -1344,7 +1296,7 @@ std::unique_ptr<LTSM::Channel::Connector>
         if(std::filesystem::exists(path))
         {
             flags |= O_APPEND;
-            Application::error("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "file exists switch mode to append", channel, path.c_str());
+            Application::warning("%s: %s, channel: 0x%02x, path: %s", __FUNCTION__, "file exists switch mode to append", channel, path.c_str());
         }
         else
         {
@@ -1360,11 +1312,11 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    return std::make_unique<Connector>(channel, fd, mode, sender, speed);
+    return std::make_unique<Connector>(channel, fd, mode, speed, sender);
 }
 
-LTSM::Channel::Listener::Listener(int fd, bool isunix, ChannelClient & sender,
-    const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & sp)
+LTSM::Channel::Listener::Listener(int fd, bool isunix, const Channel::ConnectorMode & smode, const std::string & curl,
+    const Channel::ConnectorMode & cmode, const Channel::Speed & sp, ChannelClient & sender)
     : clientUrl(curl), clientMode(cmode), serverMode(smode), owner(& sender), speed(sp), srvfd(fd), isUnix(isunix)
 {
     loopRunning = true;
@@ -1429,9 +1381,9 @@ void LTSM::Channel::Listener::loopAccept(Listener* st)
     }
 }
 
-LTSM::Channel::UnixListener::UnixListener(const std::filesystem::path & sock, int fd, ChannelClient & sender, const Channel::ConnectorMode & smode, 
-    const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed)
-    : LTSM::Channel::Listener(fd, true, sender, smode, curl, cmode, speed), path(sock)
+LTSM::Channel::UnixListener::UnixListener(const std::filesystem::path & sock, int fd, const Channel::ConnectorMode & smode, 
+    const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed, ChannelClient & sender)
+    : LTSM::Channel::Listener(fd, true, smode, curl, cmode, speed, sender), path(sock)
 {
 }
 
@@ -1442,8 +1394,8 @@ LTSM::Channel::UnixListener::~UnixListener()
 }
 
 std::unique_ptr<LTSM::Channel::Listener>
-    LTSM::Channel::UnixListener::createListener(const std::filesystem::path & path, int listen, ChannelClient & sender,
-        const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed)
+    LTSM::Channel::UnixListener::createListener(const std::filesystem::path & path, const ListenMode & listen,
+        const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed, ChannelClient & sender)
 {
     if(std::filesystem::exists(path))
     {
@@ -1459,24 +1411,20 @@ std::unique_ptr<LTSM::Channel::Listener>
         }
     }
 
-    int srvfd = UnixSocket::listen(path, listen);
+    int srvfd = UnixSocket::listen(path, listen.queue);
     if(0 > srvfd)
     {
         Application::error("%s: %s, path: %s", __FUNCTION__, "unix failed", path.c_str());
         throw channel_error(NS_FuncName);
     }
 
-    // set permissions 0640
-    auto perm640 = std::filesystem::perms::owner_write | std::filesystem::perms::owner_read | std::filesystem::perms::group_read;
-    std::filesystem::permissions(path, perm640, std::filesystem::perm_options::replace);
-
-    return std::make_unique<UnixListener>(path, srvfd, sender, smode, curl, cmode, speed);
+    return std::make_unique<UnixListener>(path, srvfd, listen.mode, curl, cmode, speed, sender);
 }
 
 
 std::unique_ptr<LTSM::Channel::Listener>
-    LTSM::Channel::TcpListener::createListener(std::string_view url, int listen, ChannelClient & sender,
-        const Channel::ConnectorMode & smode, const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed)
+    LTSM::Channel::TcpListener::createListener(std::string_view url, const ListenMode & listen,
+        const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed, ChannelClient & sender)
 {
     auto [ ipaddr, port ] = Channel::TcpConnector::parseUrl(url);
     if(0 >= port)
@@ -1489,12 +1437,12 @@ std::unique_ptr<LTSM::Channel::Listener>
     if(sender.serverSide())
         ipaddr = "127.0.0.1";
 
-    int srvfd = TCPSocket::listen(ipaddr, port, listen);
+    int srvfd = TCPSocket::listen(ipaddr, port, listen.queue);
     if(0 > srvfd)
     {
         Application::error("%s: %s, ipaddr: %s, port: %d", __FUNCTION__, "socket failed", ipaddr.c_str(), port);
         throw channel_error(NS_FuncName);
     }
 
-    return std::make_unique<Listener>(srvfd, false, sender, smode, curl, cmode, speed);
+    return std::make_unique<Listener>(srvfd, false, listen.mode, curl, cmode, speed, sender);
 }

@@ -28,7 +28,7 @@ namespace LTSM
     inline static const char* dbus_service_name = "ltsm.manager.service";
     inline static const char* dbus_object_path = "/ltsm/manager/service";
 
-    inline static const int service_version = 20221019;
+    inline static const int service_version = 20221020;
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
     inline static const bool big_endian = false;

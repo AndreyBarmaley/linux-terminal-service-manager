@@ -494,7 +494,8 @@ namespace LTSM
     {
         if(0 < _display && display == _display)
         {
-            createListener(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::connectorSpeed(speed));
+            // FIXME listen queue
+            createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), 5}, Channel::connectorSpeed(speed));
         }
     }
 

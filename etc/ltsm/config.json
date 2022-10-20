@@ -22,7 +22,10 @@
     "transfer:file:disabled": false,
     "transfer:file:max": 100000000,
     "#transfer:group:only": "transfer-allow",
+
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
+    "channel:pulseaudio:format": "/var/run/ltsm/pulse/%{user}",
+    "channel:pcscd:format", "/var/run/ltsm/pcscd/%{user}",
 
     "idle:timeout:sec": 0,
     "#idle:action:path": "/usr/bin/xlock",

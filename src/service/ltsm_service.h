@@ -236,6 +236,7 @@ namespace LTSM
             void                        startSessionChannels(int display);
             bool                        startPrinterListener(int display, const XvfbSession &, const std::string & clientUrl);
             bool                        startPulseAudioListener(int display, const XvfbSession &, const std::string & clientUrl);
+            bool                        startPcscdListener(int display, const XvfbSession &, const std::string & clientUrl);
 #endif
         };
 

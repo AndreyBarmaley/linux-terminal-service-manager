@@ -142,10 +142,7 @@ keyboard: json object, keyboard layouts identifiers
  ReadOnly     | ro
  WriteOnly    | wo
  ReadWrite    | rw
- Default      | xx
 --------------+------
-
- Default mode - unix: rw, socket: rw, file(present): ro, file(not found): wo
 
 --------------+-------
  point speed  | value

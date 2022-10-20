@@ -26,6 +26,7 @@
 #include <signal.h>
 
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <sys/inotify.h>
 
@@ -1448,6 +1449,13 @@ namespace LTSM
         else if(Tools::lower(policy) == "authshare")
             xvfb->policy = SessionPolicy::AuthShare;
 
+        // fixed environments
+        for(auto & [key, val] : xvfb->environments)
+        {
+            if(std::string::npos != val.find("%{user}"))
+                val = Tools::replace(val, "%{user}", userName);
+        }
+
         xvfb->pid2 = runUserSession(oldScreen, sessionBin, *xvfb);
         if(xvfb->pid2 < 0)
         {
@@ -1611,8 +1619,8 @@ namespace LTSM
         if(auto xvfb = getXvfbInfo(display))
         {
 /*
-            _config->getString("idle:action:path");
-            _config->getStdList<std::string>("idle:action:args");
+            auto cmd = _config->getString("idle:action:path");
+            auto args = _config->getStdList<std::string>("idle:action:args");
 
             try
             {
@@ -2359,7 +2367,21 @@ namespace LTSM
             xvfb->options.clear();
 
             for(auto & [key, val] : map)
+            {
                 xvfb->options.emplace(key, val);
+
+                if(key == "pulseaudio")
+                {
+                    auto socket = _config->getString("channel:pulseaudio:format", "/var/run/ltsm/pulse/%{user}");
+                    xvfb->environments.emplace("PULSE_SERVER", socket);
+                }
+                else
+                if(key == "pcscd")
+                {
+                    auto socket = _config->getString("channel:pcscd:format", "/var/run/ltsm/pcscd/%{user}");
+                    xvfb->environments.emplace("PCSCLITE_CSOCK_NAME", socket);
+                }
+            }
 
             return true;
         }
@@ -2368,11 +2390,34 @@ namespace LTSM
     }
 
 #ifdef LTSM_CHANNELS
+    void fixPermissionJob(std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode)
+    {
+        auto tp = std::chrono::steady_clock::now();
+        bool failed = false;
+
+        while(! failed)
+        {
+            if(std::filesystem::exists(path))
+                break;
+
+            std::this_thread::sleep_for(300ms);
+
+            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
+            if(dt.count() > 3500)
+                failed = true;
+        }
+
+        if(! failed)
+        {
+            chmod(path.c_str(), mode);
+            chown(path.c_str(), uid, gid);
+        }
+    }
+
     void Manager::Object::startSessionChannels(int display)
     {
         if(auto xvfb = getXvfbInfo(display))
         {
-
             auto printer = xvfb->options.find("printer");
             if(xvfb->options.end() != printer)
                 startPrinterListener(display, *xvfb, printer->second);
@@ -2380,6 +2425,10 @@ namespace LTSM
             auto pulseaudio = xvfb->options.find("pulseaudio");
             if(xvfb->options.end() != pulseaudio)
                 startPulseAudioListener(display, *xvfb, pulseaudio->second);
+
+            auto pcscd = xvfb->options.find("pcscd");
+            if(xvfb->options.end() != pcscd)
+                startPcscdListener(display, *xvfb, pcscd->second);
         }
     }
 
@@ -2396,24 +2445,27 @@ namespace LTSM
 
         auto printerSocket = _config->getString("channel:printer:format", "/var/run/ltsm/cups/printer_%{user}");
         auto socketFolder = std::filesystem::path(printerSocket).parent_path();
+        auto lp = getGroupGid("lp");
 
         if(! std::filesystem::is_directory(socketFolder))
-        {
             std::filesystem::create_directory(socketFolder);
 
-            // fix mode 0750
-            std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
+        // fix mode 0750
+        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
                                         std::filesystem::perm_options::remove);
-
-            // fix owner xvfb
-            setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), 0);
-        }
+        // fix owner xvfb.lp
+        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), lp);
 
         printerSocket = Tools::replace(printerSocket, "%{user}", xvfb.user);
+
+        if(std::filesystem::is_socket(printerSocket))
+            std::filesystem::remove(printerSocket);
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
                                     serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "slow");
+        // fix permissions job
+        std::thread(fixPermissionJob, printerSocket, xvfb.uid, lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
         return true;
     }
@@ -2438,14 +2490,56 @@ namespace LTSM
         // fix mode 0750
         std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
                                         std::filesystem::perm_options::remove);
-        // fix owner xvfb
-        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), getGroupGid(xvfb.user));
+        // fix owner xvfb.user
+        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), xvfb.gid);
 
         pulseAudioSocket = Tools::replace(pulseAudioSocket, "%{user}", xvfb.user);
+
+        if(std::filesystem::is_socket(pulseAudioSocket))
+            std::filesystem::remove(pulseAudioSocket);
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                                     serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast");
+        // fix permissions job
+        std::thread(fixPermissionJob, pulseAudioSocket, xvfb.uid, xvfb.gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+
+        return true;
+    }
+
+    bool Manager::Object::startPcscdListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
+    {
+        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
+        auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
+
+        if(clientType == Channel::ConnectorType::Unknown)
+        {
+            Application::error("%s: %s, unknown client url: %s", __FUNCTION__, "pcscd", clientUrl.c_str());
+            return false;
+        }
+
+        auto pcscdSocket = _config->getString("channel:pcscd:format", "/var/run/ltsm/pcscd/%{user}");
+        auto socketFolder = std::filesystem::path(pcscdSocket).parent_path();
+
+        if(! std::filesystem::is_directory(socketFolder))
+            std::filesystem::create_directory(socketFolder);
+
+        // fix mode 0750
+        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
+                                        std::filesystem::perm_options::remove);
+        // fix owner xvfb.user
+        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), xvfb.gid);
+
+        pcscdSocket = Tools::replace(pcscdSocket, "%{user}", xvfb.user);
+
+        if(std::filesystem::is_socket(pcscdSocket))
+            std::filesystem::remove(pcscdSocket);
+
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscdSocket);
+        emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow");
+        // fix permissions job
+        std::thread(fixPermissionJob, pcscdSocket, xvfb.uid, xvfb.gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
         return true;
     }
