@@ -27,21 +27,21 @@ docker run -i -t docker.io/ltsm/devel
 
 # LTSM_service
 основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service  
+see also: [wiki: LTSM service](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service)  
 
 # LTSM_connector
 является только обработчиком сетевого протокола VNC и RDP, а основной сетевой частью занимается служебный xinetd/(systemd sockets), также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия на коннектор Affero GPLv3)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector  
+see also: [wiki: LTSM connector](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector)  
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/123924335-66914a00-d979-11eb-9025-9d6bcf3fa250.png)  
 графическая утилита входа в систему, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description)  
+see also: [wiki: LTSM config](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description))  
 
 # LTSM_sessions
 ![ltsm_session](https://user-images.githubusercontent.com/8620726/119793454-23e5d900-bec6-11eb-9978-ee31f44360ae.png)  
 графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
+see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator)  
 
 # LTSM_vnc2sdl
  
@@ -55,11 +55,11 @@ see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/
 * Реализован редирект звука через pulseaudio
 * Реализована поддержка pkcs11 через редирект pcscd
  
-Маханизм каналов реализован через абстрактные схемы unix://, file://, socket://, и режим доступа ReadOnly, WriteOnly, ReadWrite.  
-Например для обычной передачи файла создается типовой канал (клиент сервер): file:///src_file1 (ReadOnly) file:///dst_file2 (WriteOnly), далее в сессии пользователя запускаются информационные GUI диалоги и о передаче и выбора папки назначения, после которых файл автоматически сохранится в удаленной сессии.  
+Маханизм каналов реализован через абстрактные схемы ```unix://, file://, socket://```, и режим доступа ```ReadOnly, WriteOnly, ReadWrite```.  
+Например для обычной передачи файла создается типовой канал (клиент сервер): ```file:///src_file1 (ReadOnly)``` и ```file:///dst_file2 (WriteOnly)```, далее в сессии пользователя запускаются информационные GUI диалоги и о передаче и выбора папки назначения, после которых файл автоматически сохранится в удаленной сессии.  
 Также помощью данного механизма возможна передача любого потока данных в обе стороны, но инициатором создания канала всегда является сервер.  
 
-Печать со стороны сервера (в удаленной сессии пользователя) реализуется таким образом - на сервере в cups добавляется собственный backend для настройки принтера, который знает в какой unix сокет печатать в сессии пользователя, со стороны клиента поток можно отправлять в сетевой принтер socket://127.0.0.1:9100, также в локальный cups или в file:///dev/usb/lp0. В этой схеме системный администратор настраивает принтер только один раз для сервера. Редирект звука и pcscd работает по аналогичной схеме.
+Печать со стороны сервера (в удаленной сессии пользователя) реализуется таким образом - на сервере в cups добавляется собственный backend для настройки принтера, который знает в какой unix сокет печатать в сессии пользователя, со стороны клиента поток можно отправлять в сетевой принтер ```socket://127.0.0.1:9100```, также в локальный cups или в ```file:///dev/usb/lp0```. В этой схеме системный администратор настраивает принтер только один раз для сервера. Редирект звука и pcscd работает по аналогичной схеме.
 
 Все эти реализованные возможности вы можете протестировать в версии docker.  
 
