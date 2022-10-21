@@ -40,22 +40,22 @@ The following components are implemented:
 
 # LTSM_service
 The main service, dbus owner *ltsm.service.manager*, receives commands from LTSM_connector, and starts login and users sessions based on Xvfb (GPLv3 license)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service  
+see also: [wiki: LTSM service](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service)  
 
 # LTSM_connector
 It is just a graphics protocol handler, and the main network part is handled by the service xinetd/(systemd sockets), and it is also a dbus client *ltsm.manager.service*, it connects to Xvfb via the shared memory mechanism (Affero GPLv3 license)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector  
+see also: [wiki: LTSM connector](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector)  
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/123924335-66914a00-d979-11eb-9025-9d6bcf3fa250.png)  
 GUI login utility, and it is a dbus client *ltsm.manager.service* (GPLv3 license)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description)  
+see also: [wiki: LTSM config](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description))  
 
 # LTSM_sessions
 ![ltsm_session](https://user-images.githubusercontent.com/8620726/119793454-23e5d900-bec6-11eb-9978-ee31f44360ae.png)  
 GUI users sessions management utility, and it is a dbus client *ltsm.manager.service* (GPLv3 license)  
 ![ltsm_show_session](https://user-images.githubusercontent.com/8620726/123924343-67c27700-d979-11eb-9802-723d043f9f6f.png)  
-see also: https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator  
+see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator)  
 
 # LTSM_vnc2sdl
 
