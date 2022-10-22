@@ -506,5 +506,13 @@ namespace LTSM
             destroyListener(client, server);
         }
     }
+
+    void Connector::VNC::onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug)
+    {
+        if(0 < _display && display == _display)
+        {
+            setChannelDebug(channel, debug);
+        }
+    }
 #endif
 }

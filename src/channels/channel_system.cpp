@@ -278,13 +278,6 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
         throw std::invalid_argument(NS_FuncName);
     }
 
-    // FIXME: channel debug
-    if(0)
-    {
-        auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
-        Application::info("%s: channel: 0x%02x, size: %d, content: [%s]", __FUNCTION__, channel, buf.size(), str.c_str());
-    }
-
     channelConn->pushData(std::move(buf));
 }
 
@@ -894,8 +887,7 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 
     auto buf = ns.recvData(length);
 
-    // FIXME channel debug
-    if(channel == Channel::System)
+    if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
         Application::info("%s: channel: 0x%02x, size: %d, content: [%s]", __FUNCTION__, channel, length, str.c_str());
@@ -933,7 +925,7 @@ void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
     // data
     ns.sendIntBE16(len);
 
-    if(channel == Channel::System)
+    if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring<uint8_t>(buf, len, 2);
         Application::info("%s: channel: 0x%02x, size: %d, content: [%s]", __FUNCTION__, channel, len, str.c_str());
@@ -941,6 +933,19 @@ void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
 
     ns.sendRaw(buf, len);
     ns.sendFlush();
+}
+
+void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & debug)
+{
+    if(debug)
+    {
+        channelDebug = channel;
+    }
+    else
+    if(channelDebug == channel)
+    {
+        channelDebug = -1;
+    }
 }
 
 /// Connector

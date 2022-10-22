@@ -48,7 +48,15 @@
         </method>
         <method name="busSetDebugLevel">
             <arg type="s" name="level" direction="in" />
-            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetConnectorDebugLevel">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="level" direction="in" />
+        </method>
+        <method name="busSetChannelDebug">
+            <arg type="i" name="display" direction="in" />
+            <arg type="y" name="channel" direction="in" />
+            <arg type="b" name="debug" direction="in" />
         </method>
         <method name="busSetEncryptionInfo">
             <arg type="i" name="display" direction="in" />
@@ -288,7 +296,13 @@
             <arg type="(yyy)" name="color" />
         </signal>
         <signal name="debugLevel">
+            <arg type="i" name="display" />
             <arg type="s" name="level" />
+        </signal>
+        <signal name="debugChannel">
+            <arg type="i" name="display" />
+            <arg type="y" name="channel" />
+            <arg type="b" name="debug" />
         </signal>
     </interface>
 </node>

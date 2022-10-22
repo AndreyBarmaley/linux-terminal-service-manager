@@ -235,6 +235,8 @@ namespace LTSM
         Channel::Connector* findChannel(uint8_t);
         Channel::Planned*   findPlanned(uint8_t);
 
+        int                 channelDebug = -1;
+
     protected:
         friend void Channel::Listener::loopAccept(Listener*);
 
@@ -269,6 +271,8 @@ namespace LTSM
         void            destroyListener(const std::string & clientUrl, const std::string & serverUrl);
 
         size_t          countFreeChannels(void) const;
+
+        void            setChannelDebug(const uint8_t& channel, const bool& debug);
 
     public:
         void            sendLtsmEvent(uint8_t channel, std::string_view);

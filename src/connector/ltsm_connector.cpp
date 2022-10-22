@@ -373,10 +373,13 @@ namespace LTSM
         }
     }
 
-    void Connector::SignalProxy::onDebugLevel(const std::string & level)
+    void Connector::SignalProxy::onDebugLevel(const int32_t & display, const std::string & level)
     {
-        Application::info("%s: level: %s", __FUNCTION__, level.c_str());
-        Application::setDebugLevel(level);
+        if(0 < _display && display == _display)
+        {
+            Application::info("%s: display: %d, level: %s", __FUNCTION__, display, level.c_str());
+            Application::setDebugLevel(level);
+        }
     }
 
     void Connector::SignalProxy::onAddDamage(const XCB::Region & reg)

@@ -15,7 +15,7 @@ option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 option(LTSM_CHANNELS "ltsm channels support (dev. only)" OFF)
 #option(LTSM_CHANNEL_RUTOKEN "rutoken support (dev)" OFF)
-option(LTSM_CUPS_BACKEND "cups support (dev)" OFF)
+option(LTSM_CUPS_BACKEND "cups support" OFF)
  
 if(LTSM_BUILD_COVERAGE_TESTS)
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")

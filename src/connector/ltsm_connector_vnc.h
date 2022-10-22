@@ -95,6 +95,7 @@ namespace LTSM
             void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
             void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
+            void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
 #endif
 
             void                serverHandshakeVersionEvent(void) override;

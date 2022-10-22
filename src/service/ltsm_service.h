@@ -25,7 +25,8 @@
 
 #include <chrono>
 #include <future>
-#include <exception>
+#include <stdexcept>
+#include <functional>
 #include <filesystem>
 #include <string_view>
 
@@ -80,6 +81,8 @@ namespace LTSM
         std::unordered_map<std::string, std::string>
                                         options;
 
+        std::shared_future<int>         idleActionRunning;
+
         XvfbMode                        mode = XvfbMode::SessionLogin;
 	SessionPolicy			policy = SessionPolicy::AuthLock;
         bool                            allowTransfer = true;
@@ -99,7 +102,7 @@ namespace LTSM
 
     typedef std::pair<int, std::vector<uint8_t>> StatusStdout;
 
-    typedef std::pair<pid_t, std::future<int>> PidStatus;
+    typedef std::pair<pid_t, std::shared_future<int>> PidStatus;
     typedef std::pair<pid_t, std::future<StatusStdout>> PidStatusStdout;
 
     class XvfbSessions
@@ -157,6 +160,14 @@ namespace LTSM
 
             bool                        sessionRunZenity(const XvfbSession*, std::initializer_list<std::string>);
 
+#ifdef LTSM_CHANNELS
+            static void                 transferFileStartBackground(Object* owner, const XvfbSession* xvfb, int display,
+                                            std::string tmpfile, std::string dstfile, uint32_t filesz);
+            static void                 transferFilesRequestCommunication(Object* owner, const XvfbSession* xvfb,
+                                            int display, std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
+                                            std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int>);
+#endif
+
         protected:
 	    void			openlog(void) const;
             int		                getFreeDisplay(void) const;
@@ -201,7 +212,9 @@ namespace LTSM
 	    bool			busConnectorAlive(const int32_t & display) override;
             bool                        busIdleTimeoutAction(const int32_t& display) override;
 	    bool			busSetLoginsDisable(const bool & action) override;
-            bool                        busSetDebugLevel(const std::string & level) override;
+            void                        busSetDebugLevel(const std::string & level) override;
+            void                        busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool& debug) override;
+            void                        busSetConnectorDebugLevel(const int32_t& display, const std::string& level) override;
             bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
 	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
 	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
@@ -237,6 +250,7 @@ namespace LTSM
             bool                        startPrinterListener(int display, const XvfbSession &, const std::string & clientUrl);
             bool                        startPulseAudioListener(int display, const XvfbSession &, const std::string & clientUrl);
             bool                        startPcscdListener(int display, const XvfbSession &, const std::string & clientUrl);
+            bool                        startSaneListener(int display, const XvfbSession &, const std::string & clientUrl);
 #endif
         };
 

@@ -38,7 +38,7 @@ namespace LTSM
     void printHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--audio] [--printer] [--pcscd]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--pulse [XDG_RUNTIME_DIR/pulse/native]] [--printer [sock://127.0.0.1:9100]] [--sane [sock://127.0.0.1:6566]] [--pcscd [unix:///var/run/pcscd/pcscd.comm]]" << std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -67,13 +67,76 @@ namespace LTSM
                 fullscreen = true;
             else
             if(0 == std::strcmp(argv[it], "--printer"))
-                printer = true;
+            {
+                printerUrl = "sock://127.0.0.1:9100";
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    auto url = Channel::parseUrl(argv[it + 1]);
+
+                    if(url.first == Channel::ConnectorType::Unknown)
+                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "printer", argv[it + 1]);
+                    else
+                        printerUrl.assign(argv[it + 1]);
+
+                    it = it + 1;
+                }
+            }
             else
-            if(0 == std::strcmp(argv[it], "--audio"))
-                audio = true;
+            if(0 == std::strcmp(argv[it], "--sane"))
+            {
+                saneUrl = "sock://127.0.0.1:6566";
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    auto url = Channel::parseUrl(argv[it + 1]);
+
+                    if(url.first == Channel::ConnectorType::Unknown)
+                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "sane", argv[it + 1]);
+                    else
+                        saneUrl.assign(argv[it + 1]);
+
+                    it = it + 1;
+                }
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--pulse"))
+            {
+                if(auto runtime = getenv("XDG_RUNTIME_DIR"))
+                {
+                    auto path = std::filesystem::path(runtime) / "pulse" / "native";
+                    pulseUrl = std::string("unix://").append(path.native());
+                }
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    auto url = Channel::parseUrl(argv[it + 1]);
+
+                    if(url.first == Channel::ConnectorType::Unknown)
+                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pulse", argv[it + 1]);
+                    else
+                        pulseUrl.assign(argv[it + 1]);
+
+                    it = it + 1;
+                }
+            }
             else
             if(0 == std::strcmp(argv[it], "--pcscd"))
-                pcscd = true;
+            {
+                pcscdUrl = "unix:///var/run/pcscd/pcscd.comm";
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    auto url = Channel::parseUrl(argv[it + 1]);
+
+                    if(url.first == Channel::ConnectorType::Unknown)
+                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pcscd", argv[it + 1]);
+                    else
+                        pcscdUrl.assign(argv[it + 1]);
+
+                    it = it + 1;
+                }
+            }
             else
             if(0 == std::strcmp(argv[it], "--debug"))
                 Application::setDebugLevel(DebugLevel::Console);
@@ -156,7 +219,7 @@ namespace LTSM
             }
             else
             {
-                std::cerr << "unknown params: " << argv[it] << std::endl;
+                throw std::invalid_argument(argv[it]);
             }
         }
 
@@ -607,32 +670,30 @@ namespace LTSM
         jo.push("username", Tools::getUsername());
         jo.push("platform", SDL_GetPlatform());
 
-        if(printer)
-            jo.push("printer", "socket://127.0.0.1:9100");
-
-        if(pcscd)
+        if(! printerUrl.empty())
         {
-            auto sock = "/var/run/pcscd/pcscd.comm";
-
-            if(std::filesystem::is_socket(sock))
-                jo.push("pcscd", std::string("unix://").append(sock));
+            Application::info("%s: %s url: %s", __FUNCTION__, "printer", printerUrl.c_str());
+            jo.push("printer", printerUrl);
         }
 
-        if(audio)
+        if(! saneUrl.empty())
         {
-            if(auto runtime = getenv("XDG_RUNTIME_DIR"))
-            {
-                auto pulse = std::filesystem::path(runtime) / "pulse" / "native";
-
-                if(std::filesystem::is_socket(pulse))
-                    jo.push("pulseaudio", std::string("unix://").append(pulse.native()));
-                else
-                    Application::warning("%s: pulse socket not found: %s", __FUNCTION__, pulse.c_str());
-            }
+            Application::info("%s: %s url: %s", __FUNCTION__, "sane", saneUrl.c_str());
+            jo.push("sane", saneUrl);
         }
 
-//        jo.push("redirectaudio", false);
-//        jo.push("redirectmicrofone", false);
+        if(! pcscdUrl.empty())
+        {
+            Application::info("%s: %s url: %s", __FUNCTION__, "pcscd", pcscdUrl.c_str());
+            jo.push("pcscd", pcscdUrl);
+        }
+
+        if(! pulseUrl.empty())
+        {
+            Application::info("%s: %s url: %s", __FUNCTION__, "pulse", pulseUrl.c_str());
+            jo.push("pulseaudio", pulseUrl);
+        }
+
 //        jo.push("redirectvideo", false);
 //        jo.push("redirectscanner", false);
 
@@ -650,12 +711,21 @@ int main(int argc, const char** argv)
     int res = 0;
 
     if(0 > SDL_Init(SDL_INIT_VIDEO))
+    {
+        std::cerr << "sdl init video failed" << std::endl;
         return -1;
+    }
 
     try
     {
         LTSM::Vnc2SDL app(argc, argv);
         res = app.start();
+    }
+    catch(const std::invalid_argument & err)
+    {
+        std::cerr << "unknown params: " << err.what() << std::endl;
+        LTSM::printHelp(argv[0]);
+        return -1;
     }
     catch(const std::exception & err)
     {

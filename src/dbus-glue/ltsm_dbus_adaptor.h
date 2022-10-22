@@ -31,7 +31,9 @@ protected:
         object_.registerMethod("busStartUserSession").onInterface(INTERFACE_NAME).withInputParamNames("display", "userName", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType){ return this->busStartUserSession(display, userName, remoteAddr, connType); });
         object_.registerMethod("busSendMessage").onInterface(INTERFACE_NAME).withInputParamNames("display", "message").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& message){ return this->busSendMessage(display, message); });
         object_.registerMethod("busSendNotify").onInterface(INTERFACE_NAME).withInputParamNames("display", "summary", "body", "icontype", "urgency").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency){ return this->busSendNotify(display, summary, body, icontype, urgency); });
-        object_.registerMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withInputParamNames("level").withOutputParamNames("result").implementedAs([this](const std::string& level){ return this->busSetDebugLevel(level); });
+        object_.registerMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withInputParamNames("level").implementedAs([this](const std::string& level){ return this->busSetDebugLevel(level); });
+        object_.registerMethod("busSetConnectorDebugLevel").onInterface(INTERFACE_NAME).withInputParamNames("display", "level").implementedAs([this](const int32_t& display, const std::string& level){ return this->busSetConnectorDebugLevel(display, level); });
+        object_.registerMethod("busSetChannelDebug").onInterface(INTERFACE_NAME).withInputParamNames("display", "channel", "debug").implementedAs([this](const int32_t& display, const uint8_t& channel, const bool& debug){ return this->busSetChannelDebug(display, channel, debug); });
         object_.registerMethod("busSetEncryptionInfo").onInterface(INTERFACE_NAME).withInputParamNames("display", "info").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& info){ return this->busSetEncryptionInfo(display, info); });
         object_.registerMethod("busSetSessionDurationSec").onInterface(INTERFACE_NAME).withInputParamNames("display", "duration").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint32_t& duration){ return this->busSetSessionDurationSec(display, duration); });
         object_.registerMethod("busSetSessionPolicy").onInterface(INTERFACE_NAME).withInputParamNames("display", "policy").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& policy){ return this->busSetSessionPolicy(display, policy); });
@@ -82,7 +84,8 @@ protected:
         object_.registerSignal("destroyListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "client", "server");
         object_.registerSignal("addRenderRect").onInterface(INTERFACE_NAME).withParameters<int32_t, sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>, bool>("display", "rect", "color", "fill");
         object_.registerSignal("addRenderText").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, sdbus::Struct<int16_t, int16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>>("display", "text", "pos", "color");
-        object_.registerSignal("debugLevel").onInterface(INTERFACE_NAME).withParameters<std::string>("level");
+        object_.registerSignal("debugLevel").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "level");
+        object_.registerSignal("debugChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, uint8_t, bool>("display", "channel", "debug");
     }
 
     ~Service_adaptor() = default;
@@ -188,9 +191,14 @@ public:
         object_.emitSignal("addRenderText").onInterface(INTERFACE_NAME).withArguments(display, text, pos, color);
     }
 
-    void emitDebugLevel(const std::string& level)
+    void emitDebugLevel(const int32_t& display, const std::string& level)
     {
-        object_.emitSignal("debugLevel").onInterface(INTERFACE_NAME).withArguments(level);
+        object_.emitSignal("debugLevel").onInterface(INTERFACE_NAME).withArguments(display, level);
+    }
+
+    void emitDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug)
+    {
+        object_.emitSignal("debugChannel").onInterface(INTERFACE_NAME).withArguments(display, channel, debug);
     }
 
 private:
@@ -203,7 +211,9 @@ private:
     virtual int32_t busStartUserSession(const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual bool busSendMessage(const int32_t& display, const std::string& message) = 0;
     virtual bool busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency) = 0;
-    virtual bool busSetDebugLevel(const std::string& level) = 0;
+    virtual void busSetDebugLevel(const std::string& level) = 0;
+    virtual void busSetConnectorDebugLevel(const int32_t& display, const std::string& level) = 0;
+    virtual void busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool& debug) = 0;
     virtual bool busSetEncryptionInfo(const int32_t& display, const std::string& info) = 0;
     virtual bool busSetSessionDurationSec(const int32_t& display, const uint32_t& duration) = 0;
     virtual bool busSetSessionPolicy(const int32_t& display, const std::string& policy) = 0;

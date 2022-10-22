@@ -42,7 +42,8 @@ protected:
         proxy_.uponSignal("destroyListener").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& client, const std::string& server){ this->onDestroyListener(display, client, server); });
         proxy_.uponSignal("addRenderRect").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ this->onAddRenderRect(display, rect, color, fill); });
         proxy_.uponSignal("addRenderText").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ this->onAddRenderText(display, text, pos, color); });
-        proxy_.uponSignal("debugLevel").onInterface(INTERFACE_NAME).call([this](const std::string& level){ this->onDebugLevel(level); });
+        proxy_.uponSignal("debugLevel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& level){ this->onDebugLevel(display, level); });
+        proxy_.uponSignal("debugChannel").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const uint8_t& channel, const bool& debug){ this->onDebugChannel(display, channel, debug); });
     }
 
     ~Service_proxy() = default;
@@ -67,7 +68,8 @@ protected:
     virtual void onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) = 0;
     virtual void onAddRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual void onAddRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;
-    virtual void onDebugLevel(const std::string& level) = 0;
+    virtual void onDebugLevel(const int32_t& display, const std::string& level) = 0;
+    virtual void onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) = 0;
 
 public:
     int32_t busGetServiceVersion()
@@ -133,11 +135,19 @@ public:
         return result;
     }
 
-    bool busSetDebugLevel(const std::string& level)
+    void busSetDebugLevel(const std::string& level)
     {
-        bool result;
-        proxy_.callMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withArguments(level).storeResultsTo(result);
-        return result;
+        proxy_.callMethod("busSetDebugLevel").onInterface(INTERFACE_NAME).withArguments(level);
+    }
+
+    void busSetConnectorDebugLevel(const int32_t& display, const std::string& level)
+    {
+        proxy_.callMethod("busSetConnectorDebugLevel").onInterface(INTERFACE_NAME).withArguments(display, level);
+    }
+
+    void busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool& debug)
+    {
+        proxy_.callMethod("busSetChannelDebug").onInterface(INTERFACE_NAME).withArguments(display, channel, debug);
     }
 
     bool busSetEncryptionInfo(const int32_t& display, const std::string& info)

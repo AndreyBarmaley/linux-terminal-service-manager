@@ -372,7 +372,7 @@ namespace LTSM
         std::thread([str = std::move(str), screen = display]()
         {
             int ret = std::system(str.c_str());
-            Application::debug("%s: run command: `%s', return code: %d, display: %d", __FUNCTION__, str.c_str(), ret, screen);
+            Application::debug("%s: command: `%s', return code: %d, display: %d", "runSystemScript", str.c_str(), ret, screen);
         }).detach();
         return true;
     }
@@ -1618,25 +1618,34 @@ namespace LTSM
 
         if(auto xvfb = getXvfbInfo(display))
         {
-/*
             auto cmd = _config->getString("idle:action:path");
-            auto args = _config->getStdList<std::string>("idle:action:args");
 
-            try
+            // alse running
+            if(xvfb->idleActionRunning.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout)
+                return false;
+
+            if(xvfb->mode != XvfbMode::SessionLogin &&
+                ! cmd.empty() && std::filesystem::exists(cmd))
             {
-                std::scoped_lock<std::mutex> guard(_lockRunning);
-                PidStatus pidStatus = RunAs::sessionCommand(xvfb, cmd, std::move(params));
+                auto args = _config->getStdList<std::string>("idle:action:args");
+
+                try
+                {
+                    std::scoped_lock<std::mutex> guard(_lockRunning);
+                    PidStatus pidStatus = RunAs::sessionCommand(xvfb, cmd, std::move(args));
+                    xvfb->idleActionRunning = pidStatus.second;
+                }
+                catch(const std::system_error &)
+                {
+                    Application::error("%s: failed, check thread limit", __FUNCTION__);
+                }
+                catch(const std::exception & err)
+                {
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                }
+
+                return true;
             }
-            catch(const std::system_error &)
-            {
-                Application::error("%s: failed, check thread limit", __FUNCTION__);
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            }
-*/
-            return true;
         }
 
         return false;
@@ -1688,6 +1697,156 @@ namespace LTSM
         return true;
     }
 
+#ifdef LTSM_CHANNELS
+    void Manager::Object::transferFilesRequestCommunication(Object* owner, const XvfbSession* xvfb,
+        int display, std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
+        std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int> zenityQuestionResult)
+    {
+        // copy all files to (Connector) user home, after success move to real user
+        auto xvfbHome = getUserHome(owner->_config->getString("user:xvfb"));
+
+        // wait zenity question
+        zenityQuestionResult.wait();
+        int status = zenityQuestionResult.get();
+
+        // yes = 0, no: 256
+        if(status == 256)
+        {
+            emitTransferReject(display, files);
+            return;
+        }
+
+        // zenity select directory
+        std::future<StatusStdout> zenitySelectDirectoryResult;
+        bool error = false;
+
+        try
+        {
+            auto pair = RunAs::sessionCommandStdout(xvfb, zenity,
+                                { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" });
+            zenitySelectDirectoryResult = std::move(pair.second);
+        }
+        catch(const std::system_error &)
+        {
+            Application::error("%s: failed, check thread limit", "RunZenity");
+            emitTransferReject(display, files);
+            return;
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception: %s", "RunZenity", err.what());
+            emitTransferReject(display, files);
+            return;
+        }
+
+        // wait file selection
+        zenitySelectDirectoryResult.wait();
+        // get StatusStdout
+        auto ret = zenitySelectDirectoryResult.get();
+        status = ret.first;
+
+        // ok = 0, cancel: 256
+        if(status == 256)
+        {
+            emitTransferReject(display, files);
+            return;
+        }
+
+        // get dstdir
+        auto & buf = ret.second;
+        auto end = buf.back() == 0x0a ? std::prev(buf.end()) : buf.end();
+        std::filesystem::path dstdir(std::string(buf.begin(), end));
+
+        if(! std::filesystem::is_directory(dstdir))
+        {
+            Application::error("%s: path not found: `%s', display: %d", "RunZenity", dstdir.c_str(), display);
+            emitTransferReject(display, files);
+            return;
+        }
+
+        std::scoped_lock<std::mutex> guard(owner->_lockTransfer);
+        for(auto & info : files)
+        {
+            auto tmpname = std::filesystem::path(xvfbHome) / std::string("transfer_").append( Tools::randomHexString(8));
+            Application::debug("%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity", display, dstdir.c_str(), tmpname.c_str());
+
+            auto filepath = std::get<0>(info);
+            auto filesize = std::get<1>(info);
+
+            // check disk space limited
+            //size_t ftotal = std::accumulate(files.begin(), files.end(), 0, [](size_t sum, auto & val){ return sum += std::get<1>(val); });
+            auto spaceInfo = std::filesystem::space(dstdir);
+            if(spaceInfo.available < filesize)
+            {
+                owner->busSendNotify(display, "Transfer Rejected", "not enough disk space",
+                                    NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                break;
+            }
+
+            // check dstdir writeable / filename present
+            auto filename = std::filesystem::path(filepath).filename();
+            auto dstfile = std::filesystem::path(dstdir) / filename;
+
+            if(std::filesystem::exists(dstfile))
+            {
+                Application::error("%s: file present and skipping, display: %d, dst file: `%s'", "RunZenity", display, dstfile.c_str());
+
+                owner->busSendNotify(display, "Transfer Skipping", Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
+                                    NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
+                continue;
+            }
+
+            owner->_allowTransfer.emplace_back(filepath);
+            owner->emitTransferAllow(display, filepath, tmpname, dstdir);
+        }
+    }
+
+    void Manager::Object::transferFileStartBackground(Object* owner, const XvfbSession* xvfb, int display, std::string tmpfile, std::string dstfile, uint32_t filesz)
+    {
+        bool error = false;
+
+        while(!error)
+        {
+            if(std::filesystem::exists(tmpfile) &&
+                std::filesystem::file_size(tmpfile) >= filesz)
+                break;
+
+            // FIXME create progress informer session
+
+            if(xvfb->mode != XvfbMode::SessionOnline)
+            {
+                owner->busSendNotify(display, "Transfer Error", Tools::StringFormat("transfer connection is lost"),
+                                        NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                error = true;
+                continue;
+            }
+
+            std::this_thread::sleep_for(350ms);
+        }
+
+        if(! error)
+        {
+            try
+            {
+                // move tmpfile to dstfile
+                std::filesystem::rename(tmpfile, dstfile);
+            }
+            catch(std::exception & err)
+            {
+                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            }
+
+            uid_t uid; gid_t gid;
+
+            std::tie(uid, gid, std::ignore, std::ignore) = getUserInfo(xvfb->user);
+            setFileOwner(dstfile, uid, gid);
+
+            owner->busSendNotify(display, "Transfer Complete",
+                Tools::StringFormat("new file added: <a href=\"file://%1\">%2</a>").arg(dstfile).arg(std::filesystem::path(dstfile).filename().c_str()),
+                            NotifyParams::Information, NotifyParams::UrgencyLevel::Normal);
+        }
+    }
+
     bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
     {
         Application::info("%s: display: %d, count: %d", __FUNCTION__, display, files.size());
@@ -1723,9 +1882,9 @@ namespace LTSM
 
         std::filesystem::path zenity = this->_config->getString("zenity:path", "/usr/bin/zenity");
         auto msg = std::string("Can you receive remote files?(").append(std::to_string(files.size())).append(")");
-        std::future<int> zenityQuestionResult;
+        std::shared_future<int> zenityQuestionResult;
 
-        auto emitTransferReject = [this, display](const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
+        auto emitTransferReject = [this](int display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
         {
             for(auto & info : files)
                 this->emitTransferAllow(display, std::get<0>(info), "", "");
@@ -1739,117 +1898,18 @@ namespace LTSM
         catch(const std::system_error &)
         {
             Application::error("%s: failed, check thread limit", __FUNCTION__);
-            emitTransferReject(files);
+            emitTransferReject(display, files);
             return false;
         }
         catch(const std::exception & err)
         {
             Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            emitTransferReject(files);
+            emitTransferReject(display, files);
             return false;
         }
 
-        auto xvfbHome = getUserHome(_config->getString("user:xvfb"));
-
         //run background
-        std::thread([this, zenity, display, files, xvfbHome,
-            emitTransferReject = std::move(emitTransferReject), zenityQuestionResult = std::move(zenityQuestionResult)]() mutable
-        {
-            // wait zenity question
-            zenityQuestionResult.wait();
-            int status = zenityQuestionResult.get();
-
-            // yes = 0, no: 256
-            if(status == 256)
-            {
-                emitTransferReject(files);
-                return;
-            }
-
-            // zenity select directory
-            std::future<StatusStdout> zenitySelectDirectoryResult;
-            bool error = false;
-
-            try
-            {
-                auto pair = RunAs::sessionCommandStdout(this->getXvfbInfo(display), zenity,
-                                { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" });
-                zenitySelectDirectoryResult = std::move(pair.second);
-            }
-            catch(const std::system_error &)
-            {
-                Application::error("%s: failed, check thread limit", "RunZenity");
-                emitTransferReject(files);
-                return;
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", "RunZenity", err.what());
-                emitTransferReject(files);
-                return;
-            }
-
-            // wait file selection
-            zenitySelectDirectoryResult.wait();
-            // get StatusStdout
-            auto ret = zenitySelectDirectoryResult.get();
-            status = ret.first;
-
-            // ok = 0, cancel: 256
-            if(status == 256)
-            {
-                emitTransferReject(files);
-                return;
-            }
-
-            // get dstdir
-            auto & buf = ret.second;
-            auto end = buf.back() == 0x0a ? std::prev(buf.end()) : buf.end();
-            std::filesystem::path dstdir(std::string(buf.begin(), end));
-
-            if(! std::filesystem::is_directory(dstdir))
-            {
-                Application::error("%s: path not found: `%s', display: %d", "RunZenity", dstdir.c_str(), display);
-                emitTransferReject(files);
-                return;
-            }
-
-            std::scoped_lock<std::mutex> guard(_lockTransfer);
-            for(auto & info : files)
-            {
-                auto tmpname = std::filesystem::path(xvfbHome) / std::string("transfer_").append( Tools::randomHexString(8));
-                Application::debug("%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity", display, dstdir.c_str(), tmpname.c_str());
-
-                auto filepath = std::get<0>(info);
-                auto filesize = std::get<1>(info);
-
-                // check disk space limited
-                //size_t ftotal = std::accumulate(files.begin(), files.end(), 0, [](size_t sum, auto & val){ return sum += std::get<1>(val); });
-                auto spaceInfo = std::filesystem::space(dstdir);
-                if(spaceInfo.available < filesize)
-                {
-                    busSendNotify(display, "Transfer Rejected", "not enough disk space",
-                                            NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
-                    break;
-                }
-
-                // check dstdir writeable / filename present
-                auto filename = std::filesystem::path(filepath).filename();
-                auto dstfile = std::filesystem::path(dstdir) / filename;
-
-                if(std::filesystem::exists(dstfile))
-                {
-                    Application::error("%s: file present and skipping, display: %d, dst file: `%s'", "RunZenity", display, dstfile.c_str());
-
-                    busSendNotify(display, "Transfer Skipping", Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
-                                            NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
-                    continue;
-                }
-
-                _allowTransfer.emplace_back(filepath);
-                emitTransferAllow(display, filepath, tmpname, dstdir);
-            }
-        }).detach();
+        std::thread(transferFilesRequestCommunication, this, xvfb, display, zenity, files, std::move(emitTransferReject), std::move(zenityQuestionResult)).detach();
 
         return true;
     }
@@ -1859,59 +1919,24 @@ namespace LTSM
         Application::debug("%s: display: %d, tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(), dstfile.c_str());
 
         if(auto xvfb = getXvfbInfo(display))
-        {
-            std::thread([this, xvfb, display, tmpfile, dstfile, filesz]
-            {
-                bool error = false;
-
-                while(!error)
-                {
-                    if(std::filesystem::exists(tmpfile) &&
-                        std::filesystem::file_size(tmpfile) >= filesz)
-                        break;
-
-                    // FIXME create progress informer session
-
-                    if(xvfb->mode != XvfbMode::SessionOnline)
-                    {
-                        this->busSendNotify(display, "Transfer Error", Tools::StringFormat("transfer connection is lost"),
-                                            NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
-                        error = true;
-                        continue;
-                    }
-
-                    std::this_thread::sleep_for(350ms);
-                }
-
-                if(! error)
-                {
-                    try
-                    {
-                        // move tmpfile to dstfile
-                        std::filesystem::rename(tmpfile, dstfile);
-                    }
-                    catch(std::exception & err)
-                    {
-                        Application::error("%s: exception: %s", __FUNCTION__, err.what());
-                    }
-
-                    uid_t uid; gid_t gid;
-
-                    std::tie(uid, gid, std::ignore, std::ignore) = getUserInfo(xvfb->user);
-                    setFileOwner(dstfile, uid, gid);
-
-                    this->busSendNotify(display, "Transfer Complete",
-                        Tools::StringFormat("new file added: <a href=\"file://%1\">%2</a>").arg(dstfile).arg(std::filesystem::path(dstfile).filename().c_str()),
-                                            NotifyParams::Information, NotifyParams::UrgencyLevel::Normal);
-                }
-            }).detach();
-        }
+            std::thread(transferFileStartBackground, this, xvfb, display, tmpfile, dstfile, filesz).detach();
 
         std::scoped_lock<std::mutex> guard(_lockTransfer);
         _allowTransfer.remove(tmpfile);
 
         return true;
     }
+#else
+    bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
+    {
+        return false;
+    }
+
+    bool Manager::Object::busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
+    {
+        return false;
+    }
+#endif
 
     bool Manager::Object::busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency)
     {
@@ -2370,16 +2395,22 @@ namespace LTSM
             {
                 xvfb->options.emplace(key, val);
 
-                if(key == "pulseaudio")
+                if(key == "pulseaudio" && ! _config->getBoolean("channel:printer:disabled", false))
                 {
                     auto socket = _config->getString("channel:pulseaudio:format", "/var/run/ltsm/pulse/%{user}");
                     xvfb->environments.emplace("PULSE_SERVER", socket);
                 }
                 else
-                if(key == "pcscd")
+                if(key == "pcscd" && ! _config->getBoolean("channel:pcscd:disabled", false))
                 {
                     auto socket = _config->getString("channel:pcscd:format", "/var/run/ltsm/pcscd/%{user}");
                     xvfb->environments.emplace("PCSCLITE_CSOCK_NAME", socket);
+                }
+                else
+                if(key == "sane" && ! _config->getBoolean("channel:sane:disabled", false))
+                {
+                    auto socket = _config->getString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
+                    xvfb->environments.emplace("SANE_UNIX_PATH", socket);
                 }
             }
 
@@ -2419,15 +2450,23 @@ namespace LTSM
         if(auto xvfb = getXvfbInfo(display))
         {
             auto printer = xvfb->options.find("printer");
-            if(xvfb->options.end() != printer)
+            if(xvfb->options.end() != printer &&
+                ! _config->getBoolean("channel:printer:disabled", false))
                 startPrinterListener(display, *xvfb, printer->second);
 
+            auto sane = xvfb->options.find("sane");
+            if(xvfb->options.end() != sane &&
+                ! _config->getBoolean("channel:sane:disabled", false))
+                startSaneListener(display, *xvfb, sane->second);
+
             auto pulseaudio = xvfb->options.find("pulseaudio");
-            if(xvfb->options.end() != pulseaudio)
+            if(xvfb->options.end() != pulseaudio && 
+                ! _config->getBoolean("channel:pulseaudio:disabled", false))
                 startPulseAudioListener(display, *xvfb, pulseaudio->second);
 
             auto pcscd = xvfb->options.find("pcscd");
-            if(xvfb->options.end() != pcscd)
+            if(xvfb->options.end() != pcscd &&
+                ! _config->getBoolean("channel:pcscd:disabled", false))
                 startPcscdListener(display, *xvfb, pcscd->second);
         }
     }
@@ -2507,6 +2546,43 @@ namespace LTSM
         return true;
     }
 
+    bool Manager::Object::startSaneListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
+    {
+        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
+        auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
+
+        if(clientType == Channel::ConnectorType::Unknown)
+        {
+            Application::error("%s: %s, unknown client url: %s", __FUNCTION__, "sane", clientUrl.c_str());
+            return false;
+        }
+
+        auto saneSocket = _config->getString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
+        auto socketFolder = std::filesystem::path(saneSocket).parent_path();
+
+        if(! std::filesystem::is_directory(socketFolder))
+            std::filesystem::create_directory(socketFolder);
+
+        // fix mode 0750
+        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
+                                        std::filesystem::perm_options::remove);
+        // fix owner xvfb.user
+        setFileOwner(socketFolder, getUserUid(_config->getString("user:xvfb")), xvfb.gid);
+
+        saneSocket = Tools::replace(saneSocket, "%{user}", xvfb.user);
+
+        if(std::filesystem::is_socket(saneSocket))
+            std::filesystem::remove(saneSocket);
+
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket);
+        emitCreateListener(display, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow");
+        // fix permissions job
+        std::thread(fixPermissionJob, saneSocket, xvfb.uid, xvfb.gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+
+        return true;
+    }
+
     bool Manager::Object::startPcscdListener(int display, const XvfbSession & xvfb, const std::string & clientUrl)
     {
         Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
@@ -2545,11 +2621,22 @@ namespace LTSM
     }
 #endif
 
-    bool Manager::Object::busSetDebugLevel(const std::string & level)
+    void Manager::Object::busSetDebugLevel(const std::string & level)
     {
         Application::info("%s: level: %s", __FUNCTION__, level.c_str());
         Application::setDebugLevel(level);
-        return true;
+    }
+
+    void Manager::Object::busSetConnectorDebugLevel(const int32_t& display, const std::string& level)
+    {
+        Application::info("%s: display: %d, level: %s", __FUNCTION__, display, level.c_str());
+        emitDebugLevel(display, level);
+    }
+
+    void Manager::Object::busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool & debug)
+    {
+        Application::info("%s: display: %d, channel: %d, debug: %d", __FUNCTION__, display, channel, debug);
+        emitDebugChannel(display, channel, debug);
     }
 
     std::string Manager::Object::busEncryptionInfo(const int32_t & display)

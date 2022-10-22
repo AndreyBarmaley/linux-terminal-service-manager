@@ -1,0 +1,6 @@
+# This is the unix backend config file.
+
+## env: SANE_UNIX_PATH
+
+## saned socket path
+/var/run/ltsm/sane/path

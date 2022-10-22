@@ -98,11 +98,12 @@ namespace LTSM
             void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
             void                        onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
             void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
+            void                        onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override {}
 
         protected:
             // dbus virtual signals
             void                        onLoginSuccess(const int32_t & display, const std::string & userName) override;
-            void                        onDebugLevel(const std::string & level) override;
+            void                        onDebugLevel(const int32_t& display, const std::string & level) override;
 	    void			onPingConnector(const int32_t & display) override;
             void			onClearRenderPrimitives(const int32_t & display) override;
             void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
