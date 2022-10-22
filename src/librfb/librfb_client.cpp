@@ -317,6 +317,10 @@ namespace LTSM
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void)
     {
+#ifdef LTSM_CHANNELS
+        channelsShutdown();
+#endif
+        std::this_thread::sleep_for(100ms);
         rfbMessages = false;
     }
 

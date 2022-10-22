@@ -274,6 +274,7 @@ namespace LTSM
         size_t          countFreeChannels(void) const;
 
         void            setChannelDebug(const uint8_t& channel, const bool& debug);
+        void            channelsShutdown(void);
 
     public:
         void            sendLtsmEvent(uint8_t channel, std::string_view);

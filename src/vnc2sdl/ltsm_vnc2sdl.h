@@ -84,6 +84,7 @@ namespace LTSM
         bool                    sdlEventProcessing(const SDL::GenericEvent &);
         int                     startSocket(std::string_view host, int port) const;
         void                    sendMouseState(void);
+        void                    exitEvent(void);
 
         json_plain             clientOptions(void) const;
         json_plain             clientEnvironments(void) const;

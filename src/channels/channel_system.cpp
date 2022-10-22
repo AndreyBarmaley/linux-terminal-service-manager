@@ -252,7 +252,7 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
 
 void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> && buf)
 {
-    Application::info("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, buf.size());
+    Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, buf.size());
 
     if(! isUserSession())
     {
@@ -900,7 +900,7 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
                                     uint8_t channel, const uint8_t* buf, size_t len)
 {
-    Application::info("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, len);
+    Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, len);
 
     std::scoped_lock<std::mutex> guard(sendLock);
 
@@ -947,6 +947,13 @@ void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & 
     {
         channelDebug = -1;
     }
+}
+
+void LTSM::ChannelClient::channelsShutdown(void)
+{
+    std::scoped_lock<std::mutex> guard(lockch);
+    for(auto & ptr : channels)
+        ptr->setRunning(false);
 }
 
 /// Connector

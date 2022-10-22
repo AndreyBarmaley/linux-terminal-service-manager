@@ -450,6 +450,10 @@ namespace LTSM
 
     void RFB::ServerEncoder::rfbMessagesShutdown(void)
     {
+#ifdef LTSM_CHANNELS
+        channelsShutdown();
+#endif
+        std::this_thread::sleep_for(100ms);
         rfbMessages = false;
     }
 

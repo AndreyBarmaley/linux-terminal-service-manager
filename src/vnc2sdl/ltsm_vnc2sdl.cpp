@@ -358,6 +358,11 @@ namespace LTSM
         sendPointerEvent(buttons, posx, posy);
     }
 
+    void Vnc2SDL::exitEvent(void)
+    {
+        RFB::ClientDecoder::rfbMessagesShutdown();
+    }
+
     bool Vnc2SDL::sdlEventProcessing(const SDL::GenericEvent & ev)
     {
         const std::scoped_lock<std::mutex> lock(lockRender);
@@ -408,7 +413,7 @@ namespace LTSM
                 if(ev.key()->keysym.sym == SDLK_F10 &&
                     (KMOD_CTRL & SDL_GetModState()))
                 {
-                    RFB::ClientDecoder::rfbMessagesShutdown();
+                    exitEvent();
                     return true;
                 }
                 // key press delay 200 ms
@@ -468,7 +473,7 @@ namespace LTSM
                 break;
 
             case SDL_QUIT:
-                RFB::ClientDecoder::rfbMessagesShutdown();
+                exitEvent();
                 return true;
         }
 
