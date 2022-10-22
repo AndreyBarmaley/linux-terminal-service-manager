@@ -54,7 +54,7 @@ see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-ter
 * Реализована печать файлов (с помощью дополнительного [backend для CUPS](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/cups_backend))
 * Реализован редирект звука через pulseaudio
 * Реализована поддержка pkcs11 через редирект pcscd
-* Реализована сканирование (с помощью дополнительного [backend для SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
+* Реализовано сканирование документов (с помощью дополнительного [backend для SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
  
 Маханизм каналов реализован через абстрактные схемы ```unix://, file://, socket://```, и режим доступа ```ReadOnly, WriteOnly, ReadWrite```.  
 Например для обычной передачи файла создается типовой канал (клиент сервер): ```file:///src_file1 (ReadOnly)``` и ```file:///dst_file2 (WriteOnly)```, далее в сессии пользователя запускаются информационные GUI диалоги и о передаче и выбора папки назначения, после которых файл автоматически сохранится в удаленной сессии.  
