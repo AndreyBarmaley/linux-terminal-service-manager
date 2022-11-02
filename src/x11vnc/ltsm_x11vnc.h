@@ -29,10 +29,8 @@
 
 namespace LTSM
 {
-    class X11Vnc : public Application
+    class X11Vnc : public ApplicationJsonConfig
     {
-        JsonObject              _config;
-
         int    		        startInetd(void) const;
         int    		        startSocket(int port) const;
 

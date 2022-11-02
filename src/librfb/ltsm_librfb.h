@@ -142,18 +142,19 @@ namespace LTSM
         /// SecurityInfo
         struct SecurityInfo
         {
-            bool                authNone = false;
-            bool                authVnc = false;
-            bool                authVenCrypt = false;
-
             std::string         passwdFile;
-            std::string         tlsPriority;
+            std::string         tlsPriority{"NORMAL:+ANON-ECDH:+ANON-DH"};
             std::string         caFile;
             std::string         certFile;
             std::string         keyFile;
             std::string         crlFile;
-            bool                tlsAnonMode = false;
+
             int                 tlsDebug = 0;
+
+            bool                authNone = false;
+            bool                authVnc = false;
+            bool                authVenCrypt = false;
+            bool                tlsAnonMode = false;
         };
     }
 }

@@ -41,9 +41,13 @@
     "channel:pcscd:disabled": false,
     "channel:pcscd:format": "/var/run/ltsm/pcscd/%{user}",
 
-    "idle:timeout:sec": 0,
+    "#idle:timeout:xvfb": 10,
+    "#idle:timeout:login": 70,
+    "#idle:timeout:logout": 0,
+
+    "#idle:action:timeout": 0,
     "#idle:action:path": "/usr/bin/xlock",
-    "idle:action:args": [],
+    "#idle:action:args": [],
 
     "group:shm": "ltsm-shm",
     "group:auth": "ltsm-auth",
@@ -56,7 +60,6 @@
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
     "helper:autocomplete": true,
-    "helper:idletimeout": 100,
     "helper:path": "/usr/libexec/ltsm/LTSM_helper",
     "helper:args": "",
     "helper:dateformat": "dddd dd MMMM, hh:mm:ss",
@@ -76,12 +79,11 @@
     "display:max": 99,
     "display:solid": "0x4e7db7",
 
-    "xauth:file": "/var/run/ltsm/auth_%{pid}.%{remoteaddr}.%{display}",
+    "xauth:file": "/var/run/ltsm/auth_%{display}",
 
     "xvfb:path": "/usr/bin/Xvfb",
     "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",
     "xvfb:socket": "/tmp/.X11-unix/X%{display}",
-    "xvfb:lock": "/tmp/.X%{display}-lock",
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",

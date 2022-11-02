@@ -31,36 +31,36 @@
 
 namespace LTSM
 {
-    DebugLevel Application::_debug = DebugLevel::Console;
-    std::mutex Application::_logging;
+    DebugLevel Application::level = DebugLevel::Console;
+    std::mutex Application::logging;
 
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {
-        return _debug == lvl;
+        return level == lvl;
     }
 
     void Application::setDebugLevel(const DebugLevel & lvl)
     {
-        _debug = lvl;
+        level = lvl;
     }
 
-    void Application::setDebugLevel(std::string_view level)
+    void Application::setDebugLevel(std::string_view lvl)
     {
-        if(level == "info")
-            _debug = DebugLevel::SyslogInfo;
-        else if(level == "debug")
-            _debug = DebugLevel::SyslogDebug;
-        else if(level == "trace")
-            _debug = DebugLevel::SyslogTrace;
-        else if(level == "console")
-            _debug = DebugLevel::Console;
+        if(lvl == "info")
+            level = DebugLevel::SyslogInfo;
+        else if(lvl == "debug")
+            level = DebugLevel::SyslogDebug;
+        else if(lvl == "trace")
+            level = DebugLevel::SyslogTrace;
+        else if(lvl == "console")
+            level = DebugLevel::Console;
         else
-            _debug = DebugLevel::Quiet;
+            level = DebugLevel::Quiet;
     }
 
-    Application::Application(const char* ident, int argc, const char** argv) : _ident(ident), _facility(LOG_USER)
+    Application::Application(std::string_view sid) : ident(sid.data()), facility(LOG_USER)
     {
-        ::openlog(_ident, 0, _facility);
+        ::openlog(ident, 0, facility);
     }
 
     Application::~Application()
@@ -68,115 +68,141 @@ namespace LTSM
         closelog();
     }
 
-    void Application::reopenSyslog(int facility)
+    void Application::reopenSyslog(int fclt)
     {
         closelog();
-        ::openlog(_ident, 0, facility);
-        _facility = facility;
+        ::openlog(ident, 0, fclt);
+        facility = fclt;
     }
 
-    ApplicationJsonConfig::ApplicationJsonConfig(const char* ident, int argc, const char** argv)
-        : Application(ident, argc, argv)
+    ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
+        : Application(ident)
     {
-        std::string confPath;
-
-        for(int it = 1; it < argc; ++it)
+        if(fconf)
+            readConfig(fconf);
+        else
         {
-            if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc)
-            {
-                confPath.assign(argv[it + 1]);
-                it = it + 1;
-            }
-        }
+            std::list<std::filesystem::path> files;
 
-        if(confPath.empty())
-        {
-            if(const char* env = std::getenv("LTSM_CONFIG"))
-                confPath.assign(env);
-        }
+            auto env = std::getenv("LTSM_CONFIG");
+            if(env)
+                files.emplace_back(env);
 
-        if(confPath.empty())
-        {
-            for(auto path : { "config.json", "/etc/ltsm/config.json" })
+            files.emplace_back(std::filesystem::current_path() / "config.json");
+            files.emplace_back("/etc/ltsm/config.json");
+
+            for(auto & path : files)
             {
                 auto st = std::filesystem::status(path);
 
                 if(std::filesystem::file_type::not_found != st.type() &&
                    (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                 {
-                    confPath.assign(path);
+                    readConfig(path);
                     break;
                 }
             }
+        }
+    }
 
-            if(confPath.empty())
-            {
-                auto local = std::filesystem::path(argv[0]).parent_path() / "config.json";
-                auto st = std::filesystem::status(local);
-
-                if(std::filesystem::file_type::not_found != st.type() &&
-                   (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
-                    confPath.assign(local);
-            }
+    void ApplicationJsonConfig::readConfig(const std::filesystem::path & file)
+    {
+        if(! std::filesystem::exists(file))
+        {
+            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            throw std::invalid_argument(__FUNCTION__);
         }
 
-        if(confPath.empty())
-            throw std::invalid_argument("config.json not found");
+        if((std::filesystem::status(file).permissions() & std::filesystem::perms::owner_read)
+                == std::filesystem::perms::none)
+        {
+            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "access", file.c_str());
+            throw std::invalid_argument(__FUNCTION__);
+        }
 
-        info("used config: %s, running uid: %d", confPath.c_str(), getuid());
-        JsonContentFile jsonFile(confPath);
+
+        Application::info("%s: path: `%s', uid: %d", __FUNCTION__, file.c_str(), getuid());
+        JsonContentFile jsonFile(file);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject())
-            throw std::runtime_error("json parse error");
+        {
+            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "json parse", file.c_str());
+            throw std::invalid_argument(__FUNCTION__);
+        }
 
-        _config = jsonFile.toObject();
-        _config.addString("config:path", confPath);
+        json = jsonFile.toObject();
+        json.addString("config:path", file.native());
 
-        std::string str = _config.getString("logging:facility");
-        int facility = 0;
+        std::string str = json.getString("logging:facility");
+        int facility = LOG_USER;
 
         if(6 == str.size() && 0 == str.compare(0, 5, "local"))
         {
             switch(str[5])
             {
-                case '0':
-                    facility = LOG_LOCAL0;
-                    break;
-
-                case '1':
-                    facility = LOG_LOCAL1;
-                    break;
-
-                case '2':
-                    facility = LOG_LOCAL2;
-                    break;
-
-                case '3':
-                    facility = LOG_LOCAL3;
-                    break;
-
-                case '4':
-                    facility = LOG_LOCAL4;
-                    break;
-
-                case '5':
-                    facility = LOG_LOCAL5;
-                    break;
-
-                case '6':
-                    facility = LOG_LOCAL6;
-                    break;
-
-                case '7':
-                    facility = LOG_LOCAL7;
-                    break;
-
-                default:
-                    break;
+                case '0': facility = LOG_LOCAL0; break;
+                case '1': facility = LOG_LOCAL1; break;
+                case '2': facility = LOG_LOCAL2; break;
+                case '3': facility = LOG_LOCAL3; break;
+                case '4': facility = LOG_LOCAL4; break;
+                case '5': facility = LOG_LOCAL5; break;
+                case '6': facility = LOG_LOCAL6; break;
+                case '7': facility = LOG_LOCAL7; break;
+                default: break;
             }
         }
 
         if(0 < facility)
             reopenSyslog(facility);
+    }
+
+    void ApplicationJsonConfig::configSetInteger(const std::string & key, int val)
+    {
+        json.addInteger(key, val);
+    }
+
+    void ApplicationJsonConfig::configSetBoolean(const std::string & key, bool val)
+    {
+        json.addBoolean(key, val);
+    }
+
+    void ApplicationJsonConfig::configSetString(const std::string & key, std::string_view val)
+    {
+        json.addString(key, val);
+    }
+
+    void ApplicationJsonConfig::configSetDouble(const std::string & key, double val)
+    {
+        json.addDouble(key, val);
+    }
+
+    int ApplicationJsonConfig::configGetInteger(std::string_view key, int def) const
+    {
+        return json.getInteger(key, def);
+    }
+
+    bool ApplicationJsonConfig::configGetBoolean(std::string_view key, bool def) const
+    {
+        return json.getBoolean(key, def);
+    }
+
+    std::string ApplicationJsonConfig::configGetString(std::string_view key, std::string_view def) const
+    {
+        return json.getString(key, def);
+    }
+
+    double ApplicationJsonConfig::configGetDouble(std::string_view key, double def) const
+    {
+        return json.getDouble(key, def);
+    }
+
+    const JsonObject & ApplicationJsonConfig::config(void) const
+    {
+        return json;
+    }
+
+    void ApplicationJsonConfig::configSet(JsonObject && jo) noexcept
+    {
+        json.swap(jo);
     }
 }

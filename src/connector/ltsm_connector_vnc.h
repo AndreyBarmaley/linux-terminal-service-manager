@@ -55,6 +55,9 @@ namespace LTSM
             std::list<std::pair<std::string, size_t>> transfer;
             std::mutex          lockTransfer;
 
+            std::pair<XCB::SHM, uid_t>
+                                shmExt;
+
             std::chrono::time_point<std::chrono::steady_clock>
                                 idleSession;
             size_t              idleTimeoutSec = 0;
@@ -72,6 +75,8 @@ namespace LTSM
             // x11server
             XCB::RootDisplayExt*       xcbDisplay(void) override;
             const XCB::RootDisplayExt* xcbDisplay(void) const override;
+
+            const XCB::SHM*     xcbShm(void) const override;
             bool                xcbNoDamage(void) const override;
             bool                xcbAllow(void) const override;
             void                setXcbAllow(bool) override;
@@ -85,7 +90,7 @@ namespace LTSM
             void                recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
             // dbus virtual signals
-            void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
+            void                onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid) override;
             void                onShutdownConnector(const int32_t & display) override;
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
@@ -113,6 +118,8 @@ namespace LTSM
             void                systemClientVariables(const JsonObject &) override;
             void                systemKeyboardChange(const JsonObject &) override;
 #endif
+
+            void                xcbShmInit(const XCB::Size &);
 
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}

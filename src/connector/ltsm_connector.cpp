@@ -73,20 +73,32 @@ namespace LTSM
 
     /* Connector::Service */
     Connector::Service::Service(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_connector", argc, argv), _type("auto")
+        : ApplicationJsonConfig("ltsm_connector"), _type("auto")
     {
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
-            {
-                connectorHelp(argv[0]);
-                throw 0;
-            }
-            else if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
             {
                 _type = Tools::lower(argv[it + 1]);
                 it = it + 1;
             }
+            else
+            if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc)
+            {
+                readConfig(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            {
+                connectorHelp(argv[0]);
+                throw 0;
+            }
+        }
+
+        if(! config().isValid())
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "config");
+            throw std::invalid_argument(__FUNCTION__);
         }
     }
 
@@ -120,7 +132,7 @@ namespace LTSM
 
     int Connector::Service::start(void)
     {
-        Application::setDebugLevel(_config.getString("connector:debug"));
+        Application::setDebugLevel(configGetString("connector:debug"));
         auto uid = getuid();
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
         //if(0 < uid)
@@ -156,18 +168,18 @@ namespace LTSM
 #ifdef LTSM_WITH_RDP
 
         if(_type == "rdp")
-            connector.reset(new Connector::RDP(_config));
+            connector.reset(new Connector::RDP(config()));
 
 #endif
 #ifdef LTSM_WITH_SPICE
 
         if(_type == "spice")
-            connector.reset(new Connector::SPICE(_config));
+            connector.reset(new Connector::SPICE(config()));
 
 #endif
 
         if(! connector)
-            connector.reset(new Connector::VNC(_config));
+            connector.reset(new Connector::VNC(config()));
 
         int res = 0;
 
@@ -237,7 +249,7 @@ namespace LTSM
         Application::debug("%s: uid: %d, gid: %d", __FUNCTION__, getuid(), getgid());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::string socketFormat = _config->getString("xvfb:socket");
+        std::string socketFormat = _config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
         std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
@@ -255,6 +267,8 @@ namespace LTSM
             return false;
         }
 
+        // shmInit();
+
         auto displaySz = _xcbDisplay->size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
 
@@ -270,7 +284,7 @@ namespace LTSM
         return true;
     }
 
-    void Connector::SignalProxy::onLoginSuccess(const int32_t & display, const std::string & userName)
+    void Connector::SignalProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
         if(0 < _display && display == _display)
         {

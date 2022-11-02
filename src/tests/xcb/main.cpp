@@ -42,7 +42,7 @@ public:
     bool test_getimage(void)
     {
         auto damage = region();
-        auto reply = copyRootImageRegion(damage, 0);
+        auto reply = copyRootImageRegion(damage);
         if(! reply) return false;
 
         // reply info dump
@@ -309,7 +309,7 @@ class App : public Application
     int screen;
 
 public:
-    App(int argc, const char** argv) : Application("test", argc, argv), screen(0)
+    App(int argc, const char** argv) : Application("test"), screen(0)
     {
 	if(1 < argc)
 	{

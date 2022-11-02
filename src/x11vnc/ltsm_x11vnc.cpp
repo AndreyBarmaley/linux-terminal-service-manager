@@ -46,19 +46,19 @@ namespace LTSM
 
     /* X11Vnc */
     X11Vnc::X11Vnc(int argc, const char** argv)
-        : Application("ltsm_x11vnc", argc, argv)
+        : ApplicationJsonConfig("ltsm_x11vnc")
     {
-        _config.addInteger("display", 0);
-        _config.addInteger("port", 5900);
-        _config.addInteger("threads", 2);
-        _config.addBoolean("inetd", false);
-        _config.addBoolean("syslog", false);
-        _config.addBoolean("background", false);
-        _config.addBoolean("noauth", false);
-        _config.addBoolean("notls", false);
-        _config.addBoolean("nodamage", false);
-        _config.addBoolean("DesktopResized", false);
-        _config.addBoolean("ClipBoard", false);
+        configSetInteger("display", 0);
+        configSetInteger("port", 5900);
+        configSetInteger("threads", 2);
+        configSetBoolean("inetd", false);
+        configSetBoolean("syslog", false);
+        configSetBoolean("background", false);
+        configSetBoolean("noauth", false);
+        configSetBoolean("notls", false);
+        configSetBoolean("nodamage", false);
+        configSetBoolean("DesktopResized", false);
+        configSetBoolean("ClipBoard", false);
 
         for(int it = 1; it < argc; ++it)
         {
@@ -69,69 +69,69 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
-                _config.addInteger("display", std::stoi(argv[it + 1]));
+                configSetInteger("display", std::stoi(argv[it + 1]));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc)
             {
-                _config.addString("authfile", argv[it + 1]);
+                configSetString("authfile", argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--passwdfile") && it + 1 < argc)
             {
-                _config.addString("passwdfile", argv[it + 1]);
+                configSetString("passwdfile", argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--keymapfile") && it + 1 < argc)
             {
-                _config.addString("keymapfile", argv[it + 1]);
+                configSetString("keymapfile", argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--debug") && it + 1 < argc)
             {
-                _config.addString("debug", argv[it + 1]);
+                configSetString("debug", argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--threads") && it + 1 < argc)
             {
                 auto str = argv[it + 1];
-                _config.addInteger("threads", std::stoi(str[0] == ':' ? str + 1 : str));
+                configSetInteger("threads", std::stoi(str[0] == ':' ? str + 1 : str));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
             {
-                _config.addInteger("port", std::stoi(argv[it + 1]));
+                configSetInteger("port", std::stoi(argv[it + 1]));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--noauth"))
-                _config.addBoolean("noauth", true);
+                configSetBoolean("noauth", true);
             else if(0 == std::strcmp(argv[it], "--inetd"))
-                _config.addBoolean("inetd", true);
+                configSetBoolean("inetd", true);
             else if(0 == std::strcmp(argv[it], "--notls"))
-                _config.addBoolean("notls", true);
+                configSetBoolean("notls", true);
             else if(0 == std::strcmp(argv[it], "--syslog"))
-                _config.addBoolean("syslog", true);
+                configSetBoolean("syslog", true);
             else if(0 == std::strcmp(argv[it], "--background"))
-                _config.addBoolean("background", true);
+                configSetBoolean("background", true);
             else if(0 == std::strcmp(argv[it], "--nodamage"))
-                _config.addBoolean("nodamage", true);
+                configSetBoolean("nodamage", true);
             else if(0 == std::strcmp(argv[it], "+DesktopResized"))
-                _config.addBoolean("DesktopResized", true);
+                configSetBoolean("DesktopResized", true);
             else if(0 == std::strcmp(argv[it], "+ClipBoard"))
-                _config.addBoolean("ClipBoard", true);
+                configSetBoolean("ClipBoard", true);
         }
 
         bool error = false;
 
-        if(_config.getBoolean("inetd"))
-            _config.addBoolean("syslog", true);
+        if(configGetBoolean("inetd"))
+            configSetBoolean("syslog", true);
 
         LTSM::Application::setDebugLevel(LTSM::DebugLevel::ConsoleError);
 
-        if(_config.getBoolean("syslog"))
+        if(configGetBoolean("syslog"))
         {
             Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
-            auto debug = _config.getString("debug");
+            auto debug = configGetString("debug");
 
             if(! debug.empty() && debug != "console")
                 Application::setDebugLevel(debug);
@@ -139,15 +139,15 @@ namespace LTSM
 
         if(1)
         {
-            std::string file = _config.getString("authfile");
+            std::string file = configGetString("authfile");
 
             if(! file.empty() && ! std::filesystem::exists(file))
                 Application::warning("authfile not found: `%s'", file.c_str());
         }
 
-        if(! _config.getBoolean("noauth"))
+        if(! configGetBoolean("noauth"))
         {
-            std::string file = _config.getString("passwdfile");
+            std::string file = configGetString("passwdfile");
 
             if(file.empty())
             {
@@ -191,7 +191,7 @@ namespace LTSM
 
                 try
                 {
-                    auto connector = std::make_unique<Connector::X11VNC>(sock, _config);
+                    auto connector = std::make_unique<Connector::X11VNC>(sock, config());
                     res = connector->rfbCommunication();
                 }
                 catch(const std::exception & err)
@@ -220,7 +220,7 @@ namespace LTSM
 
         try
         {
-            auto connector = std::make_unique<Connector::X11VNC>(-1, _config);
+            auto connector = std::make_unique<Connector::X11VNC>(-1, config());
             res = connector->rfbCommunication();
         }
         catch(const std::exception & err)
@@ -239,11 +239,11 @@ namespace LTSM
     {
         Application::info("x11vnc version: %d", LTSM_X11VNC_VERSION);
 
-        if(_config.getBoolean("background") && fork())
+        if(configGetBoolean("background") && fork())
             return 0;
 
-        return _config.getBoolean("inetd") ?
-               startInetd() : startSocket(_config.getInteger("port"));
+        return configGetBoolean("inetd") ?
+               startInetd() : startSocket(configGetInteger("port"));
     }
 }
 
@@ -258,7 +258,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("local exception: %s", err.what());
+        LTSM::Application::error("exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

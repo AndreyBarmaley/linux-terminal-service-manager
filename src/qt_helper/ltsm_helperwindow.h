@@ -71,14 +71,10 @@ protected:
     virtual QString     getEncryptionInfo(int displayNum) = 0;
     virtual int         getServiceVersion(void) = 0;
     virtual void        widgetStartedAction(int displayNum) = 0;
-    virtual void        idleTimeoutAction(int displayNum) = 0;
     virtual bool        isAutoComplete(int displayNum) = 0;
-    virtual int         getIdleTimeoutSec(int displayNum) = 0;
     virtual QString     getTitle(int displayNum) = 0;
     virtual QString     getDateFormat(int displayNum) = 0;
     virtual QStringList getUsersList(int displayNum) = 0;
-
-    void                setIdleTimeoutSec(int);
 
     // xkb client interface
     void                xkbStateChangeEvent(int group) override;
@@ -86,8 +82,6 @@ protected:
 private:
     Ui::LTSM_HelperWindow* ui;
     int                 displayNum;
-    int                 idleTimeoutSec;
-    int                 currentIdleSec;
     int                 timerOneSec;
     int                 timer300ms;
     int                 timerReloadUsers;
@@ -121,7 +115,7 @@ private:
 protected:
     // dbus virtual signals
     void                onLoginFailure(const int32_t & display, const std::string & msg) override;
-    void                onLoginSuccess(const int32_t & display, const std::string & userName) override;
+    void                onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid) override;
     void                onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) override;
     void                onHelperWidgetCentered(const int32_t& display) override;
     void                onHelperWidgetTimezone(const int32_t& display, const std::string&) override;
@@ -134,8 +128,6 @@ protected:
     int                 getServiceVersion(void) override;
     bool                isAutoComplete(int displayNum) override;
     void                widgetStartedAction(int displayNum) override;
-    void                idleTimeoutAction(int displayNum) override;
-    int                 getIdleTimeoutSec(int displayNum) override;
     QString             getTitle(int displayNum) override;
     QString             getDateFormat(int displayNum) override;
     QStringList         getUsersList(int displayNum) override;

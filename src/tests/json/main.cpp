@@ -15,7 +15,7 @@ class Test1App : public Application
     JsonObject  config;
 
 public:
-    Test1App(const char* ident, int argc, const char** argv) : Application(ident, argc, argv)
+    Test1App(const char* ident, int argc, const char** argv) : Application(ident)
     {
         const char* file = 1 < argc ? argv[1] : "test.json";
 

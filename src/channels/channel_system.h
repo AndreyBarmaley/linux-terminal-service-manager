@@ -65,7 +65,7 @@ namespace LTSM
     {
         enum { System = 0, Reserved = 0xFF };
 
-        enum class ConnectorType { Unknown, Unix, Socket, File };
+        enum class ConnectorType { Unknown, Unix, Socket, File, Command };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
 
         // UltraSlow: ~4k/sec, ~16k/sec, ~40k/sec, ~200k/sec, ~800k/sec
@@ -170,6 +170,18 @@ namespace LTSM
                 createConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Speed &, ChannelClient &);
         };
 
+        class CommandConnector : public Connector
+        {
+            FILE*   fcmd = nullptr;
+
+        public:
+            CommandConnector(uint8_t channel, FILE*, const ConnectorMode &, const Speed &, ChannelClient &);
+            ~CommandConnector();
+
+            static std::unique_ptr<Connector>
+                createConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Speed &, ChannelClient &);
+        };
+
         struct ListenMode
         {
             Channel::ConnectorMode mode = ConnectorMode::Unknown;
@@ -266,6 +278,7 @@ namespace LTSM
         bool            createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Speed &);
         bool            createChannelSocket(uint8_t channel, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Speed &);
         bool            createChannelSocket(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Speed &);
+        bool            createChannelCommand(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Speed &);
 
         bool            createChannelFromListener(const std::string& client, const Channel::ConnectorMode & cmode, bool isunix, int sock, const Channel::ConnectorMode & smode, const Channel::Speed &);
         void            destroyChannel(uint8_t channel);

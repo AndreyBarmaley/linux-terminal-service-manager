@@ -55,7 +55,8 @@ namespace LTSM
             virtual bool        xcbAllow(void) const = 0;
             virtual bool        xcbNoDamage(void) const = 0;
             virtual void        setXcbAllow(bool) = 0;
- 
+            virtual const XCB::SHM* xcbShm(void) const { return nullptr; }
+
             const XCB::Region & getClientRegion(void) const { return clientRegion; }
 
             virtual bool        rfbClipboardEnable(void) const = 0;

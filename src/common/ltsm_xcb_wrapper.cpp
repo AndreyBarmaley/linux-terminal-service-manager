@@ -41,10 +41,6 @@
 #include "xcb/damage.h"
 #include "xcb/randr.h"
 
-#ifdef LTSM_BUILD_XCB_ERRORS
-#include "libxcb-errors/xcb_errors.h"
-#endif
-
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
@@ -263,20 +259,6 @@ namespace LTSM
             return res;
         }
 
-        size_t HasherKeyCodes::operator()(const KeyCodes & kc) const
-        {
-            if(kc.get())
-            {
-                size_t len = 0;
-
-                while(*(kc.get() + len) != NULL_KEYCODE) len++;
-
-                return Tools::crc32b(kc.get(), len);
-            }
-
-            return 0;
-        }
-
         void error(const char* func, const GenericError & err)
         {
             Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
@@ -418,31 +400,6 @@ namespace LTSM
         return res;
     }
 
-    bool XCB::KeyCodes::isValid(void) const
-    {
-        return get() && *get() != NULL_KEYCODE;
-    }
-
-    bool XCB::KeyCodes::operator==(const KeyCodes & kc) const
-    {
-        auto ptr1 = get();
-        auto ptr2 = kc.get();
-
-        if(! ptr1 || ! ptr2) return false;
-
-        if(ptr1 == ptr2) return true;
-
-        while(*ptr1 != NULL_KEYCODE && *ptr2 != NULL_KEYCODE)
-        {
-            if(*ptr1 != *ptr2) return false;
-
-            ptr1++;
-            ptr2++;
-        }
-
-        return *ptr1 == *ptr2;
-    }
-
     /* XCB::Connector */
     XCB::Connector::Connector(size_t displayNum, const AuthCookie* cookie)
     {
@@ -477,10 +434,18 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
             throw xcb_error(NS_FuncName);
         }
+
+#ifdef LTSM_BUILD_XCB_ERRORS
+        xcb_errors_context_new(_conn, &_errctx);
+#endif
     }
 
     XCB::Connector::~Connector()
     {
+#ifdef LTSM_BUILD_XCB_ERRORS
+        if(_errctx)
+            xcb_errors_context_free(_errctx);
+#endif
         xcb_disconnect(_conn);
     }
 
@@ -523,23 +488,39 @@ namespace LTSM
         return GC(win, _conn, value_mask, value_list);
     }
 
-    XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode, bool readOnly)
+    XCB::SHM XCB::Connector::createSHM(size_t shmsz, int mode, bool readOnly, uid_t owner)
     {
-        int shmid = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
+        Application::info("%s: size: %d, mode: 0x%08x, read only: %d", __FUNCTION__, shmsz, mode, readOnly);
 
+        int shmid = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
         if(shmid == -1)
         {
-            Application::error("shmget failed, size: %d, error: %s", shmsz, strerror(errno));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmget", strerror(errno), errno);
             return SHM();
         }
 
         auto shmaddr = reinterpret_cast<uint8_t*>(shmat(shmid, nullptr, (readOnly ? SHM_RDONLY : 0)));
-
         // man shmat: check result
         if(shmaddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
         {
-            Application::error("shmaddr failed, id: %d, error: %s", shmid, strerror(errno));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmaddr", strerror(errno), errno);
             return SHM();
+        }
+
+        if(0 < owner)
+        {
+            shmid_ds info;
+
+            if(0 == shmctl(shmid, IPC_STAT, & info))
+            {
+                info.shm_perm.uid = owner;
+                if(0 != shmctl(shmid, IPC_SET, & info))
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+            }
+            else
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+            }
         }
 
         return SHM(shmid, shmaddr, _conn);
@@ -576,7 +557,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_intern_atom");
+            extendedError(err.get(), __FUNCTION__, "xcb_intern_atom");
             return XCB_ATOM_NONE;
         }
 
@@ -592,7 +573,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_get_atom_name");
+            extendedError(err.get(), __FUNCTION__, "xcb_get_atom_name");
             return "";
         }
 
@@ -606,28 +587,26 @@ namespace LTSM
         return "";
     }
 
-    void XCB::Connector::extendedError(const GenericError & gen, const char* func) const
-    {
-        if(gen) extendedError(gen.get(), func);
-    }
-
-    void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func) const
+    void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func, const char* xcbname) const
     {
 #ifdef LTSM_BUILD_XCB_ERRORS
-        xcb_errors_context_t* err_ctx;
-        xcb_errors_context_new(_conn, &err_ctx);
-        const char* major, *minor, *extension, *error;
-        major = xcb_errors_get_name_for_major_code(err_ctx, err->major_code);
-        minor = xcb_errors_get_name_for_minor_code(err_ctx, err->major_code, err->minor_code);
-        error = xcb_errors_get_name_for_error(err_ctx, err->error_code, &extension);
-        Application::error("%s error: %s:%s, %s:%s, resource %u sequence %u",
-                           func, error, extension ? extension : "no_extension", major, minor ? minor : "no_minor",
+        if(_errctx)
+        {
+            const char* extension = nullptr;
+            const char* major = xcb_errors_get_name_for_major_code(_errctx, err->major_code);
+            const char* minor = xcb_errors_get_name_for_minor_code(_errctx, err->major_code, err->minor_code);
+            const char* error = xcb_errors_get_name_for_error(_errctx, err->error_code, &extension);
+
+            Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource %u, sequence %u",
+                           func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
                            (unsigned int) err->resource_id, (unsigned int) err->sequence);
-        xcb_errors_context_free(err_ctx);
-#else
-        Application::error("%s error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
-                           func, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
+        }
+        else
 #endif
+        {
+            Application::error("%s: %s failed, error code: %d, major: 0x%02x, minor: 0x%04x, sequence: %u",
+                           func, xcbname, static_cast<int>(err->error_code), static_cast<int>(err->major_code), err->minor_code, err->sequence);
+        }
     }
 
     int XCB::Connector::hasError(void) const
@@ -653,7 +632,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_test_query_version");
+                extendedError(err.get(), __FUNCTION__, "xcb_test_query_version");
                 return false;
             }
 
@@ -674,7 +653,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_damage_query_version");
+                extendedError(err.get(), __FUNCTION__, "xcb_damage_query_version");
                 return false;
             }
 
@@ -695,7 +674,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_xfixes_query_version");
+                extendedError(err.get(), __FUNCTION__, "xcb_xfixes_query_version");
                 return false;
             }
 
@@ -716,7 +695,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_randr_query_version");
+                extendedError(err.get(), __FUNCTION__, "xcb_randr_query_version");
                 return false;
             }
 
@@ -737,7 +716,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_shm_query_version");
+                extendedError(err.get(), __FUNCTION__, "xcb_shm_query_version");
                 return false;
             }
 
@@ -758,7 +737,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_xkb_use_extension");
+                extendedError(err.get(), __FUNCTION__, "xcb_xkb_use_extension");
                 return false;
             }
 
@@ -948,8 +927,8 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, offset, length);
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
 
         return xcbReply.reply();
     }
@@ -964,9 +943,10 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_ATOM, offset, 1);
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
                 return *res;
@@ -979,9 +959,10 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
                 return *res;
@@ -995,9 +976,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, offset, ~0);
         std::string res;
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
 
@@ -1012,9 +994,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, XCB_ATOM_STRING, 0, ~0);
         std::list<std::string> res;
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             int len = xcb_get_property_value_length(reply.get());
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
@@ -1029,9 +1012,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, win, prop, type, 0, ~0);
         std::vector<uint8_t> res;
 
-        if(xcbReply.error())
-            extendedError(xcbReply.error(), "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+        if(auto err = xcbReply.error())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             int len = xcb_get_property_value_length(reply.get());
             auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
@@ -1175,8 +1159,8 @@ namespace LTSM
 
         auto cookie = xcb_xkb_select_events_checked(_conn, _xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
 
-        if(auto errorReq = checkRequest(cookie))
-            extendedError(errorReq, "xcb_xkb_select_events");
+        if(auto err = checkRequest(cookie))
+            extendedError(err.get(), __FUNCTION__, "xcb_xkb_select_events");
 
         auto wsz = size();
 
@@ -1186,20 +1170,11 @@ namespace LTSM
 
         // create damage notify
         _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
-
         if(_damage)
         {
-            auto fixreg = XFixesRegion({0, 0, wsz.width, wsz.height}, _conn);
-
-            if(fixreg) _damage.addRegion(_screen->root, fixreg.xid());
+            if(auto fixreg = XFixesRegion({0, 0, wsz.width, wsz.height}, _conn))
+                _damage.addRegion(_screen->root, fixreg.xid());
         }
-
-        // init shm
-        const size_t bpp = bitsPerPixel() >> 3;
-        const size_t pagesz = 4096;
-        const size_t shmsz = ((wsz.width* wsz.height* bpp / pagesz) + 1) * pagesz;
-
-        _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false);
     }
 
     XCB::RootDisplay::~RootDisplay()
@@ -1285,21 +1260,16 @@ namespace LTSM
         return _screen->root;
     }
 
-    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, uint32_t planeMask) const
+    XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, const SHM* shm) const
     {
         Application::debug("%s: region: [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        const uint32_t planeMask = 0xFFFFFFFF;
 
-        if(_shm)
+        if(shm && shm->get())
         {
             auto xcbReply = getReplyFunc1(xcb_shm_get_image, _conn, _screen->root, reg.x, reg.y, reg.width, reg.height,
-                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, _shm.xid(), 0);
+                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, shm->xid(), 0);
             PixmapInfoReply res;
-
-            if(auto errorReq = xcbReply.error())
-            {
-                extendedError(errorReq, "xcb_shm_get_image");
-                return res;
-            }
 
             if(auto reply = xcbReply.reply())
             {
@@ -1308,9 +1278,14 @@ namespace LTSM
 
                 if(visptr)
                 {
-                    return std::make_shared<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, _shm, reply->size);
+                    return std::make_shared<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, *shm, reply->size);
                 }
             }
+
+            if(auto err = xcbReply.error())
+                extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
+
+            const_cast<SHM*>(shm)->reset();
         }
 
         size_t pitch = reg.width * (bitsPerPixel() >> 3);
@@ -1337,7 +1312,7 @@ namespace LTSM
 
             if(auto err = xcbReply.error())
             {
-                extendedError(err, "xcb_get_image");
+                extendedError(err.get(), __FUNCTION__, "xcb_get_image");
                 break;
             }
 
@@ -1410,7 +1385,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_screen_resources");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
             return res;
         }
 
@@ -1431,7 +1406,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_output_info");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_output_info");
             return res;
         }
 
@@ -1456,7 +1431,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_output_info");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_output_info");
             return res;
         }
 
@@ -1477,7 +1452,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_screen_resources");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
             return res;
         }
 
@@ -1498,7 +1473,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_output_info");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_output_info");
             return res;
         }
 
@@ -1519,7 +1494,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_screen_info");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
             return res;
         }
 
@@ -1541,7 +1516,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_get_screen_info");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
             return res;
         }
 
@@ -1639,7 +1614,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_randr_create_mode");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_create_mode");
             return 0;
         }
 
@@ -1656,9 +1631,9 @@ namespace LTSM
     {
         auto cookie = xcb_randr_add_output_mode_checked(_conn, output, mode);
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_randr_add_output_mode");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_add_output_mode");
             return false;
         }
 
@@ -1670,9 +1645,9 @@ namespace LTSM
     {
         auto cookie = xcb_randr_destroy_mode_checked(_conn, mode);
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_randr_destroy_mode_checked");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_destroy_mode_checked");
             return false;
         }
 
@@ -1684,9 +1659,9 @@ namespace LTSM
     {
         auto cookie = xcb_randr_delete_output_mode_checked(_conn, output, mode);
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_randr_delete_output_mode_checked");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_delete_output_mode_checked");
             return false;
         }
 
@@ -1779,7 +1754,7 @@ namespace LTSM
 
         if(auto err = xcbReply2.error())
         {
-            extendedError(err, "xcb_randr_set_screen_config");
+            extendedError(err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
             return false;
         }
 
@@ -1836,12 +1811,6 @@ namespace LTSM
                 }
 
                 Application::debug("xcb crc change notify: [%d,%d]", cc.width, cc.height);
-                // init shm
-                const size_t bpp = bitsPerPixel() >> 3;
-                const size_t pagesz = 4096;
-                const size_t shmsz = ((cc.width * cc.height * bpp / pagesz) + 1) * pagesz;
-                _shm = createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false);
-                // create damage notify
                 _damage = Damage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES, _conn);
                 damageAdd({0, 0, cc.width, cc.height});
             }
@@ -1918,7 +1887,7 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_xkb_get_names, _conn, XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_xkb_get_names");
+            extendedError(err.get(), __FUNCTION__, "xcb_xkb_get_names");
             return res;
         }
 
@@ -1944,7 +1913,7 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn, XCB_XKB_ID_USE_CORE_KBD);
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_xkb_get_names");
+            extendedError(err.get(), __FUNCTION__, "xcb_xkb_get_names");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1969,9 +1938,9 @@ namespace LTSM
 
         auto cookie = xcb_xkb_latch_lock_state_checked(_conn, XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_xkb_latch_lock_state");
+            extendedError(err.get(), __FUNCTION__, "xcb_xkb_latch_lock_state");
             return false;
         }
 
@@ -1990,7 +1959,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_get_keyboard_mapping");
+            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
             return empty;
         }
 
@@ -2055,7 +2024,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_get_keyboard_mapping");
+            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
             return NULL_KEYCODE;
         }
 
@@ -2162,13 +2131,14 @@ namespace LTSM
     {
         auto cookie = xcb_test_fake_input_checked(_conn, static_cast<uint8_t>(type), static_cast<uint8_t>(detail), XCB_CURRENT_TIME, _screen->root,
                       static_cast<int16_t>(posx), static_cast<int16_t>(posy), 0);
-        auto errorReq = checkRequest(cookie);
 
-        if(! errorReq)
-            return true;
+        if(auto err = checkRequest(cookie))
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_test_fake_input");
+            return false;
+        }
 
-        extendedError(errorReq, "xcb_test_fake_input");
-        return false;
+        return true;
     }
 
     /*
@@ -2179,9 +2149,8 @@ namespace LTSM
             auto back = createGC(mask, values);
 
             auto cookie = xcb_poly_fill_rectangle_checked(_conn, _screen->root, back.xcb, rects_num, rects_val);
-            auto errorReq = checkRequest(cookie);
-            if(errorReq)
-                extendedError(errorReq, "xcb_poly_fill_rectangle");
+            if(auto err = checkRequest(cookie))
+                extendedError(err, __FUNCTION__, "xcb_poly_fill_rectangle");
         }
     */
 
@@ -2205,17 +2174,15 @@ namespace LTSM
 
         uint32_t colors[]  = { color };
         auto cookie = xcb_change_window_attributes(_conn, _screen->root, XCB_CW_BACK_PIXEL, colors);
-        auto errorReq = checkRequest(cookie);
 
-        if(errorReq)
-            extendedError(errorReq, "xcb_change_window_attributes");
+        if(auto err = checkRequest(cookie))
+            extendedError(err.get(), __FUNCTION__, "xcb_change_window_attributes");
         else
         {
             cookie = xcb_clear_area_checked(_conn, 0, _screen->root, reg.x, reg.y, reg.width, reg.height);
-            errorReq = checkRequest(cookie);
 
-            if(errorReq)
-                extendedError(errorReq, "xcb_clear_area");
+            if(auto err = checkRequest(cookie))
+                extendedError(err.get(), __FUNCTION__, "xcb_clear_area");
         }
     }
 
@@ -2229,9 +2196,13 @@ namespace LTSM
         _selwin = xcb_generate_id(_conn);
         auto cookie = xcb_create_window_checked(_conn, 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, mask, values);
-        auto errorReq = checkRequest(cookie);
 
-        if(! errorReq)
+        if(auto err = checkRequest(cookie))
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_create_window");
+            _selwin = 0;
+        }
+        else
         {
             _atomPrimary = getAtom("PRIMARY");
             _atomClipboard = getAtom("CLIPBOARD");
@@ -2252,11 +2223,6 @@ namespace LTSM
                 this->getSelectionEvent(this->_atomPrimary);
                 this->getSelectionEvent(this->_atomClipboard);
             });
-        }
-        else
-        {
-            extendedError(errorReq, "xcb_create_window");
-            _selwin = 0;
         }
     }
 
@@ -2290,7 +2256,7 @@ namespace LTSM
 
         if(auto err = xcbReply.error())
         {
-            extendedError(err, "xcb_get_selection_owner");
+            extendedError(err.get(), __FUNCTION__, "xcb_get_selection_owner");
             return XCB_WINDOW_NONE;
         }
 
@@ -2302,9 +2268,9 @@ namespace LTSM
         auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
                       XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & _atomTargets); /* send list: _atomTargets, _atomText, _atomTextPlain, _atomUTF8 */
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_change_property");
+            extendedError(err.get(), __FUNCTION__, "xcb_change_property");
             return false;
         }
 
@@ -2323,9 +2289,9 @@ namespace LTSM
         auto chunk = std::min(maxreq, length);
         auto cookie = xcb_change_property_checked(_conn, XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, _selbuf.data());
 
-        if(auto errorReq = checkRequest(cookie))
+        if(auto err = checkRequest(cookie))
         {
-            extendedError(errorReq, "xcb_change_property");
+            extendedError(err.get(), __FUNCTION__, "xcb_change_property");
             return false;
         }
 
@@ -2440,8 +2406,9 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn, false, _selwin, _atomBuffer, type, 0, ~0);
 
         if(auto err = xcbReply.error())
-            extendedError(err, "xcb_get_property");
-        else if(auto reply = xcbReply.reply())
+            extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        else
+        if(auto reply = xcbReply.reply())
         {
             bool ret = false;
             auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
@@ -2466,8 +2433,8 @@ namespace LTSM
                 }
             }
 
-            if(auto errorReq = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
-                extendedError(errorReq, "xcb_delete_property");
+            if(auto err = checkRequest(xcb_delete_property_checked(_conn, _selwin, _atomBuffer)))
+                extendedError(err.get(), __FUNCTION__, "xcb_delete_property");
 
             return ret;
         }

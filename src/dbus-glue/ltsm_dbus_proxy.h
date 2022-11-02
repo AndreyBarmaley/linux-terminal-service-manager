@@ -27,7 +27,7 @@ protected:
         proxy_.uponSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin){ this->onHelperSetLoginPassword(display, login, pass, autologin); });
         proxy_.uponSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onHelperWidgetCentered(display); });
         proxy_.uponSignal("loginFailure").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& msg){ this->onLoginFailure(display, msg); });
-        proxy_.uponSignal("loginSuccess").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& userName){ this->onLoginSuccess(display, userName); });
+        proxy_.uponSignal("loginSuccess").onInterface(INTERFACE_NAME).call([this](const int32_t& display, const std::string& userName, const uint32_t& userUid){ this->onLoginSuccess(display, userName, userUid); });
         proxy_.uponSignal("shutdownConnector").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onShutdownConnector(display); });
         proxy_.uponSignal("pingConnector").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onPingConnector(display); });
         proxy_.uponSignal("sendBellSignal").onInterface(INTERFACE_NAME).call([this](const int32_t& display){ this->onSendBellSignal(display); });
@@ -53,7 +53,7 @@ protected:
     virtual void onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) = 0;
     virtual void onHelperWidgetCentered(const int32_t& display) = 0;
     virtual void onLoginFailure(const int32_t& display, const std::string& msg) = 0;
-    virtual void onLoginSuccess(const int32_t& display, const std::string& userName) = 0;
+    virtual void onLoginSuccess(const int32_t& display, const std::string& userName, const uint32_t& userUid) = 0;
     virtual void onShutdownConnector(const int32_t& display) = 0;
     virtual void onPingConnector(const int32_t& display) = 0;
     virtual void onSendBellSignal(const int32_t& display) = 0;
@@ -100,11 +100,9 @@ public:
         return result;
     }
 
-    bool busShutdownService()
+    void busShutdownService()
     {
-        bool result;
-        proxy_.callMethod("busShutdownService").onInterface(INTERFACE_NAME).storeResultsTo(result);
-        return result;
+        proxy_.callMethod("busShutdownService").onInterface(INTERFACE_NAME);
     }
 
     bool busShutdownDisplay(const int32_t& display)
@@ -308,20 +306,6 @@ public:
     {
         bool result;
         proxy_.callMethod("helperIsAutoComplete").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    bool helperIdleTimeoutAction(const int32_t& display)
-    {
-        bool result;
-        proxy_.callMethod("helperIdleTimeoutAction").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
-        return result;
-    }
-
-    int32_t helperGetIdleTimeoutSec(const int32_t& display)
-    {
-        int32_t result;
-        proxy_.callMethod("helperGetIdleTimeoutSec").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
         return result;
     }
 

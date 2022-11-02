@@ -439,7 +439,7 @@ namespace LTSM
 
             if(0 <= shmOpcode)
             {
-                _xcbDisplay->extendedError(ev.toerror(), "SHM extension");
+                _xcbDisplay->extendedError(ev.toerror(), __FUNCTION__, "");
                 return false;
             }
 
@@ -554,7 +554,7 @@ namespace LTSM
         return true;
     }
 
-    void Connector::RDP::onLoginSuccess(const int32_t & display, const std::string & userName)
+    void Connector::RDP::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
         if(0 < _display && display == _display)
         {
@@ -568,7 +568,7 @@ namespace LTSM
                 return !!this->updatePartFlag;
             });
             // switch display
-            SignalProxy::onLoginSuccess(display, userName);
+            SignalProxy::onLoginSuccess(display, userName, userUid);
             // update context
             setEnableXcbMessages(true);
             // fix new session size

@@ -68,6 +68,7 @@ namespace LTSM
         serverConnectedEvent();
 
         Application::info("%s: wait RFB messages...", __FUNCTION__);
+
         // xcb on
         setXcbAllow(true);
         bool nodamage = xcbNoDamage();
@@ -122,7 +123,7 @@ namespace LTSM
             {
                 if(0 <= xcbDisplay()->eventErrorOpcode(ev, XCB::Module::SHM))
                 {
-                    xcbDisplay()->extendedError(ev.toerror(), "SHM extension");
+                    xcbDisplay()->extendedError(ev.toerror(), __FUNCTION__, "");
                     mainLoop = false;
                     break;
                 }
@@ -141,7 +142,8 @@ namespace LTSM
                     {
                         Application::info("%s: xcb randr notify, size: [%d, %d], sequence: 0x%04x", __FUNCTION__, cc.width, cc.height, notify->sequence);
 
-                        serverDisplayResizedEvent(XCB::Size(cc.width, cc.height));
+                        const XCB::Size dsz(cc.width, cc.height);
+                        serverDisplayResizedEvent(dsz);
 
                         if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
                         {
@@ -150,7 +152,7 @@ namespace LTSM
 
                             std::thread([=]
                             {
-                                this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, XCB::Size(cc.width, cc.height));
+                                this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, dsz);
                                 this->displayResized = true;
                             }).detach();
                         }
@@ -380,7 +382,7 @@ namespace LTSM
     {
         Application::debug("%s: region [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        auto pixmapReply = xcbDisplay()->copyRootImageRegion(reg);
+        auto pixmapReply = xcbDisplay()->copyRootImageRegion(reg, xcbShm());
         if(! pixmapReply)
         {
             Application::error("%s: %s", __FUNCTION__, "xcb copy region empty");

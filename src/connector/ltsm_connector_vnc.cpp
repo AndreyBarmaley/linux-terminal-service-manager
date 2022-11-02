@@ -25,6 +25,8 @@
 #include <thread>
 #include <exception>
 
+#include <sys/stat.h>
+
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
 #include "ltsm_channels.h"
@@ -59,13 +61,19 @@ namespace LTSM
         return rfbCommunication();
     }
 
-    void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName)
+    void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
         if(0 < _display && display == _display)
         {
             setEnableXcbMessages(false);
             waitUpdateProcess();
-            SignalProxy::onLoginSuccess(display, userName);
+            shmExt.first.reset();
+
+            SignalProxy::onLoginSuccess(display, userName, userUid);
+
+            shmExt.second = userUid;
+            xcbShmInit(xcbDisplay()->size());
+
             setEnableXcbMessages(true);
             auto & clientRegion = getClientRegion();
 
@@ -82,7 +90,7 @@ namespace LTSM
             _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
             Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
 
-            idleTimeoutSec = _config->getInteger("idle:timeout:sec", 0);
+            idleTimeoutSec = _config->getInteger("idle:action:timeout", 0);
             idleSession = std::chrono::steady_clock::now();
 
 #ifdef LTSM_CHANNELS
@@ -200,6 +208,7 @@ namespace LTSM
 
     void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
     {
+        xcbShmInit(sz);
         busDisplayResized(_display, sz.width, sz.height);
     }
 
@@ -213,6 +222,8 @@ namespace LTSM
 
     void Connector::VNC::serverConnectedEvent(void)
     {
+        xcbShmInit(xcbDisplay()->size());
+
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
                 [=](){ return ! this->loginWidgetStarted; }))
@@ -262,7 +273,12 @@ namespace LTSM
     {
         return _xcbDisplay.get();
     }
-    
+
+    const XCB::SHM* Connector::VNC::xcbShm(void) const
+    {
+        return & shmExt.first;
+    }
+
     bool Connector::VNC::xcbNoDamage(void) const
     {
         return _config->getBoolean("vnc:xcb:nodamage", false);
@@ -277,7 +293,19 @@ namespace LTSM
     {
         setEnableXcbMessages(f);
     }
-            
+
+    void Connector::VNC::xcbShmInit(const XCB::Size & dsz)
+    {
+        if(auto xcb = xcbDisplay())
+        {
+            const size_t pagesz = 4096;
+            auto bpp = xcb->bitsPerPixel() >> 3;
+            auto shmsz = ((dsz.width * dsz.height * bpp / pagesz) + 1) * pagesz;
+
+            shmExt.first = xcb->createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, shmExt.second);
+        }
+    }
+
     int Connector::VNC::rfbUserKeycode(uint32_t keysym) const
     {
         auto it = keymap.find(keysym);

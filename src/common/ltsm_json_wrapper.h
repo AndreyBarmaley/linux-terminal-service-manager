@@ -406,7 +406,7 @@ namespace LTSM
 
         JsonType		getType(std::string_view) const;
         int                 	getInteger(std::string_view, int def = 0) const;
-        std::string         	getString(std::string_view, std::string def = "") const;
+        std::string         	getString(std::string_view, std::string_view def = "") const;
         double              	getDouble(std::string_view, double def = 0) const;
         bool                	getBoolean(std::string_view, bool def = false) const;
 

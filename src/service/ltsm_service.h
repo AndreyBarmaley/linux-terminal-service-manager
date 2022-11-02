@@ -30,9 +30,10 @@
 #include <functional>
 #include <filesystem>
 #include <string_view>
+#include <forward_list>
 
 #include <security/pam_appl.h>
-#include "alexab_safe_ptr.h"
+#include <security/pam_misc.h>
 
 #include "ltsm_global.h"
 #include "ltsm_dbus_proxy.h"
@@ -48,59 +49,123 @@ namespace LTSM
         explicit service_error(const char* what) : std::runtime_error(what){}
     };
 
+    class PamService
+    {
+    protected:
+        std::string_view service;
+        pam_handle_t* pamh = nullptr;
+        int status = PAM_SUCCESS;
+
+        virtual struct pam_conv* pamConv(void) = 0;
+
+    public:
+        PamService(std::string_view name) : service(name) {}
+        virtual ~PamService();
+
+        bool pamStart(const std::string & username);
+
+        std::string error(void) const;
+        pam_handle_t* get(void);
+    };
+
+    class PamAuthenticate : public PamService
+    {
+        static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
+
+        std::pair<std::string, std::string> pam_conv_data;
+        struct pam_conv pamc{ pam_conv_func, & pam_conv_data };
+
+    protected:
+        struct pam_conv* pamConv(void) override { return & pamc; }
+
+    public:
+        PamAuthenticate(std::string_view service, const std::string & user, const std::string & pass)
+            : PamService(service), pam_conv_data(std::make_pair(user, pass)) {}
+
+        bool authenticate(void);
+    };
+
+    class PamSession : public PamService
+    {
+        struct pam_conv pamc = { misc_conv, nullptr };
+        bool sessionOpenned = false;
+
+    protected:
+        struct pam_conv* pamConv(void) override { return & pamc; }
+
+    public:
+        PamSession(std::string_view service) : PamService(service) {}
+        ~PamSession();
+
+        bool validateAccount(void);
+        bool openSession(void);
+
+        void setSessionOpenned(void);
+    };
+
     namespace Manager
     {
         class Object;
     }
 
-    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep };
+    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep, SessionShutdown };
     enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
+
+    SessionPolicy sessionPolicy(const std::string &);
 
     struct XvfbSession
     {
-        int                             pid1 = 0; // xvfb pid
-        int                             pid2 = 0; // session pid
-        int                             width = 0;
-        int                             height = 0;
-        uid_t                           uid = 0;
-        gid_t                           gid = 0;
-        int                             durationlimit = 0;
-        int                             loginFailures = 0;
-        bool				shutdown = false;
-	bool				checkconn = false;
-
-        std::string                     user;
-        std::string                     display;
-        std::string                     xauthfile;
-        std::string                     remoteaddr;
-        std::string                     conntype;
-        std::string                     encryption;
-
         std::unordered_map<std::string, std::string>
                                         environments;
 
         std::unordered_map<std::string, std::string>
                                         options;
 
-        std::shared_future<int>         idleActionRunning;
+        std::filesystem::path           home;
+        std::filesystem::path           xauthfile;
 
-        XvfbMode                        mode = XvfbMode::SessionLogin;
-	SessionPolicy			policy = SessionPolicy::AuthLock;
-        bool                            allowTransfer = true;
+        std::string                     user;
+        std::string                     shell;
+        std::string                     displayAddr;
+        std::string                     remoteaddr;
+        std::string                     conntype;
+        std::string                     encryption;
 
         std::chrono::system_clock::time_point tpstart;
 
-        pam_handle_t*                   pamh = nullptr;
+        int                             displayNum = -1;
+
+        int                             pid1 = 0; // xvfb pid
+        int                             pid2 = 0; // session pid
+
+        std::atomic<int>                durationlimit{0};
+        int                             loginFailures = 0;
+
+        uid_t                           uid = 0;
+        gid_t                           gid = 0;
+
+        uint16_t                        width = 0;
+        uint16_t                        height = 0;
+        uint8_t                         depth = 0;
+
+        std::shared_future<int>         idleActionRunning;
+        std::unique_ptr<PamService>     pam;
+
+        std::atomic<XvfbMode>           mode{XvfbMode::SessionLogin};
+	SessionPolicy			policy = SessionPolicy::AuthLock;
+
+	bool				checkconn = false;
+        bool                            allowTransfer = true;
 
         XvfbSession() = default;
-
-	void				destroy(void);
+	~XvfbSession();
     };
 
     // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encryption
     typedef sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>
             xvfb2tuple;
 
+    typedef std::shared_ptr<XvfbSession> XvfbSessionPtr;
     typedef std::pair<int, std::vector<uint8_t>> StatusStdout;
 
     typedef std::pair<pid_t, std::shared_future<int>> PidStatus;
@@ -109,16 +174,19 @@ namespace LTSM
     class XvfbSessions
     {
     protected:
-        sf::safe_ptr< std::map<int, XvfbSession> > _xvfb;
+        std::vector<XvfbSessionPtr>     sessions;
+        std::mutex                      lockSessions;
 
     public:
-        XvfbSessions() = default;
-        virtual ~XvfbSessions();
+        XvfbSessions(size_t);
+        virtual ~XvfbSessions() = default;
 
-        XvfbSession*                    getXvfbInfo(int display);
-        std::pair<int, XvfbSession*>    findUserSession(const std::string & username);
-        XvfbSession*                    registryXvfbSession(int display, XvfbSession &&);
-        void                            removeXvfbDisplay(int display);
+        XvfbSessionPtr                  findDisplaySession(int display);
+        XvfbSessionPtr                  findUserSession(const std::string & username);
+        XvfbSessionPtr                  registryNewSession(int min, int max);
+        void                            removeDisplaySession(int display);
+        std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void);
+        std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
 
         std::vector<xvfb2tuple>         toSessionsList(void);
     };
@@ -134,56 +202,54 @@ namespace LTSM
         std::list<std::string>          getGroupMembers(std::string_view);
         std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
         std::list<std::string>          getSessionDbusAddresses(std::string_view);
+        void                            redirectFdNull(int);
         void                            closefds(void);
         bool                            checkFileReadable(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
-	bool			        runSystemScript(int dysplay, const std::string & user, const std::string & cmd);
-        bool	                        switchToUser(const std::string &);
+	bool			        runSystemScript(XvfbSessionPtr, const std::string & cmd);
+        bool	                        switchToUser(XvfbSessionPtr);
         std::string                     quotedString(std::string_view);
 
         class Object : public XvfbSessions, public sdbus::AdaptorInterfaces<Service_adaptor>
         {
-	    std::list<PidStatus>	_childsRunning;
-            std::mutex                  _lockRunning;
+	    std::list<PidStatus>	childsRunning;
+            std::mutex                  lockRunning;
 
-            std::list<std::string>      _allowTransfer;
-            std::mutex                  _lockTransfer;
+            std::list<std::string>      allowTransfer;
+            std::mutex                  lockTransfer;
 
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
 
 	    const Application*		_app = nullptr;
             const JsonObject*		_config = nullptr;
-            std::atomic<bool>           _running = false;
-            bool                        _loginsDisable = false;
+            std::atomic<bool>           loginsDisable = false;
 
-            pid_t                       runSessionCommandSafe(const XvfbSession*, const std::filesystem::path &, std::list<std::string>);
+            pid_t                       runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &, std::list<std::string>);
             void                        waitPidBackgroundSafe(pid_t pid);
 
-            bool                        sessionRunZenity(const XvfbSession*, std::initializer_list<std::string>);
+            bool                        sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
 
 #ifdef LTSM_CHANNELS
-            static void                 transferFileStartBackground(Object* owner, const XvfbSession* xvfb, int display,
+            static void                 transferFileStartBackground(Object* owner, XvfbSessionPtr,
                                             std::string tmpfile, std::string dstfile, uint32_t filesz);
-            static void                 transferFilesRequestCommunication(Object* owner, const XvfbSession* xvfb,
-                                            int display, std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
+            static void                 transferFilesRequestCommunication(Object* owner, XvfbSessionPtr,
+                                            std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
                                             std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int>);
 #endif
 
         protected:
 	    void			openlog(void) const;
-            int		                getFreeDisplay(void) const;
-	    void			closeSystemSession(int display, XvfbSession &);
-            std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie, const std::string & username, const std::string & remoteaddr);
-            std::filesystem::path       createSessionConnInfo(const std::filesystem::path & home, const XvfbSession*);
-            pid_t                       runXvfbDisplay(int display, uint8_t depth, uint16_t width, uint16_t height, const std::filesystem::path & xauthFile, const std::string & userLogin);
-            int				runUserSession(int display, const std::filesystem::path & sessionBin, const XvfbSession &);
-	    void			runSessionScript(int dysplay, const std::string & user, const std::string & cmd);
+	    void			closeSystemSession(XvfbSessionPtr);
+            std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie);
+            bool                        createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
+            XvfbSessionPtr              runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height, const std::string & user);
+            int				runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
+	    void			runSessionScript(XvfbSessionPtr, const std::string & cmd);
             bool			waitXvfbStarting(int display, uint32_t waitms) const;
             bool			checkXvfbSocket(int display) const;
-            bool			checkXvfbLocking(int display) const;
 	    void			removeXvfbSocket(int display) const;
-            bool			displayShutdown(int display, bool emitSignal, XvfbSession*);
-            bool                        pamAuthenticate(const int32_t & display, const std::string & login, const std::string & password);
+            bool			displayShutdown(XvfbSessionPtr, bool emitSignal);
+            bool                        pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password);
             std::list<std::string>      getAllowLogins(void) const;
 
 	    void			sessionsTimeLimitAction(void);
@@ -193,15 +259,14 @@ namespace LTSM
             void                        childEndedEvent(void);
 
         public:
-            Object(sdbus::IConnection &, const JsonObject &, const Application &);
+            Object(sdbus::IConnection &, const JsonObject &, size_t displays, const Application &);
             ~Object();
 
-            bool                        isRunning(void) const;
-            void                        shutdown(void);
+            void                        shutdownService(void);
 
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
-            bool                        busShutdownService(void) override;
+            void                        busShutdownService(void) override;
             int32_t                     busStartLoginSession(const uint8_t& depth, const std::string & remoteAddr, const std::string & connType) override;
             int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;
@@ -230,9 +295,7 @@ namespace LTSM
             bool                        busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files) override;
             bool                        busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile) override;
 
-            bool                        helperIdleTimeoutAction(const int32_t & display) override;
             bool                        helperWidgetStartedAction(const int32_t & display) override;
-            int32_t                     helperGetIdleTimeoutSec(const int32_t & display) override;
             std::vector<std::string>    helperGetUsersList(const int32_t & display) override;
             bool                        helperIsAutoComplete(const int32_t & display) override;
             std::string                 helperGetTitle(const int32_t & display) override;
@@ -247,19 +310,16 @@ namespace LTSM
             bool                        busRenderClear(const int32_t& display) override;
 
 #ifdef LTSM_CHANNELS
-            void                        startSessionChannels(int display);
-            bool                        startPrinterListener(int display, const XvfbSession &, const std::string & clientUrl);
-            bool                        startPulseAudioListener(int display, const XvfbSession &, const std::string & clientUrl);
-            bool                        startPcscdListener(int display, const XvfbSession &, const std::string & clientUrl);
-            bool                        startSaneListener(int display, const XvfbSession &, const std::string & clientUrl);
+            void                        startSessionChannels(XvfbSessionPtr);
+            bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startPulseAudioListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startPcscdListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
 #endif
         };
 
         class Service : public ApplicationJsonConfig
         {
-            static std::unique_ptr<Object> objAdaptor;
-            static std::atomic<bool>       isRunning;
-
             std::unique_ptr<Tools::BaseTimer> timerInotifyWatchConfig;
             bool                           isBackground = false;
 

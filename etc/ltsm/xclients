@@ -9,6 +9,15 @@ if ( umask 077 && cp /dev/null "${errfile}" 2> /dev/null ); then
         exec > "${errfile}" 2>&1
 fi
 
+UID=`id --user`
+export XDG_CONFIG_DIRS="/etc/xdg"
+export XDG_DATA_DIRS="/usr/share"
+export XDG_RUNTIME_DIR=/run/user/$UID
+export XDG_SESSION_TYPE="x11"
+
+mkdir $XDG_RUNTIME_DIR
+chmod 700 $XDG_RUNTIME_DIR
+
 if [ -d /etc/X11/xinit/xinitrc.d ]; then
     for SCRIPT in /etc/X11/xinit/xinitrc.d/*.sh; do
         if [ -f ${SCRIPT} ]; then
@@ -42,10 +51,6 @@ fi
 if [ -f ${HOME}/.Xmodmap ]; then
     xmodmap ${HOME}/.Xmodmap
 fi
-
-export XDG_CONFIG_DIRS="/etc/xdg"
-export XDG_DATA_DIRS="/usr/share"
-export XDG_SESSION_TYPE="x11"
 
 XSESSION=/usr/bin/icewm-session
 exec ${XSESSION}

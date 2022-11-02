@@ -74,7 +74,7 @@ namespace LTSM
 
         protected:
             bool            authVncInit(std::string_view pass);
-            bool            authVenCryptInit(std::string_view tlsPriority, int);
+            bool            authVenCryptInit(const SecurityInfo &);
 
             void            sendPixelFormat(void);
             void            sendEncodings(std::initializer_list<int>);
@@ -120,7 +120,7 @@ namespace LTSM
         public:
             ClientDecoder() = default;
 
-            bool            rfbHandshake(bool tls, std::string_view tlsPriority, std::string_view password = "");
+            bool            rfbHandshake(const SecurityInfo &);
             bool            rfbMessagesRunning(void) const;
             void            rfbMessagesLoop(void);
             void            rfbMessagesShutdown(void);

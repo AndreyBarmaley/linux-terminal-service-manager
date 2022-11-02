@@ -662,10 +662,10 @@ namespace LTSM
         return jv ? jv->getInteger() : def;
     }
 
-    std::string JsonObject::getString(std::string_view key, std::string def) const
+    std::string JsonObject::getString(std::string_view key, std::string_view def) const
     {
         const JsonValue* jv = getValue(key);
-        return jv ? jv->getString() : def;
+        return jv ? jv->getString() : std::string(def.data(), def.size());
     }
 
     double JsonObject::getDouble(std::string_view key, double def) const
@@ -1052,16 +1052,9 @@ namespace LTSM
 
     bool JsonContent::readFile(const std::filesystem::path & file)
     {
-        std::ifstream ifs(file);
-
-        if(ifs.is_open())
-        {
-            auto fsz = std::filesystem::file_size(file);
-            std::string buf(fsz, 0x20);
-            ifs.read(buf.data(), buf.size());
-            ifs.close();
-            return parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
-        }
+        auto str = Tools::fileToString(file);
+        if(! str.empty())
+            return parseBinary(reinterpret_cast<const char*>(str.data()), str.size());
 
         return false;
     }

@@ -56,7 +56,7 @@ void LTSM_HelperSDBus::onLoginFailure(const int32_t & display, const std::string
     loginFailureCallback(display, QString::fromStdString(msg));
 }
 
-void LTSM_HelperSDBus::onLoginSuccess(const int32_t & display, const std::string & userName)
+void LTSM_HelperSDBus::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
 {
     loginSuccessCallback(display, QString::fromStdString(userName));
 }
@@ -104,14 +104,6 @@ void LTSM_HelperSDBus::widgetStartedAction(int displayNum)
     }).detach();
 }
 
-void LTSM_HelperSDBus::idleTimeoutAction(int displayNum)
-{
-    std::thread([this, display = displayNum]()
-    {
-        this->helperIdleTimeoutAction(display);
-    }).detach();
-}
-
 QString LTSM_HelperSDBus::getEncryptionInfo(int displayNum)
 {
     return QString::fromStdString(busEncryptionInfo(displayNum));
@@ -125,11 +117,6 @@ int LTSM_HelperSDBus::getServiceVersion(void)
 bool LTSM_HelperSDBus::isAutoComplete(int displayNum)
 {
     return helperIsAutoComplete(displayNum);
-}
-
-int LTSM_HelperSDBus::getIdleTimeoutSec(int displayNum)
-{
-    return helperGetIdleTimeoutSec(displayNum);
 }
 
 QString LTSM_HelperSDBus::getTitle(int displayNum)
@@ -153,8 +140,8 @@ QStringList LTSM_HelperSDBus::getUsersList(int displayNum)
 /// LTSM_HelperWindow
 LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     QMainWindow(parent),
-    ui(new Ui::LTSM_HelperWindow), displayNum(0), idleTimeoutSec(0), currentIdleSec(0),
-    timerOneSec(0), timer300ms(0), timerReloadUsers(0), errorPause(0), loginAutoComplete(false), initArguments(false), dateFormat("dddd dd MMMM, hh:mm:ss")
+    ui(new Ui::LTSM_HelperWindow), displayNum(0), timerOneSec(0), timer300ms(0),
+        timerReloadUsers(0), errorPause(0), loginAutoComplete(false), initArguments(false), dateFormat("dddd dd MMMM, hh:mm:ss")
 {
     ui->setupUi(this);
     ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
@@ -204,11 +191,6 @@ void LTSM_HelperWindow::passwordChanged(const QString &)
     ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
 }
 
-void LTSM_HelperWindow::setIdleTimeoutSec(int val)
-{
-    idleTimeoutSec = val;
-}
-
 void LTSM_HelperWindow::showEvent(QShowEvent*)
 {
     widgetStartedAction(displayNum);
@@ -219,8 +201,6 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
 
     if(! initArguments)
     {
-        idleTimeoutSec = getIdleTimeoutSec(displayNum);
-
         auto title = getTitle(displayNum);
 
         if(! title.isEmpty())
@@ -251,20 +231,12 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
 {
     if(ev->timerId() == timerOneSec)
     {
-        currentIdleSec += 1;
-
         if(0 < errorPause)
             errorPause--;
         else
         {
             ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
             ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
-        }
-
-        if(currentIdleSec > idleTimeoutSec)
-        {
-            idleTimeoutAction(displayNum);
-            close();
         }
     }
     else
@@ -277,8 +249,6 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
 
 void LTSM_HelperWindow::mouseMoveEvent(QMouseEvent* ev)
 {
-    currentIdleSec = 0;
-
     if((ev->buttons() & Qt::LeftButton) && titleBarPressed)
     {
         auto distance = ev->globalPos() - *titleBarPressed;
@@ -289,8 +259,6 @@ void LTSM_HelperWindow::mouseMoveEvent(QMouseEvent* ev)
 
 void LTSM_HelperWindow::mousePressEvent(QMouseEvent* ev)
 {
-    currentIdleSec = 0;
-
     if(ui->labelTitle->geometry().contains(ev->pos()))
         titleBarPressed.reset(new QPoint(ev->globalPos()));
 }
@@ -302,7 +270,6 @@ void LTSM_HelperWindow::mouseReleaseEvent(QMouseEvent*)
 
 void LTSM_HelperWindow::keyPressEvent(QKeyEvent*)
 {
-    currentIdleSec = 0;
 }
 
 void LTSM_HelperWindow::reloadUsersList(void)

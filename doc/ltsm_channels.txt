@@ -104,14 +104,16 @@ With this message, the client provides any information in the form of a key valu
 -------------+--------------
  option      | description
 -------------+--------------
- printer     | possible
  hostname    | possible
  ipaddr      | possible
  username    | possible
- password    | possible
- ostype      | linux
+ platform    | SDL_GetPlatform
+ printer     | client url socket
+ sane        | client url socket
+ pulseaudio  | client url socket
+ pcscd       | client url socket
  certificate | possible
-----------------------------
+-------------+--------------
 
 environments: json oblect, append to session environments, TZ, LANG, LC_ and others
 keyboard: json object, keyboard layouts identifiers

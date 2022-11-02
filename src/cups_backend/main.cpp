@@ -65,7 +65,7 @@ namespace LTSM
 
     public:
 
-        CupsBackend(int argc, const char** argv) : Application("ltsm_cups_backend", argc, argv)
+        CupsBackend(int argc, const char** argv) : Application("ltsm_cups")
         {
             setDebugLevel(DebugLevel::SyslogInfo);
 

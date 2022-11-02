@@ -26,7 +26,7 @@ protected:
         object_.registerMethod("busStartLoginSession").onInterface(INTERFACE_NAME).withInputParamNames("depth", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const uint8_t& depth, const std::string& remoteAddr, const std::string& connType){ return this->busStartLoginSession(depth, remoteAddr, connType); });
         object_.registerMethod("busCreateAuthFile").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("path").implementedAs([this](const int32_t& display){ return this->busCreateAuthFile(display); });
         object_.registerMethod("busShutdownConnector").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownConnector(display); });
-        object_.registerMethod("busShutdownService").onInterface(INTERFACE_NAME).withOutputParamNames("success").implementedAs([this](){ return this->busShutdownService(); });
+        object_.registerMethod("busShutdownService").onInterface(INTERFACE_NAME).implementedAs([this](){ return this->busShutdownService(); });
         object_.registerMethod("busShutdownDisplay").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->busShutdownDisplay(display); });
         object_.registerMethod("busStartUserSession").onInterface(INTERFACE_NAME).withInputParamNames("display", "userName", "remoteAddr", "connType").withOutputParamNames("display").implementedAs([this](const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType){ return this->busStartUserSession(display, userName, remoteAddr, connType); });
         object_.registerMethod("busSendMessage").onInterface(INTERFACE_NAME).withInputParamNames("display", "message").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& message){ return this->busSendMessage(display, message); });
@@ -57,8 +57,6 @@ protected:
         object_.registerMethod("busCreateChannel").onInterface(INTERFACE_NAME).withInputParamNames("display", "client", "cmode", "server", "smode").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode){ return this->busCreateChannel(display, client, cmode, server, smode); });
         object_.registerMethod("busDestroyChannel").onInterface(INTERFACE_NAME).withInputParamNames("display", "channel").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint8_t& channel){ return this->busDestroyChannel(display, channel); });
         object_.registerMethod("helperIsAutoComplete").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("success").implementedAs([this](const int32_t& display){ return this->helperIsAutoComplete(display); });
-        object_.registerMethod("helperIdleTimeoutAction").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperIdleTimeoutAction(display); });
-        object_.registerMethod("helperGetIdleTimeoutSec").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetIdleTimeoutSec(display); });
         object_.registerMethod("helperGetTitle").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetTitle(display); });
         object_.registerMethod("helperGetDateFormat").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetDateFormat(display); });
         object_.registerMethod("helperGetUsersList").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->helperGetUsersList(display); });
@@ -69,7 +67,7 @@ protected:
         object_.registerSignal("helperSetLoginPassword").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, bool>("display", "login", "pass", "autologin");
         object_.registerSignal("helperWidgetCentered").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("loginFailure").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "msg");
-        object_.registerSignal("loginSuccess").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "userName");
+        object_.registerSignal("loginSuccess").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, uint32_t>("display", "userName", "userUid");
         object_.registerSignal("shutdownConnector").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("pingConnector").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
         object_.registerSignal("sendBellSignal").onInterface(INTERFACE_NAME).withParameters<int32_t>("display");
@@ -116,9 +114,9 @@ public:
         object_.emitSignal("loginFailure").onInterface(INTERFACE_NAME).withArguments(display, msg);
     }
 
-    void emitLoginSuccess(const int32_t& display, const std::string& userName)
+    void emitLoginSuccess(const int32_t& display, const std::string& userName, const uint32_t& userUid)
     {
-        object_.emitSignal("loginSuccess").onInterface(INTERFACE_NAME).withArguments(display, userName);
+        object_.emitSignal("loginSuccess").onInterface(INTERFACE_NAME).withArguments(display, userName, userUid);
     }
 
     void emitShutdownConnector(const int32_t& display)
@@ -206,7 +204,7 @@ private:
     virtual int32_t busStartLoginSession(const uint8_t& depth, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual std::string busCreateAuthFile(const int32_t& display) = 0;
     virtual bool busShutdownConnector(const int32_t& display) = 0;
-    virtual bool busShutdownService() = 0;
+    virtual void busShutdownService() = 0;
     virtual bool busShutdownDisplay(const int32_t& display) = 0;
     virtual int32_t busStartUserSession(const int32_t& display, const std::string& userName, const std::string& remoteAddr, const std::string& connType) = 0;
     virtual bool busSendMessage(const int32_t& display, const std::string& message) = 0;
@@ -237,8 +235,6 @@ private:
     virtual bool busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) = 0;
     virtual bool busDestroyChannel(const int32_t& display, const uint8_t& channel) = 0;
     virtual bool helperIsAutoComplete(const int32_t& display) = 0;
-    virtual bool helperIdleTimeoutAction(const int32_t& display) = 0;
-    virtual int32_t helperGetIdleTimeoutSec(const int32_t& display) = 0;
     virtual std::string helperGetTitle(const int32_t& display) = 0;
     virtual std::string helperGetDateFormat(const int32_t& display) = 0;
     virtual std::vector<std::string> helperGetUsersList(const int32_t& display) = 0;

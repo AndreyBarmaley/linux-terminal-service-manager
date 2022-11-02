@@ -37,13 +37,16 @@ namespace LTSM
     void printHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--debug] [--tls_priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--certificate <path>] [--accel] [--pulse [XDG_RUNTIME_DIR/pulse/native]] [--printer [sock://127.0.0.1:9100]] [--sane [sock://127.0.0.1:6566]] [--pcscd [unix:///var/run/pcscd/pcscd.comm]]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--noxkb] [--debug] [--tls-priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--ca-file <path>] [--cert-file <path>] [--key-file <path>] [--noaccel] [--pulse [XDG_RUNTIME_DIR/pulse/native]] [--printer [sock://127.0.0.1:9100]] [--sane [sock://127.0.0.1:6566]] [--pcscd [unix:///var/run/pcscd/pcscd.comm]]" << std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
-        : Application("ltsm_vnc2sdl", argc, argv)
+        : Application("ltsm_vnc2sdl")
     {
         Application::setDebugLevel(DebugLevel::SyslogInfo);
+
+        rfbsec.authVenCrypt = true;
+        rfbsec.tlsDebug = 2;
 
         for(int it = 1; it < argc; ++it)
         {
@@ -56,11 +59,17 @@ namespace LTSM
 
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--accel"))
-                accelerated = true;
+            if(0 == std::strcmp(argv[it], "--nocaps"))
+                capslock = false;
+            else
+            if(0 == std::strcmp(argv[it], "--noaccel"))
+                accelerated = false;
             else
             if(0 == std::strcmp(argv[it], "--notls"))
-                notls = true;
+                rfbsec.authVenCrypt = false;
+            else
+            if(0 == std::strcmp(argv[it], "--noxkb"))
+                usexkb = false;
             else
             if(0 == std::strcmp(argv[it], "--fullscreen"))
                 fullscreen = true;
@@ -146,15 +155,15 @@ namespace LTSM
                 it = it + 1;
             }
             else
-            if(0 == std::strcmp(argv[it], "--tls_priority") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--tls-priority") && it + 1 < argc)
             {
-                priority.assign(argv[it + 1]);
+                rfbsec.tlsPriority.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
             if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
             {
-                password.assign(argv[it + 1]);
+                rfbsec.passwdFile.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
@@ -190,30 +199,21 @@ namespace LTSM
                 it = it + 1;
             }
             else
-            if(0 == std::strcmp(argv[it], "--certificate") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--ca-file") && it + 1 < argc)
             {
-                std::filesystem::path file(argv[it + 1]);
-
-                if(std::filesystem::exists(file))
-                {
-                    std::ifstream ifs(file, std::ios::binary);
-                    if(ifs.is_open())
-                    {
-                        auto fsz = std::filesystem::file_size(file);
-                        certificate.resize(fsz);
-                        ifs.read(certificate.data(), certificate.size());
-                        ifs.close();
-                    }
-                    else
-                    {
-                        std::cerr << "error read certificate" << std::endl;
-                    }
-                }
-                else
-                {
-                    std::cerr << "certificate not found" << std::endl;
-                }
-
+                rfbsec.caFile.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--cert-file") && it + 1 < argc)
+            {
+                rfbsec.certFile.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--key-file") && it + 1 < argc)
+            {
+                rfbsec.keyFile.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
@@ -246,8 +246,11 @@ namespace LTSM
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
 
+        rfbsec.authVnc = ! rfbsec.passwdFile.empty();
+        rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
+
         // connected
-        if(! rfbHandshake(! notls, priority, password))
+        if(! rfbHandshake(rfbsec))
             return -1;
 
         // rfb thread: process rfb messages
@@ -259,7 +262,7 @@ namespace LTSM
             }
             catch(const std::exception & err)
             {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                Application::error("%s: exception: %s", "start", err.what());
             }
             catch(...)
             {
@@ -424,15 +427,26 @@ namespace LTSM
                 }
                 // continue
             case SDL_KEYUP:
+                if(ev.key()->keysym.sym == 0x40000000 && ! capslock)
+                {
+                    auto mod = SDL_GetModState();
+                    SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
+                    Application::notice("%s: CAPS reset", __FUNCTION__);
+                    return true;
+                }
+                else
                 {
                     int xksym = SDL::Window::convertScanCodeToKeySym(ev.key()->keysym.scancode);
                     if(xksym == 0) xksym = ev.key()->keysym.sym;
 
-                    auto keycodeGroup = keysymToKeycodeGroup(xksym);
-                    int group = xkbGroup();
+                    if(usexkb)
+                    {
+                        auto keycodeGroup = keysymToKeycodeGroup(xksym);
+                        int group = xkbGroup();
 
-                    if(group != keycodeGroup.second)
-                        xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                        if(group != keycodeGroup.second)
+                            xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                    }
 
                     sendKeyEvent(ev.type() == SDL_KEYDOWN, xksym);
                 }
@@ -640,7 +654,8 @@ namespace LTSM
 
     void Vnc2SDL::xkbStateChangeEvent(int group)
     {
-        sendSystemKeyboardChange(xkbNames(), group);
+        if(usexkb)
+            sendSystemKeyboardChange(xkbNames(), group);
     }
 
     json_plain Vnc2SDL::clientEnvironments(void) const
@@ -671,8 +686,13 @@ namespace LTSM
         JsonObjectStream jo;
         jo.push("hostname", "localhost");
         jo.push("ipaddr", "127.0.0.1");
-        jo.push("username", Tools::getUsername());
+        jo.push("username", Tools::getLocalUsername());
         jo.push("platform", SDL_GetPlatform());
+
+        if(! rfbsec.certFile.empty())
+        {
+            jo.push("certificate", Tools::fileToString(rfbsec.certFile));
+        }
 
         if(! printerUrl.empty())
         {
@@ -697,9 +717,6 @@ namespace LTSM
             Application::info("%s: %s url: %s", __FUNCTION__, "pulse", pulseUrl.c_str());
             jo.push("pulseaudio", pulseUrl);
         }
-
-//        jo.push("redirectvideo", false);
-//        jo.push("redirectscanner", false);
 
 //       jo.push("programVersion", "XXXXX");
 //       jo.push("programName", "XXXXX");
@@ -733,7 +750,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("local exception: %s", err.what());
+        LTSM::Application::error("exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

@@ -42,34 +42,30 @@ namespace LTSM
     class Vnc2SDL : public Application, XCB::XkbClient, protected RFB::ClientDecoder
     {
         PixelFormat             format;
-
-        std::string             host{"localhost"};
-        std::string             password;
-        std::string             priority;
-        std::string             certificate;
+        RFB::SecurityInfo       rfbsec;
 
         std::list<std::string>  dropFiles;
+        std::string             host{"localhost"};
+        std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<FrameBuffer> fb;
 
         XCB::Region             dirty;
-
         std::mutex              lockRender;
 
         std::chrono::time_point<std::chrono::steady_clock>
                                 keyPress;
-
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
 
         int                     port = 5900;
         uint16_t                setWidth = 0;
         uint16_t                setHeight = 0;
-        bool                    accelerated = false;
-        bool                    notls = false;
+        bool                    accelerated = true;
         bool                    fullscreen = false;
-        std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
+        bool                    usexkb = true;
+        bool                    capslock = true;
 #ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
 #endif

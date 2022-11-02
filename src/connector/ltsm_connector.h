@@ -102,7 +102,7 @@ namespace LTSM
 
         protected:
             // dbus virtual signals
-            void                        onLoginSuccess(const int32_t & display, const std::string & userName) override;
+            void                        onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid) override;
             void                        onDebugLevel(const int32_t& display, const std::string & level) override;
 	    void			onPingConnector(const int32_t & display) override;
             void			onClearRenderPrimitives(const int32_t & display) override;

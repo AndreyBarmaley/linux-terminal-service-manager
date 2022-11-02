@@ -90,6 +90,33 @@ namespace LTSM
         return std::string(sub.begin(), sub.end());
     }
 
+    std::string Tools::fileToString(const std::filesystem::path & file)
+    {
+        std::string str;
+
+        if(std::filesystem::exists(file))
+        {
+            std::ifstream ifs(file, std::ios::binary);
+            if(ifs.is_open())
+            {
+                auto fsz = std::filesystem::file_size(file);
+                str.resize(fsz);
+                ifs.read(str.data(), str.size());
+                ifs.close();
+            }
+            else
+            {
+                Application::error("%s: %s failed, path:`%s'", __FUNCTION__, "read", file.c_str());
+            }
+        }
+        else
+        {
+            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+        }
+
+        return str;
+    }
+
     std::string Tools::getTimeZone(void)
     {
         const std::filesystem::path localtime{"/etc/localtime"};
@@ -120,7 +147,7 @@ namespace LTSM
         return str;
     }
 
-    std::string Tools::getUsername(void)
+    std::string Tools::getLocalUsername(void)
     {
         auto ptr = std::getenv("USER");
         return std::string(ptr ? ptr : "");

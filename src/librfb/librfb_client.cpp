@@ -100,7 +100,7 @@ namespace LTSM
         return true;
     }
 
-    bool RFB::ClientDecoder::authVenCryptInit(std::string_view tlsPriority, int tlsDebug)
+    bool RFB::ClientDecoder::authVenCryptInit(const SecurityInfo & sec)
     {
         // server VenCrypt version
         int majorVer = recvInt8();
@@ -131,13 +131,25 @@ namespace LTSM
         while(typesCount--)
             venCryptTypes.push_back(recvIntBE32());
 
-        if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val){ return val == RFB::SECURITY_VENCRYPT02_TLSNONE; }))
+        int mode = RFB::SECURITY_VENCRYPT02_TLSNONE;
+        if(sec.tlsAnonMode)
         {
-            Application::error("%s: server unsupported tls anon mode", __FUNCTION__);
-            return false;
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val){ return val == RFB::SECURITY_VENCRYPT02_TLSNONE; }))
+            {
+                Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "anon");
+                return false;
+            }
+        }
+        else
+        {
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val){ return val == RFB::SECURITY_VENCRYPT02_X509NONE; }))
+            {
+                Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "x509");
+                return false;
+            }
+            mode = RFB::SECURITY_VENCRYPT02_X509NONE;
         }
 
-        int mode = RFB::SECURITY_VENCRYPT02_TLSNONE;
         Application::debug("%s: send vencrypt mode: %d", __FUNCTION__, mode);
         sendIntBE32(mode).sendFlush();
 
@@ -150,7 +162,11 @@ namespace LTSM
 
         try
         {
-            tls = std::make_unique<TLS::AnonSession>(socket.get(), tlsPriority, false, tlsDebug);
+            if(mode == RFB::SECURITY_VENCRYPT02_X509NONE)
+                tls = std::make_unique<TLS::X509Session>(socket.get(), sec.caFile, sec.certFile, sec.keyFile,
+                            sec.crlFile, sec.tlsPriority, false, sec.tlsDebug);
+            else
+                tls = std::make_unique<TLS::AnonSession>(socket.get(), sec.tlsPriority, false, sec.tlsDebug);
         }
         catch(gnutls::exception & err)
         {
@@ -163,7 +179,7 @@ namespace LTSM
         return true;
     }
 
-    bool RFB::ClientDecoder::rfbHandshake(bool tls, std::string_view tlsPriority, std::string_view password)
+    bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec)
     {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
@@ -203,22 +219,22 @@ namespace LTSM
         while(0 < counts--)
             security.push_back(recvInt8());
 
-        if(tls && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VENCRYPT; }))
+        if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VENCRYPT; }))
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "vencrypt");
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
-            int tlsDebug = 3;
-            authVenCryptInit(tlsPriority, tlsDebug);
+            authVenCryptInit(sec);
         }
         else
-        if(std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_NONE; }))
+        if(sec.authNone && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_NONE; }))
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "noauth");
             sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
         }
         else
-        if(std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VNC; }))
+        if(sec.authVnc && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VNC; }))
         {
+            auto & password = sec.passwdFile;
             if(password.empty())
             {
                 Application::error("%s: security vnc: password empty", __FUNCTION__);

@@ -49,10 +49,11 @@ namespace LTSM
         std::string prettyFuncName(std::string_view);
         std::string randomHexString(size_t len);
 
+        std::string fileToString(const std::filesystem::path &);
         std::vector<uint8_t> randomBytes(size_t bytesCount);
 
         std::string getTimeZone(void);
-        std::string getUsername(void);
+        std::string getLocalUsername(void);
 
         class StringFormat : public std::string
         {

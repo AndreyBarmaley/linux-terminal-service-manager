@@ -43,6 +43,10 @@
 #undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
 
+#ifdef LTSM_BUILD_XCB_ERRORS
+#include "libxcb-errors/xcb_errors.h"
+#endif
+
 #include "ltsm_tools.h"
 
 namespace LTSM
@@ -244,23 +248,6 @@ namespace LTSM
 	#define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
 	#define NULL_KEYCODE 0
 
-        struct KeyCodes : std::shared_ptr<xcb_keycode_t>
-        {
-//            KeyCodes(xcb_keycode_t* ptr)
-//		: std::shared_ptr<xcb_keycode_t>(ptr, std::free) {}
-
-            KeyCodes(xcb_keycode_t code)
-		: std::shared_ptr<xcb_keycode_t>(new xcb_keycode_t[2]{code, NULL_KEYCODE}, std::default_delete<xcb_keycode_t[]>()) {}
-
-            bool isValid(void) const;
-            bool operator==(const KeyCodes &) const;
-        };
-
-        struct HasherKeyCodes
-        {
-            size_t operator()(const KeyCodes & kc) const;
-        };
-
         struct GC : std::shared_ptr<gc_t>
         {
             GC(xcb_drawable_t, xcb_connection_t*,
@@ -400,6 +387,10 @@ namespace LTSM
             xcb_connection_t*       _conn = nullptr;
             const xcb_setup_t*      _setup = nullptr;
 
+#ifdef LTSM_BUILD_XCB_ERRORS
+            xcb_errors_context_t*   _errctx = nullptr;
+#endif
+
         public:
             Connector(size_t displayNum, const AuthCookie* = nullptr);
             virtual ~Connector();
@@ -433,14 +424,13 @@ namespace LTSM
             bool                    isXkbKeyboardNotify(const GenericEvent & ev) const;
             bool                    isXkbMapNotify(const GenericEvent & ev) const;
 
-            void                    extendedError(const xcb_generic_error_t* error, const char* func) const;
-            void                    extendedError(const GenericError &, const char* func) const;
+            void                    extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
 
             GenericError            checkRequest(const xcb_void_cookie_t &) const;
             virtual GenericEvent    poolEvent(void);
 
             GC                      createGC(xcb_drawable_t winid, uint32_t value_mask = 0, const void* value_list = nullptr);
-            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = false);
+            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = false, uid_t owner = 0);
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
             XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
@@ -468,7 +458,6 @@ namespace LTSM
             xcb_visualtype_t*       _visual = nullptr;
 
             Damage                  _damage;
-            SHM                     _shm;
 
             xcb_keycode_t           _minKeycode = 0;
             xcb_keycode_t           _maxKeycode = 0;
@@ -498,7 +487,7 @@ namespace LTSM
             void                    fillRegion(int r, int g, int b, const Region &);
             void                    fillBackground(int r, int g, int b);
 
-            PixmapInfoReply         copyRootImageRegion(const Region &, uint32_t planeMask = 0xFFFFFFFF) const;
+            PixmapInfoReply         copyRootImageRegion(const Region &, const SHM* = nullptr) const;
 
             void                    fakeInputKeycode(xcb_keycode_t, bool pressed);
             void                    fakeInputKeysym(xcb_keysym_t, bool pressed);

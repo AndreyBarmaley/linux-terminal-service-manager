@@ -38,17 +38,17 @@ namespace LTSM
 
     class Application
     {
-        const char*     _ident = nullptr;
-	int		_facility = LOG_USER;
+        const char*     ident = nullptr;
+	int		facility = LOG_USER;
 
     protected:
-        static std::mutex _logging;
-        static DebugLevel _debug;
+        static std::mutex logging;
+        static DebugLevel level;
 
         void            reopenSyslog(int facility);
 
     public:
-        Application(const char* ident, int argc, const char** argv);
+        Application(std::string_view ident);
         virtual ~Application();
 
         Application(Application &) = delete;
@@ -57,24 +57,24 @@ namespace LTSM
         template<typename... Values>
         static void info(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console)
+	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(logging);
 		fprintf(stderr, "[info]\t");
 		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
-	    if(_debug == DebugLevel::SyslogInfo ||  _debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
+	    if(level == DebugLevel::SyslogInfo ||  level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
                 syslog(LOG_INFO, format, vals...);
         }
 
         template<typename... Values>
         static void notice(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console)
+	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(logging);
 		fprintf(stderr, "[notice]\t");
 		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
@@ -86,10 +86,10 @@ namespace LTSM
         template<typename... Values>
         static void warning(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console ||
-	        _debug == DebugLevel::ConsoleError)
+	    if(level == DebugLevel::Console ||
+	        level == DebugLevel::ConsoleError)
 	    {
-                const std::scoped_lock<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(logging);
 		fprintf(stderr, "[warning]\t");
 		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
@@ -101,10 +101,10 @@ namespace LTSM
         template<typename... Values>
         static void error(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console ||
-	        _debug == DebugLevel::ConsoleError)
+	    if(level == DebugLevel::Console ||
+	        level == DebugLevel::ConsoleError)
 	    {
-                const std::scoped_lock<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(logging);
 		fprintf(stderr, "[error]\t");
 		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
@@ -116,21 +116,21 @@ namespace LTSM
         template<typename... Values>
         static void debug(const char* format, Values && ... vals)
         {
-	    if(_debug == DebugLevel::Console)
+	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(_logging);
+                const std::scoped_lock<std::mutex> lock(logging);
 		fprintf(stderr, "[debug]\t");
 		fprintf(stderr, format, vals...);
 		fprintf(stderr, "\n");
 	    }
 	    else
-	    if(_debug == DebugLevel::SyslogDebug ||  _debug == DebugLevel::SyslogTrace)
+	    if(level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
                 syslog(LOG_DEBUG, format, vals...);
         }
 
         void openlog(void) const
         {
-            ::openlog(_ident, 0, _facility);
+            ::openlog(ident, 0, facility);
         }
 
         static bool isDebugLevel(const DebugLevel &);
@@ -142,16 +142,27 @@ namespace LTSM
 
     class ApplicationJsonConfig : public Application
     {
+        JsonObject	   json;
+
     protected:
-        JsonObject	_config;
+        void               configSet(JsonObject &&) noexcept;
 
     public:
-        ApplicationJsonConfig(const char* ident, int argc, const char** argv);
+        ApplicationJsonConfig(std::string_view ident, const char* fconf = nullptr);
 
-        const JsonObject & config(void) const
-        {
-            return _config;
-        }
+        void               readConfig(const std::filesystem::path &);
+
+        void               configSetInteger(const std::string &, int);
+        void               configSetBoolean(const std::string &, bool);
+        void               configSetString(const std::string &, std::string_view);
+        void               configSetDouble(const std::string &, double);
+
+        int                configGetInteger(std::string_view, int = 0) const;
+        bool               configGetBoolean(std::string_view, bool = false) const;
+        std::string        configGetString(std::string_view, std::string_view = "") const;
+        double             configGetDouble(std::string_view, double = 0) const;
+
+        const JsonObject & config(void) const;
     };
 }
 

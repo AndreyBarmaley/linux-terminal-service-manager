@@ -37,11 +37,11 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug] [--priority <string>]" << std::endl;
+        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]" << std::endl;
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image", argc, argv)
+        : Application("ltsm_vnc2image")
     {
         Application::setDebugLevel(DebugLevel::ConsoleError);
 
@@ -55,11 +55,6 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
                 host.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--priority") && it + 1 < argc)
-            {
-                priority.assign(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc)
@@ -98,11 +93,18 @@ namespace LTSM
             return -1;
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
+        RFB::SecurityInfo rfbsec;
+
+        rfbsec.authVenCrypt = ! notls;
+        rfbsec.authNone = password.empty();
+        rfbsec.authVnc = ! password.empty();
+        rfbsec.passwdFile = password;
+        rfbsec.tlsAnonMode = true;
 
         // process rfb message background
         try
         {
-            if(rfbHandshake(! notls, priority, password))
+            if(rfbHandshake(rfbsec))
             {
                 tp = std::chrono::steady_clock::now();
                 rfbMessagesLoop();
@@ -171,7 +173,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("local exception: %s", err.what());
+        LTSM::Application::error("exception: %s", err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)
