@@ -51,8 +51,7 @@ namespace LTSM
             // rfb server encoding
             const PixelFormat &        serverFormat(void) const override;
 
-            XCB::RootDisplayExt*       xcbDisplay(void) override;
-            const XCB::RootDisplayExt* xcbDisplay(void) const override;
+            XCB::SharedDisplay         xcbDisplay(void) const override;
             bool                       xcbNoDamage(void) const override;
             bool                       xcbAllow(void) const override;
             void                       setXcbAllow(bool) override;

@@ -79,14 +79,9 @@ namespace LTSM
         return _config->getBoolean("DesktopResized");
     }
 
-    XCB::RootDisplayExt* Connector::X11VNC::xcbDisplay(void)
+    XCB::SharedDisplay Connector::X11VNC::xcbDisplay(void) const
     {
-        return _xcbDisplay.get();
-    }
-
-    const XCB::RootDisplayExt* Connector::X11VNC::xcbDisplay(void) const
-    {
-        return _xcbDisplay.get();
+        return _xcbDisplay;
     }
 
     bool Connector::X11VNC::xcbNoDamage(void) const
