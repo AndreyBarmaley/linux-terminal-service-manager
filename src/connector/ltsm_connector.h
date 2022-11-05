@@ -73,16 +73,18 @@ namespace LTSM
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {
         protected:
-            const JsonObject*           _config;
-            int                         _display;
-            std::string		        _conntype;
-            std::string			_remoteaddr;
-
             std::list<std::unique_ptr<RenderPrimitive>>
                                         _renderPrimitives;
 
-            std::atomic<bool>           _xcbDisableMessages;
             XCB::SharedDisplay          _xcbDisplay;
+
+            std::string		        _conntype;
+            std::string			_remoteaddr;
+
+            const JsonObject*           _config = nullptr;
+
+            std::atomic<int>            _display{0};
+            std::atomic<bool>           _xcbDisableMessages{true};
 
         private:
             // dbus virtual signals
@@ -112,6 +114,7 @@ namespace LTSM
 	    void		        onAddDamage(const XCB::Region &);
             bool                        xcbConnect(int display);
             void                        renderPrimitivesToFB(FrameBuffer &) const;
+            int                         displayNum(void) const;
 
         public:
             SignalProxy(const JsonObject &, const char* conntype);

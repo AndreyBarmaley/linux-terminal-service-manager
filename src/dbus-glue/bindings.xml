@@ -109,11 +109,6 @@
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
-        <method name="busConnectorSwitched">
-            <arg type="i" name="oldDisplay" direction="in" />
-            <arg type="i" name="newDisplay" direction="in" />
-            <arg type="b" name="result" direction="out" />
-        </method>
         <method name="busConnectorAlive">
             <arg type="i" name="display" direction="in" />
             <arg type="b" name="result" direction="out" />

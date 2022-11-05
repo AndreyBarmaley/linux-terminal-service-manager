@@ -38,10 +38,10 @@ namespace LTSM
     /* Connector::VNC */
     Connector::VNC::~VNC()
     {
-        if(0 < _display)
+        if(0 < displayNum())
         {
-            busConnectorTerminated(_display);
-            clientDisconnectedEvent(_display);
+            busConnectorTerminated(displayNum());
+            clientDisconnectedEvent(displayNum());
         }
     }
 
@@ -63,7 +63,7 @@ namespace LTSM
 
     void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             setEnableXcbMessages(false);
             waitUpdateProcess();
@@ -80,15 +80,15 @@ namespace LTSM
             // fix new session size
             if(_xcbDisplay->size() != clientRegion.toSize())
             {
-                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
+                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
 
                 if(0 < _xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
-                    Application::info("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, _display);
+                    Application::info("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
             }
 
             // full update
             _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
-            Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, _display, userName.c_str());
+            //Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, displayNum(), userName.c_str());
 
             idleTimeoutSec = _config->getInteger("idle:action:timeout", 0);
             idleSession = std::chrono::steady_clock::now();
@@ -101,7 +101,7 @@ namespace LTSM
 
     void Connector::VNC::onShutdownConnector(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             setEnableXcbMessages(false);
             waitUpdateProcess();
@@ -112,7 +112,7 @@ namespace LTSM
 
     void Connector::VNC::onHelperWidgetStarted(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
             loginWidgetStarted = true;
@@ -121,7 +121,7 @@ namespace LTSM
 
     void Connector::VNC::onSendBellSignal(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
 
@@ -201,7 +201,7 @@ namespace LTSM
         // check idle timeout
         if(idleTimeoutSec && std::chrono::seconds(idleTimeoutSec) < std::chrono::steady_clock::now() - idleSession)
         {
-            busIdleTimeoutAction(_display);
+            busIdleTimeoutAction(displayNum());
             idleSession = std::chrono::steady_clock::now();
         }
     }
@@ -209,7 +209,7 @@ namespace LTSM
     void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
     {
         xcbShmInit(sz);
-        busDisplayResized(_display, sz.width, sz.height);
+        busDisplayResized(displayNum(), sz.width, sz.height);
     }
 
     void Connector::VNC::serverEncodingsEvent(void)
@@ -235,7 +235,7 @@ namespace LTSM
 
     void Connector::VNC::serverSecurityInitEvent(void)
     {
-        busSetEncryptionInfo(_display, serverEncryptionInfo());
+        busSetEncryptionInfo(displayNum(), serverEncryptionInfo());
     }
 
     RFB::SecurityInfo Connector::VNC::rfbSecurityInfo(void) const
@@ -264,14 +264,9 @@ namespace LTSM
         return true;
     }
     
-    XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void)
+    XCB::SharedDisplay Connector::VNC::xcbDisplay(void) const
     {
-        return _xcbDisplay.get();
-    }
-
-    const XCB::RootDisplayExt* Connector::VNC::xcbDisplay(void) const
-    {
-        return _xcbDisplay.get();
+        return _xcbDisplay;
     }
 
     const XCB::SHM* Connector::VNC::xcbShm(void) const
@@ -335,27 +330,28 @@ namespace LTSM
         Application::debug("%s: count: %d", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments"))
-            busSetSessionEnvironments(_display, env->toStdMap<std::string>());
+            busSetSessionEnvironments(displayNum(), env->toStdMap<std::string>());
 
         if(auto keyboard = jo.getObject("keyboard"))
         {
             auto names = keyboard->getStdVector<std::string>("layouts");
-            busSetSessionKeyboardLayouts(_display, names);
+            busSetSessionKeyboardLayouts(displayNum(), names);
 
             auto layout = keyboard->getString("current");
+
             auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
                     { return Tools::lower(str).substr(0,2) == Tools::lower(layout).substr(0,2); });
 
-            std::thread([group = std::distance(names.begin(), it), display = _xcbDisplay.get()]()
+            std::thread([group = std::distance(names.begin(), it), display = _xcbDisplay]()
             {
                 // wait pause for apply layouts
-                std::this_thread::sleep_for(300ms);
+                std::this_thread::sleep_for(200ms);
                 display->switchXkbLayoutGroup(group);
             }).detach();
         }
 
         if(auto opts = jo.getObject("options"))
-            busSetSessionOptions(_display, opts->toStdMap<std::string>());
+            busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
     }
 
     void Connector::VNC::systemKeyboardChange(const JsonObject & jo)
@@ -395,7 +391,7 @@ namespace LTSM
             if(_config->getBoolean("transfer:file:disabled", false))
             {
                 Application::error("%s: administrative disable", __FUNCTION__);
-                busSendNotify(_display, "Transfer Disable", "transfer is blocked, contact the administrator",
+                busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
                                 NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
                 return;
             }
@@ -431,7 +427,7 @@ namespace LTSM
                 if(fmax && fsize > fmax)
                 {
                     Application::warning("%s: file size exceeds and skipped, file: %s", __FUNCTION__, fname.c_str());
-                    busSendNotify(_display, "Transfer Skipped", Tools::StringFormat("the file size exceeds, the allowed limit: %1M, file: %2").arg(prettyMb).arg(fname),
+                    busSendNotify(displayNum(), "Transfer Skipped", Tools::StringFormat("the file size exceeds, the allowed limit: %1M, file: %2").arg(prettyMb).arg(fname),
                                 NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
                     continue;
                 }
@@ -462,7 +458,7 @@ namespace LTSM
                 }
 
                 // send request to manager
-                busTransferFilesRequest(_display, files);
+                busTransferFilesRequest(displayNum(), files);
             }
         }
     }
@@ -474,7 +470,7 @@ namespace LTSM
         // dstdir - server target directory
         Application::debug("%s: display: %d", __FUNCTION__, display);
 
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             std::scoped_lock<std::mutex> guard(lockTransfer);
 
@@ -493,7 +489,7 @@ namespace LTSM
                         Channel::createUrl(Channel::ConnectorType::File, tmpfile), Channel::ConnectorMode::WriteOnly, Channel::Speed::Slow);
 
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(_display, tmpfile, (*it).second, dstfile.c_str());
+                busTransferFileStarted(displayNum(), tmpfile, (*it).second, dstfile.c_str());
             }
 
             // remove planned
@@ -503,7 +499,7 @@ namespace LTSM
 
     void Connector::VNC::onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             // FIXME speed
             createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::Speed::Medium);
@@ -512,7 +508,7 @@ namespace LTSM
 
     void Connector::VNC::onDestroyChannel(const int32_t& display, const uint8_t& channel)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             destroyChannel(channel);
         }
@@ -520,7 +516,7 @@ namespace LTSM
 
     void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             // FIXME listen queue
             createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), 5}, Channel::connectorSpeed(speed));
@@ -529,7 +525,7 @@ namespace LTSM
 
     void Connector::VNC::onDestroyListener(const int32_t& display, const std::string& client, const std::string& server)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             destroyListener(client, server);
         }
@@ -537,7 +533,7 @@ namespace LTSM
 
     void Connector::VNC::onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             setChannelDebug(channel, debug);
         }

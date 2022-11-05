@@ -45,7 +45,6 @@ protected:
         object_.registerMethod("busDisplayResized").onInterface(INTERFACE_NAME).withInputParamNames("display", "width", "height").withOutputParamNames("result").implementedAs([this](const int32_t& display, const uint16_t& width, const uint16_t& height){ return this->busDisplayResized(display, width, height); });
         object_.registerMethod("busIdleTimeoutAction").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busIdleTimeoutAction(display); });
         object_.registerMethod("busConnectorTerminated").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorTerminated(display); });
-        object_.registerMethod("busConnectorSwitched").onInterface(INTERFACE_NAME).withInputParamNames("oldDisplay", "newDisplay").withOutputParamNames("result").implementedAs([this](const int32_t& oldDisplay, const int32_t& newDisplay){ return this->busConnectorSwitched(oldDisplay, newDisplay); });
         object_.registerMethod("busConnectorAlive").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busConnectorAlive(display); });
         object_.registerMethod("busTransferFilesRequest").onInterface(INTERFACE_NAME).withInputParamNames("display", "files").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files){ return this->busTransferFilesRequest(display, files); });
         object_.registerMethod("busTransferFileStarted").onInterface(INTERFACE_NAME).withInputParamNames("display", "tmpfile", "filesz", "dstfile").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile){ return this->busTransferFileStarted(display, tmpfile, filesz, dstfile); });
@@ -223,7 +222,6 @@ private:
     virtual bool busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) = 0;
     virtual bool busIdleTimeoutAction(const int32_t& display) = 0;
     virtual bool busConnectorTerminated(const int32_t& display) = 0;
-    virtual bool busConnectorSwitched(const int32_t& oldDisplay, const int32_t& newDisplay) = 0;
     virtual bool busConnectorAlive(const int32_t& display) = 0;
     virtual bool busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files) = 0;
     virtual bool busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile) = 0;

@@ -172,11 +172,10 @@ namespace LTSM
 
         class CommandConnector : public Connector
         {
-            FILE*   fcmd = nullptr;
+            std::unique_ptr<FILE, int(*)(FILE*)> fcmd;
 
         public:
             CommandConnector(uint8_t channel, FILE*, const ConnectorMode &, const Speed &, ChannelClient &);
-            ~CommandConnector();
 
             static std::unique_ptr<Connector>
                 createConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Speed &, ChannelClient &);

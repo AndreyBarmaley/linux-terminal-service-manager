@@ -73,8 +73,7 @@ namespace LTSM
             void                xcbFrameBufferModify(FrameBuffer &) const override;
 
             // x11server
-            XCB::RootDisplayExt*       xcbDisplay(void) override;
-            const XCB::RootDisplayExt* xcbDisplay(void) const override;
+            XCB::SharedDisplay  xcbDisplay(void) const override;
 
             const XCB::SHM*     xcbShm(void) const override;
             bool                xcbNoDamage(void) const override;

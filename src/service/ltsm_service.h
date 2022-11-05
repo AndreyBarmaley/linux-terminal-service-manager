@@ -111,6 +111,24 @@ namespace LTSM
     enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep, SessionShutdown };
     enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
 
+    namespace Flags
+    {
+        enum AllowChannel : size_t
+        {
+            TransferFiles = (1 << 1),
+            RedirectPrinter = (1 << 2),
+            RedirectAudio = (1 << 3),
+            RedirectScanner = (1 << 4),
+            RedirectSmartCard = (1 << 5),
+            RemoteFilesUse = (1 << 6)
+        };
+
+        enum SessionStatus : size_t
+        {
+            CheckConnection = (1 << 24)
+        };
+    }
+
     SessionPolicy sessionPolicy(const std::string &);
 
     struct XvfbSession
@@ -138,7 +156,8 @@ namespace LTSM
         int                             pid1 = 0; // xvfb pid
         int                             pid2 = 0; // session pid
 
-        std::atomic<int>                durationlimit{0};
+        std::atomic<size_t>             durationLimit{0};
+        std::atomic<size_t>             statusFlags{0};
         int                             loginFailures = 0;
 
         uid_t                           uid = 0;
@@ -152,10 +171,13 @@ namespace LTSM
         std::unique_ptr<PamService>     pam;
 
         std::atomic<XvfbMode>           mode{XvfbMode::SessionLogin};
-	SessionPolicy			policy = SessionPolicy::AuthLock;
+	SessionPolicy			policy = SessionPolicy::AuthTake;
 
-	bool				checkconn = false;
-        bool                            allowTransfer = true;
+        bool                            checkStatus(size_t st) const { return statusFlags & st; }
+        void                            setStatus(size_t st) { statusFlags |= st; }
+        void                            resetStatus(size_t st) { statusFlags &= ~st; }
+
+        std::chrono::seconds            aliveSec(void) const { return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpstart); }
 
         XvfbSession() = default;
 	~XvfbSession();
@@ -274,7 +296,6 @@ namespace LTSM
             bool                        busShutdownDisplay(const int32_t & display) override;
             bool                        busShutdownConnector(const int32_t & display) override;
             bool                        busConnectorTerminated(const int32_t & display) override;
-            bool                        busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
             bool                        busIdleTimeoutAction(const int32_t& display) override;
 	    bool			busSetLoginsDisable(const bool & action) override;

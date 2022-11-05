@@ -106,7 +106,7 @@ namespace LTSM
 
             if(! xcbAllow())
             {
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(50ms);
                 continue;
             }
 

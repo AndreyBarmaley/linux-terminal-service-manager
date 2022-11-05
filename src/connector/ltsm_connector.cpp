@@ -204,8 +204,7 @@ namespace LTSM
 
     /* Connector::SignalProxy */
     Connector::SignalProxy::SignalProxy(const JsonObject & jo, const char* type)
-        : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_service_name, LTSM::dbus_object_path), _config(& jo), _display(0),
-          _conntype(type), _xcbDisableMessages(true)
+        : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_service_name, LTSM::dbus_object_path), _conntype(type), _config(& jo)
     {
         _remoteaddr.assign("local");
 
@@ -245,12 +244,15 @@ namespace LTSM
 
     bool Connector::SignalProxy::xcbConnect(int screen)
     {
+        Application::info("%s: display: %d", __FUNCTION__, screen);
         std::string xauthFile = busCreateAuthFile(screen);
-        Application::debug("%s: uid: %d, gid: %d", __FUNCTION__, getuid(), getgid());
+
+        Application::debug("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(), getgid());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::string socketFormat = _config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
         std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
+
         int width = _config->getInteger("default:width");
         int height = _config->getInteger("default:height");
 
@@ -272,7 +274,7 @@ namespace LTSM
         auto displaySz = _xcbDisplay->size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
 
-        Application::info("%s: display size: [%d,%d], depth: %d", __FUNCTION__, displaySz.width, displaySz.height, _xcbDisplay->depth());
+        Application::debug("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, displaySz.width, displaySz.height, _xcbDisplay->depth());
 
         if(0 != color)
             _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
@@ -284,11 +286,16 @@ namespace LTSM
         return true;
     }
 
+    int Connector::SignalProxy::displayNum(void) const
+    {
+        return _display;
+    }
+
     void Connector::SignalProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
         if(0 < _display && display == _display)
         {
-            Application::info("%s: display: %d, username: %s", __FUNCTION__, display, userName.c_str());
+            Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, display, userName.c_str());
             // disable message loop
             bool extDisable = _xcbDisableMessages;
             _xcbDisableMessages = true;
@@ -313,8 +320,7 @@ namespace LTSM
                     throw std::runtime_error(NS_FuncName);
                 }
 
-                busConnectorSwitched(oldDisplay, newDisplay);
-                _display = newDisplay;
+                busShutdownDisplay(oldDisplay);
             }
 
             //

@@ -35,7 +35,7 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
-#define LTSM_VNC2SDL_VERSION 20221004
+#define LTSM_VNC2SDL_VERSION 20221101
 
 namespace LTSM
 {
@@ -46,6 +46,7 @@ namespace LTSM
 
         std::list<std::string>  dropFiles;
         std::string             host{"localhost"};
+        std::string             username;
         std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
 
         std::unique_ptr<SDL::Window> window;

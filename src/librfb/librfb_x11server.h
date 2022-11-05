@@ -49,8 +49,7 @@ namespace LTSM
             XcbFrameBuffer      xcbFrameBuffer(const XCB::Region &) const override;
             virtual void        xcbFrameBufferModify(FrameBuffer &) const {}
 
-            virtual XCB::RootDisplayExt*       xcbDisplay(void) = 0;
-            virtual const XCB::RootDisplayExt* xcbDisplay(void) const = 0;
+            virtual XCB::SharedDisplay xcbDisplay(void) const = 0;
 
             virtual bool        xcbAllow(void) const = 0;
             virtual bool        xcbNoDamage(void) const = 0;

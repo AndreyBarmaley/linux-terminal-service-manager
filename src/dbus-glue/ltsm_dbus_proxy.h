@@ -225,13 +225,6 @@ public:
         return result;
     }
 
-    bool busConnectorSwitched(const int32_t& oldDisplay, const int32_t& newDisplay)
-    {
-        bool result;
-        proxy_.callMethod("busConnectorSwitched").onInterface(INTERFACE_NAME).withArguments(oldDisplay, newDisplay).storeResultsTo(result);
-        return result;
-    }
-
     bool busConnectorAlive(const int32_t& display)
     {
         bool result;

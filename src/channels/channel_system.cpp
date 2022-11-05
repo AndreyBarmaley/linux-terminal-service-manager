@@ -1362,13 +1362,8 @@ std::unique_ptr<LTSM::Channel::Connector>
 
 /// CommandConnector
 LTSM::Channel::CommandConnector::CommandConnector(uint8_t channel, FILE* ptr, const ConnectorMode & mode, const Speed & speed, ChannelClient & owner)
-    : Connector(channel, fileno(ptr), mode, speed, owner), fcmd(ptr)
+    : Connector(channel, fileno(ptr), mode, speed, owner), fcmd{ptr, pclose}
 {
-}
-
-LTSM::Channel::CommandConnector::~CommandConnector()
-{
-    if(fcmd) pclose(fcmd);
 }
 
 std::unique_ptr<LTSM::Channel::Connector>

@@ -44,6 +44,7 @@ namespace LTSM
         : Application("ltsm_vnc2sdl")
     {
         Application::setDebugLevel(DebugLevel::SyslogInfo);
+        username = Tools::getLocalUsername();
 
         rfbsec.authVenCrypt = true;
         rfbsec.tlsDebug = 2;
@@ -164,6 +165,12 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
             {
                 rfbsec.passwdFile.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--username") && it + 1 < argc)
+            {
+                username.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
@@ -686,8 +693,11 @@ namespace LTSM
         JsonObjectStream jo;
         jo.push("hostname", "localhost");
         jo.push("ipaddr", "127.0.0.1");
-        jo.push("username", Tools::getLocalUsername());
+        jo.push("username", username);
         jo.push("platform", SDL_GetPlatform());
+
+        if(! rfbsec.passwdFile.empty())
+            jo.push("password", rfbsec.passwdFile);
 
         if(! rfbsec.certFile.empty())
         {

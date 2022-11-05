@@ -355,9 +355,9 @@ namespace LTSM
 
     Connector::RDP::~RDP()
     {
-        if(0 < _display)
+        if(0 < displayNum())
         {
-            busConnectorTerminated(_display);
+            busConnectorTerminated(displayNum());
             disconnectedEvent();
         }
     }
@@ -455,7 +455,7 @@ namespace LTSM
 
                 if(0 < cc.width && 0 < cc.height)
                 {
-                    busDisplayResized(_display, cc.width, cc.height);
+                    busDisplayResized(displayNum(), cc.width, cc.height);
                     damageRegion.reset();
                     desktopResizeEvent(*freeRdp->peer, cc.width, cc.height);
                 }
@@ -506,12 +506,12 @@ namespace LTSM
 
     void Connector::RDP::setEncryptionInfo(const std::string & info)
     {
-        busSetEncryptionInfo(_display, info);
+        busSetEncryptionInfo(displayNum(), info);
     }
 
     void Connector::RDP::setAutoLogin(const std::string & login, const std::string & pass)
     {
-        helperSetSessionLoginPassword(_display, login, pass, false);
+        helperSetSessionLoginPassword(displayNum(), login, pass, false);
     }
 
     bool Connector::RDP::createX11Session(uint8_t depth)
@@ -556,7 +556,7 @@ namespace LTSM
 
     void Connector::RDP::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             // disable xcb messages processing
             setEnableXcbMessages(false);
@@ -576,24 +576,24 @@ namespace LTSM
 
             if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
             {
-                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, _display);
+                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
 
                 if(_xcbDisplay->setRandrScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
                 {
                     wsz = _xcbDisplay->size();
-                    Application::info("change session size [%d,%d], display: %d", wsz.width, wsz.height, _display);
+                    Application::info("change session size [%d,%d], display: %d", wsz.width, wsz.height, displayNum());
                 }
             }
 
             // full update
             _xcbDisplay->damageAdd(_xcbDisplay->region());
-            Application::info("dbus signal: login success, display: %d, username: %s", _display, userName.c_str());
+            Application::info("dbus signal: login success, display: %d, username: %s", displayNum(), userName.c_str());
         }
     }
 
     void Connector::RDP::onShutdownConnector(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             freeRdp->stopEventLoop();
             setEnableXcbMessages(false);
@@ -604,7 +604,7 @@ namespace LTSM
 
     void Connector::RDP::onSendBellSignal(const int32_t & display)
     {
-        if(0 < _display && display == _display &&
+        if(0 < displayNum() && display == displayNum() &&
            freeRdp && freeRdp->peer && freeRdp->peer->settings && freeRdp->peer->settings->SoundBeepsEnabled)
         {
             // FIXME beep
@@ -613,7 +613,7 @@ namespace LTSM
 
     void Connector::RDP::onHelperWidgetStarted(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(0 < displayNum() && display == displayNum())
         {
             helperStartedFlag = true;
             Application::info("dbus signal: helper started, display: %d", display);
@@ -623,7 +623,7 @@ namespace LTSM
     // client events
     void Connector::RDP::disconnectedEvent(void)
     {
-        Application::warning("RDP disconnected, display: %d", _display);
+        Application::warning("RDP disconnected, display: %d", displayNum());
     }
 
     void Connector::RDP::desktopResizeEvent(freerdp_peer & peer, uint16_t width, uint16_t height)
@@ -963,7 +963,7 @@ namespace LTSM
         auto wsz = connector->_xcbDisplay->size();
         if(wsz.width != peer->settings->DesktopWidth || wsz.height != peer->settings->DesktopHeight)
         {
-            Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, peer->settings->DesktopWidth, peer->settings->DesktopHeight, connector->_display);
+            Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, peer->settings->DesktopWidth, peer->settings->DesktopHeight, connector->displayNum());
 
             if(! connector->_xcbDisplay->setRandrScreenSize(peer->settings->DesktopWidth, peer->settings->DesktopHeight))
                 Application::error("%s: x11display set size: failed", __FUNCTION__);

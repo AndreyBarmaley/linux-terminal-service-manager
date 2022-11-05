@@ -307,7 +307,7 @@ namespace LTSM
         std::scoped_lock guard{ lockSessions };
         for(auto & ptr : sessions)
         {
-            if(ptr && 0 < ptr->durationlimit)
+            if(ptr && 0 < ptr->durationLimit)
                 res.push_front(ptr);
         }
 
@@ -420,7 +420,7 @@ namespace LTSM
                 ptr->height,
                 ptr->uid,
                 ptr->gid,
-                ptr->durationlimit,
+                ptr->durationLimit,
                 sesmode,
                 conpol,
                 ptr->user,
@@ -987,13 +987,13 @@ namespace LTSM
         {
             // task background
             auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - ptr->tpstart);
-            auto lastsec = std::chrono::seconds(ptr->durationlimit) - sessionAliveSec;
+            auto lastsec = std::chrono::seconds(ptr->durationLimit) - ptr->aliveSec();
 
             // shutdown session
-            if(std::chrono::seconds(ptr->durationlimit) < sessionAliveSec)
+            if(std::chrono::seconds(ptr->durationLimit) < sessionAliveSec)
             {
                 Application::notice("time point limit, display: %d, limit: %dsec, session alive: %dsec",
-                                    ptr->displayNum, static_cast<int>(ptr->durationlimit), sessionAliveSec.count());
+                                    ptr->displayNum, static_cast<int>(ptr->durationLimit), sessionAliveSec.count());
                 displayShutdown(ptr, true);
             }
             else
@@ -1061,16 +1061,16 @@ namespace LTSM
         for(auto & ptr : getOnlineSessions())
         {
             // check alive connectors
-            if(! ptr->checkconn)
+            if(! ptr->checkStatus(Flags::SessionStatus::CheckConnection))
             {
-                ptr->checkconn = true;
+                ptr->setStatus(Flags::SessionStatus::CheckConnection);
                 emitPingConnector(ptr->displayNum);
             }
             else
             // not reply
             {
                 ptr->mode = XvfbMode::SessionSleep;
-                ptr->checkconn = false;
+                ptr->resetStatus(Flags::SessionStatus::CheckConnection);
                 Application::warning("connector not reply, display: %d", ptr->displayNum);
                 // complete shutdown
                 busConnectorTerminated(ptr->displayNum);
@@ -1326,7 +1326,7 @@ namespace LTSM
         sess->gid = gid;
         sess->displayAddr = std::string(":").append(std::to_string(sess->displayNum));
         sess->tpstart = std::chrono::system_clock::now();
-        sess->durationlimit = _config->getInteger("idle:timeout:xvfb", 10);
+        sess->durationLimit = _config->getInteger("idle:timeout:xvfb", 10);
 
         // generate session key
         auto mcookie = Tools::randomBytes(128);
@@ -1531,7 +1531,7 @@ namespace LTSM
         if(0 >= xvfb->pid2)
             return -1;
 
-        xvfb->durationlimit = _config->getInteger("idle:timeout:login", 80);
+        xvfb->durationLimit = _config->getInteger("idle:timeout:login", 80);
         return xvfb->displayNum;
     }
 
@@ -1582,14 +1582,35 @@ namespace LTSM
         if(! newSess)
             return -1;
 
-        // close login session
-        loginSess->durationlimit = 5;
+        // auto close login session
+        loginSess->durationLimit = loginSess->aliveSec().count() + 1;
 
         // update screen
+        newSess->environments = std::move(loginSess->environments);
+        newSess->options = std::move(loginSess->options);
+        newSess->encryption = loginSess->encryption;
         newSess->remoteaddr = remoteAddr;
         newSess->conntype = connType;
-        newSess->durationlimit = _config->getInteger("idle:timeout:logout", 0);
+        newSess->durationLimit = _config->getInteger("idle:timeout:logout", 0);
         newSess->policy = sessionPolicy(Tools::lower(_config->getString("session:policy")));
+
+        if(! _config->getBoolean("transfer:file:disabled", false))
+            newSess->setStatus(Flags::AllowChannel:: TransferFiles);
+
+        if(! _config->getBoolean("channel:printer:disabled", false))
+            newSess->setStatus(Flags::AllowChannel::RedirectPrinter);
+
+        if(! _config->getBoolean("channel:pulseaudio:disabled", false))
+            newSess->setStatus(Flags::AllowChannel::RedirectAudio);
+
+        if(! _config->getBoolean("channel:pcscd:disabled", false))
+            newSess->setStatus(Flags::AllowChannel::RedirectSmartCard);
+
+        if(! _config->getBoolean("channel:sane:disabled", false))
+            newSess->setStatus(Flags::AllowChannel::RedirectScanner);
+
+        if(! _config->getBoolean("channel:fuse:disabled", false))
+            newSess->setStatus(Flags::AllowChannel::RemoteFilesUse);
 
         // fix permission
         auto groupAuthGid = getGroupGid(groupAuth);
@@ -1802,7 +1823,7 @@ namespace LTSM
     {
         if(auto xvfb = findDisplaySession(display))
         {
-            xvfb->checkconn = false;
+            xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
             return true;
         }
 
@@ -1836,17 +1857,6 @@ namespace LTSM
         }
 
         return true;
-    }
-
-    bool Manager::Object::busConnectorSwitched(const int32_t & oldDisplay, const int32_t & newDisplay)
-    {
-        Application::info("%s: old display: %d, new display: %d", __FUNCTION__, oldDisplay, newDisplay);
-        if(auto xvfb = findDisplaySession(oldDisplay))
-        {
-            displayShutdown(xvfb, false);
-            return true;
-        }
-        return false;
     }
 
 #ifdef LTSM_CHANNELS
@@ -2010,12 +2020,12 @@ namespace LTSM
             return false;
         }
 
-        if(! xvfb->allowTransfer)
+        if(! xvfb->checkStatus(Flags::AllowChannel::TransferFiles))
         {
-            Application::error("%s: display %d, transfer reject", __FUNCTION__, display);
+            Application::warning("%s: display %d, transfer reject", __FUNCTION__, display);
 
             busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
-                            NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }
 
@@ -2024,10 +2034,10 @@ namespace LTSM
             auto members = Manager::getGroupMembers(_config->getString("transfer:group:only"));
             if(std::none_of(members.begin(), members.end(), [&](auto & user) { return user == xvfb->user; }))
             {
-                Application::error("%s: display %d, transfer reject", __FUNCTION__, display);
+                Application::warning("%s: display %d, transfer reject", __FUNCTION__, display);
 
                 busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
-                                NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+                                NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
                 return false;
             }
         }
@@ -2419,6 +2429,7 @@ namespace LTSM
         if(auto xvfb = findDisplaySession(display))
         {
             xvfb->options.clear();
+            std::string login, pass;
 
             for(auto & [key, val] : map)
             {
@@ -2441,7 +2452,16 @@ namespace LTSM
                     auto socket = _config->getString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
                     xvfb->environments.emplace("SANE_UNIX_PATH", socket);
                 }
+                else
+                if(key == "username")
+                    login = val;
+                else
+                if(key == "password")
+                    pass = val;
             }
+
+            if(!login.empty() && !pass.empty())
+                busSetAuthenticateInfo(display, login, pass);
 
             return true;
         }
@@ -2477,28 +2497,33 @@ namespace LTSM
     void Manager::Object::startSessionChannels(XvfbSessionPtr xvfb)
     {
         auto printer = xvfb->options.find("printer");
-        if(xvfb->options.end() != printer &&
-            ! _config->getBoolean("channel:printer:disabled", false))
+        if(xvfb->options.end() != printer)
             startPrinterListener(xvfb, printer->second);
 
         auto sane = xvfb->options.find("sane");
-        if(xvfb->options.end() != sane &&
-            ! _config->getBoolean("channel:sane:disabled", false))
+        if(xvfb->options.end() != sane)
             startSaneListener(xvfb, sane->second);
 
         auto pulseaudio = xvfb->options.find("pulseaudio");
-        if(xvfb->options.end() != pulseaudio && 
-            ! _config->getBoolean("channel:pulseaudio:disabled", false))
+        if(xvfb->options.end() != pulseaudio)
             startPulseAudioListener(xvfb, pulseaudio->second);
 
         auto pcscd = xvfb->options.find("pcscd");
-        if(xvfb->options.end() != pcscd &&
-            ! _config->getBoolean("channel:pcscd:disabled", false))
+        if(xvfb->options.end() != pcscd)
             startPcscdListener(xvfb, pcscd->second);
     }
 
     bool Manager::Object::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
     {
+        if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPrinter))
+        {
+            Application::warning("%s: display %d, redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "printer");
+
+            busSendNotify(xvfb->displayNum, "Channel Disabled", Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("printer"),
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
         Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
@@ -2543,6 +2568,15 @@ namespace LTSM
 
     bool Manager::Object::startPulseAudioListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
     {
+        if(! xvfb->checkStatus(Flags::AllowChannel::RedirectAudio))
+        {
+            Application::warning("%s: display %d, redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "audio");
+
+            busSendNotify(xvfb->displayNum, "Channel Disabled", Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("audio"),
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
         Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
@@ -2586,6 +2620,15 @@ namespace LTSM
 
     bool Manager::Object::startSaneListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
     {
+        if(! xvfb->checkStatus(Flags::AllowChannel::RedirectScanner))
+        {
+            Application::warning("%s: display %d, redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "scanner");
+
+            busSendNotify(xvfb->displayNum, "Channel Disabled", Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("scanner"),
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
         Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
@@ -2629,6 +2672,15 @@ namespace LTSM
 
     bool Manager::Object::startPcscdListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
     {
+        if(! xvfb->checkStatus(Flags::AllowChannel::RedirectSmartCard))
+        {
+            Application::warning("%s: display %d, redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "smart card");
+
+            busSendNotify(xvfb->displayNum, "Channel Disabled", Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("smartcard"),
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
         Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
         auto [ clientType, clientAddress ] = Channel::parseUrl(clientUrl);
 
@@ -2730,7 +2782,7 @@ namespace LTSM
 
         if(auto xvfb = findDisplaySession(display))
         {
-            xvfb->durationlimit = duration;
+            xvfb->durationLimit = duration;
             emitClearRenderPrimitives(display);
             emitSessionChanged(display);
             return true;
