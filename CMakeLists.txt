@@ -6,14 +6,14 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -Wall -Werror -Wn
 set(CMAKE_CXX_FLAGS_PROFILER "-O2 -pg -Wall -Werror -Wno-sign-compare -Wno-unused-function -Wno-unused-variable -DLTSM_DEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-compare -Wno-unused-function -Wno-unused-variable")
 
-option(LTSM_BUILD_STD_MAP "usage std::unordered_map" OFF)
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_SERVER "build server" OFF)
 option(LTSM_BUILD_CLIENT "build client" ON)
-option(LTSM_BUILD_TESTS "build test utilities" OFF)
-option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
-option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 option(LTSM_CHANNELS "ltsm channels support" ON)
+#option(LTSM_BUILD_TESTS "build test utilities" OFF)
+#option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
+#option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
+#option(LTSM_WITH_STD_MAP "usage std::unordered_map" OFF)
 
 if(LTSM_BUILD_SERVER)
     set(LTSM_WITH_RDP ON CACHE BOOL "add rdp protocol support")
@@ -71,6 +71,10 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
 endif()
 
+if(LTSM_GITHUB_WORKFLOW)
+    unset(LTSM_RUTOKEN_BACKEND CACHE)
+endif()
+
 if(LTSM_RUTOKEN_BACKEND)
     # fix for rutoken/pki-core
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-extern-c-compat")
@@ -98,7 +102,7 @@ add_compile_options(${XCB_XTEST_CFLAGS})
 add_compile_options(${XCB_RANDR_CFLAGS})
 add_compile_options(-DJSMN_STATIC)
 
-if(LTSM_BUILD_STD_MAP)
+if(LTSM_WITH_STD_MAP)
     add_compile_options(-DLTSM_BUILD_STD_MAP)
 endif()
 
