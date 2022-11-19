@@ -357,7 +357,7 @@ namespace LTSM
     std::unique_ptr<ReplyBase>
         FuseSessionBus::getReply(uint32_t cookie)
     {
-        std::scoped_lock{ lockrp };
+        std::scoped_lock guard{ lockrp };
         auto it = std::find_if(replies.begin(), replies.end(),
                 [=](auto & ptr){ return ptr->cookie == cookie; });
 
@@ -415,7 +415,7 @@ namespace LTSM
     {
         LTSM::Application::debug("%s: path: `%s', cookie: %d, errno: %d", __FUNCTION__, path.c_str(), cookie, errno2);
 
-        std::scoped_lock{ lockrp };
+        std::scoped_lock guard{ lockrp };
         replies.emplace_back(std::make_unique<ReplyGetAttr>(error, errno2, path, cookie, stat));
     }
 
@@ -423,7 +423,7 @@ namespace LTSM
     {
         LTSM::Application::debug("%s: path: `%s', cookie: %d, errno: %d", __FUNCTION__, path.c_str(), cookie, errno2);
 
-        std::scoped_lock{ lockrp };
+        std::scoped_lock guard{ lockrp };
         replies.emplace_back(std::make_unique<ReplyReadDir>(error, errno2, path, cookie, names));
     }
 
@@ -431,7 +431,7 @@ namespace LTSM
     {
         LTSM::Application::debug("%s: path: `%s', cookie: %d, errno: %d", __FUNCTION__, path.c_str(), cookie, errno2);
 
-        std::scoped_lock{ lockrp };
+        std::scoped_lock guard{ lockrp };
         replies.emplace_back(std::make_unique<ReplyOpen>(error, errno2, path, cookie));
     }
 
@@ -439,7 +439,7 @@ namespace LTSM
     {
         LTSM::Application::debug("%s: path: `%s', cookie: %d, errno: %d", __FUNCTION__, path.c_str(), cookie, errno2);
 
-        std::scoped_lock{ lockrp };
+        std::scoped_lock guard{ lockrp };
         replies.emplace_back(std::make_unique<ReplyRead>(error, errno2, path, cookie, data));
     }
 }
