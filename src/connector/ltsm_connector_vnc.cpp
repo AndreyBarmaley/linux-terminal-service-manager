@@ -38,7 +38,13 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
     /* FuseSessionProxy */
     FuseSessionProxy::FuseSessionProxy(const std::string& address, ChannelClient & client)
+#ifdef SDBUS_ADDRESS_SUPPORT
         : ProxyInterfaces(sdbus::createSessionBusConnectionWithAddress(address), LTSM::dbus_session_fuse_name, LTSM::dbus_session_fuse_path), sender(& client)
+#else
+        // not working
+        // build test only
+        : ProxyInterfaces(sdbus::createSessionBusConnection(), LTSM::dbus_session_fuse_name, LTSM::dbus_session_fuse_path), sender(& client)
+#endif
     {
         registerProxy();
     }
@@ -674,26 +680,30 @@ namespace LTSM
         }
         catch(const sdbus::Error & err)
         {
-            LTSM::Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), displayNum());
+            Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), displayNum());
             fuse.reset();
         }
     }
 
     void Connector::VNC::onFuseSessionStart(const int32_t& display, const std::string& dbusAddresses, const std::string& mountPoint)
     {
-        LTSM::Application::info("%s: display: %d, dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
+        Application::info("%s: display: %d, dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
         int ver = 0;
 
         if(0 < displayNum() && display == displayNum())
         {
             try
             {
+#ifdef SDBUS_ADDRESS_SUPPORT
                 fuse = std::make_unique<FuseSessionProxy>(dbusAddresses, static_cast<ChannelClient &>(*this));
                 ver = fuse->getVersion();
+#else
+                Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+#endif
             }
             catch(const sdbus::Error & err)
             {
-                LTSM::Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), display);
+                Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), display);
                 fuse.reset();
             }
 
