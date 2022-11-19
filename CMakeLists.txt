@@ -54,6 +54,8 @@ else()
 endif()
 
 if(LTSM_BUILD_COVERAGE_TESTS)
+    unset(LTSM_RUTOKEN_BACKEND CACHE)
+
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
 
     set(LTSM_WITH_RDP ON CACHE BOOL "add rdp protocol support" FORCE)
