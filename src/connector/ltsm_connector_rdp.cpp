@@ -492,11 +492,6 @@ namespace LTSM
                 Application::error("xcb exception: %s", err.what());
                 return false;
             }
-            catch(...)
-            {
-                Application::error("xcb exception: %s", "unknown");
-                return false;
-            }
 
             updatePartFlag = false;
         }

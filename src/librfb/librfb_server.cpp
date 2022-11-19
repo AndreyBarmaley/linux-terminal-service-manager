@@ -53,42 +53,111 @@ namespace LTSM
     }
 
     void RFB::ServerEncoder::sendFlush(void)
-    {
-        if(rfbMessages)
-            streamOut->sendFlush();
+    {   
+        try
+        {
+            if(rfbMessages)
+                streamOut->sendFlush();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            streamOut->setError();
+            rfbMessagesShutdown();
+        }
     }
 
     void RFB::ServerEncoder::sendRaw(const void* ptr, size_t len)
-    {
-        if(rfbMessages)
+    {   
+        try
         {
-            streamOut->sendRaw(ptr, len);
-            netStatTx += len;
+            if(rfbMessages)
+            {
+                streamOut->sendRaw(ptr, len);
+                netStatTx += len;
+            }
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            streamOut->setError();
+            rfbMessagesShutdown();
         }
     }
-    
+
     void RFB::ServerEncoder::recvRaw(void* ptr, size_t len) const
-    {
-        if(rfbMessages)
+    {   
+        try
         {
-            streamIn->recvRaw(ptr, len);
-            netStatRx += len;
+            if(rfbMessages)
+            {
+                streamIn->recvRaw(ptr, len);
+                netStatRx += len;
+            }
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
 
     bool RFB::ServerEncoder::hasInput(void) const
     {
-        return rfbMessages ? streamIn->hasInput() : false;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->hasInput();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return false;
     }
 
     size_t RFB::ServerEncoder::hasData(void) const
     {
-        return rfbMessages ? streamIn->hasData() : 0;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->hasData();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return 0;
     }
-    
+
     uint8_t RFB::ServerEncoder::peekInt8(void) const
     {
-        return rfbMessages ? streamIn->peekInt8() : 0;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->peekInt8();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return 0;
     }
 
     bool RFB::ServerEncoder::isUpdateProcessed(void) const
@@ -425,8 +494,8 @@ namespace LTSM
 
         try
         {
-            auto xfb = xcbFrameBuffer(area);
-            sendFrameBufferUpdate(xfb);
+            auto reply = xcbFrameBuffer(area);
+            sendFrameBufferUpdate(reply.fb);
             sendFrameBufferUpdateEvent(area);
         }
         catch(const std::exception & err)
@@ -484,6 +553,11 @@ namespace LTSM
                 {
                     recvLtsm(*this);
                 }
+                catch(const std::runtime_error & err)
+                {
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    rfbMessagesShutdown();
+                }
                 catch(const std::exception & err)
                 {
                     Application::error("%s: exception: %s", __FUNCTION__, err.what());
@@ -491,6 +565,9 @@ namespace LTSM
                 continue;
             }
 #endif
+            if(! rfbMessages)
+                break;
+
             switch(msgType)
             {
                 case RFB::CLIENT_SET_PIXEL_FORMAT:
@@ -527,7 +604,7 @@ namespace LTSM
 
                 default:
                     Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
-                    rfbMessages = false;
+                    rfbMessagesShutdown();
             }
         }
     }
@@ -811,9 +888,9 @@ namespace LTSM
         continueUpdatesProcessed = enable;
     }
 
-    void RFB::ServerEncoder::sendFrameBufferUpdate(const XcbFrameBuffer & xfb)
+    void RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb)
     {
-        auto & reg = xfb.fb.region();
+        auto & reg = fb.region();
 
         Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
@@ -825,8 +902,62 @@ namespace LTSM
         sendInt8(0);
 
         // send encodings
-        prefEncodingsPair.first(xfb.fb);
+        prefEncodingsPair.first(fb);
 
+        sendFlush();
+    }
+
+    void RFB::ServerEncoder::sendFrameBufferUpdateRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot)
+    {
+        auto & reg = fb.region();
+
+        Application::debug("%s: region: [%d, %d, %d, %d], xhot: %d, yhot: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+
+        std::scoped_lock<std::mutex> guard1(sendLock);
+
+        // RFB: 6.5.1
+        sendInt8(RFB::SERVER_FB_UPDATE);
+        // padding
+        sendInt8(0);
+
+        // regions counts
+        sendIntBE16(1);
+
+        std::scoped_lock<std::mutex> guard2(encodingBusy);
+
+        // region size
+        sendIntBE16(xhot);
+        sendIntBE16(yhot);
+        sendIntBE16(reg.width);
+        sendIntBE16(reg.height);
+
+        // region type
+        sendIntBE32(RFB::ENCODING_RICH_CURSOR);
+
+        Tools::StreamBitsPack bitmask;
+
+        for(int oy = 0; oy < reg.height; ++oy)
+        {
+            for(int ox = 0; ox < reg.width; ++ox)
+            {
+                auto pixel = fb.pixel(XCB::Point(ox, oy));
+                sendPixel(pixel);
+                bitmask.pushBit(fb.pixelFormat().alpha(pixel));
+            }
+
+            bitmask.pushAlign();
+        }
+
+        const std::vector<uint8_t> & bitmaskBuf = bitmask.toVector();
+        size_t bitmaskSize = std::floor((reg.width + 7) / 8) * reg.height;
+
+        if(bitmaskSize != bitmaskBuf.size())
+        {
+            Application::error("%s: bitmask missmatch, buf size: %d, bitmask size: %d", __FUNCTION__, bitmaskBuf.size(), bitmaskSize);
+            throw rfb_error(NS_FuncName);
+        }
+
+        sendData(bitmaskBuf);
         sendFlush();
     }
 
@@ -1864,6 +1995,18 @@ namespace LTSM
         else
         if(cmd == SystemCommand::ChannelConnected)
             systemChannelConnected(jo);
+        else
+        if(cmd == SystemCommand::FuseProxy)
+            systemFuseProxy(jo);
+        else
+        if(cmd == SystemCommand::ChannelError)
+            systemChannelError(jo);
+        else
+        if(cmd == SystemCommand::TokenAuth)
+            systemTokenAuth(jo);
+        else
+        if(cmd == SystemCommand::LoginSuccess)
+            systemLoginSuccess(jo);
         else
         {
             Application::error("%s: %s", __FUNCTION__, "unknown cmd");

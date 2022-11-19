@@ -340,6 +340,17 @@ namespace LTSM
                 : PixmapBase(rmask, gmask, bmask, bpp) { pixels.reserve(res); }
         };
 
+        #define ReplyCursor ReplyError<xcb_xfixes_get_cursor_image_reply_t>
+
+        struct CursorImage : ReplyCursor
+        {
+            uint32_t*           data(void);
+            const uint32_t*     data(void) const;
+            size_t              size(void) const;
+
+            CursorImage(ReplyCursor && rc) : ReplyCursor(rc) {}
+        };
+
         enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
 
 	union xkb_notify_event_t
@@ -434,6 +445,7 @@ namespace LTSM
             Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
             XFixesRegion            createFixesRegion(const Region &);
             XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
+            CursorImage             cursorImage(void);
 	    xcb_atom_t              getAtom(std::string_view, bool create = true) const;
 	    bool                    checkAtom(std::string_view) const;
 	    std::string	            getAtomName(xcb_atom_t) const;

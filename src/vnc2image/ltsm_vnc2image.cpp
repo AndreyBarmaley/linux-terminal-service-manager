@@ -114,10 +114,6 @@ namespace LTSM
         {
             Application::error("%s: exception: %s", __FUNCTION__, err.what());
         }
-        catch(...)
-        {
-            Application::error("%s: unknown exception", __FUNCTION__);
-        }
 
         return 0;
     }
@@ -173,7 +169,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("exception: %s", err.what());
+        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

@@ -91,6 +91,9 @@ namespace LTSM
             case ENCODING_LAST_RECT:
                 return "ExtendedLastRect";
 
+            case ENCODING_RICH_CURSOR:
+                return "ExtendedRichCursor";
+
             case ENCODING_COMPRESS9:
                 return "ExtendedCompress9";
 

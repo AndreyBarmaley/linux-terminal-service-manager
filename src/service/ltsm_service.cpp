@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <sys/inotify.h>
+#include <sys/mount.h>
 
 #include <cctype>
 #include <chrono>
@@ -54,6 +55,14 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+    // Manager
+    namespace Manager
+    {
+        std::atomic<bool> serviceRunning = false;
+        std::atomic<bool> serviceKilled = false;
+        std::unique_ptr<Object> serviceAdaptor;
+    }
+
     SessionPolicy sessionPolicy(const std::string & name)
     {
         if(name == "authlock")
@@ -434,12 +443,14 @@ namespace LTSM
         return res;
     }
 
-    // Manager
-    namespace Manager
+    bool Manager::createDirectory(const std::filesystem::path & path)
     {
-        std::atomic<bool> serviceRunning = false;
-        std::atomic<bool> serviceKilled = false;
-        std::unique_ptr<Object> serviceAdaptor;
+        auto parent = std::filesystem::path(path).parent_path();
+        if(! std::filesystem::exists(parent))
+            createDirectory(parent);
+
+        return std::filesystem::is_directory(parent) ?
+            std::filesystem::create_directory(path) : false;
     }
 
     std::tuple<uid_t, gid_t, std::filesystem::path, std::string> Manager::getUserInfo(std::string_view user)
@@ -496,14 +507,16 @@ namespace LTSM
 
     std::list<std::string> Manager::getSessionDbusAddresses(std::string_view user)
     {
-        auto dbusPath = getUserHome(user) / ".dbus" / "session-bus";
+        auto [uid, gid, home, shell] = getUserInfo(user);
+
+        auto dbusSessionPath = home / ".dbus" / "session-bus";
         std::list<std::string> dbusAddresses;
 
-        if(std::filesystem::is_directory(dbusPath))
+        if(std::filesystem::is_directory(dbusSessionPath))
         {
             std::string_view dbusLabel = "DBUS_SESSION_BUS_ADDRESS='";
 
-            for(auto const & dirEntry : std::filesystem::directory_iterator{dbusPath})
+            for(auto const & dirEntry : std::filesystem::directory_iterator{dbusSessionPath})
             {
                 std::ifstream ifs(dirEntry.path());
                 std::string line;
@@ -520,10 +533,11 @@ namespace LTSM
                 }
             }
         }
-        else
-        {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, dbusPath.c_str());
-        }
+
+        auto dbusBrokerPath = std::filesystem::path("/run/user") / std::to_string(uid) /  "bus";
+
+        if(std::filesystem::is_socket(dbusBrokerPath))
+            dbusAddresses.emplace_front(std::string("unix:path=").append(dbusBrokerPath));
 
         return dbusAddresses;
     }
@@ -944,7 +958,7 @@ namespace LTSM
 
     /* Manager::Object */
     Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, size_t displays, const Application & app)
-        : XvfbSessions(displays), AdaptorInterfaces(conn, LTSM::dbus_object_path), _app(& app), _config(& jo)
+        : XvfbSessions(displays), AdaptorInterfaces(conn, LTSM::dbus_manager_service_path), _app(& app), _config(& jo)
     {
         // registry
         registerAdaptor();
@@ -979,6 +993,21 @@ namespace LTSM
     void Manager::Object::openlog(void) const
     {
         _app->openlog();
+    }
+
+    void Manager::Object::configReloadedEvent(void)
+    {
+        Application::setDebugLevel(_config->getString("service:debug"));
+
+        int min = _config->getInteger("display:min", 55);
+        int max = _config->getInteger("display:max", 99);
+        size_t poolsz = std::abs(max - min);
+
+        if(poolsz > sessions.size())
+        {
+            std::scoped_lock guard{ lockSessions };
+            sessions.resize(poolsz);
+        }
     }
 
     void Manager::Object::sessionsTimeLimitAction(void)
@@ -1069,8 +1098,6 @@ namespace LTSM
             else
             // not reply
             {
-                ptr->mode = XvfbMode::SessionSleep;
-                ptr->resetStatus(Flags::SessionStatus::CheckConnection);
                 Application::warning("connector not reply, display: %d", ptr->displayNum);
                 // complete shutdown
                 busConnectorTerminated(ptr->displayNum);
@@ -1102,7 +1129,10 @@ namespace LTSM
         Application::notice("%s: shutdown display: %d %s", __FUNCTION__, xvfb->displayNum, "starting");
         xvfb->mode = XvfbMode::SessionShutdown;
 
-        if(emitSignal) emitShutdownConnector(xvfb->displayNum);
+        if(emitSignal)
+        {
+            emitShutdownConnector(xvfb->displayNum);
+        }
 
         // dbus no wait, remove background
         std::string sysuser = _config->getString("user:xvfb");
@@ -1112,8 +1142,11 @@ namespace LTSM
             closeSystemSession(xvfb);
 
         // script run in thread
-        std::thread([ptr = std::move(xvfb), notsys = notSysUser, this]()
+        std::thread([wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]()
         {
+            if(wait)
+                std::this_thread::sleep_for(300ms);
+
             auto displayNum = ptr->displayNum;
 
             if(notsys)
@@ -1414,7 +1447,7 @@ namespace LTSM
 
         auto childExit = []()
         {
-            execl("/bin/false", "/bin/false", nullptr);
+            execl("/bin/true", "/bin/true", nullptr);
             std::exit(0);
         };
 
@@ -1526,6 +1559,9 @@ namespace LTSM
             helperArgs = Tools::replace(helperArgs, "%{authfile}", xvfb->xauthfile.native());
         }
 
+        // simple cursor
+        runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", "left_ptr" });
+
         // runas login helper
         xvfb->pid2 = runSessionCommandSafe(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
         if(0 >= xvfb->pid2)
@@ -1551,25 +1587,6 @@ namespace LTSM
             return -1;
         }
 
-        auto oldSess = findUserSession(userName);
-        if(oldSess && 0 <= oldSess->displayNum && checkXvfbSocket(oldSess->displayNum))
-        {
-            // parent continue
-            oldSess->remoteaddr = remoteAddr;
-            oldSess->conntype = connType;
-            oldSess->mode = XvfbMode::SessionOnline;
-            // update conn info
-            createSessionConnInfo(oldSess);
-            Application::debug("%s: user session connected, display: %d", __FUNCTION__, oldSess->displayNum);
-            emitSessionReconnect(remoteAddr, connType);
-            emitSessionChanged(oldSess->displayNum);
-#ifdef LTSM_CHANNELS
-            startSessionChannels(oldSess);
-#endif
-            runSessionScript(oldSess, _config->getString("session:connect"));
-            return oldSess->displayNum;
-        }
-
         auto loginSess = findDisplaySession(oldScreen);
         if(! loginSess)
         {
@@ -1577,18 +1594,54 @@ namespace LTSM
             return -1;
         }
 
+        // auto close login session
+        loginSess->durationLimit = loginSess->aliveSec().count() + 3;
+
+        auto oldSess = findUserSession(userName);
+        if(oldSess && 0 <= oldSess->displayNum && checkXvfbSocket(oldSess->displayNum))
+        {
+            // parent continue
+            oldSess->remoteaddr = remoteAddr;
+            oldSess->conntype = connType;
+            oldSess->mode = XvfbMode::SessionOnline;
+
+            oldSess->environments = std::move(loginSess->environments);
+            oldSess->options = std::move(loginSess->options);
+            oldSess->encryption = std::move(loginSess->encryption);
+            oldSess->layout = std::move(loginSess->layout);
+
+            // update conn info
+            createSessionConnInfo(oldSess);
+            Application::debug("%s: user session connected, display: %d", __FUNCTION__, oldSess->displayNum);
+            emitSessionReconnect(remoteAddr, connType);
+            emitSessionChanged(oldSess->displayNum);
+
+            if(_config->getBoolean("session:kill:stop", false))
+            {
+                auto cmd = std::string("/usr/bin/killall -s SIGCONT -u ").append(oldSess->user);
+                std::system(cmd.c_str());
+            }
+
+            sessionRunSetxkbmapLayout(oldSess);
+
+#ifdef LTSM_CHANNELS
+            startSessionChannels(oldSess);
+#endif
+            runSessionScript(oldSess, _config->getString("session:connect"));
+
+            return oldSess->displayNum;
+        }
+
         // get owner screen
         auto newSess = runXvfbDisplayNewSession(loginSess->depth, loginSess->width, loginSess->height, userName);
         if(! newSess)
             return -1;
 
-        // auto close login session
-        loginSess->durationLimit = loginSess->aliveSec().count() + 1;
-
         // update screen
         newSess->environments = std::move(loginSess->environments);
         newSess->options = std::move(loginSess->options);
-        newSess->encryption = loginSess->encryption;
+        newSess->encryption = std::move(loginSess->encryption);
+        newSess->layout = std::move(loginSess->layout);
         newSess->remoteaddr = remoteAddr;
         newSess->conntype = connType;
         newSess->durationLimit = _config->getInteger("idle:timeout:logout", 0);
@@ -1674,6 +1727,9 @@ namespace LTSM
 
         // parent continue
         Application::debug("%s: user session started, pid: %d, display: %d", __FUNCTION__, newSess->pid2, newSess->displayNum);
+
+        sessionRunSetxkbmapLayout(newSess);
+
         runSystemScript(newSess, _config->getString("system:logon"));
         runSystemScript(newSess, _config->getString("system:connect"));
 
@@ -1848,11 +1904,20 @@ namespace LTSM
             if(xvfb->mode == XvfbMode::SessionOnline)
             {
                 xvfb->mode = XvfbMode::SessionSleep;
+                xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
                 xvfb->remoteaddr.clear();
                 xvfb->conntype.clear();
                 xvfb->encryption.clear();
+
                 createSessionConnInfo(xvfb, false);
                 emitSessionChanged(display);
+
+                // stop user process
+                if(_config->getBoolean("session:kill:stop", false))
+                {
+                    auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(xvfb->user);
+                    std::system(cmd.c_str());
+                }
             }
         }
 
@@ -2152,6 +2217,10 @@ namespace LTSM
             signal(SIGINT, SIG_IGN);
             signal(SIGHUP, SIG_IGN);
 
+            // wait new session started
+            while(xvfb->aliveSec() < std::chrono::seconds(3))
+                std::this_thread::sleep_for(550ms);
+
             auto dbusAddresses = Manager::getSessionDbusAddresses(xvfb->user);
      
             if(Manager::switchToUser(xvfb) && ! dbusAddresses.empty())
@@ -2196,9 +2265,69 @@ namespace LTSM
             // child exit
             std::exit(0);
         }
+#else
+        Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
 #endif
         return false;
     }
+
+#ifdef LTSM_TOKEN_AUTH
+    void  Manager::Object::tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
+    {
+        Application::info("%s: display: %d, serial: %s, certs: %d", __FUNCTION__, display, serial.c_str(), certs.size());
+
+        if(auto xvfb = findDisplaySession(display))
+        {
+            if(xvfb->mode == XvfbMode::SessionLogin)
+                emitTokenAuthAttached(display, serial, description, certs);
+        }
+    }
+
+    void  Manager::Object::tokenAuthDetached(const int32_t& display, const std::string& serial)
+    {
+        Application::info("%s: display: %d, serial: %s", __FUNCTION__, display, serial.c_str());
+
+        if(auto xvfb = findDisplaySession(display))
+        {
+            if(xvfb->mode == XvfbMode::SessionLogin)
+                emitTokenAuthDetached(display, serial);
+        }
+    }
+
+    void Manager::Object::tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
+    {
+        if(auto xvfb = findDisplaySession(display))
+        {
+            if(xvfb->mode == XvfbMode::SessionLogin)
+                emitTokenAuthReplyCheck(display, serial, cert, decrypt);
+        }
+    }
+
+    void Manager::Object::helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data)
+    {
+        if(auto xvfb = findDisplaySession(display))
+        {
+            if(xvfb->mode == XvfbMode::SessionLogin)
+                emitTokenAuthCheckPkcs7(display, serial, pin, cert, data);
+        }
+    }
+#else
+    void  Manager::Object::tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
+    {
+    }
+
+    void  Manager::Object::tokenAuthDetached(const int32_t& display, const std::string& serial)
+    {
+    }
+
+    void Manager::Object::helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data)
+    {
+    }
+
+    void Manager::Object::tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
+    {
+    }
+#endif
 
     bool Manager::Object::helperWidgetStartedAction(const int32_t & display)
     {
@@ -2278,20 +2407,35 @@ namespace LTSM
         return std::vector<std::string>(allowLogins.begin(), allowLogins.end());
     }
 
-    bool Manager::Object::busSetAuthenticateInfo(const int32_t & display, const std::string & login, const std::string & password)
+    bool Manager::Object::busSetAuthenticateToken(const int32_t & display, const std::string & login)
     {
-        std::thread([=]()
+        if(auto xvfb = this->findDisplaySession(display))
         {
-            if(auto xvfb = findDisplaySession(display))
+            std::thread([this, login, xvfb = std::move(xvfb)]()
             {
-                auto res = this->pamAuthenticate(xvfb, login, password);
-                Application::info("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateInfo", (res ? "success" : "failed"), login.c_str(), display);
-            }
-        }).detach();
+                auto res = this->pamAuthenticate(xvfb, login, "******", true);
+                Application::info("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateToken", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
+            }).detach();
+        }
+
         return true;
     }
 
-    bool Manager::Object::pamAuthenticate(XvfbSessionPtr xvfb, const std::string & login, const std::string & password)
+    bool Manager::Object::busSetAuthenticateLoginPass(const int32_t & display, const std::string & login, const std::string & password)
+    {
+        if(auto xvfb = this->findDisplaySession(display))
+        {
+            std::thread([this, login, password, xvfb = std::move(xvfb)]()
+            {
+                auto res = this->pamAuthenticate(xvfb, login, password, false);
+                Application::info("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateLoginPass", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
+            }).detach();
+        }
+
+        return true;
+    }
+
+    bool Manager::Object::pamAuthenticate(XvfbSessionPtr xvfb, const std::string & login, const std::string & password, bool token)
     {
         Application::info("%s: login: %s, display: %d", __FUNCTION__, login.c_str(), xvfb->displayNum);
 
@@ -2328,20 +2472,23 @@ namespace LTSM
             return false;
         }
 
-        // check user
-        if(! pam->authenticate())
+        if( ! token)
         {
-            emitLoginFailure(xvfb->displayNum, pam->error());
-            xvfb->loginFailures += 1;
-
-            if(loginFailuresConf < xvfb->loginFailures)
+            // check user/pass
+            if(! pam->authenticate())
             {
-                Application::error("%s: login failures limit, display: %d", __FUNCTION__, xvfb->displayNum);
-                emitLoginFailure(xvfb->displayNum, "failures limit");
-                displayShutdown(xvfb, true);
-            }
+                emitLoginFailure(xvfb->displayNum, pam->error());
+                xvfb->loginFailures += 1;
 
-            return false;
+                if(loginFailuresConf < xvfb->loginFailures)
+                {
+                    Application::error("%s: login failures limit, display: %d", __FUNCTION__, xvfb->displayNum);
+                    emitLoginFailure(xvfb->displayNum, "failures limit");
+                    displayShutdown(xvfb, true);
+                }
+
+                return false;
+            }
         }
 
         // auth success
@@ -2378,6 +2525,17 @@ namespace LTSM
         return true;
     }
 
+    void Manager::Object::sessionRunSetxkbmapLayout(XvfbSessionPtr xvfb)
+    {
+        if(xvfb && ! xvfb->layout.empty())
+        {
+            std::thread([this, ptr = std::move(xvfb)]
+            {
+                this->runSessionCommandSafe(ptr, "/usr/bin/setxkbmap", { "-layout", ptr->layout, "-option", "\"\"" });
+            }).detach();
+        }
+    }
+
     bool Manager::Object::busSetSessionKeyboardLayouts(const int32_t& display, const std::vector<std::string>& layouts)
     {
         if(auto xvfb = findDisplaySession(display))
@@ -2397,7 +2555,9 @@ namespace LTSM
                     os << ",";
             }
 
-            runSessionCommandSafe(xvfb, "/usr/bin/setxkbmap", { "-layout", quotedString(os.str()), "-option", "\"\"" });
+            xvfb->layout = quotedString(os.str());
+            sessionRunSetxkbmapLayout(xvfb);
+
             return true;
         }
         return false;
@@ -2435,7 +2595,7 @@ namespace LTSM
             {
                 xvfb->options.emplace(key, val);
 
-                if(key == "pulseaudio" && ! _config->getBoolean("channel:printer:disabled", false))
+                if(key == "pulseaudio" && ! _config->getBoolean("channel:pulseaudio:disabled", false))
                 {
                     auto socket = _config->getString("channel:pulseaudio:format", "/var/run/ltsm/pulse/%{user}");
                     xvfb->environments.emplace("PULSE_SERVER", socket);
@@ -2461,7 +2621,7 @@ namespace LTSM
             }
 
             if(!login.empty() && !pass.empty())
-                busSetAuthenticateInfo(display, login, pass);
+                busSetAuthenticateLoginPass(display, login, pass);
 
             return true;
         }
@@ -2511,6 +2671,10 @@ namespace LTSM
         auto pcscd = xvfb->options.find("pcscd");
         if(xvfb->options.end() != pcscd)
             startPcscdListener(xvfb, pcscd->second);
+
+        auto fuse = xvfb->options.find("fuse");
+        if(xvfb->options.end() != fuse)
+            startFuseListener(xvfb, fuse->second);
     }
 
     bool Manager::Object::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
@@ -2539,7 +2703,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(socketFolder))
         {
-            if(! std::filesystem::create_directory(socketFolder))
+            if(! createDirectory(socketFolder))
             {
                 Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", socketFolder.c_str(), strerror(errno), errno);
                 return false;
@@ -2559,7 +2723,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "slow");
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "slow", 5);
         // fix permissions job
         std::thread(fixPermissionJob, printerSocket, xvfb->uid, lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -2591,7 +2755,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(socketFolder))
         {
-            if(! std::filesystem::create_directory(socketFolder))
+            if(! createDirectory(socketFolder))
             {
                 Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", socketFolder.c_str(), strerror(errno), errno);
                 return false;
@@ -2611,7 +2775,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast");
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pulseAudioSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -2643,7 +2807,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(socketFolder))
         {
-            if(! std::filesystem::create_directory(socketFolder))
+            if(! createDirectory(socketFolder))
             {
                 Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", socketFolder.c_str(), strerror(errno), errno);
                 return false;
@@ -2663,7 +2827,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow");
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5);
         // fix permissions job
         std::thread(fixPermissionJob, saneSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -2695,7 +2859,7 @@ namespace LTSM
 
         if(! std::filesystem::is_directory(socketFolder))
         {
-            if(! std::filesystem::create_directory(socketFolder))
+            if(! createDirectory(socketFolder))
             {
                 Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", socketFolder.c_str(), strerror(errno), errno);
                 return false;
@@ -2715,13 +2879,74 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscdSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow");
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pcscdSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
         return true;
     }
+
+    bool Manager::Object::startFuseListener(XvfbSessionPtr xvfb, const std::string & clientUrl)
+    {
+        if(! xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse))
+        {
+            Application::warning("%s: display %d, redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "fuse");
+
+            busSendNotify(xvfb->displayNum, "Channel Disabled", Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("fuse"),
+                            NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            return false;
+        }
+
+        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
+
+        auto fuseFormat = _config->getString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
+        auto fuseFolder = Tools::replace(fuseFormat, "%{user}", xvfb->user);
+
+        if(! std::filesystem::is_directory(fuseFolder))
+        {
+            if(! createDirectory(fuseFolder))
+            {
+                Application::error("%s: %s failed, path: %s, error: %s, code: %d", __FUNCTION__, "mkdir", fuseFolder.c_str(), strerror(errno), errno);
+                return false;
+            }
+        }
+        else
+        {
+            umount(fuseFolder.c_str());
+        }
+
+        // fix mode 0700
+        std::filesystem::permissions(fuseFolder, std::filesystem::perms::group_all | std::filesystem::perms::others_all,
+                                        std::filesystem::perm_options::remove);
+
+        // fix owner user.user
+        setFileOwner(fuseFolder, xvfb->uid, xvfb->gid);
+
+        std::thread([this, ptr = std::move(xvfb), mountPoint = std::move(fuseFolder)]
+        {
+            // wait new session started
+            while(ptr->aliveSec() < std::chrono::seconds(3))
+                std::this_thread::sleep_for(350ms);
+
+            std::string dbusAddresses = Tools::join(Manager::getSessionDbusAddresses(ptr->user), ";");
+
+            this->emitFuseSessionStart(ptr->displayNum, dbusAddresses, mountPoint);
+        }).detach();
+
+        return true;
+    }
 #endif
+
+    bool Manager::Object::sessionAllowFUSE(const int32_t& display)
+    {
+        if(auto xvfb = findDisplaySession(display))
+        {
+            if(xvfb->options.end() != xvfb->options.find("fuse"))
+                return xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse);
+        }
+
+        return false;
+    }
 
     void Manager::Object::busSetDebugLevel(const std::string & level)
     {
@@ -2843,7 +3068,7 @@ namespace LTSM
         return true;
     }
 
-    bool Manager::Object::busCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    bool Manager::Object::busCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
         auto modes = { "ro", "rw", "wo" };
 
@@ -2859,7 +3084,7 @@ namespace LTSM
             return false;
         }
 
-        emitCreateChannel(display, client, cmode, server, smode);
+        emitCreateChannel(display, client, cmode, server, smode, speed);
         return true;
     }
 
@@ -2929,7 +3154,7 @@ namespace LTSM
             // create
             if(! std::filesystem::is_directory(folderPath))
             {
-                if(! std::filesystem::create_directory(folderPath))
+                if(! createDirectory(folderPath))
                 {
                     Application::error("%s: %s failed, path: `%s', error: %s, code: %d", __FUNCTION__, "mkdir", folderPath.c_str(), strerror(errno), errno);
                     return false;
@@ -2993,8 +3218,10 @@ namespace LTSM
                 {
                     this->configSet(jsonFile.toObject());
 
-                    Application::info("%s: reload config %s, file: %s", "InotifyWatch", "success", filename.c_str());
-                    Application::setDebugLevel(this->configGetString("service:debug"));
+                    Application::notice("%s: reload config %s, file: %s", "InotifyWatch", "success", filename.c_str());
+
+                    if(Manager::serviceAdaptor)
+                        Manager::serviceAdaptor->configReloadedEvent();
                 }
             }
         });
@@ -3013,7 +3240,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_service_name);
+        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
         if(! conn)
         {
             Application::error("%s: dbus connection failed", "ServiceStart");
@@ -3104,7 +3331,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("exception: %s", err.what());
+        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
     }
     catch(int val)
     {

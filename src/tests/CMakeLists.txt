@@ -5,7 +5,7 @@ foreach(DIR IN ITEMS json streambuf unixsocket framebuf xcb)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_test_${DIR} PRIVATE ${EXTRA_CFLAGS})
-    target_compile_options(LTSM_test_${DIR} PRIVATE -DLTSM_SOCKET_TLS -DLTSM_SOCKET_ZLIB)
+    target_compile_options(LTSM_test_${DIR} PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB)
 
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/common)
 

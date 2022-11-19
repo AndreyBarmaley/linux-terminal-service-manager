@@ -24,10 +24,10 @@
 #define _LTSM_VNC2SDL_
 
 #include <chrono>
-#include <thread>
 #include <string>
 #include <memory>
 #include <atomic>
+#include <stdexcept>
 
 #include "ltsm_global.h"
 #include "ltsm_application.h"
@@ -35,22 +35,75 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
-#define LTSM_VNC2SDL_VERSION 20221101
+#ifdef LTSM_RUTOKEN
+#include "pki-core/common.h"
+#endif
+
+#define LTSM_VNC2SDL_VERSION 20221115
 
 namespace LTSM
 {
-    class Vnc2SDL : public Application, XCB::XkbClient, protected RFB::ClientDecoder
+    struct token_error : public std::runtime_error
+    {
+        explicit token_error(const std::string & what) : std::runtime_error(what){}
+        explicit token_error(const char* what) : std::runtime_error(what){}
+    };
+
+    class TokenAuthInterface
+    {
+    protected:
+        virtual void attachedDevice(const std::string & serial) = 0;
+        virtual void detachedDevice(const std::string & serial) = 0;
+
+    public:
+        TokenAuthInterface() = default;
+        virtual ~TokenAuthInterface() = default;
+
+
+        virtual std::vector<uint8_t> decryptPkcs7(const std::string & serial, const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) = 0;
+    };
+
+#ifdef LTSM_RUTOKEN
+    class RutokenWrapper : public TokenAuthInterface
+    {
+        std::thread thscan;
+        std::atomic<bool> shutdown{false};
+        ChannelClient* sender = nullptr;
+
+    protected:
+        void attachedDevice(const std::string & serial) override;
+        void detachedDevice(const std::string & serial) override;
+
+    public:
+        RutokenWrapper(const std::string &, ChannelClient &);
+        ~RutokenWrapper();
+
+        std::vector<uint8_t> decryptPkcs7(const std::string & serial, const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) override;
+    };
+#endif
+
+    struct ColorCursor
+    {
+        std::vector<uint8_t> pixels;
+        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> surface { nullptr, SDL_FreeSurface };
+        std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
+    };
+
+    class Vnc2SDL : public Application, public XCB::XkbClient, protected RFB::ClientDecoder
     {
         PixelFormat             format;
         RFB::SecurityInfo       rfbsec;
 
         std::list<std::string>  dropFiles;
         std::string             host{"localhost"};
-        std::string             username;
+        std::string             username, seamless, share, tokenLib;
         std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<FrameBuffer> fb;
+        std::unique_ptr<TokenAuthInterface> token;
+
+        std::unordered_map<uint32_t, ColorCursor> cursors;
 
         XCB::Region             dirty;
         std::mutex              lockRender;
@@ -70,6 +123,7 @@ namespace LTSM
 #ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
 #endif
+        bool                    alwaysRunning = false;
         std::atomic<bool>       focusLost = false;
 
     protected:
@@ -93,11 +147,18 @@ namespace LTSM
         void                    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) override;
         void                    fbUpdateEvent(void) override;
         void                    cutTextEvent(std::vector<uint8_t> &&) override;
+        void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) override;
+
 #ifdef LTSM_CHANNELS
         void                    xkbStateChangeEvent(int) override;
         void                    decodingLtsmEvent(const std::vector<uint8_t> &) override;
+        void                    systemFuseProxy(const JsonObject &) override;
+        void                    systemTokenAuth(const JsonObject &) override;
+        void                    systemLoginSuccess(const JsonObject &) override;
 #endif
         int    		        start(void) override;
+
+        bool                    isAlwaysRunning(void) const;
     };
 }
 

@@ -119,7 +119,8 @@ namespace LTSM
             bool                authVncInit(const std::string &);
             bool                authVenCryptInit(const SecurityInfo &);
 
-            void                sendFrameBufferUpdate(const XcbFrameBuffer &);
+            void                sendFrameBufferUpdate(const FrameBuffer &);
+            void                sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
             void                sendColourMap(int first);
             void                sendBellEvent(void);
             void                sendCutTextEvent(const std::vector<uint8_t> &);

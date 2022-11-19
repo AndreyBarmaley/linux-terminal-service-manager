@@ -35,9 +35,86 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+#ifdef LTSM_CHANNELS
+    /* FuseSessionProxy */
+    FuseSessionProxy::FuseSessionProxy(const std::string& address, ChannelClient & client)
+        : ProxyInterfaces(sdbus::createSessionBusConnectionWithAddress(address), LTSM::dbus_session_fuse_name, LTSM::dbus_session_fuse_path), sender(& client)
+    {
+        registerProxy();
+    }
+        
+    FuseSessionProxy::~FuseSessionProxy()
+    {
+        unregisterProxy();
+    }
+
+    void FuseSessionProxy::onRequestOpen(const std::string& path, const uint32_t& cookie, const int32_t& flags)
+    {
+        JsonObjectStream jos;
+
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "open");
+        jos.push("path", path);
+        jos.push("cookie", static_cast<size_t>(cookie));
+        jos.push("flags", flags);
+
+        sender->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void FuseSessionProxy::onRequestRead(const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset)
+    {   
+        JsonObjectStream jos;
+
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "read");
+        jos.push("path", path);
+        jos.push("cookie", static_cast<size_t>(cookie));
+        jos.push("size", static_cast<size_t>(size));
+        jos.push("offset", offset);
+
+        sender->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void FuseSessionProxy::onRequestReadDir(const std::string& path, const uint32_t& cookie)
+    {   
+        JsonObjectStream jos;
+
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "readdir");
+        jos.push("path", path);
+        jos.push("cookie", static_cast<size_t>(cookie));
+
+        sender->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void FuseSessionProxy::onRequestGetAttr(const std::string& path, const uint32_t& cookie)
+    {
+        JsonObjectStream jos;
+
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "getattr");
+        jos.push("path", path);
+        jos.push("cookie", static_cast<size_t>(cookie));
+
+        sender->sendLtsmEvent(Channel::System, jos.flush());
+    }
+#endif
+
     /* Connector::VNC */
     Connector::VNC::~VNC()
     {
+#ifdef LTSM_CHANNELS
+        if(fuse)
+        {
+            try
+            {
+                fuse->umount();
+            }
+            catch(const sdbus::Error & err)
+            {
+            }
+        }
+#endif
         if(0 < displayNum())
         {
             busConnectorTerminated(displayNum());
@@ -95,6 +172,15 @@ namespace LTSM
 
 #ifdef LTSM_CHANNELS
             userSession =  true;
+
+            std::thread([this]
+            {
+                JsonObjectStream jos;
+                jos.push("cmd", SystemCommand::LoginSuccess);
+                jos.push("action", true);
+
+                static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+            }).detach();
 #endif
         }
     }
@@ -351,7 +437,9 @@ namespace LTSM
         }
 
         if(auto opts = jo.getObject("options"))
+        {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
+        }
     }
 
     void Connector::VNC::systemKeyboardChange(const JsonObject & jo)
@@ -497,12 +585,11 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode)
+    void Connector::VNC::onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
         if(0 < displayNum() && display == displayNum())
         {
-            // FIXME speed
-            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::Speed::Medium);
+            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::connectorSpeed(speed));
         }
     }
 
@@ -514,12 +601,11 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
+    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit)
     {
         if(0 < displayNum() && display == displayNum())
         {
-            // FIXME listen queue
-            createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), 5}, Channel::connectorSpeed(speed));
+            createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), limit}, Channel::connectorSpeed(speed));
         }
     }
 
@@ -538,5 +624,157 @@ namespace LTSM
             setChannelDebug(channel, debug);
         }
     }
+
+    void Connector::VNC::systemFuseProxy(const JsonObject & jo)
+    {
+        std::string cmd = jo.getString("fuse");
+        std::string path = jo.getString("path");
+        size_t cookie = jo.getInteger("cookie");
+        bool error = jo.getBoolean("error");
+        int errno2 = jo.getInteger("errno");
+
+        if(error)
+            Application::warning("%s: fuse failed: %s, display: %d, path: `%s', cookie: %d, errno: %d", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie, errno2);
+        else
+            Application::debug("%s: fuse cmd: %s, display: %d, path: `%s', cookie: %d", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie);
+
+        if(! fuse)
+        {
+            Application::warning("%s: fuse not started, display: %d", __FUNCTION__, displayNum());
+            return;
+        }
+
+        try
+        {
+            if(cmd == "getattr")
+            {
+                if(auto st = jo.getObject("stat"))
+                    fuse->replyGetAttr(error, errno2, path, cookie, st->toStdMap<int>());
+            }
+            else
+            if(cmd == "readdir")
+            {
+                if(auto ja = jo.getArray("names"))
+                    fuse->replyReadDir(error, errno2, path, cookie, ja->toStdVector<std::string>());
+            }
+            else
+            if(cmd == "open")
+            {
+                fuse->replyOpen(error, errno2, path, cookie);
+            }
+            else
+            if(cmd == "read")
+            {
+                fuse->replyRead(error, errno2, path, cookie, jo.getString("data"));
+            }
+            else
+            {
+                Application::warning("%s: unknown cmd: %s, display: %d", __FUNCTION__, cmd.c_str(), displayNum());
+            }
+        }
+        catch(const sdbus::Error & err)
+        {
+            LTSM::Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), displayNum());
+            fuse.reset();
+        }
+    }
+
+    void Connector::VNC::onFuseSessionStart(const int32_t& display, const std::string& dbusAddresses, const std::string& mountPoint)
+    {
+        LTSM::Application::info("%s: display: %d, dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
+        int ver = 0;
+
+        if(0 < displayNum() && display == displayNum())
+        {
+            try
+            {
+                fuse = std::make_unique<FuseSessionProxy>(dbusAddresses, static_cast<ChannelClient &>(*this));
+                ver = fuse->getVersion();
+            }
+            catch(const sdbus::Error & err)
+            {
+                LTSM::Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), display);
+                fuse.reset();
+            }
+
+            if(0 < ver)
+            {
+                if(! fuse->mount(mountPoint))
+                {
+                    Application::warning("%s: %s: failed, path: `%s'", __FUNCTION__, "fuse mount", mountPoint.c_str());
+                    fuse->shutdown();
+                    fuse.reset();
+                }
+            }
+        }
+    }
+
+    void Connector::VNC::systemTokenAuth(const JsonObject & jo)
+    {
+        std::string action = jo.getString("action");
+        std::string serial = jo.getString("serial");
+
+        LTSM::Application::info("%s: action: %s, display: %d, serial: %s", __FUNCTION__, action.c_str(), displayNum(), serial.c_str());
+
+        if(action == "attach")
+        {
+            if(auto ja = jo.getArray("certs"))
+                tokenAuthAttached(displayNum(), serial, jo.getString("description"), ja->toStdVector<std::string>());
+        }
+        else
+        if(action == "detach")
+        {
+            tokenAuthDetached(displayNum(), serial);
+        }
+        else
+        if(action == "reply")
+        {
+            tokenAuthReply(displayNum(), serial, jo.getInteger("cert"), jo.getString("decrypt"));
+        }
+        else
+        {
+            Application::warning("%s: unknown action: %s, display: %d", __FUNCTION__, action.c_str(), displayNum());
+        }
+    }
+
+    void Connector::VNC::onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7)
+    {
+        if(0 < displayNum() && display == displayNum())
+        {
+            JsonObjectStream jos;
+            jos.push("cmd", SystemCommand::TokenAuth);
+            jos.push("action", "check");
+            jos.push("serial", serial);
+            jos.push("pin", pin);
+            jos.push("cert", static_cast<size_t>(cert));
+            jos.push("data", Tools::convertBinary2JsonString(RawPtr(pkcs7.data(), pkcs7.size())));
+
+            static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+        }
+    }
+
+    void Connector::VNC::onLoginFailure(const int32_t & display, const std::string & msg)
+    {
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::LoginSuccess);
+        jos.push("action", false);
+        jos.push("error", msg);
+
+        static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void Connector::VNC::systemChannelError(const JsonObject & jo)
+    {
+        auto channel = jo.getInteger("id");
+        auto code = jo.getInteger("code");
+        auto err = jo.getString("error");
+
+        Application::info("%s: channel: %d, errno: %d, display: %d, error: `%s'", __FUNCTION__, channel, displayNum(), code, err.c_str());
+
+        if(isUserSession())
+            busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
+                                NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+    }
 #endif
+
 }

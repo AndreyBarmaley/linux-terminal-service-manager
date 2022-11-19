@@ -27,24 +27,24 @@ docker run -i -t docker.io/ltsm/devel
 
 # LTSM_service
 основная служба, менеджер dbus ltsm.service.manager, получает команды от LTSM_connector, запускает login и users сессии на базе Xvfb (Лицензия GPLv3)  
-see also: [wiki: LTSM service](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service)  
+см дополнительно: [wiki: LTSM service](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-service)  
 
 # LTSM_connector
 является только обработчиком сетевого протокола VNC и RDP, а основной сетевой частью занимается служебный xinetd/(systemd sockets), также он является клиентом dbus ltsm.manager.service, подключается к Xvfb через механизм shared memory (Лицензия на коннектор Affero GPLv3)  
-see also: [wiki: LTSM connector](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector)  
+см дополнительно: [wiki: LTSM connector](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-connector)  
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/123924335-66914a00-d979-11eb-9025-9d6bcf3fa250.png)  
+![ltsm_helper_token](https://user-images.githubusercontent.com/8620726/202207854-c9c01fa6-4654-416e-a11e-c8b8772a3905.png)  
 графическая утилита входа в систему, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
-see also: [wiki: LTSM config](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description))  
+см дополнительно: [wiki: LTSM config](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description))  
 
 # LTSM_sessions
 ![ltsm_session](https://user-images.githubusercontent.com/8620726/119793454-23e5d900-bec6-11eb-9978-ee31f44360ae.png)  
 графическая утилита управления сессиями пользователей, является клиентом dbus ltsm.manager.service (Лицензия GPLv3)  
-see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator)  
+см дополнительно: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator)  
 
-# LTSM_vnc2sdl
- 
+# LTSM_vnc2sdl 
 Это экспериментальный графический клиент, в котором реализован механизм множественных каналов данных, максимально до 253.  
 
 **Основные реализованные улучшения:**
@@ -55,6 +55,8 @@ see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-ter
 * Реализован редирект звука через **pulseaudio**
 * Реализована поддержка **pkcs11** через редирект **pcscd**
 * Реализовано сканирование документов (с помощью дополнительного [backend для SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
+* Реализован редирект директорий через **FUSE** (пока только в режиме read only)
+* Реализована аутентификация в виртуальную сессию через **rutoken** с хранилищем сертификатов в **LDAP**
  
 Механизм каналов реализован через абстрактные схемы ```unix://, file://, socket://```, и режим доступа ```ReadOnly, WriteOnly, ReadWrite```.  
 Например для обычной передачи файла создается типовой канал (клиент сервер): ```file:///src_file1 (ReadOnly)``` и ```file:///dst_file2 (WriteOnly)```, далее в сессии пользователя запускаются информационные GUI диалоги о передаче и выборе папки назначения, после которых файл автоматически сохранится в удаленной сессии (дополнительно реализованы уведомления через dbus desktop notify).  
@@ -64,4 +66,9 @@ C помощью данной схемы каналов возможна пер�
 
 Все эти реализованные возможности вы можете протестировать в версии **docker**.  
 
-Ведутся работы по добавлению **folder redirection** (через **FUSE**), по записи видео всех рабочих сессий (видеофиксация), по ускорению графики с использованием GPU (Cuda API).  
+**Roadmap**
+* добавить **x264**, **VP8** encoding (как видео поток сессии)
+* добавить записи видео всех рабочих сессий (видеофикация)
+* добавить поддержку [**VirtualGL**](https://virtualgl.org/)
+* добавить редирект video через **PipeWare**
+* поработать с графикой через **Cuda GPU** (пока нет технических возможностей)

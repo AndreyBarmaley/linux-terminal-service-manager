@@ -36,9 +36,9 @@
 #include <security/pam_misc.h>
 
 #include "ltsm_global.h"
-#include "ltsm_dbus_proxy.h"
+#include "ltsm_service_proxy.h"
 #include "ltsm_application.h"
-#include "ltsm_dbus_adaptor.h"
+#include "ltsm_service_adaptor.h"
 #include "ltsm_json_wrapper.h"
 
 namespace LTSM
@@ -49,6 +49,7 @@ namespace LTSM
         explicit service_error(const char* what) : std::runtime_error(what){}
     };
 
+    /// PamService
     class PamService
     {
     protected:
@@ -68,6 +69,7 @@ namespace LTSM
         pam_handle_t* get(void);
     };
 
+    /// PamAuthenticate
     class PamAuthenticate : public PamService
     {
         static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
@@ -85,6 +87,7 @@ namespace LTSM
         bool authenticate(void);
     };
 
+    /// PamSession
     class PamSession : public PamService
     {
         struct pam_conv pamc = { misc_conv, nullptr };
@@ -103,6 +106,7 @@ namespace LTSM
         void setSessionOpenned(void);
     };
 
+    /// Manager
     namespace Manager
     {
         class Object;
@@ -111,6 +115,7 @@ namespace LTSM
     enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep, SessionShutdown };
     enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
 
+    /// Flags
     namespace Flags
     {
         enum AllowChannel : size_t
@@ -131,6 +136,7 @@ namespace LTSM
 
     SessionPolicy sessionPolicy(const std::string &);
 
+    /// XvfbSession
     struct XvfbSession
     {
         std::unordered_map<std::string, std::string>
@@ -148,6 +154,7 @@ namespace LTSM
         std::string                     remoteaddr;
         std::string                     conntype;
         std::string                     encryption;
+        std::string                     layout;
 
         std::chrono::system_clock::time_point tpstart;
 
@@ -227,6 +234,7 @@ namespace LTSM
         void                            redirectFdNull(int);
         void                            closefds(void);
         bool                            checkFileReadable(const std::filesystem::path &);
+        bool                            createDirectory(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
 	bool			        runSystemScript(XvfbSessionPtr, const std::string & cmd);
         bool	                        switchToUser(XvfbSessionPtr);
@@ -250,6 +258,7 @@ namespace LTSM
             void                        waitPidBackgroundSafe(pid_t pid);
 
             bool                        sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
+            void                        sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
 #ifdef LTSM_CHANNELS
             static void                 transferFileStartBackground(Object* owner, XvfbSessionPtr,
@@ -271,7 +280,7 @@ namespace LTSM
             bool			checkXvfbSocket(int display) const;
 	    void			removeXvfbSocket(int display) const;
             bool			displayShutdown(XvfbSessionPtr, bool emitSignal);
-            bool                        pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password);
+            bool                        pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
             std::list<std::string>      getAllowLogins(void) const;
 
 	    void			sessionsTimeLimitAction(void);
@@ -285,6 +294,9 @@ namespace LTSM
             ~Object();
 
             void                        shutdownService(void);
+            void                        configReloadedEvent(void);
+
+            bool                        sessionAllowFUSE(const int32_t& display);
 
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
@@ -311,7 +323,7 @@ namespace LTSM
             bool                        busSendMessage(const int32_t& display, const std::string& message) override;
             bool                        busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency) override;
 	    bool			busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) override;
-            bool                        busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode) override;
+            bool                        busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             bool                        busDestroyChannel(const int32_t& display, const uint8_t& channel) override;
             bool                        busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files) override;
             bool                        busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile) override;
@@ -323,12 +335,18 @@ namespace LTSM
             std::string                 helperGetDateFormat(const int32_t & display) override;
             bool                        helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
 
-            bool                        busSetAuthenticateInfo(const int32_t & display, const std::string & login, const std::string & password) override;
+            bool                        busSetAuthenticateLoginPass(const int32_t & display, const std::string & login, const std::string & password) override;
+            bool                        busSetAuthenticateToken(const int32_t & display, const std::string & login) override;
             std::vector<xvfb2tuple>     busGetSessions(void) override;
 
             bool                        busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) override;
             bool                        busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) override;
             bool                        busRenderClear(const int32_t& display) override;
+
+            void                        tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs) override;
+            void                        tokenAuthDetached(const int32_t& display, const std::string& serial) override;
+            void                        tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt) override;
+            void                        helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data) override;
 
 #ifdef LTSM_CHANNELS
             void                        startSessionChannels(XvfbSessionPtr);
@@ -336,6 +354,7 @@ namespace LTSM
             bool                        startPulseAudioListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startPcscdListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
 #endif
         };
 

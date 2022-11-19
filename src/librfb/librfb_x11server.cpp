@@ -76,19 +76,7 @@ namespace LTSM
         // process rfb messages background
         auto rfbThread = std::thread([=]()
         {
-            try
-            {
-                this->rfbMessagesLoop();
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", "X11Server::rfbCommunication", err.what());
-            }
-            catch(...)
-            {
-            }
-
-            this->rfbMessagesShutdown();
+            this->rfbMessagesLoop();
         });
 
         bool mainLoop = true;
@@ -132,6 +120,10 @@ namespace LTSM
                 {
                     auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
                     damageRegion.join(notify->area);
+                }
+                else if(xcbDisplay()->isXFixesCursorNotify(ev))
+                {
+                    clientUpdateCursor = isClientEncodings(RFB::ENCODING_RICH_CURSOR);
                 }
                 else if(xcbDisplay()->isRandrCRTCNotify(ev))
                 {
@@ -213,6 +205,12 @@ namespace LTSM
 
                 damageRegion.reset();
                 clientUpdateReq = false;
+            }
+
+            if(clientUpdateCursor && ! isUpdateProcessed())
+            {
+                sendUpdateRichCursor();
+                clientUpdateCursor = false;
             }
         } // main loop
 
@@ -373,9 +371,35 @@ namespace LTSM
         }
     }
 
+    void RFB::X11Server::sendUpdateRichCursor(void)
+    {
+        XCB::CursorImage replyCursor = xcbDisplay()->cursorImage();
+        auto reply = replyCursor.reply();
+
+        if(auto ptr = replyCursor.data())
+        {
+            size_t argbSize = reply->width * reply->height;
+            size_t dataSize = replyCursor.size();
+
+            if(dataSize == argbSize)
+            {
+                auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
+                auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
+
+                sendFrameBufferUpdateRichCursor(cursorFB, reply->xhot, reply->yhot);
+            }
+        }
+    }
+
     void RFB::X11Server::sendFrameBufferUpdateEvent(const XCB::Region & reg)
     {
         xcbDisplay()->damageSubtrack(reg);
+
+        if(clientUpdateCursor)
+        {
+            sendUpdateRichCursor();
+            clientUpdateCursor = false;
+        }
     }
 
     XcbFrameBuffer RFB::X11Server::xcbFrameBuffer(const XCB::Region & reg) const

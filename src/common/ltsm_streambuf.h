@@ -45,7 +45,10 @@ namespace LTSM
         virtual uint8_t* data(void) = 0;
         virtual const uint8_t* data(void) const = 0;
 
-        std::string     hexstring(std::string_view sep = ", ", bool prefix = true) const;
+        std::string     hexString(std::string_view sep = ", ", bool prefix = true) const;
+        std::string     toString(void) const;
+
+        uint32_t        crc32b(void) const;
     };
 
     /// @brief: raw array wrapper
@@ -87,24 +90,23 @@ namespace LTSM
         template<size_t N>
         BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
 
-        template<typename T>
+        template<typename T = std::vector<uint8_t>>
         BinaryBuf(T && v) noexcept { assign(std::forward<T>(v)); }
 
         BinaryBuf &     operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
-        template<typename T>
+
+        template<typename T = std::vector<uint8_t>>
         BinaryBuf &     operator= (T && v) noexcept { assign(std::forward<T>(v)); return *this; }
 
         BinaryBuf &     append(const uint8_t*, size_t);
         BinaryBuf &     append(const std::vector<uint8_t> &);
         BinaryBuf &     append(std::string_view);
-        std::string     tostring(void) const;
         BinaryBuf       copy(void) const;
 
         size_t          size(void) const override;
         uint8_t*        data(void) override;
         const uint8_t*  data(void) const override;
 
-        uint32_t        crc32b(void) const;
     };
 
     /// @brief: base stream interface

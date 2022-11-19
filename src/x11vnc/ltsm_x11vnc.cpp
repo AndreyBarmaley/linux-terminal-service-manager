@@ -69,7 +69,11 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
-                configSetInteger("display", std::stoi(argv[it + 1]));
+                auto str = argv[it + 1];
+                if(str[0] == ':')
+                    configSetInteger("display", std::stoi(str + 1));
+                else
+                    configSetInteger("display", std::stoi(str));
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc)
@@ -196,11 +200,7 @@ namespace LTSM
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("exception: %s", err.what());
-                }
-                catch(...)
-                {
-                    Application::error("exception: %s", "unknown");
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
                 }
 
                 close(sock);
@@ -225,11 +225,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("exception: %s", err.what());
-        }
-        catch(...)
-        {
-            Application::error("exception: %s", "unknown");
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
         }
 
         return res;
@@ -258,7 +254,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("exception: %s", err.what());
+        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

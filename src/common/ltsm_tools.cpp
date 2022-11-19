@@ -20,10 +20,18 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <sys/types.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include <sys/un.h>
 #include <sys/socket.h>
+
+#include <zlib.h>
+
+#ifdef LTSM_WITH_GNUTLS
+#include <gnutls/gnutls.h>
+#endif
 
 #include <ctime>
 #include <cstdio>
@@ -42,10 +50,209 @@
 #include <filesystem>
 
 #include "ltsm_tools.h"
+#include "ltsm_sockets.h"
+#include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
 namespace LTSM
 {
+    std::filesystem::path Tools::resolveSymLink(const std::filesystem::path & path)
+    {
+        return std::filesystem::exists(path) && std::filesystem::is_symlink(path) ?
+            resolveSymLink(std::filesystem::read_symlink(path)) : path;
+    }
+
+    std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)
+    {
+        std::vector<uint8_t> res;
+
+        if(arr.data() && arr.size())
+        {
+            res.resize(::compressBound(arr.size()));
+            uLong dstsz = res.size();
+            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz,
+                        reinterpret_cast<const Bytef*>(arr.data()), arr.size());
+
+            if(ret == Z_OK)
+                res.resize(dstsz);
+            else
+            {
+                res.clear();
+                Application::error("%s: %s failed, error: %d", __FUNCTION__, "compress", ret);
+            }
+        }
+    
+        return res;
+    }
+
+    std::vector<uint8_t> Tools::zlibUncompress(const ByteArray & arr, size_t real)
+    {
+        std::vector<uint8_t> res;
+
+        if(arr.data() && arr.size())
+        {
+            res.resize(real ? real : arr.size() * 7);
+            uLong dstsz = res.size();
+            int ret = Z_BUF_ERROR;
+
+            while(Z_BUF_ERROR ==
+                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
+                                      reinterpret_cast<const Bytef*>(arr.data()), arr.size())))
+            {
+                dstsz = res.size() * 2;
+                res.resize(dstsz);
+            }
+            
+            if(ret == Z_OK)
+                res.resize(dstsz);
+            else
+            {
+                res.clear();
+                Application::error("%s: %s failed, error: %d", __FUNCTION__, "uncompress", ret);
+            }
+        }
+
+        return res;
+    }
+
+    char base64EncodeChar(char v)
+    {
+        // 0 <=> 25
+        if(v <= ('Z' - 'A'))
+            return v + 'A';
+
+        // 26 <=> 51
+        if(v <= (26 + ('z' - 'a')))
+            return v + 'a' - 26;
+            
+        // 52 <=> 61
+        if(v <= (52 + ('9' - '0')))
+            return v + '0' - 52;
+                  
+        if(v == 62)
+            return '+';
+                
+        if(v == 63)
+            return '/';
+
+        return 0;
+    }
+
+    uint8_t base64DecodeChar(char v)
+    {
+        if(v == '+')
+            return 62;
+
+        if(v == '/')
+            return 63;
+
+        if('0' <= v && v <= '9')
+            return v - '0' + 52;
+
+        if('A' <= v && v <= 'Z')
+            return v - 'A';
+
+        if('a' <= v && v <= 'z')
+            return v - 'a' + 26;
+    
+        return 0;
+    }
+
+    std::string Tools::base64Encode(const ByteArray & arr)
+    {
+        size_t len = 4 * arr.size() / 3 + 1;
+
+        std::string res;
+        res.reserve(len);
+
+        auto beg = arr.data();
+        auto end = beg + arr.size();
+
+        while(beg < end)
+        {
+            auto next1 = beg + 1;
+            auto next2 = beg + 2;
+
+            uint32_t b1 = *beg;
+            uint32_t b2 = next1 < end ? *next1 : 0;
+            uint32_t b3 = next2 < end ? *next2 : 0;
+
+            uint32_t triple = (b1 << 16) | (b2 << 8) | b3;
+    
+            res.push_back(base64EncodeChar(0x3F & (triple >> 18)));
+            res.push_back(base64EncodeChar(0x3F & (triple >> 12)));
+            res.push_back(next1 < end ? base64EncodeChar(0x3F & (triple >> 6)) : '=');
+            res.push_back(next2 < end ? base64EncodeChar(0x3F & triple) : '=');
+
+            beg = next2 + 1;
+        }
+
+        return res;
+    }
+
+    std::vector<uint8_t> Tools::base64Decode(const std::string & str)
+    {
+        std::vector<uint8_t> res;
+
+        if(0 < str.length() && 0 == (str.length() % 4))
+        {
+            size_t len = 3 * str.length() / 4;
+        
+            if(str[str.length() - 1] == '=') len--;
+            if(str[str.length() - 2] == '=') len--;
+
+            res.reserve(len);
+
+            for(size_t ii = 0; ii < str.length(); ii += 4)
+            {
+                uint32_t sxtet_a = base64DecodeChar(str[ii]);
+                uint32_t sxtet_b = base64DecodeChar(str[ii + 1]);
+                uint32_t sxtet_c = base64DecodeChar(str[ii + 2]);
+                uint32_t sxtet_d = base64DecodeChar(str[ii + 3]);
+
+                uint32_t triple = (sxtet_a << 18) + (sxtet_b << 12) + (sxtet_c << 6) + sxtet_d;
+
+                if(res.size() < len) res.push_back((triple >> 16) & 0xFF);
+                if(res.size() < len) res.push_back((triple >> 8) & 0xFF);
+                if(res.size() < len) res.push_back(triple & 0xFF);
+            }
+        }
+        else
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "base64");
+        }
+
+        return res;
+    }
+
+    std::string Tools::convertBinary2JsonString(const ByteArray & buf)
+    {
+        auto zip = zlibCompress(buf);
+    
+        StreamBuf sb;
+        sb.writeIntBE32(buf.size());
+        sb.write(zip);
+        
+        return base64Encode(sb.rawbuf());
+     }
+
+    std::vector<uint8_t> Tools::convertJsonString2Binary(const std::string & content)
+    {
+        StreamBuf sb(Tools::base64Decode(content));
+
+        if(4 < sb.last())
+        {
+            uint32_t real = sb.readIntBE32();
+            return Tools::zlibUncompress(sb.read(), real);
+        }
+        else
+        {
+            Application::error("%s: decode failed, streambuf size: %d, base64 size: %d", __FUNCTION__, sb.last(), content.size());
+        }
+
+        return std::vector<uint8_t>();
+    }
+
     std::vector<uint8_t> Tools::randomBytes(size_t bytesCount)
     {
         std::vector<uint8_t> rand(256);
@@ -147,10 +354,21 @@ namespace LTSM
         return str;
     }
 
+    std::tuple<std::string, int, int, std::filesystem::path, std::string> Tools::getLocalUserInfo(void)
+    {
+        struct passwd* st = getpwuid(getuid());
+        if(st)
+            return std::make_tuple<std::string, int, int, std::filesystem::path, std::string>(st->pw_name, (int)st->pw_uid, (int)st->pw_gid, st->pw_dir, st->pw_shell);
+
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid", strerror(errno), errno);
+
+        return std::make_tuple<std::string, uid_t, gid_t, std::filesystem::path, std::string>("nobody", 99, 99, "/tmp", "/bin/false");
+    }
+
     std::string Tools::getLocalUsername(void)
     {
-        auto ptr = std::getenv("USER");
-        return std::string(ptr ? ptr : "");
+        auto userInfo = getLocalUserInfo();
+        return std::get<0>(userInfo);
     }
 
     std::string Tools::lower(std::string str)

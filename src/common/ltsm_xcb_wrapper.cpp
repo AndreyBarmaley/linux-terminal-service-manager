@@ -400,6 +400,22 @@ namespace LTSM
         return res;
     }
 
+    /* XCB::CursorImage */
+    uint32_t* XCB::CursorImage::data(void)
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
+    }
+
+    const uint32_t* XCB::CursorImage::data(void) const
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
+    }
+
+    size_t XCB::CursorImage::size(void) const
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image_length(reply().get()) : 0;
+    }
+
     /* XCB::Connector */
     XCB::Connector::Connector(size_t displayNum, const AuthCookie* cookie)
     {
@@ -529,6 +545,18 @@ namespace LTSM
     XCB::Damage XCB::Connector::createDamage(xcb_drawable_t win, int level)
     {
         return Damage(win, level, _conn);
+    }
+
+    XCB::CursorImage XCB::Connector::cursorImage(void)
+    {
+        auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_image, _conn);
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_image");
+        }
+
+        return xcbReply;
     }
 
     XCB::XFixesRegion XCB::Connector::createFixesRegion(const Region & reg)
@@ -1111,6 +1139,8 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "XKB extension");
             throw xcb_error(NS_FuncName);
         }
+
+        xcb_xfixes_select_cursor_input(_conn, root(), XCB_XFIXES_CURSOR_NOTIFY_MASK_DISPLAY_CURSOR);
 
         /*
         	uint8_t _xkbevent;

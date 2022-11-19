@@ -107,6 +107,7 @@ namespace LTSM
         const int ENCODING_EXT_DESKTOP_SIZE = -308;
         const int ENCODING_CONTINUOUS_UPDATES = -313;
         const int ENCODING_LAST_RECT = -224;
+        const int ENCODING_RICH_CURSOR = -239;
         const int ENCODING_COMPRESS9 = -247;
         const int ENCODING_COMPRESS8 = -248;
         const int ENCODING_COMPRESS7 = -249;

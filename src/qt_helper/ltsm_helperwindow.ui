@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>440</width>
-    <height>233</height>
+    <height>256</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -132,6 +132,20 @@ color: rgb(255, 255, 255);</string>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout2">
           <item>
+           <widget class="QLabel" name="labelDomain">
+            <property name="text">
+             <string>domain:</string>
+            </property>
+            <property name="buddy">
+             <cstring>comboBoxUsername</cstring>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout2_2">
+          <item>
            <widget class="QLabel" name="labelUsername">
             <property name="text">
              <string>username:</string>
@@ -142,7 +156,7 @@ color: rgb(255, 255, 255);</string>
            </widget>
           </item>
           <item>
-           <spacer name="horizontalSpacer2">
+           <spacer name="horizontalSpacer2_2">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
@@ -220,6 +234,16 @@ color: rgb(255, 255, 255);</string>
       </item>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <widget class="QComboBox" name="comboBoxDomain">
+          <property name="inputMethodHints">
+           <set>Qt::ImhLatinOnly|Qt::ImhLowercaseOnly</set>
+          </property>
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
         <item>
          <widget class="QComboBox" name="comboBoxUsername">
           <property name="inputMethodHints">
@@ -439,6 +463,22 @@ color: rgb(255, 255, 255);</string>
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>comboBoxDomain</sender>
+   <signal>currentTextChanged(QString)</signal>
+   <receiver>LTSM_HelperWindow</receiver>
+   <slot>tokenChanged(QString)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>272</x>
+     <y>114</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>219</x>
+     <y>127</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>usernameChanged(QString)</slot>
@@ -446,5 +486,6 @@ color: rgb(255, 255, 255);</string>
   <slot>passwordChanged(QString)</slot>
   <slot>titlePressed()</slot>
   <slot>titleReleased()</slot>
+  <slot>tokenChanged(QString)</slot>
  </slots>
 </ui>

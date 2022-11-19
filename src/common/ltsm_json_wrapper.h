@@ -291,16 +291,6 @@ namespace LTSM
         void                    join(const JsonArray &);
         void                    swap(JsonArray &) noexcept;
 
-        template<typename Iterator>
-        Iterator                begin(void) { return content.begin(); }
-        template<typename ConstIterator>
-        ConstIterator           begin(void) const { return content.begin(); }
-
-        template<typename Iterator>
-        Iterator                end(void) { return content.end(); }
-        template<typename ConstIterator>
-        ConstIterator           end(void) const { return content.end(); }
-
         template<typename T>
         std::vector<T> toStdVector(void) const
         {

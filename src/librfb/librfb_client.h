@@ -42,6 +42,8 @@ namespace LTSM
 #endif
             protected NetworkStream
         {
+            PixelFormat serverFormat;
+
             std::unique_ptr<NetworkStream> socket;           /// socket layer
             std::unique_ptr<TLS::Stream> tls;                /// tls layer
             std::unique_ptr<ZLib::InflateStream> zlib;       /// zlib layer
@@ -104,6 +106,7 @@ namespace LTSM
             void            recvDecodingZlib(const XCB::Region &);
             void            recvDecodingLastRect(const XCB::Region &);
             void            recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size &);
+            void            recvDecodingRichCursor(const XCB::Region &);
 
             int             recvPixel(void);
             int             recvCPixel(void);
@@ -116,6 +119,8 @@ namespace LTSM
             virtual void    fillPixel(const XCB::Region &, uint32_t pixel) = 0;
             virtual const PixelFormat & clientPixelFormat(void) const = 0;
             virtual XCB::Size clientSize(void) const = 0;
+
+            const PixelFormat & serverPixelFormat(void) const;
 
         public:
             ClientDecoder() = default;
@@ -141,6 +146,7 @@ namespace LTSM
             virtual void    setColorMapEvent(const std::vector<Color> &) {}
             virtual void    bellEvent(void) {}
             virtual void    cutTextEvent(std::vector<uint8_t> &&) {}
+            virtual void    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {}
         };
 
         class ClientDecoderSocket : public ClientDecoder

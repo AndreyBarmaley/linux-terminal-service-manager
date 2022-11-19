@@ -43,9 +43,12 @@
 
 namespace LTSM
 {
+    class ByteArray;
 
     namespace Tools
     {
+        std::filesystem::path resolveSymLink(const std::filesystem::path &);
+
         std::string prettyFuncName(std::string_view);
         std::string randomHexString(size_t len);
 
@@ -53,7 +56,18 @@ namespace LTSM
         std::vector<uint8_t> randomBytes(size_t bytesCount);
 
         std::string getTimeZone(void);
+
+        std::tuple<std::string, int, int, std::filesystem::path, std::string> getLocalUserInfo(void);
         std::string getLocalUsername(void);
+
+        std::vector<uint8_t> zlibCompress(const ByteArray &);
+        std::vector<uint8_t> zlibUncompress(const ByteArray &, size_t real = 0);
+
+        std::string base64Encode(const ByteArray &);
+        std::vector<uint8_t> base64Decode(const std::string &);
+
+        std::string convertBinary2JsonString(const ByteArray &);
+        std::vector<uint8_t> convertJsonString2Binary(const std::string &);
 
         class StringFormat : public std::string
         {

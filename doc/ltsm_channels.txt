@@ -1,5 +1,10 @@
 ----------| LTSM CHANNELS DESCRIPTION 0.1 |-------------
 
+[1.0] RFB proto description:
+
+https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
+
+
 [1.1] Client to Server Messages (RFB 1.7.4)
 
 ----------+----------+------------+---------------------
@@ -8,7 +13,7 @@
  1        | u8       | 119        | LTSM type
 ----------+----------+------------+----------------------
 
-Next communication continues as defined at: LTSM message format [2.0]
+Next communication continues as defined at: LTSM message format [see 1.4]
 
 
 [1.2] Server to Client Messages (RFB 1.7.5)
@@ -19,7 +24,7 @@ Next communication continues as defined at: LTSM message format [2.0]
  1        | u8       | 119        | LTSM type
 ----------+----------+------------+---------------------
 
-Next communication continues as defined at: LTSM message format [2.0]
+Next communication continues as defined at: LTSM message format [see 1.4]
 
 
 [1.3] Encodings (RFB 1.7.6)
@@ -33,9 +38,10 @@ Next communication continues as defined at: LTSM message format [2.0]
 ----------+----------+------------+---------------------
 
 If the client supports LTSM encoding, they the server will send this message to confirm LTSM support.
-Channel data not used.
+The "length" always is zero and "channel data" not used
 
-[2.0] LTSM message format
+
+[1.4] LTSM message format
 
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
@@ -69,37 +75,31 @@ Content is binary data (frame max 0xFFFF)
 
 Content is JSON format
 
-------------------------+-------------------
- system command         | direction
-------------------------+-------------------
- ClientOptions          | client -> server
-------------------------+-------------------
- ChannelOpen            | server -> client
- ChannelListen          | server -> client
- ChannelConnected       | client -> server
- ChannelClose           | any
-------------------------+-------------------
- TransferFiles          | client -> server
- KeyboardChange         | client -> server
+------------------------+-------+-----------------
+ system command         | part  | direction
+------------------------+-------+-----------------
+ ClientOptions          | 2.1.1 | client -> server
+------------------------+-------+-----------------
+ ChannelClose           | 2.2.1 | any
+ ChannelConnected       | 2.2.2 | client -> server
+ ChannelOpen            | 2.2.3 | server -> client
+ ChannelListen          | 2.2.4 | server -> client
+------------------------+-------+-----------------
+ TransferFiles          | 2.3.1 | client -> server
+ KeyboardChange         | 2.4.1 | client -> server
+ FuseProxy              | 2.5.1 | any
+ TokenAuth              | 2.6.1 | any
+ LoginSuccess           | 2.7.1 | server -> client
+------------------------+-------+------------------
 
-
-
-------------------------+-------------------
- RutokenAttach          | client -> server
- RutokenDetach          | client -> server
- RutokenCertificates    | server -> client
- RutokenCertificates    | client -> server
- RutokenEncrypt         | server -> client
- RutokenEncrypted       | client -> server
- RutokenDecrypt         | server -> client
- RutokenDecrypted       | client -> server
-------------------------+-------------------
 
 [2.1.1] System message CLIENT OPTIONS
 
 { "cmd": "ClientOptions", "options": { "key1": "val1", "key2": "val2" }, "environments": { "env1": "val1", .. }, "keyboard": { "layouts": [ "ru", "fr", "en" ], "current": "ru" }}
 
 With this message, the client provides any information in the form of a key value.
+The "environments" field is a json oblect, append to session environments, TZ, LANG, LC_ and others
+The "keyboard" field is a json object, keyboard layouts identifiers
 
 -------------+--------------
  option      | description
@@ -115,28 +115,29 @@ With this message, the client provides any information in the form of a key valu
  certificate | possible
 -------------+--------------
 
-environments: json oblect, append to session environments, TZ, LANG, LC_ and others
-keyboard: json object, keyboard layouts identifiers
 
 [2.2.1] System message CHANNEL CLOSE
 
 { "cmd": "ChannelClose", "id": int }
 
+
 [2.2.2] System message CHANNEL CONNECTED
 
 { "cmd": "ChannelConnected", "id": int , "error": false }
+
 
 [2.2.3] System message CHANNEL OPEN
 
 { "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string" }
 
---------------+-------
- point type   | value
---------------+-------
- ClientUnix   | unix
- ClientSocket | socket
- ClientFile   | file
---------------+------
+------------------+-------
+ connector type   | value
+------------------+-------
+ ConnectorUnix    | unix
+ ConnectorSocket  | socket
+ ConnectorFile    | file
+ ConnectorCommand | command
+------------------+------
 
 --------------+-------
  point mode   | value
@@ -163,11 +164,13 @@ keyboard: json object, keyboard layouts identifiers
 
 allow mode: ReadOnly, WriteOnly and ReadWrite
 
+
 [2.2.3.2] System message CHANNEL OPEN SOCKET (tcp socket)
 
 { "cmd": "ChannelOpen", "id": int, "type": "socket", "ipaddr": "127.0.0.1", "port": 12345, "mode": "rw" }
 
 allow mode: ReadOnly, WriteOnly and ReadWrite
+
 
 [2.2.3.3] System message CHANNEL OPEN FILE
 
@@ -175,16 +178,23 @@ allow mode: ReadOnly, WriteOnly and ReadWrite
 
 allow mode: ReadOnly and WriteOnly
 
-[2.2.4] System message CHANNEL LISTEN (not implemented)
+[2.2.3.3] System message CHANNEL OPEN COMMAND
+
+{ "cmd": "ChannelOpen", "id": int, "type": "command", "runcmd": "/bin/cat > /tmp/file", "mode": "wo" }
+
+allow mode: ReadOnly and WriteOnly
+
+
+[2.2.4] System message CHANNEL LISTEN
 
 { "cmd": "ChannelListen", "id": int, "type": "string", "mode": "string" }
 
---------------+-------
- point type   | value
---------------+-------
- ClientUnix   | unix
- ClientSocket | socket
---------------+------
+--------------+---------+--------
+ point type   | part    | value
+--------------+---------+--------
+ ClientUnix   | 2.2.4.1 | unix
+ ClientSocket | 2.2.4.2 | socket
+--------------+---------+--------
 
 --------------+-------
  point mode   | value
@@ -194,9 +204,11 @@ allow mode: ReadOnly and WriteOnly
  ReadWrite    | rw
 --------------+------
 
+
 [2.2.4.1] System message CHANNEL LISTEN UNIX (unix socket)
 
 { "cmd": "ChannelListen", "id": int, "type": "unix", "path": "/path/to/unix/socket", "mode": "rw" }
+
 
 [2.2.4.2] System message CHANNEL LISTEN SOCKET (tcp socket)
 
@@ -204,14 +216,121 @@ allow mode: ReadOnly and WriteOnly
 
 allow mode: ReadOnly, WriteOnly and ReadWrite
 
+
 [2.3.1] System message TRANSFER FILES
 
 { "cmd": "TransferFiles", "files": [ { "file": "path_to_file1", "size": 12345 }, ... ] }
 
 the client requests the ability to transfer the files.
 
+
 [2.4.1] System message KEYBOARD CHANGE
 
 { "cmd": "KeyboardChange", "layout": "ru" }
 
 all supported keyboard layouts are transmitted in advance via the environment:keyboard.
+
+
+[2.5.1] System message FUSE PROXY
+
+{ "cmd": "FuseProxy", "fuse": string, "cookie": int, "path": string }
+
+----------+---------
+ fuse cmd | part    
+----------+---------
+ getattr  | 2.5.1.1
+ readdir  | 2.5.1.2
+ open     | 2.5.1.3
+ read     | 2.5.1.4
+----------+---------
+
+
+
+[2.5.1.1] FUSE command GetAttr
+
+client returned message: stat info struct (man 2 stat)
+
+{ "cmd": "FuseProxy", "fuse": "getattr", "path": string, "cookie": int, "error": bool, "errno": int, "stat": {} }
+
+stat: the struct stat member (man 2 stat)
+
+[2.5.1.2] FUSE command ReadDir
+
+client returned message: list names
+
+{ "cmd": "FuseProxy", "fuse": "readdir", "path": string, "cookie": int, "error": bool, "errno": int, "names": [ "name1", "name2", "name3", ... ] }
+
+
+[2.5.1.3] FUSE command Open
+
+client returned message: open status
+
+{ "cmd": "FuseProxy", "fuse": "open", "path": string, "cookie": int, "error": bool, "errno": int }
+
+
+[2.5.1.4] FUSE command Read
+
+{ "cmd": "FuseProxy", "fuse": "read", "path": string, "cookie": int, "offset": int, "size": int }
+
+client returned message: binary data
+
+{ "cmd": "FuseProxy", "fuse": "read", "path": string, "cookie": int, "error": bool, "errno": int, "eof": bool, "data": string }
+
+the "data" field is a binary data format, see 2.5.2
+
+
+[2.5.2] FUSE binary data format [binary to string]
+
+[ base64 encode string [ uin32be_t raw size data [ uint8_t[] gzip::compress binary data ]]]
+
+
+[2.6.1] System message TOKEN AUTH
+
+{ "cmd": "TokenAuth", "action": string }
+
+-----------+---------+------------------+-------------
+ action    | part    | direct           | description
+-----------+---------+------------------+-------------
+ attach    | 2.6.1.1 | client -> server | token attach
+ detach    | 2.6.1.2 | client -> server | token detach
+ check     | 2.6.1.3 | server -> client | check pkcs7
+ reply     | 2.6.1.4 | client -> client | reply decrypt
+
+
+[2.6.1.1] System message RUTOKEN ATTACH
+
+{ "cmd": "TokenAuth", "action": "attach", "serial": string, "description": string, "certs": [ "cert1", "cert2", "cert3", ...] }
+
+the "certs" field is list with certificates content
+
+[2.6.1.2] System message RUTOKEN DETACH
+
+{ "cmd": "TokenAuth", "action": "detach", "serial": string }
+
+
+[2.6.1.3] System message RUTOKEN CHECK pkcs7
+
+{ "cmd": "TokenAuth", "action": "check", "serial": string, "pin": string, "cert": int, "data": string }
+
+the "cert" field is integer(crc32b) from certificate content
+the "data" field is a binary data format, see 2.6.2
+
+
+[2.6.1.4] System message RUTOKEN REPLY decrypt
+
+{ "cmd": "TokenAuth", "action": "reply", "serial": string, "cert": int, "decrypt": string }
+
+the "cert" field is integer(crc32b) from certificate content
+
+
+[2.6.2] TOKEN AUTH binary data format [binary to string]
+
+[ base64 encode string [ uin32be_t raw size data [ uint8_t[] gzip::compress binary data ]]]
+
+
+[2.7.1] System message LOGIN SUCCESS
+
+{ "cmd": "LoginSuccess", "action": bool, "error": string }
+
+
+

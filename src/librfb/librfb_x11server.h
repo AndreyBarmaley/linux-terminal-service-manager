@@ -38,11 +38,12 @@ namespace LTSM
             XCB::Region         clientRegion;
             XCB::Region         damageRegion;
 
-            std::atomic<bool>   displayResized{false};
             std::atomic<int>    pressedMask{0};
             std::atomic<int>    randrSequence{0};
 
-            bool                clientUpdateReq = false;
+            std::atomic<bool>   displayResized{false};
+            std::atomic<bool>   clientUpdateReq{false};
+            std::atomic<bool>   clientUpdateCursor{false};
 
         protected:
 	    // rfb server encoding
@@ -70,6 +71,8 @@ namespace LTSM
             virtual void        serverMainLoopEvent(void) {}
             virtual void        serverDisplayResizedEvent(const XCB::Size &) {}
             virtual void        serverEncodingsEvent(void) {}
+
+            void                sendUpdateRichCursor(void);
 
         public:
             X11Server(int fd = 0) : ServerEncoder(fd) {}

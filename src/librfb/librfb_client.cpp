@@ -48,35 +48,104 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendFlush(void)
     {
-        if(rfbMessages)
-            streamOut->sendFlush();
+        try
+        {
+            if(rfbMessages)
+                streamOut->sendFlush();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            streamOut->setError();
+            rfbMessagesShutdown();
+        }
     }
 
     void RFB::ClientDecoder::sendRaw(const void* ptr, size_t len)
     {
-        if(rfbMessages)
-            streamOut->sendRaw(ptr, len);
+        try
+        {
+            if(rfbMessages)
+                streamOut->sendRaw(ptr, len);
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            streamOut->setError();
+            rfbMessagesShutdown();
+        }
     }
 
     void RFB::ClientDecoder::recvRaw(void* ptr, size_t len) const
     {
-        if(rfbMessages)
-            streamIn->recvRaw(ptr, len);
+        try
+        {
+            if(rfbMessages)
+                streamIn->recvRaw(ptr, len);
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
+        }
     }
 
     bool RFB::ClientDecoder::hasInput(void) const
     {
-        return rfbMessages ? streamIn->hasInput() : false;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->hasInput();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return false;
     }
 
     size_t RFB::ClientDecoder::hasData(void) const
     {
-        return rfbMessages ? streamIn->hasData() : 0;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->hasData();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return 0;
     }
 
     uint8_t RFB::ClientDecoder::peekInt8(void) const
     {
-        return rfbMessages ? streamIn->peekInt8() : 0;
+        try
+        {
+            if(rfbMessages)
+                return streamIn->peekInt8();
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+
+            const_cast<NetworkStream*>(streamIn)->setError();
+            const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
+        }
+
+        return 0;
     }
 
     bool RFB::ClientDecoder::authVncInit(std::string_view password)
@@ -271,7 +340,6 @@ namespace LTSM
         Application::debug("%s: remote framebuffer size: %dx%d", __FUNCTION__, fbWidth, fbHeight);
 
         // recv server pixel format
-        PixelFormat serverFormat;
         serverFormat.bitsPerPixel = recvInt8();
         int depth = recvInt8();
         serverBigEndian = recvInt8();
@@ -331,6 +399,11 @@ namespace LTSM
         return rfbMessages;
     }
 
+    const PixelFormat & RFB::ClientDecoder::serverPixelFormat(void) const
+    {
+        return serverFormat;
+    }
+
     void RFB::ClientDecoder::rfbMessagesShutdown(void)
     {
 #ifdef LTSM_CHANNELS
@@ -342,7 +415,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
-        std::initializer_list<int> encodings = { ENCODING_LAST_RECT,
+        std::initializer_list<int> encodings = { ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
 #ifdef LTSM_CHANNELS
                                         ENCODING_LTSM,
 #endif
@@ -387,6 +460,11 @@ namespace LTSM
                 {
                     recvLtsm(*this);
                 }
+                catch(const std::runtime_error & err)
+                {
+                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    rfbMessagesShutdown();
+                }
                 catch(const std::exception & err)
                 {
                     Application::error("%s: exception: %s", __FUNCTION__, err.what());
@@ -394,6 +472,10 @@ namespace LTSM
                 continue;
             }
 #endif
+
+            if(! rfbMessages)
+                break;
+
             switch(msgType)
             {
                 case SERVER_FB_UPDATE:          recvFBUpdateEvent(); break;
@@ -404,7 +486,7 @@ namespace LTSM
                 default:
                 {
                     Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
-                    rfbMessages = false;
+                    rfbMessagesShutdown();
                 }
             }
         }
@@ -571,6 +653,10 @@ namespace LTSM
                     numRects = 0;
                     break;
 
+                case ENCODING_RICH_CURSOR:
+                    recvDecodingRichCursor(reg);
+                    break;
+
                 case ENCODING_EXT_DESKTOP_SIZE:
                     recvDecodingExtDesktopSize(reg.x, reg.y, reg.toSize());
                     break;
@@ -657,6 +743,17 @@ namespace LTSM
     {
         if(decodingDebug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+    }
+
+    void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg)
+    {
+        if(decodingDebug)
+            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+
+        auto buf = recvData(reg.width * reg.height * serverFormat.bytePerPixel());
+        auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
+
+        richCursorEvent(reg, std::move(buf), std::move(mask));
     }
 
     void RFB::ClientDecoder::recvDecodingRRE(const XCB::Region & reg, bool corre)
@@ -1206,6 +1303,18 @@ namespace LTSM
         else
         if(cmd == SystemCommand::ChannelConnected)
             systemChannelConnected(jo);
+        else
+        if(cmd == SystemCommand::FuseProxy)
+            systemFuseProxy(jo);
+        else
+        if(cmd == SystemCommand::ChannelError)
+            systemChannelError(jo);
+        else
+        if(cmd == SystemCommand::TokenAuth)
+            systemTokenAuth(jo);
+        else
+        if(cmd == SystemCommand::LoginSuccess)
+            systemLoginSuccess(jo);
         else
         {
             Application::error("%s: %s", __FUNCTION__, "unknown cmd");

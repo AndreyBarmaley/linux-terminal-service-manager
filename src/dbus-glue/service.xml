@@ -125,10 +125,15 @@
             <arg type="s" name="dstfile" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
-        <method name="busSetAuthenticateInfo">
+        <method name="busSetAuthenticateLoginPass">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="login" direction="in" />
             <arg type="s" name="password" direction="in" />
+            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busSetAuthenticateToken">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="login" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busGetSessions">
@@ -158,12 +163,29 @@
             <arg type="s" name="cmode" direction="in" />
             <arg type="s" name="server" direction="in" />
             <arg type="s" name="smode" direction="in" />
+            <arg type="s" name="speed" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busDestroyChannel">
             <arg type="i" name="display" direction="in" />
             <arg type="y" name="channel" direction="in" />
             <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="tokenAuthAttached">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="serial" direction="in" />
+            <arg type="s" name="description" direction="in" />
+            <arg type="as" name="certs" direction="in" />
+        </method>
+        <method name="tokenAuthDetached">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="serial" direction="in" />
+        </method>
+        <method name="tokenAuthReply">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="serial" direction="in" />
+            <arg type="u" name="cert" direction="in" />
+            <arg type="s" name="decrypt" direction="in" />
         </method>
         <method name="helperIsAutoComplete">
             <arg type="i" name="display" direction="in" />
@@ -192,6 +214,13 @@
             <arg type="b" name="action" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
+        <method name="helperTokenAuthEncrypted">
+            <arg type="i" name="display" direction="in" />
+            <arg type="s" name="serial" direction="in" />
+            <arg type="s" name="pin" direction="in" />
+            <arg type="u" name="cert" direction="in" />
+            <arg type="ay" name="data" direction="in" />
+        </method>
 
         <signal name="helperWidgetStarted">
             <arg type="i" name="display" />
@@ -208,6 +237,29 @@
         </signal>
         <signal name="helperWidgetCentered">
             <arg type="i" name="display" />
+        </signal>
+        <signal name="tokenAuthAttached">
+            <arg type="i" name="display" />
+            <arg type="s" name="serial" />
+            <arg type="s" name="description" />
+            <arg type="as" name="certs" />
+        </signal>
+        <signal name="tokenAuthDetached">
+            <arg type="i" name="display" />
+            <arg type="s" name="serial" />
+        </signal>
+        <signal name="tokenAuthCheckPkcs7">
+            <arg type="i" name="display" />
+            <arg type="s" name="serial" />
+            <arg type="s" name="pin" />
+            <arg type="u" name="cert" />
+            <arg type="ay" name="pkcs7" />
+        </signal>
+        <signal name="tokenAuthReplyCheck">
+            <arg type="i" name="display" />
+            <arg type="s" name="serial" />
+            <arg type="u" name="cert" />
+            <arg type="s" name="decrypt" />
         </signal>
         <signal name="loginFailure">
             <arg type="i" name="display" />
@@ -246,6 +298,7 @@
             <arg type="s" name="cmode" />
             <arg type="s" name="server" />
             <arg type="s" name="smode" />
+            <arg type="s" name="speed" />
         </signal>
         <signal name="destroyChannel">
             <arg type="i" name="display" />
@@ -264,6 +317,7 @@
             <arg type="s" name="server" />
             <arg type="s" name="smode" />
             <arg type="s" name="speed" />
+            <arg type="y" name="limit" />
         </signal>
         <signal name="destroyListener">
             <arg type="i" name="display" />
@@ -291,5 +345,11 @@
             <arg type="y" name="channel" />
             <arg type="b" name="debug" />
         </signal>
+        <signal name="fuseSessionStart">
+            <arg type="i" name="display" />
+            <arg type="s" name="addresses" />
+            <arg type="s" name="mount" />
+        </signal>
+        
     </interface>
 </node>

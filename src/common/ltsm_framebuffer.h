@@ -31,7 +31,7 @@
 #include "ltsm_xcb_wrapper.h"
 
 #ifdef LTSM_WITH_SDBUS
-#include "ltsm_dbus_proxy.h"
+#include "ltsm_service_proxy.h"
 #endif
 
 namespace LTSM

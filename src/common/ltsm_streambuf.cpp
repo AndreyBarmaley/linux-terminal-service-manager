@@ -27,9 +27,19 @@
 
 namespace LTSM
 {
-    std::string ByteArray::hexstring(std::string_view sep, bool prefix) const
+    std::string ByteArray::hexString(std::string_view sep, bool prefix) const
     {
         return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep, prefix);
+    }
+
+    std::string ByteArray::toString(void) const
+    {
+        return std::string(data(), data() + size());
+    }
+
+    uint32_t ByteArray::crc32b(void) const
+    {
+        return Tools::crc32b(data(), size());
     }
 
     /* BinaryBuf */
@@ -37,11 +47,6 @@ namespace LTSM
     {
         insert(end(), s.begin(), s.end());
         return *this;
-    }
-
-    std::string BinaryBuf::tostring(void) const
-    {
-        return std::string(begin(), end());
     }
 
     BinaryBuf & BinaryBuf::append(const uint8_t* ptr, size_t len)
@@ -74,11 +79,6 @@ namespace LTSM
     const uint8_t* BinaryBuf::data(void) const
     {
         return std::vector<uint8_t>::data();
-    }
-
-    uint32_t BinaryBuf::crc32b(void) const
-    {
-        return Tools::crc32b(data(), size());
     }
 
     /* ByteOrderInterface */

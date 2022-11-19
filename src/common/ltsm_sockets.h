@@ -40,14 +40,14 @@
 #include <zlib.h>
 #endif
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
 #include "gnutls/gnutls.h"
 #include "gnutls/gnutlsxx.h"
 #endif
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20221002
+#define LTSM_SOCKETS_VERSION 20221110
 
 namespace LTSM
 {
@@ -71,9 +71,11 @@ namespace LTSM
         static bool             hasInput(int fd, int timeoutMS = 1);
         static size_t           hasData(int fd);
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
         virtual void            setupTLS(gnutls::session*) const {}
 #endif
+        virtual void		setError(void) {}
+
         inline NetworkStream &  sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
         inline NetworkStream &  sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
         inline NetworkStream &  sendIntBE64(uint64_t x) { putIntBE64(x); return *this; }
@@ -140,7 +142,7 @@ namespace LTSM
         SocketStream(const SocketStream &) = delete;
         SocketStream & operator=(const SocketStream &) = delete;
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
         void                    setupTLS(gnutls::session*) const override;
 #endif
         void                    setSocket(int fd) { sock = fd; }
@@ -170,7 +172,7 @@ namespace LTSM
     public:
         InetStream();
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
         void                    setupTLS(gnutls::session*) const override;
 #endif
         bool                    hasInput(void) const override;
@@ -228,7 +230,7 @@ namespace LTSM
         int                     accept(int fd);
     }
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
     struct gnutls_error : public std::runtime_error
     {
         explicit gnutls_error(const std::string & what) : std::runtime_error(what){}
@@ -268,7 +270,7 @@ namespace LTSM
             std::unique_ptr<gnutls::credentials> cred;
             std::unique_ptr<gnutls::session> session;
 
-            bool                handshake = false;
+            std::atomic<bool>   handshake{false};
             mutable int         peek = -1;
 
         public:
@@ -279,6 +281,7 @@ namespace LTSM
             size_t              hasData(void) const override;
             void                sendFlush(void) override;
             uint8_t	        peekInt8(void) const override;
+            void		setError(void) override;
 
             void		sendRaw(const void*, size_t) override;
             void                recvRaw(void*, size_t) const override;
@@ -303,7 +306,7 @@ namespace LTSM
                         const std::string & crl, std::string_view priority, bool serverMode = true, int debug = 3);
         };
     } // TLS
-#endif // LTSM_SOCKET_TLS
+#endif // LTSM_WITH_GNUTLS
 
 #ifdef LTSM_SOCKET_ZLIB
     struct zlib_error : public std::runtime_error

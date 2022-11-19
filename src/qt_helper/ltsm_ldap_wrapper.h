@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
+ *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
  *   Part of the LTSM: Linux Terminal Service Manager:                     *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
@@ -20,41 +20,36 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_GLOBALS_
-#define _LTSM_GLOBALS_
+#ifndef _LTSM_LDAP_WRAPPER_H_
+#define _LTSM_LDAP_WRAPPER_H_
+
+#ifdef LTSM_TOKEN_AUTH
+#include <ldap.h>
+
+#include <string>
+#include <vector>
+#include <stdexcept>
 
 namespace LTSM
 {
-    inline static const char* dbus_manager_service_name = "ltsm.manager.service";
-    inline static const char* dbus_manager_service_path = "/ltsm/manager/service";
-
-    inline static const char* dbus_session_fuse_name = "ltsm.session.fuse";
-    inline static const char* dbus_session_fuse_path = "/ltsm/session/fuse";
-
-    inline static const int service_version = 20221120;
-
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    inline static const bool big_endian = false;
-#else
-    inline static const bool big_endian = true;
-#endif
-
-    namespace NotifyParams
+    struct ldap_error : public std::runtime_error
     {
-        enum IconType { Information, Warning, Error, Question };
-        enum UrgencyLevel { Low = 0, Normal = 1, Critical = 2 };
+        explicit ldap_error(const std::string & what) : std::runtime_error(what){}
+        explicit ldap_error(const char* what) : std::runtime_error(what){}
+    };
+
+    class LdapWrapper
+    {
+        LDAP* ldap = nullptr;
+
+    public:
+        LdapWrapper();
+        ~LdapWrapper();
+
+        std::string findLoginFromDn(std::string_view dn);
+        std::string findDnFromCertificate(const std::vector<uint8_t> &);
     };
 }
 
-#ifdef LTSM_BUILD_STD_MAP
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
+#endif // LTSM_TOKEN_AUTH
 #endif
-
-#endif // _LTSM_GLOBALS_

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node name="/ltsm/session/fuse">
+    <interface name="LTSM.Session.FUSE">
+        <method name="getVersion">
+            <arg type="i" name="version" direction="out" />
+        </method>
+
+        <method name="shutdown">
+        </method>
+        <method name="mount">
+            <arg type="s" name="point" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+        <method name="umount">
+        </method>
+
+        <method name="replyGetAttr">
+            <arg type="b" name="error" direction="in" />
+            <arg type="i" name="errno2" direction="in" />
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+            <arg type="a{si}" name="stat" direction="in" />
+        </method>
+        <method name="replyReadDir">
+            <arg type="b" name="error" direction="in" />
+            <arg type="i" name="errno2" direction="in" />
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+            <arg type="as" name="names" direction="in" />
+        </method>
+        <method name="replyOpen">
+            <arg type="b" name="error" direction="in" />
+            <arg type="i" name="errno2" direction="in" />
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+        </method>
+        <method name="replyRead">
+            <arg type="b" name="error" direction="in" />
+            <arg type="i" name="errno2" direction="in" />
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+            <arg type="s" name="data" direction="in" />
+        </method>
+
+        <signal name="requestOpen">
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+            <arg type="i" name="flags" direction="in" />
+        </signal>
+        <signal name="requestRead">
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+            <arg type="u" name="size" direction="in" />
+            <arg type="i" name="offset" direction="in" />
+        </signal>
+        <signal name="requestReadDir">
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+        </signal>
+        <signal name="requestGetAttr">
+            <arg type="s" name="path" direction="in" />
+            <arg type="u" name="cookie" direction="in" />
+        </signal>
+    </interface>
+</node>

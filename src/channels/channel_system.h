@@ -47,9 +47,13 @@ namespace LTSM
         static const std::string_view ChannelListen{"ChannelListen"};
         static const std::string_view ChannelConnected{"ChannelConnected"};
         static const std::string_view ChannelClose{"ChannelClose"};
+        static const std::string_view ChannelError{"ChannelError"};
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
+        static const std::string_view FuseProxy{"FuseProxy"};
+        static const std::string_view TokenAuth{"TokenAuth"};
+        static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
     class ChannelClient;
@@ -264,11 +268,15 @@ namespace LTSM
         virtual void    systemKeyboardChange(const JsonObject &) {}
 
         void            systemChannelOpen(const JsonObject &);
-        void            systemChannelListen(const JsonObject &);
+        void            systemChannelListen(const JsonObject &) {}
         bool            systemChannelConnected(const JsonObject &);
         void            systemChannelClose(const JsonObject &);
+        virtual void    systemChannelError(const JsonObject &) {}
 
         virtual void    systemTransferFiles(const JsonObject &) {}
+        virtual void    systemFuseProxy(const JsonObject &) {}
+        virtual void    systemTokenAuth(const JsonObject &) {}
+        virtual void    systemLoginSuccess(const JsonObject &) {}
 
         bool            createListener(const std::string & client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ListenMode &, const Channel::Speed &);
         bool            createChannel(const std::string& client, const Channel::ConnectorMode & cmode, const std::string& server, const Channel::ConnectorMode & smode, const Channel::Speed &);
@@ -298,6 +306,7 @@ namespace LTSM
         void            sendSystemChannelOpen(uint8_t channel, const Channel::ConnectorType &, std::string_view path, const Channel::ConnectorMode &, const Channel::Speed &);
         void            sendSystemChannelClose(uint8_t channel);
         void            sendSystemChannelConnected(uint8_t channel, bool noerror);
+        void            sendSystemChannelError(uint8_t channel, int code, const std::string &);
 
         void            recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
 

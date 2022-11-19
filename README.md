@@ -48,6 +48,7 @@ see also: [wiki: LTSM connector](https://github.com/AndreyBarmaley/linux-termina
 
 # LTSM_helper
 ![ltsm_helper](https://user-images.githubusercontent.com/8620726/123924335-66914a00-d979-11eb-9025-9d6bcf3fa250.png)  
+![ltsm_helper_token](https://user-images.githubusercontent.com/8620726/202207854-c9c01fa6-4654-416e-a11e-c8b8772a3905.png)  
 GUI login utility, and it is a dbus client *ltsm.manager.service* (GPLv3 license)  
 see also: [wiki: LTSM config](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-config-(full-description))  
 
@@ -58,7 +59,6 @@ GUI users sessions management utility, and it is a dbus client *ltsm.manager.ser
 see also: [wiki: LTSM administrator](https://github.com/AndreyBarmaley/linux-terminal-service-manager/wiki/LTSM-administrator)  
 
 # LTSM_vnc2sdl
-
 This is an experimental graphical client that implements the mechanism of multiple data channels, up to a maximum of 253.
 
 **Main improvements implemented:**
@@ -69,6 +69,8 @@ This is an experimental graphical client that implements the mechanism of multip
 * Implemented audio redirect via pulseaudio
 * Implemented pkcs11 support via pcscd redirect
 * Implemented scanning redirect (using an additional [backend for SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
+* Directory redirection via **FUSE** has been implemented (so far only in read only mode)
+* Implemented authentication to a virtual session via **rutoken** with certificate storage in **LDAP**
 
 The mechanism of pipes is implemented through the abstract schemes ```unix://, file://, socket://```, and the access mode ```ReadOnly, WriteOnly, ReadWrite```.  
 For example, for a normal file transfer, a typical channel is created (client-server): ```file:///src_file1 (ReadOnly)``` and ```file:///dst_file2 (WriteOnly)```, then in the user session, informational GUI dialogs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  
@@ -76,6 +78,11 @@ Also, using this mechanism, it is possible to transfer any data stream in both d
 
 So printing from the server side (in a remote user session) is implemented in this way - on the server, cups adds its own backend to configure the printer, which knows which unix socket to print in the user session, from the client side, the stream can be sent to the ```socket://``` network printer ```127.0.0.1:9100```, also to local cups or ```file:///dev/usb/lp0```. In this scheme, the system administrator configures the printer only once per server. The audio redirect, scanning and pcscd redirect works according to a similar scheme.  
 
-You can test all implemented features in the docker version.  
+You can test all implemented features in the **docker** version.  
 
-Currently in development to add a folder redirection (from FUSE) and video recording of all sessions, and accelerated (Cuda GPU).  
+**ROADMAP**
+* add **x264** or **VP8** encoding (as a video session stream)
+* add video recordings of all working sessions (video recording)
+* add [**VirtualGL**](https://virtualgl.org) support
+* add a video redirect via **PipeWare**
+* work with graphics accelerated via **Cuda GPU** (there are no technical capabilities yet)

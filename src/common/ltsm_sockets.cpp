@@ -32,7 +32,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
 #include "gnutls/gnutls.h"
 #include "gnutls/crypto.h"
 #endif
@@ -287,7 +287,7 @@ namespace LTSM
             close(sock);
     }
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
     void SocketStream::setupTLS(gnutls::session* sess) const
     {
         sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(sock));
@@ -361,7 +361,7 @@ namespace LTSM
         fout.reset();
     }
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
     void InetStream::setupTLS(gnutls::session* sess) const
     {
         sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(fdin),
@@ -869,7 +869,7 @@ namespace LTSM
         return true;
     }
 
-#ifdef LTSM_SOCKET_TLS
+#ifdef LTSM_WITH_GNUTLS
     namespace TLS
     {
         void gnutls_log(int level, const char* str)
@@ -891,6 +891,12 @@ namespace LTSM
         {
             if(handshake)
                 session->bye(GNUTLS_SHUT_WR);
+        }
+
+        void Stream::setError(void)
+        {
+            // error stream: disable send bye
+            handshake = false;
         }
 
         bool Stream::startHandshake(void)

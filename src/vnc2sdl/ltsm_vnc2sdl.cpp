@@ -20,10 +20,19 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  **************************************************************************/
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <unistd.h>
+
+#include <list>
 #include <chrono>
+#include <thread>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
@@ -34,10 +43,173 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+    const auto sanedef = "sock://127.0.0.1:6566";
+    const auto pcscdef = "unix:///var/run/pcscd/pcscd.comm";
+    const auto librtdef = "/usr/lib64/librtpkcs11ecp.so";
+    const auto printdef = "cmd:///usr/bin/lpr";
+    const auto pulsedef = "XDG_RUNTIME_DIR/pulse/native";
+
+#ifdef LTSM_RUTOKEN
+    RutokenWrapper::RutokenWrapper(const std::string & lib, ChannelClient & owner) : sender(& owner)
+    {
+        rutoken::pkicore::initialize(std::filesystem::path(lib).parent_path());
+        shutdown = false;
+
+        thscan = std::thread([this]
+        {
+            std::list<std::string> attached;
+
+            while(! this->shutdown)
+            {
+                std::list<std::string> devices;
+
+                for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
+                    devices.emplace_back(dev.getSerialNumber());
+
+                for(auto & serial : devices)
+                    if(std::none_of(attached.begin(), attached.end(), [&](auto & str){ return str == serial; }))
+                        this->attachedDevice(serial);
+
+                for(auto & serial : attached)
+                    if(std::none_of(devices.begin(), devices.end(), [&](auto & str){ return str == serial; }))
+                        this->detachedDevice(serial);
+
+                attached.swap(devices);
+                std::this_thread::sleep_for(2000ms);
+            }
+
+            shutdown = true;
+        });
+    }
+
+    RutokenWrapper::~RutokenWrapper()
+    {
+        shutdown = true;
+
+        if(thscan.joinable())
+            thscan.join();
+
+        rutoken::pkicore::deinitialize();
+    }
+
+    void RutokenWrapper::attachedDevice(const std::string & serial)
+    {
+        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
+
+        auto devices = rutoken::pkicore::Pkcs11Device::enumerate();
+        auto it = std::find_if(devices.begin(), devices.end(), [=](auto & dev){ return dev.getSerialNumber() == serial; });
+
+        if(it != devices.end())
+        {
+            auto & dev = *it;
+            auto certs = dev.enumerateCerts();
+
+            if(! certs.empty())
+            {
+                JsonObjectStream jos;
+                jos.push("cmd", SystemCommand::TokenAuth);
+                jos.push("action", "attach");
+                jos.push("serial", serial);
+                jos.push("description", dev.getLabel());
+
+                JsonArrayStream jas;
+                for(auto & cert : certs)
+                    jas.push(cert.toPem());
+
+                jos.push("certs", jas.flush());
+                sender->sendLtsmEvent(Channel::System, jos.flush());
+            }
+        }
+    }
+
+    void RutokenWrapper::detachedDevice(const std::string & serial)
+    {
+        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
+
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::TokenAuth);
+        jos.push("action", "detach");
+        jos.push("serial", serial);
+        sender->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    std::vector<uint8_t> RutokenWrapper::decryptPkcs7(const std::string & serial, const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7)
+    {
+        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
+
+        auto devices = rutoken::pkicore::Pkcs11Device::enumerate();
+        auto itd = std::find_if(devices.begin(), devices.end(), [=](auto & dev){ return dev.getSerialNumber() == serial; });
+
+        if(itd == devices.end())
+        {
+            LTSM::Application::error("%s: device not found, serial: %s", __FUNCTION__, serial.c_str());
+            throw token_error("device not found");
+        }
+
+        auto & dev = *itd;
+
+        if(! dev.isLoggedIn())
+            dev.login(pin);
+
+        if(! dev.isLoggedIn())
+        {
+            LTSM::Application::error("%s: incorrect pin code, serial: %s, code: %s", __FUNCTION__, serial.c_str(), pin.c_str());
+            throw token_error("incorrect pin code");
+        }
+
+        auto certs = dev.enumerateCerts();
+        auto itc = std::find_if(certs.begin(), certs.end(), [=](auto & crt){ return Tools::crc32b(crt.toPem()) == cert; });
+
+        if(itc == certs.end())
+        {
+            LTSM::Application::error("%s: certificate not found, serial: %s", __FUNCTION__, serial.c_str());
+            throw token_error("certificate not found");
+        }
+
+        auto & pkcs11Cert = *itc;
+
+        auto envelopedData = rutoken::pkicore::cms::EnvelopedData::parse(pkcs7);
+        auto params = rutoken::pkicore::cms::EnvelopedData::DecryptParams(pkcs11Cert);
+        auto message = envelopedData.decrypt(params);
+
+        return rutoken::pkicore::cms::Data::cast(std::move(message)).data();
+    }
+#endif
+
     void printHelp(const char* prog)
     {
-        std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--notls] [--noxkb] [--debug] [--tls-priority <string>] [--fullscreen] [--geometry WIDTHxHEIGHT] [--ca-file <path>] [--cert-file <path>] [--key-file <path>] [--noaccel] [--pulse [XDG_RUNTIME_DIR/pulse/native]] [--printer [sock://127.0.0.1:9100]] [--sane [sock://127.0.0.1:6566]] [--pcscd [unix:///var/run/pcscd/pcscd.comm]]" << std::endl;
+        std::cout << "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] " <<
+            "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
+            "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
+            "[--share-folder <folder>] [--pulse [" << pulsedef << "]] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
+            " [--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
+            "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+
+        std::cout << std::endl << "arguments:" << std::endl <<
+            "    --version (show program version)" << std::endl <<
+            "    --debug (debug to syslog)" << std::endl <<
+            "    --host <localhost> " << std::endl <<
+            "    --port <port> " << std::endl <<
+            "    --password <pass> " << std::endl <<
+            "    --noaccel (disable SDL2 acceleration)" << std::endl <<
+            "    --fullscreen (switch t fullscreen mode, Ctrl+F10 exit)" << std::endl <<
+            "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
+            "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
+            "    --tls-priority <string> " << std::endl <<
+            "    --tls-ca-file <path> " << std::endl <<
+            "    --tls-cert-file <path> " << std::endl <<
+            "    --tls-key-file <path> " << std::endl <<
+            "    --share-folder <folder> (redirect folder)" << std::endl <<
+            "    --seamless <path> (seamless remote program)" << std::endl <<
+            "    --noxkb (disable send xkb)" << std::endl <<
+            "    --nocaps (disable send capslock)" << std::endl <<
+            "    --loop (always reconnecting)" << std::endl <<
+            "    --pulse [" << pulsedef << "] (redirect pulseaudio)" << std::endl <<
+            "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
+            "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
+            "    --pcscd [" << pcscdef << "] (redirect pkcs11)" << std::endl <<
+            "    --token-lib [" << librtdef << "] (token autenfication with LDAP)" << std::endl <<
+            std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -48,6 +220,12 @@ namespace LTSM
 
         rfbsec.authVenCrypt = true;
         rfbsec.tlsDebug = 2;
+
+        if(2 > argc)
+        {
+            printHelp(argv[0]);
+            throw 0;
+        }
 
         for(int it = 1; it < argc; ++it)
         {
@@ -60,6 +238,9 @@ namespace LTSM
 
         for(int it = 1; it < argc; ++it)
         {
+            if(0 == std::strcmp(argv[it], "--version"))
+                std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
+            else
             if(0 == std::strcmp(argv[it], "--nocaps"))
                 capslock = false;
             else
@@ -72,12 +253,16 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--noxkb"))
                 usexkb = false;
             else
+            if(0 == std::strcmp(argv[it], "--loop"))
+                alwaysRunning = true;
+            else
             if(0 == std::strcmp(argv[it], "--fullscreen"))
                 fullscreen = true;
             else
+#ifdef LTSM_CHANNELS
             if(0 == std::strcmp(argv[it], "--printer"))
             {
-                printerUrl = "sock://127.0.0.1:9100";
+                printerUrl.assign(printdef);
 
                 if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
                 {
@@ -94,7 +279,7 @@ namespace LTSM
             else
             if(0 == std::strcmp(argv[it], "--sane"))
             {
-                saneUrl = "sock://127.0.0.1:6566";
+                saneUrl.assign(sanedef);
 
                 if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
                 {
@@ -132,7 +317,7 @@ namespace LTSM
             else
             if(0 == std::strcmp(argv[it], "--pcscd"))
             {
-                pcscdUrl = "unix:///var/run/pcscd/pcscd.comm";
+                pcscdUrl.assign(pcscdef);
 
                 if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
                 {
@@ -147,12 +332,42 @@ namespace LTSM
                 }
             }
             else
+            if(0 == std::strcmp(argv[it], "--token-lib"))
+            {
+                tokenLib.assign(librtdef);
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    tokenLib.assign(argv[it + 1]);
+                    it = it + 1;
+                }
+
+                if(! std::filesystem::exists(tokenLib))
+                {
+                    Application::error("%s: parse %s failed, not exist: %s", __FUNCTION__, "token-lib", tokenLib.c_str());
+                    tokenLib.clear();
+                }
+            }
+            else
+#endif
             if(0 == std::strcmp(argv[it], "--debug"))
                 Application::setDebugLevel(DebugLevel::Console);
             else
             if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
                 host.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--seamless") && it + 1 < argc)
+            {
+                seamless.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            if(0 == std::strcmp(argv[it], "--share-folder") && it + 1 < argc)
+            {
+                share.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
@@ -206,19 +421,19 @@ namespace LTSM
                 it = it + 1;
             }
             else
-            if(0 == std::strcmp(argv[it], "--ca-file") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--tls-ca-file") && it + 1 < argc)
             {
                 rfbsec.caFile.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
-            if(0 == std::strcmp(argv[it], "--cert-file") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--tls-cert-file") && it + 1 < argc)
             {
                 rfbsec.certFile.assign(argv[it + 1]);
                 it = it + 1;
             }
             else
-            if(0 == std::strcmp(argv[it], "--key-file") && it + 1 < argc)
+            if(0 == std::strcmp(argv[it], "--tls-key-file") && it + 1 < argc)
             {
                 rfbsec.keyFile.assign(argv[it + 1]);
                 it = it + 1;
@@ -228,6 +443,9 @@ namespace LTSM
                 throw std::invalid_argument(argv[it]);
             }
         }
+
+        if(tokenLib.size() && rfbsec.passwdFile.size() && username.size())
+            tokenLib.clear();
 
         if(fullscreen)
         {
@@ -241,6 +459,11 @@ namespace LTSM
                     std::swap(setWidth, setHeight);
             }
         }
+    }
+
+    bool Vnc2SDL::isAlwaysRunning(void) const
+    {
+        return alwaysRunning;
     }
 
     int Vnc2SDL::start(void)
@@ -263,19 +486,7 @@ namespace LTSM
         // rfb thread: process rfb messages
         auto thrfb = std::thread([=]()
         {
-            try
-            {
-                this->rfbMessagesLoop();
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", "start", err.what());
-            }
-            catch(...)
-            {
-            }
-
-            this->rfbMessagesShutdown();
+            this->rfbMessagesLoop();
         });
 
         // xcb thread: wait xkb event
@@ -289,6 +500,17 @@ namespace LTSM
                 std::this_thread::sleep_for(200ms);
             }
         });
+
+        if(! tokenLib.empty() && std::filesystem::exists(tokenLib))
+        {
+#ifdef LTSM_RUTOKEN
+            if(std::filesystem::path(tokenLib).filename() == std::filesystem::path(librtdef).filename())
+            {
+                Application::info("%s: check %s success", __FUNCTION__, "rutoken", tokenLib.c_str());
+                token = std::make_unique<RutokenWrapper>(tokenLib, static_cast<ChannelClient &>(*this));
+            }
+#endif
+        }
 
         // main thread: sdl processing
         SDL_Event ev;
@@ -346,7 +568,6 @@ namespace LTSM
                 std::this_thread::sleep_for(5ms);
                 continue;
             }
-
         }
 
         rfbMessagesShutdown();
@@ -646,6 +867,44 @@ namespace LTSM
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_SetClipboardText", SDL_GetError());
     }
 
+    void Vnc2SDL::richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask)
+    {
+        uint32_t key = Tools::crc32b(pixels.data(), pixels.size());
+        auto it = cursors.find(key);
+        if(cursors.end() == it)
+        {
+            auto sdlFormat = SDL_MasksToPixelFormatEnum(format.bitsPerPixel, format.rmask(), format.gmask(), format.bmask(), format.amask());
+            if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_MasksToPixelFormatEnum", SDL_GetError());
+                return;
+            }
+
+            Application::debug("%s: create cursor, crc32b: %d, width: %d, height: %d, sdl format: %s", __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+
+            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width, reg.height, format.bitsPerPixel, reg.width * format.bytePerPixel(), sdlFormat);
+            if(! sf)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
+                return;
+            }
+
+            auto pair = cursors.emplace(key, ColorCursor{ .pixels = std::move(pixels), .surface{ sf, SDL_FreeSurface } } );
+            it = pair.first;    
+
+            auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
+            if(! curs)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateColorCursor", SDL_GetError());
+                return;
+            }
+
+            (*it).second.cursor.reset(curs);
+        }
+
+        SDL_SetCursor((*it).second.cursor.get());
+    }
+
 #ifdef LTSM_CHANNELS
     void Vnc2SDL::decodingLtsmEvent(const std::vector<uint8_t> &)
     {
@@ -677,12 +936,17 @@ namespace LTSM
             auto ptr = std::setlocale(lc.first, "");
             jo.push(lc.second, ptr ? ptr : "C");
         }
+
         // lang
         auto lang = std::getenv("LANG");
         jo.push("LANG", lang ? lang : "C");
 
         // timezone
         jo.push("TZ", Tools::getTimeZone());
+
+        // seamless
+        if(! seamless.empty())
+            jo.push("XSESSION", seamless);
 
         return jo.flush();
     }
@@ -700,9 +964,7 @@ namespace LTSM
             jo.push("password", rfbsec.passwdFile);
 
         if(! rfbsec.certFile.empty())
-        {
             jo.push("certificate", Tools::fileToString(rfbsec.certFile));
-        }
 
         if(! printerUrl.empty())
         {
@@ -728,44 +990,358 @@ namespace LTSM
             jo.push("pulseaudio", pulseUrl);
         }
 
-//       jo.push("programVersion", "XXXXX");
-//       jo.push("programName", "XXXXX");
+        if(! share.empty() && std::filesystem::is_directory(share))
+        {
+            Application::info("%s: %s url: %s", __FUNCTION__, "fuse", share.c_str());
+            jo.push("fuse", share);
+        }
 
         return jo.flush();
     }
 
+    void fuseOpenAction(std::string share, std::string fs, int cookie, int flags, ChannelClient* owner)
+    {
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "open");
+        jos.push("path", fs);
+        jos.push("cookie", cookie);
+
+        if(share.size())
+        {
+            auto path = std::filesystem::path(share + fs);
+            int fd = open(path.c_str(), flags);
+
+            if(fd < 0)
+            {
+                jos.push("error", true);
+                jos.push("errno", errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "open", strerror(errno), errno);
+            }
+            else
+            {
+                close(fd);
+            }
+        }
+        else
+        {
+            jos.push("error", true);
+            jos.push("errno", ENOENT);
+        }
+
+        owner->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void fuseReadDirAction(std::string share, std::string fs, int cookie, ChannelClient* owner)
+    {
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "readdir");
+        jos.push("path", fs);
+        jos.push("cookie", cookie);
+
+        if(share.size())
+        {
+            std::list<std::string> names;
+            auto path = std::filesystem::path(share + fs);
+
+            // return list names
+            if(std::filesystem::is_directory(path))
+            {
+                for(auto const & dirEntry : std::filesystem::directory_iterator{path})
+                    names.emplace_back(dirEntry.path().filename());
+            }
+            else
+            {
+                jos.push("error", true);
+                jos.push("errno", ENOENT);
+            }
+
+            jos.push("names", JsonArrayStream(names.begin(), names.end()).flush());
+        }
+        else
+        {
+            jos.push("error", true);
+            jos.push("errno", ENOENT);
+        }
+
+        owner->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void fuseGetAttrAction(std::string share, std::string fs, int cookie, ChannelClient* owner)
+    {
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "getattr");
+        jos.push("path", fs);
+        jos.push("cookie", cookie);
+
+        if(share.size())
+        {
+            auto path = std::filesystem::path(share + fs);
+            if(std::filesystem::exists(path))
+            {
+                // return stat struct
+                struct stat st = {0};
+
+                if(0 == stat(path.c_str(), & st))
+                {
+                    JsonObjectStream jst;
+
+                    //jst.push("st_dev", static_cast<int>(st.st_dev));
+                    //jst.push("st_ino", static_cast<int>(st.st_ino));
+                    jst.push("st_mode", static_cast<int>(st.st_mode));
+                    jst.push("st_nlink", static_cast<int>(st.st_nlink));
+                    //jst.push("st_uid", static_cast<int>(st.st_uid));
+                    //jst.push("st_gid", static_cast<int>(st.st_gid));
+                    //jst.push("st_rdev", static_cast<int>(st.st_rdev));
+                    jst.push("st_size", static_cast<int>(st.st_size));
+                    //jst.push("st_blksize", static_cast<int>(st.st_blksize));
+                    jst.push("st_blocks", static_cast<int>(st.st_blocks));
+                    jst.push("st_atime", static_cast<int>(st.st_atime));
+                    jst.push("st_mtime", static_cast<int>(st.st_mtime));
+                    jst.push("st_ctime", static_cast<int>(st.st_ctime));
+
+                    jos.push("stat", jst.flush());
+
+                    Application::debug("%s: fs: %s, st_ino: %d, st_mode: %d, st_nlink: %d, st_size: %d, st_blocks: %d, st_atime: %d, st_mtime: %d, st_ctime: %d", __FUNCTION__, fs.c_str(), st.st_ino, st.st_mode, st.st_nlink, st.st_size, st.st_blocks, st.st_atime, st.st_mtime, st.st_ctime);
+                }
+                else
+                {
+                    jos.push("error", true);
+                    jos.push("errno", errno);
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "stat", strerror(errno), errno);
+                }
+            }
+            else
+            {
+                jos.push("error", true);
+                jos.push("errno", ENOENT);
+            }
+        }
+        else
+        {
+            jos.push("error", true);
+            jos.push("errno", ENOENT);
+        }
+
+        owner->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void fuseReadAction(std::string share, std::string fs, int cookie, size_t size, int offset, ChannelClient* owner)
+    {
+        JsonObjectStream jos;
+        jos.push("cmd", SystemCommand::FuseProxy);
+        jos.push("fuse", "read");
+        jos.push("path", fs);
+        jos.push("cookie", cookie);
+
+        if(share.size())
+        {
+            JsonObjectStream jst;
+            auto path = std::filesystem::path(share + fs);
+
+            int fd = open(path.c_str(), 0);
+            Application::debug("%s: fs: %s, size: %d, offset: %d", __FUNCTION__, fs.c_str(), size, offset);
+
+            if(fd < 0)
+            {
+                jos.push("error", true);
+                jos.push("errno", errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "open", strerror(errno), errno);
+            }
+            else
+            {
+                if(0 > lseek(fd, offset, SEEK_SET))
+                {
+                    jos.push("error", true);
+                    jos.push("errno", errno);
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "lseek", strerror(errno), errno);
+                }
+                else
+                {
+                    BinaryBuf buf(size, 0);
+
+                    int ret = read(fd, buf.data(), buf.size());
+
+                    if(0 > ret)
+                    {
+                        jos.push("error", true);
+                        jos.push("errno", errno);
+                        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "lseek", strerror(errno), errno);
+                    }
+                    else
+                    // end stream
+                    if(ret == 0)
+                    {
+                        jos.push("eof", true);
+                    }
+                    else
+                    {
+                        buf.resize(ret);
+                        jos.push("eof", false);
+                        jos.push("data", Tools::convertBinary2JsonString(RawPtr(buf.data(), buf.size())));
+                    }
+                }
+
+                close(fd);
+            }
+        }
+        else
+        {
+            jos.push("error", true);
+            jos.push("errno", EBADF);
+        }
+
+        owner->sendLtsmEvent(Channel::System, jos.flush());
+    }
+
+    void Vnc2SDL::systemFuseProxy(const JsonObject & jo)
+    {
+        auto fuse = jo.getString("fuse");
+        if(fuse.empty())
+        {
+            Application::error("%s: command empty", __FUNCTION__);
+            throw sdl_error(NS_FuncName);
+        }
+
+        auto path = jo.getString("path");
+
+        if(path.empty())
+        {
+            Application::error("%s: path empty", __FUNCTION__);
+            throw sdl_error(NS_FuncName);
+        }
+
+        auto cookie = jo.getInteger("cookie", 0);
+        Application::info("%s: command: %s, path: `%s', cookie: %d", __FUNCTION__, fuse.c_str(), path.c_str(), cookie);
+
+        if(fuse == "open")
+        {
+            std::thread(fuseOpenAction, share, path, cookie, jo.getInteger("flags"), static_cast<ChannelClient*>(this)).detach();
+        }
+        else
+        if(fuse == "readdir")
+        {
+            std::thread(fuseReadDirAction, share, path, cookie, static_cast<ChannelClient*>(this)).detach();
+        }
+        else
+        if(fuse == "getattr")
+        {
+            std::thread(fuseGetAttrAction, share, path, cookie, static_cast<ChannelClient*>(this)).detach();
+        }
+        else
+        if(fuse == "read")
+        {
+            size_t size = jo.getInteger("size", 0);
+            int offset = jo.getInteger("offset", 0);
+
+            std::thread(fuseReadAction, share, path, cookie, size, offset, static_cast<ChannelClient*>(this)).detach();
+        }
+        else
+        {
+            Application::error("%s: unknown command: %s", __FUNCTION__, fuse.c_str());
+            throw sdl_error(NS_FuncName);
+        }
+    }
+
+    void Vnc2SDL::systemTokenAuth(const JsonObject & jo)
+    {
+        auto action = jo.getString("action");
+        auto serial = jo.getString("serial");
+
+        Application::info("%s: action: %s, serial: %s", __FUNCTION__, action.c_str(), serial.c_str());
+
+        if(! token)
+        {
+            Application::error("%s: token api not loaded", __FUNCTION__);
+            return;
+        }
+
+        if(action == "check")
+        {
+            std::thread([this, ptr = token.get(), serial, pin = jo.getString("pin"), cert = jo.getInteger("cert"), content = jo.getString("data")]
+            {
+                auto data = Tools::convertJsonString2Binary(content);
+
+                try
+                {
+                    data = ptr->decryptPkcs7(serial, pin, cert, data);
+                }
+                catch(const std::exception & err)
+                {
+                    std::string str = err.what();
+                    data.assign(str.begin(), str.end());
+                }
+
+                JsonObjectStream jos;
+                jos.push("cmd", SystemCommand::TokenAuth);
+                jos.push("action", "reply");
+                jos.push("serial", serial);
+                jos.push("cert", cert);
+                jos.push("decrypt", std::string(data.begin(), data.end()));
+
+                static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+            }).detach();
+        }
+        else
+        {
+            Application::error("%s: unknown action: %s", __FUNCTION__, action.c_str());
+            throw sdl_error(NS_FuncName);
+        }
+    }
+
+    void Vnc2SDL::systemLoginSuccess(const JsonObject & jo)
+    {
+        if(jo.getBoolean("action", false))
+        {
+            if(token)
+                token.reset();
+        }
+        else
+        {
+            auto error = jo.getString("error");
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "login", error.c_str());
+        }
+    }
 #endif
 }
 
 int main(int argc, const char** argv)
 {
-    int res = 0;
-
     if(0 > SDL_Init(SDL_INIT_VIDEO))
     {
         std::cerr << "sdl init video failed" << std::endl;
         return -1;
     }
 
-    try
+    bool programRestarting = true;
+    int res = 0;
+
+    while(programRestarting)
     {
-        LTSM::Vnc2SDL app(argc, argv);
-        res = app.start();
-    }
-    catch(const std::invalid_argument & err)
-    {
-        std::cerr << "unknown params: " << err.what() << std::endl;
-        LTSM::printHelp(argv[0]);
-        return -1;
-    }
-    catch(const std::exception & err)
-    {
-        LTSM::Application::error("exception: %s", err.what());
-        LTSM::Application::info("program: %s", "terminate...");
-    }
-    catch(int val)
-    {
-        res = val;
+        try
+        {
+            LTSM::Vnc2SDL app(argc, argv);
+            if(! app.isAlwaysRunning())
+                programRestarting = false;
+            res = app.start();
+        }
+        catch(const std::invalid_argument & err)
+        {
+            std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
+            LTSM::printHelp(argv[0]);
+            return -1;
+        }
+        catch(int val)
+        {
+            return val;
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::info("program: %s", "terminate...");
+        }
     }
 
     SDL_Quit();
