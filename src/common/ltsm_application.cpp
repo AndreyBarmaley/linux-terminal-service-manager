@@ -31,6 +31,11 @@
 
 namespace LTSM
 {
+    std::string ident{"application"};
+    int  facility = LOG_USER;
+
+    // Application
+    FILE* Application::fderr = stderr;
     DebugLevel Application::level = DebugLevel::Console;
     std::mutex Application::logging;
 
@@ -58,9 +63,10 @@ namespace LTSM
             level = DebugLevel::Quiet;
     }
 
-    Application::Application(std::string_view sid) : ident(sid.data()), facility(LOG_USER)
+    Application::Application(std::string_view sid)
     {
-        ::openlog(ident, 0, facility);
+        ident.assign(sid.begin(), sid.end());
+        openlog(ident.c_str(), 0, facility);
     }
 
     Application::~Application()
@@ -68,11 +74,27 @@ namespace LTSM
         closelog();
     }
 
-    void Application::reopenSyslog(int fclt)
+    void Application::openSyslog(void)
+    {
+        openlog(ident.c_str(), 0, facility);
+    }
+
+    void Application::openChildSyslog(const char* file)
+    {
+        if(file)
+        {
+            fderr = fopen(file, "a");
+            if(! fderr)
+                fderr = stderr;
+        }
+
+        // child: switch syslog to stderr
+        Application::level = DebugLevel::Console;
+    }
+
+    void Application::closeSyslog(void)
     {
         closelog();
-        ::openlog(ident, 0, fclt);
-        facility = fclt;
     }
 
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
@@ -107,16 +129,17 @@ namespace LTSM
 
     void ApplicationJsonConfig::readConfig(const std::filesystem::path & file)
     {
-        if(! std::filesystem::exists(file))
+        std::error_code err;
+        if(! std::filesystem::exists(file, err))
         {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
             throw std::invalid_argument(__FUNCTION__);
         }
 
-        if((std::filesystem::status(file).permissions() & std::filesystem::perms::owner_read)
+        if((std::filesystem::status(file, err).permissions() & std::filesystem::perms::owner_read)
                 == std::filesystem::perms::none)
         {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "access", file.c_str());
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
             throw std::invalid_argument(__FUNCTION__);
         }
 
@@ -134,7 +157,7 @@ namespace LTSM
         json.addString("config:path", file.native());
 
         std::string str = json.getString("logging:facility");
-        int facility = LOG_USER;
+        facility = LOG_USER;
 
         if(6 == str.size() && 0 == str.compare(0, 5, "local"))
         {
@@ -153,7 +176,10 @@ namespace LTSM
         }
 
         if(0 < facility)
-            reopenSyslog(facility);
+        {
+            closelog();
+            ::openlog(ident.c_str(), 0, facility);
+        }
     }
 
     void ApplicationJsonConfig::configSetInteger(const std::string & key, int val)

@@ -232,7 +232,7 @@ namespace LTSM
         std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
         std::list<std::string>          getSessionDbusAddresses(std::string_view);
         void                            redirectFdNull(int);
-        void                            closefds(void);
+        void                            closefds(int exclude = -1);
         bool                            checkFileReadable(const std::filesystem::path &);
         bool                            createDirectory(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
@@ -269,7 +269,6 @@ namespace LTSM
 #endif
 
         protected:
-	    void			openlog(void) const;
 	    void			closeSystemSession(XvfbSessionPtr);
             std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie);
             bool                        createSessionConnInfo(XvfbSessionPtr, bool destroy = false);

@@ -79,7 +79,7 @@ namespace LTSM
         if(errno == EINTR)
             return hasInput(fd, timeoutMS);
 
-        Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pool", strerror(errno), errno);
         throw network_error(NS_FuncName);
     }
 
@@ -91,7 +91,7 @@ namespace LTSM
         int count;
         if(0 > ioctl(fd, FIONREAD, & count))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ioctl", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
 
@@ -238,7 +238,7 @@ namespace LTSM
             if(EAGAIN == errno || EINTR == errno)
                 continue;
 
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "read", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
     }
@@ -270,7 +270,7 @@ namespace LTSM
             if(EAGAIN == errno || EINTR == errno)
                 continue;
 
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "write", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
     }
@@ -333,7 +333,7 @@ namespace LTSM
 
         if(1 != recv(sock, & res, 1, MSG_PEEK))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "recv", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
 
@@ -397,7 +397,7 @@ namespace LTSM
 
             if(std::ferror(fin.get()))
             {
-                Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fread", strerror(errno), errno);
                 throw network_error(NS_FuncName);
             }
 
@@ -423,7 +423,7 @@ namespace LTSM
 
             if(std::ferror(fout.get()))
             {
-                Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fwrite", strerror(errno), errno);
                 throw network_error(NS_FuncName);
             }
 
@@ -455,7 +455,7 @@ namespace LTSM
 
         if(std::ferror(fin.get()))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fgetc", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
 
@@ -489,7 +489,11 @@ namespace LTSM
 
         if(loopThread.joinable()) loopThread.join();
 
-        std::filesystem::remove(socketPath);
+        std::error_code err;
+        std::filesystem::remove(socketPath, err);
+
+        if(err)
+            Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), socketPath.c_str(), getuid());
     }
 
     int ProxySocket::proxyClientSocket(void) const
@@ -613,7 +617,7 @@ namespace LTSM
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);            
         if(0 > fd)
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
             return -1;
         }
             
@@ -635,7 +639,7 @@ namespace LTSM
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "bind", strerror(errno), errno);
             return -1;
         }
 
@@ -643,7 +647,7 @@ namespace LTSM
         
         if(0 != ::listen(fd, conn))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "listen", strerror(errno), errno);
             close(fd);
             return -1;
         }
@@ -656,7 +660,7 @@ namespace LTSM
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock)
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "accept", strerror(errno), errno);
         else
             Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
 
@@ -669,7 +673,7 @@ namespace LTSM
 
         if(0 > sock)
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
             return -1;
         }
 
@@ -683,7 +687,7 @@ namespace LTSM
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_in)))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "connect", strerror(errno), errno);
             close(sock);
             sock = -1;
         }
@@ -749,7 +753,7 @@ namespace LTSM
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > sock)
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
             return -1;
         }
 
@@ -768,7 +772,7 @@ namespace LTSM
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "connect", strerror(errno), errno);
             close(sock);
             sock = -1;
         }
@@ -784,11 +788,16 @@ namespace LTSM
 
         if(0 > fd)
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
             return -1;
         }
 
-        std::filesystem::remove(path);
+        std::error_code err;
+        std::filesystem::remove(path, err);
+
+        if(err)
+            Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
+
         struct sockaddr_un sockaddr;
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
@@ -803,7 +812,7 @@ namespace LTSM
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "bind", strerror(errno), errno);
             close(fd);
             return -1;
         }
@@ -812,7 +821,7 @@ namespace LTSM
 
         if(0 != ::listen(fd, conn))
         {
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "listen", strerror(errno), errno);
             close(fd);
             return -1;
         }
@@ -825,7 +834,7 @@ namespace LTSM
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock)
-            Application::error("%s: error: %s, code: %d", __FUNCTION__, strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "accept", strerror(errno), errno);
         else
             Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
 
@@ -839,9 +848,10 @@ namespace LTSM
         if(0 > srvfd)
             return false;
 
-        if(! std::filesystem::is_socket(path))
+        std::error_code err;
+        if(! std::filesystem::is_socket(path, err))
         {
-            Application::error("%s: path not found: %s", __FUNCTION__, path.c_str());
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not socket"), path.c_str(), getuid());
             return false;
         }
 
@@ -963,15 +973,29 @@ namespace LTSM
             if(priority.empty())
                 priority = "NORMAL:+ANON-ECDH:+ANON-DH";
 
-            if(certFile.empty() || ! std::filesystem::exists(certFile))
+
+            if(certFile.empty())
             {
-                Application::error("cert file not found: %s", certFile.c_str());
+                Application::error("%s: %s need", __FUNCTION__, "cert file");
                 return false;
             }
 
-            if(keyFile.empty() || ! std::filesystem::exists(keyFile))
+            if(keyFile.empty())
             {
-                Application::error("key file not found: %s", keyFile.c_str());
+                Application::error("%s: %s need", __FUNCTION__, "key file");
+                return false;
+            }
+
+            std::error_code err;
+            if(! std::filesystem::exists(certFile, err))
+            {
+                Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), certFile.c_str(), getuid());
+                return false;
+            }
+
+            if(! std::filesystem::exists(keyFile, err))
+            {
+                Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), keyFile.c_str(), getuid());
                 return false;
             }
 
@@ -990,13 +1014,25 @@ namespace LTSM
 
             auto certcred = static_cast<gnutls::certificate_credentials*>(cred.get());
 
-            if(std::filesystem::exists(caFile))
-                certcred->set_x509_trust_file(caFile.c_str(), GNUTLS_X509_FMT_PEM);
+            if(! caFile.empty())
+            {
+                if(std::filesystem::exists(caFile, err))
+                    certcred->set_x509_trust_file(caFile.c_str(), GNUTLS_X509_FMT_PEM);
+
+                if(err)
+                    Application::warning("%s, %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), caFile.c_str(), getuid());
+            }
 
             certcred->set_x509_key_file(certFile.c_str(), keyFile.c_str(), GNUTLS_X509_FMT_PEM);
 
-            if(std::filesystem::exists(crlFile))
-                certcred->set_x509_crl_file(crlFile.c_str(), GNUTLS_X509_FMT_PEM);
+            if(! crlFile.empty())
+            {
+                if(std::filesystem::exists(crlFile, err))
+                    certcred->set_x509_crl_file(crlFile.c_str(), GNUTLS_X509_FMT_PEM);
+
+                if(err)
+                    Application::warning("%s, %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), crlFile.c_str(), getuid());
+            }
 
             session->set_credentials(*cred.get());
             session->set_priority(priority.data(), nullptr);

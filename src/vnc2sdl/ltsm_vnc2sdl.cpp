@@ -515,8 +515,7 @@ namespace LTSM
         // main thread: sdl processing
         SDL_Event ev;
 
-        auto clipDelay = std::chrono::steady_clock::now();
-        std::shared_ptr<char> clipBoard(SDL_GetClipboardText(), SDL_free);
+        auto clipboardDelay = std::chrono::steady_clock::now();
 
         if(isContinueUpdatesSupport())
             sendContinuousUpdates(true, { XCB::Point(0,0), clientSize() });
@@ -538,23 +537,27 @@ namespace LTSM
             }
 #endif
             // send clipboard
-            if(std::chrono::steady_clock::now() - clipDelay > 300ms &&
+            if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
                 ! focusLost && SDL_HasClipboardText())
             {
-                std::thread([clip = clipBoard, ptr = SDL_GetClipboardText(), this]() mutable
+                std::thread([this]() mutable
                 {
-                    if(! clip || std::strcmp(clip.get(), ptr))
+                    if(auto ptr = SDL_GetClipboardText())
                     {
-                        this->sendCutTextEvent(ptr, SDL_strlen(ptr));
-                        clip.reset(ptr);
-                    }
-                    else
-                    {
+                        const std::scoped_lock guard{ this->clipboardLock };
+                        auto clipboardBufSdl = RawPtr<uint8_t>(reinterpret_cast<uint8_t*>(ptr), SDL_strlen(ptr));
+
+                        if(clipboardBufRemote != clipboardBufSdl && clipboardBufLocal != clipboardBufSdl)
+                        {
+                            clipboardBufLocal = clipboardBufSdl;
+                            this->sendCutTextEvent(ptr, SDL_strlen(ptr));
+                        }
+
                         SDL_free(ptr);
                     }
                 }).detach();
 
-                clipDelay = std::chrono::steady_clock::now();
+                clipboardDelay = std::chrono::steady_clock::now();
             }
 
             if(! SDL_PollEvent(& ev))
@@ -596,7 +599,7 @@ namespace LTSM
 
     bool Vnc2SDL::sdlEventProcessing(const SDL::GenericEvent & ev)
     {
-        const std::scoped_lock<std::mutex> lock(lockRender);
+        const std::scoped_lock guard{ renderLock };
 
         switch(ev.type())
         {
@@ -780,7 +783,7 @@ namespace LTSM
 
     void Vnc2SDL::fbUpdateEvent(void)
     {
-        const std::scoped_lock<std::mutex> lock(lockRender);
+        const std::scoped_lock guard{ renderLock };
 
         SDL_Rect area{ .x = dirty.x, .y = dirty.y, .w = dirty.width, .h = dirty.height };
         if(0 != SDL_UpdateTexture(window->display(), & area, fb->pitchData(dirty.y) + dirty.x * fb->bytePerPixel(), fb->pitchSize()))
@@ -797,7 +800,7 @@ namespace LTSM
     {
         Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
 
-        const std::scoped_lock<std::mutex> lock(lockRender);
+        const std::scoped_lock guard{ renderLock };
 
         if(! window)
             window.reset(new SDL::Window("VNC2SDL", width, height, 0, 0, 0, accelerated));
@@ -835,7 +838,7 @@ namespace LTSM
 
     void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel)
     {
-        const std::scoped_lock<std::mutex> lock(lockRender);
+        const std::scoped_lock guard{ renderLock };
 
         fb->setPixel(dst, pixel);
         dirty.join(dst.x, dst.y, 1, 1);
@@ -843,7 +846,7 @@ namespace LTSM
 
     void Vnc2SDL::fillPixel(const XCB::Region & dst, uint32_t pixel)
     {
-        const std::scoped_lock<std::mutex> lock(lockRender);
+        const std::scoped_lock guard{ renderLock };
 
         fb->fillPixel(dst, pixel);
         dirty.join(dst);
@@ -862,9 +865,22 @@ namespace LTSM
 
     void Vnc2SDL::cutTextEvent(std::vector<uint8_t> && buf)
     {
-        buf.push_back(0);
-        if(0 != SDL_SetClipboardText(reinterpret_cast<const char*>(buf.data())))
+        bool zeroInserted = false;
+
+        if(buf.back() != 0)
+        {
+            buf.push_back(0);
+            zeroInserted = true;
+        }
+
+        const std::scoped_lock guard{ clipboardLock };
+        clipboardBufRemote.swap(buf);
+
+        if(0 != SDL_SetClipboardText(reinterpret_cast<const char*>(clipboardBufRemote.data())))
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_SetClipboardText", SDL_GetError());
+
+        if(zeroInserted)
+            clipboardBufRemote.pop_back();
     }
 
     void Vnc2SDL::richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask)

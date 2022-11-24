@@ -106,16 +106,24 @@ namespace LTSM
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
         XCB::Region             dirty;
-        std::mutex              lockRender;
+        std::mutex              renderLock;
 
         std::chrono::time_point<std::chrono::steady_clock>
                                 keyPress;
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
 
+        std::atomic<bool>       focusLost = false;
+
         int                     port = 5900;
+
+        BinaryBuf               clipboardBufRemote;
+        BinaryBuf               clipboardBufLocal;
+        std::mutex              clipboardLock;
+
         uint16_t                setWidth = 0;
         uint16_t                setHeight = 0;
+
         bool                    accelerated = true;
         bool                    fullscreen = false;
         bool                    usexkb = true;
@@ -124,7 +132,6 @@ namespace LTSM
         bool                    sendOptions = false;
 #endif
         bool                    alwaysRunning = false;
-        std::atomic<bool>       focusLost = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;

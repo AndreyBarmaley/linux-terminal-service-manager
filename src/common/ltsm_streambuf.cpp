@@ -20,6 +20,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <cstring>
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_streambuf.h"
@@ -27,6 +29,16 @@
 
 namespace LTSM
 {
+    bool ByteArray::operator== (const ByteArray & ba) const
+    {
+        return ba.size() == size() && 0 == std::memcmp(ba.data(), data(), size());
+    }
+
+    bool ByteArray::operator!= (const ByteArray & ba) const
+    {
+        return ba.size() != size() || 0 != std::memcmp(ba.data(), data(), size());
+    }
+
     std::string ByteArray::hexString(std::string_view sep, bool prefix) const
     {
         return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep, prefix);

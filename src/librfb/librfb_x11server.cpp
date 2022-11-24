@@ -152,16 +152,11 @@ namespace LTSM
                 }
                 else if(xcbDisplay()->isSelectionNotify(ev) && rfbClipboardEnable())
                 {
-                    auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
-
-                    if(xcbDisplay()->selectionNotifyAction(notify))
+                    std::thread([this, xcb = xcbDisplay(), notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get())]()
                     {
-                        std::thread([this]
-                        {
-                            auto selbuf = this->xcbDisplay()->getSelectionData();
-                            this->sendCutTextEvent(selbuf);
-                        }).detach();
-                    }
+                        if(xcb->selectionNotifyAction(notify, true /* sync PRIMARY and CLIPBOARD */))
+                            this->sendCutTextEvent(xcb->getSelectionData());
+                    }).detach();
                 }
             } // xcb pool events
 
@@ -303,9 +298,7 @@ namespace LTSM
         if(xcbAllow() && rfbClipboardEnable())
         {
             size_t maxreq = xcbDisplay()->getMaxRequest();
-            size_t chunk = std::min(maxreq, buf.size());
-
-            xcbDisplay()->setClipboardEvent(buf.data(), chunk);
+            xcbDisplay()->setClipboardEvent(buf.data(), std::min(maxreq, buf.size()));
         }
 
         clientUpdateReq = true;

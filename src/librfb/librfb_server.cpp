@@ -302,12 +302,15 @@ namespace LTSM
         if(x509Mode)
         {
             const std::string* errFile = nullptr;
+            std::error_code fserr;
 
-            if(! std::filesystem::exists(secInfo.caFile))
+            if(! std::filesystem::exists(secInfo.caFile, fserr))
                 errFile = &secInfo.caFile;
-            if(! std::filesystem::exists(secInfo.certFile))
+
+            if(! std::filesystem::exists(secInfo.certFile, fserr))
                 errFile = &secInfo.certFile;
-            if(! std::filesystem::exists(secInfo.keyFile))
+
+            if(! std::filesystem::exists(secInfo.keyFile, fserr))
                 errFile = &secInfo.keyFile;
 
             if(errFile)
@@ -417,9 +420,10 @@ namespace LTSM
                         return false;
                     }
 
-                    if(! std::filesystem::exists(secInfo.passwdFile))
+                    std::error_code err;
+                    if(! std::filesystem::exists(secInfo.passwdFile, err))
                     {
-                        Application::error("%s: file not found: %s", __FUNCTION__, secInfo.passwdFile.c_str());
+                        Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), secInfo.passwdFile.c_str(), getuid());
                         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                         return false;
                     }
@@ -1956,7 +1960,8 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)
     {
-        sendLtsm(*this, sendLock, channel, buf, len);
+        if(isClientEncodings(RFB::ENCODING_LTSM))
+            sendLtsm(*this, sendLock, channel, buf, len);
     }
 
     void RFB::ServerEncoder::recvChannelSystem(const std::vector<uint8_t> & buf)

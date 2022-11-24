@@ -1140,6 +1140,7 @@ namespace LTSM
             throw xcb_error(NS_FuncName);
         }
 
+        // xcb_xfixes_select_selection_input(xcb_xfixes_selection_event_mask_t)
         xcb_xfixes_select_cursor_input(_conn, root(), XCB_XFIXES_CURSOR_NOTIFY_MASK_DISPLAY_CURSOR);
 
         /*
@@ -1572,9 +1573,10 @@ namespace LTSM
     {
         auto cvt = "/usr/bin/cvt";
 
-        if(! std::filesystem::exists(cvt))
+        std::error_code err;
+        if(! std::filesystem::exists(cvt, err))
         {
-            Application::error("%s: utility not found: %s", __FUNCTION__, cvt);
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), cvt, getuid());
             return 0;
         }
 
@@ -2251,7 +2253,6 @@ namespace LTSM
                               [this]()
             {
                 this->getSelectionEvent(this->_atomPrimary);
-                this->getSelectionEvent(this->_atomClipboard);
             });
         }
     }
@@ -2414,10 +2415,20 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::RootDisplayExt::selectionNotifyAction(xcb_selection_notify_event_t* ev)
+    bool XCB::RootDisplayExt::selectionNotifyAction(xcb_selection_notify_event_t* ev, bool syncPrimaryClipboard)
     {
         if(! ev || ev->property == XCB_ATOM_NONE)
             return false;
+
+        bool allowAtom = ev->selection == _atomPrimary ||
+            (ev->selection == _atomClipboard && syncPrimaryClipboard);
+
+        if(! allowAtom)
+        {
+            auto name = getAtomName(ev->selection);
+            Application::warning("%s: skip selection, atom: %d, `%s'", __FUNCTION__, ev->selection, name.c_str());
+            return false;
+        }
 
         // get type
         auto type = getPropertyType(_selwin, _atomBuffer);
@@ -2428,7 +2439,7 @@ namespace LTSM
         if(type != _atomUTF8 && type != _atomText && type != _atomTextPlain)
         {
             auto name = getAtomName(type);
-            Application::error("xcb selection notify action, unsupported type: %d, `%s'", type, name.c_str());
+            Application::warning("%s: unsupported type: %d, `%s'", __FUNCTION__, type, name.c_str());
             return false;
         }
 
@@ -2458,7 +2469,7 @@ namespace LTSM
                        Application::isDebugLevel(DebugLevel::SyslogInfo))
                     {
                         std::string log(_selbuf.begin(), _selbuf.end());
-                        Application::debug("xcb get selection, size: %d, content: `%s'", _selbuf.size(), log.c_str());
+                        Application::debug("%s: selection size: %d, content: `%s'", __FUNCTION__, _selbuf.size(), log.c_str());
                     }
                 }
             }

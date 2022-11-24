@@ -27,8 +27,8 @@
 #include <string>
 #include <string_view>
 
-#include <stdio.h>
 #include <syslog.h>
+#include <stdio.h>
 
 #include "ltsm_json_wrapper.h"
 
@@ -38,14 +38,10 @@ namespace LTSM
 
     class Application
     {
-        const char*     ident = nullptr;
-	int		facility = LOG_USER;
-
     protected:
         static std::mutex logging;
+        static FILE* fderr;
         static DebugLevel level;
-
-        void            reopenSyslog(int facility);
 
     public:
         Application(std::string_view ident);
@@ -59,10 +55,11 @@ namespace LTSM
         {
 	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(logging);
-		fprintf(stderr, "[info]\t");
-		fprintf(stderr, format, vals...);
-		fprintf(stderr, "\n");
+                const std::scoped_lock guard{ logging };
+
+		fprintf(fderr, "[info]\t");
+		fprintf(fderr, format, vals...);
+		fprintf(fderr, "\n");
 	    }
 	    else
 	    if(level == DebugLevel::SyslogInfo ||  level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
@@ -74,10 +71,11 @@ namespace LTSM
         {
 	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(logging);
-		fprintf(stderr, "[notice]\t");
-		fprintf(stderr, format, vals...);
-		fprintf(stderr, "\n");
+                const std::scoped_lock guard{ logging };
+
+		fprintf(fderr, "[notice]\t");
+		fprintf(fderr, format, vals...);
+		fprintf(fderr, "\n");
 	    }
 	    else
         	syslog(LOG_NOTICE, format, vals...);
@@ -89,10 +87,11 @@ namespace LTSM
 	    if(level == DebugLevel::Console ||
 	        level == DebugLevel::ConsoleError)
 	    {
-                const std::scoped_lock<std::mutex> lock(logging);
-		fprintf(stderr, "[warning]\t");
-		fprintf(stderr, format, vals...);
-		fprintf(stderr, "\n");
+                const std::scoped_lock guard{ logging };
+
+		fprintf(fderr, "[warning]\t");
+		fprintf(fderr, format, vals...);
+		fprintf(fderr, "\n");
 	    }
 	    else
         	syslog(LOG_WARNING, format, vals...);
@@ -104,10 +103,11 @@ namespace LTSM
 	    if(level == DebugLevel::Console ||
 	        level == DebugLevel::ConsoleError)
 	    {
-                const std::scoped_lock<std::mutex> lock(logging);
-		fprintf(stderr, "[error]\t");
-		fprintf(stderr, format, vals...);
-		fprintf(stderr, "\n");
+                const std::scoped_lock guard{ logging };
+
+		fprintf(fderr, "[error]\t");
+		fprintf(fderr, format, vals...);
+		fprintf(fderr, "\n");
 	    }
 	    else
         	syslog(LOG_ERR, format, vals...);
@@ -118,20 +118,21 @@ namespace LTSM
         {
 	    if(level == DebugLevel::Console)
 	    {
-                const std::scoped_lock<std::mutex> lock(logging);
-		fprintf(stderr, "[debug]\t");
-		fprintf(stderr, format, vals...);
-		fprintf(stderr, "\n");
+                const std::scoped_lock guard{ logging };
+
+		fprintf(fderr, "[debug]\t");
+		fprintf(fderr, format, vals...);
+		fprintf(fderr, "\n");
 	    }
 	    else
 	    if(level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
                 syslog(LOG_DEBUG, format, vals...);
         }
 
-        void openlog(void) const
-        {
-            ::openlog(ident, 0, facility);
-        }
+        static void openSyslog(void);
+        static void closeSyslog(void);
+
+        static void openChildSyslog(const char* file = nullptr);
 
         static bool isDebugLevel(const DebugLevel &);
         static void setDebugLevel(const DebugLevel &);

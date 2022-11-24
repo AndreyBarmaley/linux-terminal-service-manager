@@ -49,16 +49,19 @@ namespace LTSM
         std::string     toString(void) const;
 
         uint32_t        crc32b(void) const;
+
+        bool            operator== (const ByteArray &) const;
+        bool            operator!= (const ByteArray &) const;
     };
 
     /// @brief: raw array wrapper
     template<typename T>
     struct RawPtr :  ByteArray, std::pair<T*, size_t>
     {
-        RawPtr(T* ptr, size_t len) : std::pair<T *, size_t>(ptr, len) {}
+        RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
 
         template<size_t N>
-        RawPtr(T(&arr)[N]) : std::pair<T *, size_t>(arr, N) {}
+        RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
 
 
         size_t size(void) const override
@@ -86,17 +89,15 @@ namespace LTSM
         BinaryBuf(const_iterator it1, const_iterator it2) : std::vector<uint8_t>(it1, it2) {}
         BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
         BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
+        BinaryBuf(std::vector<uint8_t> && v) noexcept { swap(v); }
 
         template<size_t N>
         BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
 
-        template<typename T = std::vector<uint8_t>>
-        BinaryBuf(T && v) noexcept { assign(std::forward<T>(v)); }
 
         BinaryBuf &     operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
-
-        template<typename T = std::vector<uint8_t>>
-        BinaryBuf &     operator= (T && v) noexcept { assign(std::forward<T>(v)); return *this; }
+        BinaryBuf &     operator= (const ByteArray & v) { assign(v.data(), v.data() + v.size()); return *this; }
+        BinaryBuf &     operator= (std::vector<uint8_t> && v) noexcept { swap(v); return *this; }
 
         BinaryBuf &     append(const uint8_t*, size_t);
         BinaryBuf &     append(const std::vector<uint8_t> &);

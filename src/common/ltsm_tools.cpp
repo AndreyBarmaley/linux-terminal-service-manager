@@ -58,8 +58,9 @@ namespace LTSM
 {
     std::filesystem::path Tools::resolveSymLink(const std::filesystem::path & path)
     {
-        return std::filesystem::exists(path) && std::filesystem::is_symlink(path) ?
-            resolveSymLink(std::filesystem::read_symlink(path)) : path;
+        std::error_code err;
+        return std::filesystem::exists(path, err) && std::filesystem::is_symlink(path, err) ?
+            resolveSymLink(std::filesystem::read_symlink(path, err)) : path;
     }
 
     std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)
@@ -300,8 +301,9 @@ namespace LTSM
     std::string Tools::fileToString(const std::filesystem::path & file)
     {
         std::string str;
+        std::error_code err;
 
-        if(std::filesystem::exists(file))
+        if(std::filesystem::exists(file, err))
         {
             std::ifstream ifs(file, std::ios::binary);
             if(ifs.is_open())
@@ -313,12 +315,12 @@ namespace LTSM
             }
             else
             {
-                Application::error("%s: %s failed, path:`%s'", __FUNCTION__, "read", file.c_str());
+                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
             }
         }
         else
         {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
         }
 
         return str;
@@ -328,17 +330,21 @@ namespace LTSM
     {
         const std::filesystem::path localtime{"/etc/localtime"};
         std::string str;
+        std::error_code err;
 
         if(auto env = std::getenv("TZ"))
         {
             str.assign(env);
         }
         else
-        if(std::filesystem::is_symlink(localtime))
+        if(std::filesystem::is_symlink(localtime, err))
         {
-            auto path = std::filesystem::read_symlink(localtime);
-            auto tz = path.parent_path().filename() / path.filename();
-            str.append(tz.native());
+            auto path = std::filesystem::read_symlink(localtime, err);
+            if(! err)
+            {
+                auto tz = path.parent_path().filename() / path.filename();
+                str.append(tz.native());
+            }
         }
         else
         {
@@ -705,8 +711,9 @@ namespace LTSM
 
     bool Tools::checkUnixSocket(const std::filesystem::path & path)
     {
+        std::error_code err;
         // check present
-        if(std::filesystem::is_socket(path))
+        if(std::filesystem::is_socket(path, err))
         {
             int socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 

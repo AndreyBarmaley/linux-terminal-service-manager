@@ -217,10 +217,11 @@ namespace LTSM
     std::string Connector::SignalProxy::checkFileOption(const std::string & param) const
     {
         auto fileName = _config->getString(param);
+        std::error_code err;
 
-        if(! fileName.empty() && ! std::filesystem::exists(fileName))
+        if(! fileName.empty() && ! std::filesystem::exists(fileName, err))
         {
-            Application::error("%s: file not found: `%s'", __FUNCTION__, fileName.c_str());
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), fileName.c_str(), getuid());
             fileName.clear();
         }
 

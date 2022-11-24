@@ -500,9 +500,10 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::list<std::string> files)
     Application::info("%s: files: %d", __FUNCTION__, files.size());
 
     files.remove_if([](auto & file){
-        if(! std::filesystem::is_regular_file(file))
+        std::error_code err;
+        if(! std::filesystem::is_regular_file(file, err))
         {
-            Application::warning("%s: skip not regular, file: %s", "sendSystemTransferFiles", file.c_str());
+            Application::warning("%s: %s, path: `%s', uid: %d", "sendSystemTransferFiles", err.message().c_str(), file.c_str(), getuid());
             return true;
         }
 
@@ -525,9 +526,11 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::list<std::string> files)
     jo.push("cmd", SystemCommand::TransferFiles);
 
     JsonArrayStream ja;
+
     for(auto & fname : files)
     {
-        if(auto fsize = std::filesystem::file_size(fname))
+        std::error_code err;
+        if(auto fsize = std::filesystem::file_size(fname, err))
             ja.push(JsonObjectStream().push("file", fname).push("size", fsize).flush());
     }
     jo.push("files", ja.flush());
@@ -1265,9 +1268,10 @@ void LTSM::Channel::Connector::loopReader(Connector* st)
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::UnixConnector::createConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Speed & speed, ChannelClient & sender)
 {
-    if(! std::filesystem::is_socket(path))
+    std::error_code err;
+    if(! std::filesystem::is_socket(path, err))
     {
-        Application::error("%s: %s, channel: 0x%02x, path: `%s'", __FUNCTION__, "socket not found", channel, path.c_str());
+        Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1339,10 +1343,11 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
+    std::error_code err;
     if(mode == ConnectorMode::ReadOnly &&
-            ! std::filesystem::exists(path))
+            ! std::filesystem::exists(path, err))
     {
-        Application::error("%s: %s, path: `%s'", __FUNCTION__, "file not found", path.c_str());
+        Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1358,7 +1363,7 @@ std::unique_ptr<LTSM::Channel::Connector>
     {
         int flags = O_WRONLY;
 
-        if(std::filesystem::exists(path))
+        if(std::filesystem::exists(path, err))
         {
             flags |= O_APPEND;
             Application::warning("%s: %s, path: `%s'", __FUNCTION__, "file exists switch mode to append", path.c_str());
@@ -1404,15 +1409,16 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    if(! std::filesystem::exists(list.front()))
+    std::error_code err;
+    if(! std::filesystem::exists(list.front(), err))
     {
-        Application::error("%s: %s, path: `%s'", __FUNCTION__, "cmd not found", list.front().c_str());
+        Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), list.front().c_str(), getuid());
         throw channel_error(NS_FuncName);
     }
 
     FILE* fcmd = nullptr;
 
-    if(std::filesystem::is_symlink(list.front()))
+    if(std::filesystem::is_symlink(list.front(), err))
     {
         auto cmd = Tools::resolveSymLink(list.front());
         list.pop_front();
@@ -1422,7 +1428,7 @@ std::unique_ptr<LTSM::Channel::Connector>
         fcmd = popen(runcmd2.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     }
     else
-    if(std::filesystem::is_regular_file(list.front()))
+    if(std::filesystem::is_regular_file(list.front(), err))
     {
         fcmd = popen(runcmd.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     }
@@ -1511,17 +1517,24 @@ LTSM::Channel::UnixListener::UnixListener(const std::filesystem::path & sock, in
 
 LTSM::Channel::UnixListener::~UnixListener()
 {
-    if(std::filesystem::exists(path) && std::filesystem::is_socket(path))
-        std::filesystem::remove(path);
+    try
+    {
+        if(std::filesystem::exists(path) && std::filesystem::is_socket(path))
+            std::filesystem::remove(path);
+    }
+    catch(const std::filesystem::filesystem_error &)
+    {
+    }
 }
 
 std::unique_ptr<LTSM::Channel::Listener>
     LTSM::Channel::UnixListener::createListener(const std::filesystem::path & path, const ListenMode & listen,
         const std::string & curl, const Channel::ConnectorMode & cmode, const Channel::Speed & speed, ChannelClient & sender)
 {
-    if(std::filesystem::exists(path))
+    std::error_code err;
+    if(std::filesystem::exists(path, err))
     {
-        if(std::filesystem::is_socket(path))
+        if(std::filesystem::is_socket(path, err))
         {
             Application::warning("%s: %s, path: `%s'", __FUNCTION__, "socket present", path.c_str());
             std::filesystem::remove(path);

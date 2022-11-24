@@ -569,7 +569,7 @@ namespace LTSM
 
             GenericEvent             poolEvent(void) override;
 
-            bool                     selectionNotifyAction(xcb_selection_notify_event_t*);
+            bool                     selectionNotifyAction(xcb_selection_notify_event_t*, bool syncPrimaryClipboard = false);
             bool                     isSelectionNotify(const GenericEvent & ev) const;
 
             void                         setClipboardClear(void);

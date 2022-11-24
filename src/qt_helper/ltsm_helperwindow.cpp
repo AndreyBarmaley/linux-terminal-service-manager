@@ -192,6 +192,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui->comboBoxUsername->setFocus();
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
+
     openlog("ltsm_helper", LOG_USER, 0);
     auto val = qgetenv("DISPLAY");
 
