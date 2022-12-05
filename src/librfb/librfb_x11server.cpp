@@ -157,7 +157,6 @@ namespace LTSM
         });
 
         bool mainLoop = true;
-        auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM);
 
         // main loop
         while(mainLoop)
@@ -167,7 +166,7 @@ namespace LTSM
             if(! rfbMessagesRunning())
             {
                 mainLoop = false;
-                break;
+                continue;
             }
 
             if(! xcbAllowMessages())
@@ -180,7 +179,7 @@ namespace LTSM
             if(! xcbProcessingEvents())
             {
                 mainLoop = false;
-                break;
+                continue;
             }
 
             if(nodamage || fullscreenUpdate)
