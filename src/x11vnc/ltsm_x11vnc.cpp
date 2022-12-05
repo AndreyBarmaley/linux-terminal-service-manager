@@ -187,8 +187,6 @@ namespace LTSM
             if(0 > sock)
                 return -1;
 
-            closeSyslog();
-
             // child
             if(0 == fork())
             {
@@ -208,10 +206,10 @@ namespace LTSM
                 }
 
                 close(sock);
+		// exit child
                 return res;
             }
 
-            openSyslog();
             close(sock);
         }
 

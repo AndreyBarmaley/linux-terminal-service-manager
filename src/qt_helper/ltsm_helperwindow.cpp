@@ -201,6 +201,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
 
     timerOneSec = startTimer(std::chrono::seconds(1));
     timer300ms = startTimer(std::chrono::milliseconds(300));
+    timerReloadUsers = startTimer(std::chrono::minutes(3));
 
     auto group = xkbGroup();
     auto names = xkbNames();
@@ -321,10 +322,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         ui->lineEditEncryption->setText(encryption);
 
         if(loginAutoComplete)
-        {
-            timerReloadUsers = startTimer(std::chrono::minutes(15));
             reloadUsersList();
-        }
 
         initArguments = true;
     }
@@ -346,7 +344,7 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
     if(ev->timerId() == timer300ms)
         xcbEventProcessing();
     else
-    if(ev->timerId() == timerReloadUsers)
+    if(ev->timerId() == timerReloadUsers && loginAutoComplete)
         reloadUsersList();
 }
 

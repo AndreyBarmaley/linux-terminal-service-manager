@@ -259,7 +259,6 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--fullscreen"))
                 fullscreen = true;
             else
-#ifdef LTSM_CHANNELS
             if(0 == std::strcmp(argv[it], "--printer"))
             {
                 printerUrl.assign(printdef);
@@ -349,7 +348,6 @@ namespace LTSM
                 }
             }
             else
-#endif
             if(0 == std::strcmp(argv[it], "--debug"))
                 Application::setDebugLevel(DebugLevel::Console);
             else
@@ -528,14 +526,13 @@ namespace LTSM
             if(xcbError())
                 break;
 
-#ifdef LTSM_CHANNELS
             if(! dropFiles.empty() &&
                 std::chrono::steady_clock::now() - dropStart > 700ms)
             {
                 ChannelClient::sendSystemTransferFiles(dropFiles);
                 dropFiles.clear();
             }
-#endif
+
             // send clipboard
             if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
                 ! focusLost && SDL_HasClipboardText())
@@ -921,7 +918,6 @@ namespace LTSM
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-#ifdef LTSM_CHANNELS
     void Vnc2SDL::decodingLtsmEvent(const std::vector<uint8_t> &)
     {
         if(! sendOptions)
@@ -1320,7 +1316,6 @@ namespace LTSM
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "login", error.c_str());
         }
     }
-#endif
 }
 
 int main(int argc, const char** argv)

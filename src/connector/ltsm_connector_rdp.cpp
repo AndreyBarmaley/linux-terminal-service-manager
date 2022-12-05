@@ -59,7 +59,6 @@
 #include <freerdp/gdi/gdi.h>
 
 #include "ltsm_tools.h"
-#include "ltsm_xcb_wrapper.h"
 #include "ltsm_connector_rdp.h"
 
 using namespace std::chrono_literals;
@@ -362,7 +361,6 @@ namespace LTSM
         }
     }
 
-
     int Connector::RDP::communication(void)
     {
         if(0 >= busGetServiceVersion())
@@ -371,7 +369,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        auto home = Connector::homeRuntime();
+        auto home = LTSM::Connector::homeRuntime();
         const auto socketFile = std::filesystem::path(home) / std::string("rdp_pid").append(std::to_string(getpid()));
 
         if(! proxyInitUnixSockets(socketFile))
@@ -401,11 +399,11 @@ namespace LTSM
             if(freeRdp->isShutdown() || ! proxyRunning())
                 loopShutdownFlag = true;
 
-            if(isAllowXcbMessages())
+            if(xcbAllowMessages())
             {
-                if(auto err = _xcbDisplay->hasError())
+                if(auto err = XCB::RootDisplay::hasError())
                 {
-                    setEnableXcbMessages(false);
+                    xcbDisableMessages(true);
                     Application::error("xcb display error connection: %d", err);
                     break;
                 }
@@ -430,50 +428,52 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
+    void Connector::RDP::xfixesSelectionChangedEvent(void)
+    {
+    }
+
+    void Connector::RDP::xfixesCursorChangedEvent(void)
+    {
+    }
+
+    void Connector::RDP::damageRegionEvent(const XCB::Region & area)
+    {
+        damageRegion.join(area);
+    }
+
+    void Connector::RDP::randrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne)
+    {
+        damageRegion.reset();
+        busDisplayResized(displayNum(), dsz.width, dsz.height);
+        desktopResizeEvent(*freeRdp->peer, dsz.width, dsz.height);
+    }
+
+    void Connector::RDP::xkbGroupChangedEvent(int)
+    {
+    }
+
+    void Connector::RDP::clipboardChangedEvent(const std::vector<uint8_t> &)
+    {
+    }
+
     bool Connector::RDP::xcbEventLoopAsync(bool nodamage)
     {
-        // get all damages and join it
-        while(auto ev = _xcbDisplay->poolEvent())
+        // processing xcb events
+        while(auto ev = XCB::RootDisplay::poolEvent())
         {
-            int shmOpcode = _xcbDisplay->eventErrorOpcode(ev, XCB::Module::SHM);
-
-            if(0 <= shmOpcode)
+            if(auto err = XCB::RootDisplay::hasError())
             {
-                _xcbDisplay->extendedError(ev.toerror(), __FUNCTION__, "");
+                Application::error("%s: xcb error, code: %d", __FUNCTION__, err);
                 return false;
             }
-
-            if(_xcbDisplay->isDamageNotify(ev))
-            {
-                auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
-                damageRegion.join(notify->area);
-            }
-            else if(_xcbDisplay->isRandrCRTCNotify(ev))
-            {
-                auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                xcb_randr_crtc_change_t cc = notify->u.cc;
-
-                if(0 < cc.width && 0 < cc.height)
-                {
-                    busDisplayResized(displayNum(), cc.width, cc.height);
-                    damageRegion.reset();
-                    desktopResizeEvent(*freeRdp->peer, cc.width, cc.height);
-                }
-            }
-            else if(_xcbDisplay->isSelectionNotify(ev))
-            {
-                // FIXME: rdp inform
-                //auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
-                //if(_xcbDisplay->selectionNotifyAction(notify))
-                //    selbuf = _xcbDisplay->getSelectionData();
-            }
         }
-
+ 
         if(nodamage)
-            damageRegion = _xcbDisplay->region();
-        else if(! damageRegion.empty())
+            damageRegion = XCB::RootDisplay::region();
+        else
+        if(! damageRegion.empty())
             // fix out of screen
-            damageRegion = _xcbDisplay->region().intersected(damageRegion.align(4));
+            damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
 
         if(! damageRegion.empty() && freeRdp->context && freeRdp->context->activated)
         {
@@ -483,7 +483,7 @@ namespace LTSM
             {
                 if(updateEvent(damageRegion))
                 {
-                    _xcbDisplay->damageSubtrack(damageRegion);
+                    XCB::RootDisplay::damageSubtrack(damageRegion);
                     damageRegion.reset();
                 }
             }
@@ -520,13 +520,13 @@ namespace LTSM
 
         Application::debug("login session request success, display: %d", screen);
 
-        if(! xcbConnect(screen))
+        if(! xcbConnect(screen, *this))
         {
             Application::error("%s", "xcb connect failed");
             return false;
         }
 
-        const xcb_visualtype_t* visual = _xcbDisplay->visual();
+        const xcb_visualtype_t* visual = XCB::RootDisplay::visual();
 
         if(! visual)
         {
@@ -534,9 +534,9 @@ namespace LTSM
             return false;
         }
 
-        Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
+        Application::info("%s: xcb max request: %d", __FUNCTION__, XCB::RootDisplay::getMaxRequest());
         // init server format
-        serverFormat = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        serverFormat = PixelFormat(XCB::RootDisplay::bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
@@ -551,47 +551,72 @@ namespace LTSM
 
     void Connector::RDP::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             // disable xcb messages processing
-            setEnableXcbMessages(false);
+            xcbDisableMessages(true);
 
             // wait client update canceled, 1000ms, 10 ms pause
             if(updatePartFlag)
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 10, [=]()
+                Tools::waitCallable<std::chrono::milliseconds>(1000, 10, [=]() {return !!this->updatePartFlag; });
+
+            Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, display, userName.c_str());
+
+            int oldDisplay = displayNum();
+            int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
+
+            if(newDisplay < 0)
             {
-                return !!this->updatePartFlag;
-            });
-            // switch display
-            SignalProxy::onLoginSuccess(display, userName, userUid);
+                Application::error("%s: %s failed", __FUNCTION__, "user session request");
+                throw std::runtime_error(NS_FuncName);
+            }
+
+            if(newDisplay != oldDisplay)
+            {
+                // wait xcb old operations ended
+                std::this_thread::sleep_for(100ms);
+
+                if(! xcbConnect(newDisplay, *this))
+                {
+                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
+                    throw std::runtime_error(NS_FuncName);
+                }
+
+                busShutdownDisplay(oldDisplay);
+            }
+
             // update context
-            setEnableXcbMessages(true);
+            xcbDisableMessages(false);
+
             // fix new session size
-            auto wsz = _xcbDisplay->size();
+            auto wsz = XCB::RootDisplay::size();
 
             if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
             {
                 Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
 
-                if(_xcbDisplay->setRandrScreenSize(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight))
+                if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight)))
                 {
-                    wsz = _xcbDisplay->size();
+                    wsz = XCB::RootDisplay::size();
                     Application::info("change session size [%d,%d], display: %d", wsz.width, wsz.height, displayNum());
                 }
             }
+            else
+            {
+                // full update
+                XCB::RootDisplay::damageAdd(XCB::RootDisplay::region());
+            }
 
-            // full update
-            _xcbDisplay->damageAdd(_xcbDisplay->region());
             Application::info("dbus signal: login success, display: %d, username: %s", displayNum(), userName.c_str());
         }
     }
 
     void Connector::RDP::onShutdownConnector(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             freeRdp->stopEventLoop();
-            setEnableXcbMessages(false);
+            xcbDisableMessages(true);
             loopShutdownFlag = true;
             Application::info("dbus signal: shutdown connector, display: %d", display);
         }
@@ -599,7 +624,7 @@ namespace LTSM
 
     void Connector::RDP::onSendBellSignal(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum() &&
+        if(display == displayNum() &&
            freeRdp && freeRdp->peer && freeRdp->peer->settings && freeRdp->peer->settings->SoundBeepsEnabled)
         {
             // FIXME beep
@@ -608,11 +633,17 @@ namespace LTSM
 
     void Connector::RDP::onHelperWidgetStarted(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             helperStartedFlag = true;
             Application::info("dbus signal: helper started, display: %d", display);
         }
+    }
+
+    void Connector::RDP::xcbAddDamage(const XCB::Region & reg)
+    {   
+        if(xcbAllowMessages())
+            XCB::RootDisplay::damageAdd(reg);
     }
 
     // client events
@@ -623,7 +654,7 @@ namespace LTSM
 
     void Connector::RDP::desktopResizeEvent(freerdp_peer & peer, uint16_t width, uint16_t height)
     {
-        Application::debug("%s: [%d,%d]", __FUNCTION__, width, height);
+        Application::info("%s: size: [%d,%d]", __FUNCTION__, width, height);
         auto context = static_cast<ServerContext*>(peer.context);
         context->activated = false;
         peer.settings->DesktopWidth = width;
@@ -636,20 +667,17 @@ namespace LTSM
     bool Connector::RDP::updateEvent(const XCB::Region & reg)
     {
         auto context = static_cast<ServerContext*>(freeRdp->peer->context);
-        auto reply = _xcbDisplay->copyRootImageRegion(reg);
+        auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
 
         // reply info dump
-        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
-        {
-            Application::info("get_image: request size: [%d,%d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
-                                  reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
-        }
+        Application::debug("%s: request size: [%d,%d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+                                  __FUNCTION__, reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
 
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
         renderPrimitivesToFB(frameBuffer);
 
-        return 24 == reply->bitsPerPixel() ?
+        return 24 == reply->bitsPerPixel() || 32 == reply->bitsPerPixel() ?
                updateBitmapPlanar(reg, reply) : updateBitmapInterleaved(reg, reply);
     }
 
@@ -919,10 +947,7 @@ namespace LTSM
             return FALSE;
         }
 
-        if(! connector->_xcbDisplay)
-            return FALSE;
-
-        peer->settings->ColorDepth = connector->_xcbDisplay->bitsPerPixel();
+        peer->settings->ColorDepth = static_cast<XCB::RootDisplay*>(connector)->bitsPerPixel();
 
         return TRUE;
     }
@@ -940,7 +965,7 @@ namespace LTSM
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->rdp;
 
-        //peer->settings->ColorDepth = connector->_xcbDisplay->bitsPerPixel();
+        //peer->settings->ColorDepth = static_cast<XCB::RootDisplay*>(connector)->bitsPerPixel();
         //peer->settings->ColorDepth = 32;
 
 //        if(peer->settings->ColorDepth == 15 || peer->settings->ColorDepth == 16)
@@ -954,23 +979,13 @@ namespace LTSM
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->rdp;
+        auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
-        auto wsz = connector->_xcbDisplay->size();
+        auto wsz = xcbDisplay->size();
         if(wsz.width != peer->settings->DesktopWidth || wsz.height != peer->settings->DesktopHeight)
         {
-            Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, peer->settings->DesktopWidth, peer->settings->DesktopHeight, connector->displayNum());
-
-            if(! connector->_xcbDisplay->setRandrScreenSize(peer->settings->DesktopWidth, peer->settings->DesktopHeight))
-                Application::error("%s: x11display set size: failed", __FUNCTION__);
-
-            auto wsz = connector->_xcbDisplay->size();
-
-            if(wsz.width != peer->settings->DesktopWidth || wsz.height != peer->settings->DesktopHeight)
-                Application::warning("%s: x11display size: [%d,%d]", __FUNCTION__, wsz.width, wsz.height);
-
-            peer->settings->DesktopWidth = wsz.width;
-            peer->settings->DesktopHeight = wsz.height;
-            peer->update->DesktopResize(peer->update->context);
+            Application::info("%s: request desktop resize [%d,%d], display: %d", __FUNCTION__, peer->settings->DesktopWidth, peer->settings->DesktopHeight, connector->displayNum());
+            xcbDisplay->setRandrScreenSize(XCB::Size(peer->settings->DesktopWidth, peer->settings->DesktopHeight));
         }
 
         if(! connector->channelsInit())
@@ -1075,7 +1090,7 @@ namespace LTSM
             connector->setEncryptionInfo(encryptionInfo);
 
         context->activated = TRUE;
-        connector->setEnableXcbMessages(true);
+        connector->xcbDisableMessages(false);
 
         if(peer->settings->Username)
         {
@@ -1092,7 +1107,8 @@ namespace LTSM
         }
 
         const XCB::Region damage(0, 0, peer->settings->DesktopWidth, peer->settings->DesktopHeight);
-        connector->_xcbDisplay->damageAdd(damage);
+        static_cast<XCB::RootDisplay*>(connector)->damageAdd(damage);
+
         return TRUE;
     }
 
@@ -1103,9 +1119,15 @@ namespace LTSM
         Application::debug("%s: flags:0x%04X, code:0x%04X, input:%p, context:%p", __FUNCTION__, flags, code, input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->rdp;
+        auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
-        if(connector->isAllowXcbMessages())
+        if(connector->xcbAllowMessages())
         {
+            auto test = static_cast<const XCB::ModuleTest*>(xcbDisplay->getExtension(XCB::Module::TEST));
+            if(! test)
+                return FALSE;
+
+            auto rootWin = xcbDisplay->root();
             uint32_t keysym = static_cast<uint32_t>(flags) << 16 | code;
 
             // local keymap priority "rdp:keymap:file"
@@ -1117,10 +1139,10 @@ namespace LTSM
                     auto ja = static_cast<const JsonArray*>(value);
 
                     for(auto & val : ja->toStdVector<int>())
-                        connector->_xcbDisplay->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val, 0, 0);
+                        test->fakeInputRaw(rootWin, flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, val, 0, 0);
                 }
                 else
-                    connector->_xcbDisplay->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger(), 0, 0);
+                    test->fakeInputRaw(rootWin, flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, value->getInteger(), 0, 0);
             }
             else
             {
@@ -1133,7 +1155,7 @@ namespace LTSM
                 // winpr: input
                 auto vkcode = GetVirtualKeyCodeFromVirtualScanCode(code, 4);
                 auto keycode = GetKeycodeFromVirtualKeyCode((flags & KBD_FLAGS_EXTENDED ? vkcode | KBDEXT : vkcode), KEYCODE_TYPE_EVDEV);
-                connector->_xcbDisplay->fakeInputTest(flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
+                test->fakeInputRaw(rootWin, flags & KBD_FLAGS_DOWN ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
             }
         }
 
@@ -1148,27 +1170,33 @@ namespace LTSM
         Application::debug("%s: flags:0x%04X, pos:%d,%d, input:%p, context:%p", __FUNCTION__, flags, posx, posy, input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->rdp;
+        auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
-        if(connector->isAllowXcbMessages())
+        if(connector->xcbAllowMessages())
         {
+            auto test = static_cast<const XCB::ModuleTest*>(xcbDisplay->getExtension(XCB::Module::TEST));
+            if(! test)
+                return FALSE;
+
+            auto rootWin = xcbDisplay->root();
+
             // left button
             if(flags & PTR_FLAGS_BUTTON1)
-                connector->_xcbDisplay->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_1, posx, posy);
+                test->fakeInputRaw(rootWin, flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_1, posx, posy);
             else
-
-                // right button
-                if(flags & PTR_FLAGS_BUTTON2)
-                    connector->_xcbDisplay->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_3, posx, posy);
-                else
-
-                    // middle button
-                    if(flags & PTR_FLAGS_BUTTON3)
-                        connector->_xcbDisplay->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_2, posx, posy);
-                    else if(flags & PTR_FLAGS_WHEEL)
-                        connector->_xcbDisplay->fakeInputTest(flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, flags & PTR_FLAGS_WHEEL_NEGATIVE ? XCB_BUTTON_INDEX_5 : XCB_BUTTON_INDEX_4, posx, posy);
+            // right button
+            if(flags & PTR_FLAGS_BUTTON2)
+                test->fakeInputRaw(rootWin, flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_3, posx, posy);
+            else
+            // middle button
+            if(flags & PTR_FLAGS_BUTTON3)
+                test->fakeInputRaw(rootWin, flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, XCB_BUTTON_INDEX_2, posx, posy);
+            else
+            if(flags & PTR_FLAGS_WHEEL)
+                test->fakeInputRaw(rootWin, flags & PTR_FLAGS_DOWN ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, flags & PTR_FLAGS_WHEEL_NEGATIVE ? XCB_BUTTON_INDEX_5 : XCB_BUTTON_INDEX_4, posx, posy);
 
             if(flags & PTR_FLAGS_MOVE)
-                connector->_xcbDisplay->fakeInputTest(XCB_MOTION_NOTIFY, 0, posx, posy);
+                test->fakeInputRaw(rootWin, XCB_MOTION_NOTIFY, 0, posx, posy);
         }
 
         return TRUE;
@@ -1179,6 +1207,8 @@ namespace LTSM
         Application::debug("%s: count rects:%d, context:%p", __FUNCTION__, (int) count, rdpctx);
         auto context = static_cast<ServerContext*>(rdpctx);
         auto connector = context->rdp;
+        auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
+
         std::vector<xcb_rectangle_t> rectangles(0 < count ? count : 1);
 
         if(count && areas)
@@ -1193,14 +1223,14 @@ namespace LTSM
         }
         else
         {
-            auto wsz = connector->_xcbDisplay->size();
+            auto wsz = xcbDisplay->size();
             rectangles[0].x = 0;
             rectangles[0].y = 0;
             rectangles[0].width = wsz.width;
             rectangles[0].height = wsz.height;
         }
 
-        return connector->_xcbDisplay->damageAdd(rectangles.data(), rectangles.size());
+        return xcbDisplay->damageAdd(rectangles.data(), rectangles.size());
     }
 
     BOOL Connector::RDP::cbServerSuppressOutput(rdpContext* rdpctx, BYTE allow, const RECTANGLE_16* area)
@@ -1211,13 +1241,15 @@ namespace LTSM
         if(area && 0 < allow)
         {
             Application::debug("%s: peer restore output(left:%d,top:%d,right:%d,bottom:%d)", __FUNCTION__, area->left, area->top, area->right, area->bottom);
-            connector->setEnableXcbMessages(true);
-            connector->_xcbDisplay->damageAdd(connector->_xcbDisplay->region());
+            connector->xcbDisableMessages(false);
+
+            auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
+            xcbDisplay->damageAdd(xcbDisplay->region());
         }
         else
         {
             Application::debug("%s: peer minimized and suppress output", __FUNCTION__);
-            connector->setEnableXcbMessages(false);
+            connector->xcbDisableMessages(true);
         }
 
         return TRUE;

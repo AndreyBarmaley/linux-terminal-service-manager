@@ -14,13 +14,12 @@
 #include "ltsm_application.h"
 
 using namespace LTSM;
-using namespace LTSM::XCB;
 using namespace std::chrono_literals;
 
-class X11Test : public RootDisplayExt
+class X11Test : public XCB::RootDisplay
 {
 public:
-    X11Test(size_t display) : RootDisplayExt(display)
+    X11Test(size_t display) : XCB::RootDisplay(display)
     {
     }
 
@@ -54,22 +53,23 @@ public:
 
     bool test_randr(void)
     {
+/*
         std::thread([=]{
             std::this_thread::sleep_for(2s);
-    	    this->setRandrScreenSize(1024, 768);
+    	    this->setRandrScreenSize(XCB::Size(1024, 768));
 	}).detach();
 
         std::thread([=]{
             std::this_thread::sleep_for(5s);
-    	    this->setRandrScreenSize(1280, 800);
+    	    this->setRandrScreenSize(XCB::Size(1280, 800));
 	}).detach();
 
-        auto _randr = xcb_get_extension_data(_conn, &xcb_randr_id);
+        auto _randr = xcb_get_extension_data(_conn.get(), &xcb_randr_id);
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplayExt::poolEvent())
+            while(auto ev = XCB::RootDisplay::poolEvent())
             {
-                if(XCB::RootDisplayExt::isRandrCRTCNotify(ev))
+                if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
                 {
                     auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
                     xcb_randr_crtc_change_t cc = rn->u.cc;
@@ -80,7 +80,7 @@ public:
                     }
                 }
                 else
-                if(XCB::RootDisplayExt::isRandrOutputNotify(ev))
+                if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_OUTPUT_CHANGE))
                 {
                     auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
                     xcb_randr_output_change_t oc = rn->u.oc;
@@ -98,6 +98,7 @@ public:
 
 	    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
+*/
 	return true;
     }
 
@@ -114,7 +115,7 @@ public:
 
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplayExt::poolEvent())
+            while(auto ev = XCB::RootDisplay::poolEvent())
             {
 		if(isXkbKeyboardNotify(ev))
 		{
@@ -199,8 +200,8 @@ public:
 
     bool test_xkblayoutcur(void)
     {
-        //xcb_xkb_get_names_cookie_t      xcb_xkb_get_names (xcb_connection_t *c, xcb_xkb_device_spec_t deviceSpec, uint32_t which)
-        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn, XCB_XKB_ID_USE_CORE_KBD);
+        //xcb_xkb_get_names_cookie_t      xcb_xkb_get_names (xcb_conn.get()ection_t *c, xcb_xkb_device_spec_t deviceSpec, uint32_t which)
+        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn.get(), XCB_XKB_ID_USE_CORE_KBD);
         if(auto err = xcbReply.error())
         {
             Application::error("xcb_xkb_get_state: %s", "failed");
@@ -216,7 +217,7 @@ public:
 
     bool test_xkbgroup(int group)
     {
-        auto cookie = xcb_xkb_latch_lock_state_checked(_conn, XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
+        auto cookie = xcb_xkb_latch_lock_state_checked(_conn.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
         auto errorReq = checkRequest(cookie);
         
         if(errorReq)
@@ -250,8 +251,8 @@ public:
         const uint32_t values[] = { XCB_EVENT_MASK_PROPERTY_CHANGE };
 
         /*
-        auto _selwin = xcb_generate_id(_conn);
-        auto cookie = xcb_create_window_checked(_conn, 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
+        auto _selwin = xcb_generate_id(_conn.get());
+        auto cookie = xcb_create_window_checked(_conn.get(), 0, _selwin, _screen->root, -1, -1, 1, 1, 0,
                             XCB_WINDOW_CLASS_INPUT_OUTPUT, _screen->root_visual, mask, values);
 
         auto errorReq = checkRequest(cookie);
@@ -261,15 +262,15 @@ public:
             return false;
         }
         */
-        xcb_change_window_attributes(_conn, _screen->root, XCB_CW_EVENT_MASK, values);
-        xcb_flush(_conn);
+        xcb_change_window_attributes(_conn.get(), _screen->root, XCB_CW_EVENT_MASK, values);
+        xcb_flush(_conn.get());
 
         auto active = getAtom("_NET_ACTIVE_WINDOW");
         auto utf8 = getAtom("UTF8_STRING");
 
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplayExt::poolEvent())
+            while(auto ev = XCB::RootDisplay::poolEvent())
             {
                 auto type = ev ? ev->response_type & ~0x80 : 0;
                 if(XCB_PROPERTY_NOTIFY == type)
@@ -299,7 +300,7 @@ public:
 	    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-        //xcb_destroy_window(_conn, _selwin);
+        //xcb_destroy_window(_conn.get(), _selwin);
 	return true;
     }
 };
@@ -336,7 +337,7 @@ public:
             return EXIT_FAILURE;
         }
 
-        Application::info("xcb max request: %d", _xcbDisplay->getMaxRequest());
+        Application::info("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
 
     	// _xcbDisplay->test_randr();
     	// _xcbDisplay->test_extinfo();
@@ -347,7 +348,7 @@ public:
 	//    Application::info("region coord: %d, %d", coord.x, coord.y);
 
     	//_xcbDisplay->test_randr_outputs();
-	//_xcbDisplay->setRandrScreenSize(1201, 887);
+	//_xcbDisplay->setRandrScreenSize(XCB::Size(1201, 887));
 
     	//_xcbDisplay->test_xkbinfo();
     	_xcbDisplay->test_xkblayout();

@@ -28,6 +28,7 @@
 
 #include "ltsm_sockets.h"
 #include "ltsm_connector.h"
+#include "ltsm_xcb_wrapper.h"
 
 #include "freerdp/freerdp.h"
 #include "freerdp/listener.h"
@@ -45,7 +46,7 @@ namespace LTSM
     namespace Connector
     {
         /* Connector::RDP */
-        class RDP : public SignalProxy, protected ProxySocket
+        class RDP : public SignalProxy, public XCB::RootDisplay, protected ProxySocket
         {
             std::atomic<bool>           helperStartedFlag{false};
             std::atomic<bool>           loopShutdownFlag{false};
@@ -61,11 +62,23 @@ namespace LTSM
             void                        onShutdownConnector(const int32_t & display) override;
             void                        onHelperWidgetStarted(const int32_t & display) override;
 
+            // connector
+            void                        xcbAddDamage(const XCB::Region &) override;
+
+            // root display
+            void                        xfixesSelectionChangedEvent(void) override;
+            void                        xfixesCursorChangedEvent(void) override;
+            void                        damageRegionEvent(const XCB::Region &) override;
+            void                        randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+            void                        xkbGroupChangedEvent(int) override;
+            void                        clipboardChangedEvent(const std::vector<uint8_t> &) override;
+
 	    bool			updateEvent(const XCB::Region &);
 	    bool			updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
 	    bool			updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
             void                        desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
 	    void                	disconnectedEvent(void);
+
 	    bool			xcbEventLoopAsync(bool nodamage);
 
             bool                        channelsInit(void);

@@ -406,9 +406,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void)
     {
-#ifdef LTSM_CHANNELS
         channelsShutdown();
-#endif
         std::this_thread::sleep_for(100ms);
         rfbMessages = false;
     }
@@ -416,9 +414,7 @@ namespace LTSM
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
         std::initializer_list<int> encodings = { ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
-#ifdef LTSM_CHANNELS
                                         ENCODING_LTSM,
-#endif
                                         ENCODING_EXT_DESKTOP_SIZE,
                                         ENCODING_CONTINUOUS_UPDATES,
                                         ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
@@ -447,13 +443,12 @@ namespace LTSM
 
             if(! hasInput())
             {
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(5ms);
                 continue;
             }
 
             int msgType = recvInt8();
 
-#ifdef LTSM_CHANNELS
             if(ltsmSupport && msgType == PROTOCOL_LTSM)
             {
                 try
@@ -471,7 +466,6 @@ namespace LTSM
                 }
                 continue;
             }
-#endif
 
             if(! rfbMessages)
                 break;
@@ -645,9 +639,8 @@ namespace LTSM
                 case ENCODING_TRLE:     recvDecodingTRLE(reg, false); break;
                 case ENCODING_ZLIB:     recvDecodingZlib(reg); break;
                 case ENCODING_ZRLE:     recvDecodingTRLE(reg, true); break;
-#ifdef LTSM_CHANNELS
                 case ENCODING_LTSM:     recvDecodingLtsm(); break;
-#endif
+
                 case ENCODING_LAST_RECT:
                     recvDecodingLastRect(reg);
                     numRects = 0;
@@ -1255,7 +1248,6 @@ namespace LTSM
         streamIn = tls ? tls.get() : socket.get();
     }
 
-#ifdef LTSM_CHANNELS
     void RFB::ClientDecoder::recvDecodingLtsm(void)
     {
         Application::info("%s: success", __FUNCTION__);
@@ -1321,5 +1313,4 @@ namespace LTSM
             throw std::invalid_argument(NS_FuncName);
         }
     }
-#endif
 }

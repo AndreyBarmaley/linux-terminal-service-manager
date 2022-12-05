@@ -33,7 +33,7 @@ namespace LTSM
 {
     namespace RFB
     {
-        class X11Server : public RFB::ServerEncoder
+        class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder
         {
             XCB::Region         clientRegion;
             XCB::Region         damageRegion;
@@ -44,18 +44,29 @@ namespace LTSM
             std::atomic<bool>   displayResized{false};
             std::atomic<bool>   clientUpdateReq{false};
             std::atomic<bool>   clientUpdateCursor{false};
+            std::atomic<bool>   fullscreenUpdate{false};
+            std::atomic<bool>   xcbMessages{true};
+
+            XCB::ShmIdShared    shm;
 
         protected:
+            // root display
+            void                xfixesCursorChangedEvent(void) override;
+            void                damageRegionEvent(const XCB::Region &) override;
+            void                randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+            void                clipboardChangedEvent(const std::vector<uint8_t> &) override;
+ 
 	    // rfb server encoding
             XcbFrameBuffer      xcbFrameBuffer(const XCB::Region &) const override;
             virtual void        xcbFrameBufferModify(FrameBuffer &) const {}
 
-            virtual XCB::SharedDisplay xcbDisplay(void) const = 0;
+            XCB::RootDisplay*   xcbDisplay(void) { return this; }
+            void                xcbShmInit(uid_t = 0);
+            bool                xcbProcessingEvents(void);
 
-            virtual bool        xcbAllow(void) const = 0;
-            virtual bool        xcbNoDamage(void) const = 0;
-            virtual void        setXcbAllow(bool) = 0;
-            virtual const XCB::SHM* xcbShm(void) const { return nullptr; }
+            virtual bool        xcbAllowMessages(void) const = 0;
+            virtual void        xcbDisableMessages(bool) = 0;
+            virtual bool        xcbNoDamageOption(void) const = 0;
 
             const XCB::Region & getClientRegion(void) const { return clientRegion; }
 

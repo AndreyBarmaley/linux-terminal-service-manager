@@ -9,7 +9,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_SERVER "build server" OFF)
 option(LTSM_BUILD_CLIENT "build client" ON)
-option(LTSM_CHANNELS "ltsm channels support" ON)
+
 #option(LTSM_BUILD_TESTS "build test utilities" OFF)
 #option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
@@ -22,8 +22,9 @@ if(LTSM_BUILD_SERVER)
     set(LTSM_BUILD_SDL2X11 ON CACHE BOOL "build sdl2x11 utility")
     set(LTSM_BUILD_SESSIONS ON CACHE BOOL "build sessions manager utility")
     set(LTSM_BUILD_HELPER ON CACHE BOOL "build helper utility")
-    set(LTSM_CHANNELS ON CACHE BOOL  "ltsm channels support")
     set(LTSM_TOKEN_AUTH ON CACHE BOOL  "ltsm token auth support")
+    set(LTSM_CUPS_BACKEND ON CACHE BOOL "cups backend build")
+    set(LTSM_FUSE2SESSION ON CACHE BOOL "session fuse support")
 else()
     unset(LTSM_CUPS_BACKEND CACHE)
     unset(LTSM_FUSE2SESSION CACHE)
@@ -34,21 +35,15 @@ else()
     unset(LTSM_BUILD_SESSIONS CACHE)
     unset(LTSM_BUILD_HELPER CACHE)
     unset(LTSM_TOKEN_AUTH CACHE)
-endif()
-
-if(LTSM_CHANNELS)
-    if(LTSM_BUILD_SERVER)
-        set(LTSM_CUPS_BACKEND ON CACHE BOOL "cups backend build")
-        set(LTSM_FUSE2SESSION ON CACHE BOOL "session fuse support")
-    endif()
-    if(LTSM_BUILD_CLIENT)
-        if(LTSM_TOKEN_AUTH)
-            set(LTSM_RUTOKEN_BACKEND ON CACHE BOOL "client rutoken support" FORCE)
-        endif()
-    endif()
-else()
     unset(LTSM_CUPS_BACKEND CACHE)
     unset(LTSM_FUSE2SESSION CACHE)
+endif()
+
+if(LTSM_BUILD_CLIENT)
+    if(LTSM_TOKEN_AUTH)
+        set(LTSM_RUTOKEN_BACKEND ON CACHE BOOL "client rutoken support" FORCE)
+    endif()
+else()
     unset(LTSM_TOKEN_AUTH CACHE)
     unset(LTSM_RUTOKEN_BACKEND CACHE)
 endif()
@@ -84,7 +79,7 @@ include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
 # LTSM common lib
-project(LTSM_common VERSION  20221124.1)
+project(LTSM_common VERSION  20221203.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -110,10 +105,6 @@ if(LTSM_BUILD_XCB_ERRORS)
     add_compile_options(-DLTSM_BUILD_XCB_ERRORS)
 endif()
 
-if(LTSM_CHANNELS)
-    include_directories(src/channels)
-endif()
-
 add_library(LTSM_common STATIC)
 add_subdirectory(src/common)
 
@@ -136,7 +127,7 @@ link_libraries(z)
 
 if(LTSM_BUILD_SERVICE)
     # LTSM service
-    project(LTSM_service VERSION 20221124.1)
+    project(LTSM_service VERSION 20221203.1)
 
     find_library(PAM_LIBRARIES NAMES pam)
     find_library(PAM_MISC_LIBRARIES NAMES pam_misc)
@@ -144,22 +135,19 @@ if(LTSM_BUILD_SERVICE)
     find_package(sdbus-c++ REQUIRED)
     find_path(PAM_INCLUDE_PATH NAMES security/pam_appl.h pam_appl.h)
 
-    add_executable(LTSM_service src/service/ltsm_service.cpp)
+    add_executable(LTSM_service
+        src/service/ltsm_service.cpp
+        src/channels/channel_system.cpp)
 
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
         target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
-    endif()
-
-    if(LTSM_CHANNELS)
-        target_compile_options(LTSM_service PRIVATE -DLTSM_CHANNELS)
-        target_sources(LTSM_service PRIVATE src/channels/channel_system.cpp)
     endif()
 
     if(LTSM_TOKEN_AUTH)
         target_compile_options(LTSM_service PRIVATE -DLTSM_TOKEN_AUTH)
     endif()
 
-    target_include_directories(LTSM_service PRIVATE src/common src/librfb src/channels src/dbus-glue ${PAM_INCLUDE_PATH})
+    target_include_directories(LTSM_service PRIVATE src/common src/channels src/librfb src/dbus-glue ${PAM_INCLUDE_PATH})
     target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARIES} ${PAM_MISC_LIBRARIES})
 
     set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -167,7 +155,7 @@ endif()
 
 if(LTSM_BUILD_CONNECTOR)
     # LTSM connector
-    project(LTSM_connector VERSION 20221124.1)
+    project(LTSM_connector VERSION 20221203.1)
 
     find_package(sdbus-c++ REQUIRED)
     find_package(GnuTLS REQUIRED)
@@ -176,6 +164,7 @@ if(LTSM_BUILD_CONNECTOR)
     add_executable(LTSM_connector
         src/connector/ltsm_connector.cpp
         src/connector/ltsm_connector_vnc.cpp
+        src/channels/channel_system.cpp
         src/librfb/librfb_server.cpp
         src/librfb/librfb_x11server.cpp
         src/librfb/ltsm_librfb.cpp)
@@ -186,11 +175,6 @@ if(LTSM_BUILD_CONNECTOR)
         target_compile_options(LTSM_connector PRIVATE ${FreeRDP2_CFLAGS} ${WinPR2_CFLAGS} -DLTSM_WITH_RDP)
         target_link_libraries(LTSM_connector ${FreeRDP2_LIBRARIES} ${WinPR2_LIBRARIES})
         target_sources(LTSM_connector PRIVATE src/connector/ltsm_connector_rdp.cpp)
-    endif()
-
-    if(LTSM_CHANNELS)
-        target_compile_options(LTSM_connector PRIVATE -DLTSM_CHANNELS)
-        target_sources(LTSM_connector PRIVATE src/channels/channel_system.cpp)
     endif()
 
     if(LTSM_TOKEN_AUTH)
@@ -205,7 +189,7 @@ endif()
 
 if(LTSM_BUILD_SDL2X11)
     # LTSM sdl2x11
-    project(LTSM_sdl2x11 VERSION 20221124.1)
+    project(LTSM_sdl2x11 VERSION 20221203.1)
     add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
     target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
@@ -217,7 +201,7 @@ endif()
 
 if(LTSM_BUILD_HELPER)
     # LTSM helper
-    project(LTSM_helper VERSION 20221124.1)
+    project(LTSM_helper VERSION 20221203.1)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -251,7 +235,7 @@ endif()
 
 if(LTSM_BUILD_SESSIONS)
     # LTSM sessions
-    project(LTSM_sessions VERSION 20221124.1)
+    project(LTSM_sessions VERSION 20221203.1)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -271,13 +255,14 @@ endif()
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20221124.1)
+    project(LTSM_x11vnc VERSION 20221203.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
         src/x11vnc/ltsm_x11vnc.cpp
         src/librfb/librfb_server.cpp
         src/librfb/librfb_x11server.cpp
+        src/channels/channel_system.cpp
         src/librfb/ltsm_librfb.cpp)
 
     find_package(GnuTLS REQUIRED)
@@ -292,7 +277,7 @@ endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20221124.1)
+    project(LTSM_vnc2image VERSION 20221203.1)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
@@ -316,25 +301,20 @@ endif()
 
 if(LTSM_BUILD_CLIENT)
     # LTSM vnc2sdl
-    project(LTSM_vnc2sdl VERSION 20221124.1)
+    project(LTSM_vnc2sdl VERSION 20221203.1)
 
     add_executable(LTSM_vnc2sdl
         src/vnc2sdl/ltsm_vnc2sdl.cpp
         src/sdl2x11/ltsm_sdl_wrapper.cpp
+        src/channels/channel_system.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
-
-    if(LTSM_CHANNELS)
-        find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
-        find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
-        target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_CHANNELS)
-        target_sources(LTSM_vnc2sdl PRIVATE src/channels/channel_system.cpp)
-        target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY})
-    endif()
+    find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
+    find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
 
     if(LTSM_RUTOKEN_BACKEND)
         target_include_directories(LTSM_vnc2sdl PRIVATE /usr/include/rutoken /usr/include/rutoken/pki-core)
@@ -344,14 +324,14 @@ if(LTSM_BUILD_CLIENT)
 
     target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2sdl PRIVATE src/common src/channels src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
-    target_link_libraries(LTSM_vnc2sdl LTSM_common ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
+    target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2sdl PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 if(LTSM_CUPS_BACKEND)
     # LTSM_cups_backend
-    project(LTSM_cups_backend VERSION 20221124.1)
+    project(LTSM_cups_backend VERSION 20221203.1)
 
     add_executable(LTSM_cups_backend
         src/cups_backend/main.cpp)
@@ -366,7 +346,7 @@ endif()
 
 if(LTSM_FUSE2SESSION)
     # LTSM_fuse2session
-    project(LTSM_fuse2session VERSION 20221124.1)
+    project(LTSM_fuse2session VERSION 20221203.1)
 
     find_package(sdbus-c++ REQUIRED)
     pkg_search_module(FUSE3 REQUIRED fuse3)   

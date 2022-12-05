@@ -21,6 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <sys/stat.h>
+
 #include <tuple>
 #include <chrono>
 #include <thread>
@@ -32,6 +34,79 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+    void RFB::X11Server::xfixesCursorChangedEvent(void)
+    {
+        clientUpdateCursor = isClientEncodings(RFB::ENCODING_RICH_CURSOR);
+    }
+
+    void RFB::X11Server::damageRegionEvent(const XCB::Region & reg)
+    {
+        damageRegion.join(reg);
+    }
+
+    void RFB::X11Server::clipboardChangedEvent(const std::vector<uint8_t> & buf)
+    {
+        if(rfbClipboardEnable())
+        {
+            // or thread async and copy buf
+            sendCutTextEvent(buf);
+        }
+    }
+
+    void RFB::X11Server::randrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify)
+    {
+        Application::info("%s: size: [%d, %d], sequence: 0x%04x", __FUNCTION__, wsz.width, wsz.height, notify.sequence);
+
+        xcbShmInit();
+        serverDisplayResizedEvent(wsz);
+
+        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
+        {
+            auto status = randrSequence == 0 || randrSequence != notify.sequence ?
+                RFB::DesktopResizeStatus::ServerRuntime : RFB::DesktopResizeStatus::ClientSide;
+
+            std::thread([=]()
+            {
+                this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
+                this->displayResized = true;
+            }).detach();
+        }
+    }
+
+    bool RFB::X11Server::xcbProcessingEvents(void)
+    {
+        while(auto ev = XCB::RootDisplay::poolEvent())
+        {
+            if(auto err = XCB::RootDisplay::hasError())
+            {
+                xcbDisableMessages(true);
+                Application::error("%s: xcb error, code: %d", __FUNCTION__, err);
+                return false;
+            }
+            else
+            if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM))
+            {
+                uint16_t opcode = 0;
+                if(shm && extShm->isEventError(ev, & opcode))
+                {
+                    Application::warning("%s: %s error: 0x%04x", __FUNCTION__, "shm", opcode);
+                    shm.reset();
+                }
+            }
+            else
+            if(auto extFixes = XCB::RootDisplay::getExtension(XCB::Module::XFIXES))
+            {
+                uint16_t opcode = 0;
+                if(extFixes->isEventError(ev, & opcode))
+                {
+                    Application::warning("%s: %s error: 0x%04x", __FUNCTION__, "xfixes", opcode);
+                }
+            }
+        }
+
+        return true;
+    }
+
     /* Connector::X11Server */
     int RFB::X11Server::rfbCommunication(void)
     {
@@ -62,16 +137,18 @@ namespace LTSM
         serverSecurityInitEvent();
 
         // RFB 6.3.1 client init
-        serverClientInit("X11 Remote Desktop", xcbDisplay()->size(), xcbDisplay()->depth(), serverFormat());
+        serverClientInit("X11 Remote Desktop", XCB::RootDisplay::size(), XCB::RootDisplay::depth(), serverFormat());
 
         timerNotActivated->stop();
+
+        xcbShmInit();
         serverConnectedEvent();
 
         Application::info("%s: wait RFB messages...", __FUNCTION__);
 
         // xcb on
-        setXcbAllow(true);
-        bool nodamage = xcbNoDamage();
+        xcbDisableMessages(false);
+        bool nodamage = xcbNoDamageOption();
 
         // process rfb messages background
         auto rfbThread = std::thread([=]()
@@ -80,6 +157,7 @@ namespace LTSM
         });
 
         bool mainLoop = true;
+        auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM);
 
         // main loop
         while(mainLoop)
@@ -89,98 +167,47 @@ namespace LTSM
             if(! rfbMessagesRunning())
             {
                 mainLoop = false;
-                continue;
+                break;
             }
 
-            if(! xcbAllow())
+            if(! xcbAllowMessages())
             {
-                std::this_thread::sleep_for(50ms);
-                continue;
-            }
-
-            if(auto err = xcbDisplay()->hasError())
-            {
-                setXcbAllow(false);
-                Application::error("%s: xcb display error, code: %d", __FUNCTION__, err);
-                mainLoop = false;
+                std::this_thread::sleep_for(20ms);
                 continue;
             }
 
             // processing xcb events
-            while(auto ev = xcbDisplay()->poolEvent())
+            if(! xcbProcessingEvents())
             {
-                if(0 <= xcbDisplay()->eventErrorOpcode(ev, XCB::Module::SHM))
-                {
-                    xcbDisplay()->extendedError(ev.toerror(), __FUNCTION__, "");
-                    mainLoop = false;
-                    break;
-                }
-
-                if(xcbDisplay()->isDamageNotify(ev))
-                {
-                    auto notify = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
-                    damageRegion.join(notify->area);
-                }
-                else if(xcbDisplay()->isXFixesCursorNotify(ev))
-                {
-                    clientUpdateCursor = isClientEncodings(RFB::ENCODING_RICH_CURSOR);
-                }
-                else if(xcbDisplay()->isRandrCRTCNotify(ev))
-                {
-                    auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                    xcb_randr_crtc_change_t cc = notify->u.cc;
-
-                    if(0 < cc.width && 0 < cc.height)
-                    {
-                        Application::info("%s: xcb randr notify, size: [%d, %d], sequence: 0x%04x", __FUNCTION__, cc.width, cc.height, notify->sequence);
-
-                        const XCB::Size dsz(cc.width, cc.height);
-                        serverDisplayResizedEvent(dsz);
-
-                        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
-                        {
-                            auto status = randrSequence == 0 || randrSequence != notify->sequence ?
-                                RFB::DesktopResizeStatus::ServerRuntime : RFB::DesktopResizeStatus::ClientSide;
-
-                            std::thread([=]
-                            {
-                                this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, dsz);
-                                this->displayResized = true;
-                            }).detach();
-                        }
-                    }
-                }
-                else if(xcbDisplay()->isSelectionNotify(ev) && rfbClipboardEnable())
-                {
-                    std::thread([this, xcb = xcbDisplay(), notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get())]()
-                    {
-                        if(xcb->selectionNotifyAction(notify, true /* sync PRIMARY and CLIPBOARD */))
-                            this->sendCutTextEvent(xcb->getSelectionData());
-                    }).detach();
-                }
-            } // xcb pool events
-
-            if(nodamage)
-            {
-                damageRegion = xcbDisplay()->region();
-                clientUpdateReq = true;
+                mainLoop = false;
+                break;
             }
-            else if(! damageRegion.empty())
+
+            if(nodamage || fullscreenUpdate)
+            {
+                damageRegion = XCB::RootDisplay::region();
+                clientUpdateReq = true;
+                fullscreenUpdate = false;
+            }
+            else
+            if(! damageRegion.empty())
+            {
                 // fix out of screen
-                damageRegion = xcbDisplay()->region().intersected(damageRegion.align(4));
+                damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
+            }
 
             // send busy
             if(isUpdateProcessed())
             {
                 // wait loop
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(5ms);
                 continue;
             }
 
             if(damageRegion.empty())
             {
                 // wait loop
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(5ms);
                 continue;
             }
 
@@ -217,17 +244,14 @@ namespace LTSM
 
     void  RFB::X11Server::recvPixelFormatEvent(const PixelFormat &, bool bigEndian)
     {
-        damageRegion = xcbDisplay()->region();
-        clientUpdateReq = true;
+        fullscreenUpdate = true;
     }
 
     void  RFB::X11Server::recvSetEncodingsEvent(const std::vector<int> &)
     {
         serverSelectEncodings();
 
-        // full update
-        damageRegion = xcbDisplay()->region();
-        clientUpdateReq = true;
+        fullscreenUpdate = true;
 
         serverEncodingsEvent();
 
@@ -235,19 +259,19 @@ namespace LTSM
         {
             std::thread([this]
             {
-                this->sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime, RFB::DesktopResizeError::NoError, xcbDisplay()->size());
+                this->sendEncodingDesktopResize(RFB::DesktopResizeStatus::ServerRuntime, RFB::DesktopResizeError::NoError, XCB::RootDisplay::size());
             }).detach();
         }
     }
 
     void RFB::X11Server::recvKeyEvent(bool pressed, uint32_t keysym)
     {
-        if(xcbAllow())
+        if(xcbAllowMessages())
         {
             if(auto keycode = rfbUserKeycode(keysym))
-                xcbDisplay()->fakeInputKeycode(keycode, 0 < pressed);
+                XCB::RootDisplay::fakeInputKeycode(keycode, 0 < pressed);
             else
-                xcbDisplay()->fakeInputKeysym(keysym, 0 < pressed);
+                XCB::RootDisplay::fakeInputKeysym(keysym, 0 < pressed);
         }
 
         clientUpdateReq = true;
@@ -255,8 +279,12 @@ namespace LTSM
 
     void RFB::X11Server::recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
     {
-        if(xcbAllow())
+        if(xcbAllowMessages())
         {
+            auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST));
+            if(! test)
+                return;
+
             if(pressedMask ^ mask)
             {
                 for(int num = 0; num < 8; ++num)
@@ -268,7 +296,7 @@ namespace LTSM
                         if(Application::isDebugLevel(DebugLevel::SyslogTrace))
                             Application::debug("%s: xfb fake input pressed: %d", __FUNCTION__, num + 1);
 
-                        xcbDisplay()->fakeInputTest(XCB_BUTTON_PRESS, num + 1, posx, posy);
+                        test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_PRESS, num + 1, posx, posy);
                         pressedMask |= bit;
                     }
                     else if(bit & pressedMask)
@@ -276,7 +304,7 @@ namespace LTSM
                         if(Application::isDebugLevel(DebugLevel::SyslogTrace))
                             Application::debug("%s: xfb fake input released: %d", __FUNCTION__, num + 1);
 
-                        xcbDisplay()->fakeInputTest(XCB_BUTTON_RELEASE, num + 1, posx, posy);
+                        test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_RELEASE, num + 1, posx, posy);
                         pressedMask &= ~bit;
                     }
                 }
@@ -286,7 +314,7 @@ namespace LTSM
                 if(Application::isDebugLevel(DebugLevel::SyslogTrace))
                     Application::debug("%s: xfb fake input move, posx: %d, posy: %d", __FUNCTION__, posx, posy);
 
-                xcbDisplay()->fakeInputTest(XCB_MOTION_NOTIFY, 0, posx, posy);
+                test->fakeInputRaw(XCB::RootDisplay::root(), XCB_MOTION_NOTIFY, 0, posx, posy);
             }
         }
 
@@ -295,10 +323,10 @@ namespace LTSM
 
     void RFB::X11Server::recvCutTextEvent(const std::vector<uint8_t> & buf)
     {
-        if(xcbAllow() && rfbClipboardEnable())
+        if(xcbAllowMessages() && rfbClipboardEnable())
         {
-            size_t maxreq = xcbDisplay()->getMaxRequest();
-            xcbDisplay()->setClipboardEvent(buf.data(), std::min(maxreq, buf.size()));
+            size_t maxreq = XCB::RootDisplay::getMaxRequest();
+            XCB::RootDisplay::setClipboard(buf.data(), std::min(maxreq, buf.size()));
         }
 
         clientUpdateReq = true;
@@ -306,9 +334,15 @@ namespace LTSM
 
     void RFB::X11Server::recvFramebufferUpdateEvent(bool fullUpdate, const XCB::Region & region)
     {
+        if(! xcbAllowMessages())
+        {
+            fullscreenUpdate = true;
+            return;
+        }
+
         if(displayResized && ! fullUpdate)
         {
-            if(region.toSize() != xcbDisplay()->size())
+            if(region.toSize() != XCB::RootDisplay::size())
             {
                 Application::info("%s: display resized, skipped client old size: [%d, %d]", __FUNCTION__, region.width, region.height);
                 return;
@@ -322,15 +356,21 @@ namespace LTSM
         }
 
         if(fullUpdate)
-            damageRegion = clientRegion = xcbDisplay()->region();
+        {
+            fullscreenUpdate = true;
+            clientRegion = XCB::RootDisplay::region();
+        }
         else
-            clientRegion = xcbDisplay()->region().intersected(region);
+        {
+            clientUpdateReq = true;
+            clientRegion = XCB::RootDisplay::region().intersected(region);
+        }
 
         if(region != clientRegion)
-            damageRegion = clientRegion = region;
-
-
-        clientUpdateReq = true;
+        {
+            fullscreenUpdate = true;
+            clientRegion = region;
+        }
     }
 
     void RFB::X11Server::recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> & screens)
@@ -345,19 +385,19 @@ namespace LTSM
         if(desktop.x != 0 || desktop.y != 0)
         {
             Application::error("%s: incorrect desktop size: [%d, %d, %d, %d]", __FUNCTION__, desktop.x, desktop.y, desktop.width, desktop.height);
-            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, xcbDisplay()->size());
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, XCB::RootDisplay::size());
         }
         else
-        if(xcbAllow())
+        if(xcbAllowMessages())
         {
             std::thread([&, sz = desktop.toSize()]
             {
                 uint16_t sequence = 0;
-                if(xcbDisplay()->setRandrScreenSize(sz.width, sz.height, & sequence))
+                if(XCB::RootDisplay::setRandrScreenSize(sz, & sequence))
                     randrSequence = sequence;
                 else
                 {
-                    sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, xcbDisplay()->size());
+                    sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::RootDisplay::size());
                     randrSequence = 0;
                 }
             }).detach();
@@ -366,27 +406,30 @@ namespace LTSM
 
     void RFB::X11Server::sendUpdateRichCursor(void)
     {
-        XCB::CursorImage replyCursor = xcbDisplay()->cursorImage();
-        auto reply = replyCursor.reply();
-
-        if(auto ptr = replyCursor.data())
+        if(auto fixes = static_cast<const XCB::ModuleFixes*>(XCB::RootDisplay::getExtension(XCB::Module::XFIXES)))
         {
-            size_t argbSize = reply->width * reply->height;
-            size_t dataSize = replyCursor.size();
+            XCB::CursorImage replyCursor = fixes->cursorImage();
+            auto reply = replyCursor.reply();
 
-            if(dataSize == argbSize)
+            if(auto ptr = replyCursor.data())
             {
-                auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
-                auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
+                size_t argbSize = reply->width * reply->height;
+                size_t dataSize = replyCursor.size();
 
-                sendFrameBufferUpdateRichCursor(cursorFB, reply->xhot, reply->yhot);
+                if(dataSize == argbSize)
+                {
+                    auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
+                    auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
+
+                    sendFrameBufferUpdateRichCursor(cursorFB, reply->xhot, reply->yhot);
+                }
             }
         }
     }
 
     void RFB::X11Server::sendFrameBufferUpdateEvent(const XCB::Region & reg)
     {
-        xcbDisplay()->damageSubtrack(reg);
+        XCB::RootDisplay::damageSubtrack(reg);
 
         if(clientUpdateCursor)
         {
@@ -395,11 +438,24 @@ namespace LTSM
         }
     }
 
+    void RFB::X11Server::xcbShmInit(uid_t uid)
+    {
+        if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM)))
+        {
+            auto dsz = XCB::RootDisplay::size();
+            const size_t pagesz = 4096;
+            auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
+            auto shmsz = ((dsz.width * dsz.height * bpp / pagesz) + 1) * pagesz;
+
+            shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+        }
+    }
+
     XcbFrameBuffer RFB::X11Server::xcbFrameBuffer(const XCB::Region & reg) const
     {
         Application::debug("%s: region [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        auto pixmapReply = xcbDisplay()->copyRootImageRegion(reg, xcbShm());
+        auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
         if(! pixmapReply)
         {
             Application::error("%s: %s", __FUNCTION__, "xcb copy region empty");

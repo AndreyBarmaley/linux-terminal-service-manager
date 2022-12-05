@@ -34,18 +34,18 @@ namespace LTSM
     {
         if(int ret = ldap_initialize(& ldap, nullptr); ret != LDAP_SUCCESS)
         {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "ldap_initialize", ldap_err2string(ret));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_initialize", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncName);
         }
 
         int protover = 3;
         if(int ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &protover); ret != LDAP_SUCCESS)
-            Application::warning("%s: %s failed, error: %s", __FUNCTION__, "ldap_set_option", ldap_err2string(ret));
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
 
         struct berval cred { 0, nullptr };
         if(int ret = ldap_sasl_bind_s(ldap, nullptr, nullptr, & cred, nullptr, nullptr, nullptr); ret != LDAP_SUCCESS)
         {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret));
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncName);
         }
     }
@@ -88,7 +88,7 @@ namespace LTSM
         }
         else
         {
-            Application::warning("%s: %s failed, error: %s", __FUNCTION__, "ldap_search", ldap_err2string(ret));
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_search", ldap_err2string(ret), ret);
         }
 
         if(msg)
@@ -141,7 +141,7 @@ namespace LTSM
         }
         else
         {
-            Application::warning("%s: %s failed, error: %s", __FUNCTION__, "ldap_search", ldap_err2string(ret));
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_search", ldap_err2string(ret), ret);
         }
 
         if(msg)

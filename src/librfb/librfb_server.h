@@ -47,11 +47,7 @@ namespace LTSM
     namespace RFB
     {
         /// ServerEncoder
-        class ServerEncoder :
-#ifdef LTSM_CHANNELS
-            public ChannelClient,
-#endif
-            protected NetworkStream
+        class ServerEncoder : public ChannelClient, protected NetworkStream
         {
             std::list< std::future<void> >
                                 encodingJobs;
@@ -126,11 +122,9 @@ namespace LTSM
             void                sendCutTextEvent(const std::vector<uint8_t> &);
             void                sendContinuousUpdates(bool enable);
             bool                sendUpdateSafe(const XCB::Region &);
-#ifdef LTSM_CHANNELS
             void                sendEncodingLtsmSupported(void);
             void                recvChannelSystem(const std::vector<uint8_t> &) override;
             bool                serverSide(void) const override { return true; }
-#endif
 
             void                recvPixelFormat(void);
             void                recvSetEncodings(void);
@@ -194,10 +188,7 @@ namespace LTSM
             virtual void        recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
             virtual void        recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
             virtual void        sendFrameBufferUpdateEvent(const XCB::Region &) {}
-
-#ifdef LTSM_CHANNELS
             virtual void        sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
-#endif
         };
     }
 }

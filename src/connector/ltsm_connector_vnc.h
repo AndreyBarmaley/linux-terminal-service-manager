@@ -43,7 +43,6 @@ namespace LTSM
         explicit vnc_error(const char* what) : std::runtime_error(what){}
     };
 
-#ifdef LTSM_CHANNELS
     /// FuseSessionProxy
     class FuseSessionProxy : public sdbus::ProxyInterfaces<Session::FUSE_proxy>
     {
@@ -54,12 +53,11 @@ namespace LTSM
             void onRequestRead(const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset) override;
             void onRequestReadDir(const std::string& path, const uint32_t& cookie) override;
             void onRequestGetAttr(const std::string& path, const uint32_t& cookie) override;
-            
+
         public:
             FuseSessionProxy(const std::string& address, ChannelClient &);
             virtual ~FuseSessionProxy();
     };
-#endif
 
     namespace Connector
     {
@@ -74,18 +72,14 @@ namespace LTSM
             std::list<std::pair<std::string, size_t>> transfer;
             std::mutex          lockTransfer;
 
-            std::pair<XCB::SHM, uid_t>
-                                shmExt;
-
             std::chrono::time_point<std::chrono::steady_clock>
                                 idleSession;
             size_t              idleTimeoutSec = 0;
 
             std::atomic<bool>   loginWidgetStarted{false};
-#ifdef LTSM_CHANNELS
             std::unique_ptr<FuseSessionProxy> fuse;
             std::atomic<bool>   userSession{false};
-#endif
+            uid_t               shmUid = 0;
 
         protected:
 	    // rfb server encoding
@@ -93,12 +87,9 @@ namespace LTSM
             void                xcbFrameBufferModify(FrameBuffer &) const override;
 
             // x11server
-            XCB::SharedDisplay  xcbDisplay(void) const override;
-
-            const XCB::SHM*     xcbShm(void) const override;
-            bool                xcbNoDamage(void) const override;
-            bool                xcbAllow(void) const override;
-            void                setXcbAllow(bool) override;
+            bool                xcbNoDamageOption(void) const override;
+            void                xcbDisableMessages(bool) override;
+            bool                xcbAllowMessages(void) const override;
 
             bool                rfbClipboardEnable(void) const override;
             bool                rfbDesktopResizeEnabled(void) const override;
@@ -114,7 +105,9 @@ namespace LTSM
             void                onHelperWidgetStarted(const int32_t & display) override;
             void                onSendBellSignal(const int32_t & display) override;
 
-#ifdef LTSM_CHANNELS
+            // connector
+            void                xcbAddDamage(const XCB::Region &) override;
+
             void                onLoginFailure(const int32_t & display, const std::string & msg) override;
             void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
@@ -124,7 +117,6 @@ namespace LTSM
             void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
             void                onFuseSessionStart(const int32_t& display, const std::string& addresses, const std::string& mount) override;
             void                onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override;
-#endif
 
             void                serverHandshakeVersionEvent(void) override;
             void                serverSelectEncodingsEvent(void) override;
@@ -134,7 +126,6 @@ namespace LTSM
             void                serverDisplayResizedEvent(const XCB::Size &) override;
             void                serverEncodingsEvent(void) override;
 
-#ifdef LTSM_CHANNELS
             // rfb channel client
             bool                isUserSession(void) const override;
             void                systemChannelError(const JsonObject &) override;
@@ -143,9 +134,6 @@ namespace LTSM
             void                systemKeyboardChange(const JsonObject &) override;
             void                systemFuseProxy(const JsonObject &) override;
             void                systemTokenAuth(const JsonObject &) override;
-#endif
-
-            void                xcbShmInit(const XCB::Size &);
 
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}

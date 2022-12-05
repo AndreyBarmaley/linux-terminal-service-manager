@@ -168,7 +168,7 @@ namespace LTSM
     void RFB::ServerEncoder::waitUpdateProcess(void)
     {
         while(isUpdateProcessed())
-            std::this_thread::sleep_for(1ms);
+            std::this_thread::sleep_for(5ms);
     }
 
     bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile)
@@ -523,9 +523,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::rfbMessagesShutdown(void)
     {
-#ifdef LTSM_CHANNELS
         channelsShutdown();
-#endif
         std::this_thread::sleep_for(100ms);
         rfbMessages = false;
     }
@@ -538,13 +536,12 @@ namespace LTSM
         {
             if(! hasInput())
             {
-                std::this_thread::sleep_for(1ms);
+                std::this_thread::sleep_for(5ms);
                 continue;
             }
 
             int msgType = recvInt8();
 
-#ifdef LTSM_CHANNELS
             if(msgType == RFB::PROTOCOL_LTSM)
             {
                 if(! isClientEncodings(RFB::ENCODING_LTSM))
@@ -568,7 +565,7 @@ namespace LTSM
                 }
                 continue;
             }
-#endif
+
             if(! rfbMessages)
                 break;
 
@@ -609,6 +606,7 @@ namespace LTSM
                 default:
                     Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
+                    break;
             }
         }
     }
@@ -1936,7 +1934,6 @@ namespace LTSM
         sendFlush();
     }
 
-#ifdef LTSM_CHANNELS
     void RFB::ServerEncoder::sendEncodingLtsmSupported(void)
     {
         Application::info("%s: server supported", __FUNCTION__);
@@ -2018,6 +2015,4 @@ namespace LTSM
             throw std::invalid_argument(NS_FuncName);
         }
     }
-#endif
-
 }

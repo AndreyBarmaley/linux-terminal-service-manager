@@ -57,6 +57,8 @@ namespace LTSM
     //
     void connectorHelp(const char* prog)
     {
+        LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+
         std::list<std::string> proto = { "VNC" };
 #ifdef LTSM_WITH_RDP
         proto.emplace_back("RDP");
@@ -97,8 +99,10 @@ namespace LTSM
 
         if(! config().isValid())
         {
-            Application::error("%s: %s failed", __FUNCTION__, "config");
-            throw std::invalid_argument(__FUNCTION__);
+            LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+
+            Application::error("%s: %s failed", "Connector", "config");
+            throw std::invalid_argument("Connector");
         }
     }
 
@@ -132,6 +136,7 @@ namespace LTSM
 
     int Connector::Service::start(void)
     {
+
         Application::setDebugLevel(configGetString("connector:debug"));
         auto uid = getuid();
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
@@ -214,6 +219,65 @@ namespace LTSM
         unregisterProxy();
     }
 
+    bool Connector::SignalProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
+    {
+        Application::info("%s: display: %d", __FUNCTION__, screen);
+        std::string xauthFile = busCreateAuthFile(screen);
+        
+        Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(), getgid());
+        
+        setenv("XAUTHORITY", xauthFile.c_str(), 1);
+        std::string socketFormat = _config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
+        std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
+            
+        // wait display starting
+        if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
+            Application::error("%s: checkUnixSocket failed, `%s'", "xcbConnect", socketPath.c_str());
+
+        try
+        {
+            xcbDisplay.reconnect(screen);
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            return false;
+        }
+        
+        xcbDisplay.resetInputs();
+
+        auto defaultSz = XCB::Size(_config->getInteger("default:width", 0),
+                                    _config->getInteger("default:height", 0));
+        auto displaySz = xcbDisplay.size();
+        int color = _config->getInteger("display:solid", 0x4e7db7);
+
+        Application::debug("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, displaySz.width, displaySz.height, xcbDisplay.depth());
+
+        if(0 != color)
+            xcbDisplay.fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
+
+        if(! defaultSz.isEmpty() && displaySz != defaultSz)
+            xcbDisplay.setRandrScreenSize(defaultSz);
+
+        _xcbDisplayNum = screen;
+        return true;
+    }
+
+    int Connector::SignalProxy::displayNum(void) const
+    {
+        return _xcbDisplayNum;
+    }
+
+    void Connector::SignalProxy::xcbDisableMessages(bool f)
+    {
+        _xcbDisable = f;
+    }
+        
+    bool Connector::SignalProxy::xcbAllowMessages(void) const
+    {
+        return ! _xcbDisable;
+    }
+
     std::string Connector::SignalProxy::checkFileOption(const std::string & param) const
     {
         auto fileName = _config->getString(param);
@@ -228,106 +292,9 @@ namespace LTSM
         return fileName;
     }
 
-    bool Connector::SignalProxy::isAllowXcbMessages(void) const
-    {
-        return ! _xcbDisableMessages;
-    }
-
-    void Connector::SignalProxy::setEnableXcbMessages(bool f)
-    {
-        _xcbDisableMessages = ! f;
-    }
-
-    bool Connector::SignalProxy::xcbConnect(int screen)
-    {
-        Application::info("%s: display: %d", __FUNCTION__, screen);
-        std::string xauthFile = busCreateAuthFile(screen);
-
-        Application::debug("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(), getgid());
-        // Xvfb: wait display starting
-        setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::string socketFormat = _config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
-        std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
-
-        int width = _config->getInteger("default:width");
-        int height = _config->getInteger("default:height");
-
-        if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
-            Application::error("%s: checkUnixSocket failed, `%s'", "xcbConnect", socketPath.c_str());
-
-        try
-        {
-            _xcbDisplay.reset(new XCB::RootDisplayExt(screen));
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            return false;
-        }
-
-        // shmInit();
-
-        auto displaySz = _xcbDisplay->size();
-        int color = _config->getInteger("display:solid", 0x4e7db7);
-
-        Application::debug("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, displaySz.width, displaySz.height, _xcbDisplay->depth());
-
-        if(0 != color)
-            _xcbDisplay->fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
-
-        if(0 < width && 0 < height && displaySz != XCB::Size(width, height))
-            _xcbDisplay->setRandrScreenSize(width, height);
-
-        _display = screen;
-        return true;
-    }
-
-    int Connector::SignalProxy::displayNum(void) const
-    {
-        return _display;
-    }
-
-    void Connector::SignalProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
-    {
-        if(0 < _display && display == _display)
-        {
-            Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, display, userName.c_str());
-            // disable message loop
-            bool extDisable = _xcbDisableMessages;
-            _xcbDisableMessages = true;
-            _xcbDisplay->resetInputs();
-            int oldDisplay = _display;
-            int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
-
-            if(newDisplay < 0)
-            {
-                Application::error("%s: %s failed", __FUNCTION__, "user session request");
-                throw std::runtime_error(NS_FuncName);
-            }
-
-            if(newDisplay != oldDisplay)
-            {
-                // wait xcb old operations ended
-                std::this_thread::sleep_for(100ms);
-
-                if(! xcbConnect(newDisplay))
-                {
-                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
-                    throw std::runtime_error(NS_FuncName);
-                }
-
-                busShutdownDisplay(oldDisplay);
-            }
-
-            //
-            if(! extDisable)
-                _xcbDisableMessages = false;
-        }
-    }
-
     void Connector::SignalProxy::onClearRenderPrimitives(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(display == displayNum())
         {
             Application::debug("%s: display: %d", __FUNCTION__, display);
 
@@ -336,12 +303,13 @@ namespace LTSM
                 if(ptr->type == RenderType::RenderRect)
                 {
                     if(auto prim = static_cast<RenderRect*>(ptr.get()))
-                        onAddDamage(prim->toRegion());
+                        xcbAddDamage(prim->toRegion());
                 }
-                else if(ptr->type == RenderType::RenderText)
+                else
+                if(ptr->type == RenderType::RenderText)
                 {
                     if(auto prim = static_cast<RenderText*>(ptr.get()))
-                        onAddDamage(prim->toRegion());
+                        xcbAddDamage(prim->toRegion());
                 }
             }
 
@@ -351,7 +319,7 @@ namespace LTSM
 
     void Connector::SignalProxy::onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill)
     {
-        if(0 < _display && display == _display)
+        if(display == displayNum())
         {
             Application::debug("%s: display: %d", __FUNCTION__, display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
@@ -359,13 +327,13 @@ namespace LTSM
             const int16_t ry = std::get<1>(rect);
             const uint16_t rw = std::get<2>(rect);
             const uint16_t rh = std::get<3>(rect);
-            onAddDamage({rx, ry, rw, rh});
+            xcbAddDamage({rx, ry, rw, rh});
         }
     }
 
     void Connector::SignalProxy::onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color)
     {
-        if(0 < _display && display == _display)
+        if(display == displayNum())
         {
             Application::debug("%s: display: %d", __FUNCTION__, display);
             const int16_t rx = std::get<0>(pos);
@@ -374,13 +342,13 @@ namespace LTSM
             const uint16_t rh = _systemfont.height;
             const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> rt{rx, ry, rw, rh};
             _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rt, color));
-            onAddDamage({rx, ry, rw, rh});
+            xcbAddDamage({rx, ry, rw, rh});
         }
     }
 
     void Connector::SignalProxy::onPingConnector(const int32_t & display)
     {
-        if(0 < _display && display == _display)
+        if(display == displayNum())
         {
             std::thread([=]()
             {
@@ -391,17 +359,11 @@ namespace LTSM
 
     void Connector::SignalProxy::onDebugLevel(const int32_t & display, const std::string & level)
     {
-        if(0 < _display && display == _display)
+        if(display == displayNum())
         {
             Application::info("%s: display: %d, level: %s", __FUNCTION__, display, level.c_str());
             Application::setDebugLevel(level);
         }
-    }
-
-    void Connector::SignalProxy::onAddDamage(const XCB::Region & reg)
-    {
-        if(isAllowXcbMessages())
-            _xcbDisplay->damageAdd(reg);
     }
 
     void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb) const
@@ -446,8 +408,8 @@ namespace LTSM
 
 int main(int argc, const char** argv)
 {
-    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
     int res = 0;
+    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
 
     try
     {
