@@ -71,9 +71,9 @@ jobs:
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_WITH_RDP=on \
                 -DLTSM_FUSE2SESSION=on \
-                -DLTSM_RUTOKEN_BACKEND=on \
                 -DLTSM_BUILD_X11VNC=on -DLTSM_BUILD_VNC2IMAGE=on \
-                -DLTSM_CHANNELS=on -DLTSM_CUPS_BACKEND=on \
+                -DLTSM_CUPS_BACKEND=on \
+                -DLTSM_GITHUB_WORKFLOW=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
       - name: Prepare LTSM coverage tests

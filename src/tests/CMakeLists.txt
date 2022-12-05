@@ -1,4 +1,4 @@
-foreach(DIR IN ITEMS json streambuf unixsocket framebuf xcb)
+foreach(DIR IN ITEMS json streambuf unixsocket framebuf)
     add_executable(LTSM_test_${DIR} ${DIR}/main.cpp)
 
     find_package(GnuTLS REQUIRED)
