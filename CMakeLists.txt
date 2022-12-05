@@ -11,6 +11,7 @@ option(LTSM_BUILD_SERVER "build server" OFF)
 option(LTSM_BUILD_CLIENT "build client" ON)
 
 #option(LTSM_BUILD_TESTS "build test utilities" OFF)
+#option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 #option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 #option(LTSM_WITH_STD_MAP "usage std::unordered_map" OFF)
@@ -281,6 +282,7 @@ if(LTSM_BUILD_VNC2IMAGE)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
+        src/channels/channel_system.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
 
