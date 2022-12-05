@@ -36,11 +36,7 @@ namespace LTSM
     namespace RFB
     {
         /* ClientDecoder */
-        class ClientDecoder : 
-#ifdef LTSM_CHANNELS
-            public ChannelClient,
-#endif
-            protected NetworkStream
+        class ClientDecoder : public ChannelClient,protected NetworkStream
         {
             PixelFormat serverFormat;
 
@@ -59,9 +55,8 @@ namespace LTSM
             bool            serverBigEndian = false;
             bool            continueUpdatesSupport = false;
             bool            continueUpdatesProcessed = false;
-#ifdef LTSM_CHANNELS
             bool            ltsmSupport = false;
-#endif
+
             // network stream interface
             void            sendFlush(void) override;
             void            sendRaw(const void* ptr, size_t len) override;
@@ -91,11 +86,9 @@ namespace LTSM
             void            recvCutTextEvent(void);
             void            recvContinuousUpdatesEvent(void);
 
-#ifdef LTSM_CHANNELS
             void            recvDecodingLtsm(void);
             void            recvChannelSystem(const std::vector<uint8_t> &) override;
             bool            isUserSession(void) const override { return true; }
-#endif
 
             void            recvDecodingRaw(const XCB::Region &);
             void            recvDecodingRRE(const XCB::Region &, bool corre);
@@ -135,11 +128,9 @@ namespace LTSM
             void            sendKeyEvent(bool pressed, uint32_t keysym);
             void            sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
             void            sendCutTextEvent(const char*, size_t);
-#ifdef LTSM_CHANNELS
             void            sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
-            virtual void    decodingLtsmEvent(const std::vector<uint8_t> &) {}
-#endif
 
+            virtual void    decodingLtsmEvent(const std::vector<uint8_t> &) {}
             virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) {}
             virtual void    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) {}
             virtual void    fbUpdateEvent(void) {}

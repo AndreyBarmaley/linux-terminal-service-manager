@@ -25,8 +25,6 @@
 #include <thread>
 #include <exception>
 
-#include <sys/stat.h>
-
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
 #include "ltsm_channels.h"
@@ -35,7 +33,6 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-#ifdef LTSM_CHANNELS
     /* FuseSessionProxy */
     FuseSessionProxy::FuseSessionProxy(const std::string& address, ChannelClient & client)
 #ifdef SDBUS_ADDRESS_SUPPORT
@@ -104,12 +101,10 @@ namespace LTSM
 
         sender->sendLtsmEvent(Channel::System, jos.flush());
     }
-#endif
 
     /* Connector::VNC */
     Connector::VNC::~VNC()
     {
-#ifdef LTSM_CHANNELS
         if(fuse)
         {
             try
@@ -120,7 +115,7 @@ namespace LTSM
             {
             }
         }
-#endif
+
         if(0 < displayNum())
         {
             busConnectorTerminated(displayNum());
@@ -146,40 +141,62 @@ namespace LTSM
 
     void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
-            setEnableXcbMessages(false);
+            xcbDisableMessages(true);
             waitUpdateProcess();
-            shmExt.first.reset();
 
-            SignalProxy::onLoginSuccess(display, userName, userUid);
+            shmUid = userUid;
+            Application::notice("%s: dbus signal, display: %d, username: %s, uid: %d", __FUNCTION__, display, userName.c_str(), userUid);
+            
+            int oldDisplay = displayNum();
+            int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
+            
+            if(newDisplay < 0)
+            {
+                Application::error("%s: %s failed", __FUNCTION__, "user session request");
+                throw std::runtime_error(NS_FuncName);
+            }
+ 
+            if(newDisplay != oldDisplay)
+            {
+                // wait xcb old operations ended
+                std::this_thread::sleep_for(100ms);
+ 
+                if(! xcbConnect(newDisplay, *this))
+                {
+                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
+                    throw std::runtime_error(NS_FuncName);
+                }
 
-            shmExt.second = userUid;
-            xcbShmInit(xcbDisplay()->size());
+                busShutdownDisplay(oldDisplay);
+            }
+ 
+            xcbShmInit(userUid);
 
-            setEnableXcbMessages(true);
+            xcbDisableMessages(false);
             auto & clientRegion = getClientRegion();
 
             // fix new session size
-            if(_xcbDisplay->size() != clientRegion.toSize())
+            if(xcbDisplay()->size() != clientRegion.toSize())
             {
                 Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
 
-                if(0 < _xcbDisplay->setRandrScreenSize(clientRegion.width, clientRegion.height))
+                if(0 < xcbDisplay()->setRandrScreenSize(clientRegion))
                     Application::info("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
             }
-
-            // full update
-            _xcbDisplay->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
-            //Application::notice("%s: dbus signal, display: %d, username: %s", __FUNCTION__, displayNum(), userName.c_str());
+            else
+            {
+                // full update
+                xcbDisplay()->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
+            }
 
             idleTimeoutSec = _config->getInteger("idle:action:timeout", 0);
             idleSession = std::chrono::steady_clock::now();
 
-#ifdef LTSM_CHANNELS
             userSession =  true;
 
-            std::thread([this]
+            std::thread([this]()
             {
                 JsonObjectStream jos;
                 jos.push("cmd", SystemCommand::LoginSuccess);
@@ -187,15 +204,14 @@ namespace LTSM
 
                 static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
             }).detach();
-#endif
         }
     }
 
     void Connector::VNC::onShutdownConnector(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
-            setEnableXcbMessages(false);
+            xcbDisableMessages(true);
             waitUpdateProcess();
             rfbMessagesShutdown();
             Application::notice("%s: dbus signal, display: %d", __FUNCTION__, display);
@@ -204,7 +220,7 @@ namespace LTSM
 
     void Connector::VNC::onHelperWidgetStarted(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
             loginWidgetStarted = true;
@@ -213,7 +229,7 @@ namespace LTSM
 
     void Connector::VNC::onSendBellSignal(const int32_t & display)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
 
@@ -243,23 +259,23 @@ namespace LTSM
 
         Application::info("%s: login session request success, display: %d", __FUNCTION__, screen);
 
-        if(! xcbConnect(screen))
+        if(! xcbConnect(screen, *this))
         {
             Application::error("%s: xcb connect: failed", __FUNCTION__);
             throw vnc_error(NS_FuncName);
         }
 
-        const xcb_visualtype_t* visual = _xcbDisplay->visual();
+        const xcb_visualtype_t* visual = xcbDisplay()->visual();
         if(! visual)
         {
             Application::error("%s: xcb visual empty", __FUNCTION__);
             throw vnc_error(NS_FuncName);
         }
 
-        Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
 
         // init server format
-        format = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        format = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
     }
 
     void Connector::VNC::serverSelectEncodingsEvent(void)
@@ -300,25 +316,20 @@ namespace LTSM
 
     void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
     {
-        xcbShmInit(sz);
+        xcbShmInit(shmUid);
         busDisplayResized(displayNum(), sz.width, sz.height);
     }
 
     void Connector::VNC::serverEncodingsEvent(void)
     {
-#ifdef LTSM_CHANNELS
         if(isClientEncodings(RFB::ENCODING_LTSM))
             sendEncodingLtsmSupported();
-#endif
     }
 
     void Connector::VNC::serverConnectedEvent(void)
     {
-        xcbShmInit(xcbDisplay()->size());
-
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10,
-                [=](){ return ! this->loginWidgetStarted; }))
+        if(! Tools::waitCallable<std::chrono::milliseconds>(3000, 10, [=](){ return ! this->loginWidgetStarted; }))
         {
             Application::info("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
             throw vnc_error(NS_FuncName);
@@ -355,42 +366,26 @@ namespace LTSM
     {
         return true;
     }
-    
-    XCB::SharedDisplay Connector::VNC::xcbDisplay(void) const
+
+    bool Connector::VNC::xcbAllowMessages(void) const
     {
-        return _xcbDisplay;
+        return SignalProxy::xcbAllowMessages();
     }
 
-    const XCB::SHM* Connector::VNC::xcbShm(void) const
+    void Connector::VNC::xcbAddDamage(const XCB::Region & reg)
     {
-        return & shmExt.first;
+        if(xcbAllowMessages())
+            xcbDisplay()->damageAdd(reg);
     }
 
-    bool Connector::VNC::xcbNoDamage(void) const
+    bool Connector::VNC::xcbNoDamageOption(void) const
     {
         return _config->getBoolean("vnc:xcb:nodamage", false);
     }
 
-    bool Connector::VNC::xcbAllow(void) const
+    void Connector::VNC::xcbDisableMessages(bool f)
     {
-        return isAllowXcbMessages();
-    }
-        
-    void Connector::VNC::setXcbAllow(bool f)
-    {
-        setEnableXcbMessages(f);
-    }
-
-    void Connector::VNC::xcbShmInit(const XCB::Size & dsz)
-    {
-        if(auto xcb = xcbDisplay())
-        {
-            const size_t pagesz = 4096;
-            auto bpp = xcb->bitsPerPixel() >> 3;
-            auto shmsz = ((dsz.width * dsz.height * bpp / pagesz) + 1) * pagesz;
-
-            shmExt.first = xcb->createSHM(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, shmExt.second);
-        }
+        SignalProxy::xcbDisableMessages(f);
     }
 
     int Connector::VNC::rfbUserKeycode(uint32_t keysym) const
@@ -411,7 +406,6 @@ namespace LTSM
         idleSession = std::chrono::steady_clock::now();
     }
 
-#ifdef LTSM_CHANNELS
     bool Connector::VNC::isUserSession(void) const
     {
         return userSession;
@@ -434,11 +428,14 @@ namespace LTSM
             auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
                     { return Tools::lower(str).substr(0,2) == Tools::lower(layout).substr(0,2); });
 
-            std::thread([group = std::distance(names.begin(), it), display = _xcbDisplay]()
+            std::thread([group = std::distance(names.begin(), it), display = xcbDisplay()]()
             {
-                // wait pause for apply layouts
-                std::this_thread::sleep_for(200ms);
-                display->switchXkbLayoutGroup(group);
+                if(auto xkb = static_cast<const XCB::ModuleXkb*>(display->getExtension(XCB::Module::XKB)))
+                {
+                    // wait pause for apply layouts
+                    std::this_thread::sleep_for(200ms);
+                    xkb->switchLayoutGroup(group);
+                }
             }).detach();
         }
 
@@ -452,19 +449,21 @@ namespace LTSM
     {
         auto layout = jo.getString("layout");
 
-        if(isAllowXcbMessages())
+        if(xcbAllowMessages())
         {
-            Application::debug("%s: layout: %s", __FUNCTION__, layout.c_str());
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB)))
+            {
+                Application::debug("%s: layout: %s", __FUNCTION__, layout.c_str());
 
-            auto names = _xcbDisplay->getXkbNames();
-
-            auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
+                auto names = xkb->getNames();
+                auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
                         { return Tools::lower(str).substr(0,2) == Tools::lower(layout).substr(0,2); });
 
-            if(it != names.end())
-                _xcbDisplay->switchXkbLayoutGroup(std::distance(names.begin(), it));
-            else
-                Application::error("%s: layout not found: %s, names: [%s]", __FUNCTION__, layout.c_str(), Tools::join(names).c_str());
+                if(it != names.end())
+                    xkb->switchLayoutGroup(std::distance(names.begin(), it));
+                else
+                    Application::error("%s: layout not found: %s, names: [%s]", __FUNCTION__, layout.c_str(), Tools::join(names).c_str());
+            }
         }
     }
 
@@ -564,7 +563,7 @@ namespace LTSM
         // dstdir - server target directory
         Application::debug("%s: display: %d", __FUNCTION__, display);
 
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             std::scoped_lock<std::mutex> guard(lockTransfer);
 
@@ -593,7 +592,7 @@ namespace LTSM
 
     void Connector::VNC::onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::connectorSpeed(speed));
         }
@@ -601,7 +600,7 @@ namespace LTSM
 
     void Connector::VNC::onDestroyChannel(const int32_t& display, const uint8_t& channel)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             destroyChannel(channel);
         }
@@ -609,7 +608,7 @@ namespace LTSM
 
     void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), limit}, Channel::connectorSpeed(speed));
         }
@@ -617,7 +616,7 @@ namespace LTSM
 
     void Connector::VNC::onDestroyListener(const int32_t& display, const std::string& client, const std::string& server)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             destroyListener(client, server);
         }
@@ -625,7 +624,7 @@ namespace LTSM
 
     void Connector::VNC::onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             setChannelDebug(channel, debug);
         }
@@ -690,7 +689,7 @@ namespace LTSM
         Application::info("%s: display: %d, dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
         int ver = 0;
 
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             try
             {
@@ -749,7 +748,7 @@ namespace LTSM
 
     void Connector::VNC::onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7)
     {
-        if(0 < displayNum() && display == displayNum())
+        if(display == displayNum())
         {
             JsonObjectStream jos;
             jos.push("cmd", SystemCommand::TokenAuth);
@@ -785,6 +784,4 @@ namespace LTSM
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
                                 NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
     }
-#endif
-
 }

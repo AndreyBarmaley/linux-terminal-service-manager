@@ -270,10 +270,24 @@ public:
         return result;
     }
 
+    std::string busGetSessionJson(const int32_t& display)
+    {
+        std::string result;
+        proxy_.callMethod("busGetSessionJson").onInterface(INTERFACE_NAME).withArguments(display).storeResultsTo(result);
+        return result;
+    }
+
     std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> busGetSessions()
     {
         std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> result;
         proxy_.callMethod("busGetSessions").onInterface(INTERFACE_NAME).storeResultsTo(result);
+        return result;
+    }
+
+    std::string busGetSessionsJson()
+    {
+        std::string result;
+        proxy_.callMethod("busGetSessionsJson").onInterface(INTERFACE_NAME).storeResultsTo(result);
         return result;
     }
 

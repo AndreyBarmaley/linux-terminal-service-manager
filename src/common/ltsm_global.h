@@ -31,7 +31,7 @@ namespace LTSM
     inline static const char* dbus_session_fuse_name = "ltsm.session.fuse";
     inline static const char* dbus_session_fuse_path = "/ltsm/session/fuse";
 
-    inline static const int service_version = 20221124;
+    inline static const int service_version = 20221203;
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
     inline static const bool big_endian = false;

@@ -35,21 +35,70 @@
 
 namespace LTSM
 {
-    class SDL2X11 : protected XCB::RootDisplayExt, protected SDL::Window
+    class SDL2X11 : protected XCB::RootDisplay, protected SDL::Window
     {
+        XCB::Region damage;
+        XCB::ShmIdShared shm;
         std::unique_ptr<char, void(*)(void*)> clipboard{ nullptr, SDL_free };
 
     public:
         SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
-            : XCB::RootDisplayExt(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h)
+            : XCB::RootDisplay(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h)
         {
         }
 
+/*
+        void xcbShmInit(uid_t uid)
+        {
+            if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM)))
+            {
+                auto dsz = XCB::RootDisplay::size();
+                const size_t pagesz = 4096;
+                auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
+                auto shmsz = ((dsz.width * dsz.height * bpp / pagesz) + 1) * pagesz;
+
+                shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+            }
+        }
+*/
+
         bool sdlFakeInputTest(int type, const SDL_Keysym & keysym)
         {
-            int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
-            auto keycode = XCB::RootDisplayExt::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
-            return keycode != XCB_NO_SYMBOL ? XCB::RootDisplayExt::fakeInputTest(type, keycode, 0, 0) : false;
+            if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
+            {
+                int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
+                auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
+                return keycode != XCB_NO_SYMBOL ? test->fakeInputRaw(root(), type, keycode, 0, 0) : false;
+            }
+            return false;
+        }
+
+        void xfixesSelectionChangedEvent(void) override
+        {
+        }
+
+        void xfixesCursorChangedEvent(void) override
+        {
+        }
+
+        void damageRegionEvent(const XCB::Region & area) override
+        {
+            damage.join(area);
+        }
+
+        void randrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne) override
+        {
+            SDL::Window::resize(dsz.width, dsz.height);
+            damage.assign(0, 0, dsz.width, dsz.height);
+        }
+
+        void xkbGroupChangedEvent(int group) override
+        {
+        }
+
+        void clipboardChangedEvent(const std::vector<uint8_t> & buf) override
+        {
+            SDL_SetClipboardText(std::string(buf.begin(), buf.end()).c_str());
         }
 
         bool sdlEventProcessing(bool & quit)
@@ -81,25 +130,28 @@ namespace LTSM
                     break;
 
                 case SDL_MOUSEBUTTONDOWN:
-                {
-                    auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputTest(XCB_BUTTON_PRESS, ev.button()->button, coordX, coordY);
-                }
-                break;
+                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
+                    {
+                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
+                        test->fakeInputRaw(root(), XCB_BUTTON_PRESS, ev.button()->button, coordX, coordY);
+                    }
+                    break;
 
                 case SDL_MOUSEBUTTONUP:
-                {
-                    auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputTest(XCB_BUTTON_RELEASE, ev.button()->button, coordX, coordY);
-                }
-                break;
+                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
+                    {
+                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
+                        test->fakeInputRaw(root(), XCB_BUTTON_RELEASE, ev.button()->button, coordX, coordY);
+                    }
+                    break;
 
                 case SDL_MOUSEMOTION:
-                {
-                    auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                    fakeInputTest(XCB_MOTION_NOTIFY, 0, coordX, coordY);
-                }
-                break;
+                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
+                    {
+                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
+                        test->fakeInputRaw(root(), XCB_MOTION_NOTIFY, 0, coordX, coordY);
+                    }
+                    break;
 
                 case SDL_MOUSEWHEEL:
                     if(ev.wheel()->y > 0)
@@ -108,7 +160,8 @@ namespace LTSM
                         SDL_GetMouseState(& posx, &posy);
                         fakeInputButton(4, XCB::Point(posx, posy));
                     }
-                    else if(ev.wheel()->y < 0)
+                    else
+                    if(ev.wheel()->y < 0)
                     {
                         int posx, posy;
                         SDL_GetMouseState(& posx, &posy);
@@ -125,7 +178,7 @@ namespace LTSM
                         if(clipboard)
                         {
                             auto len = SDL_strlen(clipboard.get());
-                            XCB::RootDisplayExt::setClipboardEvent((const uint8_t*) clipboard.get(), len);
+                            XCB::RootDisplay::setClipboard((const uint8_t*) clipboard.get(), len);
                         }
                     }
                     break;
@@ -146,39 +199,18 @@ namespace LTSM
             const size_t bytePerPixel = bitsPerPixel() >> 3;
 
             bool quit = false;
-            XCB::Region damage;
 
-            while(! quit && ! XCB::RootDisplayExt::hasError())
+            while(! quit)
             {
                 bool delay = ! sdlEventProcessing(quit);
 
-                while(auto ev = XCB::RootDisplayExt::poolEvent())
+                // processing xcb events
+                while(auto ev = XCB::RootDisplay::poolEvent())
                 {
-                    if(XCB::RootDisplayExt::isDamageNotify(ev))
+                    if(auto err = XCB::RootDisplay::hasError())
                     {
-                        const xcb_damage_notify_event_t* notify = (xcb_damage_notify_event_t*) ev.get();
-                        damage.join(notify->area.x, notify->area.y, notify->area.width, notify->area.height);
-                    }
-                    else if(XCB::RootDisplayExt::isRandrCRTCNotify(ev))
-                    {
-                        auto notify = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
-                        xcb_randr_crtc_change_t cc = notify->u.cc;
-
-                        if(0 < cc.width && 0 < cc.height)
-                        {
-                            SDL::Window::resize(cc.width, cc.height);
-                            damage.assign(0, 0, cc.width, cc.height);
-                        }
-                    }
-                    else if(XCB::RootDisplayExt::isSelectionNotify(ev))
-                    {
-                        auto notify = reinterpret_cast<xcb_selection_notify_event_t*>(ev.get());
-
-                        if(XCB::RootDisplayExt::selectionNotifyAction(notify))
-                        {
-                            auto & selbuf2 = XCB::RootDisplayExt::getSelectionData();
-                            SDL_SetClipboardText(std::string(selbuf2.begin(), selbuf2.end()).c_str());
-                        }
+                        Application::error("%s: xcb error, code: %d", __FUNCTION__, err);
+                        return EXIT_SUCCESS;
                     }
                 }
 
@@ -203,7 +235,7 @@ namespace LTSM
                         renderTexture(tx.get(), nullptr, nullptr, & dstrt);
                         renderPresent();
 
-                        XCB::RootDisplayExt::damageSubtrack(damage);
+                        XCB::RootDisplay::damageSubtrack(damage);
                     }
 
                     damage.reset();

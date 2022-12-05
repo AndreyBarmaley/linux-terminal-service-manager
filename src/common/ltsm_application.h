@@ -57,7 +57,7 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[info]\t");
+		fprintf(fderr, "[info] ");
 		fprintf(fderr, format, vals...);
 		fprintf(fderr, "\n");
 	    }
@@ -73,7 +73,7 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[notice]\t");
+		fprintf(fderr, "[notice] ");
 		fprintf(fderr, format, vals...);
 		fprintf(fderr, "\n");
 	    }
@@ -89,7 +89,7 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[warning]\t");
+		fprintf(fderr, "[warning] ");
 		fprintf(fderr, format, vals...);
 		fprintf(fderr, "\n");
 	    }
@@ -105,7 +105,7 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[error]\t");
+		fprintf(fderr, "[error] ");
 		fprintf(fderr, format, vals...);
 		fprintf(fderr, "\n");
 	    }
@@ -120,7 +120,7 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[debug]\t");
+		fprintf(fderr, "[debug] ");
 		fprintf(fderr, format, vals...);
 		fprintf(fderr, "\n");
 	    }

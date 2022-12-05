@@ -128,9 +128,7 @@ namespace LTSM
         bool                    fullscreen = false;
         bool                    usexkb = true;
         bool                    capslock = true;
-#ifdef LTSM_CHANNELS
         bool                    sendOptions = false;
-#endif
         bool                    alwaysRunning = false;
 
     protected:
@@ -156,15 +154,13 @@ namespace LTSM
         void                    cutTextEvent(std::vector<uint8_t> &&) override;
         void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) override;
 
-#ifdef LTSM_CHANNELS
         void                    xkbStateChangeEvent(int) override;
         void                    decodingLtsmEvent(const std::vector<uint8_t> &) override;
         void                    systemFuseProxy(const JsonObject &) override;
         void                    systemTokenAuth(const JsonObject &) override;
         void                    systemLoginSuccess(const JsonObject &) override;
-#endif
-        int    		        start(void) override;
 
+        int    		        start(void) override;
         bool                    isAlwaysRunning(void) const;
     };
 }

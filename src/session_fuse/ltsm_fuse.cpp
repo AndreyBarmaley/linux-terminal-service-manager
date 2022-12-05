@@ -467,7 +467,6 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
 
     try
     {
@@ -477,6 +476,8 @@ int main(int argc, char** argv)
             LTSM::Application::error("dbus connection failed, uid: %d", getuid());
             return EXIT_FAILURE;
         }
+
+        LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
 
         LTSM::session = std::make_unique<LTSM::FuseSessionBus>(*LTSM::conn);
         LTSM::Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);

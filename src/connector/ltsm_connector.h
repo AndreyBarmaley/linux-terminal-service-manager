@@ -76,15 +76,13 @@ namespace LTSM
             std::list<std::unique_ptr<RenderPrimitive>>
                                         _renderPrimitives;
 
-            XCB::SharedDisplay          _xcbDisplay;
-
             std::string		        _conntype;
             std::string			_remoteaddr;
 
             const JsonObject*           _config = nullptr;
 
-            std::atomic<int>            _display{0};
-            std::atomic<bool>           _xcbDisableMessages{true};
+            std::atomic<int>            _xcbDisplayNum{0};
+            std::atomic<bool>           _xcbDisable{true};
 
         private:
             // dbus virtual signals
@@ -109,27 +107,29 @@ namespace LTSM
 
         protected:
             // dbus virtual signals
-            void                        onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid) override;
             void                        onDebugLevel(const int32_t& display, const std::string & level) override;
 	    void			onPingConnector(const int32_t & display) override;
             void			onClearRenderPrimitives(const int32_t & display) override;
             void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
             void			onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
 
-	    void		        onAddDamage(const XCB::Region &);
-            bool                        xcbConnect(int display);
             void                        renderPrimitivesToFB(FrameBuffer &) const;
-            int                         displayNum(void) const;
+
+            virtual void                xcbAddDamage(const XCB::Region &) = 0;
+
+    	    int	                        displayNum(void) const;
+            bool                        xcbConnect(int screen, XCB::RootDisplay &);
+	    void                        xcbDisableMessages(bool f);
+	    bool                        xcbAllowMessages(void) const;
 
         public:
             SignalProxy(const JsonObject &, const char* conntype);
             virtual ~SignalProxy();
 
     	    virtual int	                communication(void) = 0;
+
 	    std::string         	checkFileOption(const std::string &) const;
 
-	    bool			isAllowXcbMessages(void) const;
-	    void			setEnableXcbMessages(bool f);
         };
 
         /* Connector::Service */

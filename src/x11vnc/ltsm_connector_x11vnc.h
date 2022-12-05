@@ -42,19 +42,18 @@ namespace LTSM
             const JsonObject*           _config = nullptr;
             std::string                 _remoteaddr;
 
-            std::atomic<bool>           _xcbDisableMessages{true};
-            XCB::SharedDisplay          _xcbDisplay;
-
             PixelFormat                _format;
+
+            std::atomic<int>           _display{0};
+            std::atomic<bool>          _xcbDisable{true};
 
         protected:
             // rfb server encoding
             const PixelFormat &        serverFormat(void) const override;
 
-            XCB::SharedDisplay         xcbDisplay(void) const override;
-            bool                       xcbNoDamage(void) const override;
-            bool                       xcbAllow(void) const override;
-            void                       setXcbAllow(bool) override;
+            bool                       xcbNoDamageOption(void) const override;
+            bool                       xcbAllowMessages(void) const override;
+            void                       xcbDisableMessages(bool) override;
 
             bool                       rfbClipboardEnable(void) const override;
             bool                       rfbDesktopResizeEnabled(void) const override;

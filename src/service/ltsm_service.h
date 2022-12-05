@@ -188,6 +188,8 @@ namespace LTSM
 
         XvfbSession() = default;
 	~XvfbSession();
+
+        std::string                      toJsonString(void) const;
     };
 
     // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encryption
@@ -200,11 +202,13 @@ namespace LTSM
     typedef std::pair<pid_t, std::shared_future<int>> PidStatus;
     typedef std::pair<pid_t, std::future<StatusStdout>> PidStatusStdout;
 
+    xvfb2tuple                          toSessionTuple(XvfbSessionPtr);
+
     class XvfbSessions
     {
     protected:
         std::vector<XvfbSessionPtr>     sessions;
-        std::mutex                      lockSessions;
+        mutable std::mutex              lockSessions;
 
     public:
         XvfbSessions(size_t);
@@ -218,6 +222,7 @@ namespace LTSM
         std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
 
         std::vector<xvfb2tuple>         toSessionsList(void);
+        std::string                      toJsonString(void) const;
     };
 
     namespace Manager
@@ -260,14 +265,11 @@ namespace LTSM
             bool                        sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
             void                        sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
-#ifdef LTSM_CHANNELS
             static void                 transferFileStartBackground(Object* owner, XvfbSessionPtr,
                                             std::string tmpfile, std::string dstfile, uint32_t filesz);
             static void                 transferFilesRequestCommunication(Object* owner, XvfbSessionPtr,
                                             std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
                                             std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int>);
-#endif
-
         protected:
 	    void			closeSystemSession(XvfbSessionPtr);
             std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie);
@@ -336,7 +338,11 @@ namespace LTSM
 
             bool                        busSetAuthenticateLoginPass(const int32_t & display, const std::string & login, const std::string & password) override;
             bool                        busSetAuthenticateToken(const int32_t & display, const std::string & login) override;
+
             std::vector<xvfb2tuple>     busGetSessions(void) override;
+
+            std::string                 busGetSessionJson(const int32_t& display) override;
+            std::string                 busGetSessionsJson(void) override;
 
             bool                        busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) override;
             bool                        busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) override;
@@ -347,14 +353,12 @@ namespace LTSM
             void                        tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt) override;
             void                        helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data) override;
 
-#ifdef LTSM_CHANNELS
             void                        startSessionChannels(XvfbSessionPtr);
             bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startPulseAudioListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startPcscdListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
-#endif
         };
 
         class Service : public ApplicationJsonConfig

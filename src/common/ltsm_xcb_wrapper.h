@@ -69,6 +69,8 @@ namespace LTSM
 
             bool isValid(void) const { return 0 <= x && 0 <= y; }
 
+            xcb_point_t toXcb(void) const { return xcb_point_t{x, y}; }
+
             Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
             Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
 
@@ -109,6 +111,8 @@ namespace LTSM
 
             const Point & topLeft(void) const { return *this; }
             const Size &  toSize(void) const { return *this; }
+
+            xcb_rectangle_t toXcb(void) const { return xcb_rectangle_t{x, y, width, height}; }
 
     	    PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
 
@@ -157,52 +161,21 @@ namespace LTSM
             const XCB::Region & region(void) const { return first; }
         };
 
-        struct object_t
+        struct ConnectionShared : std::shared_ptr<xcb_connection_t>
         {
-            uint32_t                xcb;
-            xcb_connection_t*       conn;
-
-            object_t(uint32_t id, xcb_connection_t* xcon) : xcb(id), conn(xcon) {}
-            virtual ~object_t() {}
-        };
-
-        struct gc_t : object_t
-        {
-            gc_t(xcb_connection_t* xcon, uint32_t id = 0) : object_t(id, xcon) {}
-            ~gc_t() { if(xcb) xcb_free_gc(conn, xcb); }
-        };
-
-        struct damage_t : object_t
-        {
-            damage_t(xcb_connection_t* xcon, uint32_t id = 0) : object_t(id, xcon) {}
-            ~damage_t() { if(xcb) xcb_damage_destroy(conn, xcb); }
-        };
-
-        struct xfixes_region_t : object_t
-        {
-            xfixes_region_t(xcb_connection_t* xcon, uint32_t id = 0) : object_t(id, xcon) {}
-            ~xfixes_region_t() { if(xcb) xcb_xfixes_destroy_region(conn, xcb); }
-        };
-
-        struct shm_t : object_t
-        {
-            int                     shm;
-            uint8_t*                addr;
-
-            shm_t(int shmid, uint8_t* ptr, xcb_connection_t* xcon, uint32_t id = 0) : object_t(id, xcon), shm(shmid), addr(ptr) {}
-            ~shm_t();
+            ConnectionShared(xcb_connection_t* conn = nullptr)
+                : std::shared_ptr<xcb_connection_t>(conn, xcb_disconnect) {}
         };
 
         struct GenericError : std::shared_ptr<xcb_generic_error_t>
         {
-            GenericError(xcb_generic_error_t* err)
+            GenericError(xcb_generic_error_t* err = nullptr)
                 : std::shared_ptr<xcb_generic_error_t>(err, std::free) {}
         };
 
         struct GenericEvent : std::shared_ptr<xcb_generic_event_t>
         {
-            GenericEvent() {}
-            GenericEvent(xcb_generic_event_t* ev)
+            GenericEvent(xcb_generic_event_t* ev = nullptr)
                 : std::shared_ptr<xcb_generic_event_t>(ev, std::free) {}
 
             const xcb_generic_error_t*  toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
@@ -248,41 +221,13 @@ namespace LTSM
 	#define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
 	#define NULL_KEYCODE 0
 
-        struct GC : std::shared_ptr<gc_t>
-        {
-            GC(xcb_drawable_t, xcb_connection_t*,
-               uint32_t value_mask = 0, const void* value_list = nullptr);
+        template<typename Reply, typename Cookie>
+	ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
+	{
+            return XCB::getReply1<Reply, Cookie>(func, conn, cookie);
+	}
 
-            uint32_t               xid(void) const { return get() ? get()->xcb : 0; }
-            xcb_connection_t*      connection(void) const { return get() ? get()->conn : nullptr; }
-        };
-
-        struct XFixesRegion : std::shared_ptr<xfixes_region_t>
-        {
-            XFixesRegion() {}
-
-            XFixesRegion(const Region &, xcb_connection_t*);
-            XFixesRegion(const xcb_rectangle_t*, uint32_t count, xcb_connection_t*);
-            XFixesRegion(xcb_window_t win, xcb_shape_kind_t kind, xcb_connection_t*);
-
-            uint32_t                xid(void) const { return get() ? get()->xcb : 0; }
-            xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }
-
-            XFixesRegion            intersect(xcb_xfixes_region_t) const;
-            XFixesRegion            unionreg(xcb_xfixes_region_t) const;
-        };
-
-        struct Damage : std::shared_ptr<damage_t>
-        {
-            Damage() {}
-            Damage(xcb_drawable_t, int level, xcb_connection_t*);
-
-            bool                    addRegion(xcb_drawable_t winid, xcb_xfixes_region_t regid) const;
-            bool                    subtractRegion(xcb_xfixes_region_t regid, xcb_xfixes_region_t parts) const;
-
-            uint32_t                xid(void) const { return get() ? get()->xcb : 0; }
-            xcb_connection_t*       connection(void) const { return get() ? get()->conn : nullptr; }
-        };
+        #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
 
         struct PixmapBase
         {
@@ -305,17 +250,28 @@ namespace LTSM
 
         typedef std::shared_ptr<PixmapBase> PixmapInfoReply;
 
-        struct SHM : std::shared_ptr<shm_t>
+        struct ShmId
         {
-            SHM() = default;
-            SHM(int shmid, uint8_t* addr, xcb_connection_t*);
+            ConnectionShared       conn;
+            int                    shm = -1;
+            uint8_t*               addr = nullptr;
+            xcb_shm_seg_t          id = 0;
 
-            uint32_t              xid(void) const { return get() ? get()->xcb : 0; }
+            ShmId(ConnectionShared ptr, int s, uint8_t* a, const xcb_shm_seg_t & v) : conn(ptr), shm(s), addr(a), id(v) {}
+            ShmId() = default;
+            ~ShmId();
+
+            void reset(void);
+
+            operator bool(void) const { return conn && 0 < id; };
+            const xcb_shm_seg_t & operator()(void) const { return id; };
         };
+
+        typedef std::shared_ptr<ShmId> ShmIdShared;
 
         struct PixmapSHM : PixmapBase
         {
-            SHM                   shm;
+            ShmIdShared           shm;
 	    size_t	          len = 0;
 
             uint8_t*              data(void) override { return shm ? shm->addr : nullptr; }
@@ -323,7 +279,7 @@ namespace LTSM
             size_t                size(void) const override { return len; }
 
             PixmapSHM() = default;
-            PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, const SHM & sh, size_t sz)
+            PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, ShmIdShared sh, size_t sz)
                 : PixmapBase(rmask, gmask, bmask, bpp), shm(sh), len(sz) {}
         };
 
@@ -351,7 +307,7 @@ namespace LTSM
             CursorImage(ReplyCursor && rc) : ReplyCursor(rc) {}
         };
 
-        enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB };
+        enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB, SELECTION };
 
 	union xkb_notify_event_t
 	{
@@ -372,112 +328,293 @@ namespace LTSM
 
 	struct RandrOutputInfo
 	{
-	    bool		connected;
-	    xcb_randr_crtc_t	crtc;
-	    uint32_t		mm_width;
-	    uint32_t		mm_height;
+	    bool		connected = false;
+	    xcb_randr_crtc_t	crtc = 0;
+	    uint32_t		mm_width = 0;
+	    uint32_t		mm_height = 0;
 	    std::string		name;
 
-	    RandrOutputInfo() : connected(false), crtc(0), mm_width(0), mm_height(0) {}
+	    RandrOutputInfo() = default;
 	};
 
 	struct RandrScreenInfo
 	{
-	    xcb_timestamp_t 	config_timestamp;
-	    uint16_t 		sizeID;
-	    uint16_t 		rotation;
-	    uint16_t 		rate;
-	    RandrScreenInfo() : config_timestamp(0), sizeID(0), rotation(0), rate(0) {}
+	    xcb_timestamp_t 	config_timestamp = 0;
+	    uint16_t 		sizeID = 0;
+	    uint16_t 		rotation = 0;
+	    uint16_t 		rate = 0;
+
+	    RandrScreenInfo() = default;
 	};
 
         typedef std::vector<uint8_t> AuthCookie;
 
+        struct SelectionIncrMode
+        {
+            xcb_window_t        requestor = 0;
+            uint32_t            size = 0;
+            uint16_t            sequence = 0;
+
+            SelectionIncrMode(xcb_window_t win, uint32_t sz, uint16_t seq) : requestor(win), size(sz), sequence(seq) {}
+        };
+
+        struct ModuleExtension
+        {
+            ConnectionShared    conn;
+            Module              type;
+            const               xcb_query_extension_reply_t* ext = nullptr;
+
+            ModuleExtension(ConnectionShared ptr, const Module & mod) : conn(ptr), type(mod) {}
+            virtual ~ModuleExtension() = default;
+
+            bool isModule(const Module & mod) const { return mod == type; }
+            bool isEventType(const GenericEvent &, int) const;
+            bool isEventError(const GenericEvent &, uint16_t* opcode = nullptr) const;
+        };
+
+        struct WindowDamageId
+        {
+            ConnectionShared    conn;
+            xcb_drawable_t      win = 0;
+            xcb_damage_damage_t xid = 0;
+
+            WindowDamageId(ConnectionShared ptr, const xcb_drawable_t & w, const xcb_damage_damage_t & v) : conn(ptr), win(w), xid(v) {}
+            ~WindowDamageId() { if(0 < xid && conn) xcb_damage_destroy(conn.get(), xid); }
+
+            bool                valid(void) const { return conn && 0 < xid; };
+            const xcb_damage_damage_t & id(void) const { return xid; };
+
+            bool                addRegion(const xcb_xfixes_region_t &);
+            bool                subtrackRegion(const xcb_xfixes_region_t &);
+        };
+
+        typedef std::unique_ptr<WindowDamageId> WindowDamageIdPtr;
+
+        struct ModuleDamage : ModuleExtension
+        {
+            ModuleDamage(ConnectionShared);
+
+            WindowDamageIdPtr   createDamage(xcb_drawable_t win, const xcb_damage_report_level_t &) const;
+        };
+
+        struct FixesRegionId
+        {
+            ConnectionShared    conn;
+            xcb_xfixes_region_t xid = 0;
+
+            FixesRegionId(ConnectionShared ptr, const xcb_xfixes_region_t & v) : conn(ptr), xid(v) {}
+            ~FixesRegionId() { if(0 < xid && conn) xcb_xfixes_destroy_region(conn.get(), xid); }
+
+            bool                valid(void) const { return conn && 0 < xid; };
+            const xcb_xfixes_region_t & id(void) const { return xid; };
+        };
+
+        typedef std::unique_ptr<FixesRegionId> FixesRegionIdPtr;
+
+        struct ModuleFixes : ModuleExtension
+        {
+            ModuleFixes(ConnectionShared);
+
+            FixesRegionIdPtr    createRegion(const xcb_rectangle_t &) const;
+            FixesRegionIdPtr    createRegions(const xcb_rectangle_t*, uint32_t counts) const;
+ 
+            FixesRegionIdPtr    unionRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
+            FixesRegionIdPtr    intersectRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
+
+            xcb_rectangle_t     fetchRegion(const xcb_xfixes_region_t &) const;
+            std::vector<xcb_rectangle_t> fetchRegions(const xcb_xfixes_region_t &) const;
+
+            CursorImage         cursorImage(void) const;
+        };
+
+        struct ModuleTest : ModuleExtension
+        {
+            ModuleTest(ConnectionShared);
+
+            bool                    fakeInputRaw(xcb_window_t, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const;
+            void                    fakeInputClickButton(xcb_window_t win, uint8_t button, const Point &) const;
+        };
+
+        struct ModuleSelection : ModuleExtension
+        {
+            xcb_window_t         win = XCB_WINDOW_NONE;
+
+	    std::vector<uint8_t> buf;
+            std::mutex           lock;
+
+            std::unique_ptr<SelectionIncrMode>
+                                 incr;
+
+	    xcb_atom_t           atombuf = XCB_ATOM_NONE;
+
+            ModuleSelection(ConnectionShared, const xcb_screen_t &, xcb_atom_t);
+            ~ModuleSelection();
+
+            bool                    sendNotifyTargets(const xcb_selection_request_event_t &);
+            bool                    sendNotifySelData(const xcb_selection_request_event_t &);
+
+            bool                    clearAction(const xcb_selection_clear_event_t*);
+            bool                    requestAction(const xcb_selection_request_event_t*);
+            bool                    fixesAction(const xcb_xfixes_selection_notify_event_t*);
+
+            void                    notifyIncrStart(const xcb_selection_notify_event_t &);
+            bool                    notifyIncrContinue(xcb_atom_t type);
+            bool                    notifyAction(const xcb_selection_notify_event_t*, xcb_atom_t, bool syncPrimaryClipboard);
+
+            bool                    setBuffer(const uint8_t* buf, size_t len, std::initializer_list<xcb_atom_t> atoms);
+        };
+
+        struct ModuleRandr : ModuleExtension
+        {
+            ModuleRandr(ConnectionShared);
+
+	    std::vector<xcb_randr_output_t>      getOutputs(const xcb_screen_t &) const;
+	    RandrOutputInfo                      getOutputInfo(const xcb_randr_output_t &) const;
+	    std::vector<xcb_randr_mode_t>        getOutputModes(const xcb_randr_output_t &) const;
+	    std::vector<xcb_randr_crtc_t>        getOutputCrtcs(const xcb_randr_output_t &) const;
+	    RandrScreenInfo                      getScreenInfo(const xcb_screen_t &) const;
+	    std::vector<xcb_randr_screen_size_t> getScreenSizes(const xcb_screen_t &, RandrScreenInfo* = nullptr) const;
+	    std::vector<xcb_randr_mode_info_t>   getModesInfo(const xcb_screen_t &) const;
+
+	    bool                    setScreenSize(const xcb_screen_t &, XCB::Size, uint16_t* sequence = nullptr) const;
+	    xcb_randr_mode_t        createMode(const xcb_screen_t &, const XCB::Size &) const;
+	    bool                    destroyMode(const xcb_randr_mode_t &) const;
+	    bool                    addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
+	    bool                    deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
+        };
+
+        struct ModuleShm : ModuleExtension
+        {
+            ModuleShm(ConnectionShared);
+
+            ShmIdShared             createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
+        };
+
+        struct ModuleXkb : ModuleExtension
+        {
+            std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> ctx;
+            std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*>   map;
+	    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*>     state;
+
+	    int32_t                devid = -1;
+
+            ModuleXkb(ConnectionShared);
+
+            bool                     resetMapState(void);
+
+            int                      getLayoutGroup(void) const;
+            bool                     switchLayoutGroup(int group = -1) const;
+            std::vector<std::string> getNames(void) const;
+        };
+
+#ifdef LTSM_BUILD_XCB_ERRORS
+        struct ErrorContext
+        {
+            xcb_errors_context_t*   ctx = nullptr;
+
+            ErrorContext(xcb_connection_t*);
+            ~ErrorContext();
+
+            bool                    error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const;
+        };
+#endif
+
         class Connector
         {
         protected:
-            xcb_connection_t*       _conn = nullptr;
+            ConnectionShared        _conn;
             const xcb_setup_t*      _setup = nullptr;
 
 #ifdef LTSM_BUILD_XCB_ERRORS
-            xcb_errors_context_t*   _errctx = nullptr;
+            std::unique_ptr<ErrorContext> _error;
 #endif
+        protected:
+            void                    extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
+
+            /// exception: xcb_error
+            void                    displayConnect(size_t displayNum, const AuthCookie* = nullptr);
+
+            Connector() = default;
 
         public:
             Connector(size_t displayNum, const AuthCookie* = nullptr);
-            virtual ~Connector();
+            virtual ~Connector() = default;
 
             size_t	            depthFromBpp(size_t bitsPerPixel) const;
             size_t	            bppFromDepth(size_t depth) const;
+
             const xcb_setup_t*      setup(void) const;
 
-	    template<typename Reply, typename Cookie>
-	    ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
-	    {
-                return XCB::getReply1<Reply, Cookie>(func, _conn, cookie);
-	    }
-
-	    #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
+            xcb_connection_t*       xcb_ptr(void);
+            const xcb_connection_t* xcb_ptr(void) const;
 
 	    int                     hasError(void) const;
 
-            bool                    checkExtension(const Module &) const;
-            int                     eventErrorOpcode(const GenericEvent & ev, const Module &) const;
-            int                     eventNotify(const GenericEvent & ev, const Module &) const;
-
-            bool                    isDamageNotify(const GenericEvent & ev) const;
-            bool                    isXFixesSelectionNotify(const GenericEvent & ev) const;
-            bool                    isXFixesCursorNotify(const GenericEvent & ev) const;
-            bool                    isRandrScreenNotify(const GenericEvent & ev) const;
-            bool                    isRandrOutputNotify(const GenericEvent & ev) const;
-            bool                    isRandrCRTCNotify(const GenericEvent & ev) const;
-
-            bool                    isXkbStateNotify(const GenericEvent & ev) const;
-            bool                    isXkbKeyboardNotify(const GenericEvent & ev) const;
-            bool                    isXkbMapNotify(const GenericEvent & ev) const;
-
-            void                    extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
-
             GenericError            checkRequest(const xcb_void_cookie_t &) const;
-            virtual GenericEvent    poolEvent(void);
 
-            GC                      createGC(xcb_drawable_t winid, uint32_t value_mask = 0, const void* value_list = nullptr);
-            SHM                     createSHM(size_t, int mode = 0600, bool readOnly = false, uid_t owner = 0);
-            Damage                  createDamage(xcb_drawable_t winid, int level = XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
-            XFixesRegion            createFixesRegion(const Region &);
-            XFixesRegion            createFixesRegion(const xcb_rectangle_t* rect, size_t num);
-            CursorImage             cursorImage(void);
 	    xcb_atom_t              getAtom(std::string_view, bool create = true) const;
 	    bool                    checkAtom(std::string_view) const;
 	    std::string	            getAtomName(xcb_atom_t) const;
+
 	    size_t                  getMaxRequest(void) const;
 
-            static bool             testConnection(std::string_view addr);
+            bool                    deleteProperty(xcb_window_t win, xcb_atom_t prop) const;
+            PropertyReply           getPropertyInfo(xcb_window_t win, xcb_atom_t prop) const;
+            xcb_atom_t              getPropertyType(xcb_window_t win, xcb_atom_t prop) const;
 
-            PropertyReply           getPropertyAnyType(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0, uint32_t length = 0xFFFFFFFF);
-            xcb_atom_t              getPropertyType(xcb_window_t win, xcb_atom_t prop);
-            xcb_atom_t              getPropertyAtom(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
-            xcb_window_t            getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
-            std::string             getPropertyString(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0);
-            std::list<std::string>  getPropertyStringList(xcb_window_t win, xcb_atom_t prop);
-            std::vector<uint8_t>    getPropertyBinary(xcb_window_t win, xcb_atom_t prop, xcb_atom_t type);
+            std::list<xcb_atom_t>   getPropertiesList(xcb_window_t win) const;
+
+            xcb_atom_t              getPropertyAtom(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
+            xcb_window_t            getPropertyWindow(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
+            uint32_t                getPropertyCardinal(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
+            int                     getPropertyInteger(xcb_window_t win, xcb_atom_t prop, uint32_t offset = 0) const;
+            std::string             getPropertyString(xcb_window_t win, xcb_atom_t prop) const;
+
+            std::list<xcb_atom_t>   getPropertyAtomList(xcb_window_t win, xcb_atom_t prop) const;
+            std::list<xcb_window_t> getPropertyWindowList(xcb_window_t win, xcb_atom_t prop) const;
+            std::list<uint32_t>     getPropertyCardinalList(xcb_window_t win, xcb_atom_t prop) const;
+            std::list<int>          getPropertyIntegerList(xcb_window_t win, xcb_atom_t prop) const;
+            std::list<std::string>  getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
         };
 
         class RootDisplay : public Connector
         {
 	protected:
+            std::unique_ptr<ModuleShm>    _modShm;
+            std::unique_ptr<ModuleDamage> _modDamage;
+            std::unique_ptr<ModuleFixes>  _modFixes;
+            std::unique_ptr<ModuleTest>   _modTest;
+            std::unique_ptr<ModuleRandr>  _modRandr;
+            std::unique_ptr<ModuleXkb>    _modXkb;
+            std::unique_ptr<ModuleSelection> _modSelection;
+
             xcb_screen_t*           _screen = nullptr;
             xcb_format_t*           _format = nullptr;
             xcb_visualtype_t*       _visual = nullptr;
 
-            Damage                  _damage;
+            std::unique_ptr<WindowDamageId>  _damage;
 
             xcb_keycode_t           _minKeycode = 0;
             xcb_keycode_t           _maxKeycode = 0;
 
-            std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> _xkbctx;
-            std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> _xkbmap;
-	    std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> _xkbstate;
-	    int32_t                 _xkbdevid = -1;
+	protected:
+            void                    rootConnect(size_t displayNum, const AuthCookie* = nullptr);
+
+            bool                    createFullScreenDamage(void);
+
+            bool                    isDamageNotify(const GenericEvent &) const;
+            bool                    isXFixesSelectionNotify(const GenericEvent &) const;
+            bool                    isXFixesCursorNotify(const GenericEvent &) const;
+            bool                    isRandrScreenNotify(const GenericEvent &) const;
+            bool                    isRandrNotify(const GenericEvent &, const xcb_randr_notify_t &) const;
+            bool                    isXkbNotify(const GenericEvent & ev, int notify) const;
+
+            bool                    selectionFixesAction(xcb_xfixes_selection_notify_event_t*);
+            bool                    selectionClearAction(xcb_selection_clear_event_t*);
+            bool                    selectionRequestAction(xcb_selection_request_event_t*);
+            bool                    selectionNotifyAction(xcb_selection_notify_event_t*, bool syncPrimaryClipboard = false);
+
+            RootDisplay() = default;
 
         public:
             RootDisplay(size_t displayNum, const AuthCookie* = nullptr);
@@ -493,92 +630,43 @@ namespace LTSM
             const xcb_visualtype_t* visual(void) const;
             xcb_drawable_t          root(void) const;
 
+            void                    reconnect(size_t displayNum, const AuthCookie* = nullptr);
+            const ModuleExtension*  getExtension(const Module &) const;
+
+            bool                    setRandrScreenSize(const XCB::Size &, uint16_t* sequence = nullptr);
+
+            virtual void            xfixesSelectionChangedEvent(void) {}
+            virtual void            xfixesCursorChangedEvent(void) {}
+            virtual void            damageRegionEvent(const XCB::Region &) {}
+            virtual void            randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) {}
+            virtual void            xkbGroupChangedEvent(int) {}
+	    virtual void            clipboardChangedEvent(const std::vector<uint8_t> &) {}
+
             const xcb_visualtype_t* visual(xcb_visualid_t) const;
 
-            void                    resetInputs(void);
             void                    fillRegion(int r, int g, int b, const Region &);
             void                    fillBackground(int r, int g, int b);
 
-            PixmapInfoReply         copyRootImageRegion(const Region &, const SHM* = nullptr) const;
+            bool                    setClipboard(const uint8_t*, size_t);
 
-            void                    fakeInputKeycode(xcb_keycode_t, bool pressed);
+            PixmapInfoReply         copyRootImageRegion(const Region &, ShmIdShared = nullptr) const;
+
+            void                    resetInputs(void);
+            void                    fakeInputKeycode(xcb_keycode_t, bool pressed) const;
             void                    fakeInputKeysym(xcb_keysym_t, bool pressed);
-            void                    fakeInputButton(int button, const Point &);
-            bool                    fakeInputTest(int type, int detail, int posx, int posy);
+            void                    fakeInputButton(int button, const Point &) const;
 
             xcb_keycode_t           keysymToKeycode(xcb_keysym_t) const;
             xcb_keycode_t           keysymGroupToKeycode(xcb_keysym_t, int group) const;
 	    std::pair<xcb_keycode_t, int>
                                     keysymToKeycodeGroup(xcb_keysym_t keysym) const;
-            int                     getXkbLayoutGroup(void) const;
-            bool                    switchXkbLayoutGroup(int group = -1) const;
-            std::vector<std::string> getXkbNames(void) const;
-
-	    std::vector<xcb_randr_output_t>      getRandrOutputs(void) const;
-	    RandrOutputInfo                      getRandrOutputInfo(const xcb_randr_output_t &) const;
-	    std::vector<xcb_randr_mode_t>        getRandrOutputModes(const xcb_randr_output_t &) const;
-	    std::vector<xcb_randr_crtc_t>        getRandrOutputCrtcs(const xcb_randr_output_t &) const;
-	    RandrScreenInfo                      getRandrScreenInfo(void) const;
-	    std::vector<xcb_randr_screen_size_t> getRandrScreenSizes(RandrScreenInfo* = nullptr) const;
-	    std::vector<xcb_randr_mode_info_t>   getRandrModesInfo(void) const;
-
-
-	    bool                    setRandrScreenSize(uint16_t windth, uint16_t height, uint16_t* sequence = nullptr);
-	    xcb_randr_mode_t        createRandrMode(uint16_t width, uint16_t height);
-	    bool                    destroyRandrMode(const xcb_randr_mode_t  &);
-	    bool                    addRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
-	    bool                    deleteRandrOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &);
 
             bool                    damageAdd(const xcb_rectangle_t*, size_t);
             bool                    damageAdd(const Region &);
             bool                    damageSubtrack(const Region &);
 
-            GenericEvent            poolEvent(void) override;
+            GenericEvent            poolEvent(void);
         };
-
-	class RootDisplayExt : public RootDisplay
-	{
-        protected:
-            xcb_window_t            _selwin;
-	    std::vector<uint8_t>    _selbuf;
-            std::unique_ptr<Tools::BaseTimer>
-                                    _timerClipCheck;
-
-	    xcb_atom_t              _atoms[7] = { XCB_ATOM_NONE };
-	    xcb_atom_t &            _atomPrimary;
-	    xcb_atom_t &            _atomClipboard;
-	    xcb_atom_t &            _atomBuffer;
-	    xcb_atom_t &            _atomTargets;
-	    xcb_atom_t &            _atomText;
-	    xcb_atom_t &            _atomTextPlain;
-	    xcb_atom_t &            _atomUTF8;
-
-	    xcb_window_t             getOwnerSelection(const xcb_atom_t &);
-
-	    bool                     getSelectionEvent(const xcb_atom_t &);
-	    bool                     setClipboardEvent(const uint8_t*, size_t, std::initializer_list<xcb_atom_t>);
-
-            bool                     sendNotifyTargets(const xcb_selection_request_event_t &);
-            bool                     sendNotifySelData(const xcb_selection_request_event_t &);
-            bool                     selectionClearAction(xcb_selection_clear_event_t*);
-            bool                     selectionRequestAction(xcb_selection_request_event_t*);
-
-	public:
-            RootDisplayExt(size_t displayNum, const AuthCookie* = nullptr);
-            ~RootDisplayExt();
-
-            GenericEvent             poolEvent(void) override;
-
-            bool                     selectionNotifyAction(xcb_selection_notify_event_t*, bool syncPrimaryClipboard = false);
-            bool                     isSelectionNotify(const GenericEvent & ev) const;
-
-            void                         setClipboardClear(void);
-            bool                         setClipboardEvent(const uint8_t*, size_t);
-            bool                         setClipboardEvent(std::vector<uint8_t> &&);
-	    const std::vector<uint8_t> & getSelectionData(void) const { return _selbuf; };
-	};
-
-	typedef std::shared_ptr<RootDisplayExt> SharedDisplay;
 
         class XkbClient
         {
@@ -609,14 +697,6 @@ namespace LTSM
 
             virtual void                xkbStateChangeEvent(int) {}
             virtual void                xkbStateResetEvent(void) {}
-
-            template<typename Reply, typename Cookie>
-            ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, Cookie cookie) const
-            {
-                return XCB::getReply1<Reply, Cookie>(func, conn.get(), cookie);
-            }
-                
-            #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,NAME(conn,##__VA_ARGS__))
         };
     }
 }

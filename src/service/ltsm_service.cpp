@@ -284,6 +284,115 @@ namespace LTSM
         }
     }
 
+    std::string XvfbSession::toJsonString(void) const
+    {
+        int sesmode = 0, conpol = 0;
+
+        switch(mode)
+        {
+            case XvfbMode::SessionOnline:
+                sesmode = 1;
+                break;
+
+            case XvfbMode::SessionSleep:
+                sesmode = 2;
+                break;
+
+            default:
+                 break;
+        }
+
+        switch(policy)
+        {
+            case SessionPolicy::AuthTake:
+                conpol = 1;
+                break;
+
+            case SessionPolicy::AuthShare:
+                conpol = 2;
+                break;
+
+            default:
+                 break;
+        }
+
+        JsonObjectStream jos;
+        jos.push("displaynum", displayNum);
+        jos.push("pid1", pid1);
+        jos.push("pid2", pid2);
+        jos.push("width", width);
+        jos.push("height", height);
+        jos.push("uid", static_cast<int>(uid));
+        jos.push("gid", static_cast<int>(gid));
+        jos.push("durationlimit", durationLimit);
+        jos.push("sesmode", sesmode);
+        jos.push("conpol", conpol);
+        jos.push("user", user);
+        jos.push("xauthfile", xauthfile);
+        jos.push("remoteaddr", remoteaddr);
+        jos.push("conntype", conntype);
+        jos.push("encryption", encryption);
+        jos.push("alivesec", static_cast<size_t>(aliveSec().count()));
+
+        return jos.flush();
+    }
+
+    xvfb2tuple toSessionTuple(XvfbSessionPtr ptr)
+    {
+        int32_t displayNum = -1, pid1 = -1, pid2 = -1, width = 0, height = 0, uid = 0, gid = 0, durationLimit = 0, sesmode = 0, conpol = 0;
+        std::string user, xauthfile, remoteaddr, conntype, encryption;
+
+        if(ptr)
+        {
+            switch(ptr->mode)
+            {
+                case XvfbMode::SessionOnline:
+                    sesmode = 1;
+                    break;
+
+                case XvfbMode::SessionSleep:
+                    sesmode = 2;
+                    break;
+
+                default:
+                    sesmode = 0;
+                    break;
+            }
+
+            switch(ptr->policy)
+            {
+                case SessionPolicy::AuthTake:
+                    conpol = 1;
+                    break;
+
+                case SessionPolicy::AuthShare:
+                    conpol = 2;
+                    break;
+
+                default:
+                    conpol = 0;
+                    break;
+            }
+
+            displayNum = ptr->displayNum;
+            pid1 = ptr->pid1;
+            pid2 = ptr->pid2;
+            width = ptr->width;
+            height = ptr->height;
+            uid = ptr->uid;
+            gid =ptr->gid;
+            durationLimit = ptr->durationLimit;
+            user = ptr->user;
+            xauthfile = ptr->xauthfile;
+            remoteaddr = ptr->remoteaddr;
+            conntype = ptr->conntype;
+            encryption = ptr->encryption;
+        }
+
+        return xvfb2tuple{ displayNum, pid1, pid2, width, height, uid, gid, durationLimit, sesmode, conpol,
+                            user, xauthfile, remoteaddr, conntype, encryption };
+    }
+
     /* XvfbSessions */
     XvfbSessions::XvfbSessions(size_t displays)
     {
@@ -382,66 +491,27 @@ namespace LTSM
         return nullptr;
     }
 
+    std::string XvfbSessions::toJsonString(void) const
+    {
+        JsonArrayStream jas;
+
+        std::scoped_lock guard{ lockSessions };
+
+        for(auto & ptr : sessions)
+            if(ptr) jas.push(ptr->toJsonString());
+
+        return jas.flush();
+    }
+
     std::vector<xvfb2tuple> XvfbSessions::toSessionsList(void)
     {
         std::vector<xvfb2tuple> res;
         res.reserve(sessions.size());
 
         std::scoped_lock guard{ lockSessions };
+
         for(auto & ptr : sessions)
-        {
-            if(! ptr) continue;
-
-            int32_t sesmode = 0; // SessionLogin
-
-            switch(ptr->mode)
-            {
-                case XvfbMode::SessionOnline:
-                    sesmode = 1;
-                    break;
-
-                case XvfbMode::SessionSleep:
-                    sesmode = 2;
-                    break;
-
-                default:
-                    break;
-            }
-
-            int32_t conpol = 0; // AuthLock
-
-            switch(ptr->policy)
-            {
-                case SessionPolicy::AuthTake:
-                    conpol = 1;
-                    break;
-
-                case SessionPolicy::AuthShare:
-                    conpol = 2;
-                    break;
-
-                default:
-                    break;
-            }
-
-            res.emplace_back(
-                ptr->displayNum,
-                ptr->pid1,
-                ptr->pid2,
-                ptr->width,
-                ptr->height,
-                ptr->uid,
-                ptr->gid,
-                ptr->durationLimit,
-                sesmode,
-                conpol,
-                ptr->user,
-                ptr->xauthfile,
-                ptr->remoteaddr,
-                ptr->conntype,
-                ptr->encryption
-            );
-        }
+            if(ptr) res.emplace_back(toSessionTuple(ptr));
 
         return res;
     }
@@ -1668,10 +1738,7 @@ namespace LTSM
             }
 
             sessionRunSetxkbmapLayout(oldSess);
-
-#ifdef LTSM_CHANNELS
             startSessionChannels(oldSess);
-#endif
             runSessionScript(oldSess, _config->getString("session:connect"));
 
             return oldSess->displayNum;
@@ -1782,9 +1849,7 @@ namespace LTSM
         runSystemScript(newSess, _config->getString("system:connect"));
 
         emitSessionChanged(newSess->displayNum);
-#ifdef LTSM_CHANNELS
         startSessionChannels(newSess);
-#endif
         runSessionScript(newSess, _config->getString("session:connect"));
 
         return newSess->displayNum;
@@ -1971,7 +2036,6 @@ namespace LTSM
         return true;
     }
 
-#ifdef LTSM_CHANNELS
     void Manager::Object::transferFilesRequestCommunication(Object* owner, XvfbSessionPtr xvfb,
         std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
         std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int> zenityQuestionResult)
@@ -2202,17 +2266,6 @@ namespace LTSM
 
         return true;
     }
-#else
-    bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
-    {
-        return false;
-    }
-
-    bool Manager::Object::busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
-    {
-        return false;
-    }
-#endif
 
     bool Manager::Object::busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency)
     {
@@ -2228,7 +2281,7 @@ namespace LTSM
             }
 
             // thread mode
-            std::thread([xvfb = std::move(xvfb), summary2 = summary, body2 = body, icontype2 = icontype, urgency2 = urgency]
+            std::thread([xvfb = std::move(xvfb), summary2 = summary, body2 = body, icontype2 = icontype /*, urgency2 = urgency */]
             {
                 // wait new session started
                 while(xvfb->aliveSec() < std::chrono::seconds(3))
@@ -2643,8 +2696,8 @@ namespace LTSM
                     pass = val;
             }
 
-            if(!login.empty() && !pass.empty())
-                busSetAuthenticateLoginPass(display, login, pass);
+            if(! login.empty())
+                emitHelperSetLoginPassword(display, login, pass, ! pass.empty());
 
             return true;
         }
@@ -2652,7 +2705,6 @@ namespace LTSM
         return false;
     }
 
-#ifdef LTSM_CHANNELS
     void fixPermissionJob(std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode)
     {
         auto tp = std::chrono::steady_clock::now();
@@ -2991,7 +3043,6 @@ namespace LTSM
 
         return true;
     }
-#endif
 
     bool Manager::Object::sessionAllowFUSE(const int32_t& display)
     {
@@ -3099,6 +3150,19 @@ namespace LTSM
         Application::info("%s: login: %s, display: %d", __FUNCTION__, login.c_str(), display);
         emitHelperSetLoginPassword(display, login, password, action);
         return true;
+    }
+
+    std::string Manager::Object::busGetSessionJson(const int32_t& display)
+    {
+        if(auto xvfb = findDisplaySession(display))
+            return xvfb->toJsonString();
+
+        return "{}";
+    }
+
+    std::string Manager::Object::busGetSessionsJson(void)
+    {
+        return XvfbSessions::toJsonString();
     }
 
     std::vector<xvfb2tuple> Manager::Object::busGetSessions(void)
@@ -3317,6 +3381,8 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
+        LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+
         // remove old sockets
         for(auto const & dirEntry : std::filesystem::directory_iterator{xvfbHome})
         {
@@ -3384,8 +3450,6 @@ namespace LTSM
 
 int main(int argc, const char** argv)
 {
-    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
-
     int res = 0;
     try
     {

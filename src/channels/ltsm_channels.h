@@ -24,8 +24,6 @@
 #ifndef _LTSM_CHANNELS_
 #define _LTSM_CHANNELS_
 
-#ifdef LTSM_CHANNELS
- #include "channel_system.h"
-#endif
+#include "channel_system.h"
 
 #endif

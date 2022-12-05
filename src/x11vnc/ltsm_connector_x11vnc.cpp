@@ -79,24 +79,19 @@ namespace LTSM
         return _config->getBoolean("DesktopResized");
     }
 
-    XCB::SharedDisplay Connector::X11VNC::xcbDisplay(void) const
-    {
-        return _xcbDisplay;
-    }
-
-    bool Connector::X11VNC::xcbNoDamage(void) const
+    bool Connector::X11VNC::xcbNoDamageOption(void) const
     {
         return _config->getBoolean("nodamage", false);
     }
 
-    bool Connector::X11VNC::xcbAllow(void) const
+    bool Connector::X11VNC::xcbAllowMessages(void) const
     {
-        return ! _xcbDisableMessages;
+        return ! _xcbDisable;
     }
 
-    void Connector::X11VNC::setXcbAllow(bool f)
+    void Connector::X11VNC::xcbDisableMessages(bool f)
     {
-        _xcbDisableMessages = !f;
+        _xcbDisable = f;
     }
 
     int Connector::X11VNC::rfbUserKeycode(uint32_t keysym) const
@@ -137,10 +132,11 @@ namespace LTSM
         Application::debug("%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
+        size_t screen = _config->getInteger("display", 0);
 
         try
         {
-            _xcbDisplay.reset(new XCB::RootDisplayExt(_config->getInteger("display")));
+            xcbDisplay()->reconnect(screen);
         }
         catch(const std::exception & err)
         {
@@ -148,20 +144,22 @@ namespace LTSM
             return false;
         }
 
-        _xcbDisplay->resetInputs();
+        xcbDisplay()->resetInputs();
 
-        Application::info("%s: display info, size: [%d,%d], depth: %d", __FUNCTION__, _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
-        Application::debug("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(), xcbDisplay()->height(), xcbDisplay()->depth());
+        Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
 
-        const xcb_visualtype_t* visual = _xcbDisplay->visual();
+        const xcb_visualtype_t* visual = xcbDisplay()->visual();
         if(! visual)
         {
             Application::error("%s: xcb visual empty", __FUNCTION__);
             return false;
         }
 
+        xcbShmInit();
+
         // init server format
-        _format = PixelFormat(_xcbDisplay->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        _format = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         return true;
     }
