@@ -563,7 +563,7 @@ namespace LTSM
 	return res;
     }
 
-    XCB::CursorImage XCB::ModuleFixes::cursorImage(void) const
+    XCB::CursorImage XCB::ModuleFixes::getCursorImage(void) const
     {
         auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_image, conn.get());
 
@@ -573,6 +573,26 @@ namespace LTSM
         }
 
         return xcbReply;
+    }
+
+    std::string XCB::ModuleFixes::getCursorName(const xcb_cursor_t & cur) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_name, conn.get(), cur);
+
+        if(auto err = xcbReply.error())
+        {
+            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_name");
+        }
+
+        if(auto reply = xcbReply.reply())
+        {
+            auto ptr = xcb_xfixes_get_cursor_name_name(reply.get());
+            int len = xcb_xfixes_get_cursor_name_name_length(reply.get());
+            if(ptr && 0 < len)
+                return std::string(ptr, ptr + len);
+        }
+
+        return "";
     }
 
     // XCB::ModuleTest
@@ -1290,10 +1310,7 @@ namespace LTSM
             const std::scoped_lock guard{ lock };
             buf.clear();
 
-            if(Application::isDebugLevel(DebugLevel::Console) ||
-               Application::isDebugLevel(DebugLevel::SyslogInfo))
-                Application::debug("%s: %s", __FUNCTION__, "event");
-
+            Application::debug("%s: %s", __FUNCTION__, "event");
             return true;
         }
 
@@ -1392,8 +1409,7 @@ namespace LTSM
         xcb_send_event(conn.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
         xcb_flush(conn.get());
 
-        if(Application::isDebugLevel(DebugLevel::Console) ||
-           Application::isDebugLevel(DebugLevel::SyslogInfo))
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto prop = Atom::getName(conn.get(), ev.property);
             std::string log(buf.begin(), buf.end());
@@ -1435,13 +1451,12 @@ namespace LTSM
         xcb_send_event(conn.get(), 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
         xcb_flush(conn.get());
 
-        if(Application::isDebugLevel(DebugLevel::Console) ||
-           Application::isDebugLevel(DebugLevel::SyslogTrace))
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto sel = Atom::getName(conn.get(), ev->selection);
             auto tgt = Atom::getName(conn.get(), ev->target);
             auto prop = Atom::getName(conn.get(), ev->property);
-            Application::error("%s: discard, selection atom(%d, `%s'), target atom(%d, `%s'), property atom(%d, `%s'), window: 0x%08x",
+            Application::warning("%s: discard, selection atom(%d, `%s'), target atom(%d, `%s'), property atom(%d, `%s'), window: 0x%08x",
                                     __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
         }
 
@@ -2317,6 +2332,8 @@ namespace LTSM
         createFullScreenDamage();
 
         xcb_flush(_conn.get());
+
+        displayConnectedEvent();
     }
 
     void XCB::RootDisplay::reconnect(size_t displayNum, const AuthCookie* auth)

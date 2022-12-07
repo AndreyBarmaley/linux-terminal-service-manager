@@ -477,7 +477,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+        LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
 
         LTSM::session = std::make_unique<LTSM::FuseSessionBus>(*LTSM::conn);
         LTSM::Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);

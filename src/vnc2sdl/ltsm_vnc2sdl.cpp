@@ -178,7 +178,7 @@ namespace LTSM
 
     void printHelp(const char* prog)
     {
-        std::cout << "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] " <<
+        std::cout << "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] " <<
             "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
             "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
             "[--share-folder <folder>] [--pulse [" << pulsedef << "]] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
@@ -187,7 +187,8 @@ namespace LTSM
 
         std::cout << std::endl << "arguments:" << std::endl <<
             "    --version (show program version)" << std::endl <<
-            "    --debug (debug to syslog)" << std::endl <<
+            "    --debug (debug mode)" << std::endl <<
+            "    --syslog (to syslog)" << std::endl <<
             "    --host <localhost> " << std::endl <<
             "    --port <port> " << std::endl <<
             "    --password <pass> " << std::endl <<
@@ -215,7 +216,7 @@ namespace LTSM
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
         : Application("ltsm_vnc2sdl")
     {
-        Application::setDebugLevel(DebugLevel::SyslogInfo);
+        Application::setDebug(DebugTarget::Console, DebugLevel::Info);
         username = Tools::getLocalUsername();
 
         rfbsec.authVenCrypt = true;
@@ -349,7 +350,10 @@ namespace LTSM
             }
             else
             if(0 == std::strcmp(argv[it], "--debug"))
-                Application::setDebugLevel(DebugLevel::Console);
+                Application::setDebugLevel(DebugLevel::Debug);
+            else
+            if(0 == std::strcmp(argv[it], "--syslog"))
+                Application::setDebugTarget(DebugTarget::Syslog);
             else
             if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
@@ -918,7 +922,7 @@ namespace LTSM
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::decodingLtsmEvent(const std::vector<uint8_t> &)
+    void Vnc2SDL::ltsmHandshakeEvent(int flags)
     {
         if(! sendOptions)
         {

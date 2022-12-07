@@ -30,24 +30,25 @@
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 #include "ltsm_channels.h"
+#include "librfb_decodings.h"
 
 namespace LTSM
 {
     namespace RFB
     {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient,protected NetworkStream
+        class ClientDecoder : public ChannelClient, protected NetworkStream
         {
             PixelFormat serverFormat;
 
             std::unique_ptr<NetworkStream> socket;           /// socket layer
             std::unique_ptr<TLS::Stream> tls;                /// tls layer
             std::unique_ptr<ZLib::InflateStream> zlib;       /// zlib layer
+            std::unique_ptr<DecodingBase> decoder;
 
             NetworkStream* streamIn;
             NetworkStream* streamOut;
 
-            int             decodingDebug = 0;
             std::atomic<bool> rfbMessages{true};
             std::mutex      sendLock;
 
@@ -56,6 +57,13 @@ namespace LTSM
             bool            continueUpdatesSupport = false;
             bool            continueUpdatesProcessed = false;
             bool            ltsmSupport = false;
+
+        protected:
+            friend class DecodingRaw;
+            friend class DecodingRRE;
+            friend class DecodingHexTile;
+            friend class DecodingTRLE;
+            friend class DecodingZlib;
 
             // network stream interface
             void            sendFlush(void) override;
@@ -69,7 +77,6 @@ namespace LTSM
             void            zlibInflateStart(bool uint16sz = false);
             void            zlibInflateStop(void);
 
-        protected:
             bool            authVncInit(std::string_view pass);
             bool            authVenCryptInit(const SecurityInfo &);
 
@@ -86,17 +93,10 @@ namespace LTSM
             void            recvCutTextEvent(void);
             void            recvContinuousUpdatesEvent(void);
 
-            void            recvDecodingLtsm(void);
+            void            recvDecodingLtsm(const XCB::Region &);
             void            recvChannelSystem(const std::vector<uint8_t> &) override;
             bool            isUserSession(void) const override { return true; }
 
-            void            recvDecodingRaw(const XCB::Region &);
-            void            recvDecodingRRE(const XCB::Region &, bool corre);
-            void            recvDecodingHexTile(const XCB::Region &);
-            void            recvDecodingHexTileRegion(const XCB::Region &, int & bgColor, int & fgColor);
-            void            recvDecodingTRLE(const XCB::Region &, bool zrle);
-            void            recvDecodingTRLERegion(const XCB::Region &, bool zrle);
-            void            recvDecodingZlib(const XCB::Region &);
             void            recvDecodingLastRect(const XCB::Region &);
             void            recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size &);
             void            recvDecodingRichCursor(const XCB::Region &);
@@ -107,6 +107,7 @@ namespace LTSM
 
             void            setSocketStreamMode(int sockd);
             void            setInetStreamMode(void);
+            void            updateRegion(int type, const XCB::Region &);
 
             virtual void    setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void    fillPixel(const XCB::Region &, uint32_t pixel) = 0;
@@ -130,7 +131,7 @@ namespace LTSM
             void            sendCutTextEvent(const char*, size_t);
             void            sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
 
-            virtual void    decodingLtsmEvent(const std::vector<uint8_t> &) {}
+            virtual void    ltsmHandshakeEvent(int flags) {}
             virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) {}
             virtual void    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) {}
             virtual void    fbUpdateEvent(void) {}

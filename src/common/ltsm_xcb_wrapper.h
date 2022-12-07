@@ -424,7 +424,8 @@ namespace LTSM
             xcb_rectangle_t     fetchRegion(const xcb_xfixes_region_t &) const;
             std::vector<xcb_rectangle_t> fetchRegions(const xcb_xfixes_region_t &) const;
 
-            CursorImage         cursorImage(void) const;
+            CursorImage         getCursorImage(void) const;
+            std::string         getCursorName(const xcb_cursor_t &) const;
         };
 
         struct ModuleTest : ModuleExtension
@@ -635,6 +636,7 @@ namespace LTSM
 
             bool                    setRandrScreenSize(const XCB::Size &, uint16_t* sequence = nullptr);
 
+            virtual void            displayConnectedEvent(void) {}
             virtual void            xfixesSelectionChangedEvent(void) {}
             virtual void            xfixesCursorChangedEvent(void) {}
             virtual void            damageRegionEvent(const XCB::Region &) {}

@@ -57,7 +57,7 @@ namespace LTSM
     //
     void connectorHelp(const char* prog)
     {
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+        LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
 
         std::list<std::string> proto = { "VNC" };
 #ifdef LTSM_WITH_RDP
@@ -99,7 +99,7 @@ namespace LTSM
 
         if(! config().isValid())
         {
-            LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
+            LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
 
             Application::error("%s: %s failed", "Connector", "config");
             throw std::invalid_argument("Connector");
@@ -136,8 +136,8 @@ namespace LTSM
 
     int Connector::Service::start(void)
     {
-
         Application::setDebugLevel(configGetString("connector:debug"));
+
         auto uid = getuid();
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
         //if(0 < uid)
@@ -409,7 +409,7 @@ namespace LTSM
 int main(int argc, const char** argv)
 {
     int res = 0;
-    LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+    LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
 
     try
     {

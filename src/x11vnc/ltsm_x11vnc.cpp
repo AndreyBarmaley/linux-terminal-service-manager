@@ -41,7 +41,7 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_X11VNC_VERSION << std::endl;
-        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <error|info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]" << std::endl;
+        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]" << std::endl;
     }
 
     /* X11Vnc */
@@ -130,14 +130,14 @@ namespace LTSM
         if(configGetBoolean("inetd"))
             configSetBoolean("syslog", true);
 
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::ConsoleError);
+        Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::None);
 
         if(configGetBoolean("syslog"))
         {
-            Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+            Application::setDebugTarget(LTSM::DebugTarget::Syslog);
             auto debug = configGetString("debug");
 
-            if(! debug.empty() && debug != "console")
+            if(! debug.empty())
                 Application::setDebugLevel(debug);
         }
 

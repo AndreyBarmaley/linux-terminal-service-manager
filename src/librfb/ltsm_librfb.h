@@ -119,6 +119,8 @@ namespace LTSM
         const int ENCODING_COMPRESS1 = -255;
 
         const int ENCODING_LTSM = 0x4C54534D;
+        const int ENCODING_LTSM_X264 = 1;
+        const int ENCODING_LTSM_VP8 = 2;
         const int PROTOCOL_LTSM = 119;
 
 	struct ScreenInfo
@@ -138,7 +140,6 @@ namespace LTSM
         int desktopResizeStatusCode(const DesktopResizeStatus &);
 
         const char* encodingName(int type);
-        typedef std::function<void(const FrameBuffer &)> sendEncodingFunc;
 
         /// SecurityInfo
         struct SecurityInfo

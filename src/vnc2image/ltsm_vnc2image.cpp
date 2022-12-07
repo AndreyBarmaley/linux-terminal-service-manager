@@ -43,7 +43,7 @@ namespace LTSM
     Vnc2Image::Vnc2Image(int argc, const char** argv)
         : Application("ltsm_vnc2image")
     {
-        Application::setDebugLevel(DebugLevel::ConsoleError);
+        Application::setDebug(DebugTarget::Console, DebugLevel::Info);
 
         for(int it = 1; it < argc; ++it)
         {
@@ -80,7 +80,7 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--notls"))
                 notls = true;
             else if(0 == std::strcmp(argv[it], "--debug"))
-                Application::setDebugLevel(DebugLevel::Console);
+                Application::setDebugLevel(DebugLevel::Debug);
         }
     }
 

@@ -121,6 +121,12 @@ namespace LTSM
             busConnectorTerminated(displayNum());
             clientDisconnectedEvent(displayNum());
         }
+
+        xcbDisableMessages(true);
+        rfbMessagesShutdown();
+        waitUpdateProcess();
+
+        Application::info("%s: connector shutdown", __FUNCTION__);
     }
 
     int Connector::VNC::communication(void)
@@ -132,9 +138,6 @@ namespace LTSM
         }
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
-
-        setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
-        setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
 
         return rfbCommunication();
     }
@@ -239,7 +242,7 @@ namespace LTSM
 
     const PixelFormat & Connector::VNC::serverFormat(void) const
     {
-        return format;
+        return serverPf;
     }
 
     void Connector::VNC::xcbFrameBufferModify(FrameBuffer & fb) const
@@ -275,14 +278,7 @@ namespace LTSM
         Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
 
         // init server format
-        format = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
-    }
-
-    void Connector::VNC::serverSelectEncodingsEvent(void)
-    {
-        // set disabled and preffered encodings
-        setDisabledEncodings(_config->getStdList<std::string>("vnc:encoding:blacklist"));
-        setPrefferedEncodings(_config->getStdList<std::string>("vnc:encoding:preflist"));
+        serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
         if(_config->hasKey("vnc:keymap:file"))
@@ -302,6 +298,22 @@ namespace LTSM
                 }
             }
         }
+    }
+
+    std::list<std::string> Connector::VNC::serverDisabledEncodings(void) const
+    {
+        return _config->getStdList<std::string>("vnc:encoding:blacklist");
+    }
+
+    std::list<std::string> Connector::VNC::serverPrefferedEncodings(void) const
+    {
+        return _config->getStdList<std::string>("vnc:encoding:preflist");
+    }
+
+    void Connector::VNC::serverSelectEncodingsEvent(void)
+    {
+        setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
+        setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
     }
 
     void Connector::VNC::serverMainLoopEvent(void)

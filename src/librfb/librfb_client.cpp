@@ -152,13 +152,13 @@ namespace LTSM
     {
         // recv challenge 16 bytes
         auto challenge = recvData(16);
-        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
             Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
         }
         auto crypt = TLS::encryptDES(challenge, password);
-        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
             Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
@@ -472,7 +472,17 @@ namespace LTSM
 
             switch(msgType)
             {
-                case SERVER_FB_UPDATE:          recvFBUpdateEvent(); break;
+                case SERVER_FB_UPDATE:
+                    try
+                    {
+                        recvFBUpdateEvent();
+                    }
+                    catch(const std::exception & err)
+                    {
+                        rfbMessagesShutdown();
+                    }
+                    break;
+
                 case SERVER_SET_COLOURMAP:      recvColorMapEvent(); break;
                 case SERVER_BELL:               recvBellEvent(); break;
                 case SERVER_CUT_TEXT:           recvCutTextEvent(); break;
@@ -494,7 +504,7 @@ namespace LTSM
                     __FUNCTION__, clientFormat.bitsPerPixel, big_endian,
                     clientFormat.redMax, clientFormat.redShift, clientFormat.greenMax, clientFormat.greenShift, clientFormat.blueMax, clientFormat.blueShift);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         // send pixel format
         sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
@@ -518,7 +528,7 @@ namespace LTSM
         for(auto type : encodings)
             Application::debug("%s: %s", __FUNCTION__, encodingName(type));
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         sendInt8(RFB::CLIENT_SET_ENCODINGS);
         sendZero(1); // padding
@@ -532,7 +542,7 @@ namespace LTSM
     {
         Application::debug("%s: keysym: 0x%08x, pressed: %d", __FUNCTION__, keysym, pressed);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
@@ -546,7 +556,7 @@ namespace LTSM
     {
         Application::debug("%s: pointer: [%d, %d], buttons: 0x%02x", __FUNCTION__, posx, posy, buttons);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         sendInt8(RFB::CLIENT_EVENT_POINTER);
 
@@ -560,7 +570,7 @@ namespace LTSM
     {
         Application::debug("%s: buffer size: %d", __FUNCTION__, len);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         sendInt8(RFB::CLIENT_CUT_TEXT);
         // padding
@@ -574,7 +584,7 @@ namespace LTSM
     {
         Application::debug("%s: status: %s, region [%d,%d,%d,%d]", __FUNCTION__, (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
         sendInt8(enable ? 1 : 0);
         sendIntBE16(reg.x);
@@ -596,7 +606,7 @@ namespace LTSM
     {
         Application::debug("%s: region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
 
         // send framebuffer update request
         sendInt8(CLIENT_REQUEST_FB_UPDATE);
@@ -606,6 +616,32 @@ namespace LTSM
         sendIntBE16(reg.width);
         sendIntBE16(reg.height);
         sendFlush();
+    }
+
+
+    void RFB::ClientDecoder::updateRegion(int type, const XCB::Region & reg)
+    {
+        if(! decoder || type != decoder->getType())
+        {
+            switch(type)
+            {
+                case ENCODING_RAW:      decoder = std::make_unique<DecodingRaw>(); break;
+                case ENCODING_RRE:      decoder = std::make_unique<DecodingRRE>(false); break;
+                case ENCODING_CORRE:    decoder = std::make_unique<DecodingRRE>(true); break;
+                case ENCODING_HEXTILE:  decoder = std::make_unique<DecodingHexTile>(false); break;
+                case ENCODING_TRLE:     decoder = std::make_unique<DecodingTRLE>(false); break;
+                case ENCODING_ZRLE:     decoder = std::make_unique<DecodingTRLE>(true); break;
+                case ENCODING_ZLIB:     decoder = std::make_unique<DecodingZlib>(); break;
+
+                default:
+                {
+                    Application::error("%s: %s", __FUNCTION__, "unknown decoding");
+                    throw rfb_error(NS_FuncName);
+                }
+            }
+        }
+
+        decoder->updateRegion(*this, reg);
     }
 
     void RFB::ClientDecoder::recvFBUpdateEvent(void)
@@ -632,14 +668,9 @@ namespace LTSM
 
             switch(encodingType)
             {
-                case ENCODING_RAW:      recvDecodingRaw(reg); break;
-                case ENCODING_RRE:      recvDecodingRRE(reg, false); break;
-                case ENCODING_CORRE:    recvDecodingRRE(reg, true); break;
-                case ENCODING_HEXTILE:  recvDecodingHexTile(reg); break;
-                case ENCODING_TRLE:     recvDecodingTRLE(reg, false); break;
-                case ENCODING_ZLIB:     recvDecodingZlib(reg); break;
-                case ENCODING_ZRLE:     recvDecodingTRLE(reg, true); break;
-                case ENCODING_LTSM:     recvDecodingLtsm(); break;
+                case ENCODING_LTSM:
+                    recvDecodingLtsm(reg);
+                    break;
 
                 case ENCODING_LAST_RECT:
                     recvDecodingLastRect(reg);
@@ -655,14 +686,14 @@ namespace LTSM
                     break;
 
                 case RFB::ENCODING_DESKTOP_SIZE:
+                    Application::warning("%s: %s", __FUNCTION__, "old desktop_size");
                     break;
 
                 default:
-                {
-                    Application::error("%s: %s", __FUNCTION__, "unknown decoding");
-                    throw rfb_error(NS_FuncName);
-                }
+                    updateRegion(encodingType, reg);
+                    break;
             }
+
         }
 
         auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
@@ -687,7 +718,7 @@ namespace LTSM
             col.g = recvInt8();
             col.b = recvInt8();
 
-            if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+            if(Application::isDebugLevel(DebugLevel::Trace))
                 Application::debug("%s: color [0x%02x,0x%02x,0x%02x]", __FUNCTION__, col.r, col.g, col.b);
         }
 
@@ -722,402 +753,19 @@ namespace LTSM
         sendContinuousUpdates(false, { XCB::Point(0,0), clientSize() });
     }
 
-    void RFB::ClientDecoder::recvDecodingRaw(const XCB::Region & reg)
-    {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        for(int yy = 0; yy < reg.height; ++yy)
-            for(int xx = 0; xx < reg.width; ++yy)
-                setPixel(XCB::Point(reg.x + xx, reg.y + yy), recvPixel());
-    }
-
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg)
     {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg)
     {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto buf = recvData(reg.width * reg.height * serverFormat.bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
         richCursorEvent(reg, std::move(buf), std::move(mask));
-    }
-
-    void RFB::ClientDecoder::recvDecodingRRE(const XCB::Region & reg, bool corre)
-    {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        auto subRects = recvIntBE32();
-        auto bgColor = recvPixel();
-
-        if(1 < decodingDebug)
-            Application::debug("%s: back pixel: 0x%08x, sub rects: %d", __FUNCTION__, bgColor, subRects);
-
-        fillPixel(reg, bgColor);
-
-        while(0 < subRects--)
-        {
-            XCB::Region dst;
-            auto pixel = recvPixel();
-
-            if(corre)
-            {
-                dst.x = recvInt8();
-                dst.y = recvInt8();
-                dst.width = recvInt8();
-                dst.height = recvInt8();
-            }
-            else
-            {
-                dst.x = recvIntBE16();
-                dst.y = recvIntBE16();
-                dst.width = recvIntBE16();
-                dst.height = recvIntBE16();
-            }
-
-            if(2 < decodingDebug)
-                Application::debug("%s: sub region [%d,%d,%d,%d]", __FUNCTION__, dst.x, dst.y, dst.width, dst.height);
-
-            dst.x += reg.x;
-            dst.y += reg.y;
-
-            if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height)
-            {
-                Application::error("%s: %s", __FUNCTION__, "sub region out of range");
-                throw rfb_error(NS_FuncName);
-            }
-
-            fillPixel(dst, pixel);
-        }
-    }
-
-    void RFB::ClientDecoder::recvDecodingHexTile(const XCB::Region & reg)
-    {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        int bgColor = -1;
-        int fgColor = -1;
-        const XCB::Size bsz(16, 16);
-
-        for(auto & reg0: reg.divideBlocks(bsz))
-            recvDecodingHexTileRegion(reg0, bgColor, fgColor);
-    }
-
-    void RFB::ClientDecoder::recvDecodingHexTileRegion(const XCB::Region & reg, int & bgColor, int & fgColor)
-    {
-        auto flag = recvInt8();
-
-        if(1 < decodingDebug)
-            Application::debug("%s: sub encoding mask: 0x%02x, sub region [%d,%d,%d,%d]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
-
-        if(flag & RFB::HEXTILE_RAW)
-        {
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s", __FUNCTION__, "raw");
-
-            for(int yy = 0; yy < reg.height; ++yy)
-                for(int xx = 0; xx < reg.width; ++yy)
-                    setPixel(XCB::Point(reg.x + xx, reg.y + yy), recvPixel());
-        }
-        else
-        {
-            if(flag & RFB::HEXTILE_BACKGROUND)
-            {
-                bgColor = recvPixel();
-
-                if(2 < decodingDebug)
-                    Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "background", bgColor);
-            }
-
-            fillPixel(reg, bgColor);
-
-            if(flag & HEXTILE_FOREGROUND)
-            {
-                fgColor = recvPixel();
-                flag &= ~HEXTILE_COLOURED;
-
-                if(2 < decodingDebug)
-                    Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "foreground", fgColor);
-            }
-
-            if(flag & HEXTILE_SUBRECTS)
-            {
-                int subRects = recvInt8();
-                XCB::Region dst;
-
-                if(2 < decodingDebug)
-                    Application::debug("%s: type: %s, count: %d", __FUNCTION__, "subrects", subRects);
-
-                while(0 < subRects--)
-                {
-                    auto pixel = fgColor;
-                    if(flag & HEXTILE_COLOURED)
-                    {
-                        pixel = recvPixel();
-                        if(3 < decodingDebug)
-                            Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "colored", pixel);
-                    }
-
-                    auto val1 = recvInt8();
-                    auto val2 = recvInt8();
-
-                    dst.x = (0x0F & (val1 >> 4));
-                    dst.y = (0x0F & val1);
-                    dst.width = 1 + (0x0F & (val2 >> 4));
-                    dst.height = 1 + (0x0F & val2);
-
-                    if(3 < decodingDebug)
-                        Application::debug("%s: type: %s, region: [%d,%d,%d,%d], pixel: 0x%08x", __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
-
-                    dst.x += reg.x;
-                    dst.y += reg.y;
-
-                    if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height)
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "sub region out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    fillPixel(dst, pixel);
-                }
-            }
-        }
-    }
-
-    void RFB::ClientDecoder::recvDecodingZlib(const XCB::Region & reg)
-    {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        zlibInflateStart();
-        recvDecodingRaw(reg);
-        zlibInflateStop();
-    }
-
-    void RFB::ClientDecoder::recvDecodingTRLE(const XCB::Region & reg, bool zrle)
-    {
-        if(decodingDebug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        const XCB::Size bsz(64, 64);
-
-        if(zrle)
-            zlibInflateStart();
-
-        for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
-            recvDecodingTRLERegion(reg0, zrle);
-
-        if(zrle)
-            zlibInflateStop();
-    }
-
-    void RFB::ClientDecoder::recvDecodingTRLERegion(const XCB::Region & reg, bool zrle)
-    {
-        auto type = recvInt8();
-
-        if(1 < decodingDebug)
-            Application::debug("%s: sub encoding type: 0x%02x, sub region: [%d,%d,%d,%d], zrle: %d",
-                        __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) zrle);
-
-        // trle raw
-        if(0 == type)
-        {
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s", __FUNCTION__, "raw");
-
-            for(auto coord = XCB::PointIterator(0, 0, reg.toSize()); coord.isValid(); ++coord)
-            {
-                auto pixel = recvCPixel();
-                setPixel(reg.topLeft() + coord, pixel);
-            }
-
-            if(3 < decodingDebug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "raw");
-        }
-        else
-        // trle solid
-        if(1 == type)
-        {
-            auto solid = recvCPixel();
-
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "solid", solid);
-
-            fillPixel(reg, solid);
-
-            if(3 < decodingDebug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "solid");
-        }
-        else
-        if(2 <= type && type <= 16)
-        {
-            size_t field = 1;
-
-            if(4 < type)
-                field = 4;
-            else
-            if(2 < type)
-                field = 2;
-
-            size_t bits = field * reg.width;
-            size_t rowsz = bits >> 3;
-            if((rowsz << 3) < bits) rowsz++;
-
-            //  recv palette
-            std::vector<int> palette(type);
-            for(auto & val : palette) val = recvCPixel();
-
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s, size: %d", __FUNCTION__, "packed palette", palette.size());
-
-            if(3 < decodingDebug)
-            {
-                std::string str = Tools::buffer2hexstring<int>(palette.data(), palette.size(), 8);
-                Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "packed palette", str.c_str());
-            }
-
-            // recv packed rows
-            for(int oy = 0; oy < reg.height; ++oy)
-            {
-                Tools::StreamBitsUnpack sb(recvData(rowsz), reg.width, field);
-
-                for(int ox = reg.width - 1; 0 <= ox; --ox)
-                {
-                    auto pos = reg.topLeft() + XCB::Point(ox, oy);
-                    auto index = sb.popValue(field);
-
-                    if(4 < decodingDebug)
-                        Application::debug("%s: type: %s, pos: [%d,%d], index: %d", __FUNCTION__, "packed palette", pos.x, pos.y, index);
-
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    setPixel(pos, palette[index]);
-                }
-            }
-
-            if(3 < decodingDebug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "packed palette");
-        }
-        else
-        if((17 <= type && type <= 127) || type == 129)
-        {
-            Application::error("%s: %s", __FUNCTION__, "invalid trle type");
-            throw rfb_error(NS_FuncName);
-        }
-        else
-        if(128 == type)
-        {
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s", __FUNCTION__, "plain rle");
-
-            auto coord = XCB::PointIterator(0, 0, reg.toSize());
-
-            while(coord.isValid())
-            {
-                auto pixel = recvCPixel();
-                auto runLength = recvRunLength();
-
-                if(4 < decodingDebug)
-                    Application::debug("%s: type: %s, pixel: 0x%08x, length: %d", __FUNCTION__, "plain rle", pixel, runLength);
-
-                while(runLength--)
-                {
-                    setPixel(reg.topLeft() + coord, pixel);
-                    ++coord;
-
-                    if(! coord.isValid() && runLength)
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "plain rle: coord out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-                }
-            }
-
-            if(3 < decodingDebug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "plain rle");
-        }
-        else
-        if(130 <= type)
-        {
-            size_t palsz = type - 128;
-            std::vector<int> palette(palsz);
-            
-            for(auto & val: palette)
-                val = recvCPixel();
-
-            if(2 < decodingDebug)
-                Application::debug("%s: type: %s, size: %d", __FUNCTION__, "rle palette", palsz);
-
-            if(3 < decodingDebug)
-            {
-                std::string str = Tools::buffer2hexstring<int>(palette.data(), palette.size(), 8);
-                Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "rle palette", str.c_str());
-            }
-
-            auto coord = XCB::PointIterator(0, 0, reg.toSize());
-
-            while(coord.isValid())
-            {
-                auto index = recvInt8();
-
-                if(index < 128)
-                {
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    auto pixel = palette[index];
-                    setPixel(reg.topLeft() + coord, pixel);
-
-                    ++coord;
-                }
-                else
-                {
-                    index -= 128;
-
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    auto pixel = palette[index];
-                    auto runLength = recvRunLength();
-
-                    if(4 < decodingDebug)
-                        Application::debug("%s: type: %s, index: %d, length: %d", __FUNCTION__, "rle palette", index, runLength);
-
-                    while(runLength--)
-                    {
-                        setPixel(reg.topLeft() + coord, pixel);
-                        ++coord;
-
-                        if(! coord.isValid() && runLength)
-                        {
-                            Application::error("%s: %s", __FUNCTION__, "rle palette: coord out of range");
-                            throw rfb_error(NS_FuncName);
-                        }
-                    }
-                }
-            }
-
-            if(3 < decodingDebug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "rle palette");
-        }
     }
 
     void RFB::ClientDecoder::recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size & sz)
@@ -1146,7 +794,7 @@ namespace LTSM
     {
         Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
 
-        std::scoped_lock<std::mutex> guard(sendLock);
+        std::scoped_lock guard{ sendLock };
         
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
@@ -1236,7 +884,7 @@ namespace LTSM
 
         auto zip = recvData(zipsz);
 
-        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+        if(Application::isDebugLevel(DebugLevel::Trace))
             Application::debug("%s: compress data length: %d", __FUNCTION__, zip.size());
 
         zlib->appendData(zip);
@@ -1248,15 +896,26 @@ namespace LTSM
         streamIn = tls ? tls.get() : socket.get();
     }
 
-    void RFB::ClientDecoder::recvDecodingLtsm(void)
+    void RFB::ClientDecoder::recvDecodingLtsm(const XCB::Region & reg)
     {
         Application::info("%s: success", __FUNCTION__);
+
         ltsmSupport = true;
+        size_t type = recvIntBE32();
 
-        size_t len = recvIntBE32();
-        auto data = recvData(len);
+        // type 0: handshake part
+        if(type == 0)
+        {
+            int flags = 0;
+            ltsmHandshakeEvent(flags);
+        }
+        else
+        {
+            // auto data = recvData(len);
 
-        decodingLtsmEvent(data);
+            Application::error("%s: %s", __FUNCTION__, "unknown decoding");
+            throw rfb_error(NS_FuncName);
+        }
     }
 
     void RFB::ClientDecoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)

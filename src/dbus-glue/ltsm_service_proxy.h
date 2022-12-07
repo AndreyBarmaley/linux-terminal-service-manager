@@ -277,13 +277,6 @@ public:
         return result;
     }
 
-    std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> busGetSessions()
-    {
-        std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> result;
-        proxy_.callMethod("busGetSessions").onInterface(INTERFACE_NAME).storeResultsTo(result);
-        return result;
-    }
-
     std::string busGetSessionsJson()
     {
         std::string result;

@@ -80,6 +80,7 @@
     "display:min": 55,
     "display:max": 99,
     "display:solid": "0x4e7db7",
+    "display:cursor": "left_ptr",
 
     "xauth:file": "/var/run/ltsm/auth_%{display}",
 

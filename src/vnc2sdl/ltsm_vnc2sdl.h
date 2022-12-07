@@ -155,7 +155,7 @@ namespace LTSM
         void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) override;
 
         void                    xkbStateChangeEvent(int) override;
-        void                    decodingLtsmEvent(const std::vector<uint8_t> &) override;
+        void                    ltsmHandshakeEvent(int flags) override;
         void                    systemFuseProxy(const JsonObject &) override;
         void                    systemTokenAuth(const JsonObject &) override;
         void                    systemLoginSuccess(const JsonObject &) override;

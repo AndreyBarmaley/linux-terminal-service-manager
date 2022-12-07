@@ -80,7 +80,7 @@ include(FindPkgConfig)
 set(CMAKE_FIND_FRAMEWORK LAST)
 
 # LTSM common lib
-project(LTSM_common VERSION  20221203.1)
+project(LTSM_common VERSION  20221205.1)
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
@@ -90,6 +90,7 @@ pkg_search_module(XCB_DAMAGE REQUIRED xcb-damage)
 pkg_search_module(XCB_XFIXES REQUIRED xcb-xfixes)
 pkg_search_module(XCB_XTEST REQUIRED xcb-xtest)
 pkg_search_module(XCB_RANDR REQUIRED xcb-randr)
+pkg_search_module(SYSTEMD REQUIRED libsystemd)
 
 add_compile_options(${XCB_CFLAGS})
 add_compile_options(${XCB_SHM_CFLAGS})
@@ -122,13 +123,14 @@ link_libraries(${XCB_DAMAGE_LIBRARIES})
 link_libraries(${XCB_XFIXES_LIBRARIES})
 link_libraries(${XCB_XTEST_LIBRARIES})
 link_libraries(${XCB_RANDR_LIBRARIES})
+link_libraries(${SYSTEMD_LIBRARIES})
 link_libraries(pthread)
 link_libraries(stdc++fs)
 link_libraries(z)
 
 if(LTSM_BUILD_SERVICE)
     # LTSM service
-    project(LTSM_service VERSION 20221203.1)
+    project(LTSM_service VERSION 20221205.1)
 
     find_library(PAM_LIBRARIES NAMES pam)
     find_library(PAM_MISC_LIBRARIES NAMES pam_misc)
@@ -156,7 +158,7 @@ endif()
 
 if(LTSM_BUILD_CONNECTOR)
     # LTSM connector
-    project(LTSM_connector VERSION 20221203.1)
+    project(LTSM_connector VERSION 20221205.1)
 
     find_package(sdbus-c++ REQUIRED)
     find_package(GnuTLS REQUIRED)
@@ -166,6 +168,7 @@ if(LTSM_BUILD_CONNECTOR)
         src/connector/ltsm_connector.cpp
         src/connector/ltsm_connector_vnc.cpp
         src/channels/channel_system.cpp
+        src/librfb/librfb_encodings.cpp
         src/librfb/librfb_server.cpp
         src/librfb/librfb_x11server.cpp
         src/librfb/ltsm_librfb.cpp)
@@ -190,7 +193,7 @@ endif()
 
 if(LTSM_BUILD_SDL2X11)
     # LTSM sdl2x11
-    project(LTSM_sdl2x11 VERSION 20221203.1)
+    project(LTSM_sdl2x11 VERSION 20221205.1)
     add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
 
     target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
@@ -202,7 +205,7 @@ endif()
 
 if(LTSM_BUILD_HELPER)
     # LTSM helper
-    project(LTSM_helper VERSION 20221203.1)
+    project(LTSM_helper VERSION 20221205.1)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -236,7 +239,7 @@ endif()
 
 if(LTSM_BUILD_SESSIONS)
     # LTSM sessions
-    project(LTSM_sessions VERSION 20221203.1)
+    project(LTSM_sessions VERSION 20221205.1)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -256,11 +259,12 @@ endif()
 
 if(LTSM_BUILD_X11VNC)
     # LTSM x11vnc
-    project(LTSM_x11vnc VERSION 20221203.1)
+    project(LTSM_x11vnc VERSION 20221205.1)
 
     add_executable(LTSM_x11vnc
         src/x11vnc/ltsm_connector_x11vnc.cpp
         src/x11vnc/ltsm_x11vnc.cpp
+        src/librfb/librfb_encodings.cpp
         src/librfb/librfb_server.cpp
         src/librfb/librfb_x11server.cpp
         src/channels/channel_system.cpp
@@ -278,11 +282,12 @@ endif()
 
 if(LTSM_BUILD_VNC2IMAGE)
     # LTSM vnc2image
-    project(LTSM_vnc2image VERSION 20221203.1)
+    project(LTSM_vnc2image VERSION 20221205.1)
 
     add_executable(LTSM_vnc2image
         src/vnc2image/ltsm_vnc2image.cpp
         src/channels/channel_system.cpp
+        src/librfb/librfb_decodings.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
 
@@ -303,12 +308,13 @@ endif()
 
 if(LTSM_BUILD_CLIENT)
     # LTSM vnc2sdl
-    project(LTSM_vnc2sdl VERSION 20221203.1)
+    project(LTSM_vnc2sdl VERSION 20221205.1)
 
     add_executable(LTSM_vnc2sdl
         src/vnc2sdl/ltsm_vnc2sdl.cpp
         src/sdl2x11/ltsm_sdl_wrapper.cpp
         src/channels/channel_system.cpp
+        src/librfb/librfb_decodings.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
 
@@ -333,7 +339,7 @@ endif()
 
 if(LTSM_CUPS_BACKEND)
     # LTSM_cups_backend
-    project(LTSM_cups_backend VERSION 20221203.1)
+    project(LTSM_cups_backend VERSION 20221205.1)
 
     add_executable(LTSM_cups_backend
         src/cups_backend/main.cpp)
@@ -348,7 +354,7 @@ endif()
 
 if(LTSM_FUSE2SESSION)
     # LTSM_fuse2session
-    project(LTSM_fuse2session VERSION 20221203.1)
+    project(LTSM_fuse2session VERSION 20221205.1)
 
     find_package(sdbus-c++ REQUIRED)
     pkg_search_module(FUSE3 REQUIRED fuse3)   
