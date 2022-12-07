@@ -197,6 +197,10 @@ if(LTSM_BUILD_CONNECTOR)
         target_compile_options(LTSM_connector PRIVATE -DLTSM_TOKEN_AUTH)
     endif()
 
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
+        target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+    endif()
+
     target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_connector PRIVATE src/common src/channels src/librfb src/dbus-glue ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
