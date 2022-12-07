@@ -198,7 +198,7 @@ if(LTSM_BUILD_CONNECTOR)
     endif()
 
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
-        target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+        target_compile_options(LTSM_connector PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
     target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
