@@ -1094,7 +1094,7 @@ namespace LTSM
     {
         auto it = std::find_if(clientEncodings.begin(), clientEncodings.end(),
                     [=](auto & val){ return ENCODING_COMPRESS1 <= val && val <= ENCODING_COMPRESS9; });
-        int level = it != clientEncodings.end() ? ENCODING_COMPRESS9 - *it : 9;
+        int level = it != clientEncodings.end() ? ENCODING_COMPRESS9 - *it : Z_BEST_SPEED;
 
         if(! zlib)
             zlib.reset(new ZLib::DeflateStream(level));
