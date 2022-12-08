@@ -35,9 +35,40 @@ namespace LTSM
     int  facility = LOG_USER;
 
     // Application
-    FILE* Application::fderr = stderr;
-    DebugLevel Application::level = DebugLevel::Console;
+    FILE* Application::fdlog = stderr;
+    DebugTarget Application::target = DebugTarget::Console;
+    DebugLevel Application::level = DebugLevel::Info;
     std::mutex Application::logging;
+
+    void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
+    {
+        target = tgt;
+        level = lvl;
+    }
+
+    void Application::setDebugTarget(const DebugTarget & tgt)
+    {
+        target = tgt;
+
+        if(target == DebugTarget::Syslog)
+            openlog(ident.c_str(), 0, facility);
+    }
+
+    bool Application::isDebugTarget(const DebugTarget & tgt)
+    {
+        return target == tgt;
+    }
+
+    void Application::setDebugTarget(std::string_view tgt)
+    {
+        if(tgt == "console")
+            setDebugTarget(DebugTarget::Console);
+        else
+        if(tgt == "syslog")
+            setDebugTarget(DebugTarget::Syslog);
+        else
+            setDebugTarget(DebugTarget::Quiet);
+    }
 
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {
@@ -52,49 +83,42 @@ namespace LTSM
     void Application::setDebugLevel(std::string_view lvl)
     {
         if(lvl == "info")
-            level = DebugLevel::SyslogInfo;
-        else if(lvl == "debug")
-            level = DebugLevel::SyslogDebug;
-        else if(lvl == "trace")
-            level = DebugLevel::SyslogTrace;
-        else if(lvl == "console")
-            level = DebugLevel::Console;
+            setDebugLevel(DebugLevel::Info);
         else
-            level = DebugLevel::Quiet;
+        if(lvl == "debug")
+            setDebugLevel(DebugLevel::Debug);
+        else
+        if(lvl == "trace")
+            setDebugLevel(DebugLevel::Trace);
+        else
+            setDebugLevel(DebugLevel::None);
     }
 
     Application::Application(std::string_view sid)
     {
         ident.assign(sid.begin(), sid.end());
-        openlog(ident.c_str(), 0, facility);
     }
 
     Application::~Application()
     {
-        closelog();
-    }
-
-    void Application::openSyslog(void)
-    {
-        openlog(ident.c_str(), 0, facility);
+        if(isDebugTarget(DebugTarget::Syslog))
+            closelog();
     }
 
     void Application::openChildSyslog(const char* file)
     {
-        if(file)
+        if(isDebugTarget(DebugTarget::Syslog))
         {
-            fderr = fopen(file, "a");
-            if(! fderr)
-                fderr = stderr;
+            if(file)
+            {
+                fdlog = fopen(file, "a");
+                if(! fdlog)
+                    fdlog = stderr;
+            }
+
+            // child: switch syslog to stderr
+            Application::target = DebugTarget::Console;
         }
-
-        // child: switch syslog to stderr
-        Application::level = DebugLevel::Console;
-    }
-
-    void Application::closeSyslog(void)
-    {
-        closelog();
     }
 
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)

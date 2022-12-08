@@ -55,6 +55,7 @@ namespace LTSM
             void                damageRegionEvent(const XCB::Region &) override;
             void                randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
             void                clipboardChangedEvent(const std::vector<uint8_t> &) override;
+            void                displayConnectedEvent(void) override;
  
 	    // rfb server encoding
             XcbFrameBuffer      xcbFrameBuffer(const XCB::Region &) const override;
@@ -76,7 +77,6 @@ namespace LTSM
             virtual int         rfbUserKeycode(uint32_t) const { return 0; }
 
             virtual void        serverHandshakeVersionEvent(void) {}
-            virtual void        serverSelectEncodingsEvent(void) {}
             virtual void        serverSecurityInitEvent(void) {}
             virtual void        serverConnectedEvent(void) {}
             virtual void        serverMainLoopEvent(void) {}

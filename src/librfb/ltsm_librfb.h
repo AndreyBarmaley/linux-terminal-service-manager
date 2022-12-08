@@ -138,7 +138,6 @@ namespace LTSM
         int desktopResizeStatusCode(const DesktopResizeStatus &);
 
         const char* encodingName(int type);
-        typedef std::function<void(const FrameBuffer &)> sendEncodingFunc;
 
         /// SecurityInfo
         struct SecurityInfo

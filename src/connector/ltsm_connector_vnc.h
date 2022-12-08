@@ -64,7 +64,7 @@ namespace LTSM
         /* Connector::VNC */
         class VNC : public SignalProxy, protected RFB::X11Server
         {
-            PixelFormat         format;
+            PixelFormat         serverPf;
 
             std::unordered_map<uint32_t, int>
                                 keymap;
@@ -85,7 +85,9 @@ namespace LTSM
 	    // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
             void                xcbFrameBufferModify(FrameBuffer &) const override;
-
+            std::list<std::string> serverDisabledEncodings(void) const override;
+            std::list<std::string> serverPrefferedEncodings(void) const override;
+ 
             // x11server
             bool                xcbNoDamageOption(void) const override;
             void                xcbDisableMessages(bool) override;

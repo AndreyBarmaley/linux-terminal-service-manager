@@ -105,6 +105,16 @@ namespace LTSM
         return _format;
     }
 
+    std::list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const
+    {
+        return std::list<std::string>();
+    }
+
+    std::list<std::string> Connector::X11VNC::serverPrefferedEncodings(void) const
+    {
+        return std::list<std::string>();
+    }
+
     RFB::SecurityInfo Connector::X11VNC::rfbSecurityInfo(void) const
     {
         RFB::SecurityInfo secInfo;
@@ -116,10 +126,10 @@ namespace LTSM
         secInfo.tlsAnonMode = true;
         secInfo.tlsDebug = 0;
 
-        if(Application::isDebugLevel(DebugLevel::SyslogDebug))
+        if(Application::isDebugLevel(DebugLevel::Debug))
             secInfo.tlsDebug = 1;
         else
-        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+        if(Application::isDebugLevel(DebugLevel::Trace))
             secInfo.tlsDebug = 3;
 
         return secInfo;

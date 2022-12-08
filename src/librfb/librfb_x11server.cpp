@@ -48,8 +48,16 @@ namespace LTSM
     {
         if(rfbClipboardEnable())
         {
-            // or thread async and copy buf
-            sendCutTextEvent(buf);
+            // thread async and copy buf
+            std::thread([this, buf](){ this->sendCutTextEvent(buf); }).detach();
+        }
+    }
+
+    void RFB::X11Server::displayConnectedEvent(void)
+    {
+        if(xcbNoDamageOption())
+        {
+            _damage.reset();
         }
     }
 
@@ -75,6 +83,8 @@ namespace LTSM
 
     bool RFB::X11Server::xcbProcessingEvents(void)
     {
+        auto start = std::chrono::steady_clock::now();
+
         while(auto ev = XCB::RootDisplay::poolEvent())
         {
             if(auto err = XCB::RootDisplay::hasError())
@@ -102,6 +112,9 @@ namespace LTSM
                     Application::warning("%s: %s error: 0x%04x", __FUNCTION__, "xfixes", opcode);
                 }
             }
+
+            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+            if(200 < dt.count()) break;
         }
 
         return true;
@@ -111,7 +124,6 @@ namespace LTSM
     int RFB::X11Server::rfbCommunication(void)
     {
         serverSelectEncodings();
-        serverSelectEncodingsEvent();
 
         // vnc session not activated trigger
         auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]()
@@ -292,7 +304,7 @@ namespace LTSM
 
                     if(bit & mask)
                     {
-                        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+                        if(Application::isDebugLevel(DebugLevel::Trace))
                             Application::debug("%s: xfb fake input pressed: %d", __FUNCTION__, num + 1);
 
                         test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_PRESS, num + 1, posx, posy);
@@ -300,7 +312,7 @@ namespace LTSM
                     }
                     else if(bit & pressedMask)
                     {
-                        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+                        if(Application::isDebugLevel(DebugLevel::Trace))
                             Application::debug("%s: xfb fake input released: %d", __FUNCTION__, num + 1);
 
                         test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_RELEASE, num + 1, posx, posy);
@@ -310,7 +322,7 @@ namespace LTSM
             }
             else
             {
-                if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+                if(Application::isDebugLevel(DebugLevel::Trace))
                     Application::debug("%s: xfb fake input move, posx: %d, posy: %d", __FUNCTION__, posx, posy);
 
                 test->fakeInputRaw(XCB::RootDisplay::root(), XCB_MOTION_NOTIFY, 0, posx, posy);
@@ -407,7 +419,7 @@ namespace LTSM
     {
         if(auto fixes = static_cast<const XCB::ModuleFixes*>(XCB::RootDisplay::getExtension(XCB::Module::XFIXES)))
         {
-            XCB::CursorImage replyCursor = fixes->cursorImage();
+            XCB::CursorImage replyCursor = fixes->getCursorImage();
             auto reply = replyCursor.reply();
 
             if(auto ptr = replyCursor.data())
@@ -420,7 +432,7 @@ namespace LTSM
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
                     auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
 
-                    sendFrameBufferUpdateRichCursor(cursorFB, reply->xhot, reply->yhot);
+                    sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 }
             }
         }
@@ -461,7 +473,7 @@ namespace LTSM
             throw rfb_error(NS_FuncName);
         }
 
-        if(Application::isDebugLevel(DebugLevel::SyslogTrace))
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             Application::debug("%s: request size [%d, %d], reply: length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
                             __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);

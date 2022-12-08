@@ -252,7 +252,7 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug]" << std::endl;
+    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug] [--syslog]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -265,7 +265,7 @@ int main(int argc, const char** argv)
     std::string geometry;
     std::string title = "SDL2X11";
 
-    LTSM::Application::setDebugLevel(LTSM::DebugLevel::ConsoleError);
+    LTSM::Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::Info);
 
     if(auto val = getenv("SDL2X11_SCALE"))
     {
@@ -292,12 +292,18 @@ int main(int argc, const char** argv)
         for(int it = 1; it < argc; ++it)
         {
             if(0 == std::strcmp(argv[it], "--debug"))
-                LTSM::Application::setDebugLevel(LTSM::DebugLevel::Console);
-            else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
+                LTSM::Application::setDebugLevel(LTSM::DebugLevel::Debug);
+            else
+            if(0 == std::strcmp(argv[it], "--syslog"))
+                LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog);
+            else
+            if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
                 xauth.assign(argv[it + 1]);
-            else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
+            else
+            if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
                 title.assign(argv[it + 1]);
-            else if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc)
+            else
+            if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
                 size_t idx;
@@ -313,7 +319,8 @@ int main(int argc, const char** argv)
                     return printHelp(argv[0]);
                 }
             }
-            else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
+            else
+            if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
 

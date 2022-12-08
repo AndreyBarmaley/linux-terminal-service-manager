@@ -469,6 +469,11 @@ namespace LTSM
         return *it1;
     }
 
+    const uint8_t* StreamBufRef::data(void) const
+    {
+        return & *it1;
+    }
+
     /* StreamBuf */
     StreamBuf::StreamBuf(size_t reserve)
     {

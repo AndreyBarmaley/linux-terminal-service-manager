@@ -562,7 +562,7 @@ namespace LTSM
             FileDescriptor::write(bridgeSock, buf.data(), buf.size());
 #ifdef LTSM_DEBUG
 
-            if(! checkError() && Application::isDebugLevel(DebugLevel::SyslogTrace))
+            if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from remote: [%s]", str.c_str());
@@ -591,7 +591,7 @@ namespace LTSM
             sendFlush();
 #ifdef LTSM_DEBUG
 
-            if(! checkError() && Application::isDebugLevel(DebugLevel::SyslogTrace))
+            if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
                 Application::debug("from local: [%s]", str.c_str());

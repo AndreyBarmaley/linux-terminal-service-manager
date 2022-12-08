@@ -51,7 +51,6 @@ protected:
         object_.registerMethod("busSetAuthenticateLoginPass").onInterface(INTERFACE_NAME).withInputParamNames("display", "login", "password").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& login, const std::string& password){ return this->busSetAuthenticateLoginPass(display, login, password); });
         object_.registerMethod("busSetAuthenticateToken").onInterface(INTERFACE_NAME).withInputParamNames("display", "login").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& login){ return this->busSetAuthenticateToken(display, login); });
         object_.registerMethod("busGetSessionJson").onInterface(INTERFACE_NAME).withInputParamNames("display").withOutputParamNames("result").implementedAs([this](const int32_t& display){ return this->busGetSessionJson(display); });
-        object_.registerMethod("busGetSessions").onInterface(INTERFACE_NAME).withOutputParamNames("result").implementedAs([this](){ return this->busGetSessions(); });
         object_.registerMethod("busGetSessionsJson").onInterface(INTERFACE_NAME).withOutputParamNames("result").implementedAs([this](){ return this->busGetSessionsJson(); });
         object_.registerMethod("busRenderRect").onInterface(INTERFACE_NAME).withInputParamNames("display", "rect", "color", "fill").withOutputParamNames("result").implementedAs([this](const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill){ return this->busRenderRect(display, rect, color, fill); });
         object_.registerMethod("busRenderText").onInterface(INTERFACE_NAME).withInputParamNames("display", "text", "pos", "color").withOutputParamNames("result").implementedAs([this](const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color){ return this->busRenderText(display, text, pos, color); });
@@ -265,7 +264,6 @@ private:
     virtual bool busSetAuthenticateLoginPass(const int32_t& display, const std::string& login, const std::string& password) = 0;
     virtual bool busSetAuthenticateToken(const int32_t& display, const std::string& login) = 0;
     virtual std::string busGetSessionJson(const int32_t& display) = 0;
-    virtual std::vector<sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>> busGetSessions() = 0;
     virtual std::string busGetSessionsJson() = 0;
     virtual bool busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) = 0;
     virtual bool busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) = 0;

@@ -337,62 +337,6 @@ namespace LTSM
         return jos.flush();
     }
 
-    xvfb2tuple toSessionTuple(XvfbSessionPtr ptr)
-    {
-        int32_t displayNum = -1, pid1 = -1, pid2 = -1, width = 0, height = 0, uid = 0, gid = 0, durationLimit = 0, sesmode = 0, conpol = 0;
-        std::string user, xauthfile, remoteaddr, conntype, encryption;
-
-        if(ptr)
-        {
-            switch(ptr->mode)
-            {
-                case XvfbMode::SessionOnline:
-                    sesmode = 1;
-                    break;
-
-                case XvfbMode::SessionSleep:
-                    sesmode = 2;
-                    break;
-
-                default:
-                    sesmode = 0;
-                    break;
-            }
-
-            switch(ptr->policy)
-            {
-                case SessionPolicy::AuthTake:
-                    conpol = 1;
-                    break;
-
-                case SessionPolicy::AuthShare:
-                    conpol = 2;
-                    break;
-
-                default:
-                    conpol = 0;
-                    break;
-            }
-
-            displayNum = ptr->displayNum;
-            pid1 = ptr->pid1;
-            pid2 = ptr->pid2;
-            width = ptr->width;
-            height = ptr->height;
-            uid = ptr->uid;
-            gid =ptr->gid;
-            durationLimit = ptr->durationLimit;
-            user = ptr->user;
-            xauthfile = ptr->xauthfile;
-            remoteaddr = ptr->remoteaddr;
-            conntype = ptr->conntype;
-            encryption = ptr->encryption;
-        }
-
-        return xvfb2tuple{ displayNum, pid1, pid2, width, height, uid, gid, durationLimit, sesmode, conpol,
-                            user, xauthfile, remoteaddr, conntype, encryption };
-    }
-
     /* XvfbSessions */
     XvfbSessions::XvfbSessions(size_t displays)
     {
@@ -501,19 +445,6 @@ namespace LTSM
             if(ptr) jas.push(ptr->toJsonString());
 
         return jas.flush();
-    }
-
-    std::vector<xvfb2tuple> XvfbSessions::toSessionsList(void)
-    {
-        std::vector<xvfb2tuple> res;
-        res.reserve(sessions.size());
-
-        std::scoped_lock guard{ lockSessions };
-
-        for(auto & ptr : sessions)
-            if(ptr) res.emplace_back(toSessionTuple(ptr));
-
-        return res;
     }
 
     bool Manager::createDirectory(const std::filesystem::path & path)
@@ -960,7 +891,6 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            Application::closeSyslog();
             pid_t pid = fork();
 
             if(pid < 0)
@@ -977,7 +907,6 @@ namespace LTSM
                 std::exit(0);
             }
         
-            Application::openSyslog();
             // main thread processed
             close(pipefd[1]);
 
@@ -1012,7 +941,6 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            Application::closeSyslog();
             pid_t pid = fork();
 
             if(pid < 0)
@@ -1028,8 +956,6 @@ namespace LTSM
                 std::exit(0);
             }
         
-            Application::openSyslog();
-
             // main thread processed
             auto future = std::async(std::launch::async, [pid]
             {
@@ -1484,7 +1410,6 @@ namespace LTSM
 
         Application::debug("%s: args: `%s'", __FUNCTION__, xvfbArgs.c_str());
 
-        Application::closeSyslog();
         sess->pid1 = fork();
 
         if(0 == sess->pid1)
@@ -1529,7 +1454,6 @@ namespace LTSM
             std::exit(0);
         }
 
-        Application::openSyslog();
         // main thread
         Application::debug("%s: xvfb started, pid: %d, display: %d", __FUNCTION__, sess->pid1, sess->displayNum);
 
@@ -1539,13 +1463,11 @@ namespace LTSM
 
     int Manager::Object::runUserSession(XvfbSessionPtr xvfb, const std::filesystem::path & sessionBin, PamSession* pam)
     {
-        Application::closeSyslog();
         pid_t pid = fork();
  
         if(0 != pid)
         {
             // main thread
-            Application::openSyslog();
             return pid;
         }
 
@@ -1674,7 +1596,10 @@ namespace LTSM
         }
 
         // simple cursor
-        runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", "left_ptr" });
+        if(_config->hasKey("display:cursor"))
+        {
+            runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", _config->getString("display:cursor") });
+        }
 
         // runas login helper
         xvfb->pid2 = runSessionCommandSafe(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
@@ -2287,7 +2212,7 @@ namespace LTSM
                 while(xvfb->aliveSec() < std::chrono::seconds(3))
                     std::this_thread::sleep_for(550ms);
 
-                Application::info("%s: notification display: %d, user: %s, summary: %s", __FUNCTION__, xvfb->displayNum, xvfb->user.c_str(), summary2.c_str());
+                Application::info("%s: notification display: %d, user: %s, summary: %s", "busSendNotify", xvfb->displayNum, xvfb->user.c_str(), summary2.c_str());
 
                 std::string notificationIcon("dialog-information");
                 switch(icontype2)
@@ -2302,7 +2227,7 @@ namespace LTSM
                 auto dbusAddresses = Manager::getSessionDbusAddresses(xvfb->user);
                 if(dbusAddresses.empty())
                 {
-                    Application::warning("%s: dbus address empty, display: %d, user: %s", __FUNCTION__, xvfb->displayNum, xvfb->user.c_str());
+                    Application::warning("%s: dbus address empty, display: %d, user: %s", "busSendNotify", xvfb->displayNum, xvfb->user.c_str());
                     return;
                 }
 
@@ -2330,14 +2255,14 @@ namespace LTSM
                 }
                 catch(const sdbus::Error & err)
                 {
-                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", __FUNCTION__, xvfb->displayNum, err.getName().c_str(), err.getMessage().c_str());
+                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", "busSendNotify", xvfb->displayNum, err.getName().c_str(), err.getMessage().c_str());
                 }
                 catch(std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", "busSendNotify", err.what());
                 }
 #else
-                Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+                Application::warning("%s: sdbus address not supported, use 1.2 version", "busSendNotify");
 #endif
             }).detach();
 
@@ -2865,7 +2790,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pulseAudioSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -3165,11 +3090,6 @@ namespace LTSM
         return XvfbSessions::toJsonString();
     }
 
-    std::vector<xvfb2tuple> Manager::Object::busGetSessions(void)
-    {
-        return toSessionsList();
-    }
-
     bool Manager::Object::busRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill)
     {
         emitAddRenderRect(display, rect, color, fill);
@@ -3381,7 +3301,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        LTSM::Application::setDebugLevel(LTSM::DebugLevel::SyslogInfo);
+        LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
 
         // remove old sockets
         for(auto const & dirEntry : std::filesystem::directory_iterator{xvfbHome})

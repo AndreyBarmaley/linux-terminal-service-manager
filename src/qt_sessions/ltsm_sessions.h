@@ -35,16 +35,16 @@
 
 struct XvfbInfo
 {
-    qint32      display;
-    qint32      pid1;
-    qint32      pid2;
-    qint32      width;
-    qint32      height;
-    qint32      uid;
-    qint32      gid;
-    qint32      durationLimit;
-    qint32      mode;
-    qint32      policy;
+    int         display = -1;
+    int         pid1 = 0;
+    int         pid2 = 0;
+    int         width = 0;
+    int         height = 0;
+    int         uid = 0;
+    int         gid = 0;
+    int         durationLimit = 0;
+    int         mode = 0;
+    int         policy = 0;
     QString     user;
     QString     authfile;
     QString     remoteaddr;

@@ -25,6 +25,8 @@
 #include <QThread>
 #include <QProcess>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QStringList>
 #include <QTextStream>
@@ -35,16 +37,6 @@
 
 #include "ltsm_sessions.h"
 #include "ui_ltsm_sessions.h"
-
-const QDBusArgument & operator>>(const QDBusArgument & arg, XvfbInfo & st)
-{
-    arg.beginStructure();
-    arg >> st.display >> st.pid1 >> st.pid2 >> st.width >> st.height >>
-	st.uid >> st.gid >> st.durationLimit >> st.mode >> st.policy >>
-	st.user >> st.authfile >> st.remoteaddr >> st.conntype >> st.encryption;
-    arg.endStructure();
-    return arg;
-}
 
 RowItem::RowItem(const XvfbInfo & info, const QString & label)
     : QTableWidgetItem(label)
@@ -258,30 +250,47 @@ void LTSM_Sessions::tableReload(void)
     ui->pushButtonSendMsg->setEnabled(false);
     ui->pushButtonShow->setEnabled(false);
 
-    auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busGetSessions");
+    auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busGetSessionsJson");
 
     if(! res.arguments().isEmpty())
     {
-        auto args = res.arguments().front().value<QDBusArgument>();
-        args.beginArray();
-
-        while(! args.atEnd())
+        auto jsonDoc = QJsonDocument::fromJson(res.arguments().front().toString().toUtf8());
+        if(! jsonDoc.isEmpty() && jsonDoc.isArray())
         {
-    	    XvfbInfo info;
-	    args >> info;
+            for(auto val: jsonDoc.array())
+            {
+                auto obj = val.toObject();
+    	        XvfbInfo info;
+            
+                info.display = obj.value("displaynum").toInt();
+                info.pid1 = obj.value("pid1").toInt();
+                info.pid2 = obj.value("pid2").toInt();
+                info.width = obj.value("width").toInt();
+                info.height = obj.value("height").toInt();
+                info.uid = obj.value("uid").toInt();
+                info.gid = obj.value("gid").toInt();
+                info.durationLimit = obj.value("durationlimit").toInt();
+                info.mode = obj.value("sesmode").toInt();
+                info.policy = obj.value("conpol").toInt();
+                info.user = obj.value("user").toString();
+                info.authfile = obj.value("xauthfile").toString();
+                info.remoteaddr = obj.value("remoteaddr").toString();
+                info.conntype = obj.value("conntype").toString();
+                info.encryption = obj.value("encryption").toString();
 
-    	    row = ui->tableWidget->rowCount();
-    	    ui->tableWidget->insertRow(row);
+    	        row = ui->tableWidget->rowCount();
+    	        ui->tableWidget->insertRow(row);
 
-	    if(0 < info.mode)
-	    {
-    	        ui->tableWidget->setItem(row, 0, new RowItem(info,
+	        if(0 < info.mode)
+	        {
+    	            ui->tableWidget->setItem(row, 0, new RowItem(info,
                         QIcon(1 == info.mode ? ":/ltsm/ltsm_online.png" : ":/ltsm/ltsm_offline.png"), info.user));
-    	        ui->tableWidget->setItem(row, 1, new RowItem(info, QString::number(info.display)));
-		ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? tr("online", "XvfbStatus") : tr("sleep", "XvfbStatus"))));
-    	        ui->tableWidget->setItem(row, 3, new RowItem(info, info.remoteaddr));
-    	        ui->tableWidget->setItem(row, 4, new RowItem(info, QString::number(info.pid1)));
-    	        ui->tableWidget->setItem(row, 5, new RowItem(info, QString::number(info.uid)));
+    	            ui->tableWidget->setItem(row, 1, new RowItem(info, QString::number(info.display)));
+		    ui->tableWidget->setItem(row, 2, new RowItem(info, (1 == info.mode ? tr("online", "XvfbStatus") : tr("sleep", "XvfbStatus"))));
+    	            ui->tableWidget->setItem(row, 3, new RowItem(info, info.remoteaddr));
+    	            ui->tableWidget->setItem(row, 4, new RowItem(info, QString::number(info.pid1)));
+    	            ui->tableWidget->setItem(row, 5, new RowItem(info, QString::number(info.uid)));
+                }
             }
 	}
     }

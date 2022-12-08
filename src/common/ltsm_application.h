@@ -27,6 +27,8 @@
 #include <string>
 #include <string_view>
 
+#include <systemd/sd-journal.h>
+
 #include <syslog.h>
 #include <stdio.h>
 
@@ -34,13 +36,15 @@
 
 namespace LTSM
 {
-    enum class DebugLevel { Quiet, Console, ConsoleError, SyslogInfo, SyslogDebug, SyslogTrace };
+    enum class DebugTarget { Quiet, Console, Syslog, SystemD };
+    enum class DebugLevel { None, Info, Debug, Trace };
 
     class Application
     {
     protected:
         static std::mutex logging;
-        static FILE* fderr;
+        static FILE* fdlog;
+        static DebugTarget target;
         static DebugLevel level;
 
     public:
@@ -53,80 +57,151 @@ namespace LTSM
         template<typename... Values>
         static void info(const char* format, Values && ... vals)
         {
-	    if(level == DebugLevel::Console)
+	    if(level != DebugLevel::None)
 	    {
-                const std::scoped_lock guard{ logging };
+                if(target == DebugTarget::Console)
+	        {
+                    const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[info] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
-	    }
-	    else
-	    if(level == DebugLevel::SyslogInfo ||  level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
-                syslog(LOG_INFO, format, vals...);
+		    fprintf(fdlog, "[info] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
+	        }
+	        else
+                if(target == DebugTarget::Syslog)
+                {
+                    syslog(LOG_INFO, format, vals...);
+                }
+                else
+                if(target == DebugTarget::SystemD)
+                {
+                    sd_journal_print(LOG_INFO, format, vals...);
+                }
+            }
         }
 
         template<typename... Values>
         static void notice(const char* format, Values && ... vals)
         {
-	    if(level == DebugLevel::Console)
+            if(target == DebugTarget::Console)
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[notice] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
+		fprintf(fdlog, "[notice] ");
+		fprintf(fdlog, format, vals...);
+	    	fprintf(fdlog, "\n");
 	    }
 	    else
-        	syslog(LOG_NOTICE, format, vals...);
+            if(target == DebugTarget::Syslog)
+            {
+                syslog(LOG_NOTICE, format, vals...);
+            }
+            else
+            if(target == DebugTarget::SystemD)
+            {
+                sd_journal_print(LOG_NOTICE, format, vals...);
+            }
         }
 
         template<typename... Values>
         static void warning(const char* format, Values && ... vals)
         {
-	    if(level == DebugLevel::Console ||
-	        level == DebugLevel::ConsoleError)
+	    if(level != DebugLevel::None)
 	    {
-                const std::scoped_lock guard{ logging };
+                if(target == DebugTarget::Console)
+	        {
+                    const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[warning] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
-	    }
-	    else
-        	syslog(LOG_WARNING, format, vals...);
+		    fprintf(fdlog, "[warning] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
+	        }
+	        else
+                if(target == DebugTarget::Syslog)
+                {
+        	    syslog(LOG_WARNING, format, vals...);
+                }
+                else
+                if(target == DebugTarget::SystemD)
+                {
+                    sd_journal_print(LOG_WARNING, format, vals...);
+                }
+            }
         }
 
         template<typename... Values>
         static void error(const char* format, Values && ... vals)
         {
-	    if(level == DebugLevel::Console ||
-	        level == DebugLevel::ConsoleError)
+            if(target == DebugTarget::Console)
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[error] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
+		fprintf(fdlog, "[error] ");
+		fprintf(fdlog, format, vals...);
+		fprintf(fdlog, "\n");
 	    }
 	    else
+            if(target == DebugTarget::Syslog)
+            {
         	syslog(LOG_ERR, format, vals...);
+            }
+            else
+            if(target == DebugTarget::SystemD)
+            {
+                sd_journal_print(LOG_ERR, format, vals...);
+            }
         }
 
         template<typename... Values>
         static void debug(const char* format, Values && ... vals)
         {
-	    if(level == DebugLevel::Console)
+	    if(level == DebugLevel::Debug || level == DebugLevel::Trace)
 	    {
-                const std::scoped_lock guard{ logging };
+                if(target == DebugTarget::Console)
+	        {
+                    const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[debug] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
-	    }
-	    else
-	    if(level == DebugLevel::SyslogDebug ||  level == DebugLevel::SyslogTrace)
-                syslog(LOG_DEBUG, format, vals...);
+		    fprintf(fdlog, "[debug] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
+	        }
+	        else
+                if(target == DebugTarget::Syslog)
+                {
+                    syslog(LOG_DEBUG, format, vals...);
+                }
+                else
+                if(target == DebugTarget::SystemD)
+                {
+                    sd_journal_print(LOG_DEBUG, format, vals...);
+                }
+            }
+        }
+
+        template<typename... Values>
+        static void trace(const char* format, Values && ... vals)
+        {
+	    if(level == DebugLevel::Trace)
+	    {
+                if(target == DebugTarget::Console)
+	        {
+                    const std::scoped_lock guard{ logging };
+
+		    fprintf(fdlog, "[trace] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
+	        }
+	        else
+                if(target == DebugTarget::Syslog)
+                {
+                    syslog(LOG_DEBUG, format, vals...);
+                }
+                else
+                if(target == DebugTarget::SystemD)
+                {
+                    sd_journal_print(LOG_DEBUG, format, vals...);
+                }
+            }
         }
 
         static void openSyslog(void);
@@ -134,9 +209,15 @@ namespace LTSM
 
         static void openChildSyslog(const char* file = nullptr);
 
-        static bool isDebugLevel(const DebugLevel &);
+        static void setDebug(const DebugTarget &, const DebugLevel &);
+
+        static void setDebugTarget(const DebugTarget &);
+        static void setDebugTarget(std::string_view target);
+        static bool isDebugTarget(const DebugTarget &);
+
         static void setDebugLevel(const DebugLevel &);
         static void setDebugLevel(std::string_view level);
+        static bool isDebugLevel(const DebugLevel &);
 
         virtual int start(void) = 0;
     };

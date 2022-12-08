@@ -192,17 +192,11 @@ namespace LTSM
         std::string                      toJsonString(void) const;
     };
 
-    // display, pid1, pid2, width, height, uid, gid, durationLimit, mode, policy, user, authfile, remoteaddr, conntype, encryption
-    typedef sdbus::Struct<int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, std::string, std::string, std::string, std::string, std::string>
-            xvfb2tuple;
-
     typedef std::shared_ptr<XvfbSession> XvfbSessionPtr;
     typedef std::pair<int, std::vector<uint8_t>> StatusStdout;
 
     typedef std::pair<pid_t, std::shared_future<int>> PidStatus;
     typedef std::pair<pid_t, std::future<StatusStdout>> PidStatusStdout;
-
-    xvfb2tuple                          toSessionTuple(XvfbSessionPtr);
 
     class XvfbSessions
     {
@@ -221,7 +215,6 @@ namespace LTSM
         std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void);
         std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
 
-        std::vector<xvfb2tuple>         toSessionsList(void);
         std::string                      toJsonString(void) const;
     };
 
@@ -338,8 +331,6 @@ namespace LTSM
 
             bool                        busSetAuthenticateLoginPass(const int32_t & display, const std::string & login, const std::string & password) override;
             bool                        busSetAuthenticateToken(const int32_t & display, const std::string & login) override;
-
-            std::vector<xvfb2tuple>     busGetSessions(void) override;
 
             std::string                 busGetSessionJson(const int32_t& display) override;
             std::string                 busGetSessionsJson(void) override;
