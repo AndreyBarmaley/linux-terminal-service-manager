@@ -2212,7 +2212,7 @@ namespace LTSM
                 while(xvfb->aliveSec() < std::chrono::seconds(3))
                     std::this_thread::sleep_for(550ms);
 
-                Application::info("%s: notification display: %d, user: %s, summary: %s", __FUNCTION__, xvfb->displayNum, xvfb->user.c_str(), summary2.c_str());
+                Application::info("%s: notification display: %d, user: %s, summary: %s", "busSendNotify", xvfb->displayNum, xvfb->user.c_str(), summary2.c_str());
 
                 std::string notificationIcon("dialog-information");
                 switch(icontype2)
@@ -2227,7 +2227,7 @@ namespace LTSM
                 auto dbusAddresses = Manager::getSessionDbusAddresses(xvfb->user);
                 if(dbusAddresses.empty())
                 {
-                    Application::warning("%s: dbus address empty, display: %d, user: %s", __FUNCTION__, xvfb->displayNum, xvfb->user.c_str());
+                    Application::warning("%s: dbus address empty, display: %d, user: %s", "busSendNotify", xvfb->displayNum, xvfb->user.c_str());
                     return;
                 }
 
@@ -2255,14 +2255,14 @@ namespace LTSM
                 }
                 catch(const sdbus::Error & err)
                 {
-                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", __FUNCTION__, xvfb->displayNum, err.getName().c_str(), err.getMessage().c_str());
+                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", "busSendNotify", xvfb->displayNum, err.getName().c_str(), err.getMessage().c_str());
                 }
                 catch(std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", "busSendNotify", err.what());
                 }
 #else
-                Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+                Application::warning("%s: sdbus address not supported, use 1.2 version", "busSendNotify");
 #endif
             }).detach();
 
@@ -2790,7 +2790,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pulseAudioSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 

@@ -117,6 +117,7 @@ namespace LTSM
             int         fd = -1;
             uint16_t    blocksz = 4096;
             uint8_t     id = 255;
+            bool        zlib = false;
 
         public:
             static const char* typeString(const ConnectorType &);

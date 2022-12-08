@@ -43,7 +43,7 @@ namespace LTSM
     {
     protected:
         static std::mutex logging;
-        static FILE* fderr;
+        static FILE* fdlog;
         static DebugTarget target;
         static DebugLevel level;
 
@@ -63,9 +63,9 @@ namespace LTSM
 	        {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fderr, "[info] ");
-		    fprintf(fderr, format, vals...);
-		    fprintf(fderr, "\n");
+		    fprintf(fdlog, "[info] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
@@ -87,9 +87,9 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[notice] ");
-		fprintf(fderr, format, vals...);
-	    	fprintf(fderr, "\n");
+		fprintf(fdlog, "[notice] ");
+		fprintf(fdlog, format, vals...);
+	    	fprintf(fdlog, "\n");
 	    }
 	    else
             if(target == DebugTarget::Syslog)
@@ -112,9 +112,9 @@ namespace LTSM
 	        {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fderr, "[warning] ");
-		    fprintf(fderr, format, vals...);
-		    fprintf(fderr, "\n");
+		    fprintf(fdlog, "[warning] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
@@ -136,9 +136,9 @@ namespace LTSM
 	    {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fderr, "[error] ");
-		fprintf(fderr, format, vals...);
-		fprintf(fderr, "\n");
+		fprintf(fdlog, "[error] ");
+		fprintf(fdlog, format, vals...);
+		fprintf(fdlog, "\n");
 	    }
 	    else
             if(target == DebugTarget::Syslog)
@@ -161,9 +161,9 @@ namespace LTSM
 	        {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fderr, "[debug] ");
-		    fprintf(fderr, format, vals...);
-		    fprintf(fderr, "\n");
+		    fprintf(fdlog, "[debug] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
@@ -187,9 +187,9 @@ namespace LTSM
 	        {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fderr, "[trace] ");
-		    fprintf(fderr, format, vals...);
-		    fprintf(fderr, "\n");
+		    fprintf(fdlog, "[trace] ");
+		    fprintf(fdlog, format, vals...);
+		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)

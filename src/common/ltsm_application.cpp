@@ -35,7 +35,7 @@ namespace LTSM
     int  facility = LOG_USER;
 
     // Application
-    FILE* Application::fderr = stderr;
+    FILE* Application::fdlog = stderr;
     DebugTarget Application::target = DebugTarget::Console;
     DebugLevel Application::level = DebugLevel::Info;
     std::mutex Application::logging;
@@ -111,9 +111,9 @@ namespace LTSM
         {
             if(file)
             {
-                fderr = fopen(file, "a");
-                if(! fderr)
-                    fderr = stderr;
+                fdlog = fopen(file, "a");
+                if(! fdlog)
+                    fdlog = stderr;
             }
 
             // child: switch syslog to stderr

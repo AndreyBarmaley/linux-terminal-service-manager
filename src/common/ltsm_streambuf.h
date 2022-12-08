@@ -30,7 +30,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20220925
+#define LTSM_STREAMBUF_VERSION 20221205
 
 namespace LTSM
 {
@@ -281,6 +281,8 @@ namespace LTSM
         size_t          last(void) const override;
         uint8_t         peek(void) const override;
         void            skip(size_t) const override;
+
+        const uint8_t*  data(void) const;
     };
 
     /// @brief: read/write StreamBuf

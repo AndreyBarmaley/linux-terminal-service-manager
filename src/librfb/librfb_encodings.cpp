@@ -21,12 +21,15 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <cmath>
 #include <numeric>
 
 #include "ltsm_tools.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
 #include "librfb_encodings.h"
+
+using namespace std::chrono_literals;
 
 namespace LTSM
 {
@@ -183,7 +186,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
+                if(job.wait_for(250us) == std::future_status::ready)
                 {
                     job = std::async(std::launch::async, & EncodingRRE::sendRegion, this, & srv, top, regions.front() - top, fb, jobId);
                     regions.pop_front();
@@ -334,7 +337,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
+                if(job.wait_for(250us) == std::future_status::ready)
                 {
                     job = std::async(std::launch::async, & EncodingHexTile::sendRegion, this, & srv, top, regions.front() - top, fb, jobId);
                     regions.pop_front();
@@ -533,7 +536,7 @@ namespace LTSM
                 if(regions.empty())
                     break;
 
-                if(job.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)
+                if(job.wait_for(250us) == std::future_status::ready)
                 {
                     job = std::async(std::launch::async, & EncodingTRLE::sendRegion, this, & srv, top, regions.front() - top, fb, jobId);
                     regions.pop_front();

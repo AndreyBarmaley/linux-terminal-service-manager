@@ -239,12 +239,12 @@ namespace LTSM
 
     std::vector<uint8_t> Tools::convertJsonString2Binary(const std::string & content)
     {
-        StreamBuf sb(Tools::base64Decode(content));
+        StreamBufRef sb(Tools::base64Decode(content));
 
         if(4 < sb.last())
         {
             uint32_t real = sb.readIntBE32();
-            return Tools::zlibUncompress(sb.read(), real);
+            return Tools::zlibUncompress(RawPtr(sb.data(), sb.last()), real);
         }
         else
         {

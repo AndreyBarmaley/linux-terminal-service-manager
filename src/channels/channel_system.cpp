@@ -1062,22 +1062,22 @@ void LTSM::Channel::Connector::setSpeed(const Channel::Speed & speed)
             delay = std::chrono::milliseconds(250);
             break;
 
-        // ~40k/sec
+        // ~80k/sec
         case Speed::Medium:
-            blocksz = 4096;
+            blocksz = 8192;
             delay = std::chrono::milliseconds(100);
             break;
 
-        // ~200k/sec
+        // ~800k/sec
         case Speed::Fast:
-            blocksz = 4096;
-            delay = std::chrono::milliseconds(20);
+            blocksz = 16384;
+            delay = std::chrono::milliseconds(60);
             break;
 
-        // ~800k/sec
+        // ~1600k/sec
         case Speed::UltraFast:
             delay = std::chrono::milliseconds(20);
-            blocksz = 16384;
+            blocksz = 32768;
             break;
     }
 }
@@ -1125,31 +1125,41 @@ bool LTSM::Channel::Connector::remote2local(void)
     }
 
     auto & buf = bufw.front();
-    ssize_t real = write(fd, buf.data(), buf.size());
 
-    if(0 < real)
+    if(zlib)
     {
-        if(real == buf.size())
-        {
-            bufw.pop_front();
-        }
-        else
-            buf.erase(buf.begin(), buf.begin() + real);
-
-        return true;
+        //StreamBufRef sb(bufw.front());
+        //bufsz = sb.readIntBE32();
+        //zipsz = sb.readIntBE32();
+        //buf = Tools::zlibUncompress(RawPtr(sb.data(), sb.last()), bufsz);
     }
 
-    if(EAGAIN == errno || EINTR == errno)
-        return true;
+    size_t writesz = 0;
+    while(writesz < buf.size())
+    {
+        auto real = write(fd, buf.data() + writesz, buf.size() - writesz);
+        if(0 < real)
+        {
+            writesz += real;
+            continue;
+        }
 
-    err = errno;
-    loopRunning = false;
+        if(EAGAIN == errno || EINTR == errno)
+            continue;
 
-    if(owner)
-        owner->sendSystemChannelError(id, errno, std::string(__FUNCTION__).append(": ").append(strerror(errno)));
+        // error;
+        err = errno;
+        loopRunning = false;
 
-    Application::error("%s: channel: 0x%02x, error: %s", __FUNCTION__, id, strerror(errno));
-    return false;
+        if(owner)
+            owner->sendSystemChannelError(id, errno, std::string(__FUNCTION__).append(": ").append(strerror(errno)));
+
+        Application::error("%s: channel: 0x%02x, error: %s", __FUNCTION__, id, strerror(errno));
+        return false;
+    }
+
+    bufw.pop_front();
+    return true;
 }
 
 bool LTSM::Channel::Connector::local2remote(void)
@@ -1181,8 +1191,20 @@ bool LTSM::Channel::Connector::local2remote(void)
 
     if(0 < real)
     {
+        if(zlib)
+        {
+            //StreamBuf sb;
+            //sb.writeIntBE32(real);
+            //zip=Tools::zlibCompress(RawPtr(bufr.data(), real));
+            //sb.writeIntBE32(zip.size());
+            //sb.write(Tools::zlibCompress(zip);
+            //bufr.swap(sb.rawbuf());
+            //real = bufr.size();
+        }
+
         if(owner)
             owner->sendLtsmEvent(id, bufr.data(), real);
+
         return true;
     }
 
