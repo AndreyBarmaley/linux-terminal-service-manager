@@ -107,6 +107,7 @@ jobs:
           ./LTSM_test_streambuf
           ./LTSM_test_unixsocket
           ./LTSM_test_json ./src/tests/json/test.json
+          ./LTSM_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
           echo "::group::test services"
           echo "run ltsm service"

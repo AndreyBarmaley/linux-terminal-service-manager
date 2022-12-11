@@ -28,7 +28,6 @@
 #include <mutex>
 
 #include "ltsm_librfb.h"
-#include "ltsm_sockets.h"
 #include "ltsm_channels.h"
 #include "librfb_encodings.h"
 
@@ -43,13 +42,12 @@ namespace LTSM
     namespace RFB
     {
         /// ServerEncoder
-        class ServerEncoder : public ChannelClient, protected NetworkStream
+        class ServerEncoder : public ChannelClient, protected EncoderStream
         {
             std::vector<int>    clientEncodings;
 
             std::unique_ptr<NetworkStream> socket;      /// socket layer
             std::unique_ptr<TLS::Stream> tls;           /// tls layer
-            std::unique_ptr<ZLib::DeflateStream> zlib;  /// zlib layer
             std::unique_ptr<EncodingBase> encoder;
 
             PixelFormat         clientPf;
@@ -78,12 +76,8 @@ namespace LTSM
             friend class EncodingTRLE;
             friend class EncodingZlib;
 
-            const PixelFormat & clientFormat(void) const;
-
             // ServerEncoder
-            virtual const PixelFormat & serverFormat(void) const = 0;
             virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
-
             virtual std::list<std::string> serverDisabledEncodings(void) const = 0;
             virtual std::list<std::string> serverPrefferedEncodings(void) const = 0;
 
@@ -94,9 +88,6 @@ namespace LTSM
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
             uint8_t             peekInt8(void) const override;
-
-	    void		zlibDeflateStart(size_t);
-	    void                zlibDeflateStop(bool uint16sz = false);
 
             std::string         serverEncryptionInfo(void) const;
             virtual void        serverSelectEncodingsEvent(void) {}
@@ -137,6 +128,10 @@ namespace LTSM
 
         public:
             ServerEncoder(int sockfd = 0);
+
+            // EncoderStream interface
+            const PixelFormat & clientFormat(void) const override;
+            bool                clientIsBigEndian(void) const override;
 
             int                 serverHandshakeVersion(void);
             bool                serverSecurityInit(int protover, const SecurityInfo &);

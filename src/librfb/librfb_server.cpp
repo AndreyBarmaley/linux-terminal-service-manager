@@ -36,6 +36,7 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+    // ServerEncoder
     RFB::ServerEncoder::ServerEncoder(int sockfd)
     {
         if(0 < sockfd)
@@ -654,6 +655,11 @@ namespace LTSM
         recvPixelFormatEvent(clientPf, clientBigEndian);
     }
 
+    bool RFB::ServerEncoder::clientIsBigEndian(void) const
+    {
+        return clientBigEndian;
+    }
+
     const PixelFormat & RFB::ServerEncoder::clientFormat(void) const
     {
         return clientPf;
@@ -906,7 +912,7 @@ namespace LTSM
         sendInt8(0);
 
         // send encodings
-        encoder->sendFrameBuffer(*this, fb);
+        encoder->sendFrameBuffer(this, fb);
 
         sendFlush();
     }
@@ -1032,34 +1038,6 @@ namespace LTSM
         }
     }
 
-    void RFB::ServerEncoder::zlibDeflateStart(size_t len)
-    {
-        auto it = std::find_if(clientEncodings.begin(), clientEncodings.end(),
-                    [=](auto & val){ return ENCODING_COMPRESS1 <= val && val <= ENCODING_COMPRESS9; });
-        int level = it != clientEncodings.end() ? ENCODING_COMPRESS9 - *it : Z_BEST_SPEED;
-
-        if(! zlib)
-            zlib.reset(new ZLib::DeflateStream(level));
-
-        zlib->prepareSize(len);
-        streamOut = zlib.get();
-    }
-
-    void RFB::ServerEncoder::zlibDeflateStop(bool uint16sz)
-    {
-        streamOut = tls ? tls.get() : socket.get();
-        auto zip = zlib->deflateFlush();
-
-        if(uint16sz)
-            sendIntBE16(zip.size());
-        else
-            sendIntBE32(zip.size());
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-            Application::debug("%s: compress data length: %d", __FUNCTION__, zip.size());
-        sendRaw(zip.data(), zip.size());
-    }
-
     bool RFB::ServerEncoder::serverSelectClientEncoding(void)
     {
         for(int type : clientEncodings)
@@ -1071,11 +1049,7 @@ namespace LTSM
                     return true;
 
                 case RFB::ENCODING_HEXTILE:
-                    encoder = std::make_unique<EncodingHexTile>(false);
-                    return true;
-
-                case RFB::ENCODING_ZLIBHEX:
-                    encoder = std::make_unique<EncodingHexTile>(true);
+                    encoder = std::make_unique<EncodingHexTile>();
                     return true;
 
                 case RFB::ENCODING_CORRE:
