@@ -2790,7 +2790,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pulseAudioSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 

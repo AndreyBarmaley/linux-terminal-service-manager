@@ -666,7 +666,7 @@ namespace LTSM
 
     bool Connector::RDP::updateEvent(const XCB::Region & reg)
     {
-        auto context = static_cast<ServerContext*>(freeRdp->peer->context);
+        //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
 
         // reply info dump
@@ -963,7 +963,7 @@ namespace LTSM
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth, peer->settings->DesktopHeight, peer->settings->ColorDepth);
 
         auto context = static_cast<ServerContext*>(peer->context);
-        auto connector = context->rdp;
+        //auto connector = context->rdp;
 
         //peer->settings->ColorDepth = static_cast<XCB::RootDisplay*>(connector)->bitsPerPixel();
         //peer->settings->ColorDepth = 32;
