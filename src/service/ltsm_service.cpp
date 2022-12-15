@@ -2108,8 +2108,17 @@ namespace LTSM
 
             if(fserr)
             {
-                Application::error("%s: %s, path: `%s'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
-                error = true;
+                if(fserr.value() == 18)
+                {
+                    std::filesystem::copy_file(tmpfile, dstfile, fserr);
+                }
+                else
+                {
+                    Application::error("%s: %s, path: `%s'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
+                    error = true;
+                }
+
+                std::filesystem::remove(tmpfile, fserr);
             }
 
             if(! error)
