@@ -789,7 +789,6 @@ namespace LTSM
 
         if(zlib)
         {
-            zlib->prepareSize(reg.width * reg.height * fb.bytePerPixel());
             zlib->sendData(tmp.buffer());
             st->sendZlibData(zlib.get());
         }
@@ -910,8 +909,6 @@ namespace LTSM
 
     void RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
-        zlib->prepareSize(reg.width * reg.height * fb.bytePerPixel());
-
         if(debug)
             Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 

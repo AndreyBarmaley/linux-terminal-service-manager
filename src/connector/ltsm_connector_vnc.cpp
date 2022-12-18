@@ -590,8 +590,8 @@ namespace LTSM
             if(! dstdir.empty() && ! tmpfile.empty())
             {
                 // create file transfer channel
-                createChannel(Channel::createUrl(Channel::ConnectorType::File, filepath), Channel::ConnectorMode::ReadOnly,
-                        Channel::createUrl(Channel::ConnectorType::File, tmpfile), Channel::ConnectorMode::WriteOnly, Channel::Speed::Slow);
+                createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
+                        Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly), Channel::Opts{Channel::Speed::Slow, false});
 
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
                 busTransferFileStarted(displayNum(), tmpfile, (*it).second, dstfile.c_str());
@@ -606,7 +606,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            createChannel(client, Channel::connectorMode(cmode), server, Channel::connectorMode(smode), Channel::connectorSpeed(speed));
+            createChannel(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), Channel::Opts{Channel::connectorSpeed(speed), false});
         }
     }
 
@@ -622,7 +622,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            createListener(client, Channel::connectorMode(cmode), server, Channel::ListenMode{Channel::connectorMode(smode), limit}, Channel::connectorSpeed(speed));
+            createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit, Channel::Opts{Channel::connectorSpeed(speed), true});
         }
     }
 

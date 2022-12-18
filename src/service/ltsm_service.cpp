@@ -2097,8 +2097,17 @@ namespace LTSM
 
             if(fserr)
             {
-                Application::error("%s: %s, path: `%s'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
-                error = true;
+                if(fserr.value() == 18)
+                {
+                    std::filesystem::copy_file(tmpfile, dstfile, fserr);
+                }
+                else
+                {
+                    Application::error("%s: %s, path: `%s'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
+                    error = true;
+                }
+
+                std::filesystem::remove(tmpfile, fserr);
             }
 
             if(! error)
@@ -2731,7 +2740,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "slow", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5);
         // fix permissions job
         std::thread(fixPermissionJob, printerSocket, xvfb->uid, lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -2790,7 +2799,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pulseAudioSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "ultra", 5);
         // fix permissions job
         std::thread(fixPermissionJob, pulseAudioSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 
@@ -2849,7 +2858,7 @@ namespace LTSM
 
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
-                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5);
+                                    serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5);
         // fix permissions job
         std::thread(fixPermissionJob, saneSocket, xvfb->uid, xvfb->gid, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
 

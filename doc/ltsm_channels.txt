@@ -122,12 +122,12 @@ The "keyboard" field is a json object, keyboard layouts identifiers
 
 [2.2.2] System message CHANNEL CONNECTED
 
-{ "cmd": "ChannelConnected", "id": int , "error": false }
+{ "cmd": "ChannelConnected", "id": int , "zlib": bool, "error": false }
 
 
 [2.2.3] System message CHANNEL OPEN
 
-{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string" }
+{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string", "zlib": bool }
 
 ------------------+-------
  connector type   | value
