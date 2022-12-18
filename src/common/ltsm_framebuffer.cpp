@@ -369,7 +369,7 @@ namespace LTSM
         if(pixelFormat() != fb.pixelFormat())
         {
             for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
-                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & pixelFormat());
+                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
         }
         else
         {

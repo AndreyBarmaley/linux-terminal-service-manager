@@ -114,6 +114,7 @@ pkg_search_module(XCB_XKB REQUIRED xcb-xkb)
 pkg_search_module(XKBCOMMON_X11 REQUIRED xkbcommon-x11)
 add_compile_options(${XCB_XKB_CFLAGS})
 add_compile_options(${XKBCOMMON_X11_CFLAGS})
+add_compile_options(-DLTSM_SOCKET_ZLIB)
 link_libraries(${XCB_XKB_LIBRARIES})
 link_libraries(${XKBCOMMON_X11_LIBRARIES})
 
@@ -189,7 +190,7 @@ if(LTSM_BUILD_CONNECTOR)
         target_compile_options(LTSM_connector PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
-    target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
+    target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_connector PRIVATE src/common src/channels src/librfb src/dbus-glue ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
     set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -277,7 +278,7 @@ if(LTSM_BUILD_X11VNC)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
-    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB ${GNUTLS_DEFINITIONS})
+    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
 
@@ -299,7 +300,7 @@ if(LTSM_BUILD_VNC2IMAGE)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
-    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
+    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
@@ -334,7 +335,7 @@ if(LTSM_BUILD_CLIENT)
         target_link_libraries(LTSM_vnc2sdl LTSM_common -lpki-core)
     endif()
 
-    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
+    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2sdl PRIVATE src/common src/channels src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 

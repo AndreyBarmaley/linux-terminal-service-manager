@@ -47,7 +47,7 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20221110
+#define LTSM_SOCKETS_VERSION 20221215
 
 namespace LTSM
 {
@@ -317,19 +317,28 @@ namespace LTSM
 
     namespace ZLib
     {
-        /// @brief: zlib compress output stream only
-        class DeflateStream : public NetworkStream
+        class DeflateBase
         {
         protected:
             z_stream            zs{0};
-            BinaryBuf           bb;
             
         public:
+            explicit DeflateBase(int level = Z_BEST_COMPRESSION);
+            virtual ~DeflateBase();
+    
+            std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH);
+        };
+
+        /// @brief: zlib compress output stream only
+        class DeflateStream : public DeflateBase, public NetworkStream
+        {
+        protected:
+            BinaryBuf           bb;
+
+        public:
             explicit DeflateStream(int level = Z_BEST_COMPRESSION);
-            ~DeflateStream();
     
             std::vector<uint8_t> deflateFlush(void);
-            void                prepareSize(size_t);
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
@@ -341,15 +350,27 @@ namespace LTSM
         };
 
         /// @brief: zlib compress input stream only
-        class InflateStream : public NetworkStream
+        class InflateBase
         {
         protected:
             z_stream            zs{0};
+            std::array<uint8_t, 1024> tmp;
+
+        public:
+            InflateBase();
+            virtual ~InflateBase();
+
+            /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
+            std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
+        };
+
+        class InflateStream : public InflateBase, public NetworkStream
+        {
+        protected:
             StreamBuf           sb;
 
         public:
             InflateStream();
-            ~InflateStream();
 
             void                appendData(const std::vector<uint8_t> &);
 
@@ -360,6 +381,18 @@ namespace LTSM
 
         private:
             void                sendRaw(const void*, size_t) override;
+        };
+
+        class DeflateInflate
+        {
+            DeflateBase         def;
+            InflateBase         inf;
+
+        public:
+            DeflateInflate(int level) : def(level) {}
+
+            std::vector<uint8_t> deflate(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH) { return def.deflateData(buf, len, flushPolicy); }
+            std::vector<uint8_t> inflate(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH) { return inf.inflateData(buf, len, flushPolicy); }
         };
     } // Zlib
 #endif // LTSM_SOCKET_ZLIB

@@ -1212,11 +1212,10 @@ namespace LTSM
 #ifdef LTSM_SOCKET_ZLIB
     namespace ZLib
     {
-        /* Zlib::DeflateStream */
-        DeflateStream::DeflateStream(int level)
+        /* Zlib::DeflateBase */
+        DeflateBase::DeflateBase(int level)
         {
             zs.data_type = Z_BINARY;
-            bb.reserve(4096);
 
             if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level)
                 level = Z_BEST_COMPRESSION;
@@ -1230,26 +1229,24 @@ namespace LTSM
             }
         }
 
-        DeflateStream::~DeflateStream()
+        DeflateBase::~DeflateBase()
         {
             deflateEnd(& zs);
         }
 
-        void DeflateStream::prepareSize(size_t len)
+        std::vector<uint8_t> DeflateBase::deflateData(const void* buf, size_t len, int flushPolicy)
         {
-            if(len < bb.capacity()) bb.reserve(len);
-        }
+            // zlib legacy non const
+            zs.next_in = (Bytef*) buf;
+            zs.avail_in = len;
 
-        std::vector<uint8_t> DeflateStream::deflateFlush(void)
-        {
-            zs.next_in = bb.data();
-            zs.avail_in = bb.size();
+            std::vector<uint8_t> tmp(deflateBound(& zs, std::max(len, zs.total_in)));
 
-            std::vector<uint8_t> zip(deflateBound(& zs, bb.size()));
-            zs.next_out = zip.data();
-            zs.avail_out = zip.size();
+            zs.next_out = tmp.data();
+            zs.avail_out = tmp.size();
+
             auto prev = zs.total_out;
-            int ret = deflate(& zs, Z_SYNC_FLUSH);
+            int ret = deflate(& zs, flushPolicy);
 
             if(ret < Z_OK)
             {
@@ -1257,20 +1254,32 @@ namespace LTSM
                 throw zlib_error(NS_FuncName);
             }
 
-            auto zipsz = zs.total_out - prev;
-            zip.resize(zipsz);
-            bb.clear();
+            tmp.resize(zs.total_out - prev);
+
             zs.next_in = nullptr;
             zs.avail_in = 0;
             zs.next_out = nullptr;
             zs.avail_out = 0;
 
-            return zip;
+            return tmp;
+        }
+
+        /* Zlib::DeflateStream */
+        DeflateStream::DeflateStream(int level) : DeflateBase(level)
+        {
+            bb.reserve(4096);
+        }
+
+        std::vector<uint8_t> DeflateStream::deflateFlush(void)
+        {
+            bb.append(deflateData(nullptr, 0, Z_SYNC_FLUSH));
+            zs.total_in = 0;
+            return std::move(bb);
         }
 
         void DeflateStream::sendRaw(const void* ptr, size_t len)
         {
-            bb.append(static_cast<const uint8_t*>(ptr), len);
+            bb.append(deflateData(ptr, len, Z_NO_FLUSH));
         }
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const
@@ -1297,8 +1306,8 @@ namespace LTSM
             throw zlib_error(NS_FuncName);
         }
 
-        /* Zlib::InflateStream */
-        InflateStream::InflateStream() : sb(4096 /* reserve */)
+        /* Zlib::InflateBase */
+        InflateBase::InflateBase()
         {
             zs.data_type = Z_BINARY;
     
@@ -1309,25 +1318,25 @@ namespace LTSM
                 throw zlib_error(NS_FuncName);
             }
         }
-    
-        InflateStream::~InflateStream()
+
+        InflateBase::~InflateBase()
         {
             inflateEnd(& zs);
         }
 
-        void InflateStream::appendData(const std::vector<uint8_t> & zip)
+        std::vector<uint8_t> InflateBase::inflateData(const void* buf, size_t len, int flushPolicy)
         {
-            sb.shrink();
+            std::vector<uint8_t> res;
+            res.reserve(len * 7);
 
-            std::array<uint8_t, 1024> tmp;
-            zs.next_in = (Bytef*) zip.data();
-            zs.avail_in = zip.size();
+            zs.next_in = (Bytef*) buf;
+            zs.avail_in = len;
 
             do
             {
                 zs.next_out = tmp.data();
                 zs.avail_out = tmp.size();
-                int ret = inflate(& zs, Z_NO_FLUSH);
+                int ret = inflate(& zs, flushPolicy);
 
                 if(ret < Z_OK)
                 {
@@ -1335,7 +1344,7 @@ namespace LTSM
                     throw zlib_error(NS_FuncName);
                 }
 
-                sb.write(tmp.data(), tmp.size() - zs.avail_out);
+                res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
             }
             while(zs.avail_in > 0);
 
@@ -1343,6 +1352,19 @@ namespace LTSM
             zs.avail_in = 0;
             zs.next_out = nullptr;
             zs.avail_out = 0;
+
+            return res;
+        }
+
+        /* Zlib::InflateStream */
+        InflateStream::InflateStream() : sb(4096 /* reserve */)
+        {
+        }
+    
+        void InflateStream::appendData(const std::vector<uint8_t> & zip)
+        {
+            sb.shrink();
+            sb.write(inflateData(zip.data(), zip.size(), Z_NO_FLUSH));
         }
 
         void InflateStream::recvRaw(void* ptr, size_t len) const

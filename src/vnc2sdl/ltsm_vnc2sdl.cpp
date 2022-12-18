@@ -191,6 +191,7 @@ namespace LTSM
             "    --syslog (to syslog)" << std::endl <<
             "    --host <localhost> " << std::endl <<
             "    --port <port> " << std::endl <<
+            "    --username <user> " << std::endl <<
             "    --password <pass> " << std::endl <<
             "    --noaccel (disable SDL2 acceleration)" << std::endl <<
             "    --fullscreen (switch t fullscreen mode, Ctrl+F10 exit)" << std::endl <<
