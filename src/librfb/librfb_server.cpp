@@ -32,6 +32,14 @@
 #include "ltsm_application.h"
 #include "librfb_server.h"
 
+#ifdef LTSM_WITH_FFMPEG
+#include "librfb_encoding_ffmpeg.h"
+#endif
+
+#ifdef LTSM_WITH_X265
+#include "librfb_encoding_x265.h"
+#endif
+
 using namespace std::chrono_literals;
 
 namespace LTSM
@@ -1067,6 +1075,12 @@ namespace LTSM
                 case RFB::ENCODING_ZRLE:
                     encoder = std::make_unique<EncodingTRLE>(true);
                     return true;
+
+#ifdef LTSM_WITH_FFMPEG
+                case RFB::ENCODING_FFMP:
+                    encoder = std::make_unique<EncodingFFmpeg>();
+                    return true;
+#endif
 
                 default:
                     break;

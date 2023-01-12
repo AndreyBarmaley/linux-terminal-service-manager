@@ -257,8 +257,8 @@ namespace LTSM
     /// @brief: read only StreamBuf
     class StreamBufRef : public MemoryStream
     {
-        mutable std::vector<uint8_t>::const_iterator it1;
-        std::vector<uint8_t>::const_iterator it2;
+        mutable uint8_t* it1 = nullptr;
+        uint8_t* it2 = nullptr;
 
     protected:
         void            getRaw(void* ptr, size_t len) const override;
@@ -266,7 +266,7 @@ namespace LTSM
 
     public:
         StreamBufRef() = default;
-        StreamBufRef(const std::vector<uint8_t> &);
+        StreamBufRef(const void*, size_t);
 
         StreamBufRef(StreamBufRef &&) noexcept;
         StreamBufRef &  operator=(StreamBufRef &&) noexcept;
@@ -275,7 +275,7 @@ namespace LTSM
         StreamBufRef &  operator=(const StreamBufRef &) = delete;
 
         bool            bigendian(void) const override { return false; }
-        void            reset(const std::vector<uint8_t> &);
+        void            reset(const void* ptr, size_t len);
 
         BinaryBuf       read(size_t = 0) const override;
         size_t          last(void) const override;

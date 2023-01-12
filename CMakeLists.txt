@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_SERVER "build server" OFF)
 option(LTSM_BUILD_CLIENT "build client" ON)
+option(LTSM_ENCODING_FFMPEG "ffmpeg encoding support" OFF)
 
 #option(LTSM_BUILD_TESTS "build test utilities" OFF)
 #option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
@@ -173,6 +174,21 @@ if(LTSM_BUILD_CONNECTOR)
         src/librfb/librfb_server.cpp
         src/librfb/librfb_x11server.cpp
         src/librfb/ltsm_librfb.cpp)
+
+
+    if(LTSM_ENCODING_FFMPEG)
+        pkg_search_module(AVDEVICE REQUIRED libavdevice)
+        pkg_search_module(AVFORMAT REQUIRED libavformat)
+        pkg_search_module(AVCODEC REQUIRED libavcodec)
+        pkg_search_module(AVSWSCALE REQUIRED libswscale)
+        pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
+        pkg_search_module(AVUTIL REQUIRED libavutil)
+
+        target_sources(LTSM_connector PRIVATE src/librfb/librfb_encoding_ffmpeg.cpp)
+        target_compile_options(LTSM_connector PRIVATE ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS} ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS} -DLTSM_WITH_FFMPEG)
+        target_link_options(LTSM_connector PRIVATE ${AVDEVICE_LDFLAGS} ${AVFORMAT_LDFLAGS} ${AVCODEC_LDFLAGS} ${AVSWSCALE_LDFLAGS} ${AVSWRESAMPLE_LDFLAGS} ${AVUTIL_LDFLAGS})
+        target_link_libraries(LTSM_connector ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES} ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})
+    endif()
 
     if(LTSM_WITH_RDP)
         pkg_search_module(FreeRDP2 REQUIRED freerdp2)

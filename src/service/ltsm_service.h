@@ -101,9 +101,10 @@ namespace LTSM
         ~PamSession();
 
         bool validateAccount(void);
-        bool openSession(void);
+        bool openSession(bool init = true);
 
         void setSessionOpenned(void);
+        std::list<std::string> getEnvList(void);
     };
 
     /// Manager
@@ -175,7 +176,7 @@ namespace LTSM
         uint8_t                         depth = 0;
 
         std::shared_future<int>         idleActionRunning;
-        std::unique_ptr<PamService>     pam;
+        std::unique_ptr<PamSession>     pam;
 
         std::atomic<XvfbMode>           mode{XvfbMode::SessionLogin};
 	SessionPolicy			policy = SessionPolicy::AuthTake;

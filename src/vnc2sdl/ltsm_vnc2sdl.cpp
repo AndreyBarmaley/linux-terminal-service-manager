@@ -63,18 +63,25 @@ namespace LTSM
             {
                 std::list<std::string> devices;
 
-                for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
-                    devices.emplace_back(dev.getSerialNumber());
+                try
+                {
+                    for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
+                        devices.emplace_back(dev.getSerialNumber());
 
-                for(auto & serial : devices)
-                    if(std::none_of(attached.begin(), attached.end(), [&](auto & str){ return str == serial; }))
-                        this->attachedDevice(serial);
+                    for(auto & serial : devices)
+                        if(std::none_of(attached.begin(), attached.end(), [&](auto & str){ return str == serial; }))
+                            this->attachedDevice(serial);
 
-                for(auto & serial : attached)
-                    if(std::none_of(devices.begin(), devices.end(), [&](auto & str){ return str == serial; }))
-                        this->detachedDevice(serial);
+                    for(auto & serial : attached)
+                        if(std::none_of(devices.begin(), devices.end(), [&](auto & str){ return str == serial; }))
+                            this->detachedDevice(serial);
 
-                attached.swap(devices);
+                    attached.swap(devices);
+                }
+                catch(const rutoken::pkicore::error::InvalidTokenException &)
+                {
+                }
+
                 std::this_thread::sleep_for(2000ms);
             }
 

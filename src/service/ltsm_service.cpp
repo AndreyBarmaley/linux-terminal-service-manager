@@ -148,10 +148,14 @@ namespace LTSM
             {
                 case PAM_ERROR_MSG:
                     Application::error("%s: pam error: %s", __FUNCTION__, pm->msg);
+                    pr->resp = strdup("");
+                    pr->resp_retcode = PAM_SUCCESS;
                     break;
 
                 case PAM_TEXT_INFO:
                     Application::info("%s: pam info: %s", __FUNCTION__, pm->msg);
+                    pr->resp = strdup("");
+                    pr->resp_retcode = PAM_SUCCESS;
                     break;
 
                 case PAM_PROMPT_ECHO_ON:
@@ -160,8 +164,10 @@ namespace LTSM
                     if(! pr->resp)
                     {
                         Application::error("%s: pam error: %s", __FUNCTION__, "buf error");
+                        pr->resp_retcode = PAM_BUF_ERR;
                         return PAM_BUF_ERR;
                     }
+                    pr->resp_retcode = PAM_SUCCESS;
                     break;
 
                 case PAM_PROMPT_ECHO_OFF:
@@ -170,8 +176,10 @@ namespace LTSM
                     if(! pr->resp)
                     {
                         Application::error("%s: pam error: %s", __FUNCTION__, "buf error");
+                        pr->resp_retcode = PAM_BUF_ERR;
                         return PAM_BUF_ERR;
                     }
+                    pr->resp_retcode = PAM_SUCCESS;
                     break;
 
                 default:
@@ -228,9 +236,9 @@ namespace LTSM
         return true;
     }
 
-    bool PamSession::openSession(void)
+    bool PamSession::openSession(bool init)
     {
-        status = pam_setcred(pamh, PAM_ESTABLISH_CRED);
+        status = pam_setcred(pamh, init ? PAM_ESTABLISH_CRED : PAM_REINITIALIZE_CRED);
 
         if(PAM_SUCCESS != status)
         {
@@ -238,16 +246,37 @@ namespace LTSM
             return false;
         }
 
-        status = pam_open_session(pamh, 0);
-
-        if(PAM_SUCCESS != status)
+        if(init)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_open_session", pam_strerror(pamh, status), status);
-            return false;
+            status = pam_open_session(pamh, 0);
+
+            if(PAM_SUCCESS != status)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_open_session", pam_strerror(pamh, status), status);
+                return false;
+            }
+
+            sessionOpenned = true;
         }
 
-        sessionOpenned = true;
         return true;
+    }
+
+    std::list<std::string> PamSession::getEnvList(void)
+    {
+        std::list<std::string> list;
+
+        if(auto envlist = pam_getenvlist(pamh))
+        {
+            for(auto env = envlist; *env; ++env)
+            {
+                list.emplace_back(*env);
+                free(*env);
+            }
+            free(envlist);
+        }
+
+        return list;
     }
 
     void PamSession::setSessionOpenned(void)
@@ -1502,7 +1531,7 @@ namespace LTSM
             childExit();
         }
 
-        if(! pam || ! pam->openSession())
+        if(! pam || ! pam->openSession(true))
         {
             Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", xvfb->displayNum, xvfb->user.c_str());
             return -1;
@@ -1526,6 +1555,10 @@ namespace LTSM
             setenv("DISPLAY", xvfb->displayAddr.c_str(), 1);
             setenv("LTSM_REMOTEADDR", xvfb->remoteaddr.c_str(), 1);
             setenv("LTSM_TYPECONN", xvfb->conntype.c_str(), 1);
+
+            // pam environments
+            for(auto & env : pam->getEnvList())
+                putenv(const_cast<char*>(env.c_str()));
 
             createSessionConnInfo(xvfb);
             int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
@@ -1649,6 +1682,13 @@ namespace LTSM
             oldSess->options = std::move(loginSess->options);
             oldSess->encryption = std::move(loginSess->encryption);
             oldSess->layout = std::move(loginSess->layout);
+
+            // reinit pam session
+            if(! oldSess->pam || ! oldSess->pam->openSession(false))
+            {
+                Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", oldSess->displayNum, oldSess->user.c_str());
+                return -1;
+            }
 
             // update conn info
             createSessionConnInfo(oldSess);

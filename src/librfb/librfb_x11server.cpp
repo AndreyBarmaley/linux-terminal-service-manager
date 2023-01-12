@@ -256,6 +256,11 @@ namespace LTSM
     void  RFB::X11Server::recvPixelFormatEvent(const PixelFormat &, bool bigEndian)
     {
         fullscreenUpdate = true;
+
+        if(serverFormat() != clientFormat())
+        {
+            Application::warning("%s: client/server format not optimal", __FUNCTION__);
+        }
     }
 
     void  RFB::X11Server::recvSetEncodingsEvent(const std::vector<int> &)

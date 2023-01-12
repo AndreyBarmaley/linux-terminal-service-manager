@@ -386,8 +386,13 @@ namespace LTSM
     }
 
     /* StreamBufRef */
-    StreamBufRef::StreamBufRef(const std::vector<uint8_t> & v) : it1(v.begin()), it2(v.end())
+    StreamBufRef::StreamBufRef(const void* ptr, size_t len)
     {
+        if(ptr)
+        {
+            it1 = (uint8_t*) ptr;
+            it2 = it1 + len;
+        }
     }
 
     StreamBufRef::StreamBufRef(StreamBufRef && sb) noexcept : it1(std::move(sb.it1)), it2(std::move(sb.it2))
@@ -401,10 +406,10 @@ namespace LTSM
         return *this;
     }
 
-    void StreamBufRef::reset(const std::vector<uint8_t> & v)
+    void StreamBufRef::reset(const void* ptr, size_t len)
     {
-        it1 = v.begin();
-        it2 = v.end();
+        it1 = (uint8_t*) ptr;
+        it2 = it1 + len;
     }
 
     void StreamBufRef::getRaw(void* ptr, size_t len) const
@@ -439,7 +444,7 @@ namespace LTSM
 
         auto it0 = it1;
         it1 = std::next(it1, len);
-        return BinaryBuf(it0, it1);
+        return BinaryBuf(it0, len);
     }
 
     void StreamBufRef::skip(size_t len) const

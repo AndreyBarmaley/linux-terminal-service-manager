@@ -292,6 +292,7 @@ namespace LTSM
 
         st->sendHeader(getType(), reg + top);
         sendRawRegionPixels(st, st, reg, fb);
+        st->sendFlush();
     }
 
     void RFB::EncodingRaw::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
@@ -426,6 +427,7 @@ namespace LTSM
 
         st->sendHeader(getType(), reg + top);
         st->sendData(tmp.buffer());
+        st->sendFlush();
     }
 
     void RFB::EncodingRRE::sendRects(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, int back, const std::list<XCB::RegionPixel> & rreList)
@@ -596,6 +598,7 @@ namespace LTSM
 
         st->sendHeader(getType(), reg + top);
         st->sendData(tmp.buffer());
+        st->sendFlush();
     }
 
     void RFB::EncodingHexTile::sendRegionColored(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, int back, const std::list<XCB::RegionPixel> & rreList)
@@ -796,6 +799,8 @@ namespace LTSM
         {
             st->sendData(tmp.buffer());
         }
+
+        st->sendFlush();
     }
 
     void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, size_t field, const PixelMapWeight & pal)
@@ -919,5 +924,6 @@ namespace LTSM
 
         st->sendHeader(getType(), reg + top);
         st->sendZlibData(zlib.get());
+        st->sendFlush();
     }
 }

@@ -392,6 +392,11 @@ namespace LTSM
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
+#ifdef LTSM_WITH_FFMPEG
+        if(isClientEncodings(RFB::ENCODING_FFMP))
+            return true;
+#endif
+
         return _config->getBoolean("vnc:xcb:nodamage", false);
     }
 

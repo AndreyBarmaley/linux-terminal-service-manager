@@ -21,7 +21,6 @@
  ***************************************************************************/
 
 #include <stdlib.h>
-#include <syslog.h>
 
 #include "openssl/bio.h"
 #include "openssl/pem.h"
@@ -29,10 +28,13 @@
 #include "openssl/pkcs7.h"
 #include "openssl/safestack.h"
 
+#include <ctime>
 #include <chrono>
 #include <thread>
 
 #include <QFile>
+#include <QDate>
+#include <QTime>
 #include <QScreen>
 #include <QCursor>
 #include <QDateTime>
@@ -193,7 +195,6 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
 
-    openlog("ltsm_helper", LOG_USER, 0);
     auto val = qgetenv("DISPLAY");
 
     if(val.size() && val[0] == ':')
@@ -209,21 +210,24 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     if(0 <= group && group < names.size())
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 
+    // init ldaps background
+    std::thread([this]()
+    {
 #ifdef LTSM_TOKEN_AUTH
-    try
-    {
-        ldap.reset(new LTSM::LdapWrapper());
-    }
-    catch(...)
-    {
-        ldap.reset();
-    }
+        try
+        {
+            ldap.reset(new LTSM::LdapWrapper());
+        }
+        catch(...)
+        {
+            ldap.reset();
+        }
+    }).detach();
 #endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
 {
-    closelog();
     delete ui;
 }
 
@@ -543,6 +547,19 @@ CertInfo getX509CertInfo(const std::string& cert)
     return certInfo;
 }
 
+QDateTime fromStringTime(const std::string & str)
+{
+    // dont use QDateTime::fromString
+    // date cert in C locale, example: "Sep 12 00:11:22 2022 GMT"
+    // QDateTime::fromString expected localized format and return invalid
+    struct tm tm;
+
+    if(strptime(str.c_str(), "%b %d %H:%M:%S %Y", & tm))
+        return QDateTime(QDate(1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday), QTime(tm.tm_hour, tm.tm_min, tm.tm_sec), Qt::UTC);
+
+    return QDateTime();
+}
+
 void LTSM_HelperWindow::usernameChanged(const QString & user)
 {
     if(tokenAuthMode)
@@ -555,6 +572,19 @@ void LTSM_HelperWindow::usernameChanged(const QString & user)
             arg(QString::fromStdString(certInfo.notAfter)).
             arg(QString::fromStdString(certInfo.notBefore));
         ui->comboBoxUsername->setToolTip(tooltip);
+
+        // check expired
+        auto notBefore = fromStringTime(certInfo.notBefore);
+        bool loginDisabled = false;
+
+        if(notBefore.isValid() &&
+            notBefore < QDateTime::currentDateTime())
+        {
+            setLabelError("certificate expired");
+            loginDisabled = true;
+        }
+
+        ui->pushButtonLogin->setDisabled(loginDisabled);
     }
     else
         ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());

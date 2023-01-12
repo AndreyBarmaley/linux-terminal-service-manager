@@ -127,6 +127,10 @@ namespace LTSM
             case ENCODING_LTSM:
                 return "LTSM";
 
+#ifdef LTSM_WITH_FFMPEG
+            case ENCODING_FFMP:
+                return "FFMPEG";
+#endif
             default:
                 break;
         }
