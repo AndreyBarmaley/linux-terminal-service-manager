@@ -137,7 +137,10 @@ namespace LTSM
             }
         }
 
-        auto pair = static_cast< std::pair<std::string, std::string>* >(appdata);
+        auto pamAuthenticate = static_cast<const PamAuthenticate*>(appdata);
+        
+        auto & login = pamAuthenticate->login;
+        auto & pass = pamAuthenticate->password;
 
         for(int ii = 0 ; ii < num_msg; ++ii)
         {
@@ -159,7 +162,7 @@ namespace LTSM
                     break;
 
                 case PAM_PROMPT_ECHO_ON:
-                    pr->resp = strdup(pair->first.c_str());
+                    pr->resp = strdup(login.c_str());
 
                     if(! pr->resp)
                     {
@@ -171,7 +174,7 @@ namespace LTSM
                     break;
 
                 case PAM_PROMPT_ECHO_OFF:
-                    pr->resp = strdup(pair->second.c_str());
+                    pr->resp = strdup(pass.c_str());
 
                     if(! pr->resp)
                     {
@@ -238,7 +241,7 @@ namespace LTSM
 
     bool PamSession::openSession(bool init)
     {
-        status = pam_setcred(pamh, init ? PAM_ESTABLISH_CRED : PAM_REINITIALIZE_CRED);
+        status = pam_setcred(pamh, init ? PAM_ESTABLISH_CRED : PAM_REFRESH_CRED);
 
         if(PAM_SUCCESS != status)
         {
@@ -257,6 +260,20 @@ namespace LTSM
             }
 
             sessionOpenned = true;
+        }
+
+        return true;
+    }
+
+    bool PamSession::setCreds(const Cred & cred)
+    {
+        // PAM_ESTABLISH_CRED, PAM_REFRESH_CRED, PAM_REINITIALIZE_CRED
+        status = pam_setcred(pamh, cred);
+
+        if(PAM_SUCCESS != status)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pam_setcred", pam_strerror(pamh, status), status);
+            return false;
         }
 
         return true;
@@ -1531,16 +1548,16 @@ namespace LTSM
             childExit();
         }
 
-        if(! pam || ! pam->openSession(true))
-        {
-            Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", xvfb->displayNum, xvfb->user.c_str());
-            return -1;
-        }
-            
         if(0 != initgroups(xvfb->user.c_str(), xvfb->gid))
         {
             Application::error("%s: %s failed, user: %s, gid: %d, error: %s", __FUNCTION__, "initgroups", xvfb->user.c_str(), xvfb->gid, strerror(errno));
-            return -1;
+            childExit();
+        }
+
+        if(! pam || ! pam->openSession(true))
+        {
+            Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", xvfb->displayNum, xvfb->user.c_str());
+            childExit();
         }
 
         Application::debug("%s: child mode, type: %s, uid: %d", __FUNCTION__, "session", getuid());
@@ -1557,8 +1574,15 @@ namespace LTSM
             setenv("LTSM_TYPECONN", xvfb->conntype.c_str(), 1);
 
             // pam environments
-            for(auto & env : pam->getEnvList())
-                putenv(const_cast<char*>(env.c_str()));
+            auto environments = pam->getEnvList();
+
+            // putenv: valid string
+            for(auto & env : environments)
+            {
+                Application::debug("%s: pam put environment: %s", __FUNCTION__, env.c_str());
+                if(0 > putenv(const_cast<char*>(env.c_str())))
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "putenv", strerror(errno), errno);
+            }
 
             createSessionConnInfo(xvfb);
             int res = execl(sessionBin.c_str(), sessionBin.c_str(), (char*) nullptr);
@@ -1669,6 +1693,7 @@ namespace LTSM
 
         // auto close login session
         loginSess->durationLimit = loginSess->aliveSec().count() + 3;
+        std::unique_ptr<PamSession> pam = std::move(loginSess->pam);
 
         auto oldSess = findUserSession(userName);
         if(oldSess && 0 <= oldSess->displayNum && checkXvfbSocket(oldSess->displayNum))
@@ -1780,14 +1805,17 @@ namespace LTSM
                 val = Tools::replace(val, "%{user}", userName);
         }
 
-        auto pam = std::make_unique<PamSession>(_config->getString("pam:service"));
-
-        if(! pam->pamStart(userName) || 
-            // check account
-            ! pam->validateAccount())
+        if(! pam)
         {
-            Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", newSess->displayNum, newSess->user.c_str());
-            return -1;
+            pam = std::make_unique<PamSession>(_config->getString("pam:service"), userName, "");
+
+            if(! pam->pamStart(userName) || 
+                // check account
+                ! pam->validateAccount())
+            {
+                Application::error("%s: %s failed, display: %d, user: %s", __FUNCTION__, "PAM", newSess->displayNum, newSess->user.c_str());
+                return -1;
+            }
         }
 
         newSess->pid2 = runUserSession(newSess, sessionBin, pam.get());
@@ -1798,7 +1826,7 @@ namespace LTSM
         }
 
         pam->setSessionOpenned();
-
+        // move pam from login session
         newSess->pam = std::move(pam);
         newSess->mode = XvfbMode::SessionOnline;
 
@@ -2515,7 +2543,7 @@ namespace LTSM
         if(0 > loginFailuresConf) loginFailuresConf = 0;
 
         // open PAM
-        auto pam = std::make_unique<PamAuthenticate>(_config->getString("pam:service"), login, password);
+        auto pam = std::make_unique<PamSession>(_config->getString("pam:service"), login, password);
         if(! pam->pamStart(login))
         {
             emitLoginFailure(xvfb->displayNum, "pam error");
@@ -2571,7 +2599,9 @@ namespace LTSM
             }
         }
 
+        xvfb->pam = std::move(pam);
         emitLoginSuccess(xvfb->displayNum, login, getUserUid(login));
+
         return true;
     }
 

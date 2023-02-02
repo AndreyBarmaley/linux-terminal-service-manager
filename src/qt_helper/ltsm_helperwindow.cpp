@@ -210,10 +210,10 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     if(0 <= group && group < names.size())
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 
+#ifdef LTSM_TOKEN_AUTH
     // init ldaps background
     std::thread([this]()
     {
-#ifdef LTSM_TOKEN_AUTH
         try
         {
             ldap.reset(new LTSM::LdapWrapper());

@@ -119,9 +119,7 @@ namespace LTSM
         const int ENCODING_COMPRESS1 = -255;
 
         const int ENCODING_LTSM = 0x4C54534D;
-#ifdef LTSM_WITH_FFMPEG
         const int ENCODING_FFMP = 0x46464D50;
-#endif
         const int PROTOCOL_LTSM = 119;
 
 	struct ScreenInfo

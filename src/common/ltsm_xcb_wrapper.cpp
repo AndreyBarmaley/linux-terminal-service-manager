@@ -1091,6 +1091,12 @@ namespace LTSM
     {
         Application::info("%s: size: %d, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, readOnly, owner);
 
+         const size_t pagesz = 4096;
+
+        // shmsz: align page 4096
+        if(auto align = shmsz % pagesz)
+            shmsz += pagesz - align;
+
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
         if(shmId == -1)
         {

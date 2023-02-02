@@ -25,7 +25,8 @@
 #include <algorithm>
 
 #include "ltsm_application.h"
-#include "librfb_encoding_ffmpeg.h"
+#include "librfb_client.h"
+#include "librfb_ffmpeg.h"
 
 namespace LTSM
 {
@@ -40,6 +41,8 @@ namespace LTSM
         }
     }
 
+#ifdef LTSM_ENCODING_FFMPEG
+    // EncodingFFmpeg
     RFB::EncodingFFmpeg::EncodingFFmpeg() : EncodingBase(ENCODING_FFMP)
     {
         av_log_set_level(AV_LOG_QUIET);
@@ -242,7 +245,85 @@ namespace LTSM
         // send region
         st->sendIntBE16(1);
         st->sendHeader(getType(), fb.region());
+        st->sendIntBE32(ret);
         st->sendRaw(buf, ret);
         st->sendFlush();
     }
+#endif
+
+#ifdef LTSM_DECODING_FFMPEG
+    // DecodingFFmpeg
+    RFB::DecodingFFmpeg::DecodingFFmpeg() : DecodingBase(ENCODING_FFMP)
+    {
+        av_log_set_level(AV_LOG_QUIET);
+
+#if LIBAVFORMAT_VERSION_MAJOR < 58
+        av_register_all();
+        avcodec_register_all();
+#endif
+
+        avfctx.reset(avformat_alloc_context());
+
+        if(! avfctx)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "avformat_alloc_context");
+            throw ffmpeg_error(NS_FuncName);
+        }
+    }
+
+    RFB::DecodingFFmpeg::~DecodingFFmpeg()
+    {
+        AVFormatContext* avfptr = avfctx.get();
+        avformat_close_input(& avfptr);
+    }
+
+    int readPacketFromStreamBuf(void* opaque, uint8_t* buf, int sz)
+    {
+        if(auto sb = reinterpret_cast<StreamBuf*>(opaque))
+        {
+            size_t len = std::min(sb->last(), (size_t) sz);
+            sb->readTo(buf, len);
+            return len;
+        }
+        return 0;
+    }
+
+    void RFB::DecodingFFmpeg::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    {
+        if(debug)
+            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+
+        auto len = cli.recvIntBE32();
+        aviobuf.write(cli.recvData(len));
+
+        avioctx.reset(avio_alloc_context(aviobuf.rawbuf().data(), aviobuf.last(), 0, & aviobuf, readPacketFromStreamBuf, nullptr, nullptr));
+
+        if(! avioctx)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "avio_alloc_context");
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+        avfctx->pb = avioctx.get();
+
+        if(0 == (avfctx->flags & AVFMT_FLAG_CUSTOM_IO))
+        {
+            avfctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+            AVFormatContext* avfptr = avfctx.get();
+
+            int ret = avformat_open_input(& avfptr, "", nullptr, nullptr);
+            if(0 > ret)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avformat_open_input", FFMPEG::error(ret), ret);
+                throw ffmpeg_error(NS_FuncName);
+            }
+
+            if(avfctx.get() != avfptr)
+                avfctx.reset(avfptr);
+
+            // std::pair<AVStream*, int> findVideoStreamIndex
+        }
+        //
+    }
+#endif
 }

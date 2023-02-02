@@ -64,6 +64,7 @@ namespace LTSM
             friend class DecodingHexTile;
             friend class DecodingTRLE;
             friend class DecodingZlib;
+            friend class DecodingFFmpeg;
 
             // network stream interface
             void            sendFlush(void) override;

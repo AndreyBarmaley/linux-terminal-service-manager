@@ -52,5 +52,12 @@ if [ -f ${HOME}/.Xmodmap ]; then
     xmodmap ${HOME}/.Xmodmap
 fi
 
-XSESSION=/usr/bin/icewm-session
+if [ -z "$XSESSION" ]; then
+    if [ -x /usr/bin/icewm-session ]; then
+        XSESSION=/usr/bin/icewm-session
+    else
+        XSESSION=/usr/bin/xterm
+    fi
+fi
+
 exec ${XSESSION}

@@ -21,8 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LIBRFB_ENCODING_FFMPEG_
-#define _LIBRFB_ENCODING_FFMPEG_
+#ifndef _LIBRFB_FFMPEG_
+#define _LIBRFB_FFMPEG_
 
 #include <memory>
 #include <stdexcept>
@@ -44,6 +44,7 @@ extern "C" {
 #endif
 
 #include "librfb_encodings.h"
+#include "librfb_decodings.h"
 
 namespace LTSM
 {
@@ -101,8 +102,17 @@ namespace LTSM
         }
     };
 
+    struct AVIOContextDeleter
+    {
+        void operator()(AVIOContext* ptr)
+        {
+            avio_context_free(& ptr);
+        }
+    };
+
     namespace RFB
     {
+#ifdef LTSM_ENCODING_FFMPEG
         /// EncodingFFmpeg
         class EncodingFFmpeg : public EncodingBase
         {
@@ -135,7 +145,24 @@ namespace LTSM
             EncodingFFmpeg();
             ~EncodingFFmpeg();
         };
+#endif // ENCODING_FFMPEG
+
+#ifdef LTSM_DECODING_FFMPEG
+        /// DecodingFFmpeg
+        class DecodingFFmpeg : public DecodingBase
+        {
+            StreamBuf aviobuf;
+            std::unique_ptr<AVIOContext, AVIOContextDeleter> avioctx;
+            std::unique_ptr<AVFormatContext, AVFormatContextDeleter> avfctx;
+
+        public:
+            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            
+            DecodingFFmpeg();
+            ~DecodingFFmpeg();
+        };
+#endif //  DECODING_FFMPEG
     }
 }
 
-#endif // _LIBRFB_ENCODING_FFMPEG_
+#endif // _LIBRFB_FFMPEG_

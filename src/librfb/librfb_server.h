@@ -75,6 +75,7 @@ namespace LTSM
             friend class EncodingHexTile;
             friend class EncodingTRLE;
             friend class EncodingZlib;
+            friend class EncodingFFmpeg;
 
             // ServerEncoder
             virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
