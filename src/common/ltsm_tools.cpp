@@ -327,6 +327,19 @@ namespace LTSM
         return str;
     }
 
+    std::string Tools::getHostname(void)
+    {
+        char buf[256] = { 0 };
+
+        if(0 != gethostname(buf, sizeof(buf)))
+        {
+            Application::warning( "%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
+            return "localhost";
+        }       
+     
+        return std::string(buf);
+    }
+
     std::string Tools::getTimeZone(void)
     {
         const std::filesystem::path localtime{"/etc/localtime"};

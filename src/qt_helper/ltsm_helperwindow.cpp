@@ -212,7 +212,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
 
 #ifdef LTSM_TOKEN_AUTH
     // init ldaps background
-    std::thread([this]()
+    th1 = std::thread([this]()
     {
         try
         {
@@ -222,12 +222,22 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
         {
             ldap.reset();
         }
-    }).detach();
+    });
 #endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
 {
+#ifdef LTSM_TOKEN_AUTH
+    // th1, th2 - not detached: fast start/stop crashed
+
+    if(th2.joinable())
+        th2.join();
+
+    if(th1.joinable())
+        th1.join();
+#endif
+
     delete ui;
 }
 
@@ -255,7 +265,7 @@ void LTSM_HelperWindow::loginClicked(void)
 
     setLabelInfo("check token...");
 
-    std::thread([this, display = displayNum, content = tokenCheck, cert = cert.toStdString(), serial = serial.toStdString(), pin = ui->lineEditPassword->text().toStdString()]
+    th2 = std::thread([this, display = displayNum, content = tokenCheck, cert = cert.toStdString(), serial = serial.toStdString(), pin = ui->lineEditPassword->text().toStdString()]
     {
         // crypt to pkcs7
         std::unique_ptr<BIO, void(*)(BIO*)> bio1{ BIO_new_mem_buf(cert.data(), cert.size()), BIO_free_all };
@@ -287,7 +297,7 @@ void LTSM_HelperWindow::loginClicked(void)
 
             this->sendTokenAuthEncrypted(display, serial, pin, LTSM::Tools::crc32b(cert), buf, len);
         }
-    }).detach();
+    });
 #endif
 }
 

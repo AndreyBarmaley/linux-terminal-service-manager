@@ -1251,12 +1251,12 @@ namespace LTSM
         });
     }
 
-    std::filesystem::path Manager::Object::createXauthFile(int display, const std::vector<uint8_t> & mcookie)
+    std::filesystem::path Manager::Object::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie)
     {
         std::string xauthFileTemplate = _config->getString("xauth:file", "/var/run/ltsm/auth_%{display}");
 
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{pid}", getpid());
-        xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", display);
+        xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", displayNum);
 
         std::filesystem::path xauthFilePath(xauthFileTemplate);
         Application::debug("%s: path: `%s'", __FUNCTION__, xauthFilePath.c_str());
@@ -1266,20 +1266,24 @@ namespace LTSM
         if(ofs)
         {
             // create xautfile
-            std::string_view host{"localhost"};
+            auto host = Tools::getHostname();
+            auto display = std::to_string(displayNum);
             std::string_view magic{"MIT-MAGIC-COOKIE-1"};
         
             uint16_t hostlen = host.size();
+            uint16_t displen = display.size();
             uint16_t magclen = magic.size();
             uint16_t cooklen = mcookie.size();
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
             hostlen = __builtin_bswap16(hostlen);
+            displen = __builtin_bswap16(displen);
             magclen = __builtin_bswap16(magclen);
             cooklen = __builtin_bswap16(cooklen);
 #endif
-            // format: 01 00 [ <host len:be16> [ host ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
+            // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
             ofs.put(1).put(0);
             ofs.write((const char*) &hostlen, 2).write(host.data(), host.size());
+            ofs.write((const char*) &displen, 2).write(display.data(), display.size());
             ofs.write((const char*) &magclen, 2).write(magic.data(), magic.size());
             ofs.write((const char*) &cooklen, 2).write((const char*) mcookie.data(), mcookie.size());
             ofs.close();
@@ -1623,7 +1627,7 @@ namespace LTSM
         // wait Xvfb display starting
         if(! waitXvfbStarting(xvfb->displayNum, 5000 /* 5 sec */))
         {
-            Application::error("%s: %s failed", __FUNCTION__, "waitXvfbStarting");
+            Application::error("%s: %s failed, display: %d", __FUNCTION__, "waitXvfbStarting", xvfb->displayNum);
             return -1;
         }
 
@@ -1777,7 +1781,7 @@ namespace LTSM
         // wait Xvfb display starting
         if(! waitXvfbStarting(newSess->displayNum, 5000 /* 5 sec */))
         {
-            Application::error("%s: %s failed", __FUNCTION__, "waitXvfbStarting");
+            Application::error("%s: %s failed, display: %d", __FUNCTION__, "waitXvfbStarting", newSess->displayNum);
             return -1;
         }
 
@@ -2492,8 +2496,12 @@ namespace LTSM
             std::thread([this, login, xvfb = std::move(xvfb)]()
             {
                 auto res = this->pamAuthenticate(xvfb, login, "******", true);
-                Application::info("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateToken", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
+                Application::notice("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateToken", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
             }).detach();
+        }
+        else
+        {
+            Application::warning("%s: session nof found, user: %s, display: %d", __FUNCTION__, login.c_str(), display);
         }
 
         return true;
@@ -2506,8 +2514,12 @@ namespace LTSM
             std::thread([this, login, password, xvfb = std::move(xvfb)]()
             {
                 auto res = this->pamAuthenticate(xvfb, login, password, false);
-                Application::info("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateLoginPass", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
+                Application::notice("%s: check authenticate: %s, user: %s, display: %d", "busSetAuthenticateLoginPass", (res ? "success" : "failed"), login.c_str(), xvfb->displayNum);
             }).detach();
+        }
+        else
+        {
+            Application::warning("%s: session nof found, user: %s, display: %d", __FUNCTION__, login.c_str(), display);
         }
 
         return true;

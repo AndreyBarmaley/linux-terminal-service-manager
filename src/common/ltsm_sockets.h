@@ -45,9 +45,13 @@
 #include "gnutls/gnutlsxx.h"
 #endif
 
+#ifdef LTSM_WITH_GSSAPI
+#include "ltsm_gsslayer.h"
+#endif
+
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20221215
+#define LTSM_SOCKETS_VERSION 20230316
 
 namespace LTSM
 {
@@ -74,7 +78,6 @@ namespace LTSM
 #ifdef LTSM_WITH_GNUTLS
         virtual void            setupTLS(gnutls::session*) const {}
 #endif
-        virtual void		setError(void) {}
 
         inline NetworkStream &  sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
         inline NetworkStream &  sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
@@ -120,12 +123,15 @@ namespace LTSM
 
         NetworkStream &         sendString(std::string_view);
         std::string	        recvString(size_t) const;
+
+        static void		sendTo(int fd, const void*, ssize_t);
+        static void	        recvFrom(int fd, void*, ssize_t);
     };
 
     namespace FileDescriptor
     {
-        void			write(int fd, const void*, ssize_t);
-        void	                read(int fd, void*, ssize_t);
+        void			writeTo(int fd, const void*, ssize_t);
+        void	                readFrom(int fd, void*, ssize_t);
     };
 
     /// @brief: socket stream
@@ -257,6 +263,8 @@ namespace LTSM
                 return sess->ptr();
             }
 #endif
+	    Session() = default;
+	    ~Session() = default;
         };
 
         /// @brief: tls stream
@@ -270,18 +278,15 @@ namespace LTSM
             std::unique_ptr<gnutls::credentials> cred;
             std::unique_ptr<gnutls::session> session;
 
-            std::atomic<bool>   handshake{false};
             mutable int         peek = -1;
 
         public:
             explicit Stream(const NetworkStream*);
-            ~Stream();
 
             bool                hasInput(void) const override;
             size_t              hasData(void) const override;
             void                sendFlush(void) override;
             uint8_t	        peekInt8(void) const override;
-            void		setError(void) override;
 
             void		sendRaw(const void*, size_t) override;
             void                recvRaw(void*, size_t) const override;
@@ -307,6 +312,72 @@ namespace LTSM
         };
     } // TLS
 #endif // LTSM_WITH_GNUTLS
+
+#ifdef LTSM_WITH_GSSAPI
+    struct gssapi_error : public std::runtime_error
+    {
+        explicit gssapi_error(const std::string & what) : std::runtime_error(what){}
+        explicit gssapi_error(const char* what) : std::runtime_error(what){}
+    };
+
+    namespace GssApi
+    {
+        class BaseLayer : public NetworkStream
+        {
+            BinaryBuf           sndbuf;
+            mutable StreamBuf   rcvbuf;
+
+        protected:
+            NetworkStream* layer = nullptr;
+
+            std::vector<uint8_t> recvLayer(void) const;
+            void                sendLayer(const void*, size_t);
+
+        public:
+            // NetworkStream interface
+            bool                hasInput(void) const override;
+            size_t              hasData(void) const override;
+            void                sendRaw(const void*, size_t) override;
+            void                sendFlush(void) override;
+            void                recvRaw(void*, size_t) const override;
+            uint8_t             peekInt8(void) const override;
+
+            BaseLayer(NetworkStream* st, size_t capacity = 4096);
+        };
+
+        /// @brief: gss api server layer
+        class Server : public BaseLayer, public Gss::ServiceContext
+        {
+        protected:
+            // Gss::ServiceContext interface
+            void                error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
+            std::vector<uint8_t> recvToken(void) const override { return recvLayer(); }
+            void sendToken(const void* buf, size_t len) override { sendLayer(buf, len); }
+
+        public:
+            Server(NetworkStream* st) : BaseLayer(st, 4096) {}
+
+            bool                checkServiceCredential(std::string_view service) const;
+            bool                handshakeLayer(std::string_view service);
+        };
+
+        /// @brief: gss api client layer
+        class Client : public BaseLayer, public Gss::ClientContext
+        {
+        protected:
+            // Gss::ServiceContext interface
+            void                error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
+            std::vector<uint8_t> recvToken(void) const override { return recvLayer(); }
+            void sendToken(const void* buf, size_t len) override { sendLayer(buf, len); }
+
+        public:
+            Client(NetworkStream* st) : BaseLayer(st, 4096) {}
+
+            bool                checkUserCredential(std::string_view) const;
+            bool                handshakeLayer(std::string_view service, bool mutual = false, std::string_view username = "");
+        };
+    }
+#endif // LTSM_WITH_GSSAPI
 
 #ifdef LTSM_SOCKET_ZLIB
     struct zlib_error : public std::runtime_error

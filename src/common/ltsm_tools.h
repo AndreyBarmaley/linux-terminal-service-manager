@@ -59,6 +59,7 @@ namespace LTSM
 
         std::tuple<std::string, int, int, std::filesystem::path, std::string> getLocalUserInfo(void);
         std::string getLocalUsername(void);
+        std::string getHostname(void);
 
         std::vector<uint8_t> zlibCompress(const ByteArray &);
         std::vector<uint8_t> zlibUncompress(const ByteArray &, size_t real = 0);

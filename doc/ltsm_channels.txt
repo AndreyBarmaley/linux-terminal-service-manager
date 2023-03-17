@@ -1,8 +1,42 @@
-----------| LTSM CHANNELS DESCRIPTION 0.1 |-------------
+----------| LTSM CHANNELS DESCRIPTION 0.2 |-------------
 
 [1.0] RFB proto description:
 
 https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
+
+[1.0.1] Server lists the security types (RFB 1.7.1.2)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      | 77         | GSSAPI security
+----------+----------+------------+---------------------
+
+[1.0.2] Security type GSSAPI
+
+Next step initialized GSS/API on both side;
+
+server: gss_accept_sec_context
+client: gss_init_sec_context
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ variadic | u8       |            | GSSAPI handshake
+----------+----------+------------+---------------------
+
+[1.0.3] GSSAPI continue
+
+The client sends the json (security info):
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | json length
+ array    | u8       |            | json content
+----------+----------+------------+---------------------
+
+The server received client auth info from GSSAPI
 
 
 [1.1] Client to Server Messages (RFB 1.7.4)

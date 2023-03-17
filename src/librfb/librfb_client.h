@@ -80,6 +80,9 @@ namespace LTSM
 
             bool            authVncInit(std::string_view pass);
             bool            authVenCryptInit(const SecurityInfo &);
+#ifdef LTSM_WITH_GSSAPI
+            bool            authGssApiInit(const SecurityInfo &);
+#endif
 
             void            sendPixelFormat(void);
             void            sendEncodings(std::initializer_list<int>);

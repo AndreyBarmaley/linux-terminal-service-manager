@@ -62,6 +62,7 @@ namespace LTSM
         const int SECURITY_VENCRYPT02_X509NONE = 260;
         const int SECURITY_VENCRYPT02_X509VNC = 261;
         const int SECURITY_VENCRYPT02_X509PLAIN = 261;
+        const int SECURITY_TYPE_GSSAPI = 77;
 
         const int SECURITY_RESULT_OK = 0;
         const int SECURITY_RESULT_ERR = 1;
@@ -149,12 +150,15 @@ namespace LTSM
             std::string         certFile;
             std::string         keyFile;
             std::string         crlFile;
+            std::string         krb5Service;
+            std::string         krb5Name;
 
             int                 tlsDebug = 0;
 
             bool                authNone = false;
             bool                authVnc = false;
             bool                authVenCrypt = false;
+	    bool		authKrb5 = false;
             bool                tlsAnonMode = false;
         };
     }

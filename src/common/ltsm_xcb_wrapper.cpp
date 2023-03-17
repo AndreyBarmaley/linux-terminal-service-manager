@@ -1850,6 +1850,49 @@ namespace LTSM
         return xcb_connection_has_error(_conn.get());
     }
 
+    bool XCB::Connector::setWindowGeometry(xcb_window_t win, const Region & geom)
+    {
+        uint16_t mask = 0;
+
+        mask |= XCB_CONFIG_WINDOW_X;
+        mask |= XCB_CONFIG_WINDOW_Y;
+        mask |= XCB_CONFIG_WINDOW_WIDTH;
+        mask |= XCB_CONFIG_WINDOW_HEIGHT;
+
+        const uint32_t values[] = { (uint32_t) geom.x, (uint32_t) geom.y, geom.width, geom.height };
+        auto cookie = xcb_configure_window_checked(_conn.get(), win, mask, values);
+
+        if(auto err = checkRequest(cookie))
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_configure_window");
+            return false;
+        }
+
+        return true;
+    }
+
+    std::list<xcb_window_t> XCB::Connector::getWindowChilds(xcb_window_t win) const
+    {
+        std::list<xcb_window_t> res;
+
+        auto xcbReply = getReplyFunc2(xcb_query_tree, _conn.get(), win);
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_query_tree");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            xcb_window_t* ptr = xcb_query_tree_children(reply.get());
+            int len = xcb_query_tree_children_length(reply.get());
+
+            res.assign(ptr, ptr + len);
+        }
+
+        return res;
+    }
+
     bool XCB::Connector::deleteProperty(xcb_window_t win, xcb_atom_t prop) const
     {
         auto cookie = xcb_delete_property_checked(_conn.get(), win, prop);
@@ -2540,7 +2583,7 @@ namespace LTSM
         return size().height;
     }
 
-    xcb_drawable_t XCB::RootDisplay::root(void) const
+    xcb_window_t XCB::RootDisplay::root(void) const
     {
         return _screen->root;
     }

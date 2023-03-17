@@ -559,6 +559,9 @@ namespace LTSM
 
 	    size_t                  getMaxRequest(void) const;
 
+            bool                    setWindowGeometry(xcb_window_t win, const Region &);
+            std::list<xcb_window_t> getWindowChilds(xcb_window_t win) const;
+
             bool                    deleteProperty(xcb_window_t win, xcb_atom_t prop) const;
             PropertyReply           getPropertyInfo(xcb_window_t win, xcb_atom_t prop) const;
             xcb_atom_t              getPropertyType(xcb_window_t win, xcb_atom_t prop) const;
@@ -629,7 +632,7 @@ namespace LTSM
             size_t	            bitsPerPixel(void) const;
             size_t		    scanlinePad(void) const;
             const xcb_visualtype_t* visual(void) const;
-            xcb_drawable_t          root(void) const;
+            xcb_window_t            root(void) const;
 
             void                    reconnect(size_t displayNum, const AuthCookie* = nullptr);
             const ModuleExtension*  getExtension(const Module &) const;

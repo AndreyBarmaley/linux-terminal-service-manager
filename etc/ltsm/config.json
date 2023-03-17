@@ -19,6 +19,10 @@
     "#vnc:xcb:nodamage": false,
     "vnc:clipboard": true,
 
+    "vnc:kerberos:service": "TERMSRV",
+    "vnc:kerberos:keytab": "/etc/ltsm/termsrv.keytab",
+    "#vnc:kerberos:trace": "/var/tmp/ltsm_krb5.trace",
+
     "rdp:wlog:level": "error",
     "rdp:security:rdp": true,
     "rdp:security:tls": true,

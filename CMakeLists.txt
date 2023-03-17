@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wall -Wno-sign-comp
 option(LTSM_BUILD_XCB_ERRORS "usage xcb_errors" OFF)
 option(LTSM_BUILD_SERVER "build server" OFF)
 option(LTSM_BUILD_CLIENT "build client" ON)
+option(LTSM_GSSAPI "GSSAPI security" OFF)
 option(LTSM_FFMPEG "ffmpeg encoding support" OFF)
 
 #option(LTSM_BUILD_TESTS "build test utilities" OFF)
@@ -191,6 +192,15 @@ if(LTSM_BUILD_CONNECTOR)
         target_link_libraries(LTSM_connector ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES} ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})
     endif()
 
+    if(LTSM_GSSAPI)
+	pkg_search_module(GSSAPI REQUIRED krb5-gssapi)
+        target_sources(LTSM_connector PRIVATE src/common/ltsm_gsslayer.cpp)
+
+	target_compile_options(LTSM_connector PRIVATE ${GSSAPI_DEFINITIONS} -DLTSM_WITH_GSSAPI)
+	target_include_directories(LTSM_connector PRIVATE include ${GSSAPI_INCLUDE_DIR})
+	target_link_libraries(LTSM_connector ${GSSAPI_LIBRARIES})
+    endif()
+
     if(LTSM_WITH_RDP)
         pkg_search_module(FreeRDP2 REQUIRED freerdp2)
         pkg_search_module(WinPR2 REQUIRED winpr2)
@@ -207,7 +217,8 @@ if(LTSM_BUILD_CONNECTOR)
         target_compile_options(LTSM_connector PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
-    target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
+    target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_connector PRIVATE -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_connector PRIVATE src/common src/channels src/librfb src/dbus-glue ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++ ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
     set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -295,7 +306,7 @@ if(LTSM_BUILD_X11VNC)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
-    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
+    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
 
@@ -317,7 +328,8 @@ if(LTSM_BUILD_VNC2IMAGE)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
-    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
+    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
@@ -366,7 +378,17 @@ if(LTSM_BUILD_CLIENT)
         target_link_libraries(LTSM_vnc2sdl ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES} ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})
     endif()
 
-    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
+    if(LTSM_GSSAPI)
+	pkg_search_module(GSSAPI REQUIRED krb5-gssapi)
+        target_sources(LTSM_vnc2sdl PRIVATE src/common/ltsm_gsslayer.cpp)
+
+	target_compile_options(LTSM_vnc2sdl PRIVATE ${GSSAPI_DEFINITIONS} -DLTSM_WITH_GSSAPI)
+	target_include_directories(LTSM_vnc2sdl PRIVATE include ${GSSAPI_INCLUDE_DIR})
+	target_link_libraries(LTSM_vnc2sdl ${GSSAPI_LIBRARIES})
+    endif()
+
+    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2sdl PRIVATE src/common src/channels src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 

@@ -39,7 +39,7 @@
 
 namespace LTSM
 {
-    static const int LtsmProtocolVersion = 0x01;
+    static const int LtsmProtocolVersion = 0x02;
 
     namespace SystemCommand
     {
