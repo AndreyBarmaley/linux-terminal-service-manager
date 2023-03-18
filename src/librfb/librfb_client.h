@@ -64,6 +64,7 @@ namespace LTSM
             friend class DecodingHexTile;
             friend class DecodingTRLE;
             friend class DecodingZlib;
+            friend class DecodingFFmpeg;
 
             // network stream interface
             void            sendFlush(void) override;
@@ -79,6 +80,9 @@ namespace LTSM
 
             bool            authVncInit(std::string_view pass);
             bool            authVenCryptInit(const SecurityInfo &);
+#ifdef LTSM_WITH_GSSAPI
+            bool            authGssApiInit(const SecurityInfo &);
+#endif
 
             void            sendPixelFormat(void);
             void            sendEncodings(std::initializer_list<int>);

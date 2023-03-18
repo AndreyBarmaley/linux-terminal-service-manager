@@ -25,7 +25,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 {
     std::cout << "== test StreamBufRef interface" << std::endl;
 
-    StreamBufRef sb(buf);
+    StreamBufRef sb(buf.data(), buf.size());
 
     std::cout << "test ::last: ";
     assert(sb.last() == buf.size());
@@ -187,7 +187,7 @@ void testRawPtrInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        StreamBufRef sb(buf);
+        StreamBufRef sb(buf.data(), buf.size());
         sb >> ptr;
 
         std::cout << "test ::stream >>: ";

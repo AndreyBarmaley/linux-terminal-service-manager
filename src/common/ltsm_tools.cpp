@@ -233,13 +233,14 @@ namespace LTSM
         StreamBuf sb;
         sb.writeIntBE32(buf.size());
         sb.write(zip);
-        
+
         return base64Encode(sb.rawbuf());
      }
 
     std::vector<uint8_t> Tools::convertJsonString2Binary(const std::string & content)
     {
-        StreamBufRef sb(Tools::base64Decode(content));
+        auto buf = Tools::base64Decode(content);
+        StreamBufRef sb(buf.data(), buf.size());
 
         if(4 < sb.last())
         {
@@ -324,6 +325,19 @@ namespace LTSM
         }
 
         return str;
+    }
+
+    std::string Tools::getHostname(void)
+    {
+        char buf[256] = { 0 };
+
+        if(0 != gethostname(buf, sizeof(buf)))
+        {
+            Application::warning( "%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
+            return "localhost";
+        }       
+     
+        return std::string(buf);
     }
 
     std::string Tools::getTimeZone(void)

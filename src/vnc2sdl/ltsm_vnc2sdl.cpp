@@ -48,6 +48,7 @@ namespace LTSM
     const auto librtdef = "/usr/lib64/librtpkcs11ecp.so";
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto pulsedef = "XDG_RUNTIME_DIR/pulse/native";
+    const auto krb5def = "TERMSRV@remotehost.name";
 
 #ifdef LTSM_RUTOKEN
     RutokenWrapper::RutokenWrapper(const std::string & lib, ChannelClient & owner) : sender(& owner)
@@ -63,18 +64,25 @@ namespace LTSM
             {
                 std::list<std::string> devices;
 
-                for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
-                    devices.emplace_back(dev.getSerialNumber());
+                try
+                {
+                    for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
+                        devices.emplace_back(dev.getSerialNumber());
 
-                for(auto & serial : devices)
-                    if(std::none_of(attached.begin(), attached.end(), [&](auto & str){ return str == serial; }))
-                        this->attachedDevice(serial);
+                    for(auto & serial : devices)
+                        if(std::none_of(attached.begin(), attached.end(), [&](auto & str){ return str == serial; }))
+                            this->attachedDevice(serial);
 
-                for(auto & serial : attached)
-                    if(std::none_of(devices.begin(), devices.end(), [&](auto & str){ return str == serial; }))
-                        this->detachedDevice(serial);
+                    for(auto & serial : attached)
+                        if(std::none_of(devices.begin(), devices.end(), [&](auto & str){ return str == serial; }))
+                            this->detachedDevice(serial);
 
-                attached.swap(devices);
+                    attached.swap(devices);
+                }
+                catch(const rutoken::pkicore::error::InvalidTokenException &)
+                {
+                }
+
                 std::this_thread::sleep_for(2000ms);
             }
 
@@ -180,9 +188,13 @@ namespace LTSM
     {
         std::cout << "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] " <<
             "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
-            "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
+            "[--notls] " << 
+#ifdef LTSM_WITH_GSSAPI
+	    "[--kerberos <" << krb5def << ">] " << 
+#endif
+	    "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
             "[--share-folder <folder>] [--pulse [" << pulsedef << "]] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
-            " [--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
+            "[--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
             "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
 
         std::cout << std::endl << "arguments:" << std::endl <<
@@ -194,9 +206,12 @@ namespace LTSM
             "    --username <user> " << std::endl <<
             "    --password <pass> " << std::endl <<
             "    --noaccel (disable SDL2 acceleration)" << std::endl <<
-            "    --fullscreen (switch t fullscreen mode, Ctrl+F10 exit)" << std::endl <<
+            "    --fullscreen (switch to fullscreen mode, Ctrl+F10 toggle)" << std::endl <<
             "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
             "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
+#ifdef LTSM_WITH_GSSAPI
+            "    --kerberos <" << krb5def << "> (kerberos auth, may be use --username for token name)" << std::endl <<
+#endif
             "    --tls-priority <string> " << std::endl <<
             "    --tls-ca-file <path> " << std::endl <<
             "    --tls-cert-file <path> " << std::endl <<
@@ -261,6 +276,20 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--fullscreen"))
                 fullscreen = true;
             else
+#ifdef LTSM_WITH_GSSAPI
+            if(0 == std::strcmp(argv[it], "--kerberos"))
+            {
+                rfbsec.authKrb5 = true;
+                rfbsec.krb5Service = "TERMSRV";
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    rfbsec.krb5Service = argv[it + 1];
+                    it = it + 1;
+                }
+	    }
+            else
+#endif
             if(0 == std::strcmp(argv[it], "--printer"))
             {
                 printerUrl.assign(printdef);
@@ -482,6 +511,30 @@ namespace LTSM
         rfbsec.authVnc = ! rfbsec.passwdFile.empty();
         rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
 
+        if(rfbsec.authKrb5 && rfbsec.krb5Service.empty())
+	{
+            Application::warning("%s: kerberos remote service empty", __FUNCTION__);
+	    rfbsec.authKrb5 = false;
+	}
+
+        if(rfbsec.authKrb5 && rfbsec.krb5Name.empty())
+	{
+	    if(username.empty())
+		rfbsec.krb5Name.assign(std::getenv("USERNAME"));
+	    else
+		rfbsec.krb5Name.assign(username);
+	}
+
+        if(rfbsec.authKrb5)
+	{
+	    // fixed service format: SERVICE@hostname
+    	    if(std::string::npos == rfbsec.krb5Service.find("@"))
+		rfbsec.krb5Service.append("@").append(host);
+
+            Application::info("%s: kerberos remote service: %s", __FUNCTION__, rfbsec.krb5Service.c_str());
+            Application::info("%s: kerberos local name: %s", __FUNCTION__, rfbsec.krb5Name.c_str());
+	}
+
         // connected
         if(! rfbHandshake(rfbsec))
             return -1;
@@ -652,6 +705,22 @@ namespace LTSM
                     exitEvent();
                     return true;
                 }
+                // ctrl + F11 -> fullscreen toggle
+                if(ev.key()->keysym.sym == SDLK_F11 &&
+                    (KMOD_CTRL & SDL_GetModState()))
+                {
+		    if(fullscreen)
+		    {
+			SDL_SetWindowFullscreen(window->get(), 0);
+			fullscreen = false;
+		    }
+		    else
+		    {
+			SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
+			fullscreen = true;
+                    }
+		    return true;
+		}
                 // key press delay 200 ms
                 if(std::chrono::steady_clock::now() - keyPress < 200ms)
                 {

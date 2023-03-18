@@ -210,12 +210,76 @@ namespace LTSM
         return res;
     }
 
-    /* FileDescriptor */
-    void FileDescriptor::read(int fd, void* ptr, ssize_t len)
+    void NetworkStream::recvFrom(int fd, void* ptr, ssize_t len)
     {
         while(true)
         {
-            ssize_t real = ::read(fd, ptr, len);
+            ssize_t real = recv(fd, ptr, len, 0);
+
+            if(len == real)
+                break;
+
+            if(0 < real && real < len)
+            {
+                ptr = static_cast<uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            // eof
+            if(0 == real)
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
+
+            // error
+            if(EAGAIN == errno || EINTR == errno)
+                continue;
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "recv", strerror(errno), errno);
+            throw network_error(NS_FuncName);
+        }
+    }
+
+    void NetworkStream::sendTo(int fd, const void* ptr, ssize_t len)
+    {
+        while(true)
+        {
+            ssize_t real = send(fd, ptr, len, MSG_NOSIGNAL);
+
+            if(len == real)
+                break;
+
+            if(0 < real && real < len)
+            {
+                ptr = static_cast<const uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            // eof
+            if(0 == real)
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw network_error(NS_FuncName);
+            }
+
+            // error
+            if(EAGAIN == errno || EINTR == errno)
+                continue;
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "send", strerror(errno), errno);
+            throw network_error(NS_FuncName);
+        }
+    }
+
+    /* FileDescriptor */
+    void FileDescriptor::readFrom(int fd, void* ptr, ssize_t len)
+    {
+        while(true)
+        {
+            ssize_t real = read(fd, ptr, len);
 
             if(len == real)
                 break;
@@ -243,11 +307,11 @@ namespace LTSM
         }
     }
 
-    void FileDescriptor::write(int fd, const void* ptr, ssize_t len)
+    void FileDescriptor::writeTo(int fd, const void* ptr, ssize_t len)
     {
         while(true)
         {
-            ssize_t real = ::write(fd, ptr, len);
+            ssize_t real = write(fd, ptr, len);
 
             if(len == real)
                 break;
@@ -306,7 +370,7 @@ namespace LTSM
 
     void SocketStream::recvRaw(void* ptr, size_t len) const
     {
-        FileDescriptor::read(sock, ptr, len);
+        recvFrom(sock, ptr, len);
     }
 
     void SocketStream::sendRaw(const void* ptr, size_t len)
@@ -322,7 +386,7 @@ namespace LTSM
     {
         if(buf.size())
         {
-            FileDescriptor::write(sock, buf.data(), buf.size());
+            sendTo(sock, buf.data(), buf.size());
             buf.clear();
         }
     }
@@ -559,7 +623,7 @@ namespace LTSM
             }
 
             auto buf = recvData(dataSz);
-            FileDescriptor::write(bridgeSock, buf.data(), buf.size());
+            sendTo(bridgeSock, buf.data(), buf.size());
 #ifdef LTSM_DEBUG
 
             if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
@@ -586,7 +650,7 @@ namespace LTSM
             }
 
             std::vector<uint8_t> buf(dataSz);
-            FileDescriptor::read(bridgeSock, buf.data(), buf.size());
+            recvFrom(bridgeSock, buf.data(), buf.size());
             sendRaw(buf.data(), buf.size());
             sendFlush();
 #ifdef LTSM_DEBUG
@@ -897,18 +961,6 @@ namespace LTSM
             }
         }
 
-        Stream::~Stream()
-        {
-            if(handshake)
-                session->bye(GNUTLS_SHUT_WR);
-        }
-
-        void Stream::setError(void)
-        {
-            // error stream: disable send bye
-            handshake = false;
-        }
-
         bool Stream::startHandshake(void)
         {
             int ret = 0;
@@ -926,7 +978,6 @@ namespace LTSM
                 return false;
             }
 
-            handshake = true;
             return true;
         }
 
@@ -1405,5 +1456,168 @@ namespace LTSM
             throw zlib_error(NS_FuncName);
         }
     } // ZLib
+#endif
+
+#ifdef LTSM_WITH_GSSAPI
+    namespace GssApi
+    {
+        // GssApi::BaseLayer
+        BaseLayer::BaseLayer(NetworkStream* st, size_t capacity) : rcvbuf(capacity), layer(st)
+        {
+            sndbuf.reserve(capacity);
+        }
+
+        bool BaseLayer::hasInput(void) const
+        {
+            if(rcvbuf.last())
+                return true;
+
+            if(layer && layer->hasInput())
+            {
+                rcvbuf.write(recvLayer());
+                return true;
+            }
+
+            return false;
+        }
+
+        size_t BaseLayer::hasData(void) const
+        {
+            if(layer && layer->hasInput())
+                rcvbuf.write(recvLayer());
+
+            return rcvbuf.last();
+        }
+
+        uint8_t BaseLayer::peekInt8(void) const
+        {
+            return rcvbuf.peek();
+        }
+
+        void BaseLayer::recvRaw(void* data, size_t len) const
+        {
+            while(rcvbuf.last() < len)
+                rcvbuf.write(recvLayer());
+
+            rcvbuf.readTo(static_cast<uint8_t*>(data), len);
+        }
+
+        void BaseLayer::sendRaw(const void* data, size_t len)
+        {
+            auto ptr = static_cast<const uint8_t*>(data);
+
+            if(sndbuf.capacity() < sndbuf.size() + len)
+            {
+                auto last = sndbuf.capacity() - sndbuf.size();
+
+                sndbuf.append(ptr, last);
+                sendFlush();
+
+                ptr += last;
+                len -= last;
+            }
+
+            sndbuf.append(ptr, len);
+        }
+
+        void BaseLayer::sendFlush(void)
+        {
+            sendLayer(sndbuf.data(), sndbuf.size());
+            sndbuf.clear();
+        }
+
+        std::vector<uint8_t> BaseLayer::recvLayer(void) const
+        {
+            if(! layer)
+            {
+                Application::error("%s: %s", __FUNCTION__, "network layer is null");
+                throw gssapi_error(NS_FuncName);
+            }
+
+            auto len = layer->recvIntBE32();
+            return layer->recvData(len);
+        }
+
+        void BaseLayer::sendLayer(const void* buf, size_t len)
+        {
+            if(! layer)
+            {
+                Application::error("%s: %s", __FUNCTION__, "network layer is null");
+                throw gssapi_error(NS_FuncName);
+            }
+
+            layer->sendIntBE32(len);
+            layer->sendRaw(buf, len);
+            layer->sendFlush();
+        }
+
+        // GssApi::Server
+        bool Server::checkServiceCredential(std::string_view service) const
+        {
+            Gss::ErrorCodes err;
+            auto cred = Gss::acquireServiceCredential(service, & err);
+
+            if(cred)
+                return true;
+
+            error(__FUNCTION__, err.func, err.code1, err.code2);
+            return false;
+        }
+
+        bool Server::handshakeLayer(std::string_view service)
+        {
+            Gss::ErrorCodes err;
+            auto cred = Gss::acquireServiceCredential(service, & err);
+
+            if(! cred)
+            {
+                error(__FUNCTION__, err.func, err.code1, err.code2);
+                return true;
+            }
+
+            return Gss::ServiceContext::acceptClient(std::move(cred));
+        }
+
+        void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
+        {
+            auto err = Gss::error2str(code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [%d, %d]", func, subfunc, err.c_str(), code1, code2);
+        }
+
+        // GssApi::Client
+        bool Client::checkUserCredential(std::string_view username) const
+        {
+            Gss::ErrorCodes err;
+            auto cred = acquireUserCredential(username, & err);
+
+            if(cred)
+                return true;
+
+            error(__FUNCTION__, err.func, err.code1, err.code2);
+            return false;
+        }
+
+        bool Client::handshakeLayer(std::string_view service, bool mutual, std::string_view username)
+        {
+            if(! username.empty())
+            {
+                Gss::ErrorCodes err;
+                auto cred = acquireUserCredential(username, & err);
+
+                if(cred)
+                    return connectService(service, mutual, std::move(cred));
+
+                error(__FUNCTION__, err.func, err.code1, err.code2);
+            }
+
+            return connectService(service, mutual);
+        }
+
+        void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
+        {
+            auto err = Gss::error2str(code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [%d, %d]", func, subfunc, err.c_str(), code1, code2);
+        }
+    } // GssApi
 #endif
 } // LTSM

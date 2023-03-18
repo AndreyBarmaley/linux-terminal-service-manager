@@ -56,8 +56,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
             rfbMessagesShutdown();
         }
     }
@@ -72,8 +70,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
             rfbMessagesShutdown();
         }
     }
@@ -88,8 +84,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -104,8 +98,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -122,8 +114,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -140,8 +130,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -248,6 +236,48 @@ namespace LTSM
         return true;
     }
 
+#ifdef LTSM_WITH_GSSAPI
+    bool RFB::ClientDecoder::authGssApiInit(const SecurityInfo & sec)
+    {
+        try
+        {
+            auto krb = std::make_unique<GssApi::Client>(socket.get());
+
+            if(krb->handshakeLayer(sec.krb5Service, false, sec.krb5Name))
+            {
+        	Application::info("%s: kerberos auth: %s", __FUNCTION__, "success");
+
+                JsonObjectStream jo;
+                jo.push("continue:tls", sec.authVenCrypt);
+                auto json = jo.flush();
+
+		// send security info json
+                krb->sendIntBE32(json.size());
+                krb->sendString(json);
+                krb->sendFlush();
+
+                // stop kerberos session
+		krb.reset();
+
+                // continue tls
+                if(sec.authVenCrypt)
+                    return authVenCryptInit(sec);
+
+                return true;
+            }
+        }
+        catch(const std::exception & err)
+        {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+
+        const std::string err("security kerberos failed");
+	Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+
+	return false;
+    }
+#endif
+
     bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec)
     {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
@@ -288,11 +318,36 @@ namespace LTSM
         while(0 < counts--)
             security.push_back(recvInt8());
 
+#ifdef LTSM_WITH_GSSAPI
+	Gss::CredentialPtr krb5Cred;
+
+	if(sec.authKrb5 && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_GSSAPI; }))
+	{
+	    // check local ticket
+	    if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name))
+	    {
+		auto canon = Gss::displayName(krb5Cred->name);
+        	Application::info("%s: kerberos local ticket: %s", __FUNCTION__, canon.c_str());
+	    }
+	}
+
+	if(krb5Cred)
+        {
+            Application::debug("%s: security: %s selected", __FUNCTION__, "gssapi");
+            sendInt8(RFB::SECURITY_TYPE_GSSAPI).sendFlush();
+
+            if(! authGssApiInit(sec))
+		return false;
+	}
+        else
+#endif
         if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VENCRYPT; }))
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "vencrypt");
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
-            authVenCryptInit(sec);
+
+            if(! authVenCryptInit(sec))
+		return false;
         }
         else
         if(sec.authNone && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_NONE; }))

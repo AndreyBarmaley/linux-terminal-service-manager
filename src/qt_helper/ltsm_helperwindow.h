@@ -104,6 +104,7 @@ private:
     QScopedPointer<QPoint> titleBarPressed;
 #ifdef LTSM_TOKEN_AUTH
     QScopedPointer<LTSM::LdapWrapper> ldap;
+    std::thread         th1, th2;
 #endif
 };
 

@@ -1091,6 +1091,12 @@ namespace LTSM
     {
         Application::info("%s: size: %d, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, readOnly, owner);
 
+         const size_t pagesz = 4096;
+
+        // shmsz: align page 4096
+        if(auto align = shmsz % pagesz)
+            shmsz += pagesz - align;
+
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
         if(shmId == -1)
         {
@@ -1844,6 +1850,49 @@ namespace LTSM
         return xcb_connection_has_error(_conn.get());
     }
 
+    bool XCB::Connector::setWindowGeometry(xcb_window_t win, const Region & geom)
+    {
+        uint16_t mask = 0;
+
+        mask |= XCB_CONFIG_WINDOW_X;
+        mask |= XCB_CONFIG_WINDOW_Y;
+        mask |= XCB_CONFIG_WINDOW_WIDTH;
+        mask |= XCB_CONFIG_WINDOW_HEIGHT;
+
+        const uint32_t values[] = { (uint32_t) geom.x, (uint32_t) geom.y, geom.width, geom.height };
+        auto cookie = xcb_configure_window_checked(_conn.get(), win, mask, values);
+
+        if(auto err = checkRequest(cookie))
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_configure_window");
+            return false;
+        }
+
+        return true;
+    }
+
+    std::list<xcb_window_t> XCB::Connector::getWindowChilds(xcb_window_t win) const
+    {
+        std::list<xcb_window_t> res;
+
+        auto xcbReply = getReplyFunc2(xcb_query_tree, _conn.get(), win);
+
+        if(auto err = xcbReply.error())
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_query_tree");
+        }
+        else
+        if(auto reply = xcbReply.reply())
+        {
+            xcb_window_t* ptr = xcb_query_tree_children(reply.get());
+            int len = xcb_query_tree_children_length(reply.get());
+
+            res.assign(ptr, ptr + len);
+        }
+
+        return res;
+    }
+
     bool XCB::Connector::deleteProperty(xcb_window_t win, xcb_atom_t prop) const
     {
         auto cookie = xcb_delete_property_checked(_conn.get(), win, prop);
@@ -2534,7 +2583,7 @@ namespace LTSM
         return size().height;
     }
 
-    xcb_drawable_t XCB::RootDisplay::root(void) const
+    xcb_window_t XCB::RootDisplay::root(void) const
     {
         return _screen->root;
     }
@@ -3035,39 +3084,63 @@ namespace LTSM
     {
         conn.reset(xcb_connect(nullptr, nullptr));
         if(xcb_connection_has_error(conn.get()))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_connect");
             throw xcb_error("xcb_connect");
+        }
 
         auto setup = xcb_get_setup(conn.get());
         if(! setup)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
             throw xcb_error("xcb_get_setup");
+        }
 
         minKeycode = setup->min_keycode;
         maxKeycode = setup->max_keycode;
 
         xkbext = xcb_get_extension_data(conn.get(), &xcb_xkb_id);
         if(! xkbext)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_extension_data");
             throw xcb_error("xkb_get_extension_data");
+        }
 
         auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
         if(xcbReply.error())
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_xkb_use_extension");
             throw xcb_error("xcb_xkb_use_extension");
+        }
 
         xkbdevid = xkb_x11_get_core_keyboard_device_id(conn.get());
         if(xkbdevid < 0)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
             throw xcb_error("xkb_x11_get_core_keyboard_device_id");
+        }
 
         xkbctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
         if(! xkbctx)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xkb_context_new");
             throw xcb_error("xkb_context_new");
+        }
 
         xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
         if(!xkbmap)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
             throw xcb_error("xkb_x11_keymap_new_from_device");
-    
+        }
+
         xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
         if(!xkbstate)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
             throw xcb_error("xkb_x11_state_new_from_device");
+        }
 
         // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
         // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
@@ -3076,7 +3149,10 @@ namespace LTSM
 
         auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
         if(GenericError(xcb_request_check(conn.get(), cookie)))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_xkb_select_events");
             throw xcb_error("xcb_xkb_select_events");
+        }
     }
 
     std::string XCB::XkbClient::atomName(xcb_atom_t atom) const

@@ -74,36 +74,40 @@ namespace LTSM
     {
         static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
 
-        std::pair<std::string, std::string> pam_conv_data;
-        struct pam_conv pamc{ pam_conv_func, & pam_conv_data };
+        std::string login;
+        std::string password;
+
+        struct pam_conv pamc{ pam_conv_func, this };
 
     protected:
         struct pam_conv* pamConv(void) override { return & pamc; }
 
     public:
         PamAuthenticate(std::string_view service, const std::string & user, const std::string & pass)
-            : PamService(service), pam_conv_data(std::make_pair(user, pass)) {}
+            : PamService(service), login(user), password(pass) {}
 
         bool authenticate(void);
     };
 
     /// PamSession
-    class PamSession : public PamService
+    class PamSession : public PamAuthenticate
     {
-        struct pam_conv pamc = { misc_conv, nullptr };
         bool sessionOpenned = false;
 
     protected:
-        struct pam_conv* pamConv(void) override { return & pamc; }
 
     public:
-        PamSession(std::string_view service) : PamService(service) {}
+        PamSession(std::string_view service, const std::string & user, const std::string & pass) : PamAuthenticate(service, user, pass) {}
         ~PamSession();
 
+        enum Cred { Establish  = PAM_ESTABLISH_CRED, Refresh = PAM_REFRESH_CRED, Reinit = PAM_REINITIALIZE_CRED };
+
         bool validateAccount(void);
-        bool openSession(void);
+        bool openSession(bool init = true);
+        bool setCreds(const Cred &);
 
         void setSessionOpenned(void);
+        std::list<std::string> getEnvList(void);
     };
 
     /// Manager
@@ -175,7 +179,7 @@ namespace LTSM
         uint8_t                         depth = 0;
 
         std::shared_future<int>         idleActionRunning;
-        std::unique_ptr<PamService>     pam;
+        std::unique_ptr<PamSession>     pam;
 
         std::atomic<XvfbMode>           mode{XvfbMode::SessionLogin};
 	SessionPolicy			policy = SessionPolicy::AuthTake;

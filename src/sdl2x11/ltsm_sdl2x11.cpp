@@ -53,11 +53,9 @@ namespace LTSM
             if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM)))
             {
                 auto dsz = XCB::RootDisplay::size();
-                const size_t pagesz = 4096;
                 auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
-                auto shmsz = ((dsz.width * dsz.height * bpp / pagesz) + 1) * pagesz;
 
-                shm = ext->createShm(shmsz, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+                shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
             }
         }
 */

@@ -21,7 +21,6 @@
  ***************************************************************************/
 
 #include <stdlib.h>
-#include <syslog.h>
 
 #include "openssl/bio.h"
 #include "openssl/pem.h"
@@ -29,10 +28,13 @@
 #include "openssl/pkcs7.h"
 #include "openssl/safestack.h"
 
+#include <ctime>
 #include <chrono>
 #include <thread>
 
 #include <QFile>
+#include <QDate>
+#include <QTime>
 #include <QScreen>
 #include <QCursor>
 #include <QDateTime>
@@ -193,7 +195,6 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
 
-    openlog("ltsm_helper", LOG_USER, 0);
     auto val = qgetenv("DISPLAY");
 
     if(val.size() && val[0] == ':')
@@ -210,20 +211,33 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 
 #ifdef LTSM_TOKEN_AUTH
-    try
+    // init ldaps background
+    th1 = std::thread([this]()
     {
-        ldap.reset(new LTSM::LdapWrapper());
-    }
-    catch(...)
-    {
-        ldap.reset();
-    }
+        try
+        {
+            ldap.reset(new LTSM::LdapWrapper());
+        }
+        catch(...)
+        {
+            ldap.reset();
+        }
+    });
 #endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
 {
-    closelog();
+#ifdef LTSM_TOKEN_AUTH
+    // th1, th2 - not detached: fast start/stop crashed
+
+    if(th2.joinable())
+        th2.join();
+
+    if(th1.joinable())
+        th1.join();
+#endif
+
     delete ui;
 }
 
@@ -251,7 +265,7 @@ void LTSM_HelperWindow::loginClicked(void)
 
     setLabelInfo("check token...");
 
-    std::thread([this, display = displayNum, content = tokenCheck, cert = cert.toStdString(), serial = serial.toStdString(), pin = ui->lineEditPassword->text().toStdString()]
+    th2 = std::thread([this, display = displayNum, content = tokenCheck, cert = cert.toStdString(), serial = serial.toStdString(), pin = ui->lineEditPassword->text().toStdString()]
     {
         // crypt to pkcs7
         std::unique_ptr<BIO, void(*)(BIO*)> bio1{ BIO_new_mem_buf(cert.data(), cert.size()), BIO_free_all };
@@ -283,7 +297,7 @@ void LTSM_HelperWindow::loginClicked(void)
 
             this->sendTokenAuthEncrypted(display, serial, pin, LTSM::Tools::crc32b(cert), buf, len);
         }
-    }).detach();
+    });
 #endif
 }
 
@@ -543,6 +557,19 @@ CertInfo getX509CertInfo(const std::string& cert)
     return certInfo;
 }
 
+QDateTime fromStringTime(const std::string & str)
+{
+    // dont use QDateTime::fromString
+    // date cert in C locale, example: "Sep 12 00:11:22 2022 GMT"
+    // QDateTime::fromString expected localized format and return invalid
+    struct tm tm;
+
+    if(strptime(str.c_str(), "%b %d %H:%M:%S %Y", & tm))
+        return QDateTime(QDate(1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday), QTime(tm.tm_hour, tm.tm_min, tm.tm_sec), Qt::UTC);
+
+    return QDateTime();
+}
+
 void LTSM_HelperWindow::usernameChanged(const QString & user)
 {
     if(tokenAuthMode)
@@ -555,6 +582,19 @@ void LTSM_HelperWindow::usernameChanged(const QString & user)
             arg(QString::fromStdString(certInfo.notAfter)).
             arg(QString::fromStdString(certInfo.notBefore));
         ui->comboBoxUsername->setToolTip(tooltip);
+
+        // check expired
+        auto notBefore = fromStringTime(certInfo.notBefore);
+        bool loginDisabled = false;
+
+        if(notBefore.isValid() &&
+            notBefore < QDateTime::currentDateTime())
+        {
+            setLabelError("certificate expired");
+            loginDisabled = true;
+        }
+
+        ui->pushButtonLogin->setDisabled(loginDisabled);
     }
     else
         ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());

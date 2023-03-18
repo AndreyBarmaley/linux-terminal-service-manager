@@ -32,6 +32,10 @@
 #include "ltsm_application.h"
 #include "librfb_server.h"
 
+#ifdef LTSM_ENCODING_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
+
 using namespace std::chrono_literals;
 
 namespace LTSM
@@ -57,8 +61,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
             rfbMessagesShutdown();
         }
     }
@@ -76,8 +78,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
             rfbMessagesShutdown();
         }
     }
@@ -95,8 +95,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -111,8 +109,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -129,8 +125,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -147,8 +141,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -377,6 +369,9 @@ namespace LTSM
         else
         {
             std::vector<uint8_t> res;
+#ifdef LTSM_WITH_GSSAPI
+            res.push_back(SECURITY_TYPE_GSSAPI);
+#endif
             if(secInfo.authVenCrypt)
                 res.push_back(RFB::SECURITY_TYPE_VENCRYPT);
             if(secInfo.authVnc)
@@ -441,6 +436,63 @@ namespace LTSM
 
                     sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
                 }
+#ifdef LTSM_WITH_GSSAPI
+                else if(clientSecurity == SECURITY_TYPE_GSSAPI)
+		{
+		    try
+		    {
+			auto krb = std::make_unique<GssApi::Server>(socket.get());
+                	Application::info("%s: kerberos service: `%s'", __FUNCTION__, secInfo.krb5Service.c_str());
+
+		        if(krb->handshakeLayer(secInfo.krb5Service))
+			{
+			    auto remoteName = Gss::displayName(krb->securityContext()->name);
+                            std::unique_ptr<JsonObject> jo;
+
+			    if(auto len = krb->recvIntBE32(); 0 < len)
+			    {
+				auto raw = krb->recvData(len);
+                                jo.reset(new JsonObject(JsonContentString(std::string(raw.begin(), raw.end())).toObject()));
+			    }
+
+			    // stop kerbero session
+			    krb.reset();
+                	    Application::info("%s: kerberos auth: %s, remote: %s", __FUNCTION__, "success", remoteName.c_str());
+
+                            if(auto pos = remoteName.find("@"); pos != std::string::npos)
+                            {
+                                clientAuthName = remoteName.substr(0, pos);
+                                clientAuthDomain = remoteName.substr(pos + 1);
+                            }
+                            else
+                            {
+                                clientAuthName = remoteName;
+                            }
+
+                            // check json info
+                            if(jo)
+                            {
+                                auto tls = jo->getBoolean("continue:tls", false);
+
+                                if(tls && ! authVenCryptInit(secInfo))
+                                    return false;
+                            }
+
+                	    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+			    return true;
+			}
+		    }
+		    catch(const std::exception & err)
+		    {
+			LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+		    }
+
+                    const std::string err("security kerberos failed");
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                    Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+		    return false;
+		}
+#endif
                 else
                 {
                     const std::string err("no matching security types");
@@ -1068,6 +1120,12 @@ namespace LTSM
                     encoder = std::make_unique<EncodingTRLE>(true);
                     return true;
 
+#ifdef LTSM_ENCODING_FFMPEG
+                case RFB::ENCODING_FFMP:
+                    encoder = std::make_unique<EncodingFFmpeg>();
+                    return true;
+#endif
+
                 default:
                     break;
             }
@@ -1266,5 +1324,10 @@ namespace LTSM
             Application::error("%s: %s", __FUNCTION__, "unknown cmd");
             throw std::invalid_argument(NS_FuncName);
         }
+    }
+
+    std::pair<std::string, std::string> RFB::ServerEncoder::authInfo(void) const
+    {
+        return std::make_pair(clientAuthName, clientAuthDomain);
     }
 }

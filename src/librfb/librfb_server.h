@@ -45,6 +45,8 @@ namespace LTSM
         class ServerEncoder : public ChannelClient, protected EncoderStream
         {
             std::vector<int>    clientEncodings;
+	    std::string		clientAuthName;
+	    std::string		clientAuthDomain;
 
             std::unique_ptr<NetworkStream> socket;      /// socket layer
             std::unique_ptr<TLS::Stream> tls;           /// tls layer
@@ -75,6 +77,7 @@ namespace LTSM
             friend class EncodingHexTile;
             friend class EncodingTRLE;
             friend class EncodingZlib;
+            friend class EncodingFFmpeg;
 
             // ServerEncoder
             virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
@@ -150,6 +153,8 @@ namespace LTSM
             int                 sendPixel(uint32_t pixel);
             int                 sendCPixel(uint32_t pixel);
             int                 sendRunLength(size_t length);
+
+            std::pair<std::string, std::string> authInfo(void) const;
 
             // ServerEncoder
             virtual void        recvPixelFormatEvent(const PixelFormat &, bool bigEndian) {}

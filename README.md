@@ -71,6 +71,7 @@ This is an experimental graphical client that implements the mechanism of multip
 * Implemented scanning redirect (using an additional [backend for SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
 * Directory redirection via **FUSE** has been implemented (so far only in read only mode)
 * Implemented authentication to a virtual session via **rutoken** with certificate storage in **LDAP**
+* Implemented SSO authentication via **GSSAPI** (kerberos5)
 
 The mechanism of pipes is implemented through the abstract schemes ```unix://, file://, socket://```, and the access mode ```ReadOnly, WriteOnly, ReadWrite```.  
 For example, for a normal file transfer, a typical channel is created (client-server): ```file:///src_file1 (ReadOnly)``` and ```file:///dst_file2 (WriteOnly)```, then in the user session, informational GUI dialogs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  

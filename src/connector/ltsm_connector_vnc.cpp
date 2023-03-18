@@ -346,6 +346,20 @@ namespace LTSM
             Application::info("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
             throw vnc_error(NS_FuncName);
         }
+
+#ifdef LTSM_WITH_GSSAPI
+        auto info = ServerEncoder::authInfo();
+        if(! info.first.empty())
+        {
+            std::thread([this, login = info.first]()
+            {
+                this->helperSetSessionLoginPassword(this->displayNum(), login, "", false);
+                // not so fast
+                std::this_thread::sleep_for(300ms);
+                this->busSetAuthenticateToken(this->displayNum(), login);
+            }).detach();
+        }
+#endif
     }
 
     void Connector::VNC::serverSecurityInitEvent(void)
@@ -366,6 +380,39 @@ namespace LTSM
         secInfo.keyFile = _config->getString("vnc:gnutls:keyfile");
         secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
         secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
+
+#ifdef LTSM_WITH_GSSAPI
+        secInfo.authKrb5 = true;
+	secInfo.krb5Service = _config->getString("vnc:kerberos:service", "TERMSRV");
+#endif
+
+        if(secInfo.authKrb5)
+	{
+	    auto keytab = _config->getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
+	    if(! keytab.empty())
+	    {
+		std::filesystem::path file(keytab);
+		std::error_code err;
+
+    		if(std::filesystem::exists(keytab, err))
+    		{
+        	    Application::info("%s: set KRB5_KTNAME=`%s'", __FUNCTION__, keytab.c_str());
+	    	    setenv("KRB5_KTNAME", keytab.c_str(), 1);
+
+		    auto debug = _config->getString("vnc:kerberos:trace");
+		    if(! debug.empty())
+		    {
+        		Application::info("%s: set KRB5_TRACE=`%s'", __FUNCTION__, debug.c_str());
+		        setenv("KRB5_TRACE", debug.c_str(), 1);
+		    }
+		}
+		else
+		{
+        	    Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), keytab.c_str(), getuid());
+    		}
+	    }
+	}
+
         return secInfo;
     }
 
@@ -392,6 +439,11 @@ namespace LTSM
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
+#ifdef LTSM_WITH_FFMPEG
+        if(isClientEncodings(RFB::ENCODING_FFMP))
+            return true;
+#endif
+
         return _config->getBoolean("vnc:xcb:nodamage", false);
     }
 
