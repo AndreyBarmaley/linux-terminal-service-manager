@@ -42,7 +42,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
         BinaryBuf res(buf.size());
 
         std::cout << "test ::readTo: ";
@@ -55,7 +55,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
 
         std::cout << "test ::read/last: ";
         auto res1 = sb.read();
@@ -67,7 +67,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
 
         std::cout << "test ::skip/last: ";
         size_t len = buf.size() / 2;
@@ -81,7 +81,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
         StreamBuf sb2(buf.size());
 
         std::cout << "test ::readInt8/writeInt8: ";
@@ -94,7 +94,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 2);
         StreamBuf sb2(bufsz);
 
@@ -108,7 +108,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 4);
         StreamBuf sb2(bufsz);
 
@@ -122,7 +122,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     if(true)
     {
-        sb.reset(buf);
+        sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 8);
         StreamBuf sb2(bufsz);
 

@@ -52,8 +52,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
         }
     }
 
@@ -67,8 +65,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            streamOut->setError();
         }
     }
 
@@ -82,8 +78,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
         }
     }
 
@@ -96,8 +90,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
         }
 
         return false;
@@ -112,8 +104,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
         }
 
         return 0;
@@ -128,8 +118,6 @@ namespace LTSM
         catch(const std::exception & err)
         {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-
-            const_cast<NetworkStream*>(streamIn)->setError();
         }
 
         return 0;
