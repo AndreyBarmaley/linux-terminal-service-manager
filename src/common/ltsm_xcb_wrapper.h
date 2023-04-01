@@ -152,13 +152,13 @@ namespace LTSM
             }
         };
 
-        struct RegionPixel : std::pair<XCB::Region, uint32_t>
+        struct RegionPixel : std::pair<Region, uint32_t>
         {
-            RegionPixel(const XCB::Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
+            RegionPixel(const Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
             RegionPixel() {}
         
             const uint32_t &    pixel(void) const { return second; }
-            const XCB::Region & region(void) const { return first; }
+            const Region &      region(void) const { return first; }
         };
 
         struct ConnectionShared : std::shared_ptr<xcb_connection_t>
@@ -173,12 +173,12 @@ namespace LTSM
                 : std::shared_ptr<xcb_generic_error_t>(err, std::free) {}
         };
 
-        struct GenericEvent : std::shared_ptr<xcb_generic_event_t>
+        struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
         {
             GenericEvent(xcb_generic_event_t* ev = nullptr)
-                : std::shared_ptr<xcb_generic_event_t>(ev, std::free) {}
+                : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
 
-            const xcb_generic_error_t*  toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
+	    const xcb_generic_error_t*  toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
         };
 
 	template<typename ReplyType>
@@ -189,13 +189,13 @@ namespace LTSM
     	    }
 	};
 
-        struct PropertyReply : XCB::GenericReply<xcb_get_property_reply_t>
+        struct PropertyReply : GenericReply<xcb_get_property_reply_t>
         {
             uint32_t    length(void) { return xcb_get_property_value_length(get()); }
             void*       value(void) { return xcb_get_property_value(get()); }
 
-            PropertyReply(xcb_get_property_reply_t* ptr) : XCB::GenericReply<xcb_get_property_reply_t>(ptr) {}
-            PropertyReply(const XCB::GenericReply<xcb_get_property_reply_t> & ptr) : XCB::GenericReply<xcb_get_property_reply_t>(ptr) {}
+            PropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
+            PropertyReply(const GenericReply<xcb_get_property_reply_t> & ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
         };
 
 	template<typename ReplyType>
@@ -224,7 +224,7 @@ namespace LTSM
         template<typename Reply, typename Cookie>
 	ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
 	{
-            return XCB::getReply1<Reply, Cookie>(func, conn, cookie);
+            return getReply1<Reply, Cookie>(func, conn, cookie);
 	}
 
         #define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
@@ -477,8 +477,8 @@ namespace LTSM
 	    std::vector<xcb_randr_screen_size_t> getScreenSizes(const xcb_screen_t &, RandrScreenInfo* = nullptr) const;
 	    std::vector<xcb_randr_mode_info_t>   getModesInfo(const xcb_screen_t &) const;
 
-	    bool                    setScreenSize(const xcb_screen_t &, XCB::Size, uint16_t* sequence = nullptr) const;
-	    xcb_randr_mode_t        createMode(const xcb_screen_t &, const XCB::Size &) const;
+	    bool                    setScreenSize(const xcb_screen_t &, Size, uint16_t* sequence = nullptr) const;
+	    xcb_randr_mode_t        createMode(const xcb_screen_t &, const Size &) const;
 	    bool                    destroyMode(const xcb_randr_mode_t &) const;
 	    bool                    addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
 	    bool                    deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
@@ -637,13 +637,13 @@ namespace LTSM
             void                    reconnect(size_t displayNum, const AuthCookie* = nullptr);
             const ModuleExtension*  getExtension(const Module &) const;
 
-            bool                    setRandrScreenSize(const XCB::Size &, uint16_t* sequence = nullptr);
+            bool                    setRandrScreenSize(const Size &, uint16_t* sequence = nullptr);
 
             virtual void            displayConnectedEvent(void) {}
             virtual void            xfixesSelectionChangedEvent(void) {}
             virtual void            xfixesCursorChangedEvent(void) {}
-            virtual void            damageRegionEvent(const XCB::Region &) {}
-            virtual void            randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) {}
+            virtual void            damageRegionEvent(const Region &) {}
+            virtual void            randrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) {}
             virtual void            xkbGroupChangedEvent(int) {}
 	    virtual void            clipboardChangedEvent(const std::vector<uint8_t> &) {}
 
