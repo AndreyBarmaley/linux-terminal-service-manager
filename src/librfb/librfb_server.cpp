@@ -1090,45 +1090,65 @@ namespace LTSM
         }
     }
 
-    bool RFB::ServerEncoder::serverSelectClientEncoding(void)
+    int RFB::serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings)
     {
+        // compatible
+        auto encs = { RFB::ENCODING_ZLIB, RFB::ENCODING_HEXTILE, RFB::ENCODING_CORRE, RFB::ENCODING_RRE,
+#ifdef LTSM_ENCODING_FFMPEG
+                        RFB::ENCODING_FFMP,
+#endif
+                        RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+
         for(int type : clientEncodings)
         {
-            switch(type)
-            {
-                case RFB::ENCODING_ZLIB:
-                    encoder = std::make_unique<EncodingZlib>();
-                    return true;
+            if(std::any_of(encs.begin(), encs.end(), [=](auto & val){ return val == type; }))
+                return type;
+        }
 
-                case RFB::ENCODING_HEXTILE:
-                    encoder = std::make_unique<EncodingHexTile>();
-                    return true;
+        return RFB::ENCODING_RAW;
+    }
 
-                case RFB::ENCODING_CORRE:
-                    encoder = std::make_unique<EncodingRRE>(true);
-                    return true;
+    bool RFB::ServerEncoder::serverSelectClientEncoding(void)
+    {
+        int compatible = serverSelectCompatibleEncoding(clientEncodings);
 
-                case RFB::ENCODING_RRE:
-                    encoder = std::make_unique<EncodingRRE>(false);
-                    return true;
+        if(encoder && encoder->getType() == compatible)
+            return true;
 
-                case RFB::ENCODING_TRLE:
-                    encoder = std::make_unique<EncodingTRLE>(false);
-                    return true;
+        switch(compatible)
+        {
+            case RFB::ENCODING_ZLIB:
+                encoder = std::make_unique<EncodingZlib>();
+                return true;
 
-                case RFB::ENCODING_ZRLE:
-                    encoder = std::make_unique<EncodingTRLE>(true);
-                    return true;
+            case RFB::ENCODING_HEXTILE:
+                encoder = std::make_unique<EncodingHexTile>();
+                return true;
+
+            case RFB::ENCODING_CORRE:
+                encoder = std::make_unique<EncodingRRE>(true);
+                return true;
+
+            case RFB::ENCODING_RRE:
+                encoder = std::make_unique<EncodingRRE>(false);
+                return true;
+
+            case RFB::ENCODING_TRLE:
+                encoder = std::make_unique<EncodingTRLE>(false);
+                return true;
+
+            case RFB::ENCODING_ZRLE:
+                encoder = std::make_unique<EncodingTRLE>(true);
+                return true;
 
 #ifdef LTSM_ENCODING_FFMPEG
-                case RFB::ENCODING_FFMP:
-                    encoder = std::make_unique<EncodingFFmpeg>();
-                    return true;
+            case RFB::ENCODING_FFMP:
+                encoder = std::make_unique<EncodingFFmpeg>();
+                return true;
 #endif
 
-                default:
-                    break;
-            }
+            default:
+                break;
         }
 
         encoder = std::make_unique<EncodingRaw>();

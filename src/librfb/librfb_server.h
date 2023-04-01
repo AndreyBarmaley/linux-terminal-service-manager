@@ -41,6 +41,8 @@ namespace LTSM
 
     namespace RFB
     {
+	int serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings);
+
         /// ServerEncoder
         class ServerEncoder : public ChannelClient, protected EncoderStream
         {
