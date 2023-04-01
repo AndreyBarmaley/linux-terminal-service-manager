@@ -143,6 +143,7 @@ namespace Gss
     CredentialPtr acquireCredential(std::string_view name, const NameType & , const CredentialUsage &, ErrorCodes* = nullptr);
 
     CredentialPtr acquireUserCredential(std::string_view username, ErrorCodes* = nullptr);
+    CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view pass, ErrorCodes* = nullptr);
     CredentialPtr acquireServiceCredential(std::string_view service, ErrorCodes* = nullptr);
 
     /// ServiceContext

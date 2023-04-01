@@ -242,8 +242,10 @@ namespace LTSM
         try
         {
             auto krb = std::make_unique<GssApi::Client>(socket.get());
+            // a remote peer asked for mutual authentication
+            const bool mutual = true;
 
-            if(krb->handshakeLayer(sec.krb5Service, false, sec.krb5Name))
+            if(krb->handshakeLayer(sec.krb5Service, mutual, sec.krb5Name))
             {
         	Application::info("%s: kerberos auth: %s", __FUNCTION__, "success");
 

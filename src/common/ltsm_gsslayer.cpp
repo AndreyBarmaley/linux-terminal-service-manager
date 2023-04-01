@@ -28,7 +28,7 @@ namespace Gss
 {
     int apiVersion(void)
     {
-	return 20210316;
+	return 20210328;
     }
 
     std::string error2str(OM_uint32 code1, OM_uint32 code2)
@@ -317,6 +317,34 @@ namespace Gss
         if(err)
         {
             err->func = "gss_acquire_cred";
+            err->code1 = ret;
+            err->code2 = stat;
+        }
+
+        return nullptr;
+    }
+
+    CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view password, ErrorCodes* err)
+    {
+        auto name = importName(username.data(), Gss::NameType::NtUserName, err);
+
+        if(! name)
+            return nullptr;
+
+        gss_buffer_desc pass{ password.size(), (void*) password.data() };
+
+        CredentialPtr res = std::make_unique<Credential>();
+	res->name = name;
+
+        OM_uint32 stat;
+        auto ret = gss_acquire_cred_with_password(& stat, res->name, & pass, 0, GSS_C_NULL_OID_SET, Gss::CredentialUsage::Initiate, & res->cred, & res->mechs, & res->timerec);
+
+        if(ret == GSS_S_COMPLETE)
+            return res;
+
+        if(err)
+        {
+            err->func = "gss_acquire_cred_with_password";
             err->code1 = ret;
             err->code2 = stat;
         }
