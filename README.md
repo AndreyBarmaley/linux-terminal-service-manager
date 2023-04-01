@@ -87,3 +87,4 @@ You can test all implemented features in the **docker** version.
 * add [**VirtualGL**](https://virtualgl.org) support
 * add a video redirect via **PipeWare**
 * work with graphics accelerated via **Cuda GPU** (there are no technical capabilities yet)
+* build client for MacOs/Windows
