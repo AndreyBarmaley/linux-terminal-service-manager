@@ -10,7 +10,7 @@ Linux Terminal Service Manager (LTSM) это набор программ для 
 
 # Демо доступ
 ```
-vncviewer 62.109.24.208
+vncviewer 62.109.12.152
 logins: demo1, demo2, demo3, demo4
 pass: demo
 ```
