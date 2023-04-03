@@ -107,7 +107,6 @@ namespace LTSM
         size_t          size(void) const override;
         uint8_t*        data(void) override;
         const uint8_t*  data(void) const override;
-
     };
 
     /// @brief: base stream interface

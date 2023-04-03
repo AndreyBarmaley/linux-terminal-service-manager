@@ -36,7 +36,7 @@ namespace LTSM
 {
     void RFB::X11Server::xfixesCursorChangedEvent(void)
     {
-        clientUpdateCursor = isClientEncodings(RFB::ENCODING_RICH_CURSOR);
+        clientUpdateCursor = isClientSupportedEncoding(RFB::ENCODING_RICH_CURSOR);
     }
 
     void RFB::X11Server::damageRegionEvent(const XCB::Region & reg)
@@ -68,7 +68,7 @@ namespace LTSM
         xcbShmInit();
         serverDisplayResizedEvent(wsz);
 
-        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
+        if(isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE))
         {
             auto status = randrSequence == 0 || randrSequence != notify.sequence ?
                 RFB::DesktopResizeStatus::ServerRuntime : RFB::DesktopResizeStatus::ClientSide;
@@ -160,7 +160,6 @@ namespace LTSM
 
         // xcb on
         xcbDisableMessages(false);
-        bool nodamage = xcbNoDamageOption();
 
         // process rfb messages background
         auto rfbThread = std::thread([=]()
@@ -173,6 +172,7 @@ namespace LTSM
         // main loop
         while(mainLoop)
         {
+    	    bool nodamage = xcbNoDamageOption();
             serverMainLoopEvent();
 
             if(! rfbMessagesRunning())
@@ -271,7 +271,7 @@ namespace LTSM
 
         serverEncodingsEvent();
 
-        if(isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled())
+        if(isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled())
         {
             std::thread([this]
             {

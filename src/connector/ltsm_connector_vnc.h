@@ -80,6 +80,7 @@ namespace LTSM
             std::unique_ptr<FuseSessionProxy> fuse;
             std::atomic<bool>   userSession{false};
             uid_t               shmUid = 0;
+	    bool		nodamage = false;
 
         protected:
 	    // rfb server encoding

@@ -192,6 +192,9 @@ namespace LTSM
 #ifdef LTSM_WITH_GSSAPI
 	    "[--kerberos <" << krb5def << ">] " << 
 #endif
+#ifdef LTSM_DECODING_FFMPEG
+            "[--x264] " <<
+#endif
 	    "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
             "[--share-folder <folder>] [--pulse [" << pulsedef << "]] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
             "[--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
@@ -211,6 +214,9 @@ namespace LTSM
             "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
 #ifdef LTSM_WITH_GSSAPI
             "    --kerberos <" << krb5def << "> (kerberos auth, may be use --username for token name)" << std::endl <<
+#endif
+#ifdef LTSM_DECODING_FFMPEG
+            "    --x264 (use ffmpeg decoding)" << std::endl <<
 #endif
             "    --tls-priority <string> " << std::endl <<
             "    --tls-ca-file <path> " << std::endl <<
@@ -276,6 +282,11 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--fullscreen"))
                 fullscreen = true;
             else
+#ifdef LTSM_DECODING_FFMPEG
+            if(0 == std::strcmp(argv[it], "--x264"))
+                x264Decoding = true;
+	    else
+#endif
 #ifdef LTSM_WITH_GSSAPI
             if(0 == std::strcmp(argv[it], "--kerberos"))
             {
@@ -772,7 +783,7 @@ namespace LTSM
                         sz.height = (size_t) ev.user()->data2;
                         bool contUpdateResume = ev.user()->code == 777;
 
-                        fb.reset(new FrameBuffer(sz, format));
+                        fb.reset(new FrameBuffer(sz, clientPf));
 
                         if(fullscreen)
                             window.reset(new SDL::Window("VNC2SDL", sz.width, sz.height,
@@ -900,8 +911,8 @@ namespace LTSM
             contUpdateResume = true;
         }
 
-        format = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        fb.reset(new FrameBuffer(XCB::Size(width, height), format));
+        clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
+        fb.reset(new FrameBuffer(XCB::Size(width, height), clientPf));
 
         if(contUpdateResume)
             sendContinuousUpdates(true, {0, 0, width, height});
@@ -923,15 +934,31 @@ namespace LTSM
         dirty.join(dst);
     }
 
-    const PixelFormat & Vnc2SDL::clientPixelFormat(void) const
+    void Vnc2SDL::updateRawPixels(const void* data, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
     {
-        return format;
+    	const std::scoped_lock guard{ renderLock };
+
+	auto area = XCB::Region(0, 0, width, height);
+	if(fb->width() == width && fb->height() == height)
+	    fb = std::make_unique<FrameBuffer>((uint8_t*) data, area, PixelFormat(bpp, rmask, gmask, bmask, amask), pitch);
+
+        dirty.join(area);
+    }
+
+    const PixelFormat & Vnc2SDL::clientFormat(void) const
+    {
+        return clientPf;
     }
 
     XCB::Size Vnc2SDL::clientSize(void) const
     {
         auto [ width, height ] = window->geometry();
         return XCB::Size(width, height);
+    }
+
+    bool Vnc2SDL::clientX264(void) const
+    {
+	return x264Decoding;
     }
 
     void Vnc2SDL::cutTextEvent(std::vector<uint8_t> && buf)
@@ -960,7 +987,7 @@ namespace LTSM
         auto it = cursors.find(key);
         if(cursors.end() == it)
         {
-            auto sdlFormat = SDL_MasksToPixelFormatEnum(format.bitsPerPixel, format.rmask(), format.gmask(), format.bmask(), format.amask());
+            auto sdlFormat = SDL_MasksToPixelFormatEnum(clientPf.bitsPerPixel, clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask());
             if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
             {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_MasksToPixelFormatEnum", SDL_GetError());
@@ -969,7 +996,7 @@ namespace LTSM
 
             Application::debug("%s: create cursor, crc32b: %d, width: %d, height: %d, sdl format: %s", __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
 
-            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width, reg.height, format.bitsPerPixel, reg.width * format.bytePerPixel(), sdlFormat);
+            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width, reg.height, clientPf.bitsPerPixel, reg.width * clientPf.bytePerPixel(), sdlFormat);
             if(! sf)
             {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());

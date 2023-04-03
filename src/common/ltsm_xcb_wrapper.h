@@ -533,12 +533,12 @@ namespace LTSM
             void                    extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
 
             /// exception: xcb_error
-            void                    displayConnect(size_t displayNum, const AuthCookie* = nullptr);
+            void                    displayConnect(int displayNum, const AuthCookie* = nullptr);
 
             Connector() = default;
 
         public:
-            Connector(size_t displayNum, const AuthCookie* = nullptr);
+            Connector(int displayNum, const AuthCookie* = nullptr);
             virtual ~Connector() = default;
 
             size_t	            depthFromBpp(size_t bitsPerPixel) const;
@@ -602,7 +602,7 @@ namespace LTSM
             xcb_keycode_t           _maxKeycode = 0;
 
 	protected:
-            void                    rootConnect(size_t displayNum, const AuthCookie* = nullptr);
+            void                    rootConnect(int displayNum, const AuthCookie* = nullptr);
 
             bool                    createFullScreenDamage(void);
 
@@ -621,7 +621,7 @@ namespace LTSM
             RootDisplay() = default;
 
         public:
-            RootDisplay(size_t displayNum, const AuthCookie* = nullptr);
+            RootDisplay(int displayNum, const AuthCookie* = nullptr);
             ~RootDisplay();
 
             uint16_t		    width(void) const;
@@ -634,7 +634,7 @@ namespace LTSM
             const xcb_visualtype_t* visual(void) const;
             xcb_window_t            root(void) const;
 
-            void                    reconnect(size_t displayNum, const AuthCookie* = nullptr);
+            void                    reconnect(int displayNum, const AuthCookie* = nullptr);
             const ModuleExtension*  getExtension(const Module &) const;
 
             bool                    setRandrScreenSize(const Size &, uint16_t* sequence = nullptr);

@@ -38,6 +38,7 @@ extern "C" {
 #include "libavutil/timestamp.h"
 #include "libswscale/swscale.h"
 #include "libswresample/swresample.h"
+#include "libavutil/imgutils.h"
 
 #ifdef __cplusplus
 }
@@ -58,15 +59,12 @@ namespace LTSM
     {
         void operator()(AVCodecContext* ctx)
         {
+            avcodec_close(ctx);
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(55, 69, 100)
             avcodec_free_context(& ctx);
-        }
-    };
-        
-    struct AVFormatContextDeleter
-    {   
-        void operator()(AVFormatContext* ctx)
-        {
-            avformat_free_context(ctx);
+#else
+            avcodec_free(ctx);
+#endif
         }
     };
         
@@ -102,48 +100,35 @@ namespace LTSM
         }
     };
 
-    struct AVIOContextDeleter
-    {
-        void operator()(AVIOContext* ptr)
-        {
-            avio_context_free(& ptr);
-        }
-    };
-
     namespace RFB
     {
 #ifdef LTSM_ENCODING_FFMPEG
         /// EncodingFFmpeg
         class EncodingFFmpeg : public EncodingBase
         {
-#if LIBAVFORMAT_VERSION_MAJOR < 59
-            AVOutputFormat* oformat = nullptr;
-#else
-            const AVOutputFormat* oformat = nullptr;
-#endif
-            std::unique_ptr<AVFormatContext, AVFormatContextDeleter> avfctx;
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;
+	    std::unique_ptr<AVPacket, AVPacketDeleter> packet;
 
 #if LIBAVFORMAT_VERSION_MAJOR < 59
             AVCodec* codec = nullptr;
 #else
             const AVCodec* codec = nullptr;
 #endif
-            AVStream* stream = nullptr;
 
             int bitrate = 1024;
             int fps = 25;
             int pts = 0;
 
         protected:
+	    void		initContext(size_t, size_t);
 
         public:
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
             EncodingFFmpeg();
-            ~EncodingFFmpeg();
+            ~EncodingFFmpeg() = default;
         };
 #endif // ENCODING_FFMPEG
 
@@ -151,15 +136,27 @@ namespace LTSM
         /// DecodingFFmpeg
         class DecodingFFmpeg : public DecodingBase
         {
-            StreamBuf aviobuf;
-            std::unique_ptr<AVIOContext, AVIOContextDeleter> avioctx;
-            std::unique_ptr<AVFormatContext, AVFormatContextDeleter> avfctx;
+            std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
+            std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
+            std::unique_ptr<AVFrame, AVFrameDeleter> frame;
+	    std::unique_ptr<AVPacket, AVPacketDeleter> packet;
+	    std::unique_ptr<AVFrame, AVFrameDeleter> rgb;
+	    std::unique_ptr<uint8_t, decltype(av_free)*> rgbdata{nullptr, av_free};
+
+#if LIBAVFORMAT_VERSION_MAJOR < 59
+            AVCodec* codec = nullptr;
+#else
+            const AVCodec* codec = nullptr;
+#endif
+
+        protected:
+	    void		initContext(size_t, size_t);
 
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
             
             DecodingFFmpeg();
-            ~DecodingFFmpeg();
+            ~DecodingFFmpeg() = default;
         };
 #endif //  DECODING_FFMPEG
     }

@@ -91,7 +91,7 @@ namespace LTSM
 
     class Vnc2SDL : public Application, public XCB::XkbClient, protected RFB::ClientDecoder
     {
-        PixelFormat             format;
+        PixelFormat             clientPf;
         RFB::SecurityInfo       rfbsec;
 
         std::list<std::string>  dropFiles;
@@ -130,12 +130,15 @@ namespace LTSM
         bool                    capslock = true;
         bool                    sendOptions = false;
         bool                    alwaysRunning = false;
+	bool			x264Decoding = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
         void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-        const PixelFormat &     clientPixelFormat(void) const override;
+	void    		updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
+        const PixelFormat &     clientFormat(void) const override;
         XCB::Size               clientSize(void) const override;
+	bool			clientX264(void) const override;
 
         bool                    sdlEventProcessing(const SDL::GenericEvent &);
         int                     startSocket(std::string_view host, int port) const;

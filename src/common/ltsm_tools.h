@@ -41,12 +41,32 @@
 #include <filesystem>
 #include <functional>
 
+#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libavformat/avformat.h"
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+
 namespace LTSM
 {
     class ByteArray;
 
     namespace Tools
     {
+#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
+	bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int *bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
+	AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
+#endif
+
+	bool binaryToFile(const void*, size_t len, std::string_view);
+	std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
+
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
         std::string prettyFuncName(std::string_view);

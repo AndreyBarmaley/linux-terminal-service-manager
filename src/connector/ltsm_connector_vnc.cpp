@@ -139,6 +139,8 @@ namespace LTSM
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
+	nodamage = _config->getBoolean("vnc:xcb:nodamage", false);
+
         return rfbCommunication();
     }
 
@@ -334,7 +336,7 @@ namespace LTSM
 
     void Connector::VNC::serverEncodingsEvent(void)
     {
-        if(isClientEncodings(RFB::ENCODING_LTSM))
+        if(isClientSupportedEncoding(RFB::ENCODING_LTSM))
             sendEncodingLtsmSupported();
     }
 
@@ -439,12 +441,12 @@ namespace LTSM
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
-#ifdef LTSM_WITH_FFMPEG
-        if(isClientEncodings(RFB::ENCODING_FFMP))
+#ifdef LTSM_ENCODING_FFMPEG
+        if(isClientEncoding(RFB::ENCODING_FFMPEG_X264))
             return true;
 #endif
 
-        return _config->getBoolean("vnc:xcb:nodamage", false);
+        return nodamage;
     }
 
     void Connector::VNC::xcbDisableMessages(bool f)

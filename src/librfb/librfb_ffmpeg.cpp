@@ -25,7 +25,6 @@
 #include <algorithm>
 
 #include "ltsm_application.h"
-#include "librfb_client.h"
 #include "librfb_ffmpeg.h"
 
 namespace LTSM
@@ -43,157 +42,104 @@ namespace LTSM
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
-    RFB::EncodingFFmpeg::EncodingFFmpeg() : EncodingBase(ENCODING_FFMP)
+    RFB::EncodingFFmpeg::EncodingFFmpeg() : EncodingBase(ENCODING_FFMPEG_X264)
     {
         av_log_set_level(AV_LOG_QUIET);
 
-#if LIBAVFORMAT_VERSION_MAJOR < 58
-        av_register_all();
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
-        oformat = av_guess_format("mp4", nullptr, nullptr);
-        if(! oformat)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "av_guess_format");
-            throw ffmpeg_error(NS_FuncName);
-        }
-
-        AVFormatContext* avfctx2 = nullptr;
-        int ret = avformat_alloc_output_context2(& avfctx2, oformat, nullptr, nullptr);
-
-        if(0 > ret)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avformat_alloc_output_context2", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
-        }
-
-        avfctx.reset(avfctx2);
 
         codec = avcodec_find_encoder(AV_CODEC_ID_H264);
         if(! codec)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_find_encoder", FFMPEG::error(ret), ret);
+            Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncName);
         }
-
-        stream = avformat_new_stream(avfctx.get(), codec);
-        if(! stream)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avformat_new_stream", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
-        }
-
-        avcctx.reset(avcodec_alloc_context3(codec));
-        if(! avcctx)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_alloc_context3", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
-        }
-
-        stream->id = avfctx->nb_streams - 1;
-        stream->time_base = (AVRational){1, fps};
-        stream->avg_frame_rate = (AVRational){fps, 1};
-
-        auto codecpar = stream->codecpar;
-        codecpar->codec_id = AV_CODEC_ID_H264;
-        codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
-        codecpar->format = AV_PIX_FMT_YUV420P;
-        codecpar->bit_rate = bitrate * 1024;
-
-        ret = avcodec_parameters_to_context(avcctx.get(), codecpar);
-        if(0 > ret)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_parameters_to_context", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
-        }
-
-        avcctx->time_base = (AVRational){1, fps};
-        avcctx->framerate = (AVRational){fps, 1};
-        avcctx->gop_size = 12;
-
-        av_opt_set(avcctx.get(), "preset", "veryfast", 0);
     }
 
-    RFB::EncodingFFmpeg::~EncodingFFmpeg()
+    void RFB::EncodingFFmpeg::initContext(size_t width, size_t height)
     {
-        uint8_t* buf = nullptr;
-        int ret = avio_close_dyn_buf(avfctx->pb, & buf);
-        if(buf)
-            av_free(buf);
+	avcctx.reset(avcodec_alloc_context3(codec));
+    	if(! avcctx)
+    	{
+    	    Application::error("%s: %s failed", __FUNCTION__, "avcodec_alloc_context3");
+    	    throw ffmpeg_error(NS_FuncName);
+    	}
+
+	avcctx->delay = 0;
+	//avcctx->bit_rate = xxxx;
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(56, 13, 100)
+    	avcctx->framerate = (AVRational){ fps, 1 };
+#endif
+    	avcctx->time_base = (AVRational){ 1, fps };
+
+    	av_opt_set(avcctx.get(), "preset", "medium", AV_OPT_SEARCH_CHILDREN);
+    	av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
+
+    	avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
+        avcctx->width = width;
+        avcctx->height = height;
+    	avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
+    	avcctx->flags |= AV_CODEC_FLAG_LOOP_FILTER;
+
+	if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+    	    avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+
+        int ret = avcodec_open2(avcctx.get(), codec, nullptr);
+        if(0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+        frame.reset(av_frame_alloc());
+        if(! frame)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+        frame->width = avcctx->width;
+        frame->height = avcctx->height;
+        frame->format = avcctx->pix_fmt;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 48, 100)
+    	frame->colorspace = AVCOL_SPC_BT709;
+#endif
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 92, 100)
+    	frame->chroma_location = AVCHROMA_LOC_LEFT;
+#endif
+	frame->pts = 0;
+
+        ret = av_frame_get_buffer(frame.get(), 1);
+        if(0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        AVPixelFormat avPixelFormat = AV_PIX_FMT_BGR0;
+#else
+        AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
+#endif
+        swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avPixelFormat,
+                        frame->width, frame->height, (AVPixelFormat) frame->format, SWS_BILINEAR, nullptr, nullptr, nullptr));
+
+        packet.reset(av_packet_alloc());
+
     }
 
     void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
     {
-        if(! swsctx || fb.width() != avcctx->width || fb.height() != avcctx->height)
-        {
-            if(swsctx)
-            {
-                Application::warning("%s: context resized, width: %d, height: %d", __FUNCTION__, fb.width(), fb.height());
-            }
+        if(! avcctx)
+	    initContext(fb.width(), fb.height());
 
-            avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
-            avcctx->width = fb.width();
-            avcctx->height = fb.height();
-        
-            int ret = avcodec_parameters_from_context(stream->codecpar, avcctx.get());
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_parameters_from_context", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
- 
-            ret = avcodec_open2(avcctx.get(), codec, nullptr);
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-
-            // write header
-            if(! swsctx)
-            {
-                ret = avio_open_dyn_buf(& avfctx->pb);
-                if(0 > ret)
-                {
-                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avio_open_dyn_buf", FFMPEG::error(ret), ret);
-                    throw ffmpeg_error(NS_FuncName);
-                }
-            }
-
-            ret = avformat_write_header(avfctx.get(), nullptr);
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avformat_write_header", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-
-            // init frame
-            frame.reset(av_frame_alloc());
-            if(! frame)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-
-            frame->width = avcctx->width;
-            frame->height = avcctx->height;
-            frame->format = avcctx->pix_fmt;
-
-            ret = av_frame_get_buffer(frame.get(), 32);
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
- 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            AVPixelFormat avPixelFormat = AV_PIX_FMT_BGR0;
-#else
-            AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
-#endif
-            swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avPixelFormat,
-                        frame->width, frame->height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr));
-        }
+	if(fb.width() != avcctx->width || fb.height() != avcctx->height)
+	{
+            Application::error("%s: %s, new sz: %dx%x, old sz: %dx%d", __FUNCTION__, "context resized", fb.width(), fb.height(), avcctx->width, avcctx->height);
+            throw ffmpeg_error(NS_FuncName);
+	}
 
         const uint8_t* data[1] = { fb.pitchData(0) };
         int lines[1] = { (int) fb.pitchSize() };
@@ -201,129 +147,213 @@ namespace LTSM
         sws_scale(swsctx.get(), data, lines, 0, fb.height(), frame->data, frame->linesize);
         frame->pts = pts++;
 
-        // write frame
-        int ret = avcodec_send_frame(avcctx.get(), frame.get());
-        if(0 > ret)
+	int ret = 0;
+        if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
-            
-        while(true)
+
+        if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret)
         {
-            std::unique_ptr<AVPacket, AVPacketDeleter> pkt(av_packet_alloc());
-     
-            int ret = avcodec_receive_packet(avcctx.get(), pkt.get());
-            if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                break;
-
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-
-            av_packet_rescale_ts(pkt.get(), avcctx->time_base, stream->time_base);
-            pkt->stream_index = stream->index;
-
-            ret = av_write_frame(avfctx.get(), pkt.get());
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_write_frame", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-        }
-
-        uint8_t* buf = nullptr;
-        ret = avio_get_dyn_buf(avfctx->pb, & buf);
-        if(0 > ret)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avio_get_dyn_buf", FFMPEG::error(ret), ret);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
         // send region
-        st->sendIntBE16(1);
-        st->sendHeader(getType(), fb.region());
-        st->sendIntBE32(ret);
-        st->sendRaw(buf, ret);
-        st->sendFlush();
+        if(ret == 0)
+	{
+	    st->sendIntBE16(1);
+    	    st->sendHeader(getType(), fb.region());
+    	    st->sendIntBE32(packet->size);
+
+    	    Application::info("%s: packet size: %d", __FUNCTION__, packet->size);
+	    st->sendRaw(packet->data, packet->size);
+
+    	    st->sendFlush();
+	}
     }
 #endif
 
 #ifdef LTSM_DECODING_FFMPEG
     // DecodingFFmpeg
-    RFB::DecodingFFmpeg::DecodingFFmpeg() : DecodingBase(ENCODING_FFMP)
+    RFB::DecodingFFmpeg::DecodingFFmpeg() : DecodingBase(ENCODING_FFMPEG_X264)
     {
         av_log_set_level(AV_LOG_QUIET);
 
-#if LIBAVFORMAT_VERSION_MAJOR < 58
-        av_register_all();
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
 
-        avfctx.reset(avformat_alloc_context());
-
-        if(! avfctx)
+        codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+        if(! codec)
         {
-            Application::error("%s: %s failed", __FUNCTION__, "avformat_alloc_context");
+            Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncName);
         }
     }
 
-    RFB::DecodingFFmpeg::~DecodingFFmpeg()
+    void RFB::DecodingFFmpeg::initContext(size_t width, size_t height)
     {
-        AVFormatContext* avfptr = avfctx.get();
-        avformat_close_input(& avfptr);
-    }
+    	avcctx.reset(avcodec_alloc_context3(codec));
+    	if(! avcctx)
+    	{
+    	    Application::error("%s: %s failed", __FUNCTION__, "avcodec_alloc_context3");
+    	    throw ffmpeg_error(NS_FuncName);
+    	}
 
-    int readPacketFromStreamBuf(void* opaque, uint8_t* buf, int sz)
-    {
-        if(auto sb = reinterpret_cast<StreamBuf*>(opaque))
+	if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+    	    avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+
+    	avcctx->time_base = (AVRational){ 1, 25 };
+    	avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    	avcctx->width = width;
+    	avcctx->height = height;
+    	avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
+    	avcctx->extradata = nullptr;
+
+    	int ret = avcodec_open2(avcctx.get(), codec, nullptr);
+    	if(0 > ret)
+    	{
+    	    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
+    	    throw ffmpeg_error(NS_FuncName);
+    	}
+
+        frame.reset(av_frame_alloc());
+        if(! frame)
         {
-            size_t len = std::min(sb->last(), (size_t) sz);
-            sb->readTo(buf, len);
-            return len;
+            Application::error("%s: %s failed", __FUNCTION__, "av_frame_alloc");
+            throw ffmpeg_error(NS_FuncName);
         }
-        return 0;
+
+        frame->width = avcctx->width;
+        frame->height = avcctx->height;
+        frame->format = avcctx->pix_fmt;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 48, 100)
+    	frame->colorspace = AVCOL_SPC_BT709;
+#endif
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(52, 92, 100)
+    	frame->chroma_location = AVCHROMA_LOC_LEFT;
+#endif
+	frame->pts = 0;
+
+        ret = av_frame_get_buffer(frame.get(), 1);
+        if(0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        AVPixelFormat avPixelFormat = AV_PIX_FMT_BGR0;
+#else
+        AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
+#endif
+        swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avcctx->pix_fmt,
+                        frame->width, frame->height, avPixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
+
+	packet.reset(av_packet_alloc());
+
+        if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+	rgb.reset(av_frame_alloc());
+        rgb->width = avcctx->width;
+        rgb->height = avcctx->height;
+        rgb->format = avPixelFormat;
+
+        rgbdata.reset((uint8_t*) av_malloc(ret));
+
+        if(ret = av_image_fill_arrays(rgb->data, rgb->linesize, rgbdata.get(),
+			(AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
     }
 
-    void RFB::DecodingFFmpeg::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto len = cli.recvIntBE32();
-        aviobuf.write(cli.recvData(len));
+        auto buf  = cli.recvData(len);
 
-        avioctx.reset(avio_alloc_context(aviobuf.rawbuf().data(), aviobuf.last(), 0, & aviobuf, readPacketFromStreamBuf, nullptr, nullptr));
+	if(reg.toSize() != cli.clientSize())
+	{
+	    if(avcctx)
+	    {
+    		Application::warning("%s: incorrect size: [%d, %d], decoder reset", __FUNCTION__, reg.width, reg.height);
+	        rgbdata.reset();
+	        rgb.reset();
+	        packet.reset();
+	        frame.reset();
+	        swsctx.reset();
+	        avcctx.reset();
+	    }
+    	    // client resized, wait correct geometry
+	    return;
+	}
 
-        if(! avioctx)
+	// The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
+	if(len % AV_INPUT_BUFFER_PADDING_SIZE)
+	    buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
+
+	if(! avcctx)
+	    initContext(reg.width, reg.height);
+
+	packet->data = buf.data();
+	packet->size = len;
+
+	int ret = 0;
+	bool haveFrame = false;
+
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
+        if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret)
         {
-            Application::error("%s: %s failed", __FUNCTION__, "avio_alloc_context");
+            Application::error("%s: %d %d", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
-        avfctx->pb = avioctx.get();
-
-        if(0 == (avfctx->flags & AVFMT_FLAG_CUSTOM_IO))
+        do
         {
-            avfctx->flags |= AVFMT_FLAG_CUSTOM_IO;
-            AVFormatContext* avfptr = avfctx.get();
+    	    ret = avcodec_receive_frame(avcctx.get(), frame.get());
+        } while (ret == AVERROR(EAGAIN));
 
-            int ret = avformat_open_input(& avfptr, "", nullptr, nullptr);
-            if(0 > ret)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avformat_open_input", FFMPEG::error(ret), ret);
-                throw ffmpeg_error(NS_FuncName);
-            }
-
-            if(avfctx.get() != avfptr)
-                avfctx.reset(avfptr);
-
-            // std::pair<AVStream*, int> findVideoStreamIndex
+        if(0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
         }
-        //
+
+        haveFrame = (ret == 0);
+#else
+	int gotFrame = 0;
+
+	if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret), ret);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
+        haveFrame = (gotFrame != 0);
+#endif
+
+	if(haveFrame)
+	{
+	    sws_scale(swsctx.get(), (uint8_t const* const*) frame->data,
+		    frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
+
+	    int bpp; uint32_t rmask, gmask, bmask, amask;
+
+	    if(Tools::AV_PixelFormatEnumToMasks((AVPixelFormat) rgb->format, & bpp, & rmask, & gmask, & bmask, & amask, false))
+		cli.updateRawPixels(rgb->data[0], avcctx->width, avcctx->height, rgb->linesize[0], bpp, rmask, gmask, bmask, amask);
+	}
     }
 #endif
 }

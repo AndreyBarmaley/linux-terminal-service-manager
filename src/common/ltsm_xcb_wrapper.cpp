@@ -1717,15 +1717,17 @@ namespace LTSM
 #endif
 
     /* XCB::Connector */
-    XCB::Connector::Connector(size_t displayNum, const AuthCookie* cookie)
+    XCB::Connector::Connector(int displayNum, const AuthCookie* cookie)
     {
         displayConnect(displayNum, cookie);
     }
 
-    void XCB::Connector::displayConnect(size_t displayNum, const AuthCookie* cookie)
+    void XCB::Connector::displayConnect(int displayNum, const AuthCookie* cookie)
     {
-        auto displayAddr = std::string(":").append(std::to_string(displayNum));
-        
+        auto displayAddr = displayNum < 0 ?
+		std::string(getenv("DISPLAY")) :
+		std::string(":").append(std::to_string(displayNum));
+
         if(cookie) 
         {
             std::string_view magic{"MIT-MAGIC-COOKIE-1"};
@@ -1742,11 +1744,11 @@ namespace LTSM
             _conn = ConnectionShared(xcb_connect(displayAddr.c_str(), nullptr));
         }
 
-        if(xcb_connection_has_error(_conn.get()))
-        {
-            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
-            throw xcb_error(NS_FuncName);
-        }
+    	if(xcb_connection_has_error(_conn.get()))
+    	{
+    	    Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
+    	    throw xcb_error(NS_FuncName);
+    	}
 
         _setup = xcb_get_setup(_conn.get());
 
@@ -2298,12 +2300,12 @@ namespace LTSM
     }
 
     /* XCB::RootDisplay */
-    XCB::RootDisplay::RootDisplay(size_t displayNum, const AuthCookie* auth) : Connector(displayNum, auth)
+    XCB::RootDisplay::RootDisplay(int displayNum, const AuthCookie* auth) : Connector(displayNum, auth)
     {
         rootConnect(displayNum, auth);
     }
 
-    void XCB::RootDisplay::rootConnect(size_t displayNum, const AuthCookie* auth)
+    void XCB::RootDisplay::rootConnect(int displayNum, const AuthCookie* auth)
     {
         _minKeycode = _setup->min_keycode;
         _maxKeycode = _setup->max_keycode;
@@ -2385,7 +2387,7 @@ namespace LTSM
         displayConnectedEvent();
     }
 
-    void XCB::RootDisplay::reconnect(size_t displayNum, const AuthCookie* auth)
+    void XCB::RootDisplay::reconnect(int displayNum, const AuthCookie* auth)
     {
         _damage.reset();
         _modShm.reset();

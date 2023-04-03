@@ -591,7 +591,7 @@ namespace LTSM
 
             if(msgType == RFB::PROTOCOL_LTSM)
             {
-                if(! isClientEncodings(RFB::ENCODING_LTSM))
+                if(! isClientSupportedEncoding(RFB::ENCODING_LTSM))
                 {
                     Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
                     throw rfb_error(NS_FuncName);
@@ -786,7 +786,7 @@ namespace LTSM
             }
         }
 
-        if(isClientEncodings(RFB::ENCODING_CONTINUOUS_UPDATES))
+        if(isClientSupportedEncoding(RFB::ENCODING_CONTINUOUS_UPDATES))
             sendContinuousUpdates(true);
 
         recvSetEncodingsEvent(clientEncodings);
@@ -1061,7 +1061,12 @@ namespace LTSM
         return continueUpdatesSupport && continueUpdatesProcessed;
     }
 
-    bool RFB::ServerEncoder::isClientEncodings(int enc) const
+    bool RFB::ServerEncoder::isClientEncoding(int enc) const
+    {
+	return encoder ? encoder->getType() == enc : false;
+    }
+
+    bool RFB::ServerEncoder::isClientSupportedEncoding(int enc) const
     {
         return std::any_of(clientEncodings.begin(), clientEncodings.end(),  [=](auto & val) { return val == enc; });
     }
@@ -1092,13 +1097,15 @@ namespace LTSM
 
     int RFB::serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings)
     {
-        // compatible
-        auto encs = { RFB::ENCODING_ZLIB, RFB::ENCODING_HEXTILE, RFB::ENCODING_CORRE, RFB::ENCODING_RRE,
+        // server priority
+        auto encs = {
 #ifdef LTSM_ENCODING_FFMPEG
-                        RFB::ENCODING_FFMP,
+                        RFB::ENCODING_FFMPEG_X264,
 #endif
-                        RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+			RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB,  RFB::ENCODING_HEXTILE,
+			RFB::ENCODING_CORRE, RFB::ENCODING_RRE };
 
+	// client priority
         for(int type : clientEncodings)
         {
             if(std::any_of(encs.begin(), encs.end(), [=](auto & val){ return val == type; }))
@@ -1142,7 +1149,7 @@ namespace LTSM
                 return true;
 
 #ifdef LTSM_ENCODING_FFMPEG
-            case RFB::ENCODING_FFMP:
+            case RFB::ENCODING_FFMPEG_X264:
                 encoder = std::make_unique<EncodingFFmpeg>();
                 return true;
 #endif
@@ -1171,7 +1178,7 @@ namespace LTSM
 
         Application::info("%s: status: %d, error: %d, size [%d, %d]", __FUNCTION__, statusCode, errorCode, desktopSize.width, desktopSize.height);
 
-        if(! isClientEncodings(RFB::ENCODING_EXT_DESKTOP_SIZE))
+        if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE))
         {
             Application::error("%s: %s", __FUNCTION__, "client not supported ExtDesktopResize encoding");
             throw rfb_error(NS_FuncName);
@@ -1287,7 +1294,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)
     {
-        if(isClientEncodings(RFB::ENCODING_LTSM))
+        if(isClientSupportedEncoding(RFB::ENCODING_LTSM))
             sendLtsm(*this, sendLock, channel, buf, len);
     }
 

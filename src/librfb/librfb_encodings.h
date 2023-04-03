@@ -48,43 +48,31 @@ namespace LTSM
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
             virtual bool clientIsBigEndian(void) const = 0;
-
-            static int          sendPixel(NetworkStream*, const EncoderStream*, uint32_t pixel);
         };
 
-        /// EncoderBufStream
-        class EncoderBufStream : public EncoderStream
+	/// EncoderWrapper
+        class EncoderWrapper : public EncoderStream
         {
         protected:
-            std::vector<uint8_t>    buf;
-            const EncoderStream*    owner = nullptr;
+            BinaryBuf*             buffer = nullptr;
+            EncoderStream*         owner = nullptr;
 
         public:
-            EncoderBufStream(const EncoderStream* st, size_t rezerve) : owner(st)
-            {
-                buf.reserve(rezerve);
-            }
+            EncoderWrapper(BinaryBuf* bb, EncoderStream* st) : buffer(bb), owner(st) {}
 
-            EncoderBufStream(const EncoderBufStream &) = delete;
-            EncoderBufStream & operator=(const EncoderBufStream &) = delete;
-
-#ifdef LTSM_WITH_GNUTLS
-            void                    setupTLS(gnutls::session*) const override;
-#endif
+            EncoderWrapper(const EncoderWrapper &) = delete;
+            EncoderWrapper & operator=(const EncoderWrapper &) = delete;
 
             bool                    hasInput(void) const override;
             size_t                  hasData(void) const override;
             uint8_t                 peekInt8(void) const override;
 
-            void                    sendRaw(const void*, size_t) override;
-            void                    recvRaw(void*, size_t) const override;
+            void                    sendRaw(const void* ptr, size_t len) override;
+            void                    recvRaw(void* ptr, size_t len) const override;
 
-            void                    reset(void);
-            const std::vector<uint8_t> & buffer(void) const;
-
-            const PixelFormat & serverFormat(void) const override { return owner->serverFormat(); }
-            const PixelFormat & clientFormat(void) const override { return owner->clientFormat(); }
-            bool clientIsBigEndian(void) const override { return owner->clientIsBigEndian(); }
+            const PixelFormat &     serverFormat(void) const override { return owner->serverFormat(); }
+            const PixelFormat &     clientFormat(void) const override { return owner->clientFormat(); }
+            bool                    clientIsBigEndian(void) const override { return owner->clientIsBigEndian(); }
         };
 
         /// EncodingBase

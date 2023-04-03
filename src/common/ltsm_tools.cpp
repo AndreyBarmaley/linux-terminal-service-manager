@@ -893,4 +893,246 @@ namespace LTSM
 
         return res;
     }
-}
+
+    bool Tools::binaryToFile(const void* buf, size_t len, std::string_view file)
+    {
+        std::ofstream ofs(file.data(), std::ofstream::out | std::ios::binary | std::ofstream::trunc);
+        if(ofs.is_open())
+        {
+            ofs.write((const char*) buf, len);
+            ofs.close();
+	    return true;
+        }
+        else
+        {
+            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "write", file.data());
+        }
+	return false;
+    }
+
+    std::vector<uint8_t> Tools::fileToBinaryBuf(const std::filesystem::path & file)
+    {
+        std::vector<uint8_t> buf;
+        std::error_code err;
+
+        if(std::filesystem::exists(file, err))
+        {
+            std::ifstream ifs(file, std::ios::binary);
+            if(ifs.is_open())
+            {
+                auto fsz = std::filesystem::file_size(file);
+                buf.resize(fsz);
+                ifs.read((char*) buf.data(), buf.size());
+                ifs.close();
+            }
+            else
+            {
+                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
+            }
+        }
+        else
+        {
+            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+        }
+
+        return buf;
+    }
+
+#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
+    bool Tools::AV_PixelFormatEnumToMasks(AVPixelFormat format, int *bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug)
+    {
+	switch(format)
+	{
+    	    case AV_PIX_FMT_RGB24:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB24");
+        	*bpp = 24; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	std::swap(*rmask, *bmask);
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_BGR24:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR24");
+        	*bpp = 24; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	std::swap(*rmask, *bmask);
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_RGB0:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB0");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+#else
+        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_0BGR:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0BGR");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0;
+#else
+        	*bpp = 32; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_BGR0:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR0");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+#else
+        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_0RGB:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0RGB");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0;
+#else
+        	*bpp = 32; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_RGBA:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGBA");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *amask = 0xFF000000; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+#else
+        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0x000000FF;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_ABGR:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ABGR");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+    	        *bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0x000000FF;
+#else
+        	*bpp = 32; *amask = 0xFF000000; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+#endif
+        	return true;
+
+    	    case AV_PIX_FMT_BGRA:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGRA");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	*bpp = 32; *amask = 0xFF000000; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+#else
+        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0x000000FF;
+#endif
+        	return true;
+
+
+    	    case AV_PIX_FMT_ARGB:
+        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ARGB");
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            *bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0x000000FF;
+#else
+            *bpp = 32; *amask = 0xFF000000; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+#endif
+            return true;
+
+    	    default:
+        	break;
+	}
+
+	return false;
+    }
+
+    AVPixelFormat Tools::AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug)
+    {
+	if(debug)
+	{
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+	    bool bigEndian = false;
+#else
+	    bool bigEndian = true;
+#endif
+	    Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x, be: %d",
+		__FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
+	}
+    
+	if(24 == bpp)
+	{
+    	    if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_BGR24;
+#else
+        	return AV_PIX_FMT_RGB24;
+#endif
+
+    	    if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_RGB24;
+#else
+        	return AV_PIX_FMT_BGR24;
+#endif
+	}
+	else
+	if(32 == bpp)
+	{
+    	    if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_0BGR;
+#else
+        	return AV_PIX_FMT_RGB0;
+#endif
+
+    	    if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_RGB0;
+#else
+        	return AV_PIX_FMT_0BGR;
+#endif
+
+    	    if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_0RGB;
+#else
+        	return AV_PIX_FMT_BGR0;
+#endif
+
+    	    if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_BGR0;
+#else
+        	return AV_PIX_FMT_0RGB;
+#endif
+
+    	    if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_ABGR;
+#else
+        	return AV_PIX_FMT_RGBA;
+#endif
+
+    	    if(amask == 0xFF000000 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_RGBA;
+#else
+        	return AV_PIX_FMT_ABGR;
+#endif
+
+    	    if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_ARGB;
+#else
+        	return AV_PIX_FMT_BGRA;
+#endif
+
+    	    if(amask == 0xFF000000 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        	return AV_PIX_FMT_BGRA;
+#else
+        	return AV_PIX_FMT_ARGB;
+#endif
+	}
+
+	Application::error("%s: unsupported pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
+		__FUNCTION__, bpp, rmask, gmask, bmask, amask);
+
+	return AV_PIX_FMT_NONE;
+    }
+#endif
+
+} // LTSM

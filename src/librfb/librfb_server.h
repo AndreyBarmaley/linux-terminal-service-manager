@@ -27,7 +27,6 @@
 #include <list>
 #include <mutex>
 
-#include "ltsm_librfb.h"
 #include "ltsm_channels.h"
 #include "librfb_encodings.h"
 
@@ -99,7 +98,8 @@ namespace LTSM
 
             void                setEncodingDebug(int v);
             void                setEncodingThreads(int v);
-            bool                isClientEncodings(int) const;
+            bool                isClientSupportedEncoding(int) const;
+            bool                isClientEncoding(int) const;
             bool                isContinueUpdatesSupport(void) const;
             bool                isContinueUpdatesProcessed(void) const;
 

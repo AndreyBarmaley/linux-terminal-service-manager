@@ -25,9 +25,12 @@
 #include <cstring>
 #include <algorithm>
 
-#include "ltsm_librfb.h"
 #include "ltsm_application.h"
 #include "librfb_client.h"
+
+#ifdef LTSM_DECODING_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
 
 using namespace std::chrono_literals;
 
@@ -397,40 +400,40 @@ namespace LTSM
         Application::debug("%s: remote framebuffer size: %dx%d", __FUNCTION__, fbWidth, fbHeight);
 
         // recv server pixel format
-        serverFormat.bitsPerPixel = recvInt8();
+        serverPf.bitsPerPixel = recvInt8();
         int depth = recvInt8();
         serverBigEndian = recvInt8();
         serverTrueColor = recvInt8();
-        serverFormat.redMax = recvIntBE16();
-        serverFormat.greenMax = recvIntBE16();
-        serverFormat.blueMax = recvIntBE16();
-        serverFormat.redShift = recvInt8();
-        serverFormat.greenShift = recvInt8();
-        serverFormat.blueShift = recvInt8();
+        serverPf.redMax = recvIntBE16();
+        serverPf.greenMax = recvIntBE16();
+        serverPf.blueMax = recvIntBE16();
+        serverPf.redShift = recvInt8();
+        serverPf.greenShift = recvInt8();
+        serverPf.blueShift = recvInt8();
         recvSkip(3);
 
         Application::debug("%s: remote pixel format: bpp: %d, depth: %d, bigendian: %d, true color: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                    __FUNCTION__, serverFormat.bitsPerPixel, depth, serverBigEndian, serverTrueColor,
-                    serverFormat.redMax, serverFormat.redShift, serverFormat.greenMax, serverFormat.greenShift, serverFormat.blueMax, serverFormat.blueShift);
+                    __FUNCTION__, serverPf.bitsPerPixel, depth, serverBigEndian, serverTrueColor,
+                    serverPf.redMax, serverPf.redShift, serverPf.greenMax, serverPf.greenShift, serverPf.blueMax, serverPf.blueShift);
 
         // check server format
-        switch(serverFormat.bitsPerPixel)
+        switch(serverPf.bitsPerPixel)
         {
             case 32: case 16: case 8:
                 break;
 
             default:
-                Application::error("%s: unknown pixel format, bpp: %d", __FUNCTION__, serverFormat.bitsPerPixel);
+                Application::error("%s: unknown pixel format, bpp: %d", __FUNCTION__, serverPf.bitsPerPixel);
                 return false;
         }
 
-        if(! serverTrueColor || serverFormat.redMax == 0 || serverFormat.greenMax == 0 || serverFormat.blueMax == 0)
+        if(! serverTrueColor || serverPf.redMax == 0 || serverPf.greenMax == 0 || serverPf.blueMax == 0)
         {
             Application::error("%s: unsupported pixel format", __FUNCTION__);
             return false;
         }
 
-        pixelFormatEvent(serverFormat, fbWidth, fbHeight);
+        pixelFormatEvent(serverPf, fbWidth, fbHeight);
 
         // recv name desktop
         auto nameLen = recvIntBE32();
@@ -456,9 +459,9 @@ namespace LTSM
         return rfbMessages;
     }
 
-    const PixelFormat & RFB::ClientDecoder::serverPixelFormat(void) const
+    const PixelFormat & RFB::ClientDecoder::serverFormat(void) const
     {
-        return serverFormat;
+        return serverPf;
     }
 
     void RFB::ClientDecoder::rfbMessagesShutdown(void)
@@ -470,12 +473,20 @@ namespace LTSM
 
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
-        std::initializer_list<int> encodings = { ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
+        std::list<int> encodings = { ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
                                         ENCODING_LTSM,
                                         ENCODING_EXT_DESKTOP_SIZE,
                                         ENCODING_CONTINUOUS_UPDATES,
                                         ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
                                         ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE, ENCODING_RAW };
+
+#ifdef LTSM_DECODING_FFMPEG
+	if(clientX264())
+	{
+    	    auto pos = std::find(encodings.begin(), encodings.end(), ENCODING_LTSM);
+	    encodings.insert(std::next(pos), ENCODING_FFMPEG_X264);
+	}
+#endif
 
         sendEncodings(encodings);
         sendPixelFormat();
@@ -555,32 +566,32 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendPixelFormat(void)
     {
-        auto & clientFormat = clientPixelFormat();
+        auto & pf = clientFormat();
 
         Application::debug("%s: local pixel format: bpp: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                    __FUNCTION__, clientFormat.bitsPerPixel, big_endian,
-                    clientFormat.redMax, clientFormat.redShift, clientFormat.greenMax, clientFormat.greenShift, clientFormat.blueMax, clientFormat.blueShift);
+                    __FUNCTION__, pf.bitsPerPixel, big_endian,
+                    pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
 
         std::scoped_lock guard{ sendLock };
 
         // send pixel format
         sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
         sendZero(3); // padding
-        sendInt8(clientFormat.bitsPerPixel);
+        sendInt8(pf.bitsPerPixel);
         sendInt8(24); // depth
         sendInt8(big_endian);
         sendInt8(1); // trueColor
-        sendIntBE16(clientFormat.redMax);
-        sendIntBE16(clientFormat.greenMax);
-        sendIntBE16(clientFormat.blueMax);
-        sendInt8(clientFormat.redShift);
-        sendInt8(clientFormat.greenShift);
-        sendInt8(clientFormat.blueShift);
+        sendIntBE16(pf.redMax);
+        sendIntBE16(pf.greenMax);
+        sendIntBE16(pf.blueMax);
+        sendInt8(pf.redShift);
+        sendInt8(pf.greenShift);
+        sendInt8(pf.blueShift);
         sendZero(3); // padding
         sendFlush();
     }
 
-    void RFB::ClientDecoder::sendEncodings(std::initializer_list<int> encodings)
+    void RFB::ClientDecoder::sendEncodings(const std::list<int> & encodings)
     {
         for(auto type : encodings)
             Application::debug("%s: %s", __FUNCTION__, encodingName(type));
@@ -689,6 +700,12 @@ namespace LTSM
                 case ENCODING_TRLE:     decoder = std::make_unique<DecodingTRLE>(false); break;
                 case ENCODING_ZRLE:     decoder = std::make_unique<DecodingTRLE>(true); break;
                 case ENCODING_ZLIB:     decoder = std::make_unique<DecodingZlib>(); break;
+
+#ifdef LTSM_DECODING_FFMPEG
+        	case ENCODING_FFMPEG_X264:
+		    decoder = std::make_unique<DecodingFFmpeg>();
+		    break;
+#endif
 
                 default:
                 {
@@ -819,7 +836,7 @@ namespace LTSM
     {
         Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        auto buf = recvData(reg.width * reg.height * serverFormat.bytePerPixel());
+        auto buf = recvData(reg.width * reg.height * serverPf.bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
         richCursorEvent(reg, std::move(buf), std::move(mask));
@@ -872,85 +889,6 @@ namespace LTSM
         sendIntBE32(0);
 
         sendFlush();
-    }
-
-    int RFB::ClientDecoder::recvPixel(void)
-    {
-        auto & pf = clientPixelFormat();
-
-        switch(pf.bytePerPixel())
-        {
-            case 4: return serverBigEndian ? recvIntBE32() : recvIntLE32();
-            case 2: return serverBigEndian ? recvIntBE16() : recvIntLE16();
-            case 1: return recvInt8();
-            default: break;
-        }
-
-        Application::error("%s: %s", __FUNCTION__, "unknown format");
-        throw rfb_error(NS_FuncName);
-    }
-
-    int RFB::ClientDecoder::recvCPixel(void)
-    {
-        auto & pf = clientPixelFormat();
-
-        if(serverTrueColor && pf.bitsPerPixel == 32)
-        {
-            auto colr = recvInt8();
-            auto colg = recvInt8();
-            auto colb = recvInt8();
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            std::swap(colr, colb);
-#endif
-            return pf.pixel(Color(colr, colg, colb));
-        }
-
-        return recvPixel();
-    }
-
-    size_t RFB::ClientDecoder::recvRunLength(void)
-    {
-        size_t length = 0;
-
-        while(true)
-        {
-            auto val = recvInt8();
-            length += val;
-
-            if(val != 255)
-            {
-                length += 1;
-                break;
-            }
-        }
-
-        return length;
-    }
-
-    void RFB::ClientDecoder::zlibInflateStart(bool uint16sz)
-    {
-        if(! zlib)
-            zlib.reset(new ZLib::InflateStream());
-
-        size_t zipsz = 0;
-
-        if(uint16sz)
-            zipsz = recvIntBE16();
-        else
-            zipsz = recvIntBE32();
-
-        auto zip = recvData(zipsz);
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-            Application::debug("%s: compress data length: %d", __FUNCTION__, zip.size());
-
-        zlib->appendData(zip);
-        streamIn = zlib.get();
-    }
-
-    void RFB::ClientDecoder::zlibInflateStop(void)
-    {
-        streamIn = tls ? tls.get() : socket.get();
     }
 
     void RFB::ClientDecoder::recvDecodingLtsm(const XCB::Region & reg)

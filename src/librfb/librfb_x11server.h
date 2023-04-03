@@ -86,7 +86,7 @@ namespace LTSM
             void                sendUpdateRichCursor(void);
 
         public:
-            X11Server(int fd = 0) : ServerEncoder(fd) {}
+            X11Server(int fd = -1) : ServerEncoder(fd) {}
 
             int		        rfbCommunication(void);
 

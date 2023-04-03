@@ -27,8 +27,6 @@
 #include <memory>
 #include <atomic>
 
-#include "ltsm_librfb.h"
-#include "ltsm_sockets.h"
 #include "ltsm_channels.h"
 #include "librfb_decodings.h"
 
@@ -37,9 +35,9 @@ namespace LTSM
     namespace RFB
     {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, protected NetworkStream
+        class ClientDecoder : public ChannelClient, protected DecoderStream
         {
-            PixelFormat serverFormat;
+            PixelFormat serverPf;
 
             std::unique_ptr<NetworkStream> socket;           /// socket layer
             std::unique_ptr<TLS::Stream> tls;                /// tls layer
@@ -74,9 +72,8 @@ namespace LTSM
             size_t          hasData(void) const override;
             uint8_t         peekInt8(void) const override;
 
-            // zlib wrapper
-            void            zlibInflateStart(bool uint16sz = false);
-            void            zlibInflateStop(void);
+	    // decoder stream interface
+            const PixelFormat & serverFormat(void) const override;
 
             bool            authVncInit(std::string_view pass);
             bool            authVenCryptInit(const SecurityInfo &);
@@ -85,7 +82,7 @@ namespace LTSM
 #endif
 
             void            sendPixelFormat(void);
-            void            sendEncodings(std::initializer_list<int>);
+            void            sendEncodings(const std::list<int> &);
             void            sendFrameBufferUpdate(bool incr);
             void            sendFrameBufferUpdate(const XCB::Region &, bool incr);
             void            sendSetDesktopSize(uint16_t width, uint16_t height);
@@ -105,20 +102,9 @@ namespace LTSM
             void            recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size &);
             void            recvDecodingRichCursor(const XCB::Region &);
 
-            int             recvPixel(void);
-            int             recvCPixel(void);
-            size_t          recvRunLength(void);
-
             void            setSocketStreamMode(int sockd);
             void            setInetStreamMode(void);
             void            updateRegion(int type, const XCB::Region &);
-
-            virtual void    setPixel(const XCB::Point &, uint32_t pixel) = 0;
-            virtual void    fillPixel(const XCB::Region &, uint32_t pixel) = 0;
-            virtual const PixelFormat & clientPixelFormat(void) const = 0;
-            virtual XCB::Size clientSize(void) const = 0;
-
-            const PixelFormat & serverPixelFormat(void) const;
 
         public:
             ClientDecoder() = default;

@@ -23,12 +23,91 @@
 #include <algorithm>
 
 #include "ltsm_tools.h"
-#include "librfb_client.h"
 #include "ltsm_application.h"
 #include "librfb_decodings.h"
 
 namespace LTSM
 {
+    // DecoderStream
+    int RFB::DecoderStream::recvPixel(void)
+    {
+        switch(clientFormat().bytePerPixel())
+        {
+            case 4:
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+                return recvIntBE32();
+#else
+                return recvIntLE32();
+#endif
+
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+                return recvIntBE16();
+#else
+                return recvIntLE16();
+#endif
+
+            case 1: return recvInt8();
+            default: break;
+        }
+
+        Application::error("%s: %s", __FUNCTION__, "unknown format");
+        throw rfb_error(NS_FuncName);
+    }
+
+    int RFB::DecoderStream::recvCPixel(void)
+    {   
+        if(clientFormat().bitsPerPixel == 32)
+        {
+            auto colr = recvInt8();
+            auto colg = recvInt8();
+            auto colb = recvInt8();
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            std::swap(colr, colb);
+#endif
+            return clientFormat().pixel(Color(colr, colg, colb));
+        }
+
+        return recvPixel();
+    }
+
+    size_t RFB::DecoderStream::recvRunLength(void)
+    {
+        size_t length = 0;
+
+        while(true)
+        {
+            auto val = recvInt8();
+            length += val;
+
+            if(val != 255)
+            {
+                length += 1;
+                break;
+            }
+        }
+            
+        return length;
+    }
+
+    size_t RFB::DecoderStream::recvZlibData(ZLib::InflateStream* zlib, bool uint16sz)
+    {
+	size_t zipsz = 0;
+
+        if(uint16sz)
+            zipsz = recvIntBE16();
+        else
+            zipsz = recvIntBE32();
+
+        auto zip = recvData(zipsz);
+
+        if(Application::isDebugLevel(DebugLevel::Trace))
+            Application::debug("%s: compress data length: %d", __FUNCTION__, zip.size());
+
+        zlib->appendData(zip);
+	return zipsz;
+    }
+
+    //  DecodingBase
     RFB::DecodingBase::DecodingBase(int v) : type(v)
     {
         Application::info("%s: init decoding: %s", __FUNCTION__, encodingName(type));
@@ -44,7 +123,7 @@ namespace LTSM
         debug = v;
     }
 
-    void RFB::DecodingRaw::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -54,7 +133,7 @@ namespace LTSM
                 cli.setPixel(XCB::Point(reg.x + xx, reg.y + yy), cli.recvPixel());
     }
 
-    void RFB::DecodingRRE::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -103,7 +182,7 @@ namespace LTSM
         }
     }
 
-    void RFB::DecodingHexTile::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingHexTile::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -114,7 +193,7 @@ namespace LTSM
             updateRegionColors(cli, reg0);
     }
 
-    void RFB::DecodingHexTile::updateRegionColors(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingHexTile::updateRegionColors(DecoderStream & cli, const XCB::Region & reg)
     {
         auto flag = cli.recvInt8();
 
@@ -195,21 +274,31 @@ namespace LTSM
         }
     }
 
-    void RFB::DecodingZlib::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB)
+    {
+        zlib.reset(new ZLib::InflateStream());
+    }
+
+    void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        cli.zlibInflateStart();
+	cli.recvZlibData(zlib.get(), false);
+	DecoderWrapper wrap(zlib.get(), & cli);
 
         for(int yy = 0; yy < reg.height; ++yy)
             for(int xx = 0; xx < reg.width; ++yy)
-                cli.setPixel(XCB::Point(reg.x + xx, reg.y + yy), cli.recvPixel());
-
-        cli.zlibInflateStop();
+                wrap.setPixel(XCB::Point(reg.x + xx, reg.y + yy), wrap.recvPixel());
     }
 
-    void RFB::DecodingTRLE::updateRegion(ClientDecoder & cli, const XCB::Region & reg)
+    RFB::DecodingTRLE::DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE)
+    {
+        if(zip)
+	    zlib.reset(new ZLib::InflateStream());
+    }
+
+    void RFB::DecodingTRLE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -217,16 +306,21 @@ namespace LTSM
         const XCB::Size bsz(64, 64);
 
         if(isZRLE())
-            cli.zlibInflateStart();
+	{
+	    cli.recvZlibData(zlib.get(), false);
+	    DecoderWrapper wrap(zlib.get(), & cli);
 
-        for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
-            updateSubRegion(cli, reg0);
-
-        if(isZRLE())
-            cli.zlibInflateStop();
+    	    for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
+    		updateSubRegion(wrap, reg0);
+	}
+	else
+	{
+    	    for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
+    		updateSubRegion(cli, reg0);
+	}
     }
 
-    void RFB::DecodingTRLE::updateSubRegion(ClientDecoder & cli, const XCB::Region & reg)
+    void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         auto type = cli.recvInt8();
 

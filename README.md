@@ -72,6 +72,7 @@ This is an experimental graphical client that implements the mechanism of multip
 * Directory redirection via **FUSE** has been implemented (so far only in read only mode)
 * Implemented authentication to a virtual session via **rutoken** with certificate storage in **LDAP**
 * Implemented SSO authentication via **GSSAPI** (kerberos5)
+* Implemented **x264** encoding/decoding **ffmpeg**
 
 The mechanism of pipes is implemented through the abstract schemes ```unix://, file://, socket://```, and the access mode ```ReadOnly, WriteOnly, ReadWrite```.  
 For example, for a normal file transfer, a typical channel is created (client-server): ```file:///src_file1 (ReadOnly)``` and ```file:///dst_file2 (WriteOnly)```, then in the user session, informational GUI dialogs are launched about the transfer and selection of the destination folder, after which the file automatically saved in the remote session.  
@@ -82,7 +83,7 @@ So printing from the server side (in a remote user session) is implemented in th
 You can test all implemented features in the **docker** version.  
 
 **ROADMAP**
-* add **x264** or **VP8** encoding (as a video session stream)
+* add **VP8** encoding (as a video session stream)
 * add video recordings of all working sessions (video recording)
 * add [**VirtualGL**](https://virtualgl.org) support
 * add a video redirect via **PipeWare**

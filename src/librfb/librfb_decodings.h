@@ -25,13 +25,68 @@
 #define _LIBRFB_DECODINGS_
 
 #include "ltsm_librfb.h"
+#include "ltsm_sockets.h"
 
 namespace LTSM
 {
     namespace RFB
     {
-        class ClientDecoder;
+        /// DecoderStream
+        class DecoderStream : public NetworkStream
+        {
+        public:
+            int                 recvPixel(void);
+            int                 recvCPixel(void);
+            size_t              recvRunLength(void);
+	    size_t              recvZlibData(ZLib::InflateStream*, bool uint16sz = false);
 
+            virtual const PixelFormat & serverFormat(void) const = 0;
+            virtual const PixelFormat & clientFormat(void) const = 0;
+
+            virtual void    	setPixel(const XCB::Point &, uint32_t pixel) = 0;
+            virtual void    	fillPixel(const XCB::Region &, uint32_t pixel) = 0;
+            virtual void    	updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) = 0;
+
+	    virtual XCB::Size 	clientSize(void) const = 0;
+            virtual bool    	clientX264(void) const = 0;
+        };
+
+	/// DecoderWrapper
+        class DecoderWrapper : public DecoderStream
+        {
+        protected:
+            NetworkStream*         stream = nullptr;
+            DecoderStream*         owner = nullptr;
+
+        public:
+            DecoderWrapper(NetworkStream* ns, DecoderStream* st) : stream(ns), owner(st) {}
+
+            DecoderWrapper(const DecoderWrapper &) = delete;
+            DecoderWrapper & operator=(const DecoderWrapper &) = delete;
+
+#ifdef LTSM_WITH_GNUTLS
+            void                    setupTLS(gnutls::session* ses) const override { stream->setupTLS(ses); }
+#endif
+
+            bool                    hasInput(void) const override { return stream->hasInput(); }
+            size_t                  hasData(void) const override { return stream->hasData(); }
+            uint8_t                 peekInt8(void) const override { return stream->peekInt8(); }
+    
+            void                    sendRaw(const void* ptr, size_t len) override { stream->sendRaw(ptr, len); }
+            void                    recvRaw(void* ptr, size_t len) const override { stream->recvRaw(ptr, len); }
+        
+            const PixelFormat &     serverFormat(void) const override { return owner->serverFormat(); }
+            const PixelFormat &     clientFormat(void) const override { return owner->clientFormat(); }
+
+            void                    setPixel(const XCB::Point & pt, uint32_t pixel) override { owner->setPixel(pt, pixel); }
+            void                    fillPixel(const XCB::Region & rt, uint32_t pixel) override { owner->fillPixel(rt, pixel); }
+            void                    updateRawPixels(const void* data, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override { owner->updateRawPixels(data, width, height, pitch, bpp, rmask, gmask, bmask, amask); }
+
+	    XCB::Size 			clientSize(void) const override { return owner->clientSize(); };
+            bool    			clientX264(void) const override { return owner->clientX264(); }
+	};
+ 
+        /// DecodingBase
         class DecodingBase
         {
         protected:
@@ -42,7 +97,7 @@ namespace LTSM
             DecodingBase(int v);
             virtual ~DecodingBase() = default;
 
-            virtual void        updateRegion(ClientDecoder &, const XCB::Region &) = 0;
+            virtual void        updateRegion(DecoderStream &, const XCB::Region &) = 0;
 
             int                 getType(void) const;
             void                setDebug(int);
@@ -52,7 +107,7 @@ namespace LTSM
         class DecodingRaw : public DecodingBase
         {
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingRaw() : DecodingBase(ENCODING_RAW) {}
         };
@@ -61,7 +116,7 @@ namespace LTSM
         class DecodingRRE : public DecodingBase
         {
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
@@ -75,10 +130,10 @@ namespace LTSM
             int                 fgColor = -1;
 
         protected:
-            void                updateRegionColors(ClientDecoder &, const XCB::Region &);
+            void                updateRegionColors(DecoderStream &, const XCB::Region &);
 
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
@@ -88,13 +143,15 @@ namespace LTSM
         /// DecodingTRLE
         class DecodingTRLE : public DecodingBase
         {
+	    std::unique_ptr<ZLib::InflateStream> zlib;
+
         protected:
-            void                updateSubRegion(ClientDecoder &, const XCB::Region &);
+            void                updateSubRegion(DecoderStream &, const XCB::Region &);
 
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
 
-            DecodingTRLE(bool zlib) : DecodingBase(zlib ? ENCODING_ZRLE : ENCODING_TRLE) {}
+            DecodingTRLE(bool zlib);
 
             bool                isZRLE(void) const { return getType() == ENCODING_ZRLE; }
         };
@@ -102,10 +159,12 @@ namespace LTSM
         /// DecodingZlib
         class DecodingZlib : public DecodingBase
         {
+	    std::unique_ptr<ZLib::InflateStream> zlib;
+
         public:
-            void                updateRegion(ClientDecoder &, const XCB::Region &) override;
+            void                updateRegion(DecoderStream &, const XCB::Region &) override;
         
-            DecodingZlib() : DecodingBase(ENCODING_ZLIB) {}
+            DecodingZlib();
         };
     }
 }
