@@ -48,7 +48,7 @@ namespace LTSM
             virtual void    	updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) = 0;
 
 	    virtual XCB::Size 	clientSize(void) const = 0;
-            virtual bool    	clientX264(void) const = 0;
+            virtual bool    	clientX264(void) const { return false; }
         };
 
 	/// DecoderWrapper

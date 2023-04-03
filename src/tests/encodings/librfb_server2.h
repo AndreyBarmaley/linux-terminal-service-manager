@@ -40,7 +40,8 @@ namespace LTSM
         {
             std::vector<int>    clientEncodings;
 
-            std::unique_ptr<EncoderBufStream> socket;
+            BinaryBuf           bufData;
+            std::unique_ptr<EncoderWrapper> socket;
             std::unique_ptr<EncodingBase> encoder;
 
             PixelFormat         clientPf, serverPf;

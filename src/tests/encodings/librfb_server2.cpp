@@ -38,7 +38,8 @@ namespace LTSM
     // ServerEncoder
     RFB::ServerEncoderBuf::ServerEncoderBuf(const PixelFormat & pf) : clientPf(pf), serverPf(pf)
     {
-        socket.reset(new EncoderBufStream(static_cast<const EncoderStream*>(this), 30 * 1024 * 1024));
+        bufData.reserve(30 * 1024 * 1024);
+        socket.reset(new EncoderWrapper(&bufData, this));
 
         streamIn = streamOut = socket.get();
     }
@@ -125,12 +126,12 @@ namespace LTSM
 
     const std::vector<uint8_t> & RFB::ServerEncoderBuf::getBuffer(void) const
     {
-        return socket->buffer();
+        return bufData;
     }
 
     void RFB::ServerEncoderBuf::resetBuffer(void)
     {
-        socket->reset();
+        bufData.clear();
     }
 
     bool RFB::ServerEncoderBuf::isUpdateProcessed(void) const
