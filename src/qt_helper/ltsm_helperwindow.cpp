@@ -212,7 +212,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
 
 #ifdef LTSM_TOKEN_AUTH
     // init ldaps background
-    th1 = std::thread([this]()
+    std::thread([this]()
     {
         try
         {
@@ -222,20 +222,18 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
         {
             ldap.reset();
         }
-    });
+    }).detached();
 #endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
 {
 #ifdef LTSM_TOKEN_AUTH
-    // th1, th2 - not detached: fast start/stop crashed
+    // th2 - not detached
 
     if(th2.joinable())
         th2.join();
 
-    if(th1.joinable())
-        th1.join();
 #endif
 
     delete ui;

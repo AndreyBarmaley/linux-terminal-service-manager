@@ -28,8 +28,9 @@
 
 class LtsmHelper : public LTSM::Application, public QApplication
 {
+
 public:
-    LtsmHelper(int argc, char** argv) : LTSM::Application("ltsm_helper"), QApplication(argc, argv)
+    LtsmHelper(int & argc, char** argv) : LTSM::Application("ltsm_helper"), QApplication(argc, argv)
     {
         LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
     }
