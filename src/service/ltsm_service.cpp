@@ -516,12 +516,33 @@ namespace LTSM
 
         if(user.size())
         {
-            struct passwd* st = getpwnam(user.data());
+            long val = sysconf(_SC_GETPW_R_SIZE_MAX);
 
-            if(st)
-                return std::make_tuple<uid_t, gid_t, std::filesystem::path, std::string>((uid_t)st->pw_uid, (gid_t)st->pw_gid, st->pw_dir, st->pw_shell);
+            if(0 < val)
+            {
+                uid_t localUid = getuid();
 
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam", strerror(errno), errno);
+                std::vector<char> strbuf(val, 0);
+                struct passwd st = { 0 };
+                struct passwd* res = nullptr;
+
+                int ret = getpwnam_r(user.data(), & st, strbuf.data(), strbuf.size(), & res);
+                if(ret == 0)
+                {
+                    if(res)
+                        return std::make_tuple<uid_t, gid_t, std::filesystem::path, std::string>((uid_t) res->pw_uid, (gid_t) res->pw_gid, res->pw_dir, res->pw_shell);
+
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", "name not found", res);
+                }
+                else
+                {
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
+                }
+            }
+            else
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "sysconf", strerror(errno), errno);
+            }
         }
 
         return std::make_tuple<uid_t, gid_t, std::filesystem::path, std::string>(0, 0, "/tmp", "/bin/false");
@@ -1811,7 +1832,7 @@ namespace LTSM
 
         if(! pam)
         {
-            pam = std::make_unique<PamSession>(_config->getString("pam:service"), userName, "");
+            pam = std::make_unique<PamSession>(_config->getString("pam:service", "login"), userName, "");
 
             if(! pam->pamStart(userName) || 
                 // check account

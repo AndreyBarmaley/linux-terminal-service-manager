@@ -48,7 +48,7 @@ namespace LTSM
         static DebugLevel level;
 
     public:
-        Application(std::string_view ident);
+        explicit Application(std::string_view ident);
         virtual ~Application();
 
         Application(Application &) = delete;

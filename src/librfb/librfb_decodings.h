@@ -100,7 +100,7 @@ namespace LTSM
             virtual void        updateRegion(DecoderStream &, const XCB::Region &) = 0;
 
             int                 getType(void) const;
-            void                setDebug(int);
+            virtual void        setDebug(int);
         };
 
         /// DecodingRaw

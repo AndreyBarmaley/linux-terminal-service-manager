@@ -87,7 +87,7 @@ namespace LTSM
             ConnectorType type = ConnectorType::Unknown;
             std::string content;
 
-            TypeContent(const std::pair<ConnectorType, std::string> & pair) : type(pair.first), content(pair.second) {}
+    	    explicit TypeContent(const std::pair<ConnectorType, std::string> & pair) : type(pair.first), content(pair.second) {}
             TypeContent(const ConnectorType & typ, const std::string & body) : type(typ), content(body) {}
         };
 
@@ -273,19 +273,19 @@ namespace LTSM
 
         virtual bool    isUserSession(void) const { return false; }
 
-        virtual void    systemClientVariables(const JsonObject &) {}
-        virtual void    systemKeyboardChange(const JsonObject &) {}
+        virtual void    systemClientVariables(const JsonObject &) { /* empty */ }
+        virtual void    systemKeyboardChange(const JsonObject &) { /* empty */ }
 
         void            systemChannelOpen(const JsonObject &);
-        void            systemChannelListen(const JsonObject &) {}
+        void            systemChannelListen(const JsonObject &) { /* empty */ }
         bool            systemChannelConnected(const JsonObject &);
         void            systemChannelClose(const JsonObject &);
-        virtual void    systemChannelError(const JsonObject &) {}
+        virtual void    systemChannelError(const JsonObject &) { /* empty */ }
 
-        virtual void    systemTransferFiles(const JsonObject &) {}
-        virtual void    systemFuseProxy(const JsonObject &) {}
-        virtual void    systemTokenAuth(const JsonObject &) {}
-        virtual void    systemLoginSuccess(const JsonObject &) {}
+        virtual void    systemTransferFiles(const JsonObject &) { /* empty */ }
+        virtual void    systemFuseProxy(const JsonObject &) { /* empty */ }
+        virtual void    systemTokenAuth(const JsonObject &) { /* empty */ }
+        virtual void    systemLoginSuccess(const JsonObject &) { /* empty */ }
 
         bool            createListener(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, size_t listen, const Channel::Opts &);
         bool            createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);

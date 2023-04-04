@@ -42,7 +42,7 @@ namespace LTSM
             const JsonObject*           _config = nullptr;
             std::string                 _remoteaddr;
 
-            PixelFormat                _format;
+            PixelFormat                _pf;
 
             std::atomic<int>           _display{0};
             std::atomic<bool>          _xcbDisable{true};

@@ -99,7 +99,7 @@ namespace LTSM
             int                 getType(void) const;
             bool                jobsEmpty(void) const;
 
-            void                setDebug(int);
+            virtual void        setDebug(int);
             void                setThreads(int);
         };
 

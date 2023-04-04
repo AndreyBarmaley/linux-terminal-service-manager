@@ -137,7 +137,7 @@ namespace LTSM
     class JsonString : public JsonPrimitive
     {
     public:
-        JsonString(std::string_view val) : JsonPrimitive(val) {}
+        explicit JsonString(std::string_view val) : JsonPrimitive(val) {}
 
         JsonType		getType(void) const override;
         std::string             toString(void) const override;
@@ -151,7 +151,7 @@ namespace LTSM
     class JsonDouble : public JsonPrimitive
     {
     public:
-        JsonDouble(const double & val) : JsonPrimitive(val) {}
+        explicit JsonDouble(const double & val) : JsonPrimitive(val) {}
 
         JsonType		getType(void) const override;
         int                     getInteger(void) const override;
@@ -164,7 +164,7 @@ namespace LTSM
     class JsonInteger : public JsonPrimitive
     {
     public:
-        JsonInteger(const int & val) : JsonPrimitive(val) {}
+        explicit JsonInteger(const int & val) : JsonPrimitive(val) {}
 
         JsonType		getType(void) const override;
         int                     getInteger(void) const override;
@@ -177,7 +177,7 @@ namespace LTSM
     class JsonBoolean : public JsonPrimitive
     {
     public:
-        JsonBoolean(const bool & val) : JsonPrimitive(val) {}
+        explicit JsonBoolean(const bool & val) : JsonPrimitive(val) {}
 
         JsonType		getType(void) const override;
         int                     getInteger(void) const override;
@@ -210,8 +210,8 @@ namespace LTSM
         explicit JsonValuePtr(JsonArray &&);
         explicit JsonValuePtr(JsonObject &&);
         explicit JsonValuePtr(JsonValue*);
-        JsonValuePtr(const JsonValuePtr &);
-        JsonValuePtr(JsonValuePtr &&) noexcept;
+        explicit JsonValuePtr(const JsonValuePtr &);
+        explicit JsonValuePtr(JsonValuePtr &&) noexcept;
 
         JsonValuePtr &          operator=(const JsonValuePtr &);
         JsonValuePtr &          operator=(JsonValuePtr &&) noexcept;
@@ -238,21 +238,21 @@ namespace LTSM
         JsonArray(JsonArray && ja) noexcept;
 
         template<typename T>
-        JsonArray(const std::list<T> & list)
+        explicit JsonArray(const std::list<T> & list)
         {
             content.reserve(list.size());
             for(auto & val : list) content.emplace_back(val);
         }
 
         template<typename T>
-        JsonArray(const std::vector<T> & list)
+        explicit JsonArray(const std::vector<T> & list)
         {
             content.reserve(list.size());
             for(auto & val : list) content.emplace_back(val);
         }
 
         template<typename InputIterator>
-        JsonArray(InputIterator it1, InputIterator it2)
+        explicit JsonArray(InputIterator it1, InputIterator it2)
         {
             content.reserve(std::distance(it1, it2));
             while(it1 != it2) content.emplace_back(*it1++);

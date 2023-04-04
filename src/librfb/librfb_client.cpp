@@ -704,6 +704,7 @@ namespace LTSM
 #ifdef LTSM_DECODING_FFMPEG
         	case ENCODING_FFMPEG_X264:
 		    decoder = std::make_unique<DecodingFFmpeg>();
+		    decoder->setDebug(4 /* AV_LOG_VERBOSE */);
 		    break;
 #endif
 

@@ -32,19 +32,63 @@ namespace LTSM
     namespace FFMPEG
     {
         std::array<char,1024> errbuf;
+        std::array<char,1024> logbuf;
 
         const char* error(int errnum)
         {
             std::fill(errbuf.begin(), errbuf.end(), 0);
             return 0 > av_strerror(errnum, errbuf.data(), errbuf.size() - 1) ? "error not found" : errbuf.data();
         }
+
+	void logCallback(void* avcl, int lvl, const char* fmt, va_list vl)
+	{
+	    if(av_log_get_level() < lvl)
+		return;
+
+	    if(int len = vsnprintf(logbuf.data(), logbuf.size(), fmt, vl); 0 < len)
+	    {
+		AVClass* avc = avcl ? *(AVClass**) avcl : nullptr;
+		const char* name = avc ? avc->item_name(avcl) : nullptr;
+		const char* type = "ffmpeg debug";
+
+		// remove endl
+		if(1 < len) len--;
+
+		switch(lvl)
+		{
+		    case AV_LOG_PANIC:
+		    case AV_LOG_FATAL:
+		    case AV_LOG_ERROR:
+    			Application::error("%s: [%s] %.*s", type, name, len, logbuf.data());
+			break;
+
+		    case AV_LOG_WARNING:
+    			Application::warning("%s: [%s] %.*s", type, name, len, logbuf.data());
+			break;
+
+		    case AV_LOG_INFO:
+		    case AV_LOG_VERBOSE:
+    			Application::notice("%s: [%s] %.*s", type, name, len, logbuf.data());
+			break;
+
+		    case AV_LOG_DEBUG:
+		    case AV_LOG_TRACE:
+    			Application::info("%s: [%s] %.*s", type, name, len, logbuf.data());
+			break;
+
+		    default:
+    			break;
+		}
+	    }
+	}
     }
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
     RFB::EncodingFFmpeg::EncodingFFmpeg() : EncodingBase(ENCODING_FFMPEG_X264)
     {
-        av_log_set_level(AV_LOG_QUIET);
+	av_log_set_level(AV_LOG_QUIET);
+	av_log_set_callback(FFMPEG::logCallback);
 
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
@@ -56,6 +100,22 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncName);
         }
+    }
+
+    void RFB::EncodingFFmpeg::setDebug(int val)
+    {
+	// encoding:debug
+	switch(val)
+	{
+	    case 1: av_log_set_level(AV_LOG_ERROR); break;
+	    case 2: av_log_set_level(AV_LOG_WARNING); break;
+	    case 3: av_log_set_level(AV_LOG_INFO); break;
+	    case 4: av_log_set_level(AV_LOG_VERBOSE); break;
+	    case 5: av_log_set_level(AV_LOG_DEBUG); break;
+	    default: av_log_set_level(AV_LOG_TRACE); break;
+	}
+
+	EncodingBase::setDebug(val);
     }
 
     void RFB::EncodingFFmpeg::initContext(size_t width, size_t height)
@@ -167,7 +227,7 @@ namespace LTSM
     	    st->sendHeader(getType(), fb.region());
     	    st->sendIntBE32(packet->size);
 
-    	    Application::info("%s: packet size: %d", __FUNCTION__, packet->size);
+    	    Application::trace("%s: packet size: %d", __FUNCTION__, packet->size);
 	    st->sendRaw(packet->data, packet->size);
 
     	    st->sendFlush();
@@ -179,7 +239,8 @@ namespace LTSM
     // DecodingFFmpeg
     RFB::DecodingFFmpeg::DecodingFFmpeg() : DecodingBase(ENCODING_FFMPEG_X264)
     {
-        av_log_set_level(AV_LOG_QUIET);
+	av_log_set_level(AV_LOG_QUIET);
+	av_log_set_callback(FFMPEG::logCallback);
 
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
@@ -191,6 +252,22 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncName);
         }
+    }
+
+    void RFB::DecodingFFmpeg::setDebug(int val)
+    {
+	// encoding:debug
+	switch(val)
+	{
+	    case 1: av_log_set_level(AV_LOG_ERROR); break;
+	    case 2: av_log_set_level(AV_LOG_WARNING); break;
+	    case 3: av_log_set_level(AV_LOG_INFO); break;
+	    case 4: av_log_set_level(AV_LOG_VERBOSE); break;
+	    case 5: av_log_set_level(AV_LOG_DEBUG); break;
+	    default: av_log_set_level(AV_LOG_TRACE); break;
+	}
+
+	DecodingBase::setDebug(val);
     }
 
     void RFB::DecodingFFmpeg::initContext(size_t width, size_t height)

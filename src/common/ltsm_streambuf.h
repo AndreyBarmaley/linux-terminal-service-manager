@@ -30,7 +30,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20221205
+#define LTSM_STREAMBUF_VERSION 20230402
 
 namespace LTSM
 {

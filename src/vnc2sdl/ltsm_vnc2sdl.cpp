@@ -1003,8 +1003,10 @@ namespace LTSM
                 return;
             }
 
-            auto pair = cursors.emplace(key, ColorCursor{ .pixels = std::move(pixels), .surface{ sf, SDL_FreeSurface } } );
+            auto pair = cursors.emplace(key, ColorCursor{ .pixels = std::move(pixels) });
+
             it = pair.first;    
+            (*it).second.surface.reset(sf);
 
             auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
             if(! curs)

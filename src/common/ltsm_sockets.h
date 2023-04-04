@@ -263,7 +263,7 @@ namespace LTSM
                 return sess->ptr();
             }
 #endif
-	    Session() = default;
+	    Session() : gnutls::session(0) {}
 	    ~Session() = default;
         };
 

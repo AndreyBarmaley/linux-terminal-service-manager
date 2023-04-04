@@ -102,7 +102,7 @@ namespace LTSM
 
     const PixelFormat & Connector::X11VNC::serverFormat(void) const
     {
-        return _format;
+        return _pf;
     }
 
     std::list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const
@@ -169,7 +169,7 @@ namespace LTSM
         xcbShmInit();
 
         // init server format
-        _format = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        _pf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         return true;
     }

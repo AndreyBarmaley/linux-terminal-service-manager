@@ -126,6 +126,7 @@ namespace LTSM
 
         public:
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+	    void                setDebug(int) override;
 
             EncodingFFmpeg();
             ~EncodingFFmpeg() = default;
@@ -154,6 +155,7 @@ namespace LTSM
 
         public:
             void                updateRegion(DecoderStream &, const XCB::Region &) override;
+	    void                setDebug(int) override;
             
             DecodingFFmpeg();
             ~DecodingFFmpeg() = default;

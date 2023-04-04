@@ -376,11 +376,33 @@ namespace LTSM
 
     std::tuple<std::string, int, int, std::filesystem::path, std::string> Tools::getLocalUserInfo(void)
     {
-        struct passwd* st = getpwuid(getuid());
-        if(st)
-            return std::make_tuple<std::string, int, int, std::filesystem::path, std::string>(st->pw_name, (int)st->pw_uid, (int)st->pw_gid, st->pw_dir, st->pw_shell);
+        long val = sysconf(_SC_GETPW_R_SIZE_MAX);
 
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid", strerror(errno), errno);
+        if(0 < val)
+        {
+            uid_t localUid = getuid();
+
+            std::vector<char> strbuf(val, 0);
+            struct passwd st = { 0 };
+            struct passwd* res = nullptr;
+
+            int ret = getpwuid_r(localUid, & st, strbuf.data(), strbuf.size(), & res);
+            if(ret == 0)
+            {
+                if(res)
+                    return std::make_tuple<std::string, int, int, std::filesystem::path, std::string>(res->pw_name, (int) res->pw_uid, (int) res->pw_gid, res->pw_dir, res->pw_shell);
+
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", "uid not found", localUid);
+            }
+            else
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
+            }
+        }
+        else
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "sysconf", strerror(errno), errno);
+        }
 
         return std::make_tuple<std::string, uid_t, gid_t, std::filesystem::path, std::string>("nobody", 99, 99, "/tmp", "/bin/false");
     }

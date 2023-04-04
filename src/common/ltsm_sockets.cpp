@@ -768,46 +768,80 @@ namespace LTSM
         if(0 == inet_aton(ipaddr.data(), &in))
             Application::error("%s: invalid ip address: %s", __FUNCTION__, ipaddr.data());
         else
-        if(auto hp = gethostbyaddr(& in.s_addr, sizeof(in.s_addr), AF_INET))
-            return std::string(hp->h_name);
-        else
-            Application::error("%s: error: %s, ipaddr: %s", __FUNCTION__, hstrerror(h_errno), ipaddr.data());
+        {
+            std::vector<char> strbuf(1024, 0);
+            struct hostent st = { 0 };
+            struct hostent* res = nullptr;
+            int h_errnop = 0;
+
+            if(0 == gethostbyaddr_r(& in.s_addr, sizeof(in.s_addr), AF_INET, & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
+            {
+                if(res)
+                    std::string(res->h_name);
+            }
+            else
+            {
+                Application::error("%s: error: %s, ipaddr: %s", __FUNCTION__, hstrerror(h_errno), ipaddr.data());
+            }
+        }
 
         return "";
     }
 
     std::list<std::string> TCPSocket::resolvHostname2(std::string_view hostname)
     {
-        std::list<std::string> res;
-        if(auto hp = gethostbyname(hostname.data()))
+        std::list<std::string> list;
+        std::vector<char> strbuf(1024, 0);
+
+        struct hostent st = { 0 };
+        struct hostent* res = nullptr;
+        int h_errnop = 0;
+
+        if(0 == gethostbyname_r(hostname.data(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
         {
-            struct in_addr in;
-            while(hp->h_addr_list && *hp->h_addr_list)
+            if(res)
             {
-                std::copy_n(*hp->h_addr_list, sizeof(in_addr), (char*) & in);
-                res.emplace_back(inet_ntoa(in));
-                hp->h_addr_list++;
+                struct in_addr in;
+                while(res->h_addr_list && *res->h_addr_list)
+                {
+                    std::copy_n(*res->h_addr_list, sizeof(in_addr), (char*) & in);
+                    list.emplace_back(inet_ntoa(in));
+                    res->h_addr_list++;
+                }
             }
         }
         else
+        {
             Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+        }
 
-        return res;
+        return list;
     }
 
     std::string TCPSocket::resolvHostname(std::string_view hostname)
     {
-        if(auto hp = gethostbyname(hostname.data()))
+        std::vector<char> strbuf(1024, 0);
+
+        struct hostent st = { 0 };
+        struct hostent* res = nullptr;
+        int h_errnop = 0;
+
+        if(0 == gethostbyname_r(hostname.data(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
         {
-            struct in_addr in;
-            if(hp->h_addr_list && *hp->h_addr_list)
+            if(res)
             {
-                std::copy_n(*hp->h_addr_list, sizeof(in_addr), (char*) & in);
-                return std::string(inet_ntoa(in));
+                struct in_addr in;
+                if(res->h_addr_list && *res->h_addr_list)
+                {
+                    std::copy_n(*res->h_addr_list, sizeof(in_addr), (char*) & in);
+                    return std::string(inet_ntoa(in));
+                }
             }
         }
         else
+        {
             Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+        }
 
         return "";
     }
@@ -948,7 +982,9 @@ namespace LTSM
     {
         void gnutls_log(int level, const char* str)
         {
-            Application::info("gnutls debug: %s", str);
+	    // remove end line
+	    if(size_t len = strlen(str))
+        	Application::info("gnutls debug: %.*s", len-1, str);
         }
 
         /* TLS::Stream */

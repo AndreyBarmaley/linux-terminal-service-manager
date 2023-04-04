@@ -153,51 +153,49 @@ std::pair<std::string, int>
     int port = -1;
     std::string addr = "127.0.0.1";
 
-    if(2 == list.size())
+    if(2 != list.size())
+	return std::make_pair(addr, port);
+
+    // check addr
+    auto octets = Tools::split(list.front(), '.');
+    if(4 == octets.size())
     {
-        // check addr
-        auto iplist = Tools::split(list.front(), '.');
-        if(4 == iplist.size())
-        {
-            bool error = false;
-            // check numbers
-            for(auto & ip : iplist)
-            {
-                try
-                {
-                    if(255 < std::stoi(ip))
-                        error = true;
-                }
-                catch(const std::exception & err)
-                {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
-                    error = true;
-                }
-            }
+        bool error = false;
 
-            if(error)
-                Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect ipaddr", addrPort.data());
-        }
-        else
-        // resolv hostname
-        {
-            std::string addr2 = TCPSocket::resolvHostname(list.front());
-
-            if(addr2.empty())
-                Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect hostname", addrPort.data());
-            else
-                addr = addr2;
-        }
-
-        // check port
         try
         {
-            port = std::stoi(list.back());
+    	    // check numbers
+	    if(std::any_of(octets.begin(), octets.end(), [](auto & val){ return 255 < std::stoi(val); }))
+                error = true;
         }
-        catch(const std::exception & err)
+    	catch(const std::exception & err)
         {
             Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            error = true;
         }
+
+        if(error)
+            Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect ipaddr", addrPort.data());
+    }
+    else
+    // resolv hostname
+    {
+        std::string addr2 = TCPSocket::resolvHostname(list.front());
+
+        if(addr2.empty())
+            Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect hostname", addrPort.data());
+        else
+            addr = addr2;
+    }
+
+    // check port
+    try
+    {
+        port = std::stoi(list.back());
+    }
+    catch(const std::exception & err)
+    {
+        Application::error("%s: exception: %s", __FUNCTION__, err.what());
     }
 
     return std::make_pair(addr, port);
