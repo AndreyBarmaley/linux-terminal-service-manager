@@ -117,7 +117,7 @@ namespace LTSM
             const AVCodec* codec = nullptr;
 #endif
 
-            int bitrate = 1024;
+            //int bitrate = 1024;
             int fps = 25;
             int pts = 0;
 
