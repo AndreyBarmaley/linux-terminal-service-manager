@@ -222,7 +222,7 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
         {
             ldap.reset();
         }
-    }).detached();
+    }).detach();
 #endif
 }
 
