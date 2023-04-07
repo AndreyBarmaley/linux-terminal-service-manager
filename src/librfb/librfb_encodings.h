@@ -86,7 +86,7 @@ namespace LTSM
             int                 debug = 0;
             int                 threads = 2;
 
-            void                sendRawRegionPixels(NetworkStream*, EncoderStream*, const XCB::Region &, const FrameBuffer &);
+            void                sendRawRegionPixels(EncoderStream*, EncoderStream*, const XCB::Region &, const FrameBuffer &);
 
             static std::list<XCB::RegionPixel> rreProcessing(const XCB::Region &, const FrameBuffer &, int skipPixel);
 
@@ -95,6 +95,7 @@ namespace LTSM
             virtual ~EncodingBase() = default;
 
             virtual void        sendFrameBuffer(EncoderStream*, const FrameBuffer &) = 0;
+            virtual void        resizedEvent(const XCB::Size &) { /* empty */ }
 
             int                 getType(void) const;
             bool                jobsEmpty(void) const;
@@ -170,6 +171,7 @@ namespace LTSM
         class EncodingZlib : public EncodingBase
         {
             std::unique_ptr<ZLib::DeflateStream> zlib;
+            BinaryBuf           buf;
 
         protected:
             void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);

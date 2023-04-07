@@ -30,6 +30,10 @@
 #include "ltsm_application.h"
 #include "librfb_x11server.h"
 
+#ifdef LTSM_ENCODING_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
+
 using namespace std::chrono_literals;
 
 namespace LTSM
@@ -61,22 +65,41 @@ namespace LTSM
         }
     }
 
+    void  RFB::X11Server::randrScreenSetSizeEvent(const XCB::Size & wsz)
+    {
+        Application::info("%s: size: [%d, %d]", __FUNCTION__, wsz.width, wsz.height);
+        displayResizeProcessed = true;
+    }
+
     void RFB::X11Server::randrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify)
     {
         Application::info("%s: size: [%d, %d], sequence: 0x%04x", __FUNCTION__, wsz.width, wsz.height, notify.sequence);
 
         xcbShmInit();
+        displayResizeProcessed = false;
+
         serverDisplayResizedEvent(wsz);
 
         if(isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE))
         {
-            auto status = randrSequence == 0 || randrSequence != notify.sequence ?
-                RFB::DesktopResizeStatus::ServerRuntime : RFB::DesktopResizeStatus::ClientSide;
+            auto status = randrSequence == notify.sequence ?
+                RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
 
             std::thread([=]()
             {
-                this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
-                this->displayResized = true;
+                if(status == RFB::DesktopResizeStatus::ServerRuntime)
+                {
+                    this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
+                    this->displayResizeEvent(wsz);
+                }
+                else
+                // clientSide
+                if(this->displayResizeNegotiation)
+                {
+                    this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
+                    this->displayResizeEvent(wsz);
+                    this->displayResizeNegotiation = false;
+                }
             }).detach();
         }
     }
@@ -167,12 +190,12 @@ namespace LTSM
             this->rfbMessagesLoop();
         });
 
+    	bool nodamage = xcbNoDamageOption();
         bool mainLoop = true;
 
         // main loop
         while(mainLoop)
         {
-    	    bool nodamage = xcbNoDamageOption();
             serverMainLoopEvent();
 
             if(! rfbMessagesRunning())
@@ -194,11 +217,18 @@ namespace LTSM
                 continue;
             }
 
+            if(displayResizeProcessed || displayResizeNegotiation)
+            {
+                // wait loop
+                std::this_thread::sleep_for(5ms);
+                continue;
+            }
+
             if(nodamage || fullscreenUpdate)
             {
                 damageRegion = XCB::RootDisplay::region();
-                clientUpdateReq = true;
                 fullscreenUpdate = false;
+                clientUpdateReq = true;
             }
             else
             if(! damageRegion.empty())
@@ -207,7 +237,26 @@ namespace LTSM
                 damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
             }
 
-            // send busy
+#ifdef LTSM_ENCODING_FFMPEG
+    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_X264))
+	    {
+                if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
+                {
+                    auto upms = ffmpeg->updateTimeMS();
+
+		    // fps 25: 40ms
+		    if(upms < 40)
+                    {
+                        Application::trace("%s: update time ms: %d", __FUNCTION__, upms);
+            	        continue;
+                    }
+                }
+
+                clientUpdateReq = true;
+            	damageRegion = XCB::RootDisplay::region();
+            }
+#endif
+
             if(isUpdateProcessed())
             {
                 // wait loop
@@ -231,8 +280,10 @@ namespace LTSM
                     // background job
                     std::thread([&, reg = std::move(res)]()
                     {
+
                         if(! sendUpdateSafe(reg))
                             rfbMessagesShutdown(); 
+
                     }).detach();
                 }
 
@@ -247,6 +298,8 @@ namespace LTSM
             }
         } // main loop
 
+        waitUpdateProcess();
+
         if(rfbThread.joinable())
             rfbThread.join();
 
@@ -255,8 +308,6 @@ namespace LTSM
 
     void  RFB::X11Server::recvPixelFormatEvent(const PixelFormat &, bool bigEndian)
     {
-        fullscreenUpdate = true;
-
         if(serverFormat() != clientFormat())
         {
             Application::warning("%s: client/server format not optimal", __FUNCTION__);
@@ -266,9 +317,6 @@ namespace LTSM
     void  RFB::X11Server::recvSetEncodingsEvent(const std::vector<int> &)
     {
         serverSelectEncodings();
-
-        fullscreenUpdate = true;
-
         serverEncodingsEvent();
 
         if(isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE) && rfbDesktopResizeEnabled())
@@ -348,7 +396,7 @@ namespace LTSM
         clientUpdateReq = true;
     }
 
-    void RFB::X11Server::recvFramebufferUpdateEvent(bool fullUpdate, const XCB::Region & region)
+    void RFB::X11Server::recvFramebufferUpdateEvent(bool fullUpdateReq, const XCB::Region & region)
     {
         if(! xcbAllowMessages())
         {
@@ -356,37 +404,16 @@ namespace LTSM
             return;
         }
 
-        if(displayResized && ! fullUpdate)
-        {
-            if(region.toSize() != XCB::RootDisplay::size())
-            {
-                Application::info("%s: display resized, skipped client old size: [%d, %d]", __FUNCTION__, region.width, region.height);
-                return;
-            }
-            else
-            {
-                fullUpdate = true;
-                displayResized = false;
-                Application::info("%s: display resized, new size: [%d, %d]", __FUNCTION__, region.width, region.height);
-            }
-        }
-
-        if(fullUpdate)
-        {
+        if(fullUpdateReq)
             fullscreenUpdate = true;
-            clientRegion = XCB::RootDisplay::region();
-        }
-        else
-        {
-            clientUpdateReq = true;
-            clientRegion = XCB::RootDisplay::region().intersected(region);
-        }
 
         if(region != clientRegion)
         {
             fullscreenUpdate = true;
             clientRegion = region;
         }
+
+        clientUpdateReq = true;
     }
 
     void RFB::X11Server::recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> & screens)
@@ -398,22 +425,40 @@ namespace LTSM
             desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
         }
 
-        if(desktop.x != 0 || desktop.y != 0)
+        if(desktop.x != 0 && desktop.y != 0)
         {
             Application::error("%s: incorrect desktop size: [%d, %d, %d, %d]", __FUNCTION__, desktop.x, desktop.y, desktop.width, desktop.height);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, XCB::RootDisplay::size());
         }
         else
-        if(xcbAllowMessages())
+        if(! xcbAllowMessages())
         {
+            Application::error("%s: xcb disabled", __FUNCTION__);
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::Size{0, 0});
+        }
+        else
+        if(RootDisplay::size() == desktop.toSize())
+	{
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError, XCB::RootDisplay::size());
+	}
+        else
+        {
+            displayResizeNegotiation = true;
+
             std::thread([&, sz = desktop.toSize()]
             {
                 uint16_t sequence = 0;
+
+		waitUpdateProcess();
+
                 if(XCB::RootDisplay::setRandrScreenSize(sz, & sequence))
+                {
                     randrSequence = sequence;
+                }
                 else
                 {
                     sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::RootDisplay::size());
+            	    displayResizeNegotiation = false;
                     randrSequence = 0;
                 }
             }).detach();

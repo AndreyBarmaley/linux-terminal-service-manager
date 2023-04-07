@@ -107,12 +107,7 @@ namespace LTSM
 
     std::list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const
     {
-        return std::list<std::string>();
-    }
-
-    std::list<std::string> Connector::X11VNC::serverPrefferedEncodings(void) const
-    {
-        return std::list<std::string>();
+        return {};
     }
 
     RFB::SecurityInfo Connector::X11VNC::rfbSecurityInfo(void) const

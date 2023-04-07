@@ -541,22 +541,24 @@ namespace LTSM
     bool RFB::ServerEncoder::sendUpdateSafe(const XCB::Region & area)
     {
         fbUpdateProcessing = true;
-        bool res = true;
+        bool res = false;
 
         try
         {
             auto reply = xcbFrameBuffer(area);
-            sendFrameBufferUpdate(reply.fb);
-            sendFrameBufferUpdateEvent(area);
+
+            if(sendFrameBufferUpdate(reply.fb))
+            {
+                sendFrameBufferUpdateEvent(area);
+                res = true;
+            }
         }
         catch(const std::exception & err)
         {
             Application::error("%s: vnc exception: %s", __FUNCTION__, err.what());
-            res = false;
         }
         catch(...)
         {
-            res = false;
         }
 
         fbUpdateProcessing = false;
@@ -730,7 +732,6 @@ namespace LTSM
         clientEncodings.reserve(numEncodings);
 
         auto disabledEncodings = serverDisabledEncodings();
-        auto prefferedEncodings = serverPrefferedEncodings();
 
         while(0 < numEncodings--)
         {
@@ -755,35 +756,6 @@ namespace LTSM
                 Application::info("%s: request encodings: 0x%08x", __FUNCTION__, encoding);
             else
                 Application::info("%s: request encodings: %s", __FUNCTION__, RFB::encodingName(encoding));
-        }
-
-        if(! prefferedEncodings.empty())
-        {
-            std::sort(clientEncodings.begin(), clientEncodings.end(), [&](auto & v1, auto & v2)
-            {
-                auto s1 = Tools::lower(RFB::encodingName(v1));
-                auto s2 = Tools::lower(RFB::encodingName(v2));
-                auto p1 = std::find(prefferedEncodings.begin(), prefferedEncodings.end(), s1);
-                auto p2 = std::find(prefferedEncodings.begin(), prefferedEncodings.end(), s2);
-
-                if(p1 != prefferedEncodings.end() && p2 != prefferedEncodings.end())
-                    return std::distance(prefferedEncodings.begin(), p1) < std::distance(prefferedEncodings.begin(), p2);
-
-                if(p1 != prefferedEncodings.end())
-                    return true;
-
-                return false;
-            });
-
-            for(auto & enc : clientEncodings)
-            {
-                const char* name = RFB::encodingName(enc);
-
-                if(0 == std::strcmp(name, "unknown"))
-                    Application::debug("%s: server pref encodings: 0x%08x", __FUNCTION__, enc);
-                else
-                    Application::debug("%s: server pref encodings: %s", __FUNCTION__, RFB::encodingName(enc));
-            }
         }
 
         if(isClientSupportedEncoding(RFB::ENCODING_CONTINUOUS_UPDATES))
@@ -891,6 +863,20 @@ namespace LTSM
         recvSetDesktopSizeEvent(screens);
     }
 
+    void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz)
+    {
+        Application::info("%s: display resized, new size: [%d, %d]", __FUNCTION__, dsz.width, dsz.height);
+
+#ifdef LTSM_ENCODING_FFMPEG
+	// event background
+	std::thread([this, sz = dsz]()
+	{
+    	    if(this->encoder && this->encoder->getType() == RFB::ENCODING_FFMPEG_X264)
+        	this->encoder->resizedEvent(sz);
+	}).detach();
+#endif
+    }
+
     void RFB::ServerEncoder::clientDisconnectedEvent(int display)
     {
         Application::warning("%s: display: %d", __FUNCTION__, display);
@@ -950,8 +936,14 @@ namespace LTSM
         continueUpdatesProcessed = enable;
     }
 
-    void RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb)
+    bool RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb)
     {
+        if(! encoder)
+        {
+            Application::warning("%s: encoder null", __FUNCTION__);
+            return false;
+        }
+
         auto & reg = fb.region();
 
         Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -967,6 +959,7 @@ namespace LTSM
         encoder->sendFrameBuffer(this, fb);
 
         sendFlush();
+        return true;
     }
 
 
@@ -1103,7 +1096,7 @@ namespace LTSM
                         RFB::ENCODING_FFMPEG_X264,
 #endif
 			RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB,  RFB::ENCODING_HEXTILE,
-			RFB::ENCODING_CORRE, RFB::ENCODING_RRE };
+			RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW };
 
 	// client priority
         for(int type : clientEncodings)
@@ -1124,6 +1117,10 @@ namespace LTSM
 
         switch(compatible)
         {
+            case RFB::ENCODING_RAW:
+                encoder = std::make_unique<EncodingRaw>();
+                return true;
+
             case RFB::ENCODING_ZLIB:
                 encoder = std::make_unique<EncodingZlib>();
                 return true;
@@ -1165,7 +1162,7 @@ namespace LTSM
     void RFB::ServerEncoder::serverSelectEncodings(void)
     {
         serverSelectClientEncoding();
-        Application::info("%s: select encoding: %s", __FUNCTION__, RFB::encodingName(encoder->getType()));
+        Application::notice("%s: select encoding: %s", __FUNCTION__, RFB::encodingName(encoder->getType()));
 
         serverSelectEncodingsEvent();
     }

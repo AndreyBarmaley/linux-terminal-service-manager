@@ -39,7 +39,7 @@
 #include "pki-core/common.h"
 #endif
 
-#define LTSM_VNC2SDL_VERSION 20221115
+#define LTSM_VNC2SDL_VERSION 202230405
 
 namespace LTSM
 {
@@ -98,6 +98,7 @@ namespace LTSM
         std::string             host{"localhost"};
         std::string             username, seamless, share, tokenLib;
         std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
+	std::string             prefferedEncoding;
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<FrameBuffer> fb;
@@ -106,6 +107,7 @@ namespace LTSM
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
         XCB::Region             dirty;
+        XCB::Size               windowSize;
         std::mutex              renderLock;
 
         std::chrono::time_point<std::chrono::steady_clock>
@@ -121,8 +123,7 @@ namespace LTSM
         BinaryBuf               clipboardBufLocal;
         std::mutex              clipboardLock;
 
-        uint16_t                setWidth = 0;
-        uint16_t                setHeight = 0;
+	XCB::Size		setGeometry;
 
         bool                    accelerated = true;
         bool                    fullscreen = false;
@@ -130,17 +131,18 @@ namespace LTSM
         bool                    capslock = true;
         bool                    sendOptions = false;
         bool                    alwaysRunning = false;
-	bool			x264Decoding = false;
+        bool                    serverExtDesktopSizeSupported = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
         void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-	void    		updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
+	void    		updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
         const PixelFormat &     clientFormat(void) const override;
         XCB::Size               clientSize(void) const override;
-	bool			clientX264(void) const override;
+	std::string             clientEncoding(void) const override;
 
         bool                    sdlEventProcessing(const SDL::GenericEvent &);
+        bool                    pushEventWindowResize(const XCB::Size &);
         int                     startSocket(std::string_view host, int port) const;
         void                    sendMouseState(void);
         void                    exitEvent(void);
@@ -152,7 +154,7 @@ namespace LTSM
         Vnc2SDL(int argc, const char** argv);
 
         void                    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) override;
-        void                    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) override;
+        void                    pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void                    fbUpdateEvent(void) override;
         void                    cutTextEvent(std::vector<uint8_t> &&) override;
         void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) override;

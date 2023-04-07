@@ -197,21 +197,10 @@ namespace LTSM
         threads = v;
     }
 
-    void RFB::EncodingBase::sendRawRegionPixels(NetworkStream* ns, EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb)
+    void RFB::EncodingBase::sendRawRegionPixels(EncoderStream* ns, EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb)
     {
-        if(st->serverFormat() != st->clientFormat())
-        {
-            for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-                st->sendPixel(fb.pixel(reg.topLeft() + coord));
-        }
-        else
-        {
-            for(int yy = 0; yy < reg.height; ++yy)
-            {
-                size_t line = reg.width * fb.bytePerPixel();
-                ns->sendRaw(fb.pitchData(reg.y + yy) + reg.x * fb.bytePerPixel(), line);
-            }
-        }
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+            ns->sendPixel(fb.pixel(reg.topLeft() + coord));
     }
 
     std::list<XCB::RegionPixel> RFB::EncodingBase::rreProcessing(const XCB::Region & badreg, const FrameBuffer & fb, int skipPixel)
@@ -278,12 +267,14 @@ namespace LTSM
         if(debug)
             Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
 
+        const XCB::Point top(reg0.x, reg0.y);
+
         // regions counts
         st->sendIntBE16(1);
         int jobId = 1;
 
-        // single thread: zlib stream spec
-        jobs.emplace_back(std::async(std::launch::async, & EncodingRaw::sendRegion, this, st, XCB::Point(0, 0), reg0, fb, jobId));
+        // single thread: stream spec
+        jobs.emplace_back(std::async(std::launch::async, & EncodingRaw::sendRegion, this, st, top, reg0 - top, fb, jobId));
 
         // wait jobs
         for(auto & job : jobs)
@@ -494,11 +485,10 @@ namespace LTSM
     void RFB::EncodingHexTile::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         // thread buffer
-	BinaryBuf bb;
+        BinaryBuf bb;
 	bb.reserve(4096);
 
 	EncoderWrapper wrap(& bb, st);
-
         auto map = fb.pixelMapWeight(reg);
         
         if(map.empty())
@@ -512,8 +502,10 @@ namespace LTSM
             int back = fb.pixel(reg.topLeft());
 
             if(debug)
+            {
                 Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, %s",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
+            }
 
             // hextile flags
             wrap.sendInt8(RFB::HEXTILE_BACKGROUND);
@@ -533,21 +525,25 @@ namespace LTSM
             if(foreground)
             {
                 const size_t hextileForegroundLength = 2 + 2 * fb.bytePerPixel() + goods.size() * 2;
-            
+
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength)
                 {
                     if(debug)
+                    {
                         Application::debug("%s: job id: %d, [%d, %d, %d, %d], %s",
-                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                    }
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 }
                 else
                 {
                     if(debug)
+                    {
                         Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
                                     __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
+                    }
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -560,17 +556,21 @@ namespace LTSM
                 if(hextileRawLength < hextileColoredLength)
                 {
                     if(debug)
+                    {
                         Application::debug("%s: job id: %d, [%d, %d, %d, %d], %s",
-                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                    }
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 }
                 else
                 {
                     if(debug)
+                    {
                         Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
                                     __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
-                        
+                    }
+
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
                 }
             }
@@ -874,7 +874,8 @@ namespace LTSM
     // EncodingZlib
     RFB::EncodingZlib::EncodingZlib() : EncodingBase(ENCODING_ZLIB)
     {
-        zlib = std::make_unique<ZLib::DeflateStream>(Z_BEST_SPEED);
+        zlib.reset(new ZLib::DeflateStream(Z_BEST_SPEED));
+        buf.reserve(64 * 1024);
     }
 
     void RFB::EncodingZlib::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
@@ -884,12 +885,14 @@ namespace LTSM
         if(debug)
             Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
 
+        const XCB::Point top(reg0.x, reg0.y);
+
         // regions counts
         st->sendIntBE16(1);
         int jobId = 1;
 
         // single thread: zlib stream spec
-        jobs.emplace_back(std::async(std::launch::async, & EncodingZlib::sendRegion, this, st, XCB::Point(0, 0), reg0, fb, jobId));
+        jobs.emplace_back(std::async(std::launch::async, & EncodingZlib::sendRegion, this, st, top, reg0 - top, fb, jobId));
 
         // wait jobs
         for(auto & job : jobs)
@@ -903,7 +906,11 @@ namespace LTSM
         if(debug)
             Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
-        sendRawRegionPixels(zlib.get(), st, reg, fb);
+        EncoderWrapper wrap(& buf, st);
+        sendRawRegionPixels(& wrap, st, reg, fb);
+
+        zlib->sendData(buf);
+        buf.clear();
 
         // network send: wait thread
         std::scoped_lock guard{ busy };

@@ -80,14 +80,12 @@ namespace LTSM
             std::unique_ptr<FuseSessionProxy> fuse;
             std::atomic<bool>   userSession{false};
             uid_t               shmUid = 0;
-	    bool		nodamage = false;
 
         protected:
 	    // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
             void                xcbFrameBufferModify(FrameBuffer &) const override;
             std::list<std::string> serverDisabledEncodings(void) const override;
-            std::list<std::string> serverPrefferedEncodings(void) const override;
  
             // x11server
             bool                xcbNoDamageOption(void) const override;

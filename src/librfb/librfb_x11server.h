@@ -40,8 +40,10 @@ namespace LTSM
 
             std::atomic<int>    pressedMask{0};
             std::atomic<int>    randrSequence{0};
+	    std::atomic<int>	sendUpdateFPS{0};
 
-            std::atomic<bool>   displayResized{false};
+            std::atomic<bool>   displayResizeNegotiation{false};
+            std::atomic<bool>   displayResizeProcessed{false};
             std::atomic<bool>   clientUpdateReq{false};
             std::atomic<bool>   clientUpdateCursor{false};
             std::atomic<bool>   fullscreenUpdate{false};
@@ -54,6 +56,7 @@ namespace LTSM
             void                xfixesCursorChangedEvent(void) override;
             void                damageRegionEvent(const XCB::Region &) override;
             void                randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+            void                randrScreenSetSizeEvent(const XCB::Size &) override;
             void                clipboardChangedEvent(const std::vector<uint8_t> &) override;
             void                displayConnectedEvent(void) override;
  

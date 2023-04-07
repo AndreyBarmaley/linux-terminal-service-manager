@@ -135,11 +135,11 @@ namespace LTSM
         return fbPtr->region().toSize();
     }
 
-    void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, uint16_t width, uint16_t height)
+    void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
     {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel, pf.rmask(), pf.gmask(), pf.bmask(), 0);
-        fbPtr.reset(new FrameBuffer(XCB::Region(0, 0, width, height), format));
+        fbPtr.reset(new FrameBuffer(XCB::Region(0, 0, wsz.width, wsz.height), format));
     }
 
     void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel)
@@ -152,7 +152,7 @@ namespace LTSM
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
+    void Vnc2Image::updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
     {
         Application::warning("%s: not implemented", __FUNCTION__);
     }

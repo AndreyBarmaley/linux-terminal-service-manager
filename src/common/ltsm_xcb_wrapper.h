@@ -86,6 +86,7 @@ namespace LTSM
 	    Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
 	    bool isEmpty(void) const { return width == 0 || height == 0; }
+	    void reset(void) { width = 0; height = 0; }
 
             bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
             bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
@@ -643,6 +644,7 @@ namespace LTSM
             virtual void            xfixesSelectionChangedEvent(void) {}
             virtual void            xfixesCursorChangedEvent(void) {}
             virtual void            damageRegionEvent(const Region &) {}
+            virtual void            randrScreenSetSizeEvent(const Size &) {}
             virtual void            randrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) {}
             virtual void            xkbGroupChangedEvent(int) {}
 	    virtual void            clipboardChangedEvent(const std::vector<uint8_t> &) {}

@@ -116,15 +116,16 @@ namespace LTSM
             }
         }
 
+        rfbMessagesShutdown();
+        xcbDisableMessages(true);
+
         if(0 < displayNum())
         {
             busConnectorTerminated(displayNum());
             clientDisconnectedEvent(displayNum());
         }
 
-        xcbDisableMessages(true);
-        rfbMessagesShutdown();
-        waitUpdateProcess();
+        // waitUpdateProcess();
 
         Application::info("%s: connector shutdown", __FUNCTION__);
     }
@@ -138,8 +139,6 @@ namespace LTSM
         }
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
-
-	nodamage = _config->getBoolean("vnc:xcb:nodamage", false);
 
         return rfbCommunication();
     }
@@ -307,11 +306,6 @@ namespace LTSM
         return _config->getStdList<std::string>("vnc:encoding:blacklist");
     }
 
-    std::list<std::string> Connector::VNC::serverPrefferedEncodings(void) const
-    {
-        return _config->getStdList<std::string>("vnc:encoding:preflist");
-    }
-
     void Connector::VNC::serverSelectEncodingsEvent(void)
     {
         setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
@@ -441,12 +435,7 @@ namespace LTSM
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
-#ifdef LTSM_ENCODING_FFMPEG
-        if(isClientEncoding(RFB::ENCODING_FFMPEG_X264))
-            return true;
-#endif
-
-        return nodamage;
+	return _config->getBoolean("vnc:xcb:nodamage", false);
     }
 
     void Connector::VNC::xcbDisableMessages(bool f)

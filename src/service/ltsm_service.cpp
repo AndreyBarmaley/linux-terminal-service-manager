@@ -520,8 +520,6 @@ namespace LTSM
 
             if(0 < val)
             {
-                uid_t localUid = getuid();
-
                 std::vector<char> strbuf(val, 0);
                 struct passwd st = { 0 };
                 struct passwd* res = nullptr;

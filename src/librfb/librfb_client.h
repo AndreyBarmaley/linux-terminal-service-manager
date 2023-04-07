@@ -85,7 +85,7 @@ namespace LTSM
             void            sendEncodings(const std::list<int> &);
             void            sendFrameBufferUpdate(bool incr);
             void            sendFrameBufferUpdate(const XCB::Region &, bool incr);
-            void            sendSetDesktopSize(uint16_t width, uint16_t height);
+            void            sendSetDesktopSize(const XCB::Size &);
             void            sendContinuousUpdates(bool enable, const XCB::Region &);
 
             void            recvFBUpdateEvent(void);
@@ -121,14 +121,17 @@ namespace LTSM
             void            sendCutTextEvent(const char*, size_t);
             void            sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
 
-            virtual void    ltsmHandshakeEvent(int flags) {}
-            virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) {}
-            virtual void    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) {}
-            virtual void    fbUpdateEvent(void) {}
-            virtual void    setColorMapEvent(const std::vector<Color> &) {}
-            virtual void    bellEvent(void) {}
-            virtual void    cutTextEvent(std::vector<uint8_t> &&) {}
-            virtual void    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {}
+            std::list<int>  supportedEncodings(void) const;
+
+            virtual void    ltsmHandshakeEvent(int flags) { /* empty */ }
+            virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) { /* empty */ }
+            virtual void    pixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
+            virtual void    fbUpdateEvent(void) { /* empty */ }
+            virtual void    setColorMapEvent(const std::vector<Color> &) { /* empty */ }
+            virtual void    bellEvent(void) { /* empty */ }
+            virtual void    cutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
+            virtual void    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
+	    virtual void    displayResizeEvent(const XCB::Size &);
         };
 
         class ClientDecoderSocket : public ClientDecoder

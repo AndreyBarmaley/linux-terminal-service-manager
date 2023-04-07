@@ -107,6 +107,13 @@ namespace LTSM
                    redShift != pf.redShift || greenShift != pf.greenShift || blueShift != pf.blueShift || alphaShift != pf.alphaShift;
         }
 
+        bool compare(const PixelFormat & pf, bool skipAlpha) const
+        {
+            return bitsPerPixel == pf.bitsPerPixel &&
+                   redMax == pf.redMax && greenMax == pf.greenMax && blueMax == pf.blueMax && (skipAlpha ? true : alphaMax == pf.alphaMax) &&
+                   redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
+        }
+
         uint32_t        rmask(void) const;
         uint32_t        gmask(void) const;
         uint32_t        bmask(void) const;

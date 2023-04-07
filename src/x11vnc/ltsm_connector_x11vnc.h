@@ -51,7 +51,6 @@ namespace LTSM
             // rfb server encoding
             const PixelFormat &        serverFormat(void) const override;
             std::list<std::string>     serverDisabledEncodings(void) const override;
-            std::list<std::string>     serverPrefferedEncodings(void) const override;
 
             bool                       xcbNoDamageOption(void) const override;
             bool                       xcbAllowMessages(void) const override;

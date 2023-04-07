@@ -24,6 +24,8 @@
 #ifndef _LIBRFB_FFMPEG_
 #define _LIBRFB_FFMPEG_
 
+#include <mutex>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 
@@ -117,6 +119,9 @@ namespace LTSM
             const AVCodec* codec = nullptr;
 #endif
 
+            std::mutex          lockUpdate;
+            std::chrono::steady_clock::time_point updatePoint;
+
             //int bitrate = 1024;
             int fps = 25;
             int pts = 0;
@@ -125,8 +130,11 @@ namespace LTSM
 	    void		initContext(size_t, size_t);
 
         public:
+            void                resizedEvent(const XCB::Size &) override;
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 	    void                setDebug(int) override;
+
+            size_t              updateTimeMS(void) const;
 
             EncodingFFmpeg();
             ~EncodingFFmpeg() = default;
@@ -150,10 +158,13 @@ namespace LTSM
             const AVCodec* codec = nullptr;
 #endif
 
+            std::mutex          lockUpdate;
+
         protected:
 	    void		initContext(size_t, size_t);
 
         public:
+            void                resizedEvent(const XCB::Size &) override;
             void                updateRegion(DecoderStream &, const XCB::Region &) override;
 	    void                setDebug(int) override;
             

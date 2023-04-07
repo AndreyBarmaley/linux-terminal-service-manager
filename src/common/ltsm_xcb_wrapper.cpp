@@ -1716,6 +1716,17 @@ namespace LTSM
     }
 #endif
 
+    std::string getLocalAddr(int displayNum)
+    {
+	if(displayNum < 0)
+	{
+	    auto env = getenv("DISPLAY");
+	    return std::string(env ? env : "");
+	}
+
+	return std::string(":").append(std::to_string(displayNum));
+    }
+
     /* XCB::Connector */
     XCB::Connector::Connector(int displayNum, const AuthCookie* cookie)
     {
@@ -1724,9 +1735,7 @@ namespace LTSM
 
     void XCB::Connector::displayConnect(int displayNum, const AuthCookie* cookie)
     {
-        auto displayAddr = displayNum < 0 ?
-		std::string(getenv("DISPLAY")) :
-		std::string(":").append(std::to_string(displayNum));
+        auto displayAddr = getLocalAddr(displayNum);
 
         if(cookie) 
         {
@@ -2496,6 +2505,11 @@ namespace LTSM
         {
             auto area = region();
 
+	    if(area.toSize() == sz)
+		return true;
+
+            randrScreenSetSizeEvent(sz);
+
             // clear all damages
             damageSubtrack(area);
 
@@ -2507,7 +2521,7 @@ namespace LTSM
             return res;
         }
 
-        return 0;
+        return false;
     }
 
     void XCB::RootDisplay::resetInputs(void)
@@ -2782,7 +2796,7 @@ namespace LTSM
                     return GenericEvent();
                 }
 
-                Application::debug("%s: crtc change notify, size: [%d,%d], crtc: %d, mode: %d, rotation: 0x%04x, sequence: 0x%04x, timestamp: %d",
+                Application::info("%s: crtc change notify, size: [%d,%d], crtc: %d, mode: %d, rotation: 0x%04x, sequence: 0x%04x, timestamp: %d",
 				    __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
                 createFullScreenDamage();

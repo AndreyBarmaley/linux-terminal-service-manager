@@ -93,6 +93,7 @@ namespace LTSM
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
+        updatePoint = std::chrono::steady_clock::now();
 
         codec = avcodec_find_encoder(AV_CODEC_ID_H264);
         if(! codec)
@@ -107,6 +108,7 @@ namespace LTSM
 	// encoding:debug
 	switch(val)
 	{
+	    case 0: av_log_set_level(AV_LOG_QUIET); break;
 	    case 1: av_log_set_level(AV_LOG_ERROR); break;
 	    case 2: av_log_set_level(AV_LOG_WARNING); break;
 	    case 3: av_log_set_level(AV_LOG_INFO); break;
@@ -118,8 +120,21 @@ namespace LTSM
 	EncodingBase::setDebug(val);
     }
 
+    void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz)
+    {
+        std::scoped_lock guard{ lockUpdate };
+
+        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
+            initContext(nsz.width, nsz.height);
+    }
+
     void RFB::EncodingFFmpeg::initContext(size_t width, size_t height)
     {
+        packet.reset();
+        frame.reset();
+	swsctx.reset();
+	avcctx.reset();
+
 	avcctx.reset(avcodec_alloc_context3(codec));
     	if(! avcctx)
     	{
@@ -134,7 +149,7 @@ namespace LTSM
 #endif
     	avcctx->time_base = (AVRational){ 1, fps };
 
-    	av_opt_set(avcctx.get(), "preset", "medium", AV_OPT_SEARCH_CHILDREN);
+    	av_opt_set(avcctx.get(), "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
     	av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
 
     	avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -171,7 +186,7 @@ namespace LTSM
 #endif
 	frame->pts = 0;
 
-        ret = av_frame_get_buffer(frame.get(), 1);
+        ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
         if(0 > ret)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
@@ -188,17 +203,20 @@ namespace LTSM
 
         packet.reset(av_packet_alloc());
 
+        Application::info("%s: %s, size: [%d,%d]", __FUNCTION__,  RFB::encodingName(getType()), width, height);
     }
 
     void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
     {
+        std::scoped_lock guard{ lockUpdate };
+
         if(! avcctx)
 	    initContext(fb.width(), fb.height());
-
+        else
 	if(fb.width() != avcctx->width || fb.height() != avcctx->height)
 	{
-            Application::error("%s: %s, new sz: %dx%x, old sz: %dx%d", __FUNCTION__, "context resized", fb.width(), fb.height(), avcctx->width, avcctx->height);
-            throw ffmpeg_error(NS_FuncName);
+    	    Application::warning("%s: incorrect region size: [%d, %d]", __FUNCTION__, fb.width(), fb.height());
+	    initContext(fb.width(), fb.height());
 	}
 
         const uint8_t* data[1] = { fb.pitchData(0) };
@@ -231,7 +249,14 @@ namespace LTSM
 	    st->sendRaw(packet->data, packet->size);
 
     	    st->sendFlush();
+            updatePoint = std::chrono::steady_clock::now();
 	}
+    }
+
+    size_t RFB::EncodingFFmpeg::updateTimeMS(void) const
+    {
+        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - updatePoint);
+        return dt.count();
     }
 #endif
 
@@ -259,6 +284,7 @@ namespace LTSM
 	// encoding:debug
 	switch(val)
 	{
+	    case 0: av_log_set_level(AV_LOG_QUIET); break;
 	    case 1: av_log_set_level(AV_LOG_ERROR); break;
 	    case 2: av_log_set_level(AV_LOG_WARNING); break;
 	    case 3: av_log_set_level(AV_LOG_INFO); break;
@@ -270,8 +296,23 @@ namespace LTSM
 	DecodingBase::setDebug(val);
     }
 
+    void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz)
+    {
+        std::scoped_lock guard{ lockUpdate };
+
+        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
+            initContext(nsz.width, nsz.height);
+    }
+
     void RFB::DecodingFFmpeg::initContext(size_t width, size_t height)
     {
+        rgbdata.reset();
+        rgb.reset();
+	packet.reset();
+	frame.reset();
+	swsctx.reset();
+	avcctx.reset();
+
     	avcctx.reset(avcodec_alloc_context3(codec));
     	if(! avcctx)
     	{
@@ -314,7 +355,7 @@ namespace LTSM
 #endif
 	frame->pts = 0;
 
-        ret = av_frame_get_buffer(frame.get(), 1);
+        ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
         if(0 > ret)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
@@ -350,6 +391,8 @@ namespace LTSM
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
+
+        Application::info("%s: %s, size: [%d,%d]", __FUNCTION__,  RFB::encodingName(getType()), width, height);
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg)
@@ -362,23 +405,15 @@ namespace LTSM
 
 	if(reg.toSize() != cli.clientSize())
 	{
-	    if(avcctx)
-	    {
-    		Application::warning("%s: incorrect size: [%d, %d], decoder reset", __FUNCTION__, reg.width, reg.height);
-	        rgbdata.reset();
-	        rgb.reset();
-	        packet.reset();
-	        frame.reset();
-	        swsctx.reset();
-	        avcctx.reset();
-	    }
-    	    // client resized, wait correct geometry
-	    return;
+    	    Application::warning("%s: incorrect region size: [%d, %d]", __FUNCTION__, reg.width, reg.height);
+            return;
 	}
 
 	// The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
 	if(len % AV_INPUT_BUFFER_PADDING_SIZE)
 	    buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
+
+        std::scoped_lock guard{ lockUpdate };
 
 	if(! avcctx)
 	    initContext(reg.width, reg.height);
@@ -423,13 +458,22 @@ namespace LTSM
 
 	if(haveFrame)
 	{
-	    sws_scale(swsctx.get(), (uint8_t const* const*) frame->data,
+	    int heightResult = sws_scale(swsctx.get(), (uint8_t const* const*) frame->data,
 		    frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
 
-	    int bpp; uint32_t rmask, gmask, bmask, amask;
+	    if(heightResult < 0)
+    	    {
+        	Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult), heightResult);
+        	throw ffmpeg_error(NS_FuncName);
+    	    }
 
-	    if(Tools::AV_PixelFormatEnumToMasks((AVPixelFormat) rgb->format, & bpp, & rmask, & gmask, & bmask, & amask, false))
-		cli.updateRawPixels(rgb->data[0], avcctx->width, avcctx->height, rgb->linesize[0], bpp, rmask, gmask, bmask, amask);
+	    if(heightResult == avcctx->height)
+	    {
+		int bpp; uint32_t rmask, gmask, bmask, amask;
+
+		if(Tools::AV_PixelFormatEnumToMasks((AVPixelFormat) rgb->format, & bpp, & rmask, & gmask, & bmask, & amask, false))
+		    cli.updateRawPixels(rgb->data[0], XCB::Size(avcctx->width, avcctx->height), rgb->linesize[0], bpp, rmask, gmask, bmask, amask);
+	    }
 	}
     }
 #endif

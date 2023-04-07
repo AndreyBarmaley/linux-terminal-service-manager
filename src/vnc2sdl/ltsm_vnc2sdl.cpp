@@ -184,24 +184,28 @@ namespace LTSM
     }
 #endif
 
-    void printHelp(const char* prog)
+    void printHelp(const char* prog, const std::list<int> & encodings)
     {
-        std::cout << "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] " <<
+        std::cout << std::endl <<
+            prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
+
+        std::cout << std::endl <<
+            "usage: " << prog << ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] " <<
             "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
             "[--notls] " << 
 #ifdef LTSM_WITH_GSSAPI
 	    "[--kerberos <" << krb5def << ">] " << 
 #endif
 #ifdef LTSM_DECODING_FFMPEG
-            "[--x264] " <<
+            "[--x264]" <<
 #endif
+	    "[--encoding <string>] " <<
 	    "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
             "[--share-folder <folder>] [--pulse [" << pulsedef << "]] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
             "[--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
             "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
 
         std::cout << std::endl << "arguments:" << std::endl <<
-            "    --version (show program version)" << std::endl <<
             "    --debug (debug mode)" << std::endl <<
             "    --syslog (to syslog)" << std::endl <<
             "    --host <localhost> " << std::endl <<
@@ -216,8 +220,9 @@ namespace LTSM
             "    --kerberos <" << krb5def << "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_FFMPEG
-            "    --x264 (use ffmpeg decoding)" << std::endl <<
+            "    --x264 (the same as --encoding ffmpeg_x264)" << std::endl <<
 #endif
+            "    --encoding <string> (set preffered encoding)" << std::endl <<
             "    --tls-priority <string> " << std::endl <<
             "    --tls-ca-file <path> " << std::endl <<
             "    --tls-cert-file <path> " << std::endl <<
@@ -233,6 +238,13 @@ namespace LTSM
             "    --pcscd [" << pcscdef << "] (redirect pkcs11)" << std::endl <<
             "    --token-lib [" << librtdef << "] (token autenfication with LDAP)" << std::endl <<
             std::endl;
+
+        std::cout << std::endl << "supported encodings: " << std::endl << 
+            "    ";
+
+        for(auto enc: encodings)
+            std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
+        std::cout << std::endl << std::endl;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -246,7 +258,7 @@ namespace LTSM
 
         if(2 > argc)
         {
-            printHelp(argv[0]);
+            printHelp(argv[0], supportedEncodings());
             throw 0;
         }
 
@@ -254,16 +266,13 @@ namespace LTSM
         {
             if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
             {
-                printHelp(argv[0]);
+                printHelp(argv[0], supportedEncodings());
                 throw 0;
             }
         }
 
         for(int it = 1; it < argc; ++it)
         {
-            if(0 == std::strcmp(argv[it], "--version"))
-                std::cout << "version: " << LTSM_VNC2SDL_VERSION << std::endl;
-            else
             if(0 == std::strcmp(argv[it], "--nocaps"))
                 capslock = false;
             else
@@ -284,9 +293,27 @@ namespace LTSM
             else
 #ifdef LTSM_DECODING_FFMPEG
             if(0 == std::strcmp(argv[it], "--x264"))
-                x264Decoding = true;
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_X264)));
 	    else
 #endif
+            if(0 == std::strcmp(argv[it], "--encoding"))
+            {
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                {
+                    prefferedEncoding.assign(Tools::lower(argv[it + 1]));
+                    it = it + 1;
+                }
+
+                auto encodings = supportedEncodings();
+
+                if(std::none_of(encodings.begin(), encodings.end(),
+                    [&](auto & str){ return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; }))
+                {
+                    Application::warning("%s: incorrect encoding: %s", __FUNCTION__, prefferedEncoding.c_str());
+                    prefferedEncoding.clear();
+                }
+            }
+            else
 #ifdef LTSM_WITH_GSSAPI
             if(0 == std::strcmp(argv[it], "--kerberos"))
             {
@@ -310,7 +337,7 @@ namespace LTSM
                     auto url = Channel::parseUrl(argv[it + 1]);
 
                     if(url.first == Channel::ConnectorType::Unknown)
-                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "printer", argv[it + 1]);
+                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__, "printer", argv[it + 1]);
                     else
                         printerUrl.assign(argv[it + 1]);
 
@@ -327,7 +354,7 @@ namespace LTSM
                     auto url = Channel::parseUrl(argv[it + 1]);
 
                     if(url.first == Channel::ConnectorType::Unknown)
-                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "sane", argv[it + 1]);
+                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__, "sane", argv[it + 1]);
                     else
                         saneUrl.assign(argv[it + 1]);
 
@@ -348,7 +375,7 @@ namespace LTSM
                     auto url = Channel::parseUrl(argv[it + 1]);
 
                     if(url.first == Channel::ConnectorType::Unknown)
-                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pulse", argv[it + 1]);
+                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pulse", argv[it + 1]);
                     else
                         pulseUrl.assign(argv[it + 1]);
 
@@ -365,7 +392,7 @@ namespace LTSM
                     auto url = Channel::parseUrl(argv[it + 1]);
 
                     if(url.first == Channel::ConnectorType::Unknown)
-                        Application::error("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pcscd", argv[it + 1]);
+                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__, "pcscd", argv[it + 1]);
                     else
                         pcscdUrl.assign(argv[it + 1]);
 
@@ -385,7 +412,7 @@ namespace LTSM
 
                 if(! std::filesystem::exists(tokenLib))
                 {
-                    Application::error("%s: parse %s failed, not exist: %s", __FUNCTION__, "token-lib", tokenLib.c_str());
+                    Application::warning("%s: parse %s failed, not exist: %s", __FUNCTION__, "token-lib", tokenLib.c_str());
                     tokenLib.clear();
                 }
             }
@@ -452,13 +479,13 @@ namespace LTSM
 
                 try
                 {
-                    setWidth = std::stoi(argv[it + 1], & idx, 0);
-                    setHeight = std::stoi(argv[it + 1] + idx + 1, nullptr, 0);
+                    auto width = std::stoi(argv[it + 1], & idx, 0);
+                    auto height = std::stoi(argv[it + 1] + idx + 1, nullptr, 0);
+		    setGeometry = XCB::Size(width, height);
                 }
                 catch(const std::invalid_argument &)
                 {
                     std::cerr << "invalid geometry" << std::endl;
-                    setWidth = setHeight = 0;
                 }
 
                 it = it + 1;
@@ -495,11 +522,10 @@ namespace LTSM
             SDL_DisplayMode mode;
             if(0 == SDL_GetDisplayMode(0, 0, & mode))
             {
-                setWidth = mode.w;
-                setHeight = mode.h;
+                setGeometry = XCB::Size(mode.w, mode.h);
 
-                if(setWidth < setHeight)
-                    std::swap(setWidth, setHeight);
+                if(setGeometry.width < setGeometry.height)
+                    std::swap(setGeometry.width, setGeometry.height);
             }
         }
     }
@@ -583,9 +609,10 @@ namespace LTSM
         SDL_Event ev;
 
         auto clipboardDelay = std::chrono::steady_clock::now();
+	std::thread thclip;
 
         if(isContinueUpdatesSupport())
-            sendContinuousUpdates(true, { XCB::Point(0,0), clientSize() });
+            sendContinuousUpdates(true, { XCB::Point(0,0), windowSize });
 
         while(true)
         {
@@ -606,7 +633,10 @@ namespace LTSM
             if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
                 ! focusLost && SDL_HasClipboardText())
             {
-                std::thread([this]() mutable
+		if(thclip.joinable())
+		    thclip.join();
+		else
+                thclip = std::thread([this]() mutable
                 {
                     if(auto ptr = SDL_GetClipboardText())
                     {
@@ -621,7 +651,7 @@ namespace LTSM
 
                         SDL_free(ptr);
                     }
-                }).detach();
+                });
 
                 clipboardDelay = std::chrono::steady_clock::now();
             }
@@ -640,6 +670,9 @@ namespace LTSM
         }
 
         rfbMessagesShutdown();
+
+	if(thclip.joinable())
+	    thclip.join();
 
         if(thrfb.joinable())
             thrfb.join();
@@ -778,23 +811,30 @@ namespace LTSM
                     // resize event
                     if(ev.user()->code == 777 || ev.user()->code == 775)
                     {
-                        XCB::Size sz;
-                        sz.width = (size_t) ev.user()->data1;
-                        sz.height = (size_t) ev.user()->data2;
+                        XCB::Size wsz;
+                        wsz.width = (size_t) ev.user()->data1;
+                        wsz.height = (size_t) ev.user()->data2;
                         bool contUpdateResume = ev.user()->code == 777;
 
-                        fb.reset(new FrameBuffer(sz, clientPf));
+                        fb.reset(new FrameBuffer(wsz, clientPf));
+			cursors.clear();
 
                         if(fullscreen)
-                            window.reset(new SDL::Window("VNC2SDL", sz.width, sz.height,
+                            window.reset(new SDL::Window("VNC2SDL", wsz.width, wsz.height,
                                     0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
-                        else
-                            window->resize(sz.width, sz.height);
+			else
+                            window->resize(wsz.width, wsz.height);
+
+                        auto pair = window->geometry();
+                        windowSize = XCB::Size(pair.first, pair.second);
+
+			displayResizeEvent(wsz);
+
+                        // full update
+                        sendFrameBufferUpdate(false);
 
                         if(contUpdateResume)
-                            sendContinuousUpdates(true, {0, 0, sz.width, sz.height});
-                        else
-                            sendFrameBufferUpdate(false);
+                            sendContinuousUpdates(true, {0, 0, wsz.width, wsz.height});
                     }
                 }
                 break;
@@ -807,26 +847,58 @@ namespace LTSM
         return false;
     }
 
-    void Vnc2SDL::decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> & screens)
+    bool Vnc2SDL::pushEventWindowResize(const XCB::Size & nsz)
     {
-        // 1. server info: status: 0x00, error: 0x00
+        if(windowSize == nsz)
+            return true;
+
+        bool contUpdateResume = false;
+        if(isContinueUpdatesProcessed())
+        {
+            sendContinuousUpdates(false, XCB::Region{0, 0, windowSize.width, windowSize.height});
+            contUpdateResume = true;
+        }
+
+        // create event for resize (resized in main thread)
+        SDL_Event event;
+        event.type = SDL_USEREVENT;
+        event.user.code = contUpdateResume ? 777 : 775;
+        event.user.data1 = (void*)(ptrdiff_t) nsz.width;
+        event.user.data2 = (void*)(ptrdiff_t) nsz.height;
+
+        if(0 > SDL_PushEvent(& event))
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_PushEvent", SDL_GetError());
+            return false;
+        }
+
+        return true;
+    }
+
+    void Vnc2SDL::decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens)
+    {
+        dirty.reset();
+        const std::scoped_lock guard{ renderLock };
+
+        // 1. server request: status: 0x00, error: 0x00
         if(status == 0 && err == 0)
         {
-            bool resize = false;
-
-            auto [ winWidth, winHeight ] = window->geometry();
-            
-            if(setWidth && setHeight)
+            // negotiate part
+            if(! serverExtDesktopSizeSupported)
             {
-                // 2. send client size
-                sendSetDesktopSize(setWidth, setHeight);
+                serverExtDesktopSizeSupported = true;
+
+                if(! setGeometry.isEmpty() && setGeometry != windowSize)
+                    sendSetDesktopSize(setGeometry);
             }
             else
-            if(winWidth != sz.width || winHeight != sz.height)
+            // server runtime
             {
-                // 2. send client size
-                sendSetDesktopSize(sz.width, sz.height);
-            } 
+                if(fullscreen && setGeometry != nsz)
+                    Application::warning("%s: fullscreen mode: [%d, %d], server request resize desktop: [%d, %d]", __FUNCTION__, setGeometry.width, setGeometry.height, nsz.width, nsz.height);
+    
+                pushEventWindowResize(nsz);
+            }
         }
         else
         // 3. server reply
@@ -834,65 +906,50 @@ namespace LTSM
         {
             if(0 == err)
             {
-                if(setWidth && setHeight &&
-                    setWidth == sz.width && setHeight == sz.height)
-                    setWidth = setHeight = 0;
-
-                bool contUpdateResume = false;
-
-                if(isContinueUpdatesProcessed() && fb)
-                {
-                    sendContinuousUpdates(false, XCB::Region(0, 0, fb->width(), fb->height()));
-                    contUpdateResume = true;
-                }
-
-                // create event for resize (resized in main thread)
-                SDL_Event event;
-                event.type = SDL_USEREVENT;
-                event.user.code = contUpdateResume ? 777 : 775;
-                event.user.data1 = (void*)(ptrdiff_t) sz.width;
-                event.user.data2 = (void*)(ptrdiff_t) sz.height;
-    
-                if(0 > SDL_PushEvent(& event))
-                    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_PushEvent", SDL_GetError());
+                pushEventWindowResize(nsz);
             }
             else
             {
-                Application::info("%s: status: %d, error code: %d", __FUNCTION__, status, err);
+                Application::error("%s: status: %d, error code: %d", __FUNCTION__, status, err);
+
+                if(nsz.isEmpty())
+                    throw sdl_error(NS_FuncName);
+
+                pushEventWindowResize(nsz);
+                setGeometry.reset();
             }
         }
     }
 
     void Vnc2SDL::fbUpdateEvent(void)
     {
-        const std::scoped_lock guard{ renderLock };
+    	const std::scoped_lock guard{ renderLock };
 
-        SDL_Rect area{ .x = dirty.x, .y = dirty.y, .w = dirty.width, .h = dirty.height };
-        if(0 != SDL_UpdateTexture(window->display(), & area, fb->pitchData(dirty.y) + dirty.x * fb->bytePerPixel(), fb->pitchSize()))
+	if(! dirty.empty())
         {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
-            throw sdl_error(NS_FuncName);
-        }
+	    SDL_Rect area{ .x = dirty.x, .y = dirty.y, .w = dirty.width, .h = dirty.height };
+    	    if(0 != SDL_UpdateTexture(window->display(), & area, fb->pitchData(dirty.y) + dirty.x * fb->bytePerPixel(), fb->pitchSize()))
+    	    {
+        	Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
+    		throw sdl_error(NS_FuncName);
+    	    }
 
-        window->renderPresent();
-        dirty.reset();
+	    window->renderPresent();
+    	    dirty.reset();
+	}
     }
 
-    void Vnc2SDL::pixelFormatEvent(const PixelFormat & pf, uint16_t width, uint16_t height) 
+    void Vnc2SDL::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) 
     {
-        Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
+        Application::info("%s: width: %d, height: %d", __FUNCTION__, wsz.width, wsz.height);
 
         const std::scoped_lock guard{ renderLock };
 
         if(! window)
-            window.reset(new SDL::Window("VNC2SDL", width, height, 0, 0, 0, accelerated));
+	    window.reset(new SDL::Window("VNC2SDL", wsz.width, wsz.height, 0, 0, 0, accelerated));
 
-        if(setWidth && setHeight)
-        {
-            auto [ winWidth, winHeight ] = window->geometry();
-            if(setWidth == winWidth && setHeight == winHeight)
-                setWidth = setHeight = 0;
-        }
+        auto pair = window->geometry();
+        windowSize = XCB::Size(pair.first, pair.second);
 
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
@@ -903,19 +960,10 @@ namespace LTSM
             throw sdl_error(NS_FuncName);
         }
 
-        bool contUpdateResume = false;
-
-        if(isContinueUpdatesProcessed() && fb)
-        {
-            sendContinuousUpdates(false, XCB::Region(0, 0, fb->width(), fb->height()));
-            contUpdateResume = true;
-        }
-
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        fb.reset(new FrameBuffer(XCB::Size(width, height), clientPf));
+        fb.reset(new FrameBuffer(windowSize, clientPf));
 
-        if(contUpdateResume)
-            sendContinuousUpdates(true, {0, 0, width, height});
+	displayResizeEvent(windowSize);
     }
 
     void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel)
@@ -934,15 +982,34 @@ namespace LTSM
         dirty.join(dst);
     }
 
-    void Vnc2SDL::updateRawPixels(const void* data, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
+    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
     {
     	const std::scoped_lock guard{ renderLock };
 
-	auto area = XCB::Region(0, 0, width, height);
-	if(fb->width() == width && fb->height() == height)
-	    fb = std::make_unique<FrameBuffer>((uint8_t*) data, area, PixelFormat(bpp, rmask, gmask, bmask, amask), pitch);
+	if(fb->region().toSize() == wsz)
+	{
+	    const PixelFormat framePf(bpp, rmask, gmask, bmask, amask);
+	    const FrameBuffer frameFb((uint8_t*) data, XCB::Region(0, 0, wsz.width, wsz.height), framePf, pitch);
 
-        dirty.join(area);
+	    if(! clientPf.compare(frameFb.pixelFormat(), true))
+	    {
+		Application::debug("%s: frame pixel format: bpp: %d, rmask(0x%08x), gmask(0x%08x), bmask(0x%08x), amask(0x%08x)",
+                    __FUNCTION__, framePf.bitsPerPixel, framePf.rmask(), framePf.gmask(), framePf.bmask(), framePf.amask());
+
+		Application::debug("%s: client pixel format: bpp: %d, rmask(0x%08x), gmask(0x%08x), bmask(0x%08x), amask(0x%08x)",
+                    __FUNCTION__, clientPf.bitsPerPixel, clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask());
+
+    		Application::warning("%s: incorrect frame pixel format, slow operation...", __FUNCTION__);
+	    }
+
+	    fb->blitRegion(frameFb, frameFb.region(), XCB::Point{0, 0});
+    	    dirty.assign(fb->region());
+	}
+	else
+	{
+    	    Application::warning("%s: incorrect geometry, fb sz: [%d,%d], frame sz: [%d,%d]", __FUNCTION__, fb->width(), fb->height(), wsz.width, wsz.height);
+    	    dirty.reset();
+	}
     }
 
     const PixelFormat & Vnc2SDL::clientFormat(void) const
@@ -952,13 +1019,12 @@ namespace LTSM
 
     XCB::Size Vnc2SDL::clientSize(void) const
     {
-        auto [ width, height ] = window->geometry();
-        return XCB::Size(width, height);
+        return windowSize;
     }
 
-    bool Vnc2SDL::clientX264(void) const
+    std::string Vnc2SDL::clientEncoding(void) const
     {
-	return x264Decoding;
+	return prefferedEncoding;
     }
 
     void Vnc2SDL::cutTextEvent(std::vector<uint8_t> && buf)
@@ -1444,7 +1510,6 @@ int main(int argc, const char** argv)
         catch(const std::invalid_argument & err)
         {
             std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
-            LTSM::printHelp(argv[0]);
             return -1;
         }
         catch(int val)

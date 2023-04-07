@@ -49,7 +49,7 @@ namespace LTSM
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
         void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void                    updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
+        void                    updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
         const PixelFormat &     clientFormat(void) const override;
         XCB::Size               clientSize(void) const override;
 
@@ -58,7 +58,7 @@ namespace LTSM
     public:
         Vnc2Image(int argc, const char** argv);
 
-        void                    pixelFormatEvent(const PixelFormat &, uint16_t width, uint16_t height) override;
+        void                    pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void                    fbUpdateEvent(void) override;
 
         int    		        start(void) override;

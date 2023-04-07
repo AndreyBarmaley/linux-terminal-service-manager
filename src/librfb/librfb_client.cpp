@@ -433,7 +433,7 @@ namespace LTSM
             return false;
         }
 
-        pixelFormatEvent(serverPf, fbWidth, fbHeight);
+        pixelFormatEvent(serverPf, XCB::Size(fbWidth, fbHeight));
 
         // recv name desktop
         auto nameLen = recvIntBE32();
@@ -471,22 +471,49 @@ namespace LTSM
         rfbMessages = false;
     }
 
+    std::list<int> RFB::ClientDecoder::supportedEncodings(void) const
+    {
+        return { 
+#ifdef LTSM_DECODING_FFMPEG
+	            ENCODING_FFMPEG_X264,
+#endif
+                    ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
+                    ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE, ENCODING_RAW };
+
+    }
+
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
-        std::list<int> encodings = { ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
-                                        ENCODING_LTSM,
-                                        ENCODING_EXT_DESKTOP_SIZE,
-                                        ENCODING_CONTINUOUS_UPDATES,
-                                        ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
-                                        ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE, ENCODING_RAW };
+        auto encodings = supportedEncodings();
+
+        // added pseudo encodings
+        encodings.push_front(ENCODING_LAST_RECT);
+        encodings.push_front(ENCODING_RICH_CURSOR);
+        encodings.push_front(ENCODING_EXT_DESKTOP_SIZE);
+        encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
+        encodings.push_front(ENCODING_LTSM);
+
+        auto prefferedEncoding = clientEncoding();
 
 #ifdef LTSM_DECODING_FFMPEG
-	if(clientX264())
-	{
-    	    auto pos = std::find(encodings.begin(), encodings.end(), ENCODING_LTSM);
-	    encodings.insert(std::next(pos), ENCODING_FFMPEG_X264);
-	}
+        // experimental feature remove and added from preffered
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_X264)))
+            encodings.remove(ENCODING_FFMPEG_X264);
 #endif
+
+        if( ! prefferedEncoding.empty())
+        {
+            // preffered set priority
+            auto it = std::find_if(encodings.begin(), encodings.end(),
+                            [&](auto & enc){ return prefferedEncoding == Tools::lower(RFB::encodingName(enc)); });
+            if(it != encodings.end())
+            {
+                auto enc = *it;
+                encodings.erase(it);
+                it = std::find(encodings.begin(), encodings.end(), ENCODING_LTSM);
+                encodings.insert(std::next(it), enc);
+            }
+        }
 
         sendEncodings(encodings);
         sendPixelFormat();
@@ -562,6 +589,20 @@ namespace LTSM
                 }
             }
         }
+    }
+
+    void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz)
+    {
+	Application::info("%s: display resized, new size: [%d, %d]", __FUNCTION__, dsz.width, dsz.height);
+
+#ifdef LTSM_DECODING_FFMPEG
+	// event background
+	std::thread([this, sz = dsz]()
+	{
+    	    if(this->decoder && this->decoder->getType() == RFB::ENCODING_FFMPEG_X264)
+    		this->decoder->resizedEvent(sz);
+	}).detach();
+#endif
     }
 
     void RFB::ClientDecoder::sendPixelFormat(void)
@@ -865,16 +906,16 @@ namespace LTSM
         decodingExtDesktopSizeEvent(status, err, sz, screens); 
     }
 
-    void RFB::ClientDecoder::sendSetDesktopSize(uint16_t width, uint16_t height)
+    void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz)
     {
-        Application::info("%s: width: %d, height: %d", __FUNCTION__, width, height);
+        Application::info("%s: width: %d, height: %d", __FUNCTION__, wsz.width, wsz.height);
 
         std::scoped_lock guard{ sendLock };
         
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
-        sendIntBE16(width);
-        sendIntBE16(height);
+        sendIntBE16(wsz.width);
+        sendIntBE16(wsz.height);
 
         // num of screens
         sendInt8(1);
@@ -884,8 +925,8 @@ namespace LTSM
         sendIntBE32(0);
         // posx, posy
         sendIntBE32(0);
-        sendIntBE16(width);
-        sendIntBE16(height);
+        sendIntBE16(wsz.width);
+        sendIntBE16(wsz.height);
         // flag
         sendIntBE32(0);
 

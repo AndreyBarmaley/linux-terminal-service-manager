@@ -128,9 +128,8 @@ namespace LTSM
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        for(int yy = 0; yy < reg.height; ++yy)
-            for(int xx = 0; xx < reg.width; ++yy)
-                cli.setPixel(XCB::Point(reg.x + xx, reg.y + yy), cli.recvPixel());
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+            cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
     }
 
     void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
@@ -184,13 +183,16 @@ namespace LTSM
 
     void RFB::DecodingHexTile::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
+        if(16 < reg.width || 16 < reg.height)
+        {
+            Application::error("%s: invalid hextile region: [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            throw rfb_error(NS_FuncName);
+        }
+
         if(debug)
             Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
-        const XCB::Size bsz(16, 16);
-
-        for(auto & reg0: reg.divideBlocks(bsz))
-            updateRegionColors(cli, reg0);
+        updateRegionColors(cli, reg);
     }
 
     void RFB::DecodingHexTile::updateRegionColors(DecoderStream & cli, const XCB::Region & reg)
@@ -205,9 +207,8 @@ namespace LTSM
             if(2 < debug)
                 Application::debug("%s: type: %s", __FUNCTION__, "raw");
 
-            for(int yy = 0; yy < reg.height; ++yy)
-                for(int xx = 0; xx < reg.width; ++yy)
-                    cli.setPixel(XCB::Point(reg.x + xx, reg.y + yy), cli.recvPixel());
+            for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+                    cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
         }
         else
         {
@@ -272,24 +273,6 @@ namespace LTSM
                 }
             }
         }
-    }
-
-    RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB)
-    {
-        zlib.reset(new ZLib::InflateStream());
-    }
-
-    void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)
-    {
-        if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-	cli.recvZlibData(zlib.get(), false);
-	DecoderWrapper wrap(zlib.get(), & cli);
-
-        for(int yy = 0; yy < reg.height; ++yy)
-            for(int xx = 0; xx < reg.width; ++yy)
-                wrap.setPixel(XCB::Point(reg.x + xx, reg.y + yy), wrap.recvPixel());
     }
 
     RFB::DecodingTRLE::DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE)
@@ -520,4 +503,22 @@ namespace LTSM
                 Application::debug("%s: complete: %s", __FUNCTION__, "rle palette");
         }
     }
+
+    RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB)
+    {
+        zlib.reset(new ZLib::InflateStream());
+    }
+
+    void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)
+    {
+        if(debug)
+            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+
+	cli.recvZlibData(zlib.get(), false);
+	DecoderWrapper wrap(zlib.get(), & cli);
+
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+                wrap.setPixel(reg.topLeft() + coord, wrap.recvPixel());
+    }
 }
+

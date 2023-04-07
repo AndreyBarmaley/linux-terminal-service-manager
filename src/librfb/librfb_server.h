@@ -80,10 +80,11 @@ namespace LTSM
             friend class EncodingZlib;
             friend class EncodingFFmpeg;
 
+            const EncodingBase* getEncoder(void) const { return encoder.get(); }
+
             // ServerEncoder
             virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
             virtual std::list<std::string> serverDisabledEncodings(void) const = 0;
-            virtual std::list<std::string> serverPrefferedEncodings(void) const = 0;
 
             // network stream interface
             void                sendFlush(void) override;
@@ -111,7 +112,7 @@ namespace LTSM
             bool                authVncInit(const std::string &);
             bool                authVenCryptInit(const SecurityInfo &);
 
-            void                sendFrameBufferUpdate(const FrameBuffer &);
+            bool                sendFrameBufferUpdate(const FrameBuffer &);
             void                sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
             void                sendColourMap(int first);
             void                sendBellEvent(void);
@@ -151,6 +152,7 @@ namespace LTSM
             void                sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
             void                clientDisconnectedEvent(int display);
+            void                displayResizeEvent(const XCB::Size &);
 
             int                 sendPixel(uint32_t pixel);
             int                 sendCPixel(uint32_t pixel);

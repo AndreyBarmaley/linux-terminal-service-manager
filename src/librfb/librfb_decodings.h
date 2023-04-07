@@ -45,10 +45,10 @@ namespace LTSM
 
             virtual void    	setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void    	fillPixel(const XCB::Region &, uint32_t pixel) = 0;
-            virtual void    	updateRawPixels(const void*, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) = 0;
+            virtual void    	updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) = 0;
 
 	    virtual XCB::Size 	clientSize(void) const = 0;
-            virtual bool    	clientX264(void) const { return false; }
+            virtual std::string	clientEncoding(void) const { return ""; }
         };
 
 	/// DecoderWrapper
@@ -80,10 +80,10 @@ namespace LTSM
 
             void                    setPixel(const XCB::Point & pt, uint32_t pixel) override { owner->setPixel(pt, pixel); }
             void                    fillPixel(const XCB::Region & rt, uint32_t pixel) override { owner->fillPixel(rt, pixel); }
-            void                    updateRawPixels(const void* data, size_t width, size_t height, uint16_t pitch, int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override { owner->updateRawPixels(data, width, height, pitch, bpp, rmask, gmask, bmask, amask); }
+            void                    updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override { owner->updateRawPixels(data, wsz, pitch, bpp, rmask, gmask, bmask, amask); }
 
-	    XCB::Size 			clientSize(void) const override { return owner->clientSize(); };
-            bool    			clientX264(void) const override { return owner->clientX264(); }
+	    XCB::Size 		    clientSize(void) const override { return owner->clientSize(); };
+            std::string             clientEncoding(void) const override { return owner->clientEncoding(); }
 	};
  
         /// DecodingBase
@@ -98,6 +98,7 @@ namespace LTSM
             virtual ~DecodingBase() = default;
 
             virtual void        updateRegion(DecoderStream &, const XCB::Region &) = 0;
+	    virtual void        resizedEvent(const XCB::Size &) { /* empty */ }
 
             int                 getType(void) const;
             virtual void        setDebug(int);
