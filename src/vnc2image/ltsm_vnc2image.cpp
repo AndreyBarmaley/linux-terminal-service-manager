@@ -152,7 +152,7 @@ namespace LTSM
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
+    void Vnc2Image::updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const Pixelformat &)
     {
         Application::warning("%s: not implemented", __FUNCTION__);
     }

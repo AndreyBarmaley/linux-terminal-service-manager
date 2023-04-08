@@ -145,6 +145,8 @@ namespace LTSM
         /// DecodingFFmpeg
         class DecodingFFmpeg : public DecodingBase
         {
+	    PixelFormat 	pf;
+
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;

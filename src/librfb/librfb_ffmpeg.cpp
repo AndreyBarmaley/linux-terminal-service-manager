@@ -367,6 +367,17 @@ namespace LTSM
 #else
         AVPixelFormat avPixelFormat = AV_PIX_FMT_0RGB;
 #endif
+	int bpp; uint32_t rmask, gmask, bmask, amask;
+	if(Tools::AV_PixelFormatEnumToMasks(avPixelFormat, & bpp, & rmask, & gmask, & bmask, & amask, false))
+	{
+	    pf = PixelFormat(bpp, rmask, gmask, bmask, amask);
+        }
+	else
+	{
+            Application::error("%s: unknown pixel format: %s, id: %d", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat), (int) avPixelFormat);
+            throw ffmpeg_error(NS_FuncName);
+        }
+
         swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avcctx->pix_fmt,
                         frame->width, frame->height, avPixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
 
@@ -468,12 +479,7 @@ namespace LTSM
     	    }
 
 	    if(heightResult == avcctx->height)
-	    {
-		int bpp; uint32_t rmask, gmask, bmask, amask;
-
-		if(Tools::AV_PixelFormatEnumToMasks((AVPixelFormat) rgb->format, & bpp, & rmask, & gmask, & bmask, & amask, false))
-		    cli.updateRawPixels(rgb->data[0], XCB::Size(avcctx->width, avcctx->height), rgb->linesize[0], bpp, rmask, gmask, bmask, amask);
-	    }
+		cli.updateRawPixels(rgb->data[0], XCB::Size(avcctx->width, avcctx->height), rgb->linesize[0], pf);
 	}
     }
 #endif

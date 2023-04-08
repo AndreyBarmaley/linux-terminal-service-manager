@@ -606,8 +606,6 @@ namespace LTSM
         }
 
         // main thread: sdl processing
-        SDL_Event ev;
-
         auto clipboardDelay = std::chrono::steady_clock::now();
 	std::thread thclip;
 
@@ -656,13 +654,32 @@ namespace LTSM
                 clipboardDelay = std::chrono::steady_clock::now();
             }
 
-            if(! SDL_PollEvent(& ev))
-            {
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
+	    if(needUpdate && sfback)
+	    {
+    		const std::scoped_lock guard{ renderLock };
 
-            if(! sdlEventProcessing(& ev))
+		SDL_Texture* tx = SDL_CreateTextureFromSurface(window->render(), sfback.get());
+		if(! tx)
+		{
+        	    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateTextureFromSurface", SDL_GetError());
+    		    throw sdl_error(NS_FuncName);
+		}
+
+		window->renderReset();
+        
+    		if(0 != SDL_RenderCopy(window->render(), tx, nullptr, nullptr))
+    		{
+        	    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
+        	    throw sdl_error(NS_FuncName);
+    		}
+        
+    		SDL_RenderPresent(window->render());
+		SDL_DestroyTexture(tx);
+
+		needUpdate = false;
+	    }
+
+            if(! sdlEventProcessing())
             {
                 std::this_thread::sleep_for(5ms);
                 continue;
@@ -696,9 +713,16 @@ namespace LTSM
         RFB::ClientDecoder::rfbMessagesShutdown();
     }
 
-    bool Vnc2SDL::sdlEventProcessing(const SDL::GenericEvent & ev)
+    enum LocalEvent { Resize = 776, ResizeCont = 777 };
+
+    bool Vnc2SDL::sdlEventProcessing(void)
     {
         const std::scoped_lock guard{ renderLock };
+
+        if(! SDL_PollEvent(& sdlEvent))
+	    return false;
+
+	const SDL::GenericEvent ev(& sdlEvent);
 
         switch(ev.type())
         {
@@ -809,32 +833,30 @@ namespace LTSM
             case SDL_USEREVENT:
                 {
                     // resize event
-                    if(ev.user()->code == 777 || ev.user()->code == 775)
+                    if(ev.user()->code == LocalEvent::Resize || ev.user()->code == LocalEvent::ResizeCont)
                     {
-                        XCB::Size wsz;
-                        wsz.width = (size_t) ev.user()->data1;
-                        wsz.height = (size_t) ev.user()->data2;
-                        bool contUpdateResume = ev.user()->code == 777;
+                        auto width = (size_t) ev.user()->data1;
+                        auto height = (size_t) ev.user()->data2;
+                        bool contUpdateResume = ev.user()->code == LocalEvent::ResizeCont;
 
-                        fb.reset(new FrameBuffer(wsz, clientPf));
 			cursors.clear();
 
                         if(fullscreen)
-                            window.reset(new SDL::Window("VNC2SDL", wsz.width, wsz.height,
+                            window.reset(new SDL::Window("VNC2SDL", width, height,
                                     0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
 			else
-                            window->resize(wsz.width, wsz.height);
+                            window->resize(width, height);
 
                         auto pair = window->geometry();
                         windowSize = XCB::Size(pair.first, pair.second);
 
-			displayResizeEvent(wsz);
+			displayResizeEvent(windowSize);
 
                         // full update
                         sendFrameBufferUpdate(false);
 
                         if(contUpdateResume)
-                            sendContinuousUpdates(true, {0, 0, wsz.width, wsz.height});
+                            sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
                     }
                 }
                 break;
@@ -862,7 +884,7 @@ namespace LTSM
         // create event for resize (resized in main thread)
         SDL_Event event;
         event.type = SDL_USEREVENT;
-        event.user.code = contUpdateResume ? 777 : 775;
+        event.user.code = contUpdateResume ? LocalEvent::ResizeCont : LocalEvent::Resize;
         event.user.data1 = (void*)(ptrdiff_t) nsz.width;
         event.user.data2 = (void*)(ptrdiff_t) nsz.height;
 
@@ -877,8 +899,7 @@ namespace LTSM
 
     void Vnc2SDL::decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens)
     {
-        dirty.reset();
-        const std::scoped_lock guard{ renderLock };
+        needUpdate = false;
 
         // 1. server request: status: 0x00, error: 0x00
         if(status == 0 && err == 0)
@@ -923,20 +944,8 @@ namespace LTSM
 
     void Vnc2SDL::fbUpdateEvent(void)
     {
-    	const std::scoped_lock guard{ renderLock };
-
-	if(! dirty.empty())
-        {
-	    SDL_Rect area{ .x = dirty.x, .y = dirty.y, .w = dirty.width, .h = dirty.height };
-    	    if(0 != SDL_UpdateTexture(window->display(), & area, fb->pitchData(dirty.y) + dirty.x * fb->bytePerPixel(), fb->pitchSize()))
-    	    {
-        	Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
-    		throw sdl_error(NS_FuncName);
-    	    }
-
-	    window->renderPresent();
-    	    dirty.reset();
-	}
+	if(! needUpdate)
+	    needUpdate = true;
     }
 
     void Vnc2SDL::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) 
@@ -961,54 +970,77 @@ namespace LTSM
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        fb.reset(new FrameBuffer(windowSize, clientPf));
-
 	displayResizeEvent(windowSize);
     }
 
     void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel)
     {
-        const std::scoped_lock guard{ renderLock };
-
-        fb->setPixel(dst, pixel);
-        dirty.join(dst.x, dst.y, 1, 1);
+        fillPixel({dst, XCB::Size{1, 1}}, pixel);
     }
 
     void Vnc2SDL::fillPixel(const XCB::Region & dst, uint32_t pixel)
     {
         const std::scoped_lock guard{ renderLock };
 
-        fb->fillPixel(dst, pixel);
-        dirty.join(dst);
+	if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
+	{
+	    sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height, clientPf.bitsPerPixel,
+			    clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
+	    if(! sfback)
+	    {
+        	Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateSurface", SDL_GetError());
+    		throw sdl_error(NS_FuncName);
+	    }
+	}
+
+	SDL_Rect dstrt{ .x = dst.x, .y = dst.y, .w = dst.width, .h = dst.height };
+	auto col = clientPf.color(pixel);
+	Uint32 color = SDL_MapRGB(sfback->format, col.r, col.g, col.b);
+
+	if(0 > SDL_FillRect(sfback.get(), &dstrt, color))
+	{
+    	    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_FillRect", SDL_GetError());
+    	    throw sdl_error(NS_FuncName);
+	}
     }
 
-    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask)
+    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, const PixelFormat & pf)
     {
     	const std::scoped_lock guard{ renderLock };
 
-	if(fb->region().toSize() == wsz)
+	if(windowSize == wsz)
 	{
-	    const PixelFormat framePf(bpp, rmask, gmask, bmask, amask);
-	    const FrameBuffer frameFb((uint8_t*) data, XCB::Region(0, 0, wsz.width, wsz.height), framePf, pitch);
+	    std::unique_ptr<SDL_Surface, SurfaceDeleter> sfframe;
 
-	    if(! clientPf.compare(frameFb.pixelFormat(), true))
+	    if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
 	    {
-		Application::debug("%s: frame pixel format: bpp: %d, rmask(0x%08x), gmask(0x%08x), bmask(0x%08x), amask(0x%08x)",
-                    __FUNCTION__, framePf.bitsPerPixel, framePf.rmask(), framePf.gmask(), framePf.bmask(), framePf.amask());
-
-		Application::debug("%s: client pixel format: bpp: %d, rmask(0x%08x), gmask(0x%08x), bmask(0x%08x), amask(0x%08x)",
-                    __FUNCTION__, clientPf.bitsPerPixel, clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask());
-
-    		Application::warning("%s: incorrect frame pixel format, slow operation...", __FUNCTION__);
+		sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height, clientPf.bitsPerPixel,
+			    clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
+		if(! sfback)
+		{
+        	    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateSurface", SDL_GetError());
+    		    throw sdl_error(NS_FuncName);
+		}
 	    }
 
-	    fb->blitRegion(frameFb, frameFb.region(), XCB::Point{0, 0});
-    	    dirty.assign(fb->region());
+	    sfframe.reset(SDL_CreateRGBSurfaceFrom((void*) data, wsz.width, wsz.height, pf.bitsPerPixel, pitch, 
+			    pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()));
+
+	    if(! sfframe)
+	    {
+        	Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateSurfaceFrom", SDL_GetError());
+    		throw sdl_error(NS_FuncName);
+	    }
+
+	    if(0 > SDL_BlitSurface(sfframe.get(), nullptr, sfback.get(), nullptr))
+	    {
+        	Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_BlitSurface", SDL_GetError());
+    		throw sdl_error(NS_FuncName);
+	    }
 	}
 	else
 	{
-    	    Application::warning("%s: incorrect geometry, fb sz: [%d,%d], frame sz: [%d,%d]", __FUNCTION__, fb->width(), fb->height(), wsz.width, wsz.height);
-    	    dirty.reset();
+    	    Application::warning("%s: incorrect geometry, win sz: [%d,%d], frame sz: [%d,%d]", __FUNCTION__, windowSize.width, windowSize.height, wsz.width, wsz.height);
 	}
     }
 

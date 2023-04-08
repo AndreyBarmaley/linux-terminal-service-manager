@@ -89,6 +89,14 @@ namespace LTSM
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
     };
 
+    struct SurfaceDeleter
+    {
+	void operator()(SDL_Surface* sf)
+	{
+	    if(sf) SDL_FreeSurface(sf);
+	}
+    };
+
     class Vnc2SDL : public Application, public XCB::XkbClient, protected RFB::ClientDecoder
     {
         PixelFormat             clientPf;
@@ -101,12 +109,11 @@ namespace LTSM
 	std::string             prefferedEncoding;
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<FrameBuffer> fb;
         std::unique_ptr<TokenAuthInterface> token;
+	std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;
 
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
-        XCB::Region             dirty;
         XCB::Size               windowSize;
         std::mutex              renderLock;
 
@@ -115,7 +122,8 @@ namespace LTSM
         std::chrono::time_point<std::chrono::steady_clock>
                                 dropStart;
 
-        std::atomic<bool>       focusLost = false;
+        std::atomic<bool>       focusLost{false};
+        std::atomic<bool>       needUpdate{false};
 
         int                     port = 5900;
 
@@ -124,6 +132,7 @@ namespace LTSM
         std::mutex              clipboardLock;
 
 	XCB::Size		setGeometry;
+	SDL_Event		sdlEvent;
 
         bool                    accelerated = true;
         bool                    fullscreen = false;
@@ -136,12 +145,12 @@ namespace LTSM
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
         void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-	void    		updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override;
+	void    		updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) override;
         const PixelFormat &     clientFormat(void) const override;
         XCB::Size               clientSize(void) const override;
 	std::string             clientEncoding(void) const override;
 
-        bool                    sdlEventProcessing(const SDL::GenericEvent &);
+        bool                    sdlEventProcessing(void);
         bool                    pushEventWindowResize(const XCB::Size &);
         int                     startSocket(std::string_view host, int port) const;
         void                    sendMouseState(void);

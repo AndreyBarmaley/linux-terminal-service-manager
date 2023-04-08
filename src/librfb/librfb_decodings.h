@@ -45,7 +45,7 @@ namespace LTSM
 
             virtual void    	setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void    	fillPixel(const XCB::Region &, uint32_t pixel) = 0;
-            virtual void    	updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) = 0;
+            virtual void    	updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) = 0;
 
 	    virtual XCB::Size 	clientSize(void) const = 0;
             virtual std::string	clientEncoding(void) const { return ""; }
@@ -80,7 +80,7 @@ namespace LTSM
 
             void                    setPixel(const XCB::Point & pt, uint32_t pixel) override { owner->setPixel(pt, pixel); }
             void                    fillPixel(const XCB::Region & rt, uint32_t pixel) override { owner->fillPixel(rt, pixel); }
-            void                    updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) override { owner->updateRawPixels(data, wsz, pitch, bpp, rmask, gmask, bmask, amask); }
+            void                    updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch, const PixelFormat & pf) override { owner->updateRawPixels(data, wsz, pitch, pf); }
 
 	    XCB::Size 		    clientSize(void) const override { return owner->clientSize(); };
             std::string             clientEncoding(void) const override { return owner->clientEncoding(); }
