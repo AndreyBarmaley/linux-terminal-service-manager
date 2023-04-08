@@ -83,7 +83,6 @@ So printing from the server side (in a remote user session) is implemented in th
 You can test all implemented features in the **docker** version.  
 
 **ROADMAP**
-* add **VP8** encoding (as a video session stream)
 * add video recordings of all working sessions (video recording)
 * add [**VirtualGL**](https://virtualgl.org) support
 * add a video redirect via **PipeWare**
