@@ -233,7 +233,7 @@ namespace LTSM
         std::list<std::string>          getGroupMembers(std::string_view);
         std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
         std::list<std::string>          getSessionDbusAddresses(std::string_view);
-        void                            redirectFdNull(int);
+	void				redirectStdoutStderrTo(bool out, bool err, const char*);
         void                            closefds(int exclude = -1);
         bool                            checkFileReadable(const std::filesystem::path &);
         bool                            createDirectory(const std::filesystem::path &);

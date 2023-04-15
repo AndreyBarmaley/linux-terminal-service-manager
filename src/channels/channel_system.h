@@ -39,7 +39,7 @@
 
 namespace LTSM
 {
-    static const int LtsmProtocolVersion = 0x02;
+    static const int LtsmProtocolVersion = 0x03;
 
     namespace SystemCommand
     {
@@ -100,11 +100,15 @@ namespace LTSM
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
+	enum DataPack { Raw = 0, ZLib = 1 };
+
         struct Opts
         {
             Speed speed = Speed::Medium;
-            bool zlib = false;
+            DataPack pack = DataPack::Raw;
         };
+
+	DataPack dataPack(int);
 
         struct Planned
         {
@@ -122,9 +126,7 @@ namespace LTSM
 
             std::chrono::milliseconds delay{100};
 
-#ifdef LTSM_SOCKET_ZLIB
             std::unique_ptr<ZLib::DeflateBase> zlib;
-#endif
 
             size_t      transfer1 = 0;
             size_t      transfer2 = 0;
@@ -138,7 +140,7 @@ namespace LTSM
             bool        sendData(void);
 
         public:
-            Local2Remote(uint8_t cid, int fd0, bool zlib);
+            Local2Remote(uint8_t cid, int fd0, const DataPack &);
             ~Local2Remote();
 
             bool        readData(void);
@@ -158,9 +160,7 @@ namespace LTSM
 
             std::chrono::milliseconds delay{100};
 
-#ifdef LTSM_SOCKET_ZLIB
             std::unique_ptr<ZLib::InflateBase> zlib;
-#endif
 
             size_t      transfer1 = 0;
             size_t      transfer2 = 0;
@@ -172,7 +172,7 @@ namespace LTSM
             std::vector<uint8_t> popData(void);
 
         public:
-            Remote2Local(uint8_t cid, int fd0, bool zlib);
+            Remote2Local(uint8_t cid, int fd0, const DataPack &);
             ~Remote2Local();
 
             void        pushData(std::vector<uint8_t> &&);
@@ -371,7 +371,7 @@ namespace LTSM
         bool            sendSystemTransferFiles(std::list<std::string>);
         void            sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode &, const Channel::Opts &);
         void            sendSystemChannelClose(uint8_t channel);
-        void            sendSystemChannelConnected(uint8_t channel, bool zlib, bool noerror);
+        void            sendSystemChannelConnected(uint8_t channel, int pack, bool noerror);
         void            sendSystemChannelError(uint8_t channel, int code, const std::string &);
 
         void            recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);

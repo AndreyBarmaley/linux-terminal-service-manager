@@ -668,14 +668,26 @@ namespace LTSM
         return logins;
     }
 
-    void Manager::redirectFdNull(int fd)
+    void Manager::redirectStdoutStderrTo(bool out, bool err, const char* file)
     {
-        int null = open("/dev/null", 0);
-        if(0 <= null)
-        {
-            if(0 > dup2(null, fd))
-                Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
-            close(null);
+        int fd = open(file, O_RDWR | O_CREAT, 0640);
+
+        if(0 <= fd)
+	{
+            if(out)
+		dup2(fd, STDOUT_FILENO);
+            if(err)
+		dup2(fd, STDERR_FILENO);
+
+            close(fd);
+        }
+	else
+	{
+	    const char* devnull = "/dev/null";
+	    Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file, getuid());
+
+	    if(0 != std::strcmp(devnull, file))
+		redirectStdoutStderrTo(out, err, devnull);
         }
     }
 
@@ -851,16 +863,27 @@ namespace LTSM
                     if(! val.empty()) argv.push_back(val.c_str());
                 argv.push_back(nullptr);
 
-                Manager::redirectFdNull(STDERR_FILENO);
+                // errlog folder
+        	auto ltsmLogFolder = xvfb->home / ".ltsm" / "log";
+        	std::error_code fserr;
 
-                // close stdout
+        	if(! std::filesystem::is_directory(ltsmLogFolder, fserr))
+		    Manager::createDirectory(ltsmLogFolder);
+
+        	auto logFile = ltsmLogFolder / cmd.filename();
+        	logFile.replace_extension( ".log" );
+
                 if(0 > pipeout)
                 {
-                    Manager::redirectFdNull(STDOUT_FILENO);
+		    // redirect stdout, atderr
+		    Manager::redirectStdoutStderrTo(true, true, logFile.c_str());
                 }
                 else
-                // redirect stdout
                 {
+		    // redirect stderr
+		    Manager::redirectStdoutStderrTo(false, true, logFile.c_str());
+
+		    // redirect stdout
                     if(0 > dup2(pipeout, STDOUT_FILENO))
                         Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "dup2", strerror(errno), errno);
                     close(pipeout);
@@ -998,7 +1021,7 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            Application::info("%s: request for user: %s, display: %d, cmd: `%s'", __FUNCTION__, xvfb->user.c_str(), xvfb->displayNum, cmd.c_str());
+            Application::info("%s: request for: %s, display: %d, cmd: `%s %s'", __FUNCTION__, xvfb->user.c_str(), xvfb->displayNum, cmd.c_str(), Tools::join(params, " ").c_str());
 
             if(! std::filesystem::is_directory(xvfb->home, err))
             {
@@ -1503,8 +1526,18 @@ namespace LTSM
 
             if(switchToUser(sess))
             {
-                redirectFdNull(STDERR_FILENO);
-                redirectFdNull(STDOUT_FILENO);
+                // errlog folder
+                auto ltsmLogFolder = sess->home / ".ltsm" / "log";
+                std::error_code fserr;
+
+                if(! std::filesystem::is_directory(ltsmLogFolder, fserr))
+                    Manager::createDirectory(ltsmLogFolder);
+
+                auto logFile = ltsmLogFolder / std::filesystem::path(xvfbBin).filename();
+                logFile.replace_extension( ".log" );
+
+                // redirect stdout, atderr
+                Manager::redirectStdoutStderrTo(true, true, logFile.c_str());
 
                 // create argv
                 std::list<std::string> list = Tools::split(xvfbArgs, 0x20);

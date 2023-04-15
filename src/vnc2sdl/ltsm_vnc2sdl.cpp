@@ -199,8 +199,7 @@ namespace LTSM
 #ifdef LTSM_DECODING_FFMPEG
             "[--h264]" <<
             "[--av1]" <<
-            "[--vp9]" <<
-            "[--webp]" <<
+            "[--vp8]" <<
 #endif
 	    "[--encoding <string>] " <<
 	    "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
@@ -225,8 +224,7 @@ namespace LTSM
 #ifdef LTSM_DECODING_FFMPEG
             "    --h264 (the same as --encoding ffmpeg_h264)" << std::endl <<
             "    --av1 (the same as --encoding ffmpeg_av1)" << std::endl <<
-            "    --vp9 (the same as --encoding ffmpeg_vp9)" << std::endl <<
-            "    --webp (the same as --encoding ffmpeg_webp)" << std::endl <<
+            "    --vp8 (the same as --encoding ffmpeg_vp8)" << std::endl <<
 #endif
             "    --encoding <string> (set preffered encoding)" << std::endl <<
             "    --tls-priority <string> " << std::endl <<
@@ -304,11 +302,8 @@ namespace LTSM
             if(0 == std::strcmp(argv[it], "--av1"))
                 prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_AV1)));
 	    else
-            if(0 == std::strcmp(argv[it], "--vp9"))
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_VP9)));
-	    else
-            if(0 == std::strcmp(argv[it], "--webp"))
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_WEBP)));
+            if(0 == std::strcmp(argv[it], "--vp8"))
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_VP8)));
 	    else
 #endif
             if(0 == std::strcmp(argv[it], "--encoding"))

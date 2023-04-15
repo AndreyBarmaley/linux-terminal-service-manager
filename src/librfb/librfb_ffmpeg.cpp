@@ -98,9 +98,8 @@ namespace LTSM
 	switch(type)
 	{
 	    case RFB::ENCODING_FFMPEG_H264: codec = avcodec_find_encoder(AV_CODEC_ID_H264); break;
-            case RFB::ENCODING_FFMPEG_VP9: codec = avcodec_find_encoder(AV_CODEC_ID_VP9); break;
+            case RFB::ENCODING_FFMPEG_VP8: codec = avcodec_find_encoder(AV_CODEC_ID_VP8); break;
             case RFB::ENCODING_FFMPEG_AV1: codec = avcodec_find_encoder(AV_CODEC_ID_AV1); break;
-            case RFB::ENCODING_FFMPEG_WEBP: codec = avcodec_find_encoder(AV_CODEC_ID_WEBP); break;
 	    default: break;
 	}
 
@@ -170,12 +169,9 @@ namespace LTSM
     		av_opt_set(avcctx.get(), "preset", "7", AV_OPT_SEARCH_CHILDREN);
 		break;
 
-	    case AV_CODEC_ID_VP9:
+	    case AV_CODEC_ID_VP8:
 		av_opt_set(avcctx.get(), "quality", "realtime", AV_OPT_SEARCH_CHILDREN);
 		av_opt_set_int(avcctx.get(), "speed", 6, AV_OPT_SEARCH_CHILDREN);
-		break;
-
-	    case AV_CODEC_ID_WEBP:
 		break;
 
 	    default:
@@ -304,9 +300,8 @@ namespace LTSM
 	switch(type)
 	{
 	    case RFB::ENCODING_FFMPEG_H264: codec = avcodec_find_decoder(AV_CODEC_ID_H264); break;
-            case RFB::ENCODING_FFMPEG_VP9: codec = avcodec_find_decoder(AV_CODEC_ID_VP9); break;
+            case RFB::ENCODING_FFMPEG_VP8: codec = avcodec_find_decoder(AV_CODEC_ID_VP8); break;
             case RFB::ENCODING_FFMPEG_AV1: codec = avcodec_find_decoder(AV_CODEC_ID_AV1); break;
-            case RFB::ENCODING_FFMPEG_WEBP: codec = avcodec_find_decoder(AV_CODEC_ID_WEBP); break;
 	    default: break;
 	}
 

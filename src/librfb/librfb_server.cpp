@@ -788,7 +788,7 @@ namespace LTSM
         bool pressed = recvInt8();
         recvSkip(2);
         uint32_t keysym = recvIntBE32();
-        Application::debug("%s: action %s, keysym: 0x%" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
+        Application::debug("%s: action %s, keysym: 0x%08" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
 
         recvKeyEvent(pressed, keysym);
     }
@@ -799,7 +799,7 @@ namespace LTSM
         uint8_t buttons = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug("%s: mask: 0x%" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
+        Application::debug("%s: mask: 0x%02" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
 
         recvPointerEvent(buttons, posx, posy);
     }
@@ -872,8 +872,8 @@ namespace LTSM
 	std::thread([this, sz = dsz]()
 	{
     	    if(this->encoder &&
-		(this->encoder->getType() == RFB::ENCODING_FFMPEG_H264 || this->encoder->getType() == RFB::ENCODING_FFMPEG_WEBP ||
-		    this->encoder->getType() == RFB::ENCODING_FFMPEG_AV1  || this->encoder->getType() == RFB::ENCODING_FFMPEG_VP9))
+		(this->encoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
+		    this->encoder->getType() == RFB::ENCODING_FFMPEG_AV1  || this->encoder->getType() == RFB::ENCODING_FFMPEG_VP8))
         	this->encoder->resizedEvent(sz);
 	}).detach();
 #endif
@@ -1097,8 +1097,7 @@ namespace LTSM
 #ifdef LTSM_ENCODING_FFMPEG
                         RFB::ENCODING_FFMPEG_H264,
                         RFB::ENCODING_FFMPEG_AV1,
-                        RFB::ENCODING_FFMPEG_VP9,
-                        RFB::ENCODING_FFMPEG_WEBP,
+                        RFB::ENCODING_FFMPEG_VP8,
 #endif
 			RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB,  RFB::ENCODING_HEXTILE,
 			RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW };
@@ -1161,9 +1160,8 @@ namespace LTSM
 
 #ifdef LTSM_ENCODING_FFMPEG
             case RFB::ENCODING_FFMPEG_H264:
-            case RFB::ENCODING_FFMPEG_VP9:
+            case RFB::ENCODING_FFMPEG_VP8:
             case RFB::ENCODING_FFMPEG_AV1:
-            case RFB::ENCODING_FFMPEG_WEBP:
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
                 return true;
 #endif

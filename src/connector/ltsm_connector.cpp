@@ -255,7 +255,7 @@ namespace LTSM
         auto displaySz = xcbDisplay.size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
 
-        Application::debug("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, displaySz.width, displaySz.height, xcbDisplay.depth());
+        Application::debug("%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %u", __FUNCTION__, screen, displaySz.width, displaySz.height, xcbDisplay.depth());
 
         if(0 != color)
             xcbDisplay.fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
@@ -300,7 +300,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %d", __FUNCTION__, display);
+            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
 
             for(auto & ptr : _renderPrimitives)
             {
@@ -325,7 +325,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %d", __FUNCTION__, display);
+            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             const int16_t rx = std::get<0>(rect);
             const int16_t ry = std::get<1>(rect);
@@ -339,7 +339,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %d", __FUNCTION__, display);
+            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
             const int16_t rx = std::get<0>(pos);
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
@@ -365,7 +365,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::info("%s: display: %d, level: %s", __FUNCTION__, display, level.c_str());
+            Application::info("%s: display: %" PRId32 ", level: %s", __FUNCTION__, display, level.c_str());
             Application::setDebugLevel(level);
         }
     }

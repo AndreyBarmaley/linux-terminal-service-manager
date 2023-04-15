@@ -133,11 +133,8 @@ namespace LTSM
             case ENCODING_FFMPEG_AV1:
                 return "FFMPEG_AV1";
 
-            case ENCODING_FFMPEG_VP9:
-                return "FFMPEG_VP9";
-
-            case ENCODING_FFMPEG_WEBP:
-                return "FFMPEG_WEBP";
+            case ENCODING_FFMPEG_VP8:
+                return "FFMPEG_VP8";
 
             default:
                 break;

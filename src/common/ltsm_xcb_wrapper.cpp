@@ -261,7 +261,7 @@ namespace LTSM
 
         void error(const xcb_generic_error_t* err, const char* func, const char* xcbname)
         {
-            Application::error("%s: %s failed, error code: %" PRIu8 ", major: 0x%" PRIx8 ", minor: 0x%" PRIx16 ", sequence: 0x%" PRIx16,
+            Application::error("%s: %s failed, error code: %" PRIu8 ", major: 0x%02" PRIx8 ", minor: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16,
                                func, xcbname, err->error_code, err->major_code, err->minor_code, err->sequence);
         }
 
@@ -385,7 +385,7 @@ namespace LTSM
             return false;
         }
 
-	Application::debug("%s: resource id: 0x%" PRIx32, __FUNCTION__, region);
+	Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
         return true;
     }
 
@@ -398,7 +398,7 @@ namespace LTSM
             return false;
         }
 
-	Application::debug("%s: resource id: 0x%" PRIx32, __FUNCTION__, repair);
+	Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
         return true;
     }
 
@@ -434,7 +434,7 @@ namespace LTSM
             res = 0;
         }
 
-	Application::info("%s: level: %d, resource id: 0x%" PRIx32, __FUNCTION__, level, res);
+	Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
         return std::make_unique<WindowDamageId>(conn, win, res);
     }
 
@@ -471,7 +471,7 @@ namespace LTSM
             res = 0;
         }
 
-	Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%" PRIx32,
+	Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
 		 __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
         return std::make_unique<FixesRegionId>(conn, res);
@@ -488,7 +488,7 @@ namespace LTSM
             res = 0;
         }
 
-	Application::debug("%s: rects: %u, resource id: 0x%" PRIx32, __FUNCTION__, counts, res);
+	Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -503,7 +503,7 @@ namespace LTSM
             res = 0;
         }
 
-	Application::debug("%s: reg1 id: 0x%" PRIx32 ", reg2 id: 0x%" PRIx32 ", resource id: 0x%" PRIx32, __FUNCTION__, reg1, reg2, res);
+	Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -518,7 +518,7 @@ namespace LTSM
             res = 0;
         }
 
-	Application::debug("%s: reg1 id: 0x%" PRIx32 ", reg2 id: 0x%" PRIx32 ", resource id: 0x%" PRIx32, __FUNCTION__, reg1, reg2, res);
+	Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -904,7 +904,7 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-            Application::debug("%s: id: %" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
+            Application::debug("%s: id: %08" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
@@ -921,7 +921,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %" PRIx32, __FUNCTION__, mode);
+        Application::debug("%s: id: %08" PRIx32, __FUNCTION__, mode);
         return true;
     }
 
@@ -935,7 +935,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %" PRIx32 ", output: %" PRIx32, __FUNCTION__, mode, output);
+        Application::debug("%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
         return true;
     }
 
@@ -949,7 +949,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %" PRIx32 ", output: %" PRIx32, __FUNCTION__, mode, output);
+        Application::debug("%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
         return true;
     }
 
@@ -1040,7 +1040,7 @@ namespace LTSM
             if(sequence)
                 *sequence = reply->sequence;
 
-            Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: 0x%" PRIx16, __FUNCTION__, sz.width, sz.height, sizeID, reply->sequence);
+            Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: 0x%04" PRIx16, __FUNCTION__, sz.width, sz.height, sizeID, reply->sequence);
         }
 
         return true;
@@ -1139,7 +1139,7 @@ namespace LTSM
             return nullptr;
         }
 
-	Application::info("%s: resource id: 0x%" PRIx32, __FUNCTION__, res);
+	Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, res);
         return std::make_shared<ShmId>(conn, shmId, shmAddr, res);
     }
 
@@ -1297,7 +1297,7 @@ namespace LTSM
             throw xcb_error(NS_FuncName);
         }
 
-	Application::info("%s: resource id: 0x%" PRIx32, __FUNCTION__, win);
+	Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, win);
 
         // set _wm_name
         const std::string name("LTSM_WINSEL");
@@ -1421,7 +1421,7 @@ namespace LTSM
         {
             auto prop = Atom::getName(conn.get(), ev.property);
             std::string log(buf.begin(), buf.end());
-            Application::debug("%s: put selection, size: %u, content: `%s', to window: 0x%" PRIx32 ", property: `%s'",
+            Application::debug("%s: put selection, size: %u, content: `%s', to window: 0x%08" PRIx32 ", property: `%s'",
                         __FUNCTION__, buf.size(), log.c_str(), ev.requestor, prop.c_str());
         }
 
@@ -1464,7 +1464,7 @@ namespace LTSM
             auto sel = Atom::getName(conn.get(), ev->selection);
             auto tgt = Atom::getName(conn.get(), ev->target);
             auto prop = Atom::getName(conn.get(), ev->property);
-            Application::warning("%s: discard, selection atom(0x%" PRIx32 ", `%s'), target atom(0x%" PRIx32 ", `%s'), property atom(0x%" PRIx32 ", `%s'), window: 0x%" PRIx32,
+            Application::warning("%s: discard, selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), window: 0x%08" PRIx32,
                                     __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
         }
 
@@ -1498,7 +1498,7 @@ namespace LTSM
         // fixme: maybe need check time
         if(incr && incr->requestor != ev.requestor && incr->sequence > ev.sequence)
         {
-            Application::warning("%s: %s, win: 0x%" PRIx32 ", sequence: 0x%" PRIx16, __FUNCTION__, "incremental request skip", ev.requestor, ev.sequence);
+            Application::warning("%s: %s, win: 0x%08" PRIx32 ", sequence: 0x%04" PRIx16, __FUNCTION__, "incremental request skip", ev.requestor, ev.sequence);
             return;
         }
 
@@ -1515,7 +1515,7 @@ namespace LTSM
             if(reply->type != XCB_ATOM_INTEGER)
             {
                 auto name = Atom::getName(conn.get(), reply->type);
-                Application::warning("%s: unknown type, atom(0x%" PRIx32 ", `%s')", __FUNCTION__, reply->type, name.c_str());
+                Application::warning("%s: unknown type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, reply->type, name.c_str());
             }
             else
             if(reply->format != 32)
@@ -1531,7 +1531,7 @@ namespace LTSM
 
         if(0 < selsize)
         {
-            Application::notice("%s: selection size: %d, requestor win: 0x%" PRIx32 ", timestamp: %" PRIu32, __FUNCTION__, selsize, ev.requestor, ev.time);
+            Application::notice("%s: selection size: %d, requestor win: 0x%08" PRIx32 ", timestamp: %" PRIu32, __FUNCTION__, selsize, ev.requestor, ev.time);
 
             incr = std::make_unique<SelectionIncrMode>(ev.requestor, selsize, ev.sequence);
 
@@ -1543,7 +1543,7 @@ namespace LTSM
         }
         else
         {
-            Application::warning("%s: %s, win: 0x%" PRIx32 ", sequence: 0x%" PRIx16, __FUNCTION__, "incremental request empty", ev.requestor, ev.sequence);
+            Application::warning("%s: %s, win: 0x%08" PRIx32 ", sequence: 0x%04" PRIx16, __FUNCTION__, "incremental request empty", ev.requestor, ev.sequence);
         }
     }
 
@@ -1615,14 +1615,14 @@ namespace LTSM
         if(! allowAtom)
         {
             auto name = Atom::getName(conn.get(), ev->selection);
-            Application::warning("%s: skip selection, atom(0x%" PRIx32 ", `%s')", __FUNCTION__, ev->selection, name.c_str());
+            Application::warning("%s: skip selection, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, ev->selection, name.c_str());
             return false;
         }
 
         if(XCB_ATOM_NONE == buftype)
             return false;
 
-        Application::debug("%s: requestor: 0x%" PRIx32 ", selection atom(0x%" PRIx32 ", `%s'), target atom(0x%" PRIx32 ", `%s'), property atom(0x%" PRIx32 ", `%s'), timestamp: %" PRIu32,
+        Application::debug("%s: requestor: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), timestamp: %" PRIu32,
                     __FUNCTION__, ev->requestor, ev->selection, Atom::getName(conn.get(), ev->selection).c_str(),
                     ev->target, Atom::getName(conn.get(), ev->target).c_str(), ev->property, Atom::getName(conn.get(), ev->property).c_str(), ev->time);
 
@@ -1636,7 +1636,7 @@ namespace LTSM
         if(buftype != Atom::utf8String && buftype != Atom::text && buftype != Atom::textPlain)
         {
             auto name = Atom::getName(conn.get(), buftype);
-            Application::warning("%s: unsupported type, atom(0x%" PRIx32 ", `%s')", __FUNCTION__, buftype, name.c_str());
+            Application::warning("%s: unsupported type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, buftype, name.c_str());
 
             if(incr)
                 incr.reset();
@@ -1710,7 +1710,7 @@ namespace LTSM
         const char* minor = xcb_errors_get_name_for_minor_code(ctx, err->major_code, err->minor_code);
         const char* error = xcb_errors_get_name_for_error(ctx, err->error_code, & extension);
 
-        Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%" PRIx32 ", sequence: 0x%" PRIx32,
+        Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%08" PRIx32 ", sequence: 0x%08" PRIx32,
                        func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
                        (unsigned int) err->resource_id, (unsigned int) err->sequence);
 
@@ -1968,7 +1968,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
@@ -1994,7 +1994,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
             }
             else
             {
@@ -2022,7 +2022,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
@@ -2046,7 +2046,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
             }
             else
             {
@@ -2074,7 +2074,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(reply->format == 32)
@@ -2106,7 +2106,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(reply->format == 32)
@@ -2140,7 +2140,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(reply->format == 8)
@@ -2190,7 +2190,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
             }
             else
             if(reply->format == 8)
@@ -2248,7 +2248,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
                 return "";
             }
 
@@ -2283,7 +2283,7 @@ namespace LTSM
             {
                 auto name1 = getAtomName(type);
                 auto name2 = getAtomName(prop);
-                Application::warning("%s: type not %s, type atom(0x%" PRIx32 ", `%s'), property: %s", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
+                Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
                 return res;
             }
 
@@ -2669,7 +2669,7 @@ namespace LTSM
 
                     if(! visptr)
                     {
-                        Application::error("%s: unknown visual id: 0x%" PRIx32, __FUNCTION__, reply->visual);
+                        Application::error("%s: unknown visual id: 0x%08" PRIx32, __FUNCTION__, reply->visual);
                         break;
                     }
 
@@ -2747,13 +2747,13 @@ namespace LTSM
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height)
             {
-                Application::warning("%s: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+                Application::warning("%s: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                                         __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-    	    Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+    	    Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                                         __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
             damageRegionEvent(dn->area);
         }
@@ -2762,7 +2762,7 @@ namespace LTSM
         {
 	    auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
 
-	    Application::debug("%s: selection notify, window: 0x%" PRIx32 ", owner: 0x%" PRIx32 ", selection atom(0x%" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
+	    Application::debug("%s: selection notify, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
         		    __FUNCTION__, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
 
             if(_modSelection)
@@ -2775,7 +2775,7 @@ namespace LTSM
         {
 	    auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
 
-    	    Application::debug("%s: cursor notify, serial: 0x%" PRIx32 ", name: atom(0x%" PRIx32 ", `%s'), sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+    	    Application::debug("%s: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `%s'), sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                             __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
 
             xfixesCursorChangedEvent();
@@ -2792,13 +2792,13 @@ namespace LTSM
 
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
-                    Application::warning("%s: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+                    Application::warning("%s: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                                             __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
-                Application::info("%s: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%" PRIx16 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+                Application::info("%s: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
 				    __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
                 createFullScreenDamage();
@@ -2809,7 +2809,7 @@ namespace LTSM
         if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY))
         {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%" PRIx16 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug("%s: xkb notify: %s, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
 			__FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
 
             _minKeycode = mn->minKeyCode;
@@ -2821,7 +2821,7 @@ namespace LTSM
         if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY))
         {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%" PRIx16 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug("%s: xkb notify: %s, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
 			__FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
 
             if(kn->deviceID == _modXkb->devid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
@@ -2837,7 +2837,7 @@ namespace LTSM
         if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY))
         {
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, xkb type: 0x%" PRIx8 ", devid: %" PRIu8 ", mods: 0x%" PRIx8 ", group: %" PRIu8 ", changed: 0x%" PRIx16 ", sequence: 0x%" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug("%s: xkb notify: %s, xkb type: 0x%02" PRIx8 ", devid: %" PRIu8 ", mods: 0x%02" PRIx8 ", group: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
 			__FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
 
             xkb_state_update_mask(_modXkb->state.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
@@ -2922,7 +2922,7 @@ namespace LTSM
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keysym: 0x%" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug("%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
         // shifted/unshifted
         int groupsCount = keysymsPerKeycode >> 1;
@@ -2949,7 +2949,7 @@ namespace LTSM
 
         if(_modXkb)
         {
-            Application::warning("%s: keysym not found 0x%" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(_modXkb->getNames(), ",").c_str());
+            Application::warning("%s: keysym not found 0x%08" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(_modXkb->getNames(), ",").c_str());
         }
 
         return empty;
@@ -3001,7 +3001,7 @@ namespace LTSM
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug("%s: keysym: 0x%" PRIx32 ", current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug("%s: keysym: 0x%08" PRIx32 ", current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         for(int ii = 0; ii < keycodesCount; ++ii)
@@ -3025,7 +3025,7 @@ namespace LTSM
                 return keycode;
         }
 
-        Application::warning("%s: keysym not found 0x%" PRIx32 ", curent group: %d", __FUNCTION__, keysym, group);
+        Application::warning("%s: keysym not found 0x%08" PRIx32 ", curent group: %d", __FUNCTION__, keysym, group);
         return NULL_KEYCODE;
     }
 
@@ -3046,7 +3046,7 @@ namespace LTSM
             if(keysymKeycode != NULL_KEYCODE)
             {
                 if(pressed)
-                    Application::debug("%s: keysym 0x%" PRIx32 " was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
+                    Application::debug("%s: keysym 0x%08" PRIx32 " was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
 
                 if(_modXkb)
                     _modXkb->switchLayoutGroup(keysymGroup);
@@ -3242,7 +3242,7 @@ namespace LTSM
         
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keycode: 0x%" PRIx8 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug("%s: keycode: 0x%02" PRIx8 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         int index = (keycode - minKeycode) * keysymsPerKeycode + group * 2;
@@ -3275,7 +3275,7 @@ namespace LTSM
         
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keysym: 0x%" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug("%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
         // shifted/unshifted
         int groupsCount = keysymsPerKeycode >> 1;
@@ -3300,7 +3300,7 @@ namespace LTSM
             }
         }
         
-        Application::warning("%s: keysym not found 0x%" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(xkbNames(), ",").c_str());
+        Application::warning("%s: keysym not found 0x%08" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(xkbNames(), ",").c_str());
         return empty;
     }
 

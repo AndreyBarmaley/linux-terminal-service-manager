@@ -1296,7 +1296,6 @@ namespace LTSM
     } // TLS
 #endif
 
-#ifdef LTSM_SOCKET_ZLIB
     namespace ZLib
     {
         /* Zlib::DeflateBase */
@@ -1328,22 +1327,27 @@ namespace LTSM
             zs.next_in = (Bytef*) buf;
             zs.avail_in = len;
 
-            std::vector<uint8_t> tmp(len ? deflateBound(& zs, len) : zs.avail_out);
+            std::vector<uint8_t> res;
+	    res.reserve(std::max(deflateBound(& zs, len), tmp.size()));
 
-            zs.next_out = tmp.data();
-            zs.avail_out = tmp.size();
+	    do
+	    {
+        	zs.next_out = tmp.data();
+        	zs.avail_out = tmp.size();
 
-            auto prev = zs.total_out;
-            int ret = deflate(& zs, flushPolicy);
+        	int ret = deflate(& zs, flushPolicy);
 
-            if(ret < Z_OK)
-            {
-                Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflate", ret);
-                throw zlib_error(NS_FuncName);
+    		if(ret < Z_OK)
+        	{
+            	    Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflate", ret);
+            	    throw zlib_error(NS_FuncName);
+        	}
+
+                res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
             }
+            while(zs.avail_out == 0);
 
-            tmp.resize(zs.total_out - prev);
-            return tmp;
+            return res;
         }
 
         /* Zlib::DeflateStream */
@@ -1408,7 +1412,7 @@ namespace LTSM
         std::vector<uint8_t> InflateBase::inflateData(const void* buf, size_t len, int flushPolicy)
         {
             std::vector<uint8_t> res;
-            res.reserve(len * 7);
+            if(len) res.reserve(len * 7);
 
             zs.next_in = (Bytef*) buf;
             zs.avail_in = len;
@@ -1429,11 +1433,6 @@ namespace LTSM
             }
             while(zs.avail_in > 0);
 
-            zs.next_in = nullptr;
-            zs.avail_in = 0;
-            zs.next_out = nullptr;
-            zs.avail_out = 0;
-
             return res;
         }
 
@@ -1445,16 +1444,16 @@ namespace LTSM
         void InflateStream::appendData(const std::vector<uint8_t> & zip)
         {
             sb.shrink();
-            sb.write(inflateData(zip.data(), zip.size(), Z_NO_FLUSH));
+            sb.write(inflateData(zip.data(), zip.size(), Z_SYNC_FLUSH));
         }
 
         void InflateStream::recvRaw(void* ptr, size_t len) const
         {
             if(sb.last() < len)
             {
-                Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
-                throw std::invalid_argument(NS_FuncName);
-            }
+            	Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
+            	throw std::invalid_argument(NS_FuncName);
+	    }
 
             sb.readTo(static_cast<uint8_t*>(ptr), len);
         }
@@ -1486,7 +1485,6 @@ namespace LTSM
             throw zlib_error(NS_FuncName);
         }
     } // ZLib
-#endif
 
 #ifdef LTSM_WITH_GSSAPI
     namespace GssApi
@@ -1611,7 +1609,7 @@ namespace LTSM
         void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
         {
             auto err = Gss::error2str(code1, code2);
-            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%" PRIx32 ", 0x%" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%08" PRIx32 ", 0x%08" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
         }
 
         // GssApi::Client
@@ -1646,7 +1644,7 @@ namespace LTSM
         void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
         {
             auto err = Gss::error2str(code1, code2);
-            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%" PRIx32 ", 0x%" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%08" PRIx32 ", 0x%08" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
         }
     } // GssApi
 #endif

@@ -74,6 +74,17 @@ LTSM::Channel::Speed LTSM::Channel::connectorSpeed(std::string_view str)
     return Speed::VerySlow;
 }
 
+LTSM::Channel::DataPack LTSM::Channel::dataPack(int type)
+{
+    switch(type)
+    {
+	case Channel::DataPack::ZLib: return Channel::DataPack::ZLib;
+	default: break;
+    }
+
+    return Channel::DataPack::Raw;
+}
+
 const char* LTSM::Channel::Connector::typeString(const ConnectorType & type)
 {
     switch(type)
@@ -292,10 +303,16 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     auto stype = jo.getString("type");
     auto smode = jo.getString("mode");
     auto sspeed = jo.getString("speed");
-    bool zlib = jo.getBoolean("zlib", false);
+    auto pack = Channel::dataPack(jo.getInteger("packed", 0));
     bool replyError = false;
 
-    Application::info("%s: id: %" PRId8 ", type: %s, mode: %s, speed: %s, zlib: %d", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), (int) zlib);
+    // deprectated
+    if(jo.hasKey("zlib"))
+    {
+	pack = jo.getBoolean("zlib", false) ? Channel::DataPack::ZLib : Channel::DataPack::Raw;
+    }
+
+    Application::info("%s: id: %" PRId8 ", type: %s, mode: %s, speed: %s, pack: %d", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), (int) pack);
 
     if(! isUserSession())
     {
@@ -325,7 +342,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     if(! replyError)
     {
         Channel::ConnectorType type = Channel::connectorType(stype);
-        Channel::Opts chopts{ Channel::connectorSpeed(sspeed), zlib};
+        Channel::Opts chopts{ Channel::connectorSpeed(sspeed), pack};
 
         if(type == Channel::ConnectorType::Unix)
             replyError = ! createChannelUnix(channel, jo.getString("path"), mode, chopts);
@@ -346,14 +363,20 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     }
 
     if(replyError)
-        sendSystemChannelConnected(channel, zlib, false);
+        sendSystemChannelConnected(channel, pack, false);
 }
 
 bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 {
     int channel = jo.getInteger("id");
     bool error = jo.getBoolean("error");
-    bool zlib = jo.getBoolean("zlib", false);
+    auto pack = Channel::dataPack(jo.getInteger("packed", 0));
+
+    // deprectated
+    if(jo.hasKey("zlib"))
+    {
+	pack = jo.getBoolean("zlib", false) ? Channel::DataPack::ZLib : Channel::DataPack::Raw;
+    }
 
     // move planed to running
     const std::scoped_lock guard{lockpl};
@@ -364,11 +387,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
         auto job = std::move(*it);
         channelsPlanned.erase(it);
 
-        // client: zlib supported?
-        if(job.chOpts.zlib && ! zlib)
-            Application::warning("%s: %s, id: %" PRId8, __FUNCTION__, "zlib disabled", channel);
-
-        job.chOpts.zlib = zlib;
+        job.chOpts.pack = pack;
 
         if(error)
         {
@@ -874,7 +893,7 @@ void LTSM::ChannelClient::sendSystemChannelOpen(uint8_t channel, const Channel::
     jo.push("type", Channel::Connector::typeString(clientOpts.type));
     jo.push("mode", Channel::Connector::modeString(clientOpts.mode));
     jo.push("speed", Channel::Connector::speedString(chOpts.speed));
-    jo.push("zlib", chOpts.zlib);
+    jo.push("packed", (int) chOpts.pack);
 
     if(clientOpts.type == Channel::ConnectorType::Socket)
     {
@@ -905,11 +924,11 @@ void LTSM::ChannelClient::sendSystemChannelClose(uint8_t channel)
     sendLtsmEvent(Channel::System, JsonObjectStream().push("cmd", SystemCommand::ChannelClose).push("id", channel).flush());
 }
 
-void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, bool zlib, bool noerror)
+void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int pack, bool noerror)
 {
     sendLtsmEvent(Channel::System, JsonObjectStream().
         push("cmd", SystemCommand::ChannelConnected).
-        push("zlib", zlib).
+        push("packed", pack).
         push("error", ! noerror).
         push("id", channel).flush());
 }
@@ -998,15 +1017,11 @@ void LTSM::ChannelClient::channelsShutdown(void)
 }
 
 // Remote2Local
-LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int fd0, bool useZlib) : fd(fd0), id(cid)
+LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int fd0, const DataPack & pack) : fd(fd0), id(cid)
 {
-    if(useZlib)
+    if(DataPack::ZLib == pack)
     {
-#ifdef LTSM_SOCKET_ZLIB
         zlib = std::make_unique<ZLib::InflateBase>();
-#else
-        Application::error("%s: zlib not supported", __FUNCTION__);
-#endif
     }
 }
 
@@ -1059,14 +1074,12 @@ bool LTSM::Channel::Remote2Local::writeData(void)
 
     transfer1 += buf.size();
 
-#ifdef LTSM_SOCKET_ZLIB
     if(zlib)
     {
         auto buf2 = zlib->inflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
         buf.swap(buf2);
         // Application::debug("%s: inflate, size1: %d, size2: %d", __FUNCTION__, buf.size(), buf2.size());
     }
-#endif
 
     size_t writesz = 0;
     while(writesz < buf.size())
@@ -1117,15 +1130,11 @@ void LTSM::Channel::Remote2Local::setSpeed(const Channel::Speed & speed)
 }
 
 // Local2Remote
-LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int fd0, bool useZlib) : fd(fd0), id(cid)
+LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int fd0, const DataPack & pack) : fd(fd0), id(cid)
 {
-    if(useZlib)
+    if(DataPack::ZLib == pack)
     {
-#ifdef LTSM_SOCKET_ZLIB
         zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
-#else
-        Application::error("%s: zlib not supported", __FUNCTION__);
-#endif
     }
 
     buf.reserve(0xFFFF);
@@ -1202,7 +1211,6 @@ bool LTSM::Channel::Local2Remote::readData(void)
         buf.resize(real);
         transfer1 += real;
 
-#ifdef LTSM_SOCKET_ZLIB
         if(zlib)
         {
             auto buf2 = zlib->deflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
@@ -1210,7 +1218,6 @@ bool LTSM::Channel::Local2Remote::readData(void)
 	    buf.swap(buf2);
             // Application::debug("%s: deflate, size1: %d, size2: %d", __FUNCTION__, buf2.size(), buf.size());
         }
-#endif
 
         return true;
     }
@@ -1233,20 +1240,20 @@ bool LTSM::Channel::Local2Remote::readData(void)
 LTSM::Channel::Connector::Connector(uint8_t ch, int fd0, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
     : owner(& srv), mode(mod), fd(fd0)
 {
-    owner->sendSystemChannelConnected(ch, chOpts.zlib, true);
+    owner->sendSystemChannelConnected(ch, chOpts.pack, true);
 
     // start threads
     loopRunning = true;
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::ReadOnly)
     {
-        localRemote = std::make_unique<Local2Remote>(ch, fd0, chOpts.zlib);
+        localRemote = std::make_unique<Local2Remote>(ch, fd0, chOpts.pack);
         localRemote->setSpeed(chOpts.speed);
     }
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::WriteOnly)
     {
-        remoteLocal = std::make_unique<Remote2Local>(ch, fd0, chOpts.zlib);
+        remoteLocal = std::make_unique<Remote2Local>(ch, fd0, chOpts.pack);
         remoteLocal->setSpeed(chOpts.speed);
     }
 
@@ -1401,9 +1408,12 @@ void LTSM::Channel::Connector::loopReader(Connector* cn)
         Application::error("%s: id: %" PRId8 ", error: %s", __FUNCTION__, st->cid(), strerror(st->getError()));
     }
 
-    // read/write priority send
-    if(cn->mode == ConnectorMode::ReadWrite || cn->mode == ConnectorMode::ReadOnly)
-        cn->owner->sendSystemChannelClose(st->cid());
+    if(cn->owner)
+    {
+	// read/write priority send
+        if(cn->mode == ConnectorMode::ReadWrite || cn->mode == ConnectorMode::ReadOnly)
+    	    cn->owner->sendSystemChannelClose(st->cid());
+    }
 }
 
 /// UnixConnector

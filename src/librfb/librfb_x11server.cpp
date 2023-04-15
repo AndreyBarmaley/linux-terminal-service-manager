@@ -73,7 +73,7 @@ namespace LTSM
 
     void RFB::X11Server::randrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify)
     {
-        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%" PRIx16, __FUNCTION__, wsz.width, wsz.height, (uint16_t) notify.sequence);
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16, __FUNCTION__, wsz.width, wsz.height, (uint16_t) notify.sequence);
 
         xcbShmInit();
         displayResizeProcessed = false;
@@ -122,7 +122,7 @@ namespace LTSM
                 uint16_t opcode = 0;
                 if(shm && extShm->isEventError(ev, & opcode))
                 {
-                    Application::warning("%s: %s error: 0x%" PRIx16, __FUNCTION__, "shm", opcode);
+                    Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "shm", opcode);
                     shm.reset();
                 }
             }
@@ -132,7 +132,7 @@ namespace LTSM
                 uint16_t opcode = 0;
                 if(extFixes->isEventError(ev, & opcode))
                 {
-                    Application::warning("%s: %s error: 0x%" PRIx16, __FUNCTION__, "xfixes", opcode);
+                    Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xfixes", opcode);
                 }
             }
 
@@ -238,8 +238,8 @@ namespace LTSM
             }
 
 #ifdef LTSM_ENCODING_FFMPEG
-    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_H264) || isClientEncoding(RFB::ENCODING_FFMPEG_WEBP) ||
-    		isClientEncoding(RFB::ENCODING_FFMPEG_AV1) || isClientEncoding(RFB::ENCODING_FFMPEG_VP9))
+    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_H264) ||
+    		isClientEncoding(RFB::ENCODING_FFMPEG_AV1) || isClientEncoding(RFB::ENCODING_FFMPEG_VP8))
 	    {
                 if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
                 {
@@ -422,7 +422,7 @@ namespace LTSM
         XCB::Region desktop(0, 0, 0, 0);
         for(auto & info : screens)
         {
-            Application::info("%s: screen id: 0x%" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%" PRIx32,
+            Application::info("%s: screen id: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08" PRIx32,
                     __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
 
             desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
@@ -526,7 +526,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            Application::debug("%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8 ", red: %" PRIx32 ", green: %" PRIx32 ", blue: %" PRIx32,
+            Application::debug("%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8 ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
                             __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
         }
 

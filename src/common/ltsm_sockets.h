@@ -36,9 +36,7 @@
 #include <cstdio>
 #include <stdexcept>
 
-#ifdef LTSM_SOCKET_ZLIB
 #include <zlib.h>
-#endif
 
 #ifdef LTSM_WITH_GNUTLS
 #include "gnutls/gnutls.h"
@@ -51,7 +49,7 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20230316
+#define LTSM_SOCKETS_VERSION 20230414
 
 namespace LTSM
 {
@@ -379,7 +377,6 @@ namespace LTSM
     }
 #endif // LTSM_WITH_GSSAPI
 
-#ifdef LTSM_SOCKET_ZLIB
     struct zlib_error : public std::runtime_error
     {
         explicit zlib_error(const std::string & what) : std::runtime_error(what){}
@@ -392,6 +389,7 @@ namespace LTSM
         {
         protected:
             z_stream            zs{0};
+            std::array<uint8_t, 1024> tmp;
             
         public:
             explicit DeflateBase(int level = Z_BEST_COMPRESSION);
@@ -453,20 +451,7 @@ namespace LTSM
         private:
             void                sendRaw(const void*, size_t) override;
         };
-
-        class DeflateInflate
-        {
-            DeflateBase         def;
-            InflateBase         inf;
-
-        public:
-            DeflateInflate(int level) : def(level) {}
-
-            std::vector<uint8_t> deflate(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH) { return def.deflateData(buf, len, flushPolicy); }
-            std::vector<uint8_t> inflate(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH) { return inf.inflateData(buf, len, flushPolicy); }
-        };
     } // Zlib
-#endif // LTSM_SOCKET_ZLIB
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

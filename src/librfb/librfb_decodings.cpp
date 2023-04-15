@@ -200,7 +200,7 @@ namespace LTSM
         auto flag = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding mask: 0x%" PRIx8 ", sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: sub encoding mask: 0x%02" PRIx8 ", sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
 
         if(flag & RFB::HEXTILE_RAW)
         {
@@ -308,7 +308,7 @@ namespace LTSM
         auto type = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding type: 0x%" PRIx8 ", sub region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], zrle: %d",
+            Application::debug("%s: sub encoding type: 0x%02" PRIx8 ", sub region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], zrle: %d",
                         __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
 
         // trle raw

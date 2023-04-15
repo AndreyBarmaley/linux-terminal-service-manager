@@ -480,8 +480,7 @@ namespace LTSM
 #ifdef LTSM_DECODING_FFMPEG
 	            ENCODING_FFMPEG_H264,
 	            ENCODING_FFMPEG_AV1,
-	            ENCODING_FFMPEG_VP9,
-	            ENCODING_FFMPEG_WEBP,
+	            ENCODING_FFMPEG_VP8,
 #endif
 
 		     ENCODING_RAW };
@@ -506,10 +505,8 @@ namespace LTSM
             encodings.remove(ENCODING_FFMPEG_H264);
 	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_AV1)))
             encodings.remove(ENCODING_FFMPEG_AV1);
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP9)))
-            encodings.remove(ENCODING_FFMPEG_VP9);
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_WEBP)))
-            encodings.remove(ENCODING_FFMPEG_WEBP);
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP8)))
+            encodings.remove(ENCODING_FFMPEG_VP8);
 #endif
 
         if( ! prefferedEncoding.empty())
@@ -611,8 +608,8 @@ namespace LTSM
 	std::thread([this, sz = dsz]()
 	{
     	    if(this->decoder &&
-		(this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 || this->decoder->getType() == RFB::ENCODING_FFMPEG_WEBP ||
-		this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP9))
+		(this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
+		this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP8))
     		this->decoder->resizedEvent(sz);
 	}).detach();
 #endif
@@ -662,7 +659,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym)
     {
-        Application::debug("%s: keysym: 0x%" PRIx32 ", pressed: %d", __FUNCTION__, keysym, (int) pressed);
+        Application::debug("%s: keysym: 0x%08" PRIx32 ", pressed: %d", __FUNCTION__, keysym, (int) pressed);
 
         std::scoped_lock guard{ sendLock };
 
@@ -676,7 +673,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy)
     {
-        Application::debug("%s: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%" PRIx8 , __FUNCTION__, posx, posy, buttons);
+        Application::debug("%s: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%02" PRIx8 , __FUNCTION__, posx, posy, buttons);
 
         std::scoped_lock guard{ sendLock };
 
@@ -758,8 +755,7 @@ namespace LTSM
 #ifdef LTSM_DECODING_FFMPEG
         	case ENCODING_FFMPEG_H264:
         	case ENCODING_FFMPEG_AV1:
-        	case ENCODING_FFMPEG_VP9:
-        	case ENCODING_FFMPEG_WEBP:
+        	case ENCODING_FFMPEG_VP8:
 		    decoder = std::make_unique<DecodingFFmpeg>(type);
 		    decoder->setDebug(4 /* AV_LOG_VERBOSE */);
 		    break;
@@ -851,7 +847,7 @@ namespace LTSM
             col.b = recvInt8();
 
             if(Application::isDebugLevel(DebugLevel::Trace))
-                Application::debug("%s: color [0x%" PRIx8 ",0x%" PRIx8 ",0x%" PRIx8 "]", __FUNCTION__, col.r, col.g, col.b);
+                Application::debug("%s: color [0x%02" PRIx8 ",0x%02" PRIx8 ",0x%02" PRIx8 "]", __FUNCTION__, col.r, col.g, col.b);
         }
 
         setColorMapEvent(colors);
@@ -916,7 +912,7 @@ namespace LTSM
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug("%s: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%" PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
+            Application::debug("%s: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08" PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 
         decodingExtDesktopSizeEvent(status, err, sz, screens); 

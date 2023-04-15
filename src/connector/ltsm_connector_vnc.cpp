@@ -151,7 +151,7 @@ namespace LTSM
             waitUpdateProcess();
 
             shmUid = userUid;
-            Application::notice("%s: dbus signal, display: %d, username: %s, uid: %d", __FUNCTION__, display, userName.c_str(), userUid);
+            Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s, uid: %" PRIu32, __FUNCTION__, display, userName.c_str(), userUid);
             
             int oldDisplay = displayNum();
             int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
@@ -184,10 +184,10 @@ namespace LTSM
             // fix new session size
             if(xcbDisplay()->size() != clientRegion.toSize())
             {
-                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
+                Application::warning("%s: remote request desktop size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
 
                 if(0 < xcbDisplay()->setRandrScreenSize(clientRegion))
-                    Application::info("%s: change session size [%dx%d], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
+                    Application::info("%s: change session size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__, clientRegion.width, clientRegion.height, displayNum());
             }
             else
             {
@@ -218,7 +218,7 @@ namespace LTSM
             xcbDisableMessages(true);
             waitUpdateProcess();
             rfbMessagesShutdown();
-            Application::notice("%s: dbus signal, display: %d", __FUNCTION__, display);
+            Application::notice("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
         }
     }
 
@@ -226,7 +226,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
+            Application::info("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
             loginWidgetStarted = true;
         }
     }
@@ -235,7 +235,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::info("%s: dbus signal, display: %d", __FUNCTION__, display);
+            Application::info("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
 
             std::thread([this]{ this->sendBellEvent(); }).detach();
         }
@@ -276,7 +276,7 @@ namespace LTSM
             throw vnc_error(NS_FuncName);
         }
 
-        Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug("%s: xcb max request: %u", __FUNCTION__, xcbDisplay()->getMaxRequest());
 
         // init server format
         serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
@@ -468,7 +468,7 @@ namespace LTSM
 
     void Connector::VNC::systemClientVariables(const JsonObject & jo)
     {
-        Application::debug("%s: count: %d", __FUNCTION__, jo.size());
+        Application::debug("%s: count: %u", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments"))
             busSetSessionEnvironments(displayNum(), env->toStdMap<std::string>());
@@ -601,7 +601,7 @@ namespace LTSM
             {
                 if(files.size() > channels)
                 {
-                    Application::warning("%s: files list is large, count: %d, channels: %d", __FUNCTION__, files.size(), channels);
+                    Application::warning("%s: files list is large, count: %u, channels: %u", __FUNCTION__, files.size(), channels);
                     files.resize(channels);
                 }
 
@@ -616,7 +616,7 @@ namespace LTSM
         // filepath - client file path
         // tmpfile - server tmpfile
         // dstdir - server target directory
-        Application::debug("%s: display: %d", __FUNCTION__, display);
+        Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
 
         if(display == displayNum())
         {
@@ -634,7 +634,8 @@ namespace LTSM
             {
                 // create file transfer channel
                 createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
-                        Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly), Channel::Opts{Channel::Speed::Slow, false});
+                        Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
+			Channel::Opts{Channel::Speed::Slow, Channel::DataPack::Raw});
 
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
                 busTransferFileStarted(displayNum(), tmpfile, (*it).second, dstfile.c_str());
@@ -649,7 +650,8 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            createChannel(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), Channel::Opts{Channel::connectorSpeed(speed), false});
+            createChannel(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode),
+			Channel::Opts{Channel::connectorSpeed(speed), Channel::DataPack::Raw});
         }
     }
 
@@ -665,7 +667,8 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit, Channel::Opts{Channel::connectorSpeed(speed), true});
+            createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit,
+		Channel::Opts{Channel::connectorSpeed(speed), Channel::DataPack::ZLib});
         }
     }
 
@@ -694,9 +697,9 @@ namespace LTSM
         int errno2 = jo.getInteger("errno");
 
         if(error)
-            Application::warning("%s: fuse failed: %s, display: %d, path: `%s', cookie: %d, errno: %d", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie, errno2);
+            Application::warning("%s: fuse failed: %s, display: %d, path: `%s', cookie: %u, errno: %d", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie, errno2);
         else
-            Application::debug("%s: fuse cmd: %s, display: %d, path: `%s', cookie: %d", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie);
+            Application::debug("%s: fuse cmd: %s, display: %d, path: `%s', cookie: %u", __FUNCTION__, cmd.c_str(), displayNum(), path.c_str(), cookie);
 
         if(! fuse)
         {
@@ -741,7 +744,7 @@ namespace LTSM
 
     void Connector::VNC::onFuseSessionStart(const int32_t& display, const std::string& dbusAddresses, const std::string& mountPoint)
     {
-        Application::info("%s: display: %d, dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
+        Application::info("%s: display: %" PRId32 ", dbus address: %s, mount point: %s", __FUNCTION__, display, dbusAddresses.c_str(), mountPoint.c_str());
         int ver = 0;
 
         if(display == displayNum())
@@ -757,7 +760,7 @@ namespace LTSM
             }
             catch(const sdbus::Error & err)
             {
-                Application::error("%s: sdbus %s: %s, display: %d", __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), display);
+                Application::error("%s: sdbus %s: %s, display: %" PRId32, __FUNCTION__, err.getName().c_str(), err.getMessage().c_str(), display);
                 fuse.reset();
             }
 
