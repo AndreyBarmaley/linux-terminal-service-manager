@@ -1358,13 +1358,17 @@ namespace LTSM
 
         std::vector<uint8_t> DeflateStream::deflateFlush(void)
         {
-            bb.append(deflateData(nullptr, 0, Z_SYNC_FLUSH));
+            auto last = deflateData(nullptr, 0, Z_SYNC_FLUSH);
+            if(last.size())
+		bb.insert(bb.end(), last.begin(), last.end());
             return std::move(bb);
         }
 
         void DeflateStream::sendRaw(const void* ptr, size_t len)
         {
-            bb.append(deflateData(ptr, len, Z_NO_FLUSH));
+            auto data = deflateData(ptr, len, Z_NO_FLUSH);
+            if(data.size())
+		bb.insert(bb.end(), data.begin(), data.end());
         }
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const

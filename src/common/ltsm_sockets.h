@@ -49,7 +49,7 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20230414
+#define LTSM_SOCKETS_VERSION 20230415
 
 namespace LTSM
 {
@@ -402,7 +402,7 @@ namespace LTSM
         class DeflateStream : public DeflateBase, public NetworkStream
         {
         protected:
-            BinaryBuf           bb;
+            std::vector<uint8_t> bb;
 
         public:
             explicit DeflateStream(int level = Z_BEST_COMPRESSION);
