@@ -163,6 +163,8 @@ The "keyboard" field is a json object, keyboard layouts identifiers
 
 { "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string", "zlib": bool }
 
+zlib: inflate/deflate algorithm used
+
 ------------------+-------
  connector type   | value
 ------------------+-------

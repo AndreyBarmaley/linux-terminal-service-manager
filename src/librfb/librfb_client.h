@@ -99,7 +99,7 @@ namespace LTSM
             bool            isUserSession(void) const override { return true; }
 
             void            recvDecodingLastRect(const XCB::Region &);
-            void            recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size &);
+            void            recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
             void            recvDecodingRichCursor(const XCB::Region &);
 
             void            setSocketStreamMode(int sockd);
@@ -124,7 +124,7 @@ namespace LTSM
             std::list<int>  supportedEncodings(void) const;
 
             virtual void    ltsmHandshakeEvent(int flags) { /* empty */ }
-            virtual void    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) { /* empty */ }
+            virtual void    decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) { /* empty */ }
             virtual void    pixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
             virtual void    fbUpdateEvent(void) { /* empty */ }
             virtual void    setColorMapEvent(const std::vector<Color> &) { /* empty */ }

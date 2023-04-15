@@ -197,7 +197,10 @@ namespace LTSM
 	    "[--kerberos <" << krb5def << ">] " << 
 #endif
 #ifdef LTSM_DECODING_FFMPEG
-            "[--x264]" <<
+            "[--h264]" <<
+            "[--av1]" <<
+            "[--vp9]" <<
+            "[--webp]" <<
 #endif
 	    "[--encoding <string>] " <<
 	    "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
@@ -220,7 +223,10 @@ namespace LTSM
             "    --kerberos <" << krb5def << "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_FFMPEG
-            "    --x264 (the same as --encoding ffmpeg_x264)" << std::endl <<
+            "    --h264 (the same as --encoding ffmpeg_h264)" << std::endl <<
+            "    --av1 (the same as --encoding ffmpeg_av1)" << std::endl <<
+            "    --vp9 (the same as --encoding ffmpeg_vp9)" << std::endl <<
+            "    --webp (the same as --encoding ffmpeg_webp)" << std::endl <<
 #endif
             "    --encoding <string> (set preffered encoding)" << std::endl <<
             "    --tls-priority <string> " << std::endl <<
@@ -292,8 +298,17 @@ namespace LTSM
                 fullscreen = true;
             else
 #ifdef LTSM_DECODING_FFMPEG
-            if(0 == std::strcmp(argv[it], "--x264"))
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_X264)));
+            if(0 == std::strcmp(argv[it], "--h264"))
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_H264)));
+	    else
+            if(0 == std::strcmp(argv[it], "--av1"))
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_AV1)));
+	    else
+            if(0 == std::strcmp(argv[it], "--vp9"))
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_VP9)));
+	    else
+            if(0 == std::strcmp(argv[it], "--webp"))
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(RFB::ENCODING_FFMPEG_WEBP)));
 	    else
 #endif
             if(0 == std::strcmp(argv[it], "--encoding"))
@@ -897,7 +912,7 @@ namespace LTSM
         return true;
     }
 
-    void Vnc2SDL::decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens)
+    void Vnc2SDL::decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens)
     {
         needUpdate = false;
 
@@ -916,7 +931,8 @@ namespace LTSM
             // server runtime
             {
                 if(fullscreen && setGeometry != nsz)
-                    Application::warning("%s: fullscreen mode: [%d, %d], server request resize desktop: [%d, %d]", __FUNCTION__, setGeometry.width, setGeometry.height, nsz.width, nsz.height);
+                    Application::warning("%s: fullscreen mode: [%" PRIu16 ", %" PRIu16 "], server request resize desktop: [%" PRIu16 ", %" PRIu16 "]",
+			    __FUNCTION__, setGeometry.width, setGeometry.height, nsz.width, nsz.height);
     
                 pushEventWindowResize(nsz);
             }
@@ -950,7 +966,7 @@ namespace LTSM
 
     void Vnc2SDL::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) 
     {
-        Application::info("%s: width: %d, height: %d", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
 
         const std::scoped_lock guard{ renderLock };
 
@@ -1040,7 +1056,8 @@ namespace LTSM
 	}
 	else
 	{
-    	    Application::warning("%s: incorrect geometry, win sz: [%d,%d], frame sz: [%d,%d]", __FUNCTION__, windowSize.width, windowSize.height, wsz.width, wsz.height);
+    	    Application::warning("%s: incorrect geometry, win size: [%" PRIu16 ", %" PRIu16 "], frame size: [%" PRIu16 ", %" PRIu16 "]",
+		    __FUNCTION__, windowSize.width, windowSize.height, wsz.width, wsz.height);
 	}
     }
 
@@ -1092,7 +1109,8 @@ namespace LTSM
                 return;
             }
 
-            Application::debug("%s: create cursor, crc32b: %d, width: %d, height: %d, sdl format: %s", __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+            Application::debug("%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16 ", %" PRIu16 "], sdl format: %s",
+			__FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
 
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width, reg.height, clientPf.bitsPerPixel, reg.width * clientPf.bytePerPixel(), sdlFormat);
             if(! sf)
@@ -1317,7 +1335,8 @@ namespace LTSM
 
                     jos.push("stat", jst.flush());
 
-                    Application::debug("%s: fs: %s, st_ino: %d, st_mode: %d, st_nlink: %d, st_size: %d, st_blocks: %d, st_atime: %d, st_mtime: %d, st_ctime: %d", __FUNCTION__, fs.c_str(), st.st_ino, st.st_mode, st.st_nlink, st.st_size, st.st_blocks, st.st_atime, st.st_mtime, st.st_ctime);
+                    Application::debug("%s: fs: %s, st_ino: %d, st_mode: %d, st_nlink: %d, st_size: %d, st_blocks: %d, st_atime: %d, st_mtime: %d, st_ctime: %d",
+			__FUNCTION__, fs.c_str(), (int) st.st_ino, (int) st.st_mode, (int) st.st_nlink, (int) st.st_size, (int) st.st_blocks, (int) st.st_atime, (int) st.st_mtime, (int) st.st_ctime);
                 }
                 else
                 {
@@ -1355,7 +1374,7 @@ namespace LTSM
             auto path = std::filesystem::path(share + fs);
 
             int fd = open(path.c_str(), 0);
-            Application::debug("%s: fs: %s, size: %d, offset: %d", __FUNCTION__, fs.c_str(), size, offset);
+            Application::debug("%s: fs: %s, size: %u, offset: %d", __FUNCTION__, fs.c_str(), size, offset);
 
             if(fd < 0)
             {
@@ -1426,7 +1445,7 @@ namespace LTSM
             throw sdl_error(NS_FuncName);
         }
 
-        auto cookie = jo.getInteger("cookie", 0);
+        int cookie = jo.getInteger("cookie", 0);
         Application::info("%s: command: %s, path: `%s', cookie: %d", __FUNCTION__, fuse.c_str(), path.c_str(), cookie);
 
         if(fuse == "open")

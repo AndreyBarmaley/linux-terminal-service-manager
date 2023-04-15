@@ -232,7 +232,7 @@ namespace LTSM
                 sendInt8(2).sendInt8(RFB::SECURITY_VENCRYPT01_TLSNONE).sendInt8(RFB::SECURITY_VENCRYPT01_X509NONE).sendFlush();
 
             int mode = recvInt8();
-            Application::debug("%s: client choice vencrypt mode: 0x%02x", __FUNCTION__, mode);
+            Application::debug("%s: client choice vencrypt mode: %d", __FUNCTION__, mode);
 
             switch(mode)
             {
@@ -250,7 +250,7 @@ namespace LTSM
                     break;
 
                 default:
-                    Application::error("%s: unsupported vencrypt mode: 0x%02x", __FUNCTION__, mode);
+                    Application::error("%s: unsupported vencrypt mode: %d", __FUNCTION__, mode);
                     return false;
             }
         }
@@ -281,7 +281,7 @@ namespace LTSM
                     break;
 
                 default:
-                    Application::error("%s: unsupported vencrypt mode: 0x%08x", __FUNCTION__, mode);
+                    Application::error("%s: unsupported vencrypt mode: %d", __FUNCTION__, mode);
                     return false;
             }
         }
@@ -514,8 +514,8 @@ namespace LTSM
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::info("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                           __FUNCTION__, pf.bitsPerPixel, displayDepth, big_endian, 
+        Application::info("%s: bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                           __FUNCTION__, pf.bitsPerPixel, displayDepth, (int) big_endian, 
                             pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
         clientPf = serverFormat();
         // send pixel format
@@ -678,8 +678,8 @@ namespace LTSM
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("%s: bpp: %d, depth: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                            __FUNCTION__, bitsPerPixel, depth, bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
+        Application::notice("%s: bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                            __FUNCTION__, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel)
         {
@@ -694,7 +694,7 @@ namespace LTSM
                 throw rfb_error(NS_FuncName);
             }
         }
-        
+
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0)
         {
             Application::error("%s: %s", __FUNCTION__, " unsupported pixel format");
@@ -775,7 +775,7 @@ namespace LTSM
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
 
-        Application::debug("%s: request update, region [%d, %d, %d, %d], incremental: %d",
+        Application::debug("%s: request update, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
 
         bool fullUpdate = incremental == 0;
@@ -788,7 +788,7 @@ namespace LTSM
         bool pressed = recvInt8();
         recvSkip(2);
         uint32_t keysym = recvIntBE32();
-        Application::debug("%s: action %s, keysym: 0x%08x", __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
+        Application::debug("%s: action %s, keysym: 0x%" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
 
         recvKeyEvent(pressed, keysym);
     }
@@ -799,7 +799,7 @@ namespace LTSM
         uint8_t buttons = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug("%s: mask: 0x%02x, posx: %d, posy: %d", __FUNCTION__, buttons, posx, posy);
+        Application::debug("%s: mask: 0x%" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
 
         recvPointerEvent(buttons, posx, posy);
     }
@@ -810,7 +810,7 @@ namespace LTSM
         // skip padding
         recvSkip(3);
         size_t length = recvIntBE32();
-        Application::debug("%s: text length: %d", __FUNCTION__, length);
+        Application::debug("%s: text length: %u", __FUNCTION__, length);
 
         // limiting untrusted sources 64k
         size_t recv = std::min(length, size_t(65535));
@@ -824,12 +824,12 @@ namespace LTSM
     void RFB::ServerEncoder::recvSetContinuousUpdates(void)
     {
         int enable = recvInt8();
-        int regx = recvIntBE16();
-        int regy = recvIntBE16();
-        int regw = recvIntBE16();
-        int regh = recvIntBE16();
+        int16_t regx = recvIntBE16();
+        int16_t regy = recvIntBE16();
+        uint16_t regw = recvIntBE16();
+        uint16_t regh = recvIntBE16();
 
-        Application::info("%s: region: [%d,%d,%d,%d], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
+        Application::info("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx, regy, regw, regh, enable);
 
         continueUpdatesSupport = true;
         continueUpdatesProcessed = enable;
@@ -841,11 +841,11 @@ namespace LTSM
     {
         // skip padding (one byte!)
         recvSkip(1);
-        int width = recvIntBE16();
-        int height = recvIntBE16();
+        uint16_t width = recvIntBE16();
+        uint16_t height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::info("%s: size [%dx%d], screens: %d", __FUNCTION__, width, height, numOfScreens);
+        Application::info("%s: size [%" PRIu16 ", %" PRIu16 "], screens: %d", __FUNCTION__, width, height, numOfScreens);
 
         // screens array
         std::vector<RFB::ScreenInfo> screens;
@@ -865,13 +865,15 @@ namespace LTSM
 
     void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz)
     {
-        Application::info("%s: display resized, new size: [%d, %d]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("%s: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
 
 #ifdef LTSM_ENCODING_FFMPEG
 	// event background
 	std::thread([this, sz = dsz]()
 	{
-    	    if(this->encoder && this->encoder->getType() == RFB::ENCODING_FFMPEG_X264)
+    	    if(this->encoder &&
+		(this->encoder->getType() == RFB::ENCODING_FFMPEG_H264 || this->encoder->getType() == RFB::ENCODING_FFMPEG_WEBP ||
+		    this->encoder->getType() == RFB::ENCODING_FFMPEG_AV1  || this->encoder->getType() == RFB::ENCODING_FFMPEG_VP9))
         	this->encoder->resizedEvent(sz);
 	}).detach();
 #endif
@@ -884,7 +886,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendColourMap(int first)
     {
-        Application::info("%s: first: %d, colour map length: %d", __FUNCTION__, first, colourMap.size());
+        Application::info("%s: first: %d, colour map length: %u", __FUNCTION__, first, colourMap.size());
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
@@ -913,7 +915,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendCutTextEvent(const std::vector<uint8_t> & buf)
     {
-        Application::debug("%s: length text: %d", __FUNCTION__, buf.size());
+        Application::debug("%s: length text: %u", __FUNCTION__, buf.size());
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.4
         sendInt8(RFB::SERVER_CUT_TEXT);
@@ -946,7 +948,7 @@ namespace LTSM
 
         auto & reg = fb.region();
 
-        Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         std::scoped_lock guard{ sendLock };
 
@@ -1093,7 +1095,10 @@ namespace LTSM
         // server priority
         auto encs = {
 #ifdef LTSM_ENCODING_FFMPEG
-                        RFB::ENCODING_FFMPEG_X264,
+                        RFB::ENCODING_FFMPEG_H264,
+                        RFB::ENCODING_FFMPEG_AV1,
+                        RFB::ENCODING_FFMPEG_VP9,
+                        RFB::ENCODING_FFMPEG_WEBP,
 #endif
 			RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB,  RFB::ENCODING_HEXTILE,
 			RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW };
@@ -1122,7 +1127,16 @@ namespace LTSM
                 return true;
 
             case RFB::ENCODING_ZLIB:
-                encoder = std::make_unique<EncodingZlib>();
+	    {
+		auto clevels = { ENCODING_COMPRESS1, ENCODING_COMPRESS2, ENCODING_COMPRESS3, ENCODING_COMPRESS4, ENCODING_COMPRESS5, ENCODING_COMPRESS6, ENCODING_COMPRESS7, ENCODING_COMPRESS8, ENCODING_COMPRESS9 };
+		int zlevel = Z_BEST_SPEED;
+		if(auto it = std::find_if(clevels.begin(), clevels.end(),
+		    [this](auto & enc){ return this->isClientSupportedEncoding(enc); }); it != clevels.end())
+		{
+		    zlevel = ENCODING_COMPRESS1 - *it + Z_BEST_SPEED;
+		}
+                encoder = std::make_unique<EncodingZlib>(zlevel);
+	    }
                 return true;
 
             case RFB::ENCODING_HEXTILE:
@@ -1146,8 +1160,11 @@ namespace LTSM
                 return true;
 
 #ifdef LTSM_ENCODING_FFMPEG
-            case RFB::ENCODING_FFMPEG_X264:
-                encoder = std::make_unique<EncodingFFmpeg>();
+            case RFB::ENCODING_FFMPEG_H264:
+            case RFB::ENCODING_FFMPEG_VP9:
+            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_FFMPEG_WEBP:
+                encoder = std::make_unique<EncodingFFmpeg>(compatible);
                 return true;
 #endif
 
@@ -1170,10 +1187,10 @@ namespace LTSM
     /* pseudo encodings DesktopSize/Extended */
     void RFB::ServerEncoder::sendEncodingDesktopResize(const DesktopResizeStatus & status, const DesktopResizeError & error, const XCB::Size & desktopSize)
     {
-        auto statusCode = desktopResizeStatusCode(status);
-        auto errorCode = desktopResizeErrorCode(error);
+        int statusCode = desktopResizeStatusCode(status);
+        int errorCode = desktopResizeErrorCode(error);
 
-        Application::info("%s: status: %d, error: %d, size [%d, %d]", __FUNCTION__, statusCode, errorCode, desktopSize.width, desktopSize.height);
+        Application::info("%s: status: %d, error: %d, size [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, statusCode, errorCode, desktopSize.width, desktopSize.height);
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE))
         {
@@ -1219,7 +1236,7 @@ namespace LTSM
     {
         auto & reg = fb.region();
 
-        Application::debug("%s: region: [%d, %d, %d, %d], xhot: %d, yhot: %d", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+        Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         std::scoped_lock guard{ sendLock };
 
@@ -1259,7 +1276,7 @@ namespace LTSM
 
         if(bitmaskSize != bitmaskBuf.size())
         {
-            Application::error("%s: bitmask missmatch, buf size: %d, bitmask size: %d", __FUNCTION__, bitmaskBuf.size(), bitmaskSize);
+            Application::error("%s: bitmask missmatch, buf size: %u, bitmask size: %u", __FUNCTION__, bitmaskBuf.size(), bitmaskSize);
             throw rfb_error(NS_FuncName);
         }
 
@@ -1285,7 +1302,7 @@ namespace LTSM
         sendIntBE32(ENCODING_LTSM);
         // ltsm compat 1.1: zero
         sendIntBE32(0);
-        // ltsm encoding supported: ENCODING_LTSM_X264 | ENCODING_LTSM_VP8
+
         sendFlush();
     }
 

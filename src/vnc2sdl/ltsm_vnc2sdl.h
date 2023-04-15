@@ -162,7 +162,7 @@ namespace LTSM
     public:
         Vnc2SDL(int argc, const char** argv);
 
-        void                    decodingExtDesktopSizeEvent(uint16_t status, uint16_t err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) override;
+        void                    decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) override;
         void                    pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void                    fbUpdateEvent(void) override;
         void                    cutTextEvent(std::vector<uint8_t> &&) override;

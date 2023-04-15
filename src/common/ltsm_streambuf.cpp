@@ -416,7 +416,7 @@ namespace LTSM
     {
         if(last() < len)
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -435,7 +435,7 @@ namespace LTSM
     {
         if(last() < len)
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -451,7 +451,7 @@ namespace LTSM
     {
         if(last() < len)
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -526,7 +526,7 @@ namespace LTSM
     {
         if(last() < len)
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -550,7 +550,7 @@ namespace LTSM
     {
         if(len > last())
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -566,7 +566,7 @@ namespace LTSM
     {
         if(len > last())
         {
-            Application::error("%s: incorrect len, last: %d, len: %d", __FUNCTION__, last(), len);
+            Application::error("%s: incorrect len, last: %u, len: %u", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 

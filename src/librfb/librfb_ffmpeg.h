@@ -127,7 +127,7 @@ namespace LTSM
             int pts = 0;
 
         protected:
-	    void		initContext(size_t, size_t);
+	    void		initContext(const XCB::Size &);
 
         public:
             void                resizedEvent(const XCB::Size &) override;
@@ -136,7 +136,7 @@ namespace LTSM
 
             size_t              updateTimeMS(void) const;
 
-            EncodingFFmpeg();
+            EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
         };
 #endif // ENCODING_FFMPEG
@@ -163,14 +163,14 @@ namespace LTSM
             std::mutex          lockUpdate;
 
         protected:
-	    void		initContext(size_t, size_t);
+	    void		initContext(const XCB::Size &);
 
         public:
             void                resizedEvent(const XCB::Size &) override;
             void                updateRegion(DecoderStream &, const XCB::Region &) override;
 	    void                setDebug(int) override;
             
-            DecodingFFmpeg();
+            DecodingFFmpeg(int type);
             ~DecodingFFmpeg() = default;
         };
 #endif //  DECODING_FFMPEG

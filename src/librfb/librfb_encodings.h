@@ -179,7 +179,7 @@ namespace LTSM
         public:
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
-            EncodingZlib();
+            EncodingZlib(int zlevel = Z_BEST_SPEED);
         };
     }
 }

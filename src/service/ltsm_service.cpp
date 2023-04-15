@@ -1102,7 +1102,7 @@ namespace LTSM
             if(std::chrono::seconds(ptr->durationLimit) < sessionAliveSec)
             {
                 Application::notice("time point limit, display: %d, limit: %dsec, session alive: %dsec",
-                                    ptr->displayNum, static_cast<int>(ptr->durationLimit), sessionAliveSec.count());
+                                    ptr->displayNum, static_cast<int>(ptr->durationLimit), static_cast<int>(sessionAliveSec.count()));
                 displayShutdown(ptr, true);
             }
             else
@@ -1366,6 +1366,13 @@ namespace LTSM
 
     pid_t Manager::Object::runSessionCommandSafe(XvfbSessionPtr xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
     {
+	std::error_code err;
+	if(! std::filesystem::exists(cmd, err))
+	{
+	    Application::warning("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
+	    return 0;
+	}
+
         try
         {
             std::scoped_lock guard{ lockRunning };
@@ -1696,7 +1703,7 @@ namespace LTSM
         std::string sessionBin = _config->getString("session:path");
         std::string groupAuth = _config->getString("group:auth");
 
-        Application::info("%s: session request, user: %s, remote: %s, display: %d", __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
+        Application::info("%s: session request, user: %s, remote: %s, display: %" PRId32, __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
         auto [uid, gid, home, shell] = getUserInfo(userName);
 
@@ -1710,7 +1717,7 @@ namespace LTSM
         auto loginSess = findDisplaySession(oldScreen);
         if(! loginSess)
         {
-            Application::error("%s: display not found: %d", __FUNCTION__, oldScreen);
+            Application::error("%s: display not found: %" PRId32, __FUNCTION__, oldScreen);
             return -1;
         }
 
@@ -1878,14 +1885,14 @@ namespace LTSM
 
     std::string Manager::Object::busCreateAuthFile(const int32_t & display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
         auto xvfb = findDisplaySession(display);
         return xvfb ? xvfb->xauthfile : "";
     }
 
     bool Manager::Object::busShutdownDisplay(const int32_t & display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
         if(auto xvfb = findDisplaySession(display))
         {
             displayShutdown(xvfb, true);
@@ -1896,7 +1903,7 @@ namespace LTSM
 
     bool Manager::Object::busShutdownConnector(const int32_t & display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
         emitShutdownConnector(display);
         return true;
     }
@@ -1914,7 +1921,7 @@ namespace LTSM
         // wait sessions
         while(auto sessionsAlive = std::count_if(sessions.begin(), sessions.end(), isValidSession))
         {
-            Application::info("%s: wait sessions: %d", __FUNCTION__, sessionsAlive);
+            Application::info("%s: wait sessions: %u", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
         }
 
@@ -1923,7 +1930,7 @@ namespace LTSM
         // childEnded
         if(! childsRunning.empty())
         {
-            Application::error("%s: running childs: %d, killed process", __FUNCTION__, childsRunning.size());
+            Application::error("%s: running childs: %u, killed process", __FUNCTION__, childsRunning.size());
 
             for(auto & [pid, futureStatus] : childsRunning)
                 kill(pid, SIGTERM);
@@ -1949,13 +1956,13 @@ namespace LTSM
 
     bool Manager::Object::busSendMessage(const int32_t & display, const std::string & message)
     {
-        Application::info("%s: display: %d, message: `%s'", __FUNCTION__, display, message.c_str());
+        Application::info("%s: display: %" PRId32 ", message: `%s'", __FUNCTION__, display, message.c_str());
 
         if(auto xvfb = findDisplaySession(display))
         {
             if(xvfb->mode == XvfbMode::SessionLogin)
             {
-                Application::error("%s: login session skipped, display: %d", __FUNCTION__, display);
+                Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, display);
                 return false;
             }
 
@@ -1968,7 +1975,7 @@ namespace LTSM
 
     bool Manager::Object::busIdleTimeoutAction(const int32_t& display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -2022,7 +2029,7 @@ namespace LTSM
 
     bool Manager::Object::busConnectorTerminated(const int32_t & display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -2214,18 +2221,18 @@ namespace LTSM
 
     bool Manager::Object::busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
     {
-        Application::info("%s: display: %d, count: %d", __FUNCTION__, display, files.size());
+        Application::info("%s: display: %" PRId32 ", count: %u", __FUNCTION__, display, files.size());
 
         auto xvfb = findDisplaySession(display);
         if(! xvfb)
         {
-            Application::error("%s: display not found: %d", __FUNCTION__, display);
+            Application::error("%s: display not found: %" PRId32, __FUNCTION__, display);
             return false;
         }
 
         if(! xvfb->checkStatus(Flags::AllowChannel::TransferFiles))
         {
-            Application::warning("%s: display %d, transfer reject", __FUNCTION__, display);
+            Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
 
             busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
                             NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
@@ -2237,7 +2244,7 @@ namespace LTSM
             auto members = Manager::getGroupMembers(_config->getString("transfer:group:only"));
             if(std::none_of(members.begin(), members.end(), [&](auto & user) { return user == xvfb->user; }))
             {
-                Application::warning("%s: display %d, transfer reject", __FUNCTION__, display);
+                Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
 
                 busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
                                 NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
@@ -2281,7 +2288,7 @@ namespace LTSM
 
     bool Manager::Object::busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile)
     {
-        Application::debug("%s: display: %d, tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(), dstfile.c_str());
+        Application::debug("%s: display: %" PRId32 ", tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(), dstfile.c_str());
 
         if(auto xvfb = findDisplaySession(display))
             std::thread(transferFileStartBackground, this, xvfb, tmpfile, dstfile, filesz).detach();
@@ -2301,7 +2308,7 @@ namespace LTSM
         {
             if(xvfb->mode == XvfbMode::SessionLogin)
             {
-                Application::error("%s: login session skipped, display: %d", __FUNCTION__, display);
+                Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, display);
                 return false;
             }
 
@@ -2375,7 +2382,7 @@ namespace LTSM
 #ifdef LTSM_TOKEN_AUTH
     void  Manager::Object::tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
     {
-        Application::info("%s: display: %d, serial: %s, certs: %d", __FUNCTION__, display, serial.c_str(), certs.size());
+        Application::info("%s: display: %" PRId32 ", serial: %s, certs: %u", __FUNCTION__, display, serial.c_str(), certs.size());
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -2386,7 +2393,7 @@ namespace LTSM
 
     void  Manager::Object::tokenAuthDetached(const int32_t& display, const std::string& serial)
     {
-        Application::info("%s: display: %d, serial: %s", __FUNCTION__, display, serial.c_str());
+        Application::info("%s: display: %" PRId32 ", serial: %s", __FUNCTION__, display, serial.c_str());
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -2432,7 +2439,7 @@ namespace LTSM
 
     bool Manager::Object::helperWidgetStartedAction(const int32_t & display)
     {
-        Application::info("%s: display: %d", __FUNCTION__, display);
+        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
         emitHelperWidgetStarted(display);
         return true;
     }
@@ -2520,7 +2527,7 @@ namespace LTSM
         }
         else
         {
-            Application::warning("%s: session nof found, user: %s, display: %d", __FUNCTION__, login.c_str(), display);
+            Application::warning("%s: session nof found, user: %s, display: %" PRId32, __FUNCTION__, login.c_str(), display);
         }
 
         return true;
@@ -2538,7 +2545,7 @@ namespace LTSM
         }
         else
         {
-            Application::warning("%s: session nof found, user: %s, display: %d", __FUNCTION__, login.c_str(), display);
+            Application::warning("%s: session nof found, user: %s, display: %" PRId32, __FUNCTION__, login.c_str(), display);
         }
 
         return true;
@@ -2651,7 +2658,7 @@ namespace LTSM
     {
         if(auto xvfb = findDisplaySession(display))
         {
-            Application::info("%s: display: %d, layouts: [%s]", __FUNCTION__, display, Tools::join(layouts, ",").c_str());
+            Application::info("%s: display: %" PRId32 ", layouts: [%s]", __FUNCTION__, display, Tools::join(layouts, ",").c_str());
 
             if(layouts.empty())
                 return false;
@@ -3098,13 +3105,13 @@ namespace LTSM
 
     void Manager::Object::busSetConnectorDebugLevel(const int32_t& display, const std::string& level)
     {
-        Application::info("%s: display: %d, level: %s", __FUNCTION__, display, level.c_str());
+        Application::info("%s: display: %" PRId32 ", level: %s", __FUNCTION__, display, level.c_str());
         emitDebugLevel(display, level);
     }
 
     void Manager::Object::busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool & debug)
     {
-        Application::info("%s: display: %d, channel: %d, debug: %d", __FUNCTION__, display, channel, debug);
+        Application::info("%s: display: %" PRId32 ", channel: %" PRIu8 ", debug: %d", __FUNCTION__, display, channel, static_cast<int>(debug));
         emitDebugChannel(display, channel, debug);
     }
 
@@ -3120,6 +3127,7 @@ namespace LTSM
     {
         if(auto xvfb = findDisplaySession(display))
         {
+    	    Application::info("%s: display: %" PRId32 ", width: %" PRIu16 ", height: %" PRIu16, __FUNCTION__, display, width, height);
             xvfb->width = width;
             xvfb->height = height;
             emitHelperWidgetCentered(display);
@@ -3131,7 +3139,7 @@ namespace LTSM
 
     bool Manager::Object::busSetEncryptionInfo(const int32_t & display, const std::string & info)
     {
-        Application::info("%s encryption: %s, display: %d", __FUNCTION__, info.c_str(), display);
+        Application::info("%s encryption: %s, display: %" PRId32, __FUNCTION__, info.c_str(), display);
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -3145,7 +3153,7 @@ namespace LTSM
 
     bool Manager::Object::busSetSessionDurationSec(const int32_t & display, const uint32_t & duration)
     {
-        Application::info("%s: duration: %d, display: %d", __FUNCTION__, duration, display);
+        Application::info("%s: duration: %" PRIu32 ", display: %" PRId32, __FUNCTION__, duration, display);
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -3160,7 +3168,7 @@ namespace LTSM
 
     bool Manager::Object::busSetSessionPolicy(const int32_t & display, const std::string & policy)
     {
-        Application::info("%s: policy: %s, display: %d", __FUNCTION__, policy.c_str(), display);
+        Application::info("%s: policy: %s, display: %" PRId32, __FUNCTION__, policy.c_str(), display);
 
         if(auto xvfb = findDisplaySession(display))
         {
@@ -3171,7 +3179,7 @@ namespace LTSM
             else if(Tools::lower(policy) == "authshare")
                 xvfb->policy = SessionPolicy::AuthShare;
             else
-                Application::error("%s: unknown policy: %s, display: %d", __FUNCTION__, policy.c_str(), display);
+                Application::error("%s: unknown policy: %s, display: %" PRId32, __FUNCTION__, policy.c_str(), display);
 
             emitSessionChanged(display);
             return true;
@@ -3182,7 +3190,7 @@ namespace LTSM
 
     bool Manager::Object::helperSetSessionLoginPassword(const int32_t & display, const std::string & login, const std::string & password, const bool & action)
     {
-        Application::info("%s: login: %s, display: %d", __FUNCTION__, login.c_str(), display);
+        Application::info("%s: login: %s, display: %" PRId32, __FUNCTION__, login.c_str(), display);
         emitHelperSetLoginPassword(display, login, password, action);
         return true;
     }
@@ -3425,6 +3433,7 @@ namespace LTSM
         signal(SIGTERM, signalHandler);
         //signal(SIGCHLD, signalHandler);
         signal(SIGINT,  isBackground ? SIG_IGN : signalHandler);
+        signal(SIGPIPE,  SIG_IGN);
         signal(SIGHUP,  SIG_IGN);
 
         createXauthDir();

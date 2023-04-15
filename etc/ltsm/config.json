@@ -6,7 +6,6 @@
     "vnc:encoding:debug": 0,
     "vnc:encoding:threads": 4,
     "vnc:encoding:blacklist": [ "zlib" ],
-    "#vnc:encoding:preflist": [ ],
     "vnc:gnutls:disable": false,
     "vnc:gnutls:debug": 3,
     "vnc:gnutls:anonmode": true,

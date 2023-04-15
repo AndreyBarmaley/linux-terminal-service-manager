@@ -699,7 +699,7 @@ namespace LTSM
         sockaddr.sin_port = htons(port);
         sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.data());
 
-        Application::debug("%s: bind addr: %s, port: %d", __FUNCTION__, ipaddr.data(), port);
+        Application::debug("%s: bind addr: %s, port: %" PRIu16, __FUNCTION__, ipaddr.data(), port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
@@ -747,7 +747,7 @@ namespace LTSM
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.data());
         sockaddr.sin_port = htons(port);
 
-        Application::debug("%s: ipaddr: %s, port: %d", __FUNCTION__, ipaddr.data(), port);
+        Application::debug("%s: ipaddr: %s, port: %" PRIu16, __FUNCTION__, ipaddr.data(), port);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_in)))
         {
@@ -1307,7 +1307,8 @@ namespace LTSM
             if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level)
                 level = Z_BEST_COMPRESSION;
 
-            int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+            int ret = deflateInit(& zs, level);
+            //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
 
             if(ret < Z_OK)
             {
@@ -1327,7 +1328,7 @@ namespace LTSM
             zs.next_in = (Bytef*) buf;
             zs.avail_in = len;
 
-            std::vector<uint8_t> tmp(deflateBound(& zs, std::max(len, zs.total_in)));
+            std::vector<uint8_t> tmp(len ? deflateBound(& zs, len) : zs.avail_out);
 
             zs.next_out = tmp.data();
             zs.avail_out = tmp.size();
@@ -1342,12 +1343,6 @@ namespace LTSM
             }
 
             tmp.resize(zs.total_out - prev);
-
-            zs.next_in = nullptr;
-            zs.avail_in = 0;
-            zs.next_out = nullptr;
-            zs.avail_out = 0;
-
             return tmp;
         }
 
@@ -1360,7 +1355,6 @@ namespace LTSM
         std::vector<uint8_t> DeflateStream::deflateFlush(void)
         {
             bb.append(deflateData(nullptr, 0, Z_SYNC_FLUSH));
-            zs.total_in = 0;
             return std::move(bb);
         }
 
@@ -1458,7 +1452,7 @@ namespace LTSM
         {
             if(sb.last() < len)
             {
-                Application::error("%s: stream last: %d, expected: %d", __FUNCTION__, sb.last(), len);
+                Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
                 throw std::invalid_argument(NS_FuncName);
             }
 
@@ -1617,7 +1611,7 @@ namespace LTSM
         void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
         {
             auto err = Gss::error2str(code1, code2);
-            Application::error("%s: %s failed, error: \"%s\", codes: [%d, %d]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%" PRIx32 ", 0x%" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
         }
 
         // GssApi::Client
@@ -1652,7 +1646,7 @@ namespace LTSM
         void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const
         {
             auto err = Gss::error2str(code1, code2);
-            Application::error("%s: %s failed, error: \"%s\", codes: [%d, %d]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%" PRIx32 ", 0x%" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
         }
     } // GssApi
 #endif

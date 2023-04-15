@@ -115,16 +115,84 @@ namespace LTSM
             uint8_t channel = 0;
         };
 
+        // Local2Remote
+        class Local2Remote
+        {
+            std::vector<uint8_t> buf;
+
+            std::chrono::milliseconds delay{100};
+
+#ifdef LTSM_SOCKET_ZLIB
+            std::unique_ptr<ZLib::DeflateBase> zlib;
+#endif
+
+            size_t      transfer1 = 0;
+            size_t      transfer2 = 0;
+            size_t      blocksz = 4096;
+
+            int         error = 0;
+            int         fd = -1;
+
+            uint8_t     id = 255;
+
+            bool        sendData(void);
+
+        public:
+            Local2Remote(uint8_t cid, int fd0, bool zlib);
+            ~Local2Remote();
+
+            bool        readData(void);
+            void        setSpeed(const Channel::Speed &);
+
+            uint8_t     cid(void) const { return id; }
+            int         getError(void) const { return error; }
+            std::chrono::milliseconds getDelay(void) const { return delay; }
+            const std::vector<uint8_t> & getBuf(void) const { return buf; }
+        };
+
+        // Remote2Local
+        class Remote2Local
+        {
+            std::list<std::vector<uint8_t>> queueBufs;
+            std::mutex  lockQueue;
+
+            std::chrono::milliseconds delay{100};
+
+#ifdef LTSM_SOCKET_ZLIB
+            std::unique_ptr<ZLib::InflateBase> zlib;
+#endif
+
+            size_t      transfer1 = 0;
+            size_t      transfer2 = 0;
+            int         error = 0;
+            int         fd = 0;
+            uint8_t     id = 255;
+
+        protected:
+            std::vector<uint8_t> popData(void);
+
+        public:
+            Remote2Local(uint8_t cid, int fd0, bool zlib);
+            ~Remote2Local();
+
+            void        pushData(std::vector<uint8_t> &&);
+            bool        writeData(void);
+            void        setSpeed(const Channel::Speed &);
+
+            uint8_t     cid(void) const { return id; }
+            int         getError(void) const { return error; }
+            bool        isEmpty(void) const { return queueBufs.empty(); }
+            std::chrono::milliseconds getDelay(void) const { return delay; }
+        };
+
+        // Connector
         class Connector
         {
-            std::vector<uint8_t> bufr;
-            std::list<std::vector<uint8_t>> bufw;
-            std::mutex  lockw;
+            std::unique_ptr<Remote2Local> remoteLocal;
+            std::unique_ptr<Local2Remote> localRemote;
 
             std::thread thr;
             std::thread thw;
-
-            std::chrono::milliseconds delay{100};
 
             std::atomic<bool> loopRunning{false};
             std::atomic<bool> remoteConnected{false};
@@ -132,14 +200,7 @@ namespace LTSM
             ChannelClient* owner = nullptr;
             ConnectorMode mode = ConnectorMode::Unknown;
 
-            int         err = 0;
             int         fd = -1;
-            uint16_t    blocksz = 4096;
-            uint8_t     id = 255;
-
-#ifdef LTSM_SOCKET_ZLIB
-            std::unique_ptr<ZLib::DeflateInflate> zlib;
-#endif
 
         public:
             static const char* typeString(const ConnectorType &);
@@ -147,20 +208,15 @@ namespace LTSM
             static const char* speedString(const Speed &);
 
         protected:
-            bool        local2remote(void);
-            bool        remote2local(void);
-
             static void loopWriter(Connector*);
             static void loopReader(Connector*);
-
-            void        startThreads(const ConnectorMode &);
 
         public:
             Connector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
             virtual ~Connector();
 
-            uint8_t     channel(void) const { return id; }
-            int         error(void) const { return err; }
+            uint8_t     channel(void) const;
+            int         error(void) const;
 
             void        setSpeed(const Channel::Speed &);
 

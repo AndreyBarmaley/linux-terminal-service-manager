@@ -67,13 +67,13 @@ namespace LTSM
 
     void  RFB::X11Server::randrScreenSetSizeEvent(const XCB::Size & wsz)
     {
-        Application::info("%s: size: [%d, %d]", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
         displayResizeProcessed = true;
     }
 
     void RFB::X11Server::randrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify)
     {
-        Application::info("%s: size: [%d, %d], sequence: 0x%04x", __FUNCTION__, wsz.width, wsz.height, notify.sequence);
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%" PRIx16, __FUNCTION__, wsz.width, wsz.height, (uint16_t) notify.sequence);
 
         xcbShmInit();
         displayResizeProcessed = false;
@@ -122,7 +122,7 @@ namespace LTSM
                 uint16_t opcode = 0;
                 if(shm && extShm->isEventError(ev, & opcode))
                 {
-                    Application::warning("%s: %s error: 0x%04x", __FUNCTION__, "shm", opcode);
+                    Application::warning("%s: %s error: 0x%" PRIx16, __FUNCTION__, "shm", opcode);
                     shm.reset();
                 }
             }
@@ -132,7 +132,7 @@ namespace LTSM
                 uint16_t opcode = 0;
                 if(extFixes->isEventError(ev, & opcode))
                 {
-                    Application::warning("%s: %s error: 0x%04x", __FUNCTION__, "xfixes", opcode);
+                    Application::warning("%s: %s error: 0x%" PRIx16, __FUNCTION__, "xfixes", opcode);
                 }
             }
 
@@ -238,7 +238,8 @@ namespace LTSM
             }
 
 #ifdef LTSM_ENCODING_FFMPEG
-    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_X264))
+    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_H264) || isClientEncoding(RFB::ENCODING_FFMPEG_WEBP) ||
+    		isClientEncoding(RFB::ENCODING_FFMPEG_AV1) || isClientEncoding(RFB::ENCODING_FFMPEG_VP9))
 	    {
                 if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
                 {
@@ -247,7 +248,7 @@ namespace LTSM
 		    // fps 25: 40ms
 		    if(upms < 40)
                     {
-                        Application::trace("%s: update time ms: %d", __FUNCTION__, upms);
+                        Application::trace("%s: update time ms: %u", __FUNCTION__, upms);
             	        continue;
                     }
                 }
@@ -376,7 +377,7 @@ namespace LTSM
             else
             {
                 if(Application::isDebugLevel(DebugLevel::Trace))
-                    Application::debug("%s: xfb fake input move, posx: %d, posy: %d", __FUNCTION__, posx, posy);
+                    Application::debug("%s: xfb fake input move, pos: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, posx, posy);
 
                 test->fakeInputRaw(XCB::RootDisplay::root(), XCB_MOTION_NOTIFY, 0, posx, posy);
             }
@@ -421,13 +422,15 @@ namespace LTSM
         XCB::Region desktop(0, 0, 0, 0);
         for(auto & info : screens)
         {
-            Application::info("%s: screen id: 0x%08x, region: [%d, %d, %d, %d], flags: 0x%08x", __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
+            Application::info("%s: screen id: 0x%" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%" PRIx32,
+                    __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
+
             desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
         }
 
         if(desktop.x != 0 && desktop.y != 0)
         {
-            Application::error("%s: incorrect desktop size: [%d, %d, %d, %d]", __FUNCTION__, desktop.x, desktop.y, desktop.width, desktop.height);
+            Application::error("%s: incorrect desktop size: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, desktop.x, desktop.y, desktop.width, desktop.height);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, XCB::RootDisplay::size());
         }
         else
@@ -512,7 +515,7 @@ namespace LTSM
 
     XcbFrameBuffer RFB::X11Server::xcbFrameBuffer(const XCB::Region & reg) const
     {
-        Application::debug("%s: region [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
         if(! pixmapReply)
@@ -523,14 +526,15 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            Application::debug("%s: request size [%d, %d], reply: length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+            Application::debug("%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8 ", red: %" PRIx32 ", green: %" PRIx32 ", blue: %" PRIx32,
                             __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
         }
 
         // fix align
         if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel())
         {
-            Application::error("%s: region not aligned, reply size: %d, reg size: [%d, %d], byte per pixel: %d", __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
+            Application::error("%s: region not aligned, reply size: %u, reg size: [%" PRIu16 ", %" PRIu16 "], byte per pixel: %" PRIu8,
+                    __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);
         }
 

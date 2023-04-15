@@ -101,7 +101,7 @@ namespace LTSM
         auto zip = recvData(zipsz);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
-            Application::debug("%s: compress data length: %d", __FUNCTION__, zip.size());
+            Application::debug("%s: compress data length: %u", __FUNCTION__, zip.size());
 
         zlib->appendData(zip);
 	return zipsz;
@@ -126,7 +126,7 @@ namespace LTSM
     void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
             cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
@@ -135,13 +135,13 @@ namespace LTSM
     void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto subRects = cli.recvIntBE32();
         auto bgColor = cli.recvPixel();
 
         if(1 < debug)
-            Application::debug("%s: back pixel: 0x%08x, sub rects: %d", __FUNCTION__, bgColor, subRects);
+            Application::debug("%s: back pixel: 0x%08x, sub rects: %" PRIu32, __FUNCTION__, bgColor, subRects);
 
         cli.fillPixel(reg, bgColor);
 
@@ -166,7 +166,7 @@ namespace LTSM
             }
 
             if(2 < debug)
-                Application::debug("%s: sub region [%d,%d,%d,%d]", __FUNCTION__, dst.x, dst.y, dst.width, dst.height);
+                Application::debug("%s: sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dst.x, dst.y, dst.width, dst.height);
 
             dst.x += reg.x;
             dst.y += reg.y;
@@ -185,12 +185,12 @@ namespace LTSM
     {
         if(16 < reg.width || 16 < reg.height)
         {
-            Application::error("%s: invalid hextile region: [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::error("%s: invalid hextile region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
             throw rfb_error(NS_FuncName);
         }
 
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         updateRegionColors(cli, reg);
     }
@@ -200,7 +200,7 @@ namespace LTSM
         auto flag = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding mask: 0x%02x, sub region [%d,%d,%d,%d]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: sub encoding mask: 0x%" PRIx8 ", sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
 
         if(flag & RFB::HEXTILE_RAW)
         {
@@ -258,7 +258,7 @@ namespace LTSM
                     dst.height = 1 + (0x0F & val2);
 
                     if(3 < debug)
-                        Application::debug("%s: type: %s, region: [%d,%d,%d,%d], pixel: 0x%08x", __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
+                        Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], pixel: 0x%08x", __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
 
                     dst.x += reg.x;
                     dst.y += reg.y;
@@ -284,7 +284,7 @@ namespace LTSM
     void RFB::DecodingTRLE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         const XCB::Size bsz(64, 64);
 
@@ -308,7 +308,7 @@ namespace LTSM
         auto type = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding type: 0x%02x, sub region: [%d,%d,%d,%d], zrle: %d",
+            Application::debug("%s: sub encoding type: 0x%" PRIx8 ", sub region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], zrle: %d",
                         __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
 
         // trle raw
@@ -360,7 +360,7 @@ namespace LTSM
             for(auto & val : palette) val = cli.recvCPixel();
 
             if(2 < debug)
-                Application::debug("%s: type: %s, size: %d", __FUNCTION__, "packed palette", palette.size());
+                Application::debug("%s: type: %s, size: %u", __FUNCTION__, "packed palette", palette.size());
 
             if(3 < debug)
             {
@@ -379,7 +379,7 @@ namespace LTSM
                     auto index = sb.popValue(field);
 
                     if(4 < debug)
-                        Application::debug("%s: type: %s, pos: [%d,%d], index: %d", __FUNCTION__, "packed palette", pos.x, pos.y, index);
+                        Application::debug("%s: type: %s, pos: [%" PRId16 ", %" PRId16 "], index: %d", __FUNCTION__, "packed palette", pos.x, pos.y, index);
 
                     if(index >= palette.size())
                     {
@@ -414,7 +414,7 @@ namespace LTSM
                 auto runLength = cli.recvRunLength();
 
                 if(4 < debug)
-                    Application::debug("%s: type: %s, pixel: 0x%08x, length: %d", __FUNCTION__, "plain rle", pixel, runLength);
+                    Application::debug("%s: type: %s, pixel: 0x%08x, length: %u", __FUNCTION__, "plain rle", pixel, runLength);
 
                 while(runLength--)
                 {
@@ -442,7 +442,7 @@ namespace LTSM
                 val = cli.recvCPixel();
 
             if(2 < debug)
-                Application::debug("%s: type: %s, size: %d", __FUNCTION__, "rle palette", palsz);
+                Application::debug("%s: type: %s, size: %u", __FUNCTION__, "rle palette", palsz);
 
             if(3 < debug)
             {
@@ -483,7 +483,7 @@ namespace LTSM
                     auto runLength = cli.recvRunLength();
 
                     if(4 < debug)
-                        Application::debug("%s: type: %s, index: %d, length: %d", __FUNCTION__, "rle palette", index, runLength);
+                        Application::debug("%s: type: %s, index: %" PRIu8 ", length: %u", __FUNCTION__, "rle palette", index, runLength);
 
                     while(runLength--)
                     {
@@ -512,7 +512,7 @@ namespace LTSM
     void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
 	cli.recvZlibData(zlib.get(), false);
 	DecoderWrapper wrap(zlib.get(), & cli);

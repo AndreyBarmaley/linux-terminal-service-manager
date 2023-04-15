@@ -28,6 +28,7 @@
 #include <pwd.h>
 
 #include <poll.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -137,6 +138,9 @@ namespace LTSM
     int Connector::Service::start(void)
     {
         Application::setDebugLevel(configGetString("connector:debug"));
+
+	// signals
+	signal(SIGPIPE,  SIG_IGN);
 
         auto uid = getuid();
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);

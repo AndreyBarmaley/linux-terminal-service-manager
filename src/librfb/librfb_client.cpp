@@ -329,7 +329,7 @@ namespace LTSM
 	if(sec.authKrb5 && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_GSSAPI; }))
 	{
 	    // check local ticket
-	    if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name))
+	    if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name); krb5Cred)
 	    {
 		auto canon = Gss::displayName(krb5Cred->name);
         	Application::info("%s: kerberos local ticket: %s", __FUNCTION__, canon.c_str());
@@ -397,7 +397,7 @@ namespace LTSM
         // RFB 6.3.2 server init
         auto fbWidth = recvIntBE16();
         auto fbHeight = recvIntBE16();
-        Application::debug("%s: remote framebuffer size: %dx%d", __FUNCTION__, fbWidth, fbHeight);
+        Application::debug("%s: remote framebuffer size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, fbWidth, fbHeight);
 
         // recv server pixel format
         serverPf.bitsPerPixel = recvInt8();
@@ -412,8 +412,8 @@ namespace LTSM
         serverPf.blueShift = recvInt8();
         recvSkip(3);
 
-        Application::debug("%s: remote pixel format: bpp: %d, depth: %d, bigendian: %d, true color: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                    __FUNCTION__, serverPf.bitsPerPixel, depth, serverBigEndian, serverTrueColor,
+        Application::debug("%s: remote pixel format: bpp: %" PRIu8 ", depth: %d, bigendian: %d, true color: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                    __FUNCTION__, serverPf.bitsPerPixel, depth, (int) serverBigEndian, (int) serverTrueColor,
                     serverPf.redMax, serverPf.redShift, serverPf.greenMax, serverPf.greenShift, serverPf.blueMax, serverPf.blueShift);
 
         // check server format
@@ -423,7 +423,7 @@ namespace LTSM
                 break;
 
             default:
-                Application::error("%s: unknown pixel format, bpp: %d", __FUNCTION__, serverPf.bitsPerPixel);
+                Application::error("%s: unknown pixel format, bpp: %" PRIu8, __FUNCTION__, serverPf.bitsPerPixel);
                 return false;
         }
 
@@ -474,12 +474,17 @@ namespace LTSM
     std::list<int> RFB::ClientDecoder::supportedEncodings(void) const
     {
         return { 
-#ifdef LTSM_DECODING_FFMPEG
-	            ENCODING_FFMPEG_X264,
-#endif
                     ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
-                    ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE, ENCODING_RAW };
+                    ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
 
+#ifdef LTSM_DECODING_FFMPEG
+	            ENCODING_FFMPEG_H264,
+	            ENCODING_FFMPEG_AV1,
+	            ENCODING_FFMPEG_VP9,
+	            ENCODING_FFMPEG_WEBP,
+#endif
+
+		     ENCODING_RAW };
     }
 
     void RFB::ClientDecoder::rfbMessagesLoop(void)
@@ -497,8 +502,14 @@ namespace LTSM
 
 #ifdef LTSM_DECODING_FFMPEG
         // experimental feature remove and added from preffered
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_X264)))
-            encodings.remove(ENCODING_FFMPEG_X264);
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_H264)))
+            encodings.remove(ENCODING_FFMPEG_H264);
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_AV1)))
+            encodings.remove(ENCODING_FFMPEG_AV1);
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP9)))
+            encodings.remove(ENCODING_FFMPEG_VP9);
+	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_WEBP)))
+            encodings.remove(ENCODING_FFMPEG_WEBP);
 #endif
 
         if( ! prefferedEncoding.empty())
@@ -593,13 +604,15 @@ namespace LTSM
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz)
     {
-	Application::info("%s: display resized, new size: [%d, %d]", __FUNCTION__, dsz.width, dsz.height);
+	Application::info("%s: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
 
 #ifdef LTSM_DECODING_FFMPEG
 	// event background
 	std::thread([this, sz = dsz]()
 	{
-    	    if(this->decoder && this->decoder->getType() == RFB::ENCODING_FFMPEG_X264)
+    	    if(this->decoder &&
+		(this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 || this->decoder->getType() == RFB::ENCODING_FFMPEG_WEBP ||
+		this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP9))
     		this->decoder->resizedEvent(sz);
 	}).detach();
 #endif
@@ -609,8 +622,8 @@ namespace LTSM
     {
         auto & pf = clientFormat();
 
-        Application::debug("%s: local pixel format: bpp: %d, bigendian: %d, red(%d,%d), green(%d,%d), blue(%d,%d)",
-                    __FUNCTION__, pf.bitsPerPixel, big_endian,
+        Application::debug("%s: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                    __FUNCTION__, pf.bitsPerPixel, (int) big_endian,
                     pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
 
         std::scoped_lock guard{ sendLock };
@@ -649,7 +662,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym)
     {
-        Application::debug("%s: keysym: 0x%08x, pressed: %d", __FUNCTION__, keysym, pressed);
+        Application::debug("%s: keysym: 0x%" PRIx32 ", pressed: %d", __FUNCTION__, keysym, (int) pressed);
 
         std::scoped_lock guard{ sendLock };
 
@@ -663,7 +676,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy)
     {
-        Application::debug("%s: pointer: [%d, %d], buttons: 0x%02x", __FUNCTION__, posx, posy, buttons);
+        Application::debug("%s: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%" PRIx8 , __FUNCTION__, posx, posy, buttons);
 
         std::scoped_lock guard{ sendLock };
 
@@ -677,7 +690,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendCutTextEvent(const char* buf, size_t len)
     {
-        Application::debug("%s: buffer size: %d", __FUNCTION__, len);
+        Application::debug("%s: buffer size: %u", __FUNCTION__, len);
 
         std::scoped_lock guard{ sendLock };
 
@@ -691,7 +704,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg)
     {
-        Application::debug("%s: status: %s, region [%d,%d,%d,%d]", __FUNCTION__, (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: status: %s, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
 
         std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
@@ -713,7 +726,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr)
     {
-        Application::debug("%s: region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         std::scoped_lock guard{ sendLock };
 
@@ -743,8 +756,11 @@ namespace LTSM
                 case ENCODING_ZLIB:     decoder = std::make_unique<DecodingZlib>(); break;
 
 #ifdef LTSM_DECODING_FFMPEG
-        	case ENCODING_FFMPEG_X264:
-		    decoder = std::make_unique<DecodingFFmpeg>();
+        	case ENCODING_FFMPEG_H264:
+        	case ENCODING_FFMPEG_AV1:
+        	case ENCODING_FFMPEG_VP9:
+        	case ENCODING_FFMPEG_WEBP:
+		    decoder = std::make_unique<DecodingFFmpeg>(type);
 		    decoder->setDebug(4 /* AV_LOG_VERBOSE */);
 		    break;
 #endif
@@ -769,7 +785,7 @@ namespace LTSM
         auto numRects = recvIntBE16();
         XCB::Region reg;
 
-        Application::debug("%s: num rects: %d", __FUNCTION__, numRects);
+        Application::debug("%s: num rects: %" PRIu16, __FUNCTION__, numRects);
 
         while(0 < numRects--)
         {
@@ -779,7 +795,7 @@ namespace LTSM
             reg.height = recvIntBE16();
             int encodingType = recvIntBE32();
 
-            Application::debug("%s: region [%d,%d,%d,%d], encodingType: %s",
+            Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], encodingType: %s",
                      __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
 
             switch(encodingType)
@@ -813,7 +829,7 @@ namespace LTSM
         }
 
         auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
-        Application::debug("%s: update time: %dus", __FUNCTION__, dt.count());
+        Application::debug("%s: update time: %uus", __FUNCTION__, dt.count());
 
         fbUpdateEvent();
     }
@@ -824,7 +840,7 @@ namespace LTSM
         recvSkip(1);
         auto firstColor = recvIntBE16();
         auto numColors = recvIntBE16();
-        Application::debug("%s: num colors: %d, first color: %d", __FUNCTION__, numColors, firstColor);
+        Application::debug("%s: num colors: %" PRIu16 ", first color: %" PRIu16, __FUNCTION__, numColors, firstColor);
 
         std::vector<Color> colors(numColors);
 
@@ -835,7 +851,7 @@ namespace LTSM
             col.b = recvInt8();
 
             if(Application::isDebugLevel(DebugLevel::Trace))
-                Application::debug("%s: color [0x%02x,0x%02x,0x%02x]", __FUNCTION__, col.r, col.g, col.b);
+                Application::debug("%s: color [0x%" PRIx8 ",0x%" PRIx8 ",0x%" PRIx8 "]", __FUNCTION__, col.r, col.g, col.b);
         }
 
         setColorMapEvent(colors);
@@ -853,7 +869,7 @@ namespace LTSM
         recvSkip(3);
         auto length = recvIntBE32();
 
-        Application::debug("%s: length: %d", __FUNCTION__, length);
+        Application::debug("%s: length: %" PRIu32, __FUNCTION__, length);
 
         if(0 < length)
         {
@@ -871,12 +887,12 @@ namespace LTSM
 
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg)
     {
-        Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg)
     {
-        Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto buf = recvData(reg.width * reg.height * serverPf.bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
@@ -884,9 +900,9 @@ namespace LTSM
         richCursorEvent(reg, std::move(buf), std::move(mask));
     }
 
-    void RFB::ClientDecoder::recvDecodingExtDesktopSize(uint16_t status, uint16_t err, const XCB::Size & sz)
+    void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz)
     {
-        Application::info("%s: status: 0x%02x, error: 0x%02x, width: %d, height: %d", __FUNCTION__, status, err, sz.width, sz.height);
+        Application::info("%s: status: %d, error: %d, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, status, err, sz.width, sz.height);
 
         auto numOfScreens = recvInt8();
         recvSkip(3);
@@ -900,7 +916,7 @@ namespace LTSM
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug("%s: screen: %d, area: [%d, %d, %d, %d], flags: %d", __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
+            Application::debug("%s: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%" PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 
         decodingExtDesktopSizeEvent(status, err, sz, screens); 
@@ -908,7 +924,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz)
     {
-        Application::info("%s: width: %d, height: %d", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
 
         std::scoped_lock guard{ sendLock };
         

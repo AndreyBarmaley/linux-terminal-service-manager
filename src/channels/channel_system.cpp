@@ -223,7 +223,7 @@ size_t LTSM::ChannelClient::countFreeChannels(void) const
     size_t used = (2 + channels.size() + channelsPlanned.size());
     if(used > 0xFF)
     {
-        Application::error("%s: used channel count is large, count: %d", __FUNCTION__, used);
+        Application::error("%s: used channel count is large, count: %u", __FUNCTION__, used);
         throw channel_error(NS_FuncName);
     }
 
@@ -256,7 +256,7 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
 
 void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> && buf)
 {
-    Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, buf.size());
+    Application::debug("%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, buf.size());
 
     if(! isUserSession())
     {
@@ -267,19 +267,19 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
     auto channelConn = findChannel(channel);
     if(! channelConn)
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel not found", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel not found", channel);
         throw std::invalid_argument(NS_FuncName);
     }
 
     if(! channelConn->isRemoteConnected())
     {
-        Application::error("%s: %s, id: 0x%02x, error: %d", __FUNCTION__, "channel not connected", channel, channelConn->error());
+        Application::error("%s: %s, id: %" PRId8 ", error: %d", __FUNCTION__, "channel not connected", channel, channelConn->error());
         throw std::invalid_argument(NS_FuncName);
     }
 
     if(! channelConn->isRunning())
     {
-        Application::error("%s: %s, id: 0x%02x, error: %d", __FUNCTION__, "channel not running", channel, channelConn->error());
+        Application::error("%s: %s, id: %" PRId8 ", error: %d", __FUNCTION__, "channel not running", channel, channelConn->error());
         throw std::invalid_argument(NS_FuncName);
     }
 
@@ -292,33 +292,33 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     auto stype = jo.getString("type");
     auto smode = jo.getString("mode");
     auto sspeed = jo.getString("speed");
-    auto zlib = jo.getBoolean("zlib", false);
+    bool zlib = jo.getBoolean("zlib", false);
     bool replyError = false;
 
-    Application::info("%s: id: 0x%02x, type: %s, mode: %s, speed: %s, zlib: %d", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), zlib);
+    Application::info("%s: id: %" PRId8 ", type: %s, mode: %s, speed: %s, zlib: %d", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), (int) zlib);
 
     if(! isUserSession())
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "not user session", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "not user session", channel);
         replyError = true;
     }
 
     if(channel <= Channel::System || channel >= Channel::Reserved)
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel incorrect", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", channel);
         replyError = true;
     }
 
     Channel::ConnectorMode mode = Channel::connectorMode(smode);
     if(mode == Channel::ConnectorMode::Unknown)
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "unknown channel mode", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "unknown channel mode", channel);
         replyError = true;
     }
 
     if(findChannel(channel))
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel busy", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel busy", channel);
         replyError = true;
     }
 
@@ -340,7 +340,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
             replyError = ! createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
         else
         {
-            Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "unknown channel type", channel);
+            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "unknown channel type", channel);
             replyError = true;
         }
     }
@@ -366,13 +366,13 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
         // client: zlib supported?
         if(job.chOpts.zlib && ! zlib)
-            Application::warning("%s: %s, id: 0x%02x", __FUNCTION__, "zlib disabled", channel);
+            Application::warning("%s: %s, id: %" PRId8, __FUNCTION__, "zlib disabled", channel);
 
         job.chOpts.zlib = zlib;
 
         if(error)
         {
-            Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "client connect error", channel);
+            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "client connect error", channel);
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
@@ -383,7 +383,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
         if(job.channel <= Channel::System || job.channel >= Channel::Reserved)
         {
-            Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel incorrect", job.channel);
+            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", job.channel);
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
@@ -394,7 +394,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
         if(findChannel(job.channel))
         {
-            Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel busy", channel);
+            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel busy", channel);
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
@@ -405,7 +405,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
         if(0 <= job.serverFd)
         {
-            Application::info("%s: %s, id: 0x%02x, client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), "listenner");
+            Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), "listenner");
 
             switch(job.serverOpts.type)
             {
@@ -418,14 +418,14 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
                     break;
 
                 default:
-                    Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel type not implemented", channel);
+                    Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
                     throw channel_error(NS_FuncName);
             }
         }
         else
         if(! job.serverOpts.content.empty())
         {
-            Application::info("%s: %s, id: 0x%02x, client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
+            Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
 
             switch(job.serverOpts.type)
             {
@@ -446,7 +446,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
                     break;
 
                 default:
-                    Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel type not implemented", channel);
+                    Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
                     throw channel_error(NS_FuncName);
             }
         }
@@ -459,7 +459,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
     }
     else
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "channel not running", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel not running", channel);
     }
 
     return true;
@@ -503,7 +503,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
 
 bool LTSM::ChannelClient::sendSystemTransferFiles(std::list<std::string> files)
 {
-    Application::info("%s: files: %d", __FUNCTION__, files.size());
+    Application::info("%s: files: %u", __FUNCTION__, files.size());
 
     files.remove_if([](auto & file){
         std::error_code err;
@@ -710,7 +710,7 @@ bool LTSM::ChannelClient::createChannelFromListenerFd(const Channel::UrlMode & c
 
 bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
     try
     {
@@ -728,7 +728,7 @@ bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesyst
 
 bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     try
     {
@@ -746,7 +746,7 @@ bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const C
 
 bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
     try
     {
@@ -764,7 +764,7 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
 
 bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::string & runcmd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, run cmd: `%s', mode: %s", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", run cmd: `%s', mode: %s", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
 
     try
     {
@@ -782,17 +782,17 @@ bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::strin
 
 bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipAddrPort.first.c_str(), ipAddrPort.second, Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipAddrPort.first.c_str(), ipAddrPort.second, Channel::Connector::modeString(mode));
 
     if(serverSide() && 0 != ipAddrPort.first.compare(0, 4, "127."))
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "server side allow socket only for localhost", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "server side allow socket only for localhost", channel);
         return false;
     }
 
     if(0 > ipAddrPort.second)
     {
-        Application::error("%s: %s, id: 0x%02x", __FUNCTION__, "incorrect connection info", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "incorrect connection info", channel);
         return false;
     }
 
@@ -812,7 +812,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::st
 
 bool LTSM::ChannelClient::createChannelSocketFd(uint8_t channel, int sock, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-    Application::debug("%s: id: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
+    Application::debug("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     try
     {
@@ -840,11 +840,11 @@ void LTSM::ChannelClient::destroyChannel(uint8_t channel)
             (*it)->setRunning(false);
             std::this_thread::sleep_for(100ms);
             this->channels.erase(it);
-            Application::info("%s: %s, id: 0x%02x", "destroyChannel", "channel removed", channel);
+            Application::info("%s: %s, id: %" PRId8, "destroyChannel", "channel removed", channel);
         }
         else
         {
-            Application::error("%s: %s, id: 0x%02x", "destroyChannel", "channel not found", channel);
+            Application::error("%s: %s, id: %" PRId8, "destroyChannel", "channel not found", channel);
         }
     }).detach();
 }
@@ -866,7 +866,7 @@ void LTSM::ChannelClient::destroyListener(const std::string & clientUrl, const s
 
 void LTSM::ChannelClient::sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts)
 {
-    Application::info("%s: id: 0x%02x, path: `%s'", __FUNCTION__, channel, clientOpts.content.c_str());
+    Application::info("%s: id: %" PRId8 ", path: `%s'", __FUNCTION__, channel, clientOpts.content.c_str());
     JsonObjectStream jo;
 
     jo.push("cmd", SystemCommand::ChannelOpen);
@@ -923,16 +923,16 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
         throw std::runtime_error(NS_FuncName);
     }
 
-    int channel = ns.recvInt8();
-    int length = ns.recvIntBE16();
-    Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, length);
+    auto channel = ns.recvInt8();
+    auto length = ns.recvIntBE16();
+    Application::debug("%s: id: %" PRId8 ", data size: %" PRIu16, __FUNCTION__, channel, length);
 
     auto buf = ns.recvData(length);
 
     if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
-        Application::info("%s: channel: 0x%02x, size: %d, content: [%s]", __FUNCTION__, channel, length, str.c_str());
+        Application::info("%s: id: %" PRId8 ", size: %" PRIu16 ", content: [%s]", __FUNCTION__, channel, length, str.c_str());
     }
 
     recvLtsmEvent(channel, std::move(buf));
@@ -941,7 +941,7 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
                                     uint8_t channel, const uint8_t* buf, size_t len)
 {
-    Application::debug("%s: channel: 0x%02x, data size: %d", __FUNCTION__, channel, len);
+    Application::debug("%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, len);
 
     const std::scoped_lock guard{sendLock};
 
@@ -970,7 +970,7 @@ void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
     if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring<uint8_t>(buf, len, 2);
-        Application::info("%s: channel: 0x%02x, size: %d, content: [%s]", __FUNCTION__, channel, len, str.c_str());
+        Application::info("%s: id: %" PRId8 ", size: %u, content: [%s]", __FUNCTION__, channel, len, str.c_str());
     }
 
     ns.sendRaw(buf, len);
@@ -997,25 +997,264 @@ void LTSM::ChannelClient::channelsShutdown(void)
         ptr->setRunning(false);
 }
 
-/// Connector
-LTSM::Channel::Connector::Connector(uint8_t ch, int fd0, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & srv)
-    : owner(& srv), fd(fd0), id(ch)
+// Remote2Local
+LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int fd0, bool useZlib) : fd(fd0), id(cid)
 {
-    setSpeed(chOpts.speed);
-
-    if(chOpts.zlib)
+    if(useZlib)
     {
 #ifdef LTSM_SOCKET_ZLIB
-        zlib = std::make_unique<ZLib::DeflateInflate>(Z_BEST_SPEED);
+        zlib = std::make_unique<ZLib::InflateBase>();
+#else
+        Application::error("%s: zlib not supported", __FUNCTION__);
+#endif
+    }
+}
+
+LTSM::Channel::Remote2Local::~Remote2Local()
+{
+    Application::info("%s: channel: %" PRIu8 ", receive: %u byte, transfer: %u byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
+}
+
+void LTSM::Channel::Remote2Local::pushData(std::vector<uint8_t> && buf)
+{
+    const std::scoped_lock guard{lockQueue};
+    queueBufs.emplace_back(std::move(buf));
+}
+
+std::vector<uint8_t> LTSM::Channel::Remote2Local::popData(void)
+{
+    const std::scoped_lock guard{lockQueue};
+
+    if(queueBufs.empty())
+        return {};
+
+    auto queueSz = queueBufs.size();
+
+    if(queueSz > 10)
+    {
+        // descrease delay
+        if(delay > std::chrono::milliseconds{10})
+        {
+            Application::warning("%s: id: %" PRId8 ", queue large: %u, change delay to %ums", __FUNCTION__, id, queueSz, delay.count());
+            delay -= std::chrono::milliseconds{10};
+        }
+        else
+        {
+            Application::warning("%s: id: %" PRId8 ", queue large: %u, fixme: `%s'", __FUNCTION__, id, queueSz, "fixme: remote decrease speed");
+        }
+    }
+
+    auto buf = std::move(queueBufs.front());
+    queueBufs.pop_front();
+
+    return buf;
+}
+
+bool LTSM::Channel::Remote2Local::writeData(void)
+{
+    auto buf = popData();
+
+    if(buf.empty())
+        return true;
+
+    transfer1 += buf.size();
+
+#ifdef LTSM_SOCKET_ZLIB
+    if(zlib)
+    {
+        auto buf2 = zlib->inflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
+        buf.swap(buf2);
+        // Application::debug("%s: inflate, size1: %d, size2: %d", __FUNCTION__, buf.size(), buf2.size());
+    }
+#endif
+
+    size_t writesz = 0;
+    while(writesz < buf.size())
+    {
+        ssize_t real = write(fd, buf.data() + writesz, buf.size() - writesz);
+
+        if(0 < real)
+        {
+            writesz += real;
+            transfer2 += real;
+            continue;
+        }
+
+        if(EAGAIN == errno || EINTR == errno)
+            continue;
+
+        error = errno;
+        return false;
+    }
+
+    return true;
+}
+
+void LTSM::Channel::Remote2Local::setSpeed(const Channel::Speed & speed)
+{
+    switch(speed)
+    {
+        case Speed::VerySlow:
+            delay = std::chrono::milliseconds(200);
+            break;
+
+        case Speed::Slow:
+            delay = std::chrono::milliseconds(100);
+            break;
+
+        case Speed::Medium:
+            delay = std::chrono::milliseconds(100);
+            break;
+
+        case Speed::Fast:
+            delay = std::chrono::milliseconds(60);
+            break;
+
+        case Speed::UltraFast:
+            delay = std::chrono::milliseconds(20);
+            break;
+    }
+}
+
+// Local2Remote
+LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int fd0, bool useZlib) : fd(fd0), id(cid)
+{
+    if(useZlib)
+    {
+#ifdef LTSM_SOCKET_ZLIB
+        zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
 #else
         Application::error("%s: zlib not supported", __FUNCTION__);
 #endif
     }
 
-    bufr.reserve(0xFFFF);
-    bufr.resize(blocksz);
+    buf.reserve(0xFFFF);
+}
 
-    startThreads(mode);
+LTSM::Channel::Local2Remote::~Local2Remote()
+{
+    Application::info("%s: channel: %" PRIu8 ", receive: %u byte, transfer: %u byte, error: %d", "Local2Remote", id, transfer1, transfer2, error);
+}
+
+void LTSM::Channel::Local2Remote::setSpeed(const Channel::Speed & speed)
+{
+    switch(speed)
+    {
+        // ~10k/sec
+        case Speed::VerySlow:
+            blocksz = 4096;
+            delay = std::chrono::milliseconds(200);
+            break;
+
+        // ~40k/sec
+        case Speed::Slow:
+            blocksz = 8192;
+            delay = std::chrono::milliseconds(100);
+            break;
+
+        // ~80k/sec
+        case Speed::Medium:
+            blocksz = 16384;
+            delay = std::chrono::milliseconds(100);
+            break;
+
+        // ~800k/sec
+        case Speed::Fast:
+            blocksz = 32768;
+            delay = std::chrono::milliseconds(60);
+            break;
+
+        // ~1600k/sec
+        case Speed::UltraFast:
+            delay = std::chrono::milliseconds(20);
+            blocksz = 49152;
+            break;
+    }
+}
+
+bool LTSM::Channel::Local2Remote::readData(void)
+{
+    size_t dtsz = 0;
+
+    try
+    {
+        if(NetworkStream::hasInput(fd))
+    	    dtsz = NetworkStream::hasData(fd);
+    }
+    catch(const std::exception & err)
+    {
+        error = errno;
+        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        return false;
+    }
+
+    if(0 == dtsz)
+    {
+        buf.clear();
+        return true;
+    }
+
+    buf.resize(std::min(dtsz, blocksz));
+    ssize_t real = read(fd, buf.data(), buf.size());
+
+    if(0 < real)
+    {
+        buf.resize(real);
+        transfer1 += real;
+
+#ifdef LTSM_SOCKET_ZLIB
+        if(zlib)
+        {
+            auto buf2 = zlib->deflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
+            transfer2 += buf2.size();
+	    buf.swap(buf2);
+            // Application::debug("%s: deflate, size1: %d, size2: %d", __FUNCTION__, buf2.size(), buf.size());
+        }
+#endif
+
+        return true;
+    }
+
+    // eof
+    if(0 == real)
+        return false;
+
+    if(EAGAIN == errno || EINTR == errno)
+    {
+        buf.clear();
+        return true;
+    }
+
+    error = errno;
+    return false;
+}
+
+/// Connector
+LTSM::Channel::Connector::Connector(uint8_t ch, int fd0, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
+    : owner(& srv), mode(mod), fd(fd0)
+{
+    owner->sendSystemChannelConnected(ch, chOpts.zlib, true);
+
+    // start threads
+    loopRunning = true;
+
+    if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::ReadOnly)
+    {
+        localRemote = std::make_unique<Local2Remote>(ch, fd0, chOpts.zlib);
+        localRemote->setSpeed(chOpts.speed);
+    }
+
+    if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::WriteOnly)
+    {
+        remoteLocal = std::make_unique<Remote2Local>(ch, fd0, chOpts.zlib);
+        remoteLocal->setSpeed(chOpts.speed);
+    }
+
+    if(localRemote)
+        thr = std::thread(loopReader, this);
+
+    if(remoteLocal)
+        thw = std::thread(loopWriter, this);
 }
 
 LTSM::Channel::Connector::~Connector()
@@ -1031,6 +1270,25 @@ LTSM::Channel::Connector::~Connector()
 
     if(0 <= fd)
         close(fd);
+}
+
+int LTSM::Channel::Connector::error(void) const
+{
+    int err1 = remoteLocal ? remoteLocal->getError() : 0;
+    int err2 = localRemote ? localRemote->getError() : 0;
+
+    return err1 ? err1 : err2;
+}
+
+uint8_t LTSM::Channel::Connector::channel(void) const
+{
+    if(remoteLocal)
+        return remoteLocal->cid();
+
+    if(localRemote)
+        return localRemote->cid();
+
+    return 0;
 }
 
 bool LTSM::Channel::Connector::isRunning(void) const
@@ -1055,246 +1313,97 @@ void LTSM::Channel::Connector::setRemoteConnected(bool f)
 
 void LTSM::Channel::Connector::setSpeed(const Channel::Speed & speed)
 {
-    switch(speed)
-    {
-        // ~10k/sec
-        case Speed::VerySlow:
-            blocksz = 2048;
-            delay = std::chrono::milliseconds(200);
-            break;
+    if(localRemote)
+        localRemote->setSpeed(speed);
 
-        // ~40k/sec
-        case Speed::Slow:
-            blocksz = 4096;
-            delay = std::chrono::milliseconds(100);
-            break;
-
-        // ~80k/sec
-        case Speed::Medium:
-            blocksz = 8192;
-            delay = std::chrono::milliseconds(100);
-            break;
-
-        // ~800k/sec
-        case Speed::Fast:
-            blocksz = 16384;
-            delay = std::chrono::milliseconds(60);
-            break;
-
-        // ~1600k/sec
-        case Speed::UltraFast:
-            delay = std::chrono::milliseconds(20);
-            blocksz = 32768;
-            break;
-    }
+    if(remoteLocal)
+        remoteLocal->setSpeed(speed);
 }
 
-void LTSM::Channel::Connector::pushData(std::vector<uint8_t> && vec)
+void LTSM::Channel::Connector::pushData(std::vector<uint8_t> && buf)
 {
-    const std::scoped_lock guard{lockw};
+    if(! buf.empty() && remoteLocal)
+        remoteLocal->pushData(std::move(buf));
+}
 
-#ifdef LTSM_SOCKET_ZLIB
-    if(zlib)
+void LTSM::Channel::Connector::loopWriter(Connector* cn)
+{
+    bool error = false;
+    auto st = cn->remoteLocal.get();
+
+    while(cn->loopRunning)
     {
-        bufw.emplace_back(zlib->inflate(vec.data(), vec.size(), Z_SYNC_FLUSH));
-        // Application::debug("%s: inflate, size1: %d, size3: %d", __FUNCTION__, vec.size(), bufw.back().size());
+        if(st->isEmpty())
+        {
+            std::this_thread::sleep_for(st->getDelay());
+            continue;
+        }
+
+        if(! st->writeData())
+        {
+            error = true;
+            cn->loopRunning = false;
+        }
+    }
+
+    if(error)
+    {
+        if(cn->owner)
+            cn->owner->sendSystemChannelError(st->cid(), st->getError(), std::string(__FUNCTION__).append(": ").append(strerror(st->getError())));
+
+        Application::error("%s: id: %" PRId8 ", error: %s", __FUNCTION__, st->cid(), strerror(st->getError()));
     }
     else
     {
-        bufw.emplace_back(std::move(vec));
-    }
-#else
-    bufw.emplace_back(std::move(vec));
-#endif
-}
-
-void LTSM::Channel::Connector::startThreads(const ConnectorMode & md)
-{
-    owner->sendSystemChannelConnected(id, !! zlib, true);
-
-    mode = md;
-    loopRunning = true;
-
-    if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::ReadOnly)
-        thr = std::thread(loopReader, this);
-
-    if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::WriteOnly)
-        thw = std::thread(loopWriter, this);
-}
-
-bool LTSM::Channel::Connector::remote2local(void)
-{
-    const std::scoped_lock guard{lockw};
-
-    if(bufw.empty())
-        return false;
-
-    auto bufwsz = bufw.size();
-    if(bufwsz > 10)
-    {
-        // descrease delay
-        if(delay > std::chrono::milliseconds{10})
+        // all data write
+        while(! st->isEmpty())
         {
-            Application::warning("%s: channel: 0x%02x, queue large: %d, change delay to %dms", __FUNCTION__, id, bufwsz, delay.count());
-            delay -= std::chrono::milliseconds{10};
-        }
-        else
-        {
-            Application::warning("%s: channel: 0x%02x, queue large: %d, fixme: `%s'", __FUNCTION__, id, bufwsz, "fixme: remote decrease speed");
-        }
-    }
-
-    auto & buf = bufw.front();
-
-    size_t writesz = 0;
-    while(writesz < buf.size())
-    {
-        auto real = write(fd, buf.data() + writesz, buf.size() - writesz);
-        if(0 < real)
-        {
-            writesz += real;
-            continue;
-        }
-
-        if(EAGAIN == errno || EINTR == errno)
-            continue;
-
-        // error;
-        err = errno;
-        loopRunning = false;
-
-        if(owner)
-            owner->sendSystemChannelError(id, errno, std::string(__FUNCTION__).append(": ").append(strerror(errno)));
-
-        Application::error("%s: channel: 0x%02x, error: %s", __FUNCTION__, id, strerror(errno));
-        return false;
-    }
-
-    bufw.pop_front();
-    return true;
-}
-
-bool LTSM::Channel::Connector::local2remote(void)
-{
-    size_t dtsz = 0;
-
-    try
-    {
-        dtsz = NetworkStream::hasData(fd);
-    }
-    catch(const std::exception & err2)
-    {
-        err = errno;
-        loopRunning = false;
-
-        Application::error("%s: exception: %s", __FUNCTION__, err2.what());
-
-        if(owner)
-            owner->sendSystemChannelError(id, errno, std::string(__FUNCTION__).append(": exception: ").append(err2.what()));
-
-        return false;
-    }
-
-    // read/send blocksz
-    if(bufr.size() != blocksz)
-        bufr.resize(blocksz);
-
-    ssize_t real = read(fd, bufr.data(), std::min(dtsz, bufr.size()));
-
-    if(0 < real)
-    {
-        bufr.resize(real);
-
-#ifdef LTSM_SOCKET_ZLIB
-        if(zlib)
-        {
-            bufr = zlib->deflate(bufr.data(), bufr.size(), Z_SYNC_FLUSH);
-            // Application::debug("%s: deflate, size1: %d, size2: %d", __FUNCTION__, real, bufr.size());
-        }
-#endif
-
-        if(owner)
-            owner->sendLtsmEvent(id, bufr.data(), bufr.size());
-
-        return true;
-    }
-
-    // eof
-    if(0 == real)
-    {
-        loopRunning = false;
-        return false;
-    }
-
-    if(EAGAIN == errno || EINTR == errno)
-        return true;
-
-    err = errno;
-    loopRunning = false;
-
-    Application::error("%s: channel: 0x%02x, error: %s", __FUNCTION__, id, strerror(errno));
-
-    if(owner)
-        owner->sendSystemChannelError(id, errno, std::string(__FUNCTION__).append(": ").append(strerror(errno)));
-
-    return false;
-}
-
-void LTSM::Channel::Connector::loopWriter(Connector* st)
-{
-    while(st->loopRunning)
-    {
-        if(st->bufw.empty())
-        {
-            std::this_thread::sleep_for(st->delay);
-            continue;
-        }
-
-        st->remote2local();
-    }
-
-    // all data write
-    if(0 == st->err)
-    {
-        while(! st->bufw.empty() && st->remote2local());
-    }
-
-    if(st->mode != ConnectorMode::ReadWrite || st->mode == ConnectorMode::WriteOnly)
-        st->owner->sendSystemChannelClose(st->id);
-}
-
-void LTSM::Channel::Connector::loopReader(Connector* st)
-{
-    while(st->loopRunning)
-    {
-        bool input = false;
-
-        try
-        {
-            input = NetworkStream::hasInput(st->fd);
-        }
-        catch(const std::exception & err)
-        {
-            st->err = errno;
-            st->loopRunning = false;
-
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-        }
-
-        if(input)
-        {
-            st->local2remote();
-        }
-        else
-        {
-            std::this_thread::sleep_for(st->delay);
-            continue;
+            if(! st->writeData()) break;
         }
     }
 
     // read/write priority send
-    if(st->mode == ConnectorMode::ReadWrite || st->mode == ConnectorMode::ReadOnly)
-        st->owner->sendSystemChannelClose(st->id);
+    if(cn->mode != ConnectorMode::ReadWrite || cn->mode == ConnectorMode::WriteOnly)
+        cn->owner->sendSystemChannelClose(st->cid());
+}
+
+void LTSM::Channel::Connector::loopReader(Connector* cn)
+{
+    bool error = false;
+    auto st = cn->localRemote.get();
+
+    while(cn->loopRunning)
+    {
+        if(! st->readData())
+        {
+            error = true;
+            cn->loopRunning = false;
+        }
+
+        if(st->getBuf().empty())
+        {
+            std::this_thread::sleep_for(st->getDelay());
+            continue;
+        }
+        else
+        if(cn->owner)
+        {
+            auto & buf = st->getBuf();
+            cn->owner->sendLtsmEvent(st->cid(), buf.data(), buf.size());
+        }
+    }
+
+    if(error)
+    {
+        if(cn->owner)
+            cn->owner->sendSystemChannelError(st->cid(), st->getError(), std::string(__FUNCTION__).append(": ").append(strerror(st->getError())));
+
+        Application::error("%s: id: %" PRId8 ", error: %s", __FUNCTION__, st->cid(), strerror(st->getError()));
+    }
+
+    // read/write priority send
+    if(cn->mode == ConnectorMode::ReadWrite || cn->mode == ConnectorMode::ReadOnly)
+        cn->owner->sendSystemChannelClose(st->cid());
 }
 
 /// UnixConnector
@@ -1308,12 +1417,12 @@ std::unique_ptr<LTSM::Channel::Connector>
         throw channel_error(NS_FuncName);
     }
 
-    Application::info("%s: channel: 0x%02x, path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
     int fd = UnixSocket::connect(path);
     if(0 > fd)
     {
-        Application::error("%s: %s, channel: 0x%02x, path: `%s'", __FUNCTION__, "unix failed", channel, path.c_str());
+        Application::error("%s: %s, id: %" PRId8 ", path: `%s'", __FUNCTION__, "unix failed", channel, path.c_str());
         throw channel_error(NS_FuncName);
     }
 
@@ -1323,11 +1432,11 @@ std::unique_ptr<LTSM::Channel::Connector>
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::UnixConnector::createConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: channel: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     if(0 > sock)
     {
-        Application::error("%s: %s, channel: 0x%02x", __FUNCTION__, "unix failed", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "unix failed", channel);
         throw channel_error(NS_FuncName);
     }
 
@@ -1338,12 +1447,12 @@ std::unique_ptr<LTSM::Channel::Connector>
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::TcpConnector::createConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: channel: 0x%02x, addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipaddr.data(), port, Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipaddr.data(), port, Channel::Connector::modeString(mode));
 
     int fd = TCPSocket::connect(ipaddr, port);
     if(0 > fd)
     {
-        Application::error("%s: %s, channel: 0x%02x, addr: %s, port: %d", __FUNCTION__, "socket failed", channel, ipaddr.data(), port);
+        Application::error("%s: %s, id: %" PRId8 ", addr: %s, port: %d", __FUNCTION__, "socket failed", channel, ipaddr.data(), port);
         throw channel_error(NS_FuncName);
     }
 
@@ -1353,11 +1462,11 @@ std::unique_ptr<LTSM::Channel::Connector>
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::TcpConnector::createConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: channel: 0x%02x, sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
     if(0 > sock)
     {
-        Application::error("%s: %s, channel: 0x%02x", __FUNCTION__, "socket failed", channel);
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "socket failed", channel);
         throw channel_error(NS_FuncName);
     }
 
@@ -1368,7 +1477,7 @@ std::unique_ptr<LTSM::Channel::Connector>
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::FileConnector::createConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: channel: 0x%02x, path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown)
     {
@@ -1427,7 +1536,7 @@ LTSM::Channel::CommandConnector::CommandConnector(uint8_t channel, FILE* ptr, co
 std::unique_ptr<LTSM::Channel::Connector>
     LTSM::Channel::CommandConnector::createConnector(uint8_t channel, const std::string & runcmd, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: channel: 0x%02x, run cmd: `%s', mode: %s", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", run cmd: `%s', mode: %s", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown)
     {

@@ -417,7 +417,7 @@ namespace LTSM
             ModuleFixes(ConnectionShared);
 
             FixesRegionIdPtr    createRegion(const xcb_rectangle_t &) const;
-            FixesRegionIdPtr    createRegions(const xcb_rectangle_t*, uint32_t counts) const;
+            FixesRegionIdPtr    createRegions(const xcb_rectangle_t*, size_t counts) const;
  
             FixesRegionIdPtr    unionRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;
             FixesRegionIdPtr    intersectRegions(const xcb_xfixes_region_t &, xcb_xfixes_region_t &) const;

@@ -125,10 +125,19 @@ namespace LTSM
                 return "ExtendedContinuousUpdates";
 
             case ENCODING_LTSM:
-                return "LTSM";
+                return "LTSM_Channels";
 
-            case ENCODING_FFMPEG_X264:
-                return "FFMPEG_X264";
+            case ENCODING_FFMPEG_H264:
+                return "FFMPEG_H264";
+
+            case ENCODING_FFMPEG_AV1:
+                return "FFMPEG_AV1";
+
+            case ENCODING_FFMPEG_VP9:
+                return "FFMPEG_VP9";
+
+            case ENCODING_FFMPEG_WEBP:
+                return "FFMPEG_WEBP";
 
             default:
                 break;

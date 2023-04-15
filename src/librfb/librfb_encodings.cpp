@@ -253,7 +253,7 @@ namespace LTSM
         std::scoped_lock guard{ busy };
 
         if(debug)
-            Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, reg.x, reg.y, reg.width, reg.height);
 
         st->sendHeader(getType(), reg + top);
         sendRawRegionPixels(st, st, reg, fb);
@@ -265,7 +265,7 @@ namespace LTSM
         const XCB::Region & reg0 = fb.region();
 
         if(debug)
-            Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
+            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
 
@@ -289,7 +289,7 @@ namespace LTSM
         const XCB::Region & reg0 = fb.region();
 
         if(debug)
-            Application::debug("%s: type: %s, region: [%d, %d, %d, %d]", __FUNCTION__, (isCoRRE() ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.width, reg0.height);
+            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, (isCoRRE() ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz = isCoRRE() ? XCB::Size(64, 64) : XCB::Size(128, 128);
@@ -354,7 +354,7 @@ namespace LTSM
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
             
             if(debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, sub rects: %d",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x, sub rects: %u",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
          
             sendRects(& wrap, reg, fb, jobId, back, goods);
@@ -365,7 +365,7 @@ namespace LTSM
             int back = fb.pixel(reg.topLeft());
             
             if(debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel 0x%08x, %s",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x, %s",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
             
             // num sub rects
@@ -430,7 +430,7 @@ namespace LTSM
             }
 
             if(1 < debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel 0x%08x",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x",
                             __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -441,7 +441,7 @@ namespace LTSM
         const XCB::Region & reg0 = fb.region();
 
         if(debug)
-            Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
+            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
  
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz(16, 16);
@@ -503,7 +503,7 @@ namespace LTSM
 
             if(debug)
             {
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, %s",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
             }
 
@@ -531,7 +531,7 @@ namespace LTSM
                 {
                     if(debug)
                     {
-                        Application::debug("%s: job id: %d, [%d, %d, %d, %d], %s",
+                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
                                 __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
                     }
 
@@ -541,7 +541,7 @@ namespace LTSM
                 {
                     if(debug)
                     {
-                        Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
+                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, sub rects: %u, %s",
                                     __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
                     }
 
@@ -557,7 +557,7 @@ namespace LTSM
                 {
                     if(debug)
                     {
-                        Application::debug("%s: job id: %d, [%d, %d, %d, %d], %s",
+                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
                                 __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
                     }
 
@@ -567,7 +567,7 @@ namespace LTSM
                 {
                     if(debug)
                     {
-                        Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, sub rects: %d, %s",
+                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, sub rects: %u, %s",
                                     __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
                     }
 
@@ -601,7 +601,7 @@ namespace LTSM
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             if(1 < debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x",
                             __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -624,7 +624,7 @@ namespace LTSM
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
             if(1 < debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d]",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
                             __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height);
         }
     }
@@ -648,7 +648,7 @@ namespace LTSM
         const XCB::Region & reg0 = fb.region();
 
         if(debug)
-            Application::debug("%s: type: %s, region: [%d, %d, %d, %d]", __FUNCTION__, (isZRLE() ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.width, reg0.height);
+            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, (isZRLE() ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Size bsz(64, 64);
         const XCB::Point top(reg0.x, reg0.y);
@@ -709,7 +709,7 @@ namespace LTSM
             int back = fb.pixel(reg.topLeft());
 
             if(debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], back pixel: 0x%08x, %s",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // subencoding type: solid tile
@@ -728,7 +728,7 @@ namespace LTSM
                 fieldWidth = 2;
 
             if(debug)
-                Application::debug("%s: job id: %d, [%d, %d, %d, %d], palsz: %d, packed: %d",
+                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], palsz: %u, packed: %u",
                             __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), fieldWidth);
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
@@ -748,7 +748,7 @@ namespace LTSM
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength)
             {
                 if(debug)
-                    Application::debug("%s: job id: %d, [%d, %d, %d, %d], length: %d, rle plain",
+                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], length: %u, rle plain",
                                 __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
@@ -757,7 +757,7 @@ namespace LTSM
             if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength)
             {
                 if(debug)
-                    Application::debug("%s: job id: %d, [%d, %d, %d, %d], pal size: %d, length: %d, rle palette",
+                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], pal size: %u, length: %u, rle palette",
                                 __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
 
                 sendRegionPalette(& wrap, reg, fb, map, rleList);
@@ -765,7 +765,7 @@ namespace LTSM
             else
             {
                 if(debug)
-                    Application::debug("%s: job id: %d, [%d, %d, %d, %d], raw",
+                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], raw",
                                 __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
                 sendRegionRaw(& wrap, reg, fb);
@@ -872,9 +872,15 @@ namespace LTSM
     }
 
     // EncodingZlib
-    RFB::EncodingZlib::EncodingZlib() : EncodingBase(ENCODING_ZLIB)
+    RFB::EncodingZlib::EncodingZlib(int zlevel) : EncodingBase(ENCODING_ZLIB)
     {
-        zlib.reset(new ZLib::DeflateStream(Z_BEST_SPEED));
+	if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION)
+	{
+            Application::debug("%s: incorrect value, zlevel: %d", __FUNCTION__, zlevel);
+	    zlevel = Z_BEST_SPEED;
+	}
+
+        zlib.reset(new ZLib::DeflateStream(zlevel));
         buf.reserve(64 * 1024);
     }
 
@@ -883,7 +889,7 @@ namespace LTSM
         const XCB::Region & reg0 = fb.region();
             
         if(debug)
-            Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
+            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
 
@@ -904,7 +910,7 @@ namespace LTSM
     void RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         if(debug)
-            Application::debug("%s: job id: %d, [%d, %d, %d, %d]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
+            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
         EncoderWrapper wrap(& buf, st);
         sendRawRegionPixels(& wrap, st, reg, fb);

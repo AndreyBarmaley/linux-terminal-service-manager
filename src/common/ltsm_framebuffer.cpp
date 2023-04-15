@@ -177,7 +177,7 @@ namespace LTSM
 
             if(length > static_cast<size_t>(fbreg.width) - pos.x)
             {
-                Application::error("%s: out of range, x: %d, width: %d, length: %d", __FUNCTION__, pos.x, fbreg.width, length);
+                Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "], length: %u", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height, length);
                 throw std::out_of_range(NS_FuncName);
             }
 
@@ -231,7 +231,7 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
+            Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
             throw std::out_of_range(NS_FuncName);
          }
     }
@@ -341,7 +341,7 @@ namespace LTSM
             }
         }
 
-        Application::error("%s: out of range, x: %d, y: %d, width: %d, height: %d", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
+        Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
         throw std::out_of_range(NS_FuncName);
     }
 

@@ -85,7 +85,7 @@ namespace LTSM
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
-    RFB::EncodingFFmpeg::EncodingFFmpeg() : EncodingBase(ENCODING_FFMPEG_X264)
+    RFB::EncodingFFmpeg::EncodingFFmpeg(int type) : EncodingBase(type)
     {
 	av_log_set_level(AV_LOG_QUIET);
 	av_log_set_callback(FFMPEG::logCallback);
@@ -95,10 +95,18 @@ namespace LTSM
 #endif
         updatePoint = std::chrono::steady_clock::now();
 
-        codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	switch(type)
+	{
+	    case RFB::ENCODING_FFMPEG_H264: codec = avcodec_find_encoder(AV_CODEC_ID_H264); break;
+            case RFB::ENCODING_FFMPEG_VP9: codec = avcodec_find_encoder(AV_CODEC_ID_VP9); break;
+            case RFB::ENCODING_FFMPEG_AV1: codec = avcodec_find_encoder(AV_CODEC_ID_AV1); break;
+            case RFB::ENCODING_FFMPEG_WEBP: codec = avcodec_find_encoder(AV_CODEC_ID_WEBP); break;
+	    default: break;
+	}
+
         if(! codec)
         {
-            Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
+            Application::error("%s: %s failed, type: %d, encoding: %s", __FUNCTION__, "avcodec_find_encoder", type, encodingName(type));
             throw ffmpeg_error(NS_FuncName);
         }
     }
@@ -125,10 +133,10 @@ namespace LTSM
         std::scoped_lock guard{ lockUpdate };
 
         if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
-            initContext(nsz.width, nsz.height);
+            initContext(nsz);
     }
 
-    void RFB::EncodingFFmpeg::initContext(size_t width, size_t height)
+    void RFB::EncodingFFmpeg::initContext(const XCB::Size & csz)
     {
         packet.reset();
         frame.reset();
@@ -149,12 +157,34 @@ namespace LTSM
 #endif
     	avcctx->time_base = (AVRational){ 1, fps };
 
-    	av_opt_set(avcctx.get(), "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
-    	av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
+	switch(codec->id)
+	{
+	    case AV_CODEC_ID_H264:
+    		av_opt_set(avcctx.get(), "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
+    		av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
+		break;
+
+	    case AV_CODEC_ID_AV1:
+		// In versions prior to 0.9.0, valid presets are 0 to 8.
+		// higher numbers providing a higher encoding speed.
+    		av_opt_set(avcctx.get(), "preset", "7", AV_OPT_SEARCH_CHILDREN);
+		break;
+
+	    case AV_CODEC_ID_VP9:
+		av_opt_set(avcctx.get(), "quality", "realtime", AV_OPT_SEARCH_CHILDREN);
+		av_opt_set_int(avcctx.get(), "speed", 6, AV_OPT_SEARCH_CHILDREN);
+		break;
+
+	    case AV_CODEC_ID_WEBP:
+		break;
+
+	    default:
+		break;
+	}
 
     	avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
-        avcctx->width = width;
-        avcctx->height = height;
+        avcctx->width = csz.width;
+        avcctx->height = csz.height;
     	avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
     	avcctx->flags |= AV_CODEC_FLAG_LOOP_FILTER;
 
@@ -203,7 +233,7 @@ namespace LTSM
 
         packet.reset(av_packet_alloc());
 
-        Application::info("%s: %s, size: [%d,%d]", __FUNCTION__,  RFB::encodingName(getType()), width, height);
+        Application::info("%s: %s, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,  RFB::encodingName(getType()), csz.width, csz.height);
     }
 
     void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
@@ -211,12 +241,12 @@ namespace LTSM
         std::scoped_lock guard{ lockUpdate };
 
         if(! avcctx)
-	    initContext(fb.width(), fb.height());
+	    initContext(fb.region().toSize());
         else
 	if(fb.width() != avcctx->width || fb.height() != avcctx->height)
 	{
-    	    Application::warning("%s: incorrect region size: [%d, %d]", __FUNCTION__, fb.width(), fb.height());
-	    initContext(fb.width(), fb.height());
+    	    Application::warning("%s: incorrect region size: [%u, %u]", __FUNCTION__, fb.width(), fb.height());
+	    initContext(fb.region().toSize());
 	}
 
         const uint8_t* data[1] = { fb.pitchData(0) };
@@ -262,7 +292,7 @@ namespace LTSM
 
 #ifdef LTSM_DECODING_FFMPEG
     // DecodingFFmpeg
-    RFB::DecodingFFmpeg::DecodingFFmpeg() : DecodingBase(ENCODING_FFMPEG_X264)
+    RFB::DecodingFFmpeg::DecodingFFmpeg(int type) : DecodingBase(type)
     {
 	av_log_set_level(AV_LOG_QUIET);
 	av_log_set_callback(FFMPEG::logCallback);
@@ -271,7 +301,15 @@ namespace LTSM
         avcodec_register_all();
 #endif
 
-        codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+	switch(type)
+	{
+	    case RFB::ENCODING_FFMPEG_H264: codec = avcodec_find_decoder(AV_CODEC_ID_H264); break;
+            case RFB::ENCODING_FFMPEG_VP9: codec = avcodec_find_decoder(AV_CODEC_ID_VP9); break;
+            case RFB::ENCODING_FFMPEG_AV1: codec = avcodec_find_decoder(AV_CODEC_ID_AV1); break;
+            case RFB::ENCODING_FFMPEG_WEBP: codec = avcodec_find_decoder(AV_CODEC_ID_WEBP); break;
+	    default: break;
+	}
+
         if(! codec)
         {
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
@@ -301,10 +339,10 @@ namespace LTSM
         std::scoped_lock guard{ lockUpdate };
 
         if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
-            initContext(nsz.width, nsz.height);
+            initContext(nsz);
     }
 
-    void RFB::DecodingFFmpeg::initContext(size_t width, size_t height)
+    void RFB::DecodingFFmpeg::initContext(const XCB::Size & csz)
     {
         rgbdata.reset();
         rgb.reset();
@@ -325,8 +363,8 @@ namespace LTSM
 
     	avcctx->time_base = (AVRational){ 1, 25 };
     	avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    	avcctx->width = width;
-    	avcctx->height = height;
+    	avcctx->width = csz.width;
+    	avcctx->height = csz.height;
     	avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
     	avcctx->extradata = nullptr;
 
@@ -403,20 +441,20 @@ namespace LTSM
             throw ffmpeg_error(NS_FuncName);
         }
 
-        Application::info("%s: %s, size: [%d,%d]", __FUNCTION__,  RFB::encodingName(getType()), width, height);
+        Application::info("%s: %s, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,  RFB::encodingName(getType()), csz.width, csz.height);
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%d,%d,%d,%d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         auto len = cli.recvIntBE32();
         auto buf  = cli.recvData(len);
 
 	if(reg.toSize() != cli.clientSize())
 	{
-    	    Application::warning("%s: incorrect region size: [%d, %d]", __FUNCTION__, reg.width, reg.height);
+    	    Application::warning("%s: incorrect region size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.width, reg.height);
             return;
 	}
 
@@ -427,7 +465,7 @@ namespace LTSM
         std::scoped_lock guard{ lockUpdate };
 
 	if(! avcctx)
-	    initContext(reg.width, reg.height);
+	    initContext(reg);
 
 	packet->data = buf.data();
 	packet->size = len;
@@ -480,6 +518,8 @@ namespace LTSM
 
 	    if(heightResult == avcctx->height)
 		cli.updateRawPixels(rgb->data[0], XCB::Size(avcctx->width, avcctx->height), rgb->linesize[0], pf);
+
+	    av_frame_unref(frame.get());
 	}
     }
 #endif

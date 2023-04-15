@@ -249,7 +249,7 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: decode failed, streambuf size: %d, base64 size: %d", __FUNCTION__, sb.last(), content.size());
+            Application::error("%s: decode failed, streambuf size: %u, base64 size: %u", __FUNCTION__, sb.last(), content.size());
         }
 
         return std::vector<uint8_t>();
@@ -1070,7 +1070,7 @@ namespace LTSM
 #else
 	    bool bigEndian = true;
 #endif
-	    Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x, be: %d",
+	    Application::info("%s: pixel format, bpp: %d, rmask: 0x%" PRIx32 ", gmask: 0x%" PRIx32 ", bmask: 0x%" PRIx32 ", amask: 0x%" PRIx32 ", be: %d",
 		__FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
 	}
     
@@ -1150,7 +1150,7 @@ namespace LTSM
 #endif
 	}
 
-	Application::error("%s: unsupported pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
+	Application::error("%s: unsupported pixel format, bpp: %d, rmask: 0x%" PRIx32 ", gmask: 0x%" PRIx32 ", bmask: 0x%" PRIx32 ", amask: 0x%" PRIx32,
 		__FUNCTION__, bpp, rmask, gmask, bmask, amask);
 
 	return AV_PIX_FMT_NONE;
