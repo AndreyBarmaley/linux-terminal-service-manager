@@ -562,7 +562,7 @@ namespace LTSM
 	else
 	{
 	    const char* devnull = "/dev/null";
-	    Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file, getuid());
+	    Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file.data(), getuid());
 
 	    if(0 != std::strcmp(devnull, file.data()))
 		redirectStdoutStderrTo(out, err, devnull);
