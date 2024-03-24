@@ -85,6 +85,6 @@ You can test all implemented features in the **docker** version.
 **ROADMAP**
 * add video recordings of all working sessions (video recording)
 * add [**VirtualGL**](https://virtualgl.org) support
-* add a video redirect via **PipeWare**
+* add a video redirect via **PipeWire**
 * work with graphics accelerated via **Cuda GPU** (there are no technical capabilities yet)
 * build client for MacOs/Windows
