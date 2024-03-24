@@ -30,7 +30,7 @@ jobs:
            libexpat1 libpam0g-dev libgnutlsxx28 libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
-           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev
+           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-devel
       - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
