@@ -98,7 +98,7 @@ namespace LTSM
 
                 try
                 {
-                    FileDescriptor::writeTo(fd, buf.data(), is->gcount());
+                    DescriptorStream::writeFromTo(buf.data(), is->gcount(), fd);
                 }
                 catch(const std::exception & err)
                 {

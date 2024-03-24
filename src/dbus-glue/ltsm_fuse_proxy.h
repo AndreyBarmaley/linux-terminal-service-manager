@@ -22,18 +22,9 @@ protected:
     FUSE_proxy(sdbus::IProxy& proxy)
         : proxy_(proxy)
     {
-        proxy_.uponSignal("requestOpen").onInterface(INTERFACE_NAME).call([this](const std::string& path, const uint32_t& cookie, const int32_t& flags){ this->onRequestOpen(path, cookie, flags); });
-        proxy_.uponSignal("requestRead").onInterface(INTERFACE_NAME).call([this](const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset){ this->onRequestRead(path, cookie, size, offset); });
-        proxy_.uponSignal("requestReadDir").onInterface(INTERFACE_NAME).call([this](const std::string& path, const uint32_t& cookie){ this->onRequestReadDir(path, cookie); });
-        proxy_.uponSignal("requestGetAttr").onInterface(INTERFACE_NAME).call([this](const std::string& path, const uint32_t& cookie){ this->onRequestGetAttr(path, cookie); });
     }
 
     ~FUSE_proxy() = default;
-
-    virtual void onRequestOpen(const std::string& path, const uint32_t& cookie, const int32_t& flags) = 0;
-    virtual void onRequestRead(const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset) = 0;
-    virtual void onRequestReadDir(const std::string& path, const uint32_t& cookie) = 0;
-    virtual void onRequestGetAttr(const std::string& path, const uint32_t& cookie) = 0;
 
 public:
     int32_t getVersion()
@@ -43,41 +34,21 @@ public:
         return result;
     }
 
-    void shutdown()
+    void serviceShutdown()
     {
-        proxy_.callMethod("shutdown").onInterface(INTERFACE_NAME);
+        proxy_.callMethod("serviceShutdown").onInterface(INTERFACE_NAME);
     }
 
-    bool mount(const std::string& point)
+    bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket)
     {
         bool result;
-        proxy_.callMethod("mount").onInterface(INTERFACE_NAME).withArguments(point).storeResultsTo(result);
+        proxy_.callMethod("mountPoint").onInterface(INTERFACE_NAME).withArguments(localPoint, remotePoint, fuseSocket).storeResultsTo(result);
         return result;
     }
 
-    void umount()
+    void umountPoint(const std::string& localPoint)
     {
-        proxy_.callMethod("umount").onInterface(INTERFACE_NAME);
-    }
-
-    void replyGetAttr(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::map<std::string, int32_t>& stat)
-    {
-        proxy_.callMethod("replyGetAttr").onInterface(INTERFACE_NAME).withArguments(error, errno2, path, cookie, stat);
-    }
-
-    void replyReadDir(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::vector<std::string>& names)
-    {
-        proxy_.callMethod("replyReadDir").onInterface(INTERFACE_NAME).withArguments(error, errno2, path, cookie, names);
-    }
-
-    void replyOpen(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie)
-    {
-        proxy_.callMethod("replyOpen").onInterface(INTERFACE_NAME).withArguments(error, errno2, path, cookie);
-    }
-
-    void replyRead(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::string& data)
-    {
-        proxy_.callMethod("replyRead").onInterface(INTERFACE_NAME).withArguments(error, errno2, path, cookie, data);
+        proxy_.callMethod("umountPoint").onInterface(INTERFACE_NAME).withArguments(localPoint);
     }
 
 private:

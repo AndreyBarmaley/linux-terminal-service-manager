@@ -56,6 +56,245 @@
 
 namespace LTSM
 {
+    //// UserInfo
+    UserInfo::UserInfo(std::string_view name)
+    {
+        auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+        buf = std::make_unique<char[]>(buflen);
+        struct passwd* res = nullptr;
+
+        if(int ret = getpwnam_r(name.data(), & st, buf.get(), buflen, & res); ret != 0)
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+    }
+
+    UserInfo::UserInfo(uid_t uid)
+    {
+        auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+        buf = std::make_unique<char[]>(buflen);
+        struct passwd* res = nullptr;
+                
+        if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0)
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+    }
+
+    std::vector<gid_t> UserInfo::groups(void) const
+    {
+        int ngroups = 0;
+        getgrouplist(st.pw_name, st.pw_gid, nullptr, & ngroups);
+     
+        if(0 < ngroups)
+        {
+            std::vector<gid_t> res(ngroups, st.pw_gid);
+            getgrouplist(st.pw_name, st.pw_gid, res.data(), & ngroups);
+            res.resize(ngroups);
+            return res;
+        }
+
+        return {};
+    }
+
+    /// GroupInfo
+    GroupInfo::GroupInfo(gid_t gid)
+    {
+        auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
+        buf = std::make_unique<char[]>(buflen);
+        struct group* res = nullptr;
+
+        if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0)
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+    }
+
+    GroupInfo::GroupInfo(std::string_view name)
+    {
+        auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
+        buf = std::make_unique<char[]>(buflen);
+        struct group* res = nullptr;
+
+        if(int ret = getgrnam_r(name.data(), & st, buf.get(), buflen, & res); ret != 0)
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+    }
+
+    std::forward_list<std::string> GroupInfo::members(void) const
+    {   
+        if(auto ptr = st.gr_mem)
+        {
+            std::forward_list<std::string> res;
+            while(const char* memb = *ptr)
+            {
+                res.emplace_front(memb);
+                ptr++;
+            }
+        }
+
+        return {};
+    }
+
+    UserInfoPtr Tools::getUidInfo(uid_t uid)
+    {
+        try
+        {
+            return std::make_unique<UserInfo>(uid);
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
+        return nullptr;
+    }
+
+    UserInfoPtr Tools::getUserInfo(std::string_view user)
+    {
+        try
+        {
+            return std::make_unique<UserInfo>(user);
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.data());
+        return nullptr;
+    }
+
+    uid_t Tools::getUserUid(std::string_view user)
+    {
+        try
+        {
+            return UserInfo(user).uid();
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.data());
+        return 0;
+    }
+
+    std::string Tools::getUserLogin(uid_t uid)
+    {
+        try
+        {
+            return UserInfo(uid).user();
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
+        return "";
+    }
+
+    std::string Tools::getUserHome(std::string_view user)
+    {
+        try
+        {
+            return UserInfo(user).home();
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.data());
+        return "";
+    }
+
+    GroupInfoPtr Tools::getGidInfo(gid_t gid)
+    {
+        try
+        {
+            return std::make_unique<GroupInfo>(gid);
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: gid not found: %d", __FUNCTION__, (int) gid);
+        return nullptr;
+    }
+
+    GroupInfoPtr Tools::getGroupInfo(std::string_view group)
+    {
+        try
+        {
+            return std::make_unique<GroupInfo>(group);
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: group not found: `%s'", __FUNCTION__, group.data());
+        return nullptr;
+    }
+
+    gid_t Tools::getGroupGid(std::string_view group)
+    {
+        try
+        {
+            return GroupInfo(group).gid();
+        }
+        catch(const std::exception &)
+        {
+        }
+
+        Application::warning("%s: group not found: `%s'", __FUNCTION__, group.data());
+        return 0;
+    }
+
+    std::forward_list<std::string> Tools::getSystemUsers(uid_t uidMin, uid_t uidMax)
+    {
+        if(uidMin > uidMax)
+            std::swap(uidMin, uidMax);
+
+        struct passwd st = {};
+        auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+        auto buf = std::make_unique<char[]>(buflen);
+        struct passwd* res = nullptr;
+        std::forward_list<std::string> logins;
+
+        setpwent();
+
+        while(0 == getpwent_r(& st, buf.get(), buflen, & res))
+        {
+            if(! res)
+                break;
+
+            if(uidMin <= res->pw_uid && res->pw_uid <= uidMax)
+                logins.emplace_front(res->pw_name);
+        }
+
+        endpwent();
+        return logins;
+    }
+
+    std::list<std::string> Tools::readDir(const std::string & path, bool recurse)
+    {
+        std::list<std::string> res;
+        std::error_code err;
+
+        for(auto const & entry : std::filesystem::directory_iterator{path, err})
+        {
+            if(recurse && entry.is_directory())
+                res.splice(res.end(), readDir(entry.path(), true));
+
+            res.emplace_back(entry.path().native());
+        }
+
+        return res;
+    }
+
     std::filesystem::path Tools::resolveSymLink(const std::filesystem::path & path)
     {
         std::error_code err;
@@ -374,45 +613,6 @@ namespace LTSM
         return str;
     }
 
-    std::tuple<std::string, int, int, std::filesystem::path, std::string> Tools::getLocalUserInfo(void)
-    {
-        long val = sysconf(_SC_GETPW_R_SIZE_MAX);
-
-        if(0 < val)
-        {
-            uid_t localUid = getuid();
-
-            std::vector<char> strbuf(val, 0);
-            struct passwd st = { 0 };
-            struct passwd* res = nullptr;
-
-            int ret = getpwuid_r(localUid, & st, strbuf.data(), strbuf.size(), & res);
-            if(ret == 0)
-            {
-                if(res)
-                    return std::make_tuple<std::string, int, int, std::filesystem::path, std::string>(res->pw_name, (int) res->pw_uid, (int) res->pw_gid, res->pw_dir, res->pw_shell);
-
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", "uid not found", localUid);
-            }
-            else
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
-            }
-        }
-        else
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "sysconf", strerror(errno), errno);
-        }
-
-        return std::make_tuple<std::string, uid_t, gid_t, std::filesystem::path, std::string>("nobody", 99, 99, "/tmp", "/bin/false");
-    }
-
-    std::string Tools::getLocalUsername(void)
-    {
-        auto userInfo = getLocalUserInfo();
-        return std::get<0>(userInfo);
-    }
-
     std::string Tools::lower(std::string str)
     {
         if(! str.empty())
@@ -489,7 +689,7 @@ namespace LTSM
         }
 
         if(result.size() && result.back() == '\n')
-            result.erase(std::prev(result.end()));
+            result.pop_back();
 
         return result;
     }

@@ -322,6 +322,7 @@
             <arg type="s" name="smode" />
             <arg type="s" name="speed" />
             <arg type="y" name="limit" />
+            <arg type="b" name="zlib" />
         </signal>
         <signal name="destroyListener">
             <arg type="i" name="display" />
@@ -348,11 +349,6 @@
             <arg type="i" name="display" />
             <arg type="y" name="channel" />
             <arg type="b" name="debug" />
-        </signal>
-        <signal name="fuseSessionStart">
-            <arg type="i" name="display" />
-            <arg type="s" name="addresses" />
-            <arg type="s" name="mount" />
         </signal>
         
     </interface>

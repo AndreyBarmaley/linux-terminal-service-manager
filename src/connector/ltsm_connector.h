@@ -95,11 +95,10 @@ namespace LTSM
 	    void			onDisplayRemoved(const int32_t& display) override {}
             void                        onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
             void                        onDestroyChannel(const int32_t& display, const uint8_t& channel) override {};
-            void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&) override {}
+            void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const bool&) override {}
             void                        onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
             void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
             void                        onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override {}
-            void                        onFuseSessionStart(const int32_t& display, const std::string& addresses, const std::string& mount) override {}
             void                        onTokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs) override {}
             void                        onTokenAuthDetached(const int32_t& display, const std::string& serial) override {}
             void                        onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override {}

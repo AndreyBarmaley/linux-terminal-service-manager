@@ -34,6 +34,7 @@
 #include <typeindex>
 #include <filesystem>
 #include <string_view>
+#include <forward_list>
 
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
@@ -315,6 +316,17 @@ namespace LTSM
         }
 
         template<typename T>
+        std::forward_list<T> toStdListForward(void) const
+        {
+            std::forward_list<T> res;
+
+            for(auto & ptr : content)
+                res.emplace_front(ptr->template get<T>());
+
+            return res;
+        }
+
+        template<typename T>
         const JsonArray & operator>> (std::vector<T> & v) const
         {
             for(auto & ptr : content)
@@ -449,6 +461,13 @@ namespace LTSM
         {
             const JsonArray* jarr = getArray(key);
             return jarr ? jarr->template toStdList<T>() : std::list<T>();
+        }
+
+        template<typename T>
+        std::forward_list<T> getStdListForward(std::string_view key) const
+        {
+            const JsonArray* jarr = getArray(key);
+            return jarr ? jarr->template toStdListForward<T>() : std::forward_list<T>();
         }
     };
 

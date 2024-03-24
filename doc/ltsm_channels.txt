@@ -1,4 +1,4 @@
-----------| LTSM CHANNELS DESCRIPTION 0.2 |-------------
+----------| LTSM CHANNELS DESCRIPTION 0.5 |-------------
 
 [1.0] RFB proto description:
 
@@ -120,7 +120,6 @@ Content is JSON format
 ------------------------+-------+-----------------
  TransferFiles          | 2.3.1 | client -> server
  KeyboardChange         | 2.4.1 | client -> server
- FuseProxy              | 2.5.1 | any
  TokenAuth              | 2.6.1 | any
  LoginSuccess           | 2.7.1 | server -> client
 ------------------------+-------+------------------
@@ -143,7 +142,6 @@ The "keyboard" field is a json object, keyboard layouts identifiers
  platform    | SDL_GetPlatform
  printer     | client url socket
  sane        | client url socket
- pulseaudio  | client url socket
  pcscd       | client url socket
  certificate | possible
 -------------+--------------
@@ -156,12 +154,27 @@ The "keyboard" field is a json object, keyboard layouts identifiers
 
 [2.2.2] System message CHANNEL CONNECTED
 
-{ "cmd": "ChannelConnected", "id": int , "zlib": bool, "error": false }
+{ "cmd": "ChannelConnected", "id": int , "packed": int, "error": false }
 
+-------+------
+packed | type
+-------+------
+ 0     | raw
+ 1     | zlib
+-------+------
+
+zlib: inflate/deflate algorithm used
 
 [2.2.3] System message CHANNEL OPEN
 
-{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string", "zlib": bool }
+{ "cmd": "ChannelOpen", "id": int, "type": "string", "mode": "string", "speed": "string", "packed": int }
+
+-------+------
+packed | type
+-------+------
+ 0     | raw
+ 1     | zlib
+-------+------
 
 zlib: inflate/deflate algorithm used
 
@@ -266,59 +279,6 @@ the client requests the ability to transfer the files.
 all supported keyboard layouts are transmitted in advance via the environment:keyboard.
 
 
-[2.5.1] System message FUSE PROXY
-
-{ "cmd": "FuseProxy", "fuse": string, "cookie": int, "path": string }
-
-----------+---------
- fuse cmd | part    
-----------+---------
- getattr  | 2.5.1.1
- readdir  | 2.5.1.2
- open     | 2.5.1.3
- read     | 2.5.1.4
-----------+---------
-
-
-
-[2.5.1.1] FUSE command GetAttr
-
-client returned message: stat info struct (man 2 stat)
-
-{ "cmd": "FuseProxy", "fuse": "getattr", "path": string, "cookie": int, "error": bool, "errno": int, "stat": {} }
-
-stat: the struct stat member (man 2 stat)
-
-[2.5.1.2] FUSE command ReadDir
-
-client returned message: list names
-
-{ "cmd": "FuseProxy", "fuse": "readdir", "path": string, "cookie": int, "error": bool, "errno": int, "names": [ "name1", "name2", "name3", ... ] }
-
-
-[2.5.1.3] FUSE command Open
-
-client returned message: open status
-
-{ "cmd": "FuseProxy", "fuse": "open", "path": string, "cookie": int, "error": bool, "errno": int }
-
-
-[2.5.1.4] FUSE command Read
-
-{ "cmd": "FuseProxy", "fuse": "read", "path": string, "cookie": int, "offset": int, "size": int }
-
-client returned message: binary data
-
-{ "cmd": "FuseProxy", "fuse": "read", "path": string, "cookie": int, "error": bool, "errno": int, "eof": bool, "data": string }
-
-the "data" field is a binary data format, see 2.5.2
-
-
-[2.5.2] FUSE binary data format [binary to string]
-
-[ base64 encode string [ uin32be_t raw size data [ uint8_t[] gzip::compress binary data ]]]
-
-
 [2.6.1] System message TOKEN AUTH
 
 { "cmd": "TokenAuth", "action": string }
@@ -368,4 +328,73 @@ the "cert" field is integer(crc32b) from certificate content
 { "cmd": "LoginSuccess", "action": bool, "error": string }
 
 
+[2.8] Channel AUDIO
 
+Initial part from session side, see 2.8.1
+
+---------------+--------------
+ commands      | value
+---------------+--------------
+ AudioOp::Init | 0xFE01
+ AudioOp::Data | 0xFE02
+---------------+--------------
+
+----------+--------------
+ encoding | value
+----------+--------------
+ PCM      | 0
+ OPUS     | 1
+ AAC      | 2
+----------+--------------
+
+encoding structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      |            | type
+ 2        | u16      |            | channel
+ 4        | u32      | 44100 etc  | sample rate
+ 2        | u16      | 16, 24, 32 | bits per sample
+----------+----------+------------+---------------------
+
+[2.8.1] Channel AUDIO send Init (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE01     | AudioOp::Init
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | encodings count
+ variadic | u8       |            | encodings data
+----------+----------+------------+---------------------
+
+[2.8.2] Channel AUDIO send Data (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE02     | AudioOp::Data
+ 4        | u32      |            | length
+ array    | u8       |            | data
+----------+----------+------------+---------------------
+
+[2.8.3] Channel AUDIO reply Init (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE01     | AudioOp::Init
+ 2        | u16      | 0          | no error
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | selected encoding
+----------+----------+------------+---------------------
+
+[2.8.4] Channel AUDIO reply Init failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE01     | AudioOp::Init
+ 2        | u16      |            | error length
+ string   | u8       |            | error message
+----------+----------+------------+---------------------

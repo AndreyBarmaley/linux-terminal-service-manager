@@ -207,7 +207,7 @@ namespace LTSM
             context = static_cast<ServerContext*>(peer->context);
             context->config = & config;
             context->rdp = connector;
-            context->clipboard = config.getBoolean("rdp:clipboard", true);
+            context->clipboard = false;
             const std::string keymapFile = config.getString("rdp:keymap:file");
 
             if(! keymapFile.empty())

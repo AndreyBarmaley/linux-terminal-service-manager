@@ -274,71 +274,6 @@ namespace LTSM
         }
     }
 
-    /* FileDescriptor */
-    void FileDescriptor::readFrom(int fd, void* ptr, ssize_t len)
-    {
-        while(true)
-        {
-            ssize_t real = read(fd, ptr, len);
-
-            if(len == real)
-                break;
-
-            if(0 < real && real < len)
-            {
-                ptr = static_cast<uint8_t*>(ptr) + real;
-                len -= real;
-                continue;
-            }
-
-            // eof
-            if(0 == real)
-            {
-                Application::warning("%s: %s", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
-            }
-
-            // error
-            if(EAGAIN == errno || EINTR == errno)
-                continue;
-
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "read", strerror(errno), errno);
-            throw network_error(NS_FuncName);
-        }
-    }
-
-    void FileDescriptor::writeTo(int fd, const void* ptr, ssize_t len)
-    {
-        while(true)
-        {
-            ssize_t real = write(fd, ptr, len);
-
-            if(len == real)
-                break;
-
-            if(0 < real && real < len)
-            {
-                ptr = static_cast<const uint8_t*>(ptr) + real;
-                len -= real;
-                continue;
-            }
-
-            // eof
-            if(0 == real)
-            {
-                Application::warning("%s: %s", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
-            }
-
-            // error
-            if(EAGAIN == errno || EINTR == errno)
-                continue;
-
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "write", strerror(errno), errno);
-            throw network_error(NS_FuncName);
-        }
-    }
-
     /* SocketStream */
     SocketStream::SocketStream(int fd) : sock(fd)
     {
@@ -1343,7 +1278,8 @@ namespace LTSM
             	    throw zlib_error(NS_FuncName);
         	}
 
-                res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
+                if(zs.avail_out < tmp.size())
+                    res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
             }
             while(zs.avail_out == 0);
 
@@ -1433,7 +1369,8 @@ namespace LTSM
                     throw zlib_error(NS_FuncName);
                 }
 
-                res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
+                if(zs.avail_out < tmp.size())
+                    res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
             }
             while(zs.avail_in > 0);
 

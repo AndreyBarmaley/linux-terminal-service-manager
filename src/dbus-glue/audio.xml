@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node name="/ltsm/session/audio">
+    <interface name="LTSM.Session.AUDIO">
+        <method name="getVersion">
+            <arg type="i" name="version" direction="out" />
+        </method>
+
+        <method name="connectChannel">
+            <arg type="s" name="clientSocket" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+
+        <method name="disconnectChannel">
+            <arg type="s" name="clientSocket" direction="in" />
+        </method>
+
+        <method name="pulseFragmentSize">
+            <arg type="u" name="sz" direction="in" />
+        </method>
+
+        <method name="serviceShutdown">
+        </method>
+    </interface>
+</node>

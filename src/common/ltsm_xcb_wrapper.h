@@ -340,6 +340,7 @@ namespace LTSM
 
 	struct RandrScreenInfo
 	{
+	    xcb_timestamp_t 	timestamp = 0;
 	    xcb_timestamp_t 	config_timestamp = 0;
 	    uint16_t 		sizeID = 0;
 	    uint16_t 		rotation = 0;
@@ -701,6 +702,8 @@ namespace LTSM
             std::pair<xcb_keycode_t, int>
                                         keysymToKeycodeGroup(xcb_keysym_t) const;
             xcb_keysym_t                keycodeGroupToKeysym(xcb_keycode_t, int group, bool shifted = false) const;
+
+	    void                        bell(uint8_t percent) const;
 
             virtual void                xkbStateChangeEvent(int) {}
             virtual void                xkbStateResetEvent(void) {}

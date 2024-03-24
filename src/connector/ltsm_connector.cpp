@@ -24,9 +24,6 @@
 // shm access flags
 #include <sys/stat.h>
 
-#include <sys/types.h>
-#include <pwd.h>
-
 #include <poll.h>
 #include <signal.h>
 #include <unistd.h>
@@ -129,8 +126,8 @@ namespace LTSM
     {
         std::string home("/tmp");
 
-        if(struct passwd* st = getpwuid(getuid()))
-            home.assign(st->pw_dir);
+        if(auto info = Tools::getUidInfo(getuid()); info->home() != nullptr)
+            home.assign(info->home());
 
         return home;
     }

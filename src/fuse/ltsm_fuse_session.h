@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -21,23 +21,15 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_FUSE_
-#define _LTSM_FUSE_
+#ifndef _LTSM_FUSE_SESSION_
+#define _LTSM_FUSE_SESSION_
 
-#include <map>
-#include <list>
-#include <mutex>
-#include <atomic>
-#include <vector>
 #include <string>
-#include <memory>
 #include <stdexcept>
+#include <forward_list>
 
+#include "ltsm_fuse.h"
 #include "ltsm_fuse_adaptor.h"
-#define LTSM_FUSE2SESSION_VERSION 20221110
-
-#define FUSE_USE_VERSION 34
-#include <fuse.h>
 
 namespace LTSM
 {
@@ -47,43 +39,23 @@ namespace LTSM
         explicit fuse_error(const char* what) : std::runtime_error(what){}
     };
 
-    struct ReplyBase;
+    struct FuseSession;
 
-    class FuseApiWrapper
+    class FuseSessionBus : public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>, public Application
     {
-        fuse_operations oper = {0};
-        struct fuse* ptr = nullptr;
-
-    public:
-        FuseApiWrapper(const std::string &);
-        ~FuseApiWrapper();
-    };
-
-    class FuseSessionBus : public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>
-    {
-        std::unique_ptr<FuseApiWrapper> api;
-        std::atomic<uint32_t> sid{0};
-
-        std::list<std::unique_ptr<ReplyBase>> replies;
-        std::mutex lockrp;
+        std::forward_list<std::unique_ptr<FuseSession>> childs;
 
     public:
         FuseSessionBus(sdbus::IConnection &);
         virtual ~FuseSessionBus();
 
-        uint32_t getCookie(void) { return ++sid; }
-        std::unique_ptr<ReplyBase> getReply(uint32_t cookie);
+        int start(void) override;
 
         int32_t getVersion(void) override;
-        void shutdown(void) override;
+        void serviceShutdown(void) override;
 
-        bool mount(const std::string& point) override;
-        void umount(void) override;
-
-        void replyGetAttr(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::map<std::string, int32_t>& stat) override;
-        void replyReadDir(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::vector<std::string>& names) override;
-        void replyOpen(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie) override;
-        void replyRead(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::string& data) override;
+        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) override;
+        void umountPoint(const std::string& point) override;
     };
 }
 

@@ -282,6 +282,13 @@ namespace LTSM
         void            skip(size_t) const override;
 
         const uint8_t*  data(void) const;
+
+        uint16_t        peekIntLE16(void) const;
+        uint16_t        peekIntBE16(void) const;
+        uint32_t        peekIntLE32(void) const;
+        uint32_t        peekIntBE32(void) const;
+        uint64_t        peekIntLE64(void) const;
+        uint64_t        peekIntBE64(void) const;
     };
 
     /// @brief: read/write StreamBuf
@@ -305,6 +312,8 @@ namespace LTSM
         StreamBuf &     operator=(StreamBuf &&) noexcept;
 
         bool            bigendian(void) const override { return false; }
+
+        void            reset(void);
         void            reset(const std::vector<uint8_t> &);
 
         BinaryBuf       read(size_t = 0) const override;
@@ -318,6 +327,35 @@ namespace LTSM
         BinaryBuf &     rawbuf(void);
 
         void            shrink(void);
+    };
+
+    /// @brief: descriptor stream
+    class DescriptorStream : public ByteOrderInterface
+    {
+        int             fd = 0;
+        bool            autoClose = true;
+
+    protected:
+        void            getRaw(void* ptr, size_t len) const override;
+        void            putRaw(const void* ptr, size_t len) override;
+
+    public:
+        DescriptorStream() = default;
+
+        explicit DescriptorStream(int fd0, bool autoclose);
+        ~DescriptorStream();
+
+        DescriptorStream(const DescriptorStream &) = delete;
+        DescriptorStream & operator=(const DescriptorStream &) = delete;
+
+        void            setDescriptor(int fd0) { fd = fd0; }
+        int             getDescriptor(void) const { return fd; }
+
+        void            readTo(void* ptr, ssize_t len) const;
+        void            writeFrom(const void* ptr, ssize_t len) const;
+
+        static void     readFromTo(int fd, void* ptr, ssize_t len);
+        static void     writeFromTo(const void* ptr, ssize_t len, int fd);
     };
 
 } // _LTSM_STREAMBUF_

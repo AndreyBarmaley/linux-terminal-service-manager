@@ -25,6 +25,7 @@
 
 #include <mutex>
 #include <string>
+#include <cstdarg>
 #include <string_view>
 
 #include <systemd/sd-journal.h>
@@ -54,153 +55,177 @@ namespace LTSM
         Application(Application &) = delete;
         Application & operator= (const Application &) = delete;
 
-        template<typename... Values>
-        static void info(const char* format, Values && ... vals)
+        static void info(const char* format, ...)
         {
 	    if(level != DebugLevel::None)
 	    {
+                va_list args;
+                va_start(args, format);
+
                 if(target == DebugTarget::Console)
 	        {
                     const std::scoped_lock guard{ logging };
 
 		    fprintf(fdlog, "[info] ");
-		    fprintf(fdlog, format, vals...);
+		    vfprintf(fdlog, format, args);
 		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    syslog(LOG_INFO, format, vals...);
+                    vsyslog(LOG_INFO, format, args);
                 }
                 else
                 if(target == DebugTarget::SystemD)
                 {
-                    sd_journal_print(LOG_INFO, format, vals...);
+                    sd_journal_printv(LOG_INFO, format, args);
                 }
+
+                va_end(args);
             }
         }
 
-        template<typename... Values>
-        static void notice(const char* format, Values && ... vals)
+        static void notice(const char* format, ...)
         {
+            va_list args;
+            va_start(args, format);
+
             if(target == DebugTarget::Console)
 	    {
                 const std::scoped_lock guard{ logging };
 
 		fprintf(fdlog, "[notice] ");
-		fprintf(fdlog, format, vals...);
+		vfprintf(fdlog, format, args);
 	    	fprintf(fdlog, "\n");
 	    }
 	    else
             if(target == DebugTarget::Syslog)
             {
-                syslog(LOG_NOTICE, format, vals...);
+                vsyslog(LOG_NOTICE, format, args);
             }
             else
             if(target == DebugTarget::SystemD)
             {
-                sd_journal_print(LOG_NOTICE, format, vals...);
+                sd_journal_printv(LOG_NOTICE, format, args);
             }
+
+            va_end(args);
         }
 
-        template<typename... Values>
-        static void warning(const char* format, Values && ... vals)
+        static void warning(const char* format, ...)
         {
 	    if(level != DebugLevel::None)
 	    {
+                va_list args;
+                va_start(args, format);
+
                 if(target == DebugTarget::Console)
 	        {
                     const std::scoped_lock guard{ logging };
 
 		    fprintf(fdlog, "[warning] ");
-		    fprintf(fdlog, format, vals...);
+		    vfprintf(fdlog, format, args);
 		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-        	    syslog(LOG_WARNING, format, vals...);
+        	    vsyslog(LOG_WARNING, format, args);
                 }
                 else
                 if(target == DebugTarget::SystemD)
                 {
-                    sd_journal_print(LOG_WARNING, format, vals...);
+                    sd_journal_printv(LOG_WARNING, format, args);
                 }
+
+                va_end(args);
             }
         }
 
-        template<typename... Values>
-        static void error(const char* format, Values && ... vals)
+        static void error(const char* format, ...)
         {
+            va_list args;
+            va_start(args, format);
+
             if(target == DebugTarget::Console)
 	    {
                 const std::scoped_lock guard{ logging };
 
 		fprintf(fdlog, "[error] ");
-		fprintf(fdlog, format, vals...);
+		vfprintf(fdlog, format, args);
 		fprintf(fdlog, "\n");
 	    }
 	    else
             if(target == DebugTarget::Syslog)
             {
-        	syslog(LOG_ERR, format, vals...);
+        	vsyslog(LOG_ERR, format, args);
             }
             else
             if(target == DebugTarget::SystemD)
             {
-                sd_journal_print(LOG_ERR, format, vals...);
+                sd_journal_printv(LOG_ERR, format, args);
             }
+
+            va_end(args);
         }
 
-        template<typename... Values>
-        static void debug(const char* format, Values && ... vals)
+        static void debug(const char* format, ...)
         {
 	    if(level == DebugLevel::Debug || level == DebugLevel::Trace)
 	    {
+                va_list args;
+                va_start(args, format);
+
                 if(target == DebugTarget::Console)
 	        {
                     const std::scoped_lock guard{ logging };
 
 		    fprintf(fdlog, "[debug] ");
-		    fprintf(fdlog, format, vals...);
+		    vfprintf(fdlog, format, args);
 		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    syslog(LOG_DEBUG, format, vals...);
+                    vsyslog(LOG_DEBUG, format, args);
                 }
                 else
                 if(target == DebugTarget::SystemD)
                 {
-                    sd_journal_print(LOG_DEBUG, format, vals...);
+                    sd_journal_printv(LOG_DEBUG, format, args);
                 }
+
+                va_end(args);
             }
         }
 
-        template<typename... Values>
-        static void trace(const char* format, Values && ... vals)
+        static void trace(const char* format, ...)
         {
 	    if(level == DebugLevel::Trace)
 	    {
+                va_list args;
+                va_start(args, format);
+
                 if(target == DebugTarget::Console)
 	        {
                     const std::scoped_lock guard{ logging };
 
 		    fprintf(fdlog, "[trace] ");
-		    fprintf(fdlog, format, vals...);
+		    vfprintf(fdlog, format, args);
 		    fprintf(fdlog, "\n");
 	        }
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    syslog(LOG_DEBUG, format, vals...);
+                    vsyslog(LOG_DEBUG, format, args);
                 }
                 else
                 if(target == DebugTarget::SystemD)
                 {
-                    sd_journal_print(LOG_DEBUG, format, vals...);
+                    sd_journal_printv(LOG_DEBUG, format, args);
                 }
+
+                va_end(args);
             }
         }
 
