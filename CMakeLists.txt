@@ -12,7 +12,7 @@ option(LTSM_BUILD_CLIENT "build client" ON)
 option(LTSM_GSSAPI "GSSAPI security" OFF)
 option(LTSM_FFMPEG "ffmpeg encoding support" OFF)
 
-#option(LTSM_BUILD_TESTS "build test utilities" OFF)
+option(LTSM_BUILD_TESTS "build test utilities" OFF)
 #option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 #option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
@@ -28,9 +28,8 @@ if(LTSM_BUILD_SERVER)
     set(LTSM_TOKEN_AUTH ON CACHE BOOL  "ltsm token auth support")
     set(LTSM_CUPS_BACKEND ON CACHE BOOL "cups backend build")
     set(LTSM_FUSE2SESSION ON CACHE BOOL "session fuse support")
+    set(LTSM_AUDIO2SESSION ON CACHE BOOL "session audio support")
 else()
-    unset(LTSM_CUPS_BACKEND CACHE)
-    unset(LTSM_FUSE2SESSION CACHE)
     unset(LTSM_WITH_RDP CACHE)
     unset(LTSM_BUILD_SERVICE CACHE)
     unset(LTSM_BUILD_CONNECTOR CACHE)
@@ -40,6 +39,7 @@ else()
     unset(LTSM_TOKEN_AUTH CACHE)
     unset(LTSM_CUPS_BACKEND CACHE)
     unset(LTSM_FUSE2SESSION CACHE)
+    unset(LTSM_AUDIO2SESSION CACHE)
 endif()
 
 if(LTSM_BUILD_CLIENT)
@@ -118,7 +118,6 @@ pkg_search_module(XCB_XKB REQUIRED xcb-xkb)
 pkg_search_module(XKBCOMMON_X11 REQUIRED xkbcommon-x11)
 add_compile_options(${XCB_XKB_CFLAGS})
 add_compile_options(${XKBCOMMON_X11_CFLAGS})
-add_compile_options(-DLTSM_SOCKET_ZLIB)
 link_libraries(${XCB_XKB_LIBRARIES})
 link_libraries(${XKBCOMMON_X11_LIBRARIES})
 
@@ -155,7 +154,7 @@ if(LTSM_BUILD_SERVICE)
         target_compile_options(LTSM_service PRIVATE -DLTSM_TOKEN_AUTH)
     endif()
 
-    target_include_directories(LTSM_service PRIVATE src/common src/channels src/librfb src/dbus-glue ${PAM_INCLUDE_PATH})
+    target_include_directories(LTSM_service PRIVATE src/common src/channels src/fuse src/audio src/librfb src/dbus-glue ${PAM_INCLUDE_PATH})
     target_link_libraries(LTSM_service LTSM_common SDBusCpp::sdbus-c++ ${PAM_LIBRARIES} ${PAM_MISC_LIBRARIES})
 
     set_target_properties(LTSM_service PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -348,6 +347,10 @@ if(LTSM_BUILD_CLIENT)
         src/vnc2sdl/ltsm_vnc2sdl.cpp
         src/sdl2x11/ltsm_sdl_wrapper.cpp
         src/channels/channel_system.cpp
+        src/audio/ltsm_audio_pulse.cpp
+        src/audio/ltsm_audio_client.cpp
+        src/audio/ltsm_audio_decoder.cpp
+        src/fuse/ltsm_fuse_client.cpp
         src/librfb/librfb_decodings.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
@@ -362,6 +365,21 @@ if(LTSM_BUILD_CLIENT)
         target_include_directories(LTSM_vnc2sdl PRIVATE /usr/include/rutoken /usr/include/rutoken/pki-core)
         target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_RUTOKEN)
         target_link_libraries(LTSM_vnc2sdl LTSM_common -lpki-core)
+    endif()
+
+    pkg_search_module(PULSEAUDIO REQUIRED libpulse)
+    pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
+    pkg_search_module(OPUS REQUIRED opus)
+
+    # add FAAD
+    find_path(FAAD_INCLUDE_DIR faad.h)
+    find_library(FAAD_LIBRARY faad)
+    find_package_handle_standard_args(FAAD DEFAULT_MSG FAAD_INCLUDE_DIR FAAD_LIBRARY)
+
+    if(OPUS_FOUND)
+        target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_OPUS ${OPUS_CFLAGS})
+        target_include_directories(LTSM_vnc2sdl PRIVATE ${OPUS_INCLUDE_DIR})
+        target_link_libraries(LTSM_vnc2sdl ${OPUS_LIBRARIES})
     endif()
 
     if(LTSM_FFMPEG)
@@ -387,10 +405,10 @@ if(LTSM_BUILD_CLIENT)
 	target_link_libraries(LTSM_vnc2sdl ${GSSAPI_LIBRARIES})
     endif()
 
-    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
-    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
-    target_include_directories(LTSM_vnc2sdl PRIVATE src/common src/channels src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
-    target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
+    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_CLIENT -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS} ${PULSEAUDIO_CFLAGS})
+    target_include_directories(LTSM_vnc2sdl PRIVATE src/common src/channels src/audio src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} ${PULSEAUDIO_INCLUDE_DIR})
+    target_link_libraries(LTSM_vnc2sdl LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2sdl PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -418,7 +436,7 @@ if(LTSM_FUSE2SESSION)
     pkg_search_module(FUSE3 REQUIRED fuse3)   
 
     add_executable(LTSM_fuse2session
-        src/session_fuse/ltsm_fuse.cpp)
+        src/fuse/ltsm_fuse_session.cpp)
 
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
         target_compile_options(LTSM_fuse2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
@@ -429,4 +447,35 @@ if(LTSM_FUSE2SESSION)
     target_link_libraries(LTSM_fuse2session LTSM_common SDBusCpp::sdbus-c++ ${FUSE3_LIBRARIES})
 
     set_target_properties(LTSM_fuse2session PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+if(LTSM_AUDIO2SESSION)
+    # LTSM_audio2session
+    project(LTSM_audio2session)
+
+    find_package(sdbus-c++ REQUIRED)
+    pkg_search_module(PULSEAUDIO REQUIRED libpulse)
+    pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
+    pkg_search_module(OPUS REQUIRED opus)
+
+    add_executable(LTSM_audio2session
+        src/audio/ltsm_audio_pulse.cpp
+        src/audio/ltsm_audio_encoder.cpp
+        src/audio/ltsm_audio_session.cpp)
+
+    if(OPUS_FOUND)
+        target_compile_options(LTSM_audio2session PRIVATE -DLTSM_WITH_OPUS ${OPUS_CFLAGS})
+        target_include_directories(LTSM_audio2session PRIVATE ${OPUS_INCLUDE_DIR})
+        target_link_libraries(LTSM_audio2session ${OPUS_LIBRARIES})
+    endif()
+
+#    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
+#        target_compile_options(LTSM_audio2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+#    endif()
+
+    target_compile_options(LTSM_audio2session PRIVATE ${PULSEAUDIO_CFLAGS})
+    target_include_directories(LTSM_audio2session PRIVATE src/common src/dbus-glue ${PULSEAUDIO_INCLUDE_DIR})
+    target_link_libraries(LTSM_audio2session LTSM_common SDBusCpp::sdbus-c++ ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES})
+
+    set_target_properties(LTSM_audio2session PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

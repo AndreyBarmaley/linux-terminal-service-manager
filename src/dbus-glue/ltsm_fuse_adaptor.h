@@ -23,51 +23,18 @@ protected:
         : object_(object)
     {
         object_.registerMethod("getVersion").onInterface(INTERFACE_NAME).withOutputParamNames("version").implementedAs([this](){ return this->getVersion(); });
-        object_.registerMethod("shutdown").onInterface(INTERFACE_NAME).implementedAs([this](){ return this->shutdown(); });
-        object_.registerMethod("mount").onInterface(INTERFACE_NAME).withInputParamNames("point").withOutputParamNames("res").implementedAs([this](const std::string& point){ return this->mount(point); });
-        object_.registerMethod("umount").onInterface(INTERFACE_NAME).implementedAs([this](){ return this->umount(); });
-        object_.registerMethod("replyGetAttr").onInterface(INTERFACE_NAME).withInputParamNames("error", "errno2", "path", "cookie", "stat").implementedAs([this](const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::map<std::string, int32_t>& stat){ return this->replyGetAttr(error, errno2, path, cookie, stat); });
-        object_.registerMethod("replyReadDir").onInterface(INTERFACE_NAME).withInputParamNames("error", "errno2", "path", "cookie", "names").implementedAs([this](const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::vector<std::string>& names){ return this->replyReadDir(error, errno2, path, cookie, names); });
-        object_.registerMethod("replyOpen").onInterface(INTERFACE_NAME).withInputParamNames("error", "errno2", "path", "cookie").implementedAs([this](const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie){ return this->replyOpen(error, errno2, path, cookie); });
-        object_.registerMethod("replyRead").onInterface(INTERFACE_NAME).withInputParamNames("error", "errno2", "path", "cookie", "data").implementedAs([this](const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::string& data){ return this->replyRead(error, errno2, path, cookie, data); });
-        object_.registerSignal("requestOpen").onInterface(INTERFACE_NAME).withParameters<std::string, uint32_t, int32_t>("path", "cookie", "flags");
-        object_.registerSignal("requestRead").onInterface(INTERFACE_NAME).withParameters<std::string, uint32_t, uint32_t, int32_t>("path", "cookie", "size", "offset");
-        object_.registerSignal("requestReadDir").onInterface(INTERFACE_NAME).withParameters<std::string, uint32_t>("path", "cookie");
-        object_.registerSignal("requestGetAttr").onInterface(INTERFACE_NAME).withParameters<std::string, uint32_t>("path", "cookie");
+        object_.registerMethod("serviceShutdown").onInterface(INTERFACE_NAME).implementedAs([this](){ return this->serviceShutdown(); });
+        object_.registerMethod("mountPoint").onInterface(INTERFACE_NAME).withInputParamNames("localPoint", "remotePoint", "fuseSocket").withOutputParamNames("res").implementedAs([this](const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket){ return this->mountPoint(localPoint, remotePoint, fuseSocket); });
+        object_.registerMethod("umountPoint").onInterface(INTERFACE_NAME).withInputParamNames("localPoint").implementedAs([this](const std::string& localPoint){ return this->umountPoint(localPoint); });
     }
 
     ~FUSE_adaptor() = default;
 
-public:
-    void emitRequestOpen(const std::string& path, const uint32_t& cookie, const int32_t& flags)
-    {
-        object_.emitSignal("requestOpen").onInterface(INTERFACE_NAME).withArguments(path, cookie, flags);
-    }
-
-    void emitRequestRead(const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset)
-    {
-        object_.emitSignal("requestRead").onInterface(INTERFACE_NAME).withArguments(path, cookie, size, offset);
-    }
-
-    void emitRequestReadDir(const std::string& path, const uint32_t& cookie)
-    {
-        object_.emitSignal("requestReadDir").onInterface(INTERFACE_NAME).withArguments(path, cookie);
-    }
-
-    void emitRequestGetAttr(const std::string& path, const uint32_t& cookie)
-    {
-        object_.emitSignal("requestGetAttr").onInterface(INTERFACE_NAME).withArguments(path, cookie);
-    }
-
 private:
     virtual int32_t getVersion() = 0;
-    virtual void shutdown() = 0;
-    virtual bool mount(const std::string& point) = 0;
-    virtual void umount() = 0;
-    virtual void replyGetAttr(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::map<std::string, int32_t>& stat) = 0;
-    virtual void replyReadDir(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::vector<std::string>& names) = 0;
-    virtual void replyOpen(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie) = 0;
-    virtual void replyRead(const bool& error, const int32_t& errno2, const std::string& path, const uint32_t& cookie, const std::string& data) = 0;
+    virtual void serviceShutdown() = 0;
+    virtual bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) = 0;
+    virtual void umountPoint(const std::string& localPoint) = 0;
 
 private:
     sdbus::IObject& object_;

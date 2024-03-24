@@ -31,7 +31,6 @@
     "rdp:server:certfile": "/etc/ltsm/server.crt",
     "rdp:server:keyfile": "/etc/ltsm/server.key",
     "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
-    "rdp:clipboard": true,
 
     "transfer:file:disabled": false,
     "transfer:file:max": 100000000,
@@ -39,8 +38,8 @@
 
     "channel:printer:disabled": false,
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
-    "channel:pulseaudio:disabled": false,
-    "channel:pulseaudio:format": "/var/run/ltsm/pulse/%{user}",
+    "channel:audio:disabled": false,
+    "channel:audio:format", "/var/run/ltsm/audio/%{user}",
     "channel:pcscd:disabled": false,
     "channel:pcscd:format": "/var/run/ltsm/pcscd/%{user}",
     "channel:fuse:disabled": false,
@@ -59,7 +58,7 @@
     "user:xvfb": "ltsm-xvfb",
     "pam:service": "ltsm",
 
-    "#access:group": "ts-users",
+    "#access:groups": [ "ts-users", "ts-admins" ],
     "access:uid:min": 100,
     "access:uid:max": 9999,
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],

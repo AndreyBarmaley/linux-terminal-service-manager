@@ -43,7 +43,7 @@ namespace LTSM
 	int serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings);
 
         /// ServerEncoder
-        class ServerEncoder : public ChannelClient, protected EncoderStream
+        class ServerEncoder : public ChannelListener, protected EncoderStream
         {
             std::vector<int>    clientEncodings;
 	    std::string		clientAuthName;

@@ -261,22 +261,27 @@ namespace LTSM
         if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            if(ret != EAGAIN)
+                throw ffmpeg_error(NS_FuncName);
         }
+
+        st->sendIntBE16(1);
+        st->sendHeader(getType(), fb.region());
 
         // send region
         if(ret == 0)
 	{
-	    st->sendIntBE16(1);
-    	    st->sendHeader(getType(), fb.region());
-    	    st->sendIntBE32(packet->size);
-
+            st->sendIntBE32(packet->size);
     	    Application::trace("%s: packet size: %d", __FUNCTION__, packet->size);
 	    st->sendRaw(packet->data, packet->size);
-
-    	    st->sendFlush();
             updatePoint = std::chrono::steady_clock::now();
 	}
+        else
+        {
+            st->sendIntBE32(0);
+        }
+
+        st->sendFlush();
     }
 
     size_t RFB::EncodingFFmpeg::updateTimeMS(void) const
@@ -446,6 +451,9 @@ namespace LTSM
 
         auto len = cli.recvIntBE32();
         auto buf  = cli.recvData(len);
+
+        if(0 == len)
+            return;
 
 	if(reg.toSize() != cli.clientSize())
 	{

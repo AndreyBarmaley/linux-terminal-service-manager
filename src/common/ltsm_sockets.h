@@ -24,17 +24,18 @@
 #ifndef _LTSM_SOCKETS_
 #define _LTSM_SOCKETS_
 
+#include <list>
 #include <array>
 #include <atomic>
 #include <vector>
 #include <thread>
 #include <string>
-#include <string_view>
-#include <filesystem>
 #include <memory>
 #include <cstdint>
 #include <cstdio>
 #include <stdexcept>
+#include <string_view>
+#include <filesystem>
 
 #include <zlib.h>
 
@@ -124,12 +125,6 @@ namespace LTSM
 
         static void		sendTo(int fd, const void*, ssize_t);
         static void	        recvFrom(int fd, void*, ssize_t);
-    };
-
-    namespace FileDescriptor
-    {
-        void			writeTo(int fd, const void*, ssize_t);
-        void	                readFrom(int fd, void*, ssize_t);
     };
 
     /// @brief: socket stream

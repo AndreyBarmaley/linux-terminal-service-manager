@@ -519,7 +519,7 @@ namespace LTSM
                 auto enc = *it;
                 encodings.erase(it);
                 it = std::find(encodings.begin(), encodings.end(), ENCODING_LTSM);
-                encodings.insert(std::next(it), enc);
+                encodings.insert(it == encodings.end() ? it : std::next(it), enc);
             }
         }
 
@@ -1003,9 +1003,6 @@ namespace LTSM
         else
         if(cmd == SystemCommand::ChannelConnected)
             systemChannelConnected(jo);
-        else
-        if(cmd == SystemCommand::FuseProxy)
-            systemFuseProxy(jo);
         else
         if(cmd == SystemCommand::ChannelError)
             systemChannelError(jo);

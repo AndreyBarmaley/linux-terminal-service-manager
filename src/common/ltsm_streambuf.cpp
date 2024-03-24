@@ -20,6 +20,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <unistd.h>
+
 #include <cstring>
 
 #include "ltsm_tools.h"
@@ -474,6 +476,54 @@ namespace LTSM
         return *it1;
     }
 
+    uint16_t StreamBufRef::peekIntLE16(void) const
+    {
+        uint16_t ret = getIntLE16();
+        it1 = std::prev(it1, 2);
+
+        return ret;
+    }
+
+    uint16_t StreamBufRef::peekIntBE16(void) const
+    {
+        uint16_t ret = getIntBE16();
+        it1 = std::prev(it1, 2);
+
+        return ret;
+    }
+
+    uint32_t StreamBufRef::peekIntLE32(void) const
+    {
+        uint32_t ret = getIntLE32();
+        it1 = std::prev(it1, 4);
+
+        return ret;
+    }
+
+    uint32_t StreamBufRef::peekIntBE32(void) const
+    {
+        uint32_t ret = getIntBE32();
+        it1 = std::prev(it1, 4);
+
+        return ret;
+    }
+
+    uint64_t StreamBufRef::peekIntLE64(void) const
+    {
+        uint64_t ret = getIntLE64();
+        it1 = std::prev(it1, 8);
+
+        return ret;
+    }
+
+    uint64_t StreamBufRef::peekIntBE64(void) const
+    {
+        uint64_t ret = getIntBE64();
+        it1 = std::prev(it1, 8);
+
+        return ret;
+    }
+
     const uint8_t* StreamBufRef::data(void) const
     {
         return it1;
@@ -516,6 +566,12 @@ namespace LTSM
         return *this;
     }
 
+    void StreamBuf::reset(void)
+    {
+        vec.clear();
+        it = vec.begin();
+    }
+
     void StreamBuf::reset(const std::vector<uint8_t> & v)
     {
         vec.assign(v.begin(), v.end());
@@ -543,7 +599,7 @@ namespace LTSM
         vec.resize(vsz + len);
         auto dst = std::next(vec.begin(), vsz);
         std::copy_n(src, len, dst);
-        it = std::next(vec.begin(), offset);
+        it = Tools::nextToEnd(vec.begin(), offset, vec.end());
     }
 
     BinaryBuf StreamBuf::read(size_t len) const
@@ -623,5 +679,100 @@ namespace LTSM
                 it = vec.begin();
             }
         }
+    }
+
+    // DescriptorStream
+    DescriptorStream::DescriptorStream(int fd0, bool autoclose) : fd(fd0), autoClose(autoclose)
+    {
+    } 
+
+    DescriptorStream::~DescriptorStream()
+    {
+        if(autoClose && 0 < fd)
+            ::close(fd);
+    }
+
+    void DescriptorStream::readFromTo(int fd, void* ptr, ssize_t len)
+    {
+        while(true)
+        {
+            ssize_t real = ::read(fd, ptr, len);
+
+            if(len == real)
+                break;
+
+            if(0 < real && real < len)
+            {
+                ptr = static_cast<uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+            
+            // eof
+            if(0 == real)
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw streambuf_error(NS_FuncName);
+            }
+            
+            // error
+            if(EAGAIN == errno || EINTR == errno)
+                continue;
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "read", strerror(errno), errno);
+            throw streambuf_error(NS_FuncName);
+        }
+    }
+
+    void DescriptorStream::writeFromTo(const void* ptr, ssize_t len, int fd)
+    {
+        while(true)
+        {
+            ssize_t real = ::write(fd, ptr, len);
+
+            if(len == real)
+                break;
+
+            if(0 < real && real < len)
+            {
+                ptr = static_cast<const uint8_t*>(ptr) + real;
+                len -= real;
+                continue;
+            }
+
+            // eof
+            if(0 == real)
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw streambuf_error(NS_FuncName);
+            }
+
+            // error
+            if(EAGAIN == errno || EINTR == errno)
+                continue;
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "write", strerror(errno), errno);
+            throw streambuf_error(NS_FuncName);
+        }
+    }
+
+    void DescriptorStream::readTo(void* ptr, ssize_t len) const
+    {
+        readFromTo(fd, ptr, len);
+    }
+
+    void DescriptorStream::writeFrom(const void* ptr, ssize_t len) const
+    {
+        writeFromTo(ptr, len, fd);
+    }
+
+    void DescriptorStream::getRaw(void* ptr, size_t len) const
+    {
+        readFromTo(fd, ptr, len);
+    }
+
+    void DescriptorStream::putRaw(const void* ptr, size_t len)
+    {
+        writeFromTo(ptr, len, fd);
     }
 }

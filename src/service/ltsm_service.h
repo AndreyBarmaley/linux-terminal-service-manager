@@ -78,6 +78,7 @@ namespace LTSM
         std::string password;
 
         struct pam_conv pamc{ pam_conv_func, this };
+        bool authenticateSuccess = false;
 
     protected:
         struct pam_conv* pamConv(void) override { return & pamc; }
@@ -87,6 +88,9 @@ namespace LTSM
             : PamService(service), login(user), password(pass) {}
 
         bool authenticate(void);
+
+        bool isAuthenticated(void) const { return authenticateSuccess; }
+        bool isLogin(std::string_view name) const { return login == name; }
     };
 
     /// PamSession
@@ -103,11 +107,11 @@ namespace LTSM
         enum Cred { Establish  = PAM_ESTABLISH_CRED, Refresh = PAM_REFRESH_CRED, Reinit = PAM_REINITIALIZE_CRED };
 
         bool validateAccount(void);
-        bool openSession(bool init = true);
+        bool openSession(void);
+        bool refreshCreds(void);
         bool setCreds(const Cred &);
 
-        void setSessionOpenned(void);
-        std::list<std::string> getEnvList(void);
+        std::forward_list<std::string> getEnvList(void);
     };
 
     /// Manager
@@ -149,11 +153,11 @@ namespace LTSM
         std::unordered_map<std::string, std::string>
                                         options;
 
-        std::filesystem::path           home;
         std::filesystem::path           xauthfile;
 
-        std::string                     user;
-        std::string                     shell;
+        UserInfoPtr                     userInfo;
+        GroupInfoPtr                    groupInfo;
+
         std::string                     displayAddr;
         std::string                     remoteaddr;
         std::string                     conntype;
@@ -170,9 +174,6 @@ namespace LTSM
         std::atomic<size_t>             durationLimit{0};
         std::atomic<size_t>             statusFlags{0};
         int                             loginFailures = 0;
-
-        uid_t                           uid = 0;
-        gid_t                           gid = 0;
 
         uint16_t                        width = 0;
         uint16_t                        height = 0;
@@ -193,7 +194,7 @@ namespace LTSM
         XvfbSession() = default;
 	~XvfbSession();
 
-        std::string                      toJsonString(void) const;
+        std::string                     toJsonString(void) const;
     };
 
     typedef std::shared_ptr<XvfbSession> XvfbSessionPtr;
@@ -224,30 +225,21 @@ namespace LTSM
 
     namespace Manager
     {
-        std::tuple<uid_t, gid_t, std::filesystem::path, std::string>
-                                        getUserInfo(std::string_view);
-        uid_t                           getUserUid(std::string_view);
-        gid_t                           getUserGid(std::string_view);
-        std::filesystem::path           getUserHome(std::string_view);
-        gid_t                           getGroupGid(std::string_view);
-        std::list<std::string>          getGroupMembers(std::string_view);
-        std::list<std::string>          getSystemUsersRange(int uidMin, int uidMax);
-        std::list<std::string>          getSessionDbusAddresses(std::string_view);
+        std::forward_list<std::string>  getSessionDBusAddresses(const UserInfo &);
 	void				redirectStdoutStderrTo(bool out, bool err, const char*);
         void                            closefds(int exclude = -1);
         bool                            checkFileReadable(const std::filesystem::path &);
-        bool                            createDirectory(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
 	bool			        runSystemScript(XvfbSessionPtr, const std::string & cmd);
-        bool	                        switchToUser(XvfbSessionPtr);
+        bool	                        switchToUser(const UserInfo &);
         std::string                     quotedString(std::string_view);
 
-        class Object : public XvfbSessions, public sdbus::AdaptorInterfaces<Service_adaptor>
+        class Object : public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
         {
-	    std::list<PidStatus>	childsRunning;
+	    std::forward_list<PidStatus> childsRunning;
             std::mutex                  lockRunning;
 
-            std::list<std::string>      allowTransfer;
+            std::forward_list<std::string> allowTransfer;
             std::mutex                  lockTransfer;
 
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
@@ -271,7 +263,7 @@ namespace LTSM
 	    void			closeSystemSession(XvfbSessionPtr);
             std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie);
             bool                        createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
-            XvfbSessionPtr              runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height, const std::string & user);
+            XvfbSessionPtr              runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height, UserInfoPtr userInfo);
             int				runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
 	    void			runSessionScript(XvfbSessionPtr, const std::string & cmd);
             bool			waitXvfbStarting(int display, uint32_t waitms) const;
@@ -279,7 +271,8 @@ namespace LTSM
 	    void			removeXvfbSocket(int display) const;
             bool			displayShutdown(XvfbSessionPtr, bool emitSignal);
             bool                        pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
-            std::list<std::string>      getAllowLogins(void) const;
+
+            std::forward_list<std::string> getAllowLogins(void) const;
 
 	    void			sessionsTimeLimitAction(void);
 	    void			sessionsEndedAction(void);
@@ -293,8 +286,6 @@ namespace LTSM
 
             void                        shutdownService(void);
             void                        configReloadedEvent(void);
-
-            bool                        sessionAllowFUSE(const int32_t& display);
 
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
@@ -350,10 +341,14 @@ namespace LTSM
 
             void                        startSessionChannels(XvfbSessionPtr);
             bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startPulseAudioListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startAudioListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startPcscdListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
             bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
+
+            void                        stopSessionChannels(XvfbSessionPtr);
+            void                        stopAudioListener(XvfbSessionPtr, const std::string & clientUrl);
+            void                        stopFuseListener(XvfbSessionPtr, const std::string & clientUrl);
         };
 
         class Service : public ApplicationJsonConfig

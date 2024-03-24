@@ -814,6 +814,7 @@ namespace LTSM
 
             if(info)
             {
+                info->timestamp = reply->timestamp;
                 info->config_timestamp = reply->config_timestamp;
                 info->sizeID = reply->sizeID;
                 info->rotation = reply->rotation;
@@ -1026,11 +1027,14 @@ namespace LTSM
         auto sizeID = std::distance(screenSizes.begin(), its);
         auto screenInfo = getScreenInfo(screen);
 
-        auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, conn.get(), screen.root, XCB_CURRENT_TIME,
-                                       screenInfo.config_timestamp, sizeID, screenInfo.rotation /*XCB_RANDR_ROTATION_ROTATE_0*/, 0);
+        auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, conn.get(), screen.root, screenInfo.timestamp,
+                                       screenInfo.config_timestamp, sizeID, screenInfo.rotation, screenInfo.rate);
 
         if(auto err = xcbReply2.error())
         {
+            Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
+                    __FUNCTION__, sz.width, sz.height, screenInfo.timestamp, screenInfo.config_timestamp, sizeID, screenInfo.rotation, screenInfo.rate);
+
             error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
             return false;
         }
@@ -1081,7 +1085,7 @@ namespace LTSM
         if(addr)
             shmdt(addr);
     
-        if(0 < shm)
+        if(0 <= shm)
             shmctl(shm, IPC_RMID, nullptr);
 
         id = 0;
@@ -1118,15 +1122,15 @@ namespace LTSM
         {
             shmid_ds info;
 
-            if(0 == shmctl(shmId, IPC_STAT, & info))
+            if(-1 == shmctl(shmId, IPC_STAT, & info))
             {
-                info.shm_perm.uid = owner;
-                if(0 != shmctl(shmId, IPC_SET, & info))
-                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
             }
             else
             {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+                info.shm_perm.uid = owner;
+                if(-1 == shmctl(shmId, IPC_SET, & info))
+                    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
             }
         }
 
@@ -1712,7 +1716,7 @@ namespace LTSM
 
         Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%08" PRIx32 ", sequence: 0x%08" PRIx32,
                        func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
-                       (unsigned int) err->resource_id, (unsigned int) err->sequence);
+                       err->resource_id, err->sequence);
 
         return true;
     }
@@ -3307,6 +3311,17 @@ namespace LTSM
     bool XCB::XkbClient::xcbError(void) const
     {
         return error;
+    }
+
+    void XCB::XkbClient::bell(uint8_t percent) const
+    {
+        auto cookie = xcb_bell_checked(conn.get(), percent);
+
+        if(GenericError(xcb_request_check(conn.get(), cookie)))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_bell");
+            throw xcb_error("xcb_bell");
+        }
     }
 
     bool XCB::XkbClient::xcbEventProcessing(void)

@@ -33,7 +33,6 @@
 
 #include "librfb_x11server.h"
 #include "ltsm_connector.h"
-#include "ltsm_fuse_proxy.h"
 
 namespace LTSM
 {
@@ -41,22 +40,6 @@ namespace LTSM
     {
         explicit vnc_error(const std::string & what) : std::runtime_error(what){}
         explicit vnc_error(const char* what) : std::runtime_error(what){}
-    };
-
-    /// FuseSessionProxy
-    class FuseSessionProxy : public sdbus::ProxyInterfaces<Session::FUSE_proxy>
-    {
-        ChannelClient* sender = nullptr;
-
-        protected:
-            void onRequestOpen(const std::string& path, const uint32_t& cookie, const int32_t& flags) override;
-            void onRequestRead(const std::string& path, const uint32_t& cookie, const uint32_t& size, const int32_t& offset) override;
-            void onRequestReadDir(const std::string& path, const uint32_t& cookie) override;
-            void onRequestGetAttr(const std::string& path, const uint32_t& cookie) override;
-
-        public:
-            FuseSessionProxy(const std::string& address, ChannelClient &);
-            virtual ~FuseSessionProxy();
     };
 
     namespace Connector
@@ -77,7 +60,6 @@ namespace LTSM
             size_t              idleTimeoutSec = 0;
 
             std::atomic<bool>   loginWidgetStarted{false};
-            std::unique_ptr<FuseSessionProxy> fuse;
             std::atomic<bool>   userSession{false};
             uid_t               shmUid = 0;
 
@@ -113,10 +95,9 @@ namespace LTSM
             void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
             void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
-            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit) override;
+            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const bool& zlib) override;
             void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
             void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
-            void                onFuseSessionStart(const int32_t& display, const std::string& addresses, const std::string& mount) override;
             void                onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override;
 
             void                serverHandshakeVersionEvent(void) override;
@@ -133,7 +114,6 @@ namespace LTSM
             void                systemTransferFiles(const JsonObject &) override;
             void                systemClientVariables(const JsonObject &) override;
             void                systemKeyboardChange(const JsonObject &) override;
-            void                systemFuseProxy(const JsonObject &) override;
             void                systemTokenAuth(const JsonObject &) override;
 
         public:

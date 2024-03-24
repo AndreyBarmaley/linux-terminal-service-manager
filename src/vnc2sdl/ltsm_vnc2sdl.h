@@ -28,6 +28,7 @@
 #include <memory>
 #include <atomic>
 #include <stdexcept>
+#include <forward_list>
 
 #include "ltsm_global.h"
 #include "ltsm_application.h"
@@ -36,17 +37,17 @@
 #include "ltsm_xcb_wrapper.h"
 
 #ifdef LTSM_RUTOKEN
-#include "pki-core/common.h"
+    #include "pki-core-cpp.h"
 #endif
 
-#define LTSM_VNC2SDL_VERSION 202230405
+#define LTSM_VNC2SDL_VERSION 20240304
 
 namespace LTSM
 {
     struct token_error : public std::runtime_error
     {
-        explicit token_error(const std::string & what) : std::runtime_error(what){}
-        explicit token_error(const char* what) : std::runtime_error(what){}
+        explicit token_error(const std::string & what) : std::runtime_error(what) {}
+        explicit token_error(const char* what) : std::runtime_error(what) {}
     };
 
     class TokenAuthInterface
@@ -60,7 +61,8 @@ namespace LTSM
         virtual ~TokenAuthInterface() = default;
 
 
-        virtual std::vector<uint8_t> decryptPkcs7(const std::string & serial, const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) = 0;
+        virtual std::vector<uint8_t> decryptPkcs7(const std::string & serial,
+                const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) = 0;
     };
 
 #ifdef LTSM_RUTOKEN
@@ -78,7 +80,8 @@ namespace LTSM
         RutokenWrapper(const std::string &, ChannelClient &);
         ~RutokenWrapper();
 
-        std::vector<uint8_t> decryptPkcs7(const std::string & serial, const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) override;
+        std::vector<uint8_t> decryptPkcs7(const std::string & serial,
+                                          const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) override;
     };
 #endif
 
@@ -91,26 +94,30 @@ namespace LTSM
 
     struct SurfaceDeleter
     {
-	void operator()(SDL_Surface* sf)
-	{
-	    if(sf) SDL_FreeSurface(sf);
-	}
+        void operator()(SDL_Surface* sf)
+        {
+            if(sf) { SDL_FreeSurface(sf); }
+        }
     };
 
-    class Vnc2SDL : public Application, public XCB::XkbClient, protected RFB::ClientDecoder
+    class Vnc2SDL : public Application, public XCB::XkbClient,
+        protected RFB::ClientDecoder
     {
         PixelFormat             clientPf;
         RFB::SecurityInfo       rfbsec;
 
-        std::list<std::string>  dropFiles;
+        std::forward_list<std::string> dropFiles;
+        std::forward_list<std::string> shareFolders;
+
         std::string             host{"localhost"};
-        std::string             username, seamless, share, tokenLib;
-        std::string             printerUrl, pcscdUrl, pulseUrl, saneUrl;
-	std::string             prefferedEncoding;
+        std::string             username, seamless, tokenLib;
+        std::string             printerUrl, pcscdUrl, saneUrl;
+        std::string             prefferedEncoding;
+        std::string             audioEncoding{"auto"};
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<TokenAuthInterface> token;
-	std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;
+        std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;
 
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
@@ -118,9 +125,9 @@ namespace LTSM
         std::mutex              renderLock;
 
         std::chrono::time_point<std::chrono::steady_clock>
-                                keyPress;
+        keyPress;
         std::chrono::time_point<std::chrono::steady_clock>
-                                dropStart;
+        dropStart;
 
         std::atomic<bool>       focusLost{false};
         std::atomic<bool>       needUpdate{false};
@@ -131,8 +138,8 @@ namespace LTSM
         BinaryBuf               clipboardBufLocal;
         std::mutex              clipboardLock;
 
-	XCB::Size		setGeometry;
-	SDL_Event		sdlEvent;
+        XCB::Size       setGeometry;
+        SDL_Event       sdlEvent;
 
         bool                    accelerated = true;
         bool                    fullscreen = false;
@@ -141,14 +148,15 @@ namespace LTSM
         bool                    sendOptions = false;
         bool                    alwaysRunning = false;
         bool                    serverExtDesktopSizeSupported = false;
+        bool                    audioEnable = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
         void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-	void    		updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) override;
-        const PixelFormat &     clientFormat(void) const override;
+        void                    updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) override;
+        const PixelFormat   &   clientFormat(void) const override;
         XCB::Size               clientSize(void) const override;
-	std::string             clientEncoding(void) const override;
+        std::string             clientEncoding(void) const override;
 
         bool                    sdlEventProcessing(void);
         bool                    pushEventWindowResize(const XCB::Size &);
@@ -162,19 +170,23 @@ namespace LTSM
     public:
         Vnc2SDL(int argc, const char** argv);
 
-        void                    decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) override;
+        void                    decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz,
+                                                            const std::vector<RFB::ScreenInfo> &) override;
         void                    pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void                    fbUpdateEvent(void) override;
         void                    cutTextEvent(std::vector<uint8_t> &&) override;
-        void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) override;
+        void                    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
+                                                std::vector<uint8_t> && mask) override;
+        void                    bellEvent(void) override;
 
         void                    xkbStateChangeEvent(int) override;
         void                    ltsmHandshakeEvent(int flags) override;
-        void                    systemFuseProxy(const JsonObject &) override;
         void                    systemTokenAuth(const JsonObject &) override;
         void                    systemLoginSuccess(const JsonObject &) override;
 
-        int    		        start(void) override;
+        bool                    createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const override;
+
+        int                     start(void) override;
         bool                    isAlwaysRunning(void) const;
     };
 }

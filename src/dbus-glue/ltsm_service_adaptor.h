@@ -87,13 +87,12 @@ protected:
         object_.registerSignal("createChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string, std::string>("display", "client", "cmode", "server", "smode", "speed");
         object_.registerSignal("destroyChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, uint8_t>("display", "channel");
         object_.registerSignal("transferAllow").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string>("display", "filepath", "tmpfile", "dstdir");
-        object_.registerSignal("createListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string, std::string, uint8_t>("display", "client", "cmode", "server", "smode", "speed", "limit");
+        object_.registerSignal("createListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string, std::string, std::string, std::string, uint8_t, bool>("display", "client", "cmode", "server", "smode", "speed", "limit", "zlib");
         object_.registerSignal("destroyListener").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "client", "server");
         object_.registerSignal("addRenderRect").onInterface(INTERFACE_NAME).withParameters<int32_t, sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>, bool>("display", "rect", "color", "fill");
         object_.registerSignal("addRenderText").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, sdbus::Struct<int16_t, int16_t>, sdbus::Struct<uint8_t, uint8_t, uint8_t>>("display", "text", "pos", "color");
         object_.registerSignal("debugLevel").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string>("display", "level");
         object_.registerSignal("debugChannel").onInterface(INTERFACE_NAME).withParameters<int32_t, uint8_t, bool>("display", "channel", "debug");
-        object_.registerSignal("fuseSessionStart").onInterface(INTERFACE_NAME).withParameters<int32_t, std::string, std::string>("display", "addresses", "mount");
     }
 
     ~Service_adaptor() = default;
@@ -199,9 +198,9 @@ public:
         object_.emitSignal("transferAllow").onInterface(INTERFACE_NAME).withArguments(display, filepath, tmpfile, dstdir);
     }
 
-    void emitCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit)
+    void emitCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const bool& zlib)
     {
-        object_.emitSignal("createListener").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode, speed, limit);
+        object_.emitSignal("createListener").onInterface(INTERFACE_NAME).withArguments(display, client, cmode, server, smode, speed, limit, zlib);
     }
 
     void emitDestroyListener(const int32_t& display, const std::string& client, const std::string& server)
@@ -227,11 +226,6 @@ public:
     void emitDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug)
     {
         object_.emitSignal("debugChannel").onInterface(INTERFACE_NAME).withArguments(display, channel, debug);
-    }
-
-    void emitFuseSessionStart(const int32_t& display, const std::string& addresses, const std::string& mount)
-    {
-        object_.emitSignal("fuseSessionStart").onInterface(INTERFACE_NAME).withArguments(display, addresses, mount);
     }
 
 private:

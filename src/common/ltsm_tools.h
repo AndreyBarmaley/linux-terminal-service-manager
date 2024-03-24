@@ -23,15 +23,20 @@
 #ifndef _LTSM_TOOLS_
 #define _LTSM_TOOLS_
 
+#include <sys/types.h>
+#include <grp.h>
+#include <pwd.h>
+
 #include <list>
 #include <chrono>
 #include <vector>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <iomanip>
 #include <iterator>
 #include <algorithm>
+#include <string_view>
+#include <forward_list>
 
 #include <tuple>
 #include <memory>
@@ -57,6 +62,44 @@ namespace LTSM
 {
     class ByteArray;
 
+    class UserInfo
+    {
+        struct passwd st = {};
+        std::unique_ptr<char[]> buf;
+
+    public:
+        UserInfo(std::string_view name);
+        UserInfo(uid_t uid);
+
+        std::vector<gid_t> groups(void) const;
+
+        inline const char* user(void) const { return st.pw_name; }
+        inline const char* home(void) const { return st.pw_dir; }
+        inline const char* shell(void) const { return st.pw_shell; }
+        inline const char* gecos(void) const { return st.pw_gecos; }
+
+        inline const uid_t & uid(void) const { return st.pw_uid; }
+        inline const gid_t & gid(void) const { return st.pw_gid; }
+    };
+
+    class GroupInfo
+    {
+        struct group st = {};
+        std::unique_ptr<char[]> buf;
+
+    public:
+        GroupInfo(std::string_view name);
+        GroupInfo(gid_t gid);
+
+        std::forward_list<std::string> members(void) const;
+
+        inline const char* group(void) const { return st.gr_name; }
+        inline gid_t gid(void) const { return st.gr_gid; }
+    };
+
+    typedef std::unique_ptr<UserInfo>  UserInfoPtr;
+    typedef std::unique_ptr<GroupInfo> GroupInfoPtr;
+
     namespace Tools
     {
 #if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
@@ -67,6 +110,7 @@ namespace LTSM
 	bool binaryToFile(const void*, size_t len, std::string_view);
 	std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
+        std::list<std::string> readDir(const std::string & path, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
         std::string prettyFuncName(std::string_view);
@@ -77,8 +121,17 @@ namespace LTSM
 
         std::string getTimeZone(void);
 
-        std::tuple<std::string, int, int, std::filesystem::path, std::string> getLocalUserInfo(void);
-        std::string getLocalUsername(void);
+        UserInfoPtr getUidInfo(uid_t uid);
+        UserInfoPtr getUserInfo(std::string_view user);
+        std::string getUserLogin(uid_t);
+        uid_t getUserUid(std::string_view user);
+        std::string getUserHome(std::string_view user);
+        std::forward_list<std::string> getSystemUsers(uid_t uidMin, uid_t uidMax);
+
+        GroupInfoPtr getGidInfo(gid_t gid);
+        GroupInfoPtr getGroupInfo(std::string_view group);
+        gid_t getGroupGid(std::string_view group);
+
         std::string getHostname(void);
 
         std::vector<uint8_t> zlibCompress(const ByteArray &);
@@ -132,6 +185,21 @@ namespace LTSM
             int popValue(size_t field);
         };
 
+        template<typename Iterator>
+        Iterator nextToEnd( Iterator it1, size_t count, Iterator it2 )
+        {
+            // check itbeg nexted
+            for( auto num = 0; num < count; ++num ) {
+                it1 = std::next( it1 );
+
+                if( it1 == it2 ) {
+                    return it2;
+                }
+            }
+            
+            return it1;
+        }
+
         std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);
 
@@ -140,11 +208,6 @@ namespace LTSM
         {
             std::ostringstream os;
  
-            if(sep.empty())
-            {
-                std::copy(it1, it2, std::ostream_iterator<std::string>(os));
-            }
-            else
             for(auto it = it1; it != it2; ++it)
             {
                 os << *it;

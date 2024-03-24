@@ -1347,9 +1347,6 @@ namespace LTSM
         if(cmd == SystemCommand::ChannelConnected)
             systemChannelConnected(jo);
         else
-        if(cmd == SystemCommand::FuseProxy)
-            systemFuseProxy(jo);
-        else
         if(cmd == SystemCommand::ChannelError)
             systemChannelError(jo);
         else
