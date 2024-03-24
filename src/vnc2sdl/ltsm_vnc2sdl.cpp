@@ -1004,14 +1004,14 @@ namespace LTSM
         }
 
         // create event for resize (resized in main thread)
-        SDL_Event event;
+        SDL_UserEvent event;
         event.type = SDL_USEREVENT;
-        event.user.code = contUpdateResume ? LocalEvent::ResizeCont :
+        event.code = contUpdateResume ? LocalEvent::ResizeCont :
                           LocalEvent::Resize;
-        event.user.data1 = (void*)(ptrdiff_t) nsz.width;
-        event.user.data2 = (void*)(ptrdiff_t) nsz.height;
+        event.data1 = (void*)(ptrdiff_t) nsz.width;
+        event.data2 = (void*)(ptrdiff_t) nsz.height;
 
-        if(0 > SDL_PushEvent(& event))
+        if(0 > SDL_PushEvent((SDL_Event*) & event))
         {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_PushEvent",
                                SDL_GetError());

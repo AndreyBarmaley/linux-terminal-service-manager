@@ -226,7 +226,7 @@ namespace LTSM
     namespace Manager
     {
         std::forward_list<std::string>  getSessionDBusAddresses(const UserInfo &);
-	void				redirectStdoutStderrTo(bool out, bool err, const char*);
+	void				redirectStdoutStderrTo(bool out, bool err, std::string_view);
         void                            closefds(int exclude = -1);
         bool                            checkFileReadable(const std::filesystem::path &);
 	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);

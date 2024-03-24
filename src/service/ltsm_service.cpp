@@ -540,18 +540,15 @@ namespace LTSM
         return dbusAddresses;
     }
 
-    void Manager::redirectStdoutStderrTo(bool out, bool err, const char* file)
+    void Manager::redirectStdoutStderrTo(bool out, bool err, std::string_view file)
     {
-        if(file)
-        {
-            auto dir = std::filesystem::path(file).parent_path();
-            std::error_code fserr;
+        auto dir = std::filesystem::path(file).parent_path();
+        std::error_code fserr;
 
-            if(! std::filesystem::is_directory(dir, fserr))
-                std::filesystem::create_directories(dir, fserr);
-        }
+        if(! std::filesystem::is_directory(dir, fserr))
+            std::filesystem::create_directories(dir, fserr);
 
-        int fd = open(file, O_RDWR | O_CREAT, 0640);
+        int fd = open(file.data(), O_RDWR | O_CREAT, 0640);
 
         if(0 <= fd)
 	{
@@ -567,7 +564,7 @@ namespace LTSM
 	    const char* devnull = "/dev/null";
 	    Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file, getuid());
 
-	    if(0 != std::strcmp(devnull, file))
+	    if(0 != std::strcmp(devnull, file.data()))
 		redirectStdoutStderrTo(out, err, devnull);
         }
     }
@@ -761,12 +758,12 @@ namespace LTSM
                 if(0 > pipeout)
                 {
 		    // redirect stdout, atderr
-		    Manager::redirectStdoutStderrTo(true, true, logFile.c_str());
+		    Manager::redirectStdoutStderrTo(true, true, logFile.native());
                 }
                 else
                 {
 		    // redirect stderr
-		    Manager::redirectStdoutStderrTo(false, true, logFile.c_str());
+		    Manager::redirectStdoutStderrTo(false, true, logFile.native());
 
 		    // redirect stdout
                     if(0 > dup2(pipeout, STDOUT_FILENO))
@@ -1426,7 +1423,7 @@ namespace LTSM
                 logFile.replace_extension( ".log" );
 
                 // redirect stdout, atderr
-                Manager::redirectStdoutStderrTo(true, true, logFile.c_str());
+                Manager::redirectStdoutStderrTo(true, true, logFile.native());
 
                 // create argv
                 std::list<std::string> list = Tools::split(xvfbArgs, 0x20);
@@ -2544,6 +2541,12 @@ namespace LTSM
                     displayShutdown(xvfb, true);
                 }
 
+                return false;
+            }
+
+            if(! pam->validateAccount())
+            {
+                Application::error("%s: %s failed", __FUNCTION__, "validateAccount");
                 return false;
             }
         }
