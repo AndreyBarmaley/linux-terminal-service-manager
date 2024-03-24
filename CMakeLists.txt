@@ -371,11 +371,6 @@ if(LTSM_BUILD_CLIENT)
     pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
     pkg_search_module(OPUS REQUIRED opus)
 
-    # add FAAD
-    find_path(FAAD_INCLUDE_DIR faad.h)
-    find_library(FAAD_LIBRARY faad)
-    find_package_handle_standard_args(FAAD DEFAULT_MSG FAAD_INCLUDE_DIR FAAD_LIBRARY)
-
     if(OPUS_FOUND)
         target_compile_options(LTSM_vnc2sdl PRIVATE -DLTSM_WITH_OPUS ${OPUS_CFLAGS})
         target_include_directories(LTSM_vnc2sdl PRIVATE ${OPUS_INCLUDE_DIR})
