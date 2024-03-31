@@ -68,7 +68,8 @@ namespace LTSM
         if(1 < proto.size())
             proto.emplace_back("AUTO");
 
-        std::cout << "usage: " << prog << " --config <path> --type <" << Tools::join(proto, "|") << ">" << std::endl;
+        std::cout << "usage: " << prog << " --config <path> --type <" <<
+                Tools::join(proto.begin(), proto.end(), "|") << ">" << std::endl;
     }
 
     /* Connector::Service */

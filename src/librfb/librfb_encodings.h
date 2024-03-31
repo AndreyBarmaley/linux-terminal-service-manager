@@ -25,7 +25,6 @@
 #define _LIBRFB_ENCODINGS_
 
 #include <list>
-#include <mutex>
 #include <future>
 
 #include "ltsm_librfb.h"
@@ -75,13 +74,14 @@ namespace LTSM
             bool                    clientIsBigEndian(void) const override { return owner->clientIsBigEndian(); }
         };
 
+        typedef std::pair<XCB::Region, BinaryBuf> EncodingRet;
+
         /// EncodingBase
         class EncodingBase
         {
         protected:
-            std::list< std::future<void> > jobs;
+            std::list< std::future<EncodingRet> > jobs;
 
-            std::mutex		busy;
             const int           type = 0;
             int                 debug = 0;
             int                 threads = 2;
@@ -107,8 +107,11 @@ namespace LTSM
         /// EncodingRaw
         class EncodingRaw : public EncodingBase
         {
+            BinaryBuf           buf;
+
         protected:
-            void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            std::pair<XCB::Region, BinaryBuf>
+                               sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
         public:
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
@@ -120,7 +123,7 @@ namespace LTSM
         class EncodingRRE : public EncodingBase
         {
         protected:
-            void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            EncodingRet         sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void                sendRects(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<XCB::RegionPixel> &);
 
 
@@ -136,7 +139,7 @@ namespace LTSM
         class EncodingHexTile : public EncodingBase
         {
         protected:
-            void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            EncodingRet         sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void                sendRegionForeground(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<XCB::RegionPixel> &);
             void                sendRegionColored(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back, const std::list<XCB::RegionPixel> &);
             void                sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId);
@@ -153,7 +156,7 @@ namespace LTSM
             std::unique_ptr<ZLib::DeflateStream> zlib;
 
         protected:
-            void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            EncodingRet         sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void                sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, size_t field, const PixelMapWeight &);
             void                sendRegionPlain(EncoderStream*, const XCB::Region &, const FrameBuffer &, const std::list<PixelLength> &);
             void                sendRegionPalette(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const std::list<PixelLength> &);
@@ -174,7 +177,7 @@ namespace LTSM
             BinaryBuf           buf;
 
         protected:
-            void                sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            EncodingRet         sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
         public:
             void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;

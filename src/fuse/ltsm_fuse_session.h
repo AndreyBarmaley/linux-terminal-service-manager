@@ -25,7 +25,6 @@
 #define _LTSM_FUSE_SESSION_
 
 #include <string>
-#include <stdexcept>
 #include <forward_list>
 
 #include "ltsm_fuse.h"
@@ -33,12 +32,6 @@
 
 namespace LTSM
 {
-    struct fuse_error : public std::runtime_error
-    {
-        explicit fuse_error(const std::string & what) : std::runtime_error(what){}
-        explicit fuse_error(const char* what) : std::runtime_error(what){}
-    };
-
     struct FuseSession;
 
     class FuseSessionBus : public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>, public Application

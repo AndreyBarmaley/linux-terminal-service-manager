@@ -531,7 +531,7 @@ namespace LTSM
             auto dbusBrokerPath = std::filesystem::path("/run/user") / std::to_string(userInfo.uid()) /  "bus";
 
             if(std::filesystem::is_socket(dbusBrokerPath))
-                dbusAddresses.emplace_front(std::string("unix:path=").append(dbusBrokerPath));
+                dbusAddresses.emplace_front(std::string("unix:path=").append(dbusBrokerPath.native()));
         }
         catch(const std::filesystem::filesystem_error &)
         {
@@ -1023,8 +1023,7 @@ namespace LTSM
                     const uint16_t fh = 24;
                     emitAddRenderRect(ptr->displayNum, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
                     // send render text
-                    std::string text("time left: ");
-                    text.append(std::to_string(lastsec.count())).append("sec");
+                    auto text = Tools::joinToString("time left: ", lastsec.count(), "sec");
                     const int16_t px = (fw - text.size() * 8) / 2;
                     const int16_t py = (fh - 16) / 2;
                     emitAddRenderText(ptr->displayNum, text, {px, py}, {0xFF, 0xFF, 0});
@@ -1369,7 +1368,7 @@ namespace LTSM
         sess->depth = depth;
         sess->width = width;
         sess->height = height;
-        sess->displayAddr = std::string(":").append(std::to_string(sess->displayNum));
+        sess->displayAddr = Tools::joinToString(":", sess->displayNum);
         sess->tpstart = std::chrono::system_clock::now();
         sess->durationLimit = _config->getInteger("idle:timeout:xvfb", 10);
 
@@ -2074,7 +2073,8 @@ namespace LTSM
 
         for(auto & info : files)
         {
-            auto tmpname = std::filesystem::path(xvfbHome) / std::string("transfer_").append(Tools::randomHexString(8));
+            auto tmpname = std::filesystem::path(xvfbHome) / "transfer_";
+                 tmpname += Tools::randomHexString(8);
             Application::debug("%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity", xvfb->displayNum, dstdir.c_str(), tmpname.c_str());
 
             auto filepath = std::filesystem::path(std::get<0>(info));
@@ -2202,7 +2202,7 @@ namespace LTSM
         }
 
         std::filesystem::path zenity = this->_config->getString("zenity:path", "/usr/bin/zenity");
-        auto msg = std::string("Can you receive remote files?(").append(std::to_string(files.size())).append(")");
+        auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
         std::shared_future<int> zenityQuestionResult;
 
         auto emitTransferReject = [this](int display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files)
@@ -2565,7 +2565,7 @@ namespace LTSM
             {
                 Application::error("%s: session busy, policy: %s, user: %s, session display: %d, from: %s, display: %d", __FUNCTION__, "authlock", login.c_str(), userSess->displayNum, userSess->remoteaddr.c_str(), xvfb->displayNum);
                 // informer login display
-                emitLoginFailure(xvfb->displayNum, std::string("session busy, from: ").append(userSess->remoteaddr));
+                emitLoginFailure(xvfb->displayNum, Tools::joinToString("session busy, from: ", userSess->remoteaddr));
                 return false;
             }
             else
@@ -3212,7 +3212,8 @@ namespace LTSM
         // fix owner user.user
         setFileOwner(fusePointFolder, xvfb->userInfo->uid(), xvfb->userInfo->gid());
 
-        auto fuseSocket = std::filesystem::path(userShareFolder) / std::string(fusePointName).append(".sock");
+        auto fuseSocket = std::filesystem::path(userShareFolder) / fusePointName;
+             fuseSocket += ".sock";
 
         if(std::filesystem::is_socket(fuseSocket, err))
             std::filesystem::remove(fuseSocket, err);

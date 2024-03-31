@@ -248,18 +248,6 @@ namespace LTSM
     }
 
     // EncodingRaw
-    void RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
-    {
-        std::scoped_lock guard{ busy };
-
-        if(debug)
-            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, reg.x, reg.y, reg.width, reg.height);
-
-        st->sendHeader(getType(), reg + top);
-        sendRawRegionPixels(st, st, reg, fb);
-        st->sendFlush();
-    }
-
     void RFB::EncodingRaw::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
     {
         const XCB::Region & reg0 = fb.region();
@@ -274,13 +262,25 @@ namespace LTSM
         int jobId = 1;
 
         // single thread: stream spec
-        jobs.emplace_back(std::async(std::launch::async, & EncodingRaw::sendRegion, this, st, top, reg0 - top, fb, jobId));
+        auto job = sendRegion(st, top, reg0 - top, fb, jobId);
 
-        // wait jobs
-        for(auto & job : jobs)
-            job.wait();
+        st->sendHeader(getType(), job.first);
+        st->sendData(buf);
 
+        st->sendFlush();
         jobs.clear();
+    }
+
+    RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
+    {
+        if(debug)
+            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, reg.x, reg.y, reg.width, reg.height);
+
+        buf.clear();
+        EncoderWrapper wrap(& buf, st);
+
+        sendRawRegionPixels(& wrap, st, reg, fb);
+        return std::make_pair(reg + top, BinaryBuf{});
     }
 
     // EncodingRRE
@@ -317,7 +317,7 @@ namespace LTSM
 
                 if(job.wait_for(250us) == std::future_status::ready)
                 {
-                    job = std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId);
+                    jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
                     regions.pop_front();
                     jobId++;
                 }
@@ -326,12 +326,19 @@ namespace LTSM
 
         // wait jobs
         for(auto & job : jobs)
+        {
             job.wait();
+            auto ret = job.get();
 
+            st->sendHeader(getType(), ret.first);
+            st->sendData(ret.second);
+        }
+
+        st->sendFlush();
         jobs.clear();
     }
 
-    void RFB::EncodingRRE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
+    RFB::EncodingRet RFB::EncodingRRE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         // thread buffer
 	BinaryBuf bb;
@@ -393,11 +400,7 @@ namespace LTSM
             }
         }
 
-        std::scoped_lock guard { busy };
-
-        st->sendHeader(getType(), reg + top);
-        st->sendData(bb);
-        st->sendFlush();
+        return std::make_pair(reg + top, bb);
     }
 
     void RFB::EncodingRRE::sendRects(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, int back, const std::list<XCB::RegionPixel> & rreList)
@@ -449,7 +452,7 @@ namespace LTSM
         // regions counts
         st->sendIntBE16(regions.size());
         int jobId = 1;
-                
+
         // make pool jobs
         while(jobId <= threads && ! regions.empty())
         {
@@ -468,7 +471,7 @@ namespace LTSM
 
                 if(job.wait_for(250us) == std::future_status::ready)
                 {
-                    job = std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId);
+                    jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId));
                     regions.pop_front();
                     jobId++;
                 }
@@ -477,12 +480,19 @@ namespace LTSM
             
         // wait jobs
         for(auto & job : jobs)
+        {
             job.wait();
+            auto ret = job.get();
 
+            st->sendHeader(getType(), ret.first);
+            st->sendData(ret.second);
+        }
+
+        st->sendFlush();
         jobs.clear();
     }
 
-    void RFB::EncodingHexTile::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
+    RFB::EncodingRet RFB::EncodingHexTile::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         // thread buffer
         BinaryBuf bb;
@@ -576,12 +586,7 @@ namespace LTSM
             }
         }
 
-        // network send: wait thread
-        std::scoped_lock guard { busy };
-
-        st->sendHeader(getType(), reg + top);
-        st->sendData(bb);
-        st->sendFlush();
+        return std::make_pair(reg + top, bb);
     }
 
     void RFB::EncodingHexTile::sendRegionColored(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, int back, const std::list<XCB::RegionPixel> & rreList)
@@ -675,7 +680,7 @@ namespace LTSM
 
                 if(job.wait_for(250us) == std::future_status::ready)
                 {
-                    job = std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId);
+                    jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
                     regions.pop_front();
                     jobId++;
                 }
@@ -684,12 +689,28 @@ namespace LTSM
 
         // wait jobs
         for(auto & job : jobs)
+        {
             job.wait();
+            auto ret = job.get();
 
+            st->sendHeader(getType(), ret.first);
+
+            if(zlib)
+            {
+                zlib->sendData(ret.second);
+                st->sendZlibData(zlib.get());
+            }
+            else
+            {
+                st->sendData(ret.second);
+            }
+        }
+
+        st->sendFlush();
         jobs.clear();
     }
 
-    void RFB::EncodingTRLE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
+    RFB::EncodingRet RFB::EncodingTRLE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         auto map = fb.pixelMapWeight(reg);
         // convert to palette
@@ -772,21 +793,7 @@ namespace LTSM
             }
         }
 
-        // network send: wait thread
-        std::scoped_lock guard{ busy };
-        st->sendHeader(getType(), reg + top);
-
-        if(zlib)
-        {
-            zlib->sendData(bb);
-            st->sendZlibData(zlib.get());
-        }
-        else
-        {
-            st->sendData(bb);
-        }
-
-        st->sendFlush();
+        return std::make_pair(reg + top, bb);
     }
 
     void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId, size_t field, const PixelMapWeight & pal)
@@ -898,31 +905,24 @@ namespace LTSM
         int jobId = 1;
 
         // single thread: zlib stream spec
-        jobs.emplace_back(std::async(std::launch::async, & EncodingZlib::sendRegion, this, st, top, reg0 - top, fb, jobId));
+        auto job = sendRegion(st, top, reg0 - top, fb, jobId);
 
-        // wait jobs
-        for(auto & job : jobs)
-            job.wait();
-
-        jobs.clear();
+        st->sendHeader(getType(), job.first);
+        st->sendZlibData(zlib.get());
+        st->sendFlush();
     }
 
-    void RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
+    RFB::EncodingRet RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg, const FrameBuffer & fb, int jobId)
     {
         if(debug)
             Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
-        EncoderWrapper wrap(& buf, st);
-        sendRawRegionPixels(& wrap, st, reg, fb);
-
-        zlib->sendData(buf);
         buf.clear();
+        EncoderWrapper wrap(& buf, st);
 
-        // network send: wait thread
-        std::scoped_lock guard{ busy };
+        sendRawRegionPixels(& wrap, st, reg, fb);
+        zlib->sendData(buf);
 
-        st->sendHeader(getType(), reg + top);
-        st->sendZlibData(zlib.get());
-        st->sendFlush();
+        return std::make_pair(reg + top, BinaryBuf{});
     }
 }

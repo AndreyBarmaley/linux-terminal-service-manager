@@ -26,6 +26,8 @@
 
 #define LTSM_FUSE2SESSION_VERSION 20240304
 
+#include <stdexcept>
+
 namespace LTSM
 {
     namespace FuseOp
@@ -51,6 +53,12 @@ namespace LTSM
             Lookup = 0xFF15
         };
     }
+
+    struct fuse_error : public std::runtime_error
+    {
+        explicit fuse_error(const std::string & what) : std::runtime_error(what){}
+        explicit fuse_error(const char* what) : std::runtime_error(what){}
+    };
 }
 
 #endif // _LTSM_FUSE_

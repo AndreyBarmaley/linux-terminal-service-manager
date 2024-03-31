@@ -437,7 +437,8 @@ namespace LTSM
                 if(it != names.end())
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 else
-                    Application::error("%s: layout not found: %s, names: [%s]", __FUNCTION__, layout.c_str(), Tools::join(names).c_str());
+                    Application::error("%s: layout not found: %s, names: [%s]",
+                                __FUNCTION__, layout.c_str(), Tools::join(names.begin(), names.end()).c_str());
             }
         }
     }

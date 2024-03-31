@@ -1053,37 +1053,28 @@ namespace LTSM
         std::string encryptionInfo;
 
         if(0 < peer->settings->TlsSecLevel)
-            encryptionInfo.append("TLS security level: ").append(std::to_string(peer->settings->TlsSecLevel));
-
-        const char* method = nullptr;
+            encryptionInfo = Tools::joinToString("TLS security level: ", peer->settings->TlsSecLevel);
 
         switch(peer->settings->EncryptionMethods)
         {
             case ENCRYPTION_METHOD_40BIT:
-                method = "40bit";
+                encryptionInfo = Tools::joinToString(encryptionInfo, ", ", "RDP method: ", "40bit");
                 break;
 
             case ENCRYPTION_METHOD_56BIT:
-                method = "56bit";
+                encryptionInfo = Tools::joinToString(encryptionInfo, ", ", "RDP method: ", "56bit");
                 break;
 
             case ENCRYPTION_METHOD_128BIT:
-                method = "128bit";
+                encryptionInfo = Tools::joinToString(encryptionInfo, ", ", "RDP method: ", "128bit");
                 break;
 
             case ENCRYPTION_METHOD_FIPS:
-                method = "fips";
+                encryptionInfo = Tools::joinToString(encryptionInfo, ", ", "RDP method: ", "fips");
                 break;
 
             default:
                 break;
-        }
-
-        if(method)
-        {
-            if(encryptionInfo.size()) encryptionInfo.append(", ");
-
-            encryptionInfo.append("RDP method: ").append(method);
         }
 
         if(encryptionInfo.size())
