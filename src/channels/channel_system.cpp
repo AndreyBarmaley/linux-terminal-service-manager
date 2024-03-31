@@ -1881,7 +1881,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase>
         auto cmd = Tools::resolveSymLink(list.front());
         list.pop_front();
         list.push_front(cmd.native());
-        auto runcmd2 = Tools::join(list, " ");
+        auto runcmd2 = Tools::join(list.begin(), list.end(), " ");
 
         fcmd = popen(runcmd2.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     }

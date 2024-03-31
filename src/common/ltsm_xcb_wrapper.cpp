@@ -1730,7 +1730,7 @@ namespace LTSM
 	    return std::string(env ? env : "");
 	}
 
-	return std::string(":").append(std::to_string(displayNum));
+	return Tools::joinToString(":", displayNum);
     }
 
     /* XCB::Connector */

@@ -203,6 +203,14 @@ namespace LTSM
         std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);
 
+        template<typename... Args>
+        std::string joinToString( Args... args )
+        {
+            std::ostringstream os;
+            ( os << ... << args );
+            return os.str();
+        }
+
 	template<typename Iterator>
         std::string     join(Iterator it1, Iterator it2, std::string_view sep = "")
         {

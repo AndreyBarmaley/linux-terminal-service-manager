@@ -331,13 +331,14 @@ the "cert" field is integer(crc32b) from certificate content
 [2.8] Channel AUDIO
 
 Initial part from session side, see 2.8.1
+All numbers (u16, u32, u64) are sent as little endian format.
 
----------------+--------------
- commands      | value
----------------+--------------
- AudioOp::Init | 0xFE01
- AudioOp::Data | 0xFE02
----------------+--------------
+---------------+--------+---------+--------
+ commands      | value  | session | client
+---------------+--------+---------+--------
+ AudioOp::Init | 0xFE01 | 2.8.1   | 2.8.3
+ AudioOp::Data | 0xFE02 | 2.8.2   | 2.8.4
+---------------+--------+---------+--------
 
 ----------+--------------
  encoding | value
@@ -375,7 +376,7 @@ encoding structure:
 ----------+----------+------------+---------------------
  2        | u16      | 0xFE02     | AudioOp::Data
  4        | u32      |            | length
- array    | u8       |            | data
+ array    | u8       |            | raw audio data
 ----------+----------+------------+---------------------
 
 [2.8.3] Channel AUDIO reply Init (client side)
@@ -389,7 +390,7 @@ encoding structure:
  2        | u16      |            | selected encoding
 ----------+----------+------------+---------------------
 
-[2.8.4] Channel AUDIO reply Init failed (client side)
+[2.8.3.1] Channel AUDIO reply Init failed (client side)
 
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
@@ -397,4 +398,204 @@ encoding structure:
  2        | u16      | 0xFE01     | AudioOp::Init
  2        | u16      |            | error length
  string   | u8       |            | error message
+----------+----------+------------+---------------------
+
+[2.9] Channel FUSE
+
+Initial part from session side, see 2.9.1
+All numbers (u16, u32, u64) are sent as little endian format.
+
+-----------------+--------+---------+---------
+ commands        | value  | session | client
+-----------------+--------+---------+---------
+ FuseOp::Init    | 0xFF01 | 2.9.1   | 2.9.2
+ FuseOp::Quit    | 0xFF02 | 2.9.3   | 2.9.4
+ FuseOp::GetAttr | 0xFF03 | 2.9.5   | 2.9.6
+ FuseOp::Open    | 0xFF04 | 2.9.7   | 2.9.8
+ FuseOp::Read    | 0xFF05 | 2.9.9   | 2.9.10
+ FuseOp::Release | 0xFF06 | 2.9.11  | 2.9.12
+-----------------+--------+---------+---------
+
+stat structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | st_dev
+ 8        | u64      |            | st_ino
+ 4        | u32      |            | st_mode
+ 8        | u64      |            | st_nlink
+ 4        | u32      |            | st_uid
+ 4        | u32      |            | st_gid
+ 8        | u64      |            | st_rdev
+ 8        | u64      |            | st_size
+ 8        | u64      |            | st_blksize
+ 8        | u64      |            | st_blocks
+ 8        | u64      |            | st_atime
+ 8        | u64      |            | st_mtime
+ 8        | u64      |            | st_ctime
+----------+----------+------------+---------------------
+
+[2.9.1] Channel FUSE send Init (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFF01     | FuseOp::Init
+ 2        | u16      | 1          | proto version
+ 2        | u16      | length     | remote mount point
+ variadic | u8       | string     | remote mount point
+----------+----------+------------+---------------------
+
+[2.9.2] Channel FUSE reply Init (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE01     | FuseOp::Init
+ 2        | u16      | 0          | no error
+ 2        | u16      | 1          | proto version
+ 4        | u32      |            | client uid
+ 4        | u32      |            | client gid
+ variadic | u8       |            | inodes data
+ variadic | u8       |            | symlinks data
+----------+----------+------------+---------------------
+
+[2.9.2.1] Channel FUSE reply Init failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE01     | FuseOp::Init
+ 2        | u16      |            | error length
+ string   | u8       |            | error message
+----------+----------+------------+---------------------
+
+[2.9.2.2] Inodes data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | inodes count
+ variadic | u8       |            | inode structure
+----------+----------+------------+---------------------
+
+inode structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | length     | inode path
+ variadic | u8       | string     | inode path
+ 84       | u8       |            | stat structure
+----------+----------+------------+---------------------
+
+[2.9.2.3] Symlinks data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | symlinks count
+ variadic | u8       |            | symlink structure
+----------+----------+------------+---------------------
+
+inode structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | ino link
+ 8        | u64      |            | ino path
+----------+----------+------------+---------------------
+
+[2.9.3] Channel FUSE send Quit (session side)
+
+Used cached data.
+
+[2.9.4] Channel FUSE reply Quit (client side)
+
+Not usage.
+
+[2.9.5] Channel FUSE send GetAttr (session side)
+
+Used cached data.
+
+[2.9.6] Channel FUSE reply GetAttr (client side)
+
+Not usage.
+
+[2.9.7] Channel FUSE send Open (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE04     | FuseOp::Open
+ 4        | u32      |            | open flags
+ 2        | u16      | length     | open path
+ variadic | u8       | string     | open path
+----------+----------+------------+---------------------
+
+[2.9.8] Channel FUSE reply Open (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE04     | FuseOp::Open
+ 4        | u32      | 0          | errno
+ 4        | u32      |            | file description
+----------+----------+------------+---------------------
+
+[2.9.8.1] Channel FUSE reply Open failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE04     | FuseOp::Open
+ 4        | u32      |            | errno
+----------+----------+------------+---------------------
+
+[2.9.9] Channel FUSE send Read (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE05     | FuseOp::Read
+ 4        | u32      |            | file description
+ 2        | u16      |            | block size
+ 8        | u64      |            | offset
+----------+----------+------------+---------------------
+
+[2.9.10] Channel FUSE reply Read (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE05     | FuseOp::Read
+ 4        | u32      | 0          | errno
+ 2        | u16      |            | block size
+ variadic | u8       |            | raw data
+----------+----------+------------+---------------------
+
+[2.9.10.1] Channel FUSE reply Read failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE05     | FuseOp::Read
+ 4        | u32      |            | errno
+----------+----------+------------+---------------------
+
+[2.9.11] Channel FUSE send Release (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE05     | FuseOp::Release
+ 4        | u32      |            | file description
+----------+----------+------------+---------------------
+
+[2.9.12] Channel FUSE reply Release (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFE06     | FuseOp::Release
+ 4        | u32      |            | errno
 ----------+----------+------------+---------------------

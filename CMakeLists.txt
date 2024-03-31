@@ -12,11 +12,16 @@ option(LTSM_BUILD_CLIENT "build client" ON)
 option(LTSM_GSSAPI "GSSAPI security" OFF)
 option(LTSM_FFMPEG "ffmpeg encoding support" OFF)
 
+option(LTSM_BUILD_SANITIZE "build with sanitize" OFF)
 option(LTSM_BUILD_TESTS "build test utilities" OFF)
 #option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 #option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 #option(LTSM_WITH_STD_MAP "usage std::unordered_map" OFF)
+
+if(BUILD_WITH_SANITIZE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+endif()
 
 if(LTSM_BUILD_SERVER)
     set(LTSM_WITH_RDP ON CACHE BOOL "add rdp protocol support")

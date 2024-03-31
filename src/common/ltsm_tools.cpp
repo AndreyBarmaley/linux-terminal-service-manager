@@ -738,10 +738,7 @@ namespace LTSM
             it1++;
         }
 
-        std::string res;
-        res.reserve((size() + val.size()) * 2);
-        res.append(substr(0, std::distance(begin(), it1))).append(val).append(substr(std::distance(begin(), it2)));
-        std::swap(*this, res);
+        assign(joinToString(substr(0, std::distance(begin(), it1)), val, substr(std::distance(begin(), it2))));
         return arg(val);
     }
 

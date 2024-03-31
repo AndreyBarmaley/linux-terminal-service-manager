@@ -96,6 +96,7 @@ namespace LTSM
     public:
         PathStat() = default;
         PathStat(const std::string & str, struct stat && st) : std::pair<std::string, struct stat>(str, st) {}
+        virtual ~PathStat() = default;
 
         std::string localPath(const FuseSession*) const;
         std::string remotePath(const FuseSession*) const;
@@ -106,6 +107,8 @@ namespace LTSM
         const struct stat* statPtr(void) const { return std::addressof(second); }
     };
 
+    typedef std::pair<ino_t, ino_t> LinkInfo;
+
     struct FuseSession
     {
         fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
@@ -113,6 +116,7 @@ namespace LTSM
 
         std::unordered_map<ino_t, PathStat> inodes;
         std::map<std::string, const struct stat*> pathes;
+        std::forward_list<LinkInfo> symlinks;
 
     	std::unique_ptr<SocketStream> sock;
         std::unique_ptr<fuse_session, void(*)(fuse_session*)> ses{ nullptr, fuse_session_destroy };
@@ -137,6 +141,7 @@ namespace LTSM
         void recvStatStruct(struct stat* st);
         void recvShareRootInfo(void);
 
+        const LinkInfo* findLink(fuse_ino_t inode) const;
         const PathStat* findInode(fuse_ino_t inode) const;
         const struct stat* findChildStat(fuse_ino_t parent, const char* child) const;
         DirBuf createDirBuf(fuse_req_t req, const std::string & dir, const struct stat & st) const;
@@ -152,7 +157,7 @@ namespace LTSM
 
         bool appendSlash = first.back() != '/' && str.front() != '/';
         if(appendSlash)
-            std::string(first).append("/").append(str);
+            return std::string(first).append("/").append(str);
 
         return std::string(first).append(str);
     }
@@ -312,6 +317,52 @@ namespace LTSM
         }
 
         fuse_reply_attr(req, pathStat->statPtr(), 1.0);
+    }
+
+    void ll_readlink(fuse_req_t req, fuse_ino_t ino)
+    {
+        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+
+        auto fuse = (FuseSession*) fuse_req_userdata(req);
+        if(! fuse)
+        {
+            Application::error("%s: %s filed", __FUNCTION__, "fuse");
+            fuse_reply_err(req, EFAULT);
+            return;
+        }
+
+        if(! fuse->sock)
+        {
+            Application::error("%s: %s filed", __FUNCTION__, "sock");
+            fuse_reply_err(req, EFAULT);
+            return;
+        }
+
+        auto pathStat = fuse->findInode(ino);
+        if(! pathStat)
+        {
+            Application::error("%s: %s filed", __FUNCTION__, "inode");
+            fuse_reply_err(req, ENOENT);
+            return;
+        }
+
+        if(pathStat->statRef().st_mode & S_IFLNK)
+        {
+            if(auto pair = fuse->findLink(ino))
+            {
+                if(auto pathStat2 = fuse->findInode(pair->second))
+                {
+                    auto path = pathStat2->localPath(fuse);
+                    fuse_reply_readlink(req, path.c_str());
+                    return;
+                }
+            }
+
+            fuse_reply_err(req, ENOENT);
+            return;
+        }
+
+        fuse_reply_err(req, EINVAL);
     }
 
     void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info *fi)
@@ -567,12 +618,13 @@ namespace LTSM
 
         //
         fuse->sock->sendIntLE16(FuseOp::Read);
+        const size_t blockmax = 48 * 1024;
 
         // <FDH32> - fd handle
-        // <SIZE64> - blocksz
+        // <SIZE16> - blocksz
         // <OFF64> - offset
         fuse->sock->sendIntLE32(fi->fh);
-        fuse->sock->sendIntLE64(maxsize);
+        fuse->sock->sendIntLE16(std::min(maxsize, blockmax));
         fuse->sock->sendIntLE64(offset);
         fuse->sock->sendFlush();
 
@@ -710,6 +762,7 @@ namespace LTSM
         oper.release  = ll_release;
         oper.read     = ll_read;
         oper.access   = ll_access;
+        oper.readlink = ll_readlink;
 
         ses.reset(fuse_session_new(& args, & oper, sizeof(oper), this) );
 
@@ -804,6 +857,7 @@ namespace LTSM
 
     void FuseSession::recvShareRootInfo(void)
     {
+        // inodes
         uint32_t count = sock->recvIntLE32();
         inodes.reserve(count);
 
@@ -828,6 +882,22 @@ namespace LTSM
                 pathes.emplace(std::move(path), pair.first->second.statPtr());
             }
         }
+
+        // symlinks
+        count = sock->recvIntLE32();
+        while(count--)
+        {
+            auto ino1 = sock->recvIntLE64();
+            auto ino2 = sock->recvIntLE64();
+
+            symlinks.emplace_front(std::make_pair(ino1, ino2));
+        }
+    }
+
+    const LinkInfo* FuseSession::findLink(fuse_ino_t inode) const
+    {
+        auto it = std::find_if(symlinks.begin(), symlinks.end(), [&](auto & st){ return st.first == inode; });
+        return it != symlinks.end() ? std::addressof(*it) : nullptr;
     }
 
     const PathStat* FuseSession::findInode(fuse_ino_t inode) const

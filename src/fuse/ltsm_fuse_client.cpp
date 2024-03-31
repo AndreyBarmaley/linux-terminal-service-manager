@@ -64,10 +64,47 @@ namespace LTSM
         reply.writeIntLE64(st.st_ctime);
     }
 
+    std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir)
+    {
+        std::vector<char> linkto(dir.size() + 1024, 0);
+        auto len = readlink(path.c_str(), linkto.data(), linkto.size()-1);
+        if(len < 0)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                    __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
+            throw fuse_error(NS_FuncName);
+        }
+
+        if(len < dir.size())
+        {
+            Application::warning("%s: %s, path: `%s'", __FUNCTION__, "link skipped", path.c_str());
+            throw fuse_error(NS_FuncName);
+        }
+
+        // check scope
+        if(! std::equal(dir.begin(), dir.end(), linkto.begin(), linkto.begin() + dir.size()))
+        {
+            Application::warning("%s: %s, path: `%s'", __FUNCTION__, "link skipped", path.c_str());
+            throw fuse_error(NS_FuncName);
+        }
+
+        struct stat st2 = {};
+
+        if(0 > ::stat(linkto.data(), & st2))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                        __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
+            throw fuse_error(NS_FuncName);
+        }
+
+        return std::make_pair(st1.st_ino, st2.st_ino);
+    }
+
     void replyWriteShareRootInfo(StreamBuf & reply, const std::string & dir)
     {
         std::unordered_map<ino_t, std::pair<std::string, struct stat>> inodes;
         auto items = Tools::readDir(dir, true);
+        std::list<std::pair<ino_t, ino_t>> symlinks;
 
         for(auto & path: items)
         {
@@ -80,11 +117,24 @@ namespace LTSM
                 continue;
             }
 
-            if(0 == (st.st_mode & (S_IFREG | S_IFDIR)))
+            if(0 == (st.st_mode & (S_IFREG | S_IFLNK | S_IFDIR)))
             {
                 Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
                         __FUNCTION__, "special skipped", st.st_mode, path.c_str());
                 continue;
+            }
+
+            // check link
+            if(st.st_mode & S_IFLNK)
+            {
+                try
+                {
+                    symlinks.emplace_back(readSymLink(path, st, dir));
+                }
+                catch(const fuse_error &)
+                {
+                    continue;
+                }
             }
 
             inodes.emplace(st.st_ino, std::make_pair(path, std::move(st)));
@@ -97,6 +147,13 @@ namespace LTSM
             reply.write(st.second.first);
 
             replyWriteStatStruct(reply, st.second.second);
+        }
+
+        reply.writeIntLE32(symlinks.size());
+        for(auto & st: symlinks)
+        {
+            reply.writeIntLE64(st.first);
+            reply.writeIntLE64(st.second);
         }
     }
 }
@@ -446,14 +503,14 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
 {
     // cmd format:
     // <FDH32> - fd handle
-    // <SIZE64> - blocksz
+    // <SIZE16> - blocksz
     // <OFF64> - offset
 
     if(sb.last() < 20)
         throw std::underflow_error(NS_FuncName);
 
     int fdh = sb.readIntLE32();
-    size_t blocksz = sb.readIntLE64();
+    uint16_t blocksz = sb.readIntLE16();
     size_t offset = sb.readIntLE64();
 
     int ret = lseek(fdh, offset, SEEK_SET);
@@ -475,7 +532,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
         return true;
     }
 
-    const size_t blockmax = 48 * 1024;
+    const uint16_t blockmax = 48 * 1024;
     std::vector<uint8_t> buf(std::min(blocksz, blockmax));
 
     ssize_t rsz = ::read(fdh, buf.data(), buf.size());
