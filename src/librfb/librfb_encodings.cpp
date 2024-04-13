@@ -310,18 +310,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
 
         // wait jobs
@@ -464,18 +462,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
             
         // wait jobs
@@ -673,18 +669,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
 
         // wait jobs

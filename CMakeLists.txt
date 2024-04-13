@@ -19,7 +19,7 @@ option(LTSM_BUILD_TESTS "build test utilities" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
 #option(LTSM_WITH_STD_MAP "usage std::unordered_map" OFF)
 
-if(BUILD_WITH_SANITIZE)
+if(LTSM_BUILD_SANITIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
 endif()
 

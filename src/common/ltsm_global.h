@@ -34,7 +34,7 @@ namespace LTSM
     inline static const char* dbus_session_audio_name = "ltsm.session.audio";
     inline static const char* dbus_session_audio_path = "/ltsm/session/audio";
 
-    inline static const int service_version = 20240301;
+    inline static const int service_version = 20240412;
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
     inline static const bool big_endian = false;

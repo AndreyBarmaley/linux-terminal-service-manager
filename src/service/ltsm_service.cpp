@@ -94,6 +94,12 @@ namespace LTSM
         return pamh;
     }
 
+    void PamService::setItem(int type, std::string_view str)
+    {
+        if(pamh)
+            pam_set_item(pamh, type, str.data());
+    }
+
     bool PamService::pamStart(const std::string & username)
     {
         status = pam_start(service.data(), username.data(), pamConv(), & pamh);
@@ -2543,6 +2549,9 @@ namespace LTSM
 
                 return false;
             }
+
+            pam->setItem(PAM_XDISPLAY, xvfb->displayAddr.c_str());
+            pam->setItem(PAM_TTY, std::string("X11:").append(xvfb->displayAddr.c_str()).c_str());
 
             if(! pam->validateAccount())
             {

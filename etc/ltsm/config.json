@@ -39,7 +39,7 @@
     "channel:printer:disabled": false,
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
     "channel:audio:disabled": false,
-    "channel:audio:format", "/var/run/ltsm/audio/%{user}",
+    "channel:audio:format": "/var/run/ltsm/audio/%{user}",
     "channel:pcscd:disabled": false,
     "channel:pcscd:format": "/var/run/ltsm/pcscd/%{user}",
     "channel:fuse:disabled": false,

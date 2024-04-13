@@ -64,6 +64,7 @@ namespace LTSM
         virtual ~PamService();
 
         bool pamStart(const std::string & username);
+        void setItem(int type, std::string_view str);
 
         std::string error(void) const;
         pam_handle_t* get(void);
