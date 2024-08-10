@@ -43,7 +43,6 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     const auto sanedef = "sock://127.0.0.1:6566";
-    const auto pcscdef = "unix:///var/run/pcscd/pcscd.comm";
     const auto librtdef = "/usr/lib64/librtpkcs11ecp.so";
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto krb5def = "TERMSRV@remotehost.name";
@@ -212,7 +211,7 @@ namespace LTSM
                   ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] "
                   <<
                   "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
-                  "[--notls] " <<
+                  "[--notls] [--noltsm]"
 #ifdef LTSM_WITH_GSSAPI
                   "[--kerberos <" << krb5def << ">] " <<
 #endif
@@ -225,7 +224,7 @@ namespace LTSM
                   "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] "
                   <<
                   "[--share-folder <folder>] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
-                  "[--pcscd [" << pcscdef << "]] [--token-lib [" << librtdef << "]" <<
+                  "[--pcsc] [--pcsc11-auth [" << librtdef << "]" <<
                   "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
                   "    --debug (debug mode)" << std::endl <<
@@ -236,8 +235,11 @@ namespace LTSM
                   "    --password <pass> " << std::endl <<
                   "    --noaccel (disable SDL2 acceleration)" << std::endl <<
                   "    --fullscreen (switch to fullscreen mode, Ctrl+F10 toggle)" << std::endl <<
+                  "    --nodamage (skip X11 damage events)" << std::endl <<
+                  "    --framerate <fps>" << std::endl <<
                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
-                  "    --notls (disable tls1.2, the server may reject the connection)" <<
+                  "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
+                  "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
                   std::endl <<
 #ifdef LTSM_WITH_GSSAPI
                   "    --kerberos <" << krb5def <<
@@ -264,11 +266,11 @@ namespace LTSM
 #else
                   "opus" <<
 #endif
-                  " " << "]" << "(audio support)" << std::endl <<
+                  " " << "] (audio support)" << std::endl <<
                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
                   "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
-                  "    --pcscd [" << pcscdef << "] (redirect pkcs11)" << std::endl <<
-                  "    --token-lib [" << librtdef << "] (token autenfication with LDAP)" <<
+                  "    --pcsc (redirect smartcard)" << std::endl <<
+                  "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
                   std::endl <<
                   std::endl;
         std::cout << std::endl << "supported encodings: " << std::endl <<
@@ -310,6 +312,10 @@ namespace LTSM
             {
                 capslock = false;
             }
+            else if(0 == std::strcmp(argv[it], "--noltsm"))
+            {
+                ltsmSupport = false;
+            }
             else if(0 == std::strcmp(argv[it], "--noaccel"))
             {
                 accelerated = false;
@@ -329,6 +335,14 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--fullscreen"))
             {
                 fullscreen = true;
+            }
+            else if(0 == std::strcmp(argv[it], "--nodamage"))
+            {
+                nodamage = true;
+            }
+            else if(0 == std::strcmp(argv[it], "--pcsc"))
+            {
+                pcscEnable = true;
             }
 
 #ifdef LTSM_DECODING_FFMPEG
@@ -434,42 +448,21 @@ namespace LTSM
                     it = it + 1;
                 }
             }
-            else if(0 == std::strcmp(argv[it], "--pcscd"))
+            else if(0 == std::strcmp(argv[it], "--pkcs11-auth"))
             {
-                pcscdUrl.assign(pcscdef);
+                pkcs11Auth.assign(librtdef);
 
                 if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
                 {
-                    auto url = Channel::parseUrl(argv[it + 1]);
-
-                    if(url.first == Channel::ConnectorType::Unknown)
-                    {
-                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__,
-                                             "pcscd", argv[it + 1]);
-                    }
-                    else
-                    {
-                        pcscdUrl.assign(argv[it + 1]);
-                    }
-
-                    it = it + 1;
-                }
-            }
-            else if(0 == std::strcmp(argv[it], "--token-lib"))
-            {
-                tokenLib.assign(librtdef);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    tokenLib.assign(argv[it + 1]);
+                    pkcs11Auth.assign(argv[it + 1]);
                     it = it + 1;
                 }
 
-                if(! std::filesystem::exists(tokenLib))
+                if(! std::filesystem::exists(pkcs11Auth))
                 {
                     Application::warning("%s: parse %s failed, not exist: %s", __FUNCTION__,
-                                         "token-lib", tokenLib.c_str());
-                    tokenLib.clear();
+                                         "pkcs11-auth", pkcs11Auth.c_str());
+                    pkcs11Auth.clear();
                 }
             }
             else if(0 == std::strcmp(argv[it], "--debug"))
@@ -526,6 +519,31 @@ namespace LTSM
 
                 it = it + 1;
             }
+            else if(0 == std::strcmp(argv[it], "--framerate") && it + 1 < argc)
+            {
+                try
+                {
+                    frameRate = std::stoi(argv[it + 1]);
+                    if(frameRate < 5)
+                    {
+                        frameRate = 5;
+                        std::cerr << "set frame rate: " << frameRate << std::endl;
+                    }
+                    else
+                    if(frameRate > 25)
+                    {
+                        frameRate = 25;
+                        std::cerr << "set frame rate: " << frameRate << std::endl;
+                    }
+                }
+                catch(const std::invalid_argument &)
+                {
+                    std::cerr << "incorrect frame rate" << std::endl;
+                    frameRate = 16;
+                }
+
+                it = it + 1;
+            }
             else if(0 == std::strcmp(argv[it], "--geometry") && it + 1 < argc)
             {
                 size_t idx;
@@ -564,9 +582,9 @@ namespace LTSM
             }
         }
 
-        if(tokenLib.size() && rfbsec.passwdFile.size() && username.size())
+        if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size())
         {
-            tokenLib.clear();
+            pkcs11Auth.clear();
         }
 
         if(fullscreen)
@@ -588,6 +606,11 @@ namespace LTSM
     bool Vnc2SDL::isAlwaysRunning(void) const
     {
         return alwaysRunning;
+    }
+
+    const char* Vnc2SDL::pkcs11Library(void) const
+    {
+        return pkcs11Auth.c_str();
     }
 
     int Vnc2SDL::start(void)
@@ -663,19 +686,16 @@ namespace LTSM
             }
         });
 
-        if(! tokenLib.empty() && std::filesystem::exists(tokenLib))
+        if(! pkcs11Auth.empty() && std::filesystem::exists(pkcs11Auth))
         {
 #ifdef LTSM_RUTOKEN
 
-            if(std::filesystem::path(tokenLib).filename() == std::filesystem::path(
-                                librtdef).filename())
+            if(std::filesystem::path(pkcs11Auth).filename() == std::filesystem::path(librtdef).filename())
             {
                 Application::info("%s: check %s success", __FUNCTION__, "rutoken",
-                                  tokenLib.c_str());
-                token = std::make_unique<RutokenWrapper>(tokenLib,
-                        static_cast<ChannelClient &>(*this));
+                                  pkcs11Auth.c_str());
+                token = std::make_unique<RutokenWrapper>pkcs11Auth, static_cast<ChannelClient &>(*this));
             }
-
 #endif
         }
 
@@ -1125,7 +1145,7 @@ namespace LTSM
         if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
         {
             sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                              clientPf.bitsPerPixel,
+                                              clientPf.bitsPerPixel(),
                                               clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
 
             if(! sfback)
@@ -1160,7 +1180,7 @@ namespace LTSM
             if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
             {
                 sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
-                                                  clientPf.bitsPerPixel,
+                                                  clientPf.bitsPerPixel(),
                                                   clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
 
                 if(! sfback)
@@ -1172,7 +1192,7 @@ namespace LTSM
             }
 
             sfframe.reset(SDL_CreateRGBSurfaceFrom((void*) data, wsz.width, wsz.height,
-                                                   pf.bitsPerPixel, pitch,
+                                                   pf.bitsPerPixel(), pitch,
                                                    pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()));
 
             if(! sfframe)
@@ -1246,7 +1266,7 @@ namespace LTSM
 
         if(cursors.end() == it)
         {
-            auto sdlFormat = SDL_MasksToPixelFormatEnum(clientPf.bitsPerPixel,
+            auto sdlFormat = SDL_MasksToPixelFormatEnum(clientPf.bitsPerPixel(),
                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask());
 
             if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
@@ -1260,7 +1280,7 @@ namespace LTSM
                                ", %" PRIu16 "], sdl format: %s",
                                __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
-                      reg.height, clientPf.bitsPerPixel, reg.width * clientPf.bytePerPixel(),
+                      reg.height, clientPf.bitsPerPixel(), reg.width * clientPf.bytePerPixel(),
                       sdlFormat);
 
             if(! sf)
@@ -1345,6 +1365,8 @@ namespace LTSM
         jo.push("ipaddr", "127.0.0.1");
         jo.push("platform", SDL_GetPlatform());
         jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
+        jo.push("x11:nodamage", nodamage);
+        jo.push("frame:rate", frameRate);
 
         if(username.empty())
         {
@@ -1373,25 +1395,31 @@ namespace LTSM
         {
             Application::info("%s: %s url: %s", __FUNCTION__, "printer",
                               printerUrl.c_str());
-            jo.push("printer", printerUrl);
+            jo.push("redirect:cups", printerUrl);
         }
 
         if(! saneUrl.empty())
         {
             Application::info("%s: %s url: %s", __FUNCTION__, "sane", saneUrl.c_str());
-            jo.push("sane", saneUrl);
-        }
-
-        if(! pcscdUrl.empty())
-        {
-            Application::info("%s: %s url: %s", __FUNCTION__, "pcscd", pcscdUrl.c_str());
-            jo.push("pcscd", pcscdUrl);
+            jo.push("redirect:sane", saneUrl);
         }
 
         if(! shareFolders.empty())
         {
+            JsonArrayStream ja;
+            for(auto & dir: shareFolders)
+                ja.push(dir);
+            jo.push("redirect:fuse", ja.flush());
+        }
 
-            jo.push("fuse", Tools::join(shareFolders.begin(), shareFolders.end(), "|"));
+        if(pcscEnable)
+        {
+            jo.push("redirect:pcsc", "enable");
+        }
+
+        if(! pkcs11Auth.empty())
+        {
+            jo.push("pkcs11:auth", pkcs11Auth);
         }
 
         if(audioEnable)
@@ -1401,7 +1429,7 @@ namespace LTSM
             allowEncoding.emplace_front("opus");
 #endif
             if(std::any_of(allowEncoding.begin(), allowEncoding.end(), [&](auto & enc){ return enc == audioEncoding; }))
-                jo.push("audio", audioEncoding);
+                jo.push("redirect:audio", audioEncoding);
             else
                 Application::warning("%s: unsupported audio: %s", __FUNCTION__, audioEncoding.c_str());
         }

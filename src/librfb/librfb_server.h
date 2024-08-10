@@ -66,6 +66,8 @@ namespace LTSM
             NetworkStream*      streamIn = nullptr;
             NetworkStream*      streamOut = nullptr;
 
+            bool                clientLtsmSupported = false;
+            bool                clientVideoSupported = false;
             bool                clientTrueColor = true;
             bool                clientBigEndian = false;
             bool                continueUpdatesSupport = false;
@@ -99,6 +101,8 @@ namespace LTSM
 
             void                setEncodingDebug(int v);
             void                setEncodingThreads(int v);
+            bool                isClientLtsmSupported(void) const;
+            bool                isClientVideoSupported(void) const;
             bool                isClientSupportedEncoding(int) const;
             bool                isClientEncoding(int) const;
             bool                isContinueUpdatesSupport(void) const;

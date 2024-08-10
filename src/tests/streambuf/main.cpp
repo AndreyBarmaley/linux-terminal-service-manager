@@ -162,7 +162,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
 void testRawPtrInterface(const BinaryBuf & buf)
 {
-    uint8_t tmp[100] = {0};
+    uint8_t tmp[100] = {};
     RawPtr ptr(tmp);
 
     size_t len = std::min(buf.size(), ptr.size());

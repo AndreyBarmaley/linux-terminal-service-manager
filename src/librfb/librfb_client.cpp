@@ -400,34 +400,36 @@ namespace LTSM
         Application::debug("%s: remote framebuffer size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, fbWidth, fbHeight);
 
         // recv server pixel format
-        serverPf.bitsPerPixel = recvInt8();
+        int bpp = recvInt8();
         int depth = recvInt8();
         serverBigEndian = recvInt8();
         serverTrueColor = recvInt8();
-        serverPf.redMax = recvIntBE16();
-        serverPf.greenMax = recvIntBE16();
-        serverPf.blueMax = recvIntBE16();
-        serverPf.redShift = recvInt8();
-        serverPf.greenShift = recvInt8();
-        serverPf.blueShift = recvInt8();
+        int rmax = recvIntBE16();
+        int gmax = recvIntBE16();
+        int bmax = recvIntBE16();
+        int rshift = recvInt8();
+        int gshift = recvInt8();
+        int bshift = recvInt8();
         recvSkip(3);
 
+        serverPf = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
+
         Application::debug("%s: remote pixel format: bpp: %" PRIu8 ", depth: %d, bigendian: %d, true color: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                    __FUNCTION__, serverPf.bitsPerPixel, depth, (int) serverBigEndian, (int) serverTrueColor,
-                    serverPf.redMax, serverPf.redShift, serverPf.greenMax, serverPf.greenShift, serverPf.blueMax, serverPf.blueShift);
+                    __FUNCTION__, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
+                    serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
 
         // check server format
-        switch(serverPf.bitsPerPixel)
+        switch(serverPf.bitsPerPixel())
         {
             case 32: case 16: case 8:
                 break;
 
             default:
-                Application::error("%s: unknown pixel format, bpp: %" PRIu8, __FUNCTION__, serverPf.bitsPerPixel);
+                Application::error("%s: unknown pixel format, bpp: %" PRIu8, __FUNCTION__, serverPf.bitsPerPixel());
                 return false;
         }
 
-        if(! serverTrueColor || serverPf.redMax == 0 || serverPf.greenMax == 0 || serverPf.blueMax == 0)
+        if(! serverTrueColor || serverPf.rmax() == 0 || serverPf.gmax() == 0 || serverPf.bmax() == 0)
         {
             Application::error("%s: unsupported pixel format", __FUNCTION__);
             return false;
@@ -495,7 +497,9 @@ namespace LTSM
         encodings.push_front(ENCODING_RICH_CURSOR);
         encodings.push_front(ENCODING_EXT_DESKTOP_SIZE);
         encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
-        encodings.push_front(ENCODING_LTSM);
+
+        if(ltsmSupported())
+            encodings.push_front(ENCODING_LTSM);
 
         auto prefferedEncoding = clientEncoding();
 
@@ -552,7 +556,7 @@ namespace LTSM
 
             int msgType = recvInt8();
 
-            if(ltsmSupport && msgType == PROTOCOL_LTSM)
+            if(ltsmServer && msgType == PROTOCOL_LTSM)
             {
                 try
                 {
@@ -620,24 +624,24 @@ namespace LTSM
         auto & pf = clientFormat();
 
         Application::debug("%s: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                    __FUNCTION__, pf.bitsPerPixel, (int) big_endian,
-                    pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
+                    __FUNCTION__, pf.bitsPerPixel(), (int) BigEndian,
+                    pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
 
         std::scoped_lock guard{ sendLock };
 
         // send pixel format
         sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
         sendZero(3); // padding
-        sendInt8(pf.bitsPerPixel);
+        sendInt8(pf.bitsPerPixel());
         sendInt8(24); // depth
-        sendInt8(big_endian);
+        sendInt8(BigEndian);
         sendInt8(1); // trueColor
-        sendIntBE16(pf.redMax);
-        sendIntBE16(pf.greenMax);
-        sendIntBE16(pf.blueMax);
-        sendInt8(pf.redShift);
-        sendInt8(pf.greenShift);
-        sendInt8(pf.blueShift);
+        sendIntBE16(pf.rmax());
+        sendIntBE16(pf.gmax());
+        sendIntBE16(pf.bmax());
+        sendInt8(pf.rshift());
+        sendInt8(pf.gshift());
+        sendInt8(pf.bshift());
         sendZero(3); // padding
         sendFlush();
     }
@@ -949,7 +953,7 @@ namespace LTSM
     {
         Application::info("%s: success", __FUNCTION__);
 
-        ltsmSupport = true;
+        ltsmServer = true;
         size_t type = recvIntBE32();
 
         // type 0: handshake part

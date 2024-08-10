@@ -59,8 +59,10 @@ namespace LTSM
                                 idleSession;
             size_t              idleTimeoutSec = 0;
 
+            std::atomic<size_t> frameRate{16};
             std::atomic<bool>   loginWidgetStarted{false};
             std::atomic<bool>   userSession{false};
+            std::atomic<bool>   x11NoDamage{false};
             uid_t               shmUid = 0;
 
         protected:
@@ -73,6 +75,7 @@ namespace LTSM
             bool                xcbNoDamageOption(void) const override;
             void                xcbDisableMessages(bool) override;
             bool                xcbAllowMessages(void) const override;
+            size_t              frameRateOption(void) const override;
 
             bool                rfbClipboardEnable(void) const override;
             bool                rfbDesktopResizeEnabled(void) const override;
@@ -95,7 +98,7 @@ namespace LTSM
             void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
             void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
             void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
-            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const bool& zlib) override;
+            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const uint32_t& flags) override;
             void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
             void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
             void                onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override;

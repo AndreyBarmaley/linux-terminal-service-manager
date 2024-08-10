@@ -54,7 +54,7 @@ namespace LTSM
             bool            serverBigEndian = false;
             bool            continueUpdatesSupport = false;
             bool            continueUpdatesProcessed = false;
-            bool            ltsmSupport = false;
+            bool            ltsmServer = false;
 
         protected:
             friend class DecodingRaw;
@@ -132,6 +132,8 @@ namespace LTSM
             virtual void    cutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
             virtual void    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
 	    virtual void    displayResizeEvent(const XCB::Size &);
+            //
+            virtual bool    ltsmSupported(void) const { return false; }
         };
 
         class ClientDecoderSocket : public ClientDecoder

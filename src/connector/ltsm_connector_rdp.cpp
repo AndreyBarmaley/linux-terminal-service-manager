@@ -356,7 +356,7 @@ namespace LTSM
     {
         if(0 < displayNum())
         {
-            busConnectorTerminated(displayNum());
+            busConnectorTerminated(displayNum(), getpid());
             disconnectedEvent();
         }
     }
@@ -511,7 +511,7 @@ namespace LTSM
 
     bool Connector::RDP::createX11Session(uint8_t depth)
     {
-        int screen = busStartLoginSession(depth, _remoteaddr, "rdp");
+        int screen = busStartLoginSession(getpid(), depth, _remoteaddr, "rdp");
         if(screen <= 0)
         {
             Application::error("%s", "login session request failure");
@@ -563,7 +563,7 @@ namespace LTSM
             Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s", __FUNCTION__, display, userName.c_str());
 
             int oldDisplay = displayNum();
-            int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
+            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
 
             if(newDisplay < 0)
             {
@@ -730,7 +730,7 @@ namespace LTSM
             const int16_t localX = subreg.x - reg.x;
             const int16_t localY = subreg.y - reg.y;
             const size_t offset = localY * scanLineBytes + localX * reply->bytePerPixel();
-            BITMAP_DATA st = {0};
+            BITMAP_DATA st = {};
             // Bitmap data here the screen capture
             // https://msdn.microsoft.com/en-us/library/cc240612.aspx
             st.destLeft = subreg.x;
@@ -770,7 +770,7 @@ namespace LTSM
                 totalSize += (st.cbCompMainBodySize + hdrsz);
                 return false;
             });
-            BITMAP_UPDATE bitmapUpdate = {0};
+            BITMAP_UPDATE bitmapUpdate = {};
             bitmapUpdate.count = bitmapUpdate.number = std::distance(it1, it2);
             bitmapUpdate.rectangles = & (*it1);
 
@@ -854,7 +854,7 @@ namespace LTSM
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
-        BITMAP_DATA st = {0};
+        BITMAP_DATA st = {};
         // full size reserved
         auto data = std::make_unique<uint8_t[]>(tileSize * tileSize * 4);
 
@@ -892,7 +892,7 @@ namespace LTSM
                 throw rdp_error(NS_FuncName);
             }
 
-            BITMAP_UPDATE bitmapUpdate = {0};
+            BITMAP_UPDATE bitmapUpdate = {};
             bitmapUpdate.count = bitmapUpdate.number = 1;
             bitmapUpdate.rectangles = & st;
             auto ret = freeRdp->peer->update->BitmapUpdate(context, &bitmapUpdate);

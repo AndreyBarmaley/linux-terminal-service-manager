@@ -40,10 +40,11 @@
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
     "channel:audio:disabled": false,
     "channel:audio:format": "/var/run/ltsm/audio/%{user}",
-    "channel:pcscd:disabled": false,
-    "channel:pcscd:format": "/var/run/ltsm/pcscd/%{user}",
+    "channel:pcsc:disabled": false,
+    "channel:pcsc:format": "/var/run/ltsm/pcsc/%{user}",
     "channel:fuse:disabled": false,
     "channel:fuse:format": "/var/run/ltsm/fuse/%{user}",
+    "channel:sane:disabled": false,
 
     "#idle:timeout:xvfb": 10,
     "#idle:timeout:login": 70,

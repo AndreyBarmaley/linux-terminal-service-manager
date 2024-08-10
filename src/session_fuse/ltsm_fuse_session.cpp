@@ -951,8 +951,8 @@ namespace LTSM
     FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn)
         : AdaptorInterfaces(conn, dbus_session_fuse_path), Application("ltsm_fuse2session")
     {
-        setDebug(DebugTarget::Console, DebugLevel::Debug);
-        //setDebug(DebugTarget::Syslog, DebugLevel::Info);
+        //setDebug(DebugTarget::Console, DebugLevel::Debug);
+        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
 
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
 
@@ -1019,6 +1019,11 @@ namespace LTSM
         childs.emplace_front( std::move(ptr) );
 
         return true;
+    }
+
+    void FuseSessionBus::setDebug(const std::string & level)
+    {
+        setDebugLevel(level);
     }
 
     void FuseSessionBus::umountPoint(const std::string & localPoint)

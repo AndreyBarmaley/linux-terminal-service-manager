@@ -43,8 +43,17 @@
 #include <atomic>
 #include <thread>
 #include <utility>
+#include <cinttypes>
 #include <filesystem>
 #include <functional>
+
+#include <cassert>
+// Use (void) to silence unused warnings.
+#define assertm(exp, msg) assert(((void)msg, exp))
+
+#ifdef LTSM_WITH_GNUTLS
+#include "gnutls/gnutls.h"
+#endif
 
 #if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
 #ifdef __cplusplus
@@ -80,6 +89,7 @@ namespace LTSM
 
         inline const uid_t & uid(void) const { return st.pw_uid; }
         inline const gid_t & gid(void) const { return st.pw_gid; }
+        inline std::string runtime_dir(void) const { return std::string("/run/user/").append(std::to_string(st.pw_uid)); }
     };
 
     class GroupInfo
@@ -157,6 +167,8 @@ namespace LTSM
             StringFormat & replace(std::string_view, int);
             StringFormat & replace(std::string_view, std::string_view);
             StringFormat & replace(std::string_view, double, int prec);
+
+            const std::string & to_string(void) const { return *this; }
         };
 
         struct StreamBits
@@ -170,7 +182,7 @@ namespace LTSM
 
         struct StreamBitsPack : StreamBits
         {
-            StreamBitsPack();
+            StreamBitsPack(size_t rez = 32);
 
             void pushBit(bool v);
             void pushValue(int val, size_t field);
@@ -186,17 +198,20 @@ namespace LTSM
         };
 
         template<typename Iterator>
-        Iterator nextToEnd( Iterator it1, size_t count, Iterator it2 )
+        Iterator nextToEnd(Iterator it1, size_t count, Iterator it2)
         {
-            // check itbeg nexted
-            for( auto num = 0; num < count; ++num ) {
-                it1 = std::next( it1 );
+            if(it1 != it2)
+            {
+                // check itbeg nexted
+                for(auto num = 0; num < count; ++num)
+                {
+                    it1 = std::next(it1);
 
-                if( it1 == it2 ) {
-                    return it2;
+                    if(it1 == it2)
+                        return it2;
                 }
             }
-            
+
             return it1;
         }
 
@@ -295,6 +310,30 @@ namespace LTSM
             }
         };
 
+        // Timeout
+        template<typename TimeType = std::chrono::milliseconds>
+        struct Timeout
+        {
+            std::chrono::steady_clock::time_point tp;
+            TimeType dt;
+
+            Timeout(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
+            {
+            }
+
+            bool check(void)
+            {
+                auto now = std::chrono::steady_clock::now();
+        
+                if(dt < now - tp)
+                {
+                    tp = now;
+                    return true;
+                }
+
+                return false;
+            }
+        };
 
 	// BaseTimer
 	class BaseTimer
@@ -397,7 +436,55 @@ namespace LTSM
 	    }
 	    return true;
         }
+
+        template<typename TimeType = std::chrono::milliseconds>
+        struct TimePoint
+        {
+            std::chrono::steady_clock::time_point tp;
+            TimeType dt;
+
+            TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
+            {
+            }
+
+            bool check(void)
+            {
+                auto now = std::chrono::steady_clock::now();
+
+                if(dt < now - tp)
+                {
+                    tp = now;
+                    return true;
+                }
+
+                return false;
+            }
+        };
     }
+
+#ifdef LTSM_WITH_GNUTLS
+    namespace TLS
+    {
+        namespace X509
+        {
+            struct Info
+            {
+                std::string owner;
+                std::string issuer;
+                std::vector<uint8_t> fingerPrintSHA1;
+                std::vector<uint8_t> serialNumber;
+                time_t expirationTime;
+                time_t activationTime;
+                std::pair<gnutls_pk_algorithm_t, unsigned int> algorithmBits;
+                int version = 0;
+            };
+
+            typedef std::unique_ptr<Info> InfoPtr;
+
+            InfoPtr parseCertificate(const void* data, unsigned int length, bool isPem /* PEM/DER format */);
+        }
+    }
+#endif
 
 #define NS_FuncName Tools::prettyFuncName(__PRETTY_FUNCTION__)
 }

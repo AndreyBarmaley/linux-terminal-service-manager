@@ -254,17 +254,19 @@ namespace LTSM
     {
         if(pa_context_get_state(ctx.get()) != PA_CONTEXT_UNCONNECTED)
         {
-            Application::info("%s", __FUNCTION__);
+            Application::debug("%s", __FUNCTION__);
             pa_context_disconnect(ctx.get());
         }
 
         pa_context_set_state_callback(ctx.get(), nullptr, nullptr);
         pa_context_set_event_callback(ctx.get(), nullptr, nullptr);
-
     }
 
     void PulseAudio::BaseStream::streamDisconnect(void)
     {
+        if(! stream)
+            return;
+
         if(pa_stream_get_state(stream.get()) != PA_STREAM_UNCONNECTED)
         {
             Application::info("%s", __FUNCTION__);
@@ -292,7 +294,7 @@ namespace LTSM
 
         if(0 > pa_context_connect(ctx.get(), nullptr, PA_CONTEXT_NOFLAGS, nullptr))
         {
-            Application::error("%s: %s failed", __FUNCTION__, "pa_context_connect");
+            Application::warning("%s: %s failed", __FUNCTION__, "pa_context_connect");
             return false;
         }
 
@@ -447,15 +449,16 @@ namespace LTSM
 
     void PulseAudio::BaseStream::contextStateEvent(const pa_context_state_t & state)
     {
-        Application::info("%s: state: %s", __FUNCTION__, contextStateName(state));
-
-        contextState = state;
-
         if(PA_CONTEXT_FAILED == state)
         {
-            Application::error("%s: %s failed", __FUNCTION__, "state");
-            // throw audio_error(NS_FuncName);
+            Application::error("%s: state: %s", __FUNCTION__, contextStateName(state));
         }
+        else
+        {
+            Application::info("%s: state: %s", __FUNCTION__, contextStateName(state));
+        }
+
+        contextState = state;
     }
 
     void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state)
@@ -617,8 +620,8 @@ namespace LTSM
     {
         Application::debug("%s: data size: %u", __FUNCTION__, len);
 
-        std::scoped_lock guard{ lock };
-        pcm.resize(pcm.size() + len, 0);
+        std::vector<uint8_t> buf(len, 0);
+        streamWriteData(buf.data(), buf.size());
     }
 
     size_t PulseAudio::InputStream::streamWriteableSize(void) const

@@ -168,9 +168,9 @@ public:
 	for(auto & val : outputs)
 	{
 	    auto info = getRandrOutputInfo(val);
-    	    Application::info("output name: %s, connected: %s, width: %d, height: %d", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
+    	    Application::info("output name: %s, connected: %s, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
 
-	    if(info.connected)
+	    if(info->connected)
 		curout = val;
 	}
 

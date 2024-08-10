@@ -31,6 +31,7 @@
 #include <ctime>
 #include <chrono>
 #include <thread>
+#include <filesystem>
 
 #include <QFile>
 #include <QDate>
@@ -44,12 +45,17 @@
 #include <QDesktopWidget>
 #include <QGuiApplication>
 
-#include "ltsm_global.h"
 #include "ltsm_tools.h"
+#include "ltsm_global.h"
+#include "ltsm_pkcs11.h"
+#include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
+#include "ltsm_pkcs11_session.h"
+
 #include "ui_ltsm_helperwindow.h"
 
 using namespace std::chrono_literals;
+using namespace LTSM;
 
 /// LTSM_HelperSDBus
 LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
@@ -185,6 +191,8 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui(new Ui::LTSM_HelperWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer300ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
 {
+    Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+
     ui->setupUi(this);
     ui->labelDomain->hide();
     ui->comboBoxDomain->hide();
@@ -216,13 +224,19 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     {
         try
         {
-            ldap.reset(new LTSM::LdapWrapper());
+            ldap.reset(new LdapWrapper());
         }
         catch(...)
         {
             ldap.reset();
         }
     }).detach();
+#endif
+
+#ifdef LTSM_PKCS11_AUTH
+    pkcs11.reset(new Pkcs11Client(displayNum, this));
+    connect(pkcs11.get(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
+    pkcs11->start();
 #endif
 }
 
@@ -237,6 +251,13 @@ LTSM_HelperWindow::~LTSM_HelperWindow()
 #endif
 
     delete ui;
+}
+
+void LTSM_HelperWindow::tokensChanged(void)
+{
+#ifdef LTSM_PKCS11_AUTH
+    Application::info("%s, tokens: %u", __FUNCTION__, pkcs11->getTokens().size());
+#endif
 }
 
 void LTSM_HelperWindow::loginClicked(void)
@@ -257,7 +278,7 @@ void LTSM_HelperWindow::loginClicked(void)
     auto serial = jo["serial"].toString();
     auto cert = ui->comboBoxUsername->currentData().toString();
 
-    tokenCheck = LTSM::Tools::randomHexString(64);
+    tokenCheck = Tools::randomHexString(64);
     tokenSerial = serial.toStdString();
     tokenCert = cert.toStdString();
 
@@ -293,7 +314,7 @@ void LTSM_HelperWindow::loginClicked(void)
             uint8_t* buf = nullptr;
             size_t len = BIO_get_mem_data(bio3.get(), & buf);
 
-            this->sendTokenAuthEncrypted(display, serial, pin, LTSM::Tools::crc32b(cert), buf, len);
+            this->sendTokenAuthEncrypted(display, serial, pin, Tools::crc32b(cert), buf, len);
         }
     });
 #endif
@@ -548,7 +569,7 @@ CertInfo getX509CertInfo(const std::string& cert)
             std::vector<uint8_t> buf(len, 0);
             BN_bn2bin(bn.get(), buf.data());
 
-            certInfo.serialNumber = LTSM::Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, ":", false);
+            certInfo.serialNumber = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, ":", false);
         }
     }
 #endif
@@ -735,7 +756,7 @@ void LTSM_HelperWindow::tokenReplyCheck(const int32_t& display, const std::strin
 {
     if(display == displayNum && tokenAuthMode)
     {
-        if(tokenSerial == serial && LTSM::Tools::crc32b(tokenCert) == cert && tokenCheck == decrypt)
+        if(tokenSerial == serial && Tools::crc32b(tokenCert) == cert && tokenCheck == decrypt)
         {
             // FIXME LDAP find cert login
 #ifdef LTSM_TOKEN_AUTH

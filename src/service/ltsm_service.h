@@ -36,7 +36,6 @@
 #include <security/pam_misc.h>
 
 #include "ltsm_global.h"
-#include "ltsm_service_proxy.h"
 #include "ltsm_application.h"
 #include "ltsm_service_adaptor.h"
 #include "ltsm_json_wrapper.h"
@@ -133,7 +132,7 @@ namespace LTSM
             RedirectPrinter = (1 << 2),
             RedirectAudio = (1 << 3),
             RedirectScanner = (1 << 4),
-            RedirectSmartCard = (1 << 5),
+            RedirectPcsc = (1 << 5),
             RemoteFilesUse = (1 << 6)
         };
 
@@ -160,7 +159,7 @@ namespace LTSM
         GroupInfoPtr                    groupInfo;
 
         std::string                     displayAddr;
-        std::string                     remoteaddr;
+        std::string                     remoteAddr;
         std::string                     conntype;
         std::string                     encryption;
         std::string                     layout;
@@ -291,13 +290,13 @@ namespace LTSM
         private:                        /* virtual dbus methods */
             int32_t                     busGetServiceVersion(void) override;
             void                        busShutdownService(void) override;
-            int32_t                     busStartLoginSession(const uint8_t& depth, const std::string & remoteAddr, const std::string & connType) override;
-            int32_t                     busStartUserSession(const int32_t & oldDisplay, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
+            int32_t                     busStartLoginSession(const int32_t & connectorId, const uint8_t& depth, const std::string & remoteAddr, const std::string & connType) override;
+            int32_t                     busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
             std::string                 busCreateAuthFile(const int32_t & display) override;
             std::string                 busEncryptionInfo(const int32_t & display) override;
             bool                        busShutdownDisplay(const int32_t & display) override;
             bool                        busShutdownConnector(const int32_t & display) override;
-            bool                        busConnectorTerminated(const int32_t & display) override;
+            bool                        busConnectorTerminated(const int32_t & display, const int32_t & connectorId) override;
 	    bool			busConnectorAlive(const int32_t & display) override;
             bool                        busIdleTimeoutAction(const int32_t& display) override;
 	    bool			busSetLoginsDisable(const bool & action) override;
@@ -340,16 +339,24 @@ namespace LTSM
             void                        tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt) override;
             void                        helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data) override;
 
-            void                        startSessionChannels(XvfbSessionPtr);
-            bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startAudioListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startPcscdListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
+            void                        startSessionChannels(XvfbSessionPtr, int connectorId);
+            void                        stopSessionChannels(XvfbSessionPtr, int connectorId);
 
-            void                        stopSessionChannels(XvfbSessionPtr);
-            void                        stopAudioListener(XvfbSessionPtr, const std::string & clientUrl);
-            void                        stopFuseListener(XvfbSessionPtr, const std::string & clientUrl);
+            void                        startLoginChannels(XvfbSessionPtr, int connectorId);
+            void                        stopLoginChannels(XvfbSessionPtr, int connectorId);
+
+            bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool                        startAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool                        startPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool                        startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
+
+
+            void                        stopAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void                        stopFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void                        stopPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void                        stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
         };
 
         class Service : public ApplicationJsonConfig

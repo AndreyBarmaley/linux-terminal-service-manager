@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node name="/ltsm/session/pcsc">
+    <interface name="LTSM.Session.PCSC">
+        <method name="getVersion">
+            <arg type="i" name="version" direction="out" />
+        </method>
+
+        <method name="connectChannel">
+            <arg type="s" name="clientSocket" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+
+        <method name="disconnectChannel">
+            <arg type="s" name="clientSocket" direction="in" />
+        </method>
+
+        <method name="serviceShutdown">
+        </method>
+
+        <method name="setDebug">
+            <arg type="s" name="level" direction="in" />
+        </method>
+    </interface>
+</node>

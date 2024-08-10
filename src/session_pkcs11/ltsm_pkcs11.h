@@ -21,56 +21,25 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_AUDIO_SESSION_
-#define _LTSM_AUDIO_SESSION_
+#ifndef _LTSM_PKSC11_
+#define _LTSM_PKSC11_
 
-#include <thread>
-#include <atomic>
-#include <memory>
-#include <string>
-#include <forward_list>
-
-#include "ltsm_streambuf.h"
-#include "ltsm_application.h"
-#include "ltsm_audio_pulse.h"
-#include "ltsm_audio_encoder.h"
-#include "ltsm_audio_adaptor.h"
+#define LTSM_PKCS11_VERSION 20240723
 
 namespace LTSM
 {
-    struct AudioClient
+    namespace Pkcs11Op
     {
-        std::string socketPath;
-
-        std::unique_ptr<PulseAudio::OutputStream> pulse;
-        std::unique_ptr<AudioEncoder::BaseEncoder> encoder;
-        std::unique_ptr<SocketStream> sock;
-
-        std::thread thread;
-        std::atomic<bool> shutdown{false};
-
-        AudioClient(const std::string &);
-        ~AudioClient();
-    };
-
-    class AudioSessionBus : public sdbus::AdaptorInterfaces<Session::AUDIO_adaptor>, public Application
-    {
-        std::forward_list<AudioClient> clients;
-
-    public:
-        AudioSessionBus(sdbus::IConnection &);
-        virtual ~AudioSessionBus();
-
-        int start(void) override;
-
-        int32_t getVersion(void) override;
-        void serviceShutdown(void) override;
-
-        bool connectChannel(const std::string & clientSocket) override;
-        void disconnectChannel(const std::string & clientSocket) override;
-
-        void pulseFragmentSize(const uint32_t & fragsz) override;
-    };
+        enum
+        {
+            Init = 0xFC01,
+            GetSlots = 0xFC02,
+            GetSlotMechanisms = 0xFC03,
+            GetSlotCertificates = 0xFC04,
+            SignData = 0xFC11,
+            DecryptData = 0xFC12
+        };
+    }
 }
 
-#endif // _LTSM_AUDIO_SESSION_
+#endif // _LTSM_PKCS11_

@@ -30,6 +30,7 @@
 #include <atomic>
 #include <vector>
 #include <string_view>
+#include <shared_mutex>
 #include <stdexcept>
 
 #include "xcb/xcb.h"
@@ -67,6 +68,8 @@ namespace LTSM
 	    Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
 	    Point(int16_t px, int16_t py) : x(px), y(py) {}
 
+            virtual ~Point() {}
+
             bool isValid(void) const { return 0 <= x && 0 <= y; }
 
             xcb_point_t toXcb(void) const { return xcb_point_t{x, y}; }
@@ -85,6 +88,8 @@ namespace LTSM
 	    Size() : width(0), height(0) {}
 	    Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
+            virtual ~Size() {}
+
 	    bool isEmpty(void) const { return width == 0 || height == 0; }
 	    void reset(void) { width = 0; height = 0; }
 
@@ -94,13 +99,17 @@ namespace LTSM
 
 	struct PointIterator : Point
 	{
-	    const Size & 	limit;
+	    const Size  	limit;
     	    PointIterator(int16_t px, int16_t py, const Size & sz) : Point(px, py), limit(sz) {}
 
     	    PointIterator &	operator++(void);
     	    PointIterator &	operator--(void);
 
 	    bool		isValid(void) const { return Point::isValid() && x < limit.width && y < limit.height; }
+
+            bool                isBeginLine(void) const;
+            bool                isEndLine(void) const;
+            virtual void        lineChanged(void) {}
 	};
 
 	struct Region : public Point, public Size
@@ -338,6 +347,20 @@ namespace LTSM
 	    RandrOutputInfo() = default;
 	};
 
+	struct RandrCrtcInfo
+	{
+            xcb_randr_mode_t    mode = 0;
+	    xcb_timestamp_t 	timestamp = 0;
+            int16_t             x = 0;
+            int16_t             y = 0;
+            uint16_t            width = 0;
+            uint16_t            height = 0;
+            uint16_t            rotation = 0;
+            uint8_t             status = 0;
+
+	    RandrCrtcInfo() = default;
+	};
+
 	struct RandrScreenInfo
 	{
 	    xcb_timestamp_t 	timestamp = 0;
@@ -472,18 +495,26 @@ namespace LTSM
             ModuleRandr(ConnectionShared);
 
 	    std::vector<xcb_randr_output_t>      getOutputs(const xcb_screen_t &) const;
-	    RandrOutputInfo                      getOutputInfo(const xcb_randr_output_t &) const;
-	    std::vector<xcb_randr_mode_t>        getOutputModes(const xcb_randr_output_t &) const;
-	    std::vector<xcb_randr_crtc_t>        getOutputCrtcs(const xcb_randr_output_t &) const;
-	    RandrScreenInfo                      getScreenInfo(const xcb_screen_t &) const;
-	    std::vector<xcb_randr_screen_size_t> getScreenSizes(const xcb_screen_t &, RandrScreenInfo* = nullptr) const;
+	    std::vector<xcb_randr_crtc_t>        getCrtcs(const xcb_screen_t &) const;
+	    std::vector<xcb_randr_output_t>      getCrtcOutputs(const xcb_randr_crtc_t &, RandrCrtcInfo* = nullptr) const;
 	    std::vector<xcb_randr_mode_info_t>   getModesInfo(const xcb_screen_t &) const;
+	    std::vector<xcb_randr_mode_t>        getOutputModes(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
+	    std::vector<xcb_randr_crtc_t>        getOutputCrtcs(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
+	    std::vector<xcb_randr_screen_size_t> getScreenSizes(const xcb_screen_t &, RandrScreenInfo* = nullptr) const;
 
-	    bool                    setScreenSize(const xcb_screen_t &, Size, uint16_t* sequence = nullptr) const;
-	    xcb_randr_mode_t        createMode(const xcb_screen_t &, const Size &) const;
+	    std::unique_ptr<RandrCrtcInfo>       getCrtcInfo(const xcb_randr_crtc_t &) const;
+	    std::unique_ptr<RandrOutputInfo>     getOutputInfo(const xcb_randr_output_t &) const;
+	    std::unique_ptr<RandrScreenInfo>     getScreenInfo(const xcb_screen_t &) const;
+
+	    bool                    setScreenSizeCompat(const xcb_screen_t &, Size, uint16_t* sequence = nullptr) const;
+
+	    bool                    setScreenSize(const xcb_screen_t &, uint16_t width, uint16_t height, uint16_t dpi = 96) const;
+	    xcb_randr_mode_t        cvtCreateMode(const xcb_screen_t &, const Size &, int vertRef = 60) const;
 	    bool                    destroyMode(const xcb_randr_mode_t &) const;
 	    bool                    addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
 	    bool                    deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
+            bool                    crtcConnectOutputsMode(const xcb_screen_t &, const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &) const;
+            bool                    crtcDisconnect(const xcb_screen_t &, const xcb_randr_crtc_t &) const;
         };
 
         struct ModuleShm : ModuleExtension
@@ -534,14 +565,14 @@ namespace LTSM
         protected:
             void                    extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
 
-            /// exception: xcb_error
-            void                    displayConnect(int displayNum, const AuthCookie* = nullptr);
-
-            Connector() = default;
-
         public:
-            Connector(int displayNum, const AuthCookie* = nullptr);
+            Connector() = default;
             virtual ~Connector() = default;
+
+            /// exception: xcb_error
+            Connector(int displayNum, const AuthCookie* = nullptr);
+
+            virtual bool            displayConnect(int displayNum, const AuthCookie* = nullptr);
 
             size_t	            depthFromBpp(size_t bitsPerPixel) const;
             size_t	            bppFromDepth(size_t depth) const;
@@ -598,13 +629,13 @@ namespace LTSM
             xcb_format_t*           _format = nullptr;
             xcb_visualtype_t*       _visual = nullptr;
 
+            mutable std::shared_mutex _lockGeometry;
             std::unique_ptr<WindowDamageId>  _damage;
 
             xcb_keycode_t           _minKeycode = 0;
             xcb_keycode_t           _maxKeycode = 0;
 
 	protected:
-            void                    rootConnect(int displayNum, const AuthCookie* = nullptr);
 
             bool                    createFullScreenDamage(void);
 
@@ -620,11 +651,14 @@ namespace LTSM
             bool                    selectionRequestAction(xcb_selection_request_event_t*);
             bool                    selectionNotifyAction(xcb_selection_notify_event_t*, bool syncPrimaryClipboard = false);
 
-            RootDisplay() = default;
 
         public:
-            RootDisplay(int displayNum, const AuthCookie* = nullptr);
+            RootDisplay() = default;
             ~RootDisplay();
+
+            RootDisplay(int displayNum, const AuthCookie* = nullptr);
+
+            bool                    displayConnect(int displayNum, const AuthCookie* = nullptr) override;
 
             uint16_t		    width(void) const;
             uint16_t		    height(void) const;
@@ -640,6 +674,7 @@ namespace LTSM
             const ModuleExtension*  getExtension(const Module &) const;
 
             bool                    setRandrScreenSize(const Size &, uint16_t* sequence = nullptr);
+            bool                    setRandrMonitors(const std::vector<Region> & monitors);
 
             virtual void            displayConnectedEvent(void) {}
             virtual void            xfixesSelectionChangedEvent(void) {}
@@ -674,6 +709,7 @@ namespace LTSM
             bool                    damageSubtrack(const Region &);
 
             GenericEvent            poolEvent(void);
+            Size                    updateGeometrySize(void) const;
         };
 
         class XkbClient

@@ -31,7 +31,7 @@
 #include "ltsm_xcb_wrapper.h"
 
 #ifdef LTSM_WITH_SDBUS
-#include "ltsm_service_proxy.h"
+#include "sdbus-c++/sdbus-c++.h"
 #endif
 
 namespace LTSM
@@ -82,7 +82,7 @@ namespace LTSM
         int                 maxWeightPixel(void) const;
     };
 
-    struct PixelFormat
+    class PixelFormat
     {
         uint16_t            redMax = 0;
         uint16_t            greenMax = 0;
@@ -94,22 +94,24 @@ namespace LTSM
         uint8_t             blueShift = 0;
         uint8_t             alphaShift = 0;
 
-        uint8_t             bitsPerPixel = 0;
+        uint8_t             bitsPixel = 0;
+        uint8_t             bytePixel = 0;
 
+    public:
         PixelFormat() = default;
         PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask);
         PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift);
 
         bool operator!= (const PixelFormat & pf) const
         {
-            return bitsPerPixel != pf.bitsPerPixel ||
+            return bitsPerPixel() != pf.bitsPerPixel() ||
                    redMax != pf.redMax || greenMax != pf.greenMax || blueMax != pf.blueMax || alphaMax != pf.alphaMax ||
                    redShift != pf.redShift || greenShift != pf.greenShift || blueShift != pf.blueShift || alphaShift != pf.alphaShift;
         }
 
         bool compare(const PixelFormat & pf, bool skipAlpha) const
         {
-            return bitsPerPixel == pf.bitsPerPixel &&
+            return bitsPerPixel() == pf.bitsPerPixel() &&
                    redMax == pf.redMax && greenMax == pf.greenMax && blueMax == pf.blueMax && (skipAlpha ? true : alphaMax == pf.alphaMax) &&
                    redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
         }
@@ -119,15 +121,27 @@ namespace LTSM
         uint32_t        bmask(void) const;
         uint32_t        amask(void) const;
 
+        const uint16_t & rmax(void) const { return redMax; }
+        const uint16_t & gmax(void) const { return greenMax; }
+        const uint16_t & bmax(void) const { return blueMax; }
+        const uint16_t & amax(void) const { return alphaMax; }
+
+        const uint8_t & rshift(void) const { return redShift; }
+        const uint8_t & gshift(void) const { return greenShift; }
+        const uint8_t & bshift(void) const { return blueShift; }
+        const uint8_t & ashift(void) const { return alphaShift; }
+
         uint8_t         red(int pixel) const;
         uint8_t         green(int pixel) const;
         uint8_t         blue(int pixel) const;
         uint8_t         alpha(int pixel) const;
 
-        uint32_t        bytePerPixel(void) const;
         Color           color(int pixel) const;
         uint32_t        pixel(const Color & col) const;
         uint32_t        convertFrom(const PixelFormat & pf, uint32_t pixel) const;
+
+        const uint8_t & bitsPerPixel(void) const { return bitsPixel; }
+        const uint8_t & bytePerPixel(void) const { return bytePixel; }
     };
 
     struct fbinfo_t
@@ -152,6 +166,8 @@ namespace LTSM
         const uint32_t &        pixel(void) const { return first; }
         const uint32_t &        length(void) const { return second; }
     };
+
+    typedef std::vector<PixelLength> PixelLengthList;
 
     class FrameBuffer
     {
@@ -192,7 +208,7 @@ namespace LTSM
         FrameBuffer     copyRegion(const XCB::Region* = nullptr) const;
         ColorMap        colourMap(void) const;
         PixelMapWeight  pixelMapWeight(const XCB::Region &) const;
-	std::list<PixelLength> toRLE(const XCB::Region &) const;
+	PixelLengthList toRLE(const XCB::Region &) const;
         bool            allOfPixel(uint32_t pixel, const XCB::Region &) const;
 
         size_t          width(void) const;
@@ -204,8 +220,10 @@ namespace LTSM
         const PixelFormat & pixelFormat(void) const { return fbptr->format; }
 
         Color           color(const XCB::Point &) const;
-        uint32_t	bitsPerPixel(void) const;
-        uint32_t	bytePerPixel(void) const;
+        const uint8_t & bitsPerPixel(void) const;
+        const uint8_t & bytePerPixel(void) const;
+
+        static uint32_t rawPixel(const void* ptr, int bpp, bool BigEndian);
     };
 }
 

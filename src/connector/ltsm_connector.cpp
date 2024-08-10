@@ -35,6 +35,11 @@
 #include <iostream>
 #include <filesystem>
 
+#ifdef WITH_SYSTEMD 
+#include <systemd/sd-login.h>
+#include <systemd/sd-daemon.h>
+#endif
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_font_psf.h"
@@ -108,7 +113,7 @@ namespace LTSM
     int autoDetectType(void)
     {
         auto fd = fileno(stdin);
-        struct pollfd fds = {0};
+        struct pollfd fds = {};
         fds.fd = fd;
         fds.events = POLLIN;
 
@@ -192,7 +197,15 @@ namespace LTSM
 
         try
         {
+#ifdef WITH_SYSTEMD
+            sd_notify(0, "READY=1");
+#endif
+
             res = connector->communication();
+
+#ifdef WITH_SYSTEMD
+            sd_notify(0, "STOPPING=1");
+#endif
         }
         catch(const std::exception & err)
         {
@@ -234,7 +247,10 @@ namespace LTSM
             
         // wait display starting
         if(! Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&](){ return ! Tools::checkUnixSocket(socketPath); }))
-            Application::error("%s: checkUnixSocket failed, `%s'", "xcbConnect", socketPath.c_str());
+        {
+            Application::error("%s: checkUnixSocket failed, `%s'", __FUNCTION__, socketPath.c_str());
+            return false;
+        }
 
         try
         {

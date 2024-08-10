@@ -32,7 +32,7 @@
 
 namespace LTSM
 {
-    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPerPixel(bpp)
+    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPixel(bpp), bytePixel(bpp >> 3)
     {
         redMax = Tools::maskMaxValue(rmask);
         greenMax = Tools::maskMaxValue(gmask);
@@ -45,7 +45,8 @@ namespace LTSM
     }
 
     PixelFormat::PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift)
-        : redMax(rmax), greenMax(gmax), blueMax(bmax), alphaMax(amax), redShift(rshift), greenShift(gshift), blueShift(bshift), alphaShift(ashift), bitsPerPixel(bpp)
+        : redMax(rmax), greenMax(gmax), blueMax(bmax), alphaMax(amax), redShift(rshift), greenShift(gshift), blueShift(bshift), alphaShift(ashift),
+          bitsPixel(bpp), bytePixel(bpp >> 3)
     {
     }
 
@@ -89,11 +90,6 @@ namespace LTSM
         return (pixel >> alphaShift) & alphaMax;
     }
 
-    uint32_t PixelFormat::bytePerPixel(void) const
-    {
-        return bitsPerPixel >> 3;
-    }
-
     Color PixelFormat::color(int pixel) const
     {
         return Color(red(pixel), green(pixel), blue(pixel), alpha(pixel));
@@ -101,10 +97,14 @@ namespace LTSM
 
     uint32_t PixelFormat::pixel(const Color & col) const
     {
-        int a = (col.x * alphaMax) >> 8;
-        int r = (col.r * redMax) >> 8;
-        int g = (col.g * greenMax) >> 8;
-        int b = (col.b * blueMax) >> 8;
+        uint32_t a = col.x;
+        uint32_t r = col.r;
+        uint32_t g = col.g;
+        uint32_t b = col.b;
+        a = (a * alphaMax) >> 8;
+        r = (r * redMax) >> 8;
+        g = (g * greenMax) >> 8;
+        b = (b * blueMax) >> 8;
         return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
@@ -292,73 +292,116 @@ namespace LTSM
         }
     }
 
-    uint32_t FrameBuffer::pixel(const XCB::Point & pos) const
+    uint32_t FrameBuffer::rawPixel(const void* ptr, int bpp, bool BigEndian)
     {
-        if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
+        switch(bpp)
         {
-            void* ptr = pitchData(pos.y) + (pos.x * bytePerPixel());
-            auto bpp = bitsPerPixel();
+            case 32:
+                return *static_cast<const uint32_t*>(ptr);
 
-            switch(bpp)
+            case 24:
             {
-                case 32:
-                    return *static_cast<uint32_t*>(ptr);
+                auto buf = static_cast<const uint8_t*>(ptr);
+                uint32_t res = 0;
 
-                case 24:
+                if(BigEndian)
                 {
-                    auto buf = static_cast<uint8_t*>(ptr);
-                    uint32_t res = 0;
-
-                    if(big_endian)
-                    {
-                        res |= buf[0];
-                        res <<= 8;
-                        res |= buf[1];
-                        res <<= 8;
-                        res |= buf[2];
-                    }
-                    else
-                    {
-                        res |= buf[2];
-                        res <<= 8;
-                        res |= buf[1];
-                        res <<= 8;
-                        res |= buf[0];
-                    }
-
-                    return res;
+                    res |= buf[0];
+                    res <<= 8;
+                    res |= buf[1];
+                    res <<= 8;
+                    res |= buf[2];
+                }
+                else
+                {
+                    res |= buf[2];
+                    res <<= 8;
+                    res |= buf[1];
+                    res <<= 8;
+                    res |= buf[0];
                 }
 
-                case 16:
-                    return *static_cast<uint16_t*>(ptr);
-
-                case 8:
-                    return *static_cast<uint8_t*>(ptr);
-
-                default:
-                    Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
-                    throw std::invalid_argument(NS_FuncName);
+                return res;
             }
+
+            case 16:
+                return *static_cast<const uint16_t*>(ptr);
+
+            case 8:
+                return *static_cast<const uint8_t*>(ptr);
+
+            default:
+                break;
         }
 
-        Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
-        throw std::out_of_range(NS_FuncName);
+        Application::error("%s: unknown bpp: %" PRId32, __FUNCTION__, bpp);
+        throw std::invalid_argument(NS_FuncName);
     }
 
-    std::list<PixelLength> FrameBuffer::toRLE(const XCB::Region & reg) const
+    uint32_t FrameBuffer::pixel(const XCB::Point & pos) const
     {
-        std::list<PixelLength> res;
+        assertm(0 <= pos.x && 0 <= pos.y, "invalid position");
+        assertm(pos.x < fbreg.width && pos.y < fbreg.height, "position out of range");
 
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        void* ptr = pitchData(pos.y) + (static_cast<ptrdiff_t>(pos.x) * bytePerPixel());
+        return rawPixel(ptr, bitsPerPixel(), BigEndian);
+    }
+
+    struct PixelIterator : XCB::PointIterator
+    {
+        const Point & topLeft;
+        const FrameBuffer & fb;
+        const uint8_t* pitch = nullptr;
+
+        PixelIterator(const PointIterator & it, const Point & pt, const FrameBuffer & own) : XCB::PointIterator(it), topLeft(pt), fb(own)
         {
-            auto pix = pixel(reg.topLeft() + coord);
+            pitch = fb.pitchData(topLeft.y + y);
+        }
 
-            if(0 < coord.x && res.back().pixel() == pix)
+        void lineChanged(void) override
+        {
+            pitch = fb.pitchData(topLeft.y + y);
+        }
+
+        uint32_t pixel(void) const
+        {
+            auto ptr = pitch + ((topLeft.x + x) * fb.bytePerPixel());
+            return FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+        }
+    };
+
+    PixelLengthList FrameBuffer::toRLE(const XCB::Region & reg) const
+    {
+        std::vector<PixelLength> res;
+        res.reserve(reg.width * (64 < reg.height ? reg.height / 2 : reg.height));
+
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
+        {
+            const uint8_t* pitch = pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+
+                if(res.size() && res.back().pixel() == pix)
+                    res.back().second++;
+                else
+                    res.emplace_back(pix, 1);
+            }
+        }
+#else
+        for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
+        {
+            auto pix = coord.pixel();
+
+            if(res.size() && res.back().pixel() == pix)
                 res.back().second++;
             else
                 res.emplace_back(pix, 1);
         }
-
+#endif
         return res;
     }
 
@@ -387,12 +430,26 @@ namespace LTSM
         ColorMap map;
         const PixelFormat & fmt = pixelFormat();
 
+#ifdef FB_FAST_CYCLE
+        const uint8_t* pitch = nullptr;
+
         for(auto coord = coordBegin(); coord.isValid(); ++coord)
         {
-            auto pix = pixel(coord);
+            if(coord.isBeginLine())
+                pitch = pitchData(fbreg.y + coord.y);
+
+            auto ptr = pitch + ((fbreg.x + coord.x) * bytePerPixel());
+            auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+
             map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
         }
-
+#else
+        for(auto coord = PixelIterator(coordBegin(), fbreg, *this); coord.isValid(); ++coord)
+        {
+            auto pix = coord.pixel();
+            map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
+        }
+#endif
         return map;
     }
 
@@ -400,9 +457,27 @@ namespace LTSM
     {
         PixelMapWeight map;
 
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
         {
-            auto pix = pixel(reg.topLeft() + coord);
+            const uint8_t* pitch = pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+                auto it = map.find(pix);
+
+                if(it != map.end())
+                    (*it).second += 1;
+                else
+                    map.emplace(pix, 1);
+            }
+        }
+#else
+        for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
+        {
+            auto pix = coord.pixel();
             auto it = map.find(pix);
 
             if(it != map.end())
@@ -410,15 +485,27 @@ namespace LTSM
             else
                 map.emplace(pix, 1);
         }
-
+#endif
         return map;
     }
 
     bool FrameBuffer::allOfPixel(uint32_t pixel, const XCB::Region & reg) const
     {
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-            if(pixel != this->pixel(reg.topLeft() + coord)) return false;
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
+        {
+            const uint8_t* pitch = pitchData(reg.y + py);
 
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                if(pixel != rawPixel(ptr, bitsPerPixel(), BigEndian)) return false;
+            }
+        }
+#else
+        for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
+            if(pixel != coord.pixel()) return false;
+#endif
         return true;
     }
 
@@ -478,12 +565,12 @@ namespace LTSM
         return pixelFormat().color(pixel(pos));
     }
 
-    uint32_t FrameBuffer::bitsPerPixel(void) const
+    const uint8_t & FrameBuffer::bitsPerPixel(void) const
     {
-        return pixelFormat().bitsPerPixel;
+        return pixelFormat().bitsPerPixel();
     }
 
-    uint32_t FrameBuffer::bytePerPixel(void) const
+    const uint8_t & FrameBuffer::bytePerPixel(void) const
     {
         return pixelFormat().bytePerPixel();
     }

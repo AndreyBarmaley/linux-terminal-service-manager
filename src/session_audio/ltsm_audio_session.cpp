@@ -159,27 +159,23 @@ namespace LTSM
             try
             {
                 client->pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels);
-
-                if(client->pulse->initContext())
-                {
-                    const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
-
-                    if(client->pulse->streamConnect(false /* not paused */, & bufferAttr))
-                        break;
-
-                    // LTSM::Application::error("%s: %s failed", __FUNCTION__, "pulseaudio");
-                }
-                else
-                {
-                    // LTSM::Application::error("%s: %s failed", __FUNCTION__, "pulseaudio");
-                }
             }
             catch(const std::exception & err)
             {
-                LTSM::Application::warning("%s: wait pulseaudio", __FUNCTION__);
             }
 
-            std::this_thread::sleep_for(1s);
+            if(client->pulse && client->pulse->initContext())
+            {
+                const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
+
+                if(client->pulse->streamConnect(false /* not paused */, & bufferAttr))
+                    break;
+            }
+            else
+            {
+                LTSM::Application::warning("%s: wait pulseaudio", __FUNCTION__);
+                std::this_thread::sleep_for(1s);
+            }
         }
 
         if(enc == AudioEncoding::OPUS)
@@ -227,6 +223,12 @@ namespace LTSM
                         client->sock->sendFlush();
                     }
                 }
+                else
+                {
+                    client->sock->sendIntLE16(AudioOp::Silent);
+                    client->sock->sendIntLE32(raw.size());
+                    client->sock->sendFlush();
+                }
             }
 
             std::this_thread::sleep_for(3ms);
@@ -266,7 +268,7 @@ namespace LTSM
         : AdaptorInterfaces(conn, dbus_session_audio_path), Application("ltsm_audio2session")
     {
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
-        setDebug(DebugTarget::Syslog, DebugLevel::Info);
+        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
 
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
 
@@ -304,6 +306,11 @@ namespace LTSM
         shutdownAudio = true;
     }
 
+    void AudioSessionBus::setDebug(const std::string & level)
+    {
+        setDebugLevel(level);
+    }
+
     bool AudioSessionBus::connectChannel(const std::string & clientSocket)
     {
         Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
@@ -314,20 +321,6 @@ namespace LTSM
             return false;
         }
 
-/*
-        std::unique_ptr<PulseAudio::OutputStream> ptr;
-
-        try
-        {
-            ptr = std::make_unique<PulseAudio::OutputStream>(clientSocket);
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            return false;
-        }
-
-*/
         clients.emplace_front(clientSocket);
         return true;
     }

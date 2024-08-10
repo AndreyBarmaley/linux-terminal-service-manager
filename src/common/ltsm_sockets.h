@@ -50,10 +50,12 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20230415
+#define LTSM_SOCKETS_VERSION 20240810
 
 namespace LTSM
 {
+    inline static const size_t tcpMSS = 1460;
+
     struct network_error : public std::runtime_error
     {
         explicit network_error(const std::string & what) : std::runtime_error(what){}
@@ -154,6 +156,8 @@ namespace LTSM
         void	                recvRaw(void*, size_t) const override;
 
         void                    sendFlush(void) override;
+
+        int                     fd(void) const { return sock; }
     };
 
     /// @brief: inetd stream
@@ -164,7 +168,7 @@ namespace LTSM
         std::unique_ptr<FILE, decltype(fclose)*> fout{nullptr, fclose};
         int                     fdin = 0;
         int                     fdout = 0;
-        std::array<char, 1492>  fdbuf;
+        std::array<char, tcpMSS> fdbuf;
 
         void                    inetFdClose(void);
 
@@ -383,7 +387,7 @@ namespace LTSM
         class DeflateBase
         {
         protected:
-            z_stream            zs{0};
+            z_stream            zs{};
             std::array<uint8_t, 1024> tmp;
             
         public:
@@ -417,7 +421,7 @@ namespace LTSM
         class InflateBase
         {
         protected:
-            z_stream            zs{0};
+            z_stream            zs{};
             std::array<uint8_t, 1024> tmp;
 
         public:

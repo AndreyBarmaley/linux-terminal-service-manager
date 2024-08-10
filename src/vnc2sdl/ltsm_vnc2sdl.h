@@ -110,8 +110,8 @@ namespace LTSM
         std::forward_list<std::string> shareFolders;
 
         std::string             host{"localhost"};
-        std::string             username, seamless, tokenLib;
-        std::string             printerUrl, pcscdUrl, saneUrl;
+        std::string             username, seamless, pkcs11Auth;
+        std::string             printerUrl, saneUrl;
         std::string             prefferedEncoding;
         std::string             audioEncoding{"auto"};
 
@@ -133,6 +133,7 @@ namespace LTSM
         std::atomic<bool>       needUpdate{false};
 
         int                     port = 5900;
+        int                     frameRate = 16;
 
         BinaryBuf               clipboardBufRemote;
         BinaryBuf               clipboardBufLocal;
@@ -141,7 +142,9 @@ namespace LTSM
         XCB::Size       setGeometry;
         SDL_Event       sdlEvent;
 
+        bool                    ltsmSupport = true;
         bool                    accelerated = true;
+        bool                    nodamage = false;
         bool                    fullscreen = false;
         bool                    usexkb = true;
         bool                    capslock = true;
@@ -149,6 +152,7 @@ namespace LTSM
         bool                    alwaysRunning = false;
         bool                    serverExtDesktopSizeSupported = false;
         bool                    audioEnable = false;
+        bool                    pcscEnable = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
@@ -184,7 +188,9 @@ namespace LTSM
         void                    systemTokenAuth(const JsonObject &) override;
         void                    systemLoginSuccess(const JsonObject &) override;
 
+        const char*             pkcs11Library(void) const override;
         bool                    createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const override;
+        bool                    ltsmSupported(void) const override { return ltsmSupport; }
 
         int                     start(void) override;
         bool                    isAlwaysRunning(void) const;

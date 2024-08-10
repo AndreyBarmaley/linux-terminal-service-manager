@@ -283,7 +283,10 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
         throw std::underflow_error(NS_FuncName);
 
     auto len = sb.readIntLE32();
-    Application::debug("%s: zero size: %u", __FUNCTION__, len);
+    Application::debug("%s: data size: %u", __FUNCTION__, len);
+
+    std::vector<uint8_t> buf(len, 0);
+    pulse->streamWrite(buf.data(), buf.size());
 }
 
 void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)

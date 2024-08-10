@@ -30,6 +30,7 @@
 
 #include "ltsm_service_proxy.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_sockets.h"
 
 #ifdef LTSM_TOKEN_AUTH
 #include "ltsm_ldap_wrapper.h"
@@ -39,6 +40,9 @@ namespace Ui
 {
     class LTSM_HelperWindow;
 }
+
+class Pkcs11Client;
+struct Pkcs11Token;
 
 class LTSM_HelperWindow : public QMainWindow, public LTSM::XCB::XkbClient
 {
@@ -66,6 +70,8 @@ protected slots:
     void                tokenDetached(const int32_t& display, const std::string& serial);
     void                tokenReplyCheck(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt);
     void                tokenChanged(const QString &);
+
+    void                tokensChanged(void);
 
 protected:
     virtual void        showEvent(QShowEvent*) override;
@@ -106,6 +112,9 @@ private:
     QScopedPointer<LTSM::LdapWrapper> ldap;
     std::thread         th2;
 #endif
+#ifdef LTSM_PKCS11_AUTH
+    QScopedPointer<Pkcs11Client> pkcs11;
+#endif
 };
 
 class LTSM_HelperSDBus : public LTSM_HelperWindow, public sdbus::ProxyInterfaces<LTSM::Manager::Service_proxy>
@@ -116,7 +125,7 @@ private:
     void                onDisplayRemoved(const int32_t& display) override {}
     void                onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
     void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override {}
-    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const bool&) override {}
+    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const uint32_t&) override {}
     void                onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
     void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
     void                onDebugLevel(const int32_t& display, const std::string & level) override {}

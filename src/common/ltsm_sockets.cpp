@@ -62,7 +62,7 @@ namespace LTSM
         if(0 > fd)
             return false;
 
-        struct pollfd fds = {0};
+        struct pollfd fds = {};
         fds.fd = fd;
         fds.events = POLLIN;
 
@@ -277,7 +277,7 @@ namespace LTSM
     /* SocketStream */
     SocketStream::SocketStream(int fd) : sock(fd)
     {
-        buf.reserve(2048);
+        buf.reserve(tcpMSS);
     }
 
     SocketStream::~SocketStream()
@@ -312,8 +312,22 @@ namespace LTSM
     {
         if(ptr && len)
         {
-            auto it = static_cast<const uint8_t*>(ptr);
-            buf.insert(buf.end(), it, it + len);
+            if(buf.size() + len < tcpMSS)
+            {
+                auto beg = static_cast<const uint8_t*>(ptr);
+                buf.insert(buf.end(), beg, beg + len);
+            }
+            else
+            {
+                size_t last = tcpMSS - buf.size();
+                auto beg = static_cast<const uint8_t*>(ptr);
+                buf.insert(buf.end(), beg, beg + last);
+
+                sendTo(sock, buf.data(), buf.size());
+                buf.clear();
+
+                buf.insert(buf.end(), beg + last, beg + len);
+            }
         }
     }
 
@@ -547,15 +561,9 @@ namespace LTSM
         size_t dataSz = 0;
 
         // inetFd -> bridgeSock
-        if(NetworkStream::hasInput(fdin))
+        if(NetworkStream::hasInput(fdin) &&
+            0 < (dataSz = NetworkStream::hasData(fdin)))
         {
-            dataSz = NetworkStream::hasData(fdin);
-
-            if(dataSz == 0)
-            {
-                Application::warning("%s: stream ended", __FUNCTION__);
-                return false;
-            }
 
             auto buf = recvData(dataSz);
             sendTo(bridgeSock, buf.data(), buf.size());
@@ -574,16 +582,9 @@ namespace LTSM
             return false;
 
         // bridgeSock -> inetFd
-        if(NetworkStream::hasInput(bridgeSock))
+        if(NetworkStream::hasInput(bridgeSock) &&
+            0 < (dataSz = NetworkStream::hasData(bridgeSock)))
         {
-            dataSz = NetworkStream::hasData(bridgeSock);
-
-            if(dataSz == 0)
-            {
-                Application::warning("%s: stream ended", __FUNCTION__);
-                return false;
-            }
-
             std::vector<uint8_t> buf(dataSz);
             recvFrom(bridgeSock, buf.data(), buf.size());
             sendRaw(buf.data(), buf.size());
@@ -616,7 +617,7 @@ namespace LTSM
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);            
         if(0 > fd)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.data(), port);
             return -1;
         }
             
@@ -624,7 +625,7 @@ namespace LTSM
         int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
         if(0 > err)
         {
-            Application::warning("%s: socket reuseaddr failed, error: %s, code: %d", __FUNCTION__, strerror(errno), err);
+            Application::warning("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.data(), port);
         }
 
         struct sockaddr_in sockaddr;
@@ -638,7 +639,7 @@ namespace LTSM
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "bind", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "bind", strerror(errno), errno, ipaddr.data(), port);
             return -1;
         }
 
@@ -646,7 +647,7 @@ namespace LTSM
         
         if(0 != ::listen(fd, conn))
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "listen", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "listen", strerror(errno), errno, ipaddr.data(), port);
             close(fd);
             return -1;
         }
@@ -672,7 +673,7 @@ namespace LTSM
 
         if(0 > sock)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.data(), port);
             return -1;
         }
 
@@ -686,7 +687,7 @@ namespace LTSM
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_in)))
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "connect", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "connect", strerror(errno), errno, ipaddr.data(), port);
             close(sock);
             sock = -1;
         }
@@ -705,14 +706,14 @@ namespace LTSM
         else
         {
             std::vector<char> strbuf(1024, 0);
-            struct hostent st = { 0 };
+            struct hostent st = {};
             struct hostent* res = nullptr;
             int h_errnop = 0;
 
             if(0 == gethostbyaddr_r(& in.s_addr, sizeof(in.s_addr), AF_INET, & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
             {
                 if(res)
-                    std::string(res->h_name);
+                    return std::string(res->h_name);
             }
             else
             {
@@ -728,7 +729,7 @@ namespace LTSM
         std::list<std::string> list;
         std::vector<char> strbuf(1024, 0);
 
-        struct hostent st = { 0 };
+        struct hostent st = {};
         struct hostent* res = nullptr;
         int h_errnop = 0;
 
@@ -757,7 +758,7 @@ namespace LTSM
     {
         std::vector<char> strbuf(1024, 0);
 
-        struct hostent st = { 0 };
+        struct hostent st = {};
         struct hostent* res = nullptr;
         int h_errnop = 0;
 
@@ -786,7 +787,7 @@ namespace LTSM
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(0 > sock)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "socket", strerror(errno), errno, path.c_str());
             return -1;
         }
 
@@ -805,7 +806,7 @@ namespace LTSM
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "connect", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "connect", strerror(errno), errno, path.c_str());
             close(sock);
             sock = -1;
         }
@@ -821,7 +822,7 @@ namespace LTSM
 
         if(0 > fd)
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "socket", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "socket", strerror(errno), errno, path.c_str());
             return -1;
         }
 
@@ -845,7 +846,7 @@ namespace LTSM
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "bind", strerror(errno), errno);
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "bind", strerror(errno), errno, path.c_str());
             close(fd);
             return -1;
         }
@@ -1182,8 +1183,10 @@ namespace LTSM
         {
             gnutls_cipher_hd_t ctx;
             std::vector<uint8_t> res(data);
-            std::array<uint8_t, 8> _key = { 0 };
-            std::array<uint8_t, 8> _iv = { 0 };
+            std::array<uint8_t, 8> _key;
+            std::array<uint8_t, 8> _iv;
+            std::fill(_key.begin(), _key.end(), 0);
+            std::fill(_iv.begin(), _iv.end(), 0);
             std::copy_n(str.begin(), std::min(str.size(), _key.size()), _key.begin());
             gnutls_datum_t key = { _key.data(), _key.size() };
             gnutls_datum_t iv = { _iv.data(), _iv.size() };

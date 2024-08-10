@@ -73,7 +73,7 @@ public:
             srv = std::make_unique<RFB::ServerEncoderBuf>(pf);
 
             Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
-                __FUNCTION__, (int) pf.bitsPerPixel, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
+                __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 
             for(auto type: encodings)

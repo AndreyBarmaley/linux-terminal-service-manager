@@ -6,6 +6,7 @@
             <arg type="i" name="version" direction="out" />
         </method>
         <method name="busStartLoginSession">
+            <arg type="i" name="connectorId" direction="in" />
             <arg type="y" name="depth" direction="in" />
             <arg type="s" name="remoteAddr" direction="in" />
             <arg type="s" name="connType" direction="in" />
@@ -27,6 +28,7 @@
         </method>
         <method name="busStartUserSession">
             <arg type="i" name="display" direction="in" />
+            <arg type="i" name="connectorId" direction="in" />
             <arg type="s" name="userName" direction="in" />
             <arg type="s" name="remoteAddr" direction="in" />
             <arg type="s" name="connType" direction="in" />
@@ -107,6 +109,7 @@
         </method>
         <method name="busConnectorTerminated">
             <arg type="i" name="display" direction="in" />
+            <arg type="i" name="connectorId" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busConnectorAlive">
@@ -322,7 +325,7 @@
             <arg type="s" name="smode" />
             <arg type="s" name="speed" />
             <arg type="y" name="limit" />
-            <arg type="b" name="zlib" />
+            <arg type="u" name="flags" />
         </signal>
         <signal name="destroyListener">
             <arg type="i" name="display" />

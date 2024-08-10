@@ -56,7 +56,7 @@ namespace LTSM
 
     int RFB::DecoderStream::recvCPixel(void)
     {   
-        if(clientFormat().bitsPerPixel == 32)
+        if(clientFormat().bitsPerPixel() == 32)
         {
             auto colr = recvInt8();
             auto colg = recvInt8();
