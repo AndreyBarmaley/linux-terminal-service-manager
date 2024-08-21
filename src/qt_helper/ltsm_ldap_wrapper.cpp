@@ -20,7 +20,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifdef LTSM_TOKEN_AUTH
 #include <exception>
 #include <algorithm>
 
@@ -97,7 +96,7 @@ namespace LTSM
         return res;
     }
 
-    std::string LdapWrapper::findDnFromCertificate(const std::vector<uint8_t> & derform)
+    std::string LdapWrapper::findDnFromCertificate(const uint8_t* derform, size_t length)
     {
         std::string res;
         const char* attrs[] = { "userCertificate", nullptr };
@@ -125,8 +124,8 @@ namespace LTSM
                         {
                             for(size_t ii = 0; ii < count; ++ii)
                             {
-                                if(derform.size() == vals[ii]->bv_len &&
-                                    std::equal(derform.begin(), derform.end(), (uint8_t*) vals[ii]->bv_val))
+                                if(length == vals[ii]->bv_len &&
+                                    std::equal(derform, derform + length, (uint8_t*) vals[ii]->bv_val))
                                     res.assign(dn);
                             }
                         }
@@ -150,5 +149,3 @@ namespace LTSM
         return res;
     }
 }
-
-#endif // LTSM_TOKEN_AUTH

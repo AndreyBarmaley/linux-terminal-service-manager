@@ -30,7 +30,7 @@
 #include <utility>
 #include <cstdint>
 
-#define LTSM_STREAMBUF_VERSION 20230402
+#define LTSM_STREAMBUF_VERSION 20240810
 
 namespace LTSM
 {
@@ -172,8 +172,7 @@ namespace LTSM
         inline uint32_t readIntBE32(void) const { return getIntBE32(); }
         inline uint64_t readIntBE64(void) const { return getIntBE64(); };
 
-        void            readTo(char*, size_t) const;
-        void            readTo(uint8_t*, size_t) const;
+        void            readTo(void*, size_t) const;
 
         virtual BinaryBuf read(size_t = 0) const = 0;
         std::string     readString(size_t = 0) const;
@@ -203,22 +202,21 @@ namespace LTSM
         }
 
         /// @brief: write uint16 (depends on current endian mode)
-        void            writeInt16(uint16_t);
+        MemoryStream &  writeInt16(uint16_t);
         /// @brief: write uint32 (depends on current endian mode)
-        void            writeInt32(uint32_t);
+        MemoryStream &  writeInt32(uint32_t);
         /// @brief: write uint64 (depends on current endian mode)
-        void            writeInt64(uint64_t);
+        MemoryStream &  writeInt64(uint64_t);
 
-        inline void     writeIntLE16(uint16_t v) { putIntLE16(v); }
-        inline void     writeIntLE32(uint32_t v) { putIntLE32(v); }
-        inline void     writeIntLE64(uint64_t v) { putIntLE64(v); }
+        inline MemoryStream & writeIntLE16(uint16_t v) { putIntLE16(v); return *this; }
+        inline MemoryStream & writeIntLE32(uint32_t v) { putIntLE32(v); return *this; }
+        inline MemoryStream & writeIntLE64(uint64_t v) { putIntLE64(v); return *this; }
 
-        inline void     writeIntBE16(uint16_t v) { putIntBE16(v); }
-        inline void     writeIntBE32(uint32_t v) { putIntBE32(v); }
-        inline void     writeIntBE64(uint64_t v) { putIntBE64(v); }
+        inline MemoryStream & writeIntBE16(uint16_t v) { putIntBE16(v); return *this; }
+        inline MemoryStream & writeIntBE32(uint32_t v) { putIntBE32(v); return *this; }
+        inline MemoryStream & writeIntBE64(uint64_t v) { putIntBE64(v); return *this; }
 
-        MemoryStream &  write(const char*, size_t);
-        MemoryStream &  write(const uint8_t*, size_t);
+        MemoryStream &  write(const void*, size_t);
         MemoryStream &  write(std::string_view);
         MemoryStream &  write(const std::vector<uint8_t> &);
         /// @brief: fill version

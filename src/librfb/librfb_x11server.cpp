@@ -45,6 +45,7 @@ namespace LTSM
 
     void RFB::X11Server::damageRegionEvent(const XCB::Region & reg)
     {
+        std::scoped_lock guard{ serverLock };
         damageRegion.join(reg);
     }
 
@@ -106,38 +107,47 @@ namespace LTSM
 
     bool RFB::X11Server::xcbProcessingEvents(void)
     {
-        auto start = std::chrono::steady_clock::now();
-
-        while(auto ev = XCB::RootDisplay::poolEvent())
+        while(rfbMessagesRunning())
         {
+            if(! xcbAllowMessages())
+            {
+                std::this_thread::sleep_for(20ms);
+                continue;
+            }
+
             if(auto err = XCB::RootDisplay::hasError())
             {
                 xcbDisableMessages(true);
+                rfbMessagesShutdown();
                 Application::error("%s: xcb error, code: %d", __FUNCTION__, err);
                 return false;
             }
-            else
-            if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM))
-            {
-                uint16_t opcode = 0;
-                if(shm && extShm->isEventError(ev, & opcode))
-                {
-                    Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "shm", opcode);
-                    shm.reset();
-                }
-            }
-            else
-            if(auto extFixes = XCB::RootDisplay::getExtension(XCB::Module::XFIXES))
-            {
-                uint16_t opcode = 0;
-                if(extFixes->isEventError(ev, & opcode))
-                {
-                    Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xfixes", opcode);
-                }
-            }
 
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
-            if(200 < dt.count()) break;
+            if(auto ev = XCB::RootDisplay::poolEvent())
+            {
+                if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM))
+                {
+                    uint16_t opcode = 0;
+                    if(shm && extShm->isEventError(ev, & opcode))
+                    {
+                        Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "shm", opcode);
+                        shm.reset();
+                    }
+                }
+                else
+                if(auto extFixes = XCB::RootDisplay::getExtension(XCB::Module::XFIXES))
+                {
+                    uint16_t opcode = 0;
+                    if(extFixes->isEventError(ev, & opcode))
+                    {
+                        Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xfixes", opcode);
+                    }
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(10ms);
+            }
         }
 
         return true;
@@ -183,6 +193,9 @@ namespace LTSM
 
         // xcb on
         xcbDisableMessages(false);
+        bool mainLoop = true;
+        auto frameTimePoint = std::chrono::steady_clock::now();
+        size_t delayTimeout = 75;
 
         // process rfb messages background
         auto rfbThread = std::thread([=]()
@@ -190,8 +203,12 @@ namespace LTSM
             this->rfbMessagesLoop();
         });
 
-    	bool nodamage = xcbNoDamageOption();
-        bool mainLoop = true;
+        auto xcbThread = std::thread([=]()
+        {
+            this->xcbProcessingEvents();
+        });
+
+        std::this_thread::sleep_for(100ms);
 
         // main loop
         while(mainLoop)
@@ -210,13 +227,6 @@ namespace LTSM
                 continue;
             }
 
-            // processing xcb events
-            if(! xcbProcessingEvents())
-            {
-                mainLoop = false;
-                continue;
-            }
-
             if(displayResizeProcessed || displayResizeNegotiation)
             {
                 // wait loop
@@ -224,47 +234,56 @@ namespace LTSM
                 continue;
             }
 
-            if(nodamage || fullscreenUpdate)
+            if(isContinueUpdatesProcessed())
             {
-                damageRegion = XCB::RootDisplay::region();
-                fullscreenUpdate = false;
                 clientUpdateReq = true;
             }
-            else
-            if(! damageRegion.empty())
+
+            if(isClientLtsmSupported())
             {
-                // fix out of screen
-                damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
-            }
-
 #ifdef LTSM_ENCODING_FFMPEG
-    	    if(isClientEncoding(RFB::ENCODING_FFMPEG_H264) ||
-    		isClientEncoding(RFB::ENCODING_FFMPEG_AV1) || isClientEncoding(RFB::ENCODING_FFMPEG_VP8))
-	    {
-                if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
-                {
-                    auto upms = ffmpeg->updateTimeMS();
-
-		    // fps 25: 40ms
-		    if(upms < 40)
+    	        if(isClientVideoSupported())
+	        {
+                    if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
                     {
-                        Application::trace("%s: update time ms: %u", __FUNCTION__, upms);
+                        auto upms = ffmpeg->updateTimeMS();
+
+		        if(upms < delayTimeout)
+                        {
+                            Application::trace("%s: update time ms: %u", __FUNCTION__, upms);
+                            std::this_thread::sleep_for(1ms);
+            	            continue;
+                        }
+                    }
+
+                    std::scoped_lock guard{ serverLock };
+
+                    clientUpdateReq = true;
+            	    damageRegion = XCB::RootDisplay::region();
+                }
+                else
+#endif
+                if(delayTimeout)
+                {
+                    auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+                    if(dt.count() < delayTimeout)
+                    {
+                        Application::trace("%s: update time ms: %u", __FUNCTION__, dt.count());
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
             	        continue;
                     }
                 }
-
-                clientUpdateReq = true;
-            	damageRegion = XCB::RootDisplay::region();
             }
-#endif
 
-            if(isUpdateProcessed())
+            if(xcbNoDamageOption() || fullscreenUpdateReq)
             {
-                // wait loop
-                std::this_thread::sleep_for(5ms);
-                continue;
-            }
+                std::scoped_lock guard{ serverLock };
+                damageRegion = XCB::RootDisplay::region();
 
+                fullscreenUpdateReq = false;
+                clientUpdateReq = true;
+            }
+            else
             if(damageRegion.empty())
             {
                 // wait loop
@@ -272,34 +291,39 @@ namespace LTSM
                 continue;
             }
 
-            if(clientUpdateReq || isContinueUpdatesProcessed())
+            // frame update
+            std::scoped_lock guard{ serverLock };
+            auto serverRegion = XCB::RootDisplay::region();
+
+            // fix out of screen
+            damageRegion = serverRegion.intersected(damageRegion.align(4));
+            damageRegion = clientRegion.intersected(damageRegion);
+
+            if(! sendUpdateSafe(damageRegion))
             {
-                XCB::Region res;
-
-                if(XCB::Region::intersection(clientRegion, damageRegion, & res))
-                {
-                    // background job
-                    std::thread([&, reg = std::move(res)]()
-                    {
-
-                        if(! sendUpdateSafe(reg))
-                            rfbMessagesShutdown(); 
-
-                    }).detach();
-                }
-
-                damageRegion.reset();
-                clientUpdateReq = false;
+                rfbMessagesShutdown(); 
+                continue;
             }
 
-            if(clientUpdateCursor && ! isUpdateProcessed())
+            if(clientUpdateCursor)
             {
                 sendUpdateRichCursor();
                 clientUpdateCursor = false;
             }
+
+            damageRegion.reset();
+            clientUpdateReq = false;
+
+            auto frameRate = frameRateOption();
+            delayTimeout = frameRate ? 1000 / frameRate : 0;
+
+            frameTimePoint = std::chrono::steady_clock::now();
         } // main loop
 
         waitUpdateProcess();
+
+        if(xcbThread.joinable())
+            xcbThread.join();
 
         if(rfbThread.joinable())
             rfbThread.join();
@@ -401,16 +425,16 @@ namespace LTSM
     {
         if(! xcbAllowMessages())
         {
-            fullscreenUpdate = true;
+            fullscreenUpdateReq = true;
             return;
         }
 
         if(fullUpdateReq)
-            fullscreenUpdate = true;
+            fullscreenUpdateReq = true;
 
         if(region != clientRegion)
         {
-            fullscreenUpdate = true;
+            fullscreenUpdateReq = true;
             clientRegion = region;
         }
 

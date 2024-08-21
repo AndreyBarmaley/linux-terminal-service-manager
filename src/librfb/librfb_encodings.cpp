@@ -81,7 +81,7 @@ namespace LTSM
 
     int RFB::EncoderStream::sendCPixel(uint32_t pixel)
     {
-        if(clientFormat().bitsPerPixel == 32)
+        if(clientFormat().bitsPerPixel() == 32)
         {
             auto pixel2 = clientFormat().convertFrom(serverFormat(), pixel);
             auto red = clientFormat().red(pixel2);
@@ -199,8 +199,22 @@ namespace LTSM
 
     void RFB::EncodingBase::sendRawRegionPixels(EncoderStream* ns, EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb)
     {
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
+        {
+            const uint8_t* pitch = fb.pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+                ns->sendPixel(pix);
+            }
+        }
+#else
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
             ns->sendPixel(fb.pixel(reg.topLeft() + coord));
+#endif
     }
 
     std::list<XCB::RegionPixel> RFB::EncodingBase::rreProcessing(const XCB::Region & badreg, const FrameBuffer & fb, int skipPixel)
@@ -310,18 +324,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
 
         // wait jobs
@@ -464,18 +476,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
             
         // wait jobs
@@ -673,18 +683,16 @@ namespace LTSM
         // renew completed job
         while(! regions.empty())
         {
-            for(auto & job : jobs)
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job){ return job.wait_for(1us) != std::future_status::ready; });
+            if(busy < threads)
             {
-                if(regions.empty())
-                    break;
-
-                if(job.wait_for(250us) == std::future_status::ready)
-                {
-                    jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
-                    regions.pop_front();
-                    jobId++;
-                }
+                jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb, jobId));
+                regions.pop_front();
+                jobId++;
             }
+
+            std::this_thread::sleep_for(100us);
         }
 
         // wait jobs
@@ -805,21 +813,41 @@ namespace LTSM
         for(auto & pair : pal)
             st->sendCPixel(pair.first);
 
-        Tools::StreamBitsPack sb;
+        const size_t rez = (reg.width * reg.height) >> 2;
+        Tools::StreamBitsPack sb(rez ? rez : 32);
 
         // send packed rows
-        for(int oy = 0; oy < reg.height; ++oy)
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
         {
-            for(int ox = 0; ox < reg.width; ++ox)
+            const uint8_t* pitch = fb.pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
             {
-                auto pixel = fb.pixel(reg.topLeft() + XCB::Point(ox, oy));
-                auto it = pal.find(pixel);
+                auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+
+                auto it = pal.find(pix);
                 auto index = it != pal.end() ? (*it).second : 0;
+
                 sb.pushValue(index, field);
             }
 
             sb.pushAlign();
         }
+#else
+        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        {
+            auto pix = fb.pixel(reg.topLeft() + coord);
+            auto it = pal.find(pix);
+            auto index = it != pal.end() ? (*it).second : 0;
+
+            sb.pushValue(index, field);
+
+            if(coord.isEndLine())
+                sb.pushAlign();
+        }
+#endif
 
         st->sendData(sb.toVector());
 
@@ -830,7 +858,7 @@ namespace LTSM
         }
     }
 
-    void RFB::EncodingTRLE::sendRegionPlain(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, const std::list<PixelLength> & rle)
+    void RFB::EncodingTRLE::sendRegionPlain(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, const PixelLengthList & rle)
     {
         // subencoding type: rle plain
         st->sendInt8(128);
@@ -843,7 +871,7 @@ namespace LTSM
         }
     }
 
-    void RFB::EncodingTRLE::sendRegionPalette(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, const PixelMapWeight & pal, const std::list<PixelLength> & rle)
+    void RFB::EncodingTRLE::sendRegionPalette(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, const PixelMapWeight & pal, const PixelLengthList & rle)
     {
         // subencoding type: rle palette
         st->sendInt8(pal.size() + 128);
@@ -874,8 +902,23 @@ namespace LTSM
         st->sendInt8(0);
 
         // send pixels
+#ifdef FB_FAST_CYCLE
+        for(uint16_t py = 0; py < reg.height; ++py)
+        {
+            const uint8_t* pitch = fb.pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+
+                st->sendCPixel(pix);
+            }
+        }
+#else
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
             st->sendCPixel(fb.pixel(reg.topLeft() + coord));
+#endif
     }
 
     // EncodingZlib

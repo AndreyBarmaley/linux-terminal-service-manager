@@ -44,6 +44,7 @@
     "channel:pcscd:format": "/var/run/ltsm/pcscd/%{user}",
     "channel:fuse:disabled": false,
     "channel:fuse:format": "/var/run/ltsm/fuse/%{user}",
+    "channel:sane:disabled": false,
 
     "#idle:timeout:xvfb": 10,
     "#idle:timeout:login": 70,

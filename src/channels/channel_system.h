@@ -38,6 +38,7 @@
 #include "ltsm_audio.h"
 #include "ltsm_audio_pulse.h"
 #include "ltsm_audio_decoder.h"
+#include "ltsm_pkcs11_wrapper.h"
 #endif
 
 #include "ltsm_sockets.h"
@@ -46,7 +47,7 @@
 
 namespace LTSM
 {
-    static const int LtsmProtocolVersion = 0x05;
+    static const int LtsmProtocolVersion = 0x03;
 
     namespace SystemCommand
     {
@@ -58,7 +59,6 @@ namespace LTSM
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
-        static const std::string_view TokenAuth{"TokenAuth"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
@@ -76,7 +76,7 @@ namespace LTSM
     {
         enum { System = 0, Reserved = 0xFF };
 
-        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio };
+        enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
 
         // UltraSlow: ~10k/sec, ~40k/sec, ~80k/sec, ~800k/sec, ~1600k/sec
@@ -107,15 +107,13 @@ namespace LTSM
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
-	enum DataPack { Raw = 0, ZLib = 1 };
+        enum OptsFlags { ZLibCompression = 1, AllowLoginSession = 2 };
 
         struct Opts
         {
             Speed speed = Speed::Medium;
-            DataPack pack = DataPack::Raw;
+            int flags = 0;
         };
-
-	DataPack dataPack(int);
 
         struct Planned
         {
@@ -146,7 +144,7 @@ namespace LTSM
             bool        sendData(void);
 
         public:
-            Local2Remote(uint8_t cid, const DataPack &);
+            Local2Remote(uint8_t cid, int flags);
             virtual ~Local2Remote();
 
             virtual bool hasInput(void) const = 0;
@@ -169,7 +167,7 @@ namespace LTSM
             bool        needClose = true;
 
         public:
-            Local2Remote_FD(uint8_t cid, int fd0, bool close, const DataPack &);
+            Local2Remote_FD(uint8_t cid, int fd0, bool close, int flags);
             ~Local2Remote_FD();
 
             bool        hasInput(void) const override;
@@ -198,7 +196,7 @@ namespace LTSM
             std::vector<uint8_t> popData(void);
 
         public:
-            Remote2Local(uint8_t cid, const DataPack &);
+            Remote2Local(uint8_t cid, int flags);
             virtual ~Remote2Local();
 
             virtual ssize_t writeDataFrom(const void* buf, size_t len) = 0;
@@ -220,7 +218,7 @@ namespace LTSM
             bool        needClose = true;
 
         public:
-            Remote2Local_FD(uint8_t cid, int fd0, bool close, const DataPack &);
+            Remote2Local_FD(uint8_t cid, int fd0, bool close, int flags);
             ~Remote2Local_FD();
 
             ssize_t     writeDataFrom(const void* buf, size_t len) override;
@@ -236,6 +234,8 @@ namespace LTSM
         protected:
             ChannelClient* owner = nullptr;
             ConnectorMode mode = ConnectorMode::Unknown;
+        public:
+            int flags = 0;
 
         public:
             ConnectorBase(uint8_t ch, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv);
@@ -247,6 +247,7 @@ namespace LTSM
             virtual void setSpeed(const Channel::Speed &) = 0;
             virtual void pushData(std::vector<uint8_t> &&) = 0;
 
+            bool        isAllowSessionFor(bool user) const;
             bool        isRunning(void) const;
             void        setRunning(bool);
 
@@ -256,6 +257,8 @@ namespace LTSM
             ChannelClient* getOwner(void) { return owner; }
             bool        isMode(ConnectorMode cm) const { return mode == cm; }
         };
+
+        typedef std::unique_ptr<ConnectorBase> ConnectorBasePtr;
 
         // ConnectorFD_R
         class ConnectorFD_R : public ConnectorBase
@@ -389,6 +392,70 @@ namespace LTSM
             void        setSpeed(const Channel::Speed &) override;
             void        pushData(std::vector<uint8_t> &&) override;
         };
+
+        /// ConnectorClientPcsc
+        class ConnectorClientPcsc : public ConnectorBase
+        {
+            //uint16_t    pcscVer = 0;
+            uint8_t     cid = 255;
+
+            std::vector<uint8_t> last;
+
+        protected:
+            void        pcscEstablishContext(const StreamBufRef &);
+            void        pcscReleaseContext(const StreamBufRef &);
+            void        pcscListReaders(const StreamBufRef &);
+            void        pcscConnect(const StreamBufRef &);
+            void        pcscReconnect(const StreamBufRef &);
+            void        pcscDisconnect(const StreamBufRef &);
+            void        pcscBeginTransaction(const StreamBufRef &);
+            void        pcscEndTransaction(const StreamBufRef &);
+            void        pcscTransmit(const StreamBufRef &);
+            void        pcscStatus(const StreamBufRef &);
+            void        pcscGetStatusChange(const StreamBufRef &);
+            void        pcscControl(const StreamBufRef &);
+            void        pcscCancel(const StreamBufRef &);
+            void        pcscGetAttrib(const StreamBufRef &);
+            void        pcscSetAttrib(const StreamBufRef &);
+
+        public:
+            ConnectorClientPcsc(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            virtual ~ConnectorClientPcsc();
+
+            uint8_t     channel(void) const override;
+            int         error(void) const override; 
+            void        setSpeed(const Channel::Speed &) override;
+            void        pushData(std::vector<uint8_t> &&) override;
+        };
+
+        /// ConnectorClientPkcs11
+        class ConnectorClientPkcs11 : public ConnectorBase
+        {
+            StreamBuf   reply;
+
+            PKCS11::LibraryPtr pkcs11;
+            std::vector<uint8_t> last;
+
+            uint16_t    protoVer = 0;
+            uint8_t     cid = 255;
+
+        protected:
+            bool        pkcs11Init(const StreamBufRef &);
+            bool        pkcs11GetSlots(const StreamBufRef &);
+            bool        pkcs11GetSlotMechanisms(const StreamBufRef &);
+            bool        pkcs11GetSlotCertificates(const StreamBufRef &);
+            bool        pkcs11SignData(const StreamBufRef &);
+            bool        pkcs11DecryptData(const StreamBufRef &);
+
+        public:
+            ConnectorClientPkcs11(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+            virtual ~ConnectorClientPkcs11();
+
+            uint8_t     channel(void) const override;
+            int         error(void) const override; 
+            void        setSpeed(const Channel::Speed &) override;
+            void        pushData(std::vector<uint8_t> &&) override;
+        };
 #endif
 
         namespace Connector
@@ -398,17 +465,19 @@ namespace LTSM
             const char* speedString(const Speed &);
         }
 
-        std::unique_ptr<ConnectorBase> createUnixConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
-        std::unique_ptr<ConnectorBase> createUnixConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createUnixConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createUnixConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
 
-        std::unique_ptr<ConnectorBase> createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
-        std::unique_ptr<ConnectorBase> createTcpConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createTcpConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
 
-        std::unique_ptr<ConnectorBase> createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
-        std::unique_ptr<ConnectorBase> createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 
-        std::unique_ptr<ConnectorBase> createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
-        std::unique_ptr<ConnectorBase> createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 
         /// Listener
         class Listener
@@ -477,7 +546,6 @@ namespace LTSM
         virtual void    systemChannelError(const JsonObject &) { /* empty */ }
 
         virtual void    systemTransferFiles(const JsonObject &) { /* empty */ }
-        virtual void    systemTokenAuth(const JsonObject &) { /* empty */ }
         virtual void    systemLoginSuccess(const JsonObject &) { /* empty */ }
 
         bool            createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
@@ -491,6 +559,8 @@ namespace LTSM
         bool            createChannelCommand(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool            createChannelClientFuse(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool            createChannelClientAudio(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool            createChannelClientPcsc(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
+        bool            createChannelClientPkcs11(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
 
         size_t          countFreeChannels(void) const;
 
@@ -509,7 +579,7 @@ namespace LTSM
         bool            sendSystemTransferFiles(std::forward_list<std::string>);
         void            sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode &, const Channel::Opts &);
         void            sendSystemChannelClose(uint8_t channel);
-        void            sendSystemChannelConnected(uint8_t channel, int pack, bool noerror);
+        void            sendSystemChannelConnected(uint8_t channel, int flags, bool noerror);
         void            sendSystemChannelError(uint8_t channel, int code, const std::string &);
 
         void            recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
@@ -517,6 +587,8 @@ namespace LTSM
         virtual void    sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) = 0;
         virtual bool    serverSide(void) const { return false; }
         virtual bool    createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const { return false; }
+
+        virtual const char* pkcs11Library(void) const { return nullptr; }
     };
 
     class ChannelListener : public ChannelClient

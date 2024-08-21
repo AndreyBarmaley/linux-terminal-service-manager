@@ -19,10 +19,12 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
       - name: Update packages
         run: |
          sudo apt-get update
          sudo apt-get -y upgrade
+
       - name: Install dependencies
         run: |
          sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity \
@@ -30,25 +32,31 @@ jobs:
            libexpat1 libpam0g-dev libgnutlsxx28 libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
-           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev
+           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev
+
       - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
           java-version: 11
+
       - uses: actions/checkout@v3
+
       - name: Set up Python 3.8 for gcovr
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
+
       - name: install gcovr 5.0
         run: |
           pip install gcovr==5.0 # 5.1 is not supported
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v1
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
       - name: Download and set up sonar-scanner
         env:
           SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
@@ -57,6 +65,7 @@ jobs:
           curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }} 
           unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin" >> $GITHUB_PATH
+
       - name: Download and set up build-wrapper
         env:
           BUILD_WRAPPER_DOWNLOAD_URL: ${{ env.SONAR_SERVER_URL }}/static/cpp/build-wrapper-linux-x86.zip
@@ -64,6 +73,7 @@ jobs:
           curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
+
       - name: Run build-wrapper
         run: |
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
@@ -71,11 +81,15 @@ jobs:
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_WITH_RDP=on \
                 -DLTSM_FUSE2SESSION=on \
+                -DLTSM_AUDIO2SESSION=on \
+                -DLTSM_PCSC2SESSION=on \
+                -DLTSM_PKCS11_AUTH=on \
                 -DLTSM_BUILD_X11VNC=on -DLTSM_BUILD_VNC2IMAGE=on \
                 -DLTSM_CUPS_BACKEND=on \
                 -DLTSM_GITHUB_WORKFLOW=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
       - name: Prepare LTSM coverage tests
         run: |
           echo "::group::scripts"
@@ -97,6 +111,7 @@ jobs:
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
           sudo sed -i -e 's|console|anybody|' /etc/X11/Xwrapper.config
           echo "::endgroup::"
+
       - name: Run tests to generate coverage statistics
         env:
           SOCAT_DEFAULT_LISTEN_IP: 127.0.0.1
@@ -126,9 +141,11 @@ jobs:
           echo "wait"
           sleep 10
           echo "::endgroup::"
+
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube > coverage.xml
+
       - name: Run sonar-scanner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

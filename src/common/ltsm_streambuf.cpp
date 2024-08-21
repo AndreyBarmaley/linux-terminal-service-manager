@@ -225,7 +225,7 @@ namespace LTSM
     /* MemoryStream */
     bool MemoryStream::bigendian(void) const
     {
-        return big_endian;
+        return BigEndian;
     }
 
     uint16_t MemoryStream::readInt16(void) const
@@ -243,12 +243,7 @@ namespace LTSM
         return bigendian() ? readIntBE64() : readIntLE64();
     }
 
-    void MemoryStream::readTo(char* ptr, size_t len) const
-    {
-        getRaw(ptr, len);
-    }
-
-    void MemoryStream::readTo(uint8_t* ptr, size_t len) const
+    void MemoryStream::readTo(void* ptr, size_t len) const
     {
         getRaw(ptr, len);
     }
@@ -286,37 +281,37 @@ namespace LTSM
         return *this;
     }
 
-    void MemoryStream::writeInt16(uint16_t v)
+    MemoryStream & MemoryStream::writeInt16(uint16_t v)
     {
         if(bigendian())
             writeIntBE16(v);
         else
             writeIntLE16(v);
+
+        return *this;
     }
 
-    void MemoryStream::writeInt32(uint32_t v)
+    MemoryStream & MemoryStream::writeInt32(uint32_t v)
     {
         if(bigendian())
             writeIntBE32(v);
         else
             writeIntLE32(v);
+
+        return *this;
     }
 
-    void MemoryStream::writeInt64(uint64_t v)
+    MemoryStream & MemoryStream::writeInt64(uint64_t v)
     {
         if(bigendian())
             writeIntBE64(v);
         else
             writeIntLE64(v);
-    }
 
-    MemoryStream & MemoryStream::write(const char* ptr, size_t len)
-    {
-        putRaw(ptr, len);
         return *this;
     }
 
-    MemoryStream & MemoryStream::write(const uint8_t* ptr, size_t len)
+    MemoryStream & MemoryStream::write(const void* ptr, size_t len)
     {
         putRaw(ptr, len);
         return *this;

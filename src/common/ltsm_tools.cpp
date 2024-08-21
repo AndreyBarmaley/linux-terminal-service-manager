@@ -30,6 +30,7 @@
 #include <zlib.h>
 
 #ifdef LTSM_WITH_GNUTLS
+#include "gnutls/x509.h"
 #include <gnutls/gnutls.h>
 #endif
 
@@ -75,7 +76,7 @@ namespace LTSM
         auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
         buf = std::make_unique<char[]>(buflen);
         struct passwd* res = nullptr;
-                
+
         if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0)
         {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
@@ -568,15 +569,15 @@ namespace LTSM
 
     std::string Tools::getHostname(void)
     {
-        char buf[256] = { 0 };
+        std::array<char, 256> buf = {};
 
-        if(0 != gethostname(buf, sizeof(buf)))
+        if(0 != gethostname(buf.data(), buf.size() - 1))
         {
             Application::warning( "%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
             return "localhost";
         }       
      
-        return std::string(buf);
+        return std::string(buf.data());
     }
 
     std::string Tools::getTimeZone(void)
@@ -603,7 +604,9 @@ namespace LTSM
         {
             time_t ts;
             struct tm tt;
-            char buf[16]{0};
+
+            char buf[16];
+            std::fill_n(buf, sizeof(buf), 0);
 
             ::localtime_r(&ts, &tt);
             ::strftime(buf, sizeof(buf)-1, "%Z", &tt);
@@ -672,7 +675,8 @@ namespace LTSM
 
     std::string Tools::runcmd(std::string_view cmd)
     {
-        std::array<char, 128> buffer = {0};
+        std::array<char, 128> buffer;
+        std::fill(buffer.begin(), buffer.end(), 0);
         std::unique_ptr<FILE, decltype(pclose)*> pipe{popen(cmd.data(), "r"), pclose};
         std::string result;
 
@@ -984,10 +988,10 @@ namespace LTSM
     }
 
     // StreamBitsPack
-    Tools::StreamBitsPack::StreamBitsPack()
+    Tools::StreamBitsPack::StreamBitsPack(size_t rez)
     {
         bitpos = 7;
-        vecbuf.reserve(32);
+        vecbuf.reserve(rez);
     }
 
     void Tools::StreamBitsPack::pushBit(bool v)
@@ -995,8 +999,11 @@ namespace LTSM
         if(bitpos == 7)
             vecbuf.push_back(0);
 
-        uint8_t mask = 1 << bitpos;
-        if(v) vecbuf.back() |= mask;
+        if(v)
+        {
+            const uint8_t mask = 1 << bitpos;
+            vecbuf.back() |= mask;
+        }
 
         if(bitpos == 0)
             bitpos = 7;
@@ -1012,7 +1019,7 @@ namespace LTSM
     void Tools::StreamBitsPack::pushValue(int val, size_t field)
     {
         // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
-        size_t mask = 1 << (field - 1);
+        size_t mask = 1ul << (field - 1);
 
         while(mask)
         {
@@ -1351,6 +1358,138 @@ namespace LTSM
 		__FUNCTION__, bpp, rmask, gmask, bmask, amask);
 
 	return AV_PIX_FMT_NONE;
+    }
+#endif
+
+#ifdef LTSM_WITH_GNUTLS
+    namespace TLS
+    {
+        X509::InfoPtr X509::parseCertificate(const void* data, unsigned int length, bool isPem /* PEM/DER format */)
+        {
+            gnutls_x509_crt_t crt = nullptr;
+
+            auto err = gnutls_x509_crt_init(& crt);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            auto x509 = std::unique_ptr<gnutls_x509_crt_int, decltype(gnutls_x509_crt_deinit)*>{crt, gnutls_x509_crt_deinit};            
+            gnutls_datum_t dt { (unsigned char*) data, length };
+
+            err = gnutls_x509_crt_import(x509.get(), & dt, isPem ? GNUTLS_X509_FMT_PEM : GNUTLS_X509_FMT_DER);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            auto res = std::make_unique<Info>();
+
+            // fingerprint
+            const gnutls_digest_algorithm_t algo = GNUTLS_DIG_SHA1;
+            size_t buflen = 0;
+
+            err = gnutls_x509_crt_get_fingerprint(x509.get(), algo, nullptr, & buflen);
+            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_fingerprint", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->fingerPrintSHA1.resize(buflen, 0);
+
+            err = gnutls_x509_crt_get_fingerprint(x509.get(), algo, res->fingerPrintSHA1.data(), & buflen);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_fingerprint", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->fingerPrintSHA1.resize(buflen);
+
+            // serial
+            buflen = 0;
+
+            err = gnutls_x509_crt_get_serial(x509.get(), nullptr, & buflen);
+            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_serial", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->serialNumber.resize(buflen, 0);
+
+            err = gnutls_x509_crt_get_serial(x509.get(), res->serialNumber.data(), & buflen);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_serial", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->serialNumber.resize(buflen);
+
+            // owner
+            buflen = 0;
+            err = gnutls_x509_crt_get_dn(x509.get(), nullptr, & buflen);
+        
+            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_dn", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->owner.resize(buflen, 0x20);
+
+            err = gnutls_x509_crt_get_dn(x509.get(), res->owner.data(), & buflen);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_dn", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->owner.resize(buflen);
+
+            // issuer
+            buflen = 0;
+            err = gnutls_x509_crt_get_issuer_dn(x509.get(), nullptr, & buflen);
+        
+            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_issuer_dn", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->issuer.resize(buflen, 0x20);
+
+            err = gnutls_x509_crt_get_issuer_dn(x509.get(), res->issuer.data(), & buflen);
+            if(GNUTLS_E_SUCCESS != err)
+            {
+                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_issuer_dn", gnutls_strerror(err), err);
+                return nullptr;
+            }
+
+            res->issuer.resize(buflen);
+
+            // algorithm
+            err = gnutls_x509_crt_get_pk_algorithm(x509.get(), & res->algorithmBits.second);
+            if(0 > err)
+            {
+                Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_pk_algorithm", gnutls_strerror(err), err);
+            }
+            else
+            {
+                res->algorithmBits.first = (gnutls_pk_algorithm_t) err;
+            }
+
+            // others
+            res->version = gnutls_x509_crt_get_version(x509.get());
+            res->expirationTime = gnutls_x509_crt_get_expiration_time(x509.get());
+            res->activationTime = gnutls_x509_crt_get_activation_time(x509.get());
+
+            return nullptr;
+        }
     }
 #endif
 

@@ -1082,7 +1082,7 @@ namespace LTSM
     {
         int counts = (*it).counts();
         int skip = 1;
-        auto itval = it + skip;
+        auto itval = Tools::nextToEnd(it, skip, end());
         JsonArray* arr = cont ? static_cast<JsonArray*>(cont) : new JsonArray();
 
         while(counts-- && itval != end())
@@ -1093,7 +1093,7 @@ namespace LTSM
                 arr->content.emplace_back(std::move(ptr));
 
             skip += count;
-            itval = it + skip;
+            itval = Tools::nextToEnd(it, skip, end());
         }
 
         // reset reference
@@ -1108,8 +1108,8 @@ namespace LTSM
     {
         int counts = (*it).counts();
         int skip = 1;
-        auto itkey = it + skip;
-        auto itval = itkey + 1;
+        auto itkey = Tools::nextToEnd(it, skip, end());
+        auto itval = Tools::nextToEnd(itkey, 1, end());
         JsonObject* obj = cont ? static_cast<JsonObject*>(cont) : new JsonObject();
 
         while(counts-- && itval != end())
@@ -1124,11 +1124,18 @@ namespace LTSM
             auto [ptr, count] = getValue(itval, nullptr);
 
             if(ptr)
-                obj->content.emplace(key, std::move(ptr));
+            {
+                auto it = obj->content.find(key);
+
+                if(it != obj->content.end())
+                    (*it).second = std::move(ptr);
+                else
+                    obj->content.emplace(key, std::move(ptr));
+            }
 
             skip += 1 + count;
-            itkey = it + skip;
-            itval = itkey + 1;
+            itkey = Tools::nextToEnd(it, skip, end());
+            itval = Tools::nextToEnd(itkey, 1, end());
         }
 
         // reset reference

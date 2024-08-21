@@ -42,16 +42,20 @@ namespace LTSM
 
     void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
     {
-        target = tgt;
+        setDebugTarget(tgt);
+
         level = lvl;
     }
 
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
-        target = tgt;
-
-        if(target == DebugTarget::Syslog)
+        if(target != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
             openlog(ident.c_str(), 0, facility);
+        else
+        if(target == DebugTarget::Syslog && tgt != DebugTarget::Syslog)
+            closelog();
+
+        target = tgt;
     }
 
     bool Application::isDebugTarget(const DebugTarget & tgt)
@@ -121,6 +125,7 @@ namespace LTSM
         }
     }
 
+#ifdef WITH_JSON
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
         : Application(ident)
     {
@@ -255,4 +260,5 @@ namespace LTSM
     {
         json.swap(jo);
     }
+#endif
 }

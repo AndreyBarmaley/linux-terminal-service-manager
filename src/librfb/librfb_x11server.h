@@ -38,6 +38,8 @@ namespace LTSM
             XCB::Region         clientRegion;
             XCB::Region         damageRegion;
 
+            std::mutex          serverLock;
+
             std::atomic<int>    pressedMask{0};
             std::atomic<int>    randrSequence{0};
 	    std::atomic<int>	sendUpdateFPS{0};
@@ -46,7 +48,7 @@ namespace LTSM
             std::atomic<bool>   displayResizeProcessed{false};
             std::atomic<bool>   clientUpdateReq{false};
             std::atomic<bool>   clientUpdateCursor{false};
-            std::atomic<bool>   fullscreenUpdate{false};
+            std::atomic<bool>   fullscreenUpdateReq{false};
             std::atomic<bool>   xcbMessages{true};
 
             XCB::ShmIdShared    shm;
@@ -71,6 +73,7 @@ namespace LTSM
             virtual bool        xcbAllowMessages(void) const = 0;
             virtual void        xcbDisableMessages(bool) = 0;
             virtual bool        xcbNoDamageOption(void) const = 0;
+            virtual size_t      frameRateOption(void) const = 0;
 
             const XCB::Region & getClientRegion(void) const { return clientRegion; }
 

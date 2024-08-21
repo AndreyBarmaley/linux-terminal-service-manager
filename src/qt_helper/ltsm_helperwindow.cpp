@@ -22,34 +22,36 @@
 
 #include <stdlib.h>
 
-#include "openssl/bio.h"
-#include "openssl/pem.h"
-#include "openssl/x509.h"
-#include "openssl/pkcs7.h"
-#include "openssl/safestack.h"
-
 #include <ctime>
 #include <chrono>
 #include <thread>
+#include <filesystem>
 
 #include <QFile>
 #include <QDate>
 #include <QTime>
+#include <QObject>
 #include <QScreen>
 #include <QCursor>
 #include <QDateTime>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QApplication>
 #include <QDesktopWidget>
 #include <QGuiApplication>
+#include <QSslCertificate>
+#include <QRandomGenerator>
 
-#include "ltsm_global.h"
 #include "ltsm_tools.h"
+#include "ltsm_global.h"
+#include "ltsm_pkcs11.h"
+#include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
+#include "ltsm_pkcs11_session.h"
+#include "ltsm_openssl_wrapper.h"
+
 #include "ui_ltsm_helperwindow.h"
 
 using namespace std::chrono_literals;
+using namespace LTSM;
 
 /// LTSM_HelperSDBus
 LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
@@ -97,21 +99,6 @@ void LTSM_HelperSDBus::onShutdownConnector(const int32_t & display)
     shutdownConnectorCallback(display);
 }
 
-void LTSM_HelperSDBus::onTokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
-{
-    tokenAttached(display, serial, description, certs);
-}
-
-void LTSM_HelperSDBus::onTokenAuthDetached(const int32_t& display, const std::string& serial)
-{
-    tokenDetached(display, serial);
-}
-
-void LTSM_HelperSDBus::onTokenAuthReplyCheck(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
-{
-    tokenReplyCheck(display, serial, cert, decrypt);
-}
-
 ///
 void LTSM_HelperSDBus::sendAuthenticateLoginPass(int displayNum, const QString & user, const QString & pass)
 {
@@ -126,14 +113,6 @@ void LTSM_HelperSDBus::sendAuthenticateToken(int displayNum, const QString & use
     std::thread([this, display = displayNum, user = user.toStdString()]()
     {
         this->busSetAuthenticateToken(display, user);
-    }).detach();
-}
-
-void LTSM_HelperSDBus::sendTokenAuthEncrypted(int displayNum, const std::string & serial, const std::string & pin, uint32_t cert, const uint8_t* ptr, size_t len)
-{
-    std::thread([this, display = displayNum, serial, pin, cert, buf = std::vector<uint8_t>(ptr, ptr + len)]()
-    {
-        this->helperTokenAuthEncrypted(display, serial, pin, cert, std::move(buf));
     }).detach();
 }
 
@@ -185,6 +164,8 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui(new Ui::LTSM_HelperWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer300ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
 {
+    Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+
     ui->setupUi(this);
     ui->labelDomain->hide();
     ui->comboBoxDomain->hide();
@@ -194,6 +175,9 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui->comboBoxUsername->setFocus();
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
+
+    connect(ui->comboBoxDomain, SIGNAL(currentIndexChanged(int)), this, SLOT(domainIndexChanged(int)), Qt::QueuedConnection);
+    connect(ui->comboBoxUsername, SIGNAL(currentIndexChanged(int)), this, SLOT(usernameIndexChanged(int)), Qt::QueuedConnection);
 
     auto val = qgetenv("DISPLAY");
 
@@ -210,33 +194,184 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     if(0 <= group && group < names.size())
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 
-#ifdef LTSM_TOKEN_AUTH
-    // init ldaps background
-    std::thread([this]()
-    {
-        try
-        {
-            ldap.reset(new LTSM::LdapWrapper());
-        }
-        catch(...)
-        {
-            ldap.reset();
-        }
-    }).detach();
+#ifdef LTSM_PKCS11_AUTH
+    ldap.reset(new LdapWrapper());
+    //
+    pkcs11.reset(new Pkcs11Client(displayNum, this));
+    connect(pkcs11.get(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
+    pkcs11->start();
 #endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
 {
-#ifdef LTSM_TOKEN_AUTH
-    // th2 - not detached
-
-    if(th2.joinable())
-        th2.join();
-
-#endif
-
     delete ui;
+}
+
+void LTSM_HelperWindow::switchLoginMode(void)
+{
+    tokenAuthMode = false;
+
+    ui->labelDomain->setText(tr("domain:"));
+    ui->labelUsername->setText(tr("username:"));
+    ui->labelPassword->setText(tr("password:"));
+
+    ui->comboBoxUsername->lineEdit()->setReadOnly(false);
+    ui->comboBoxDomain->lineEdit()->setReadOnly(false);
+
+    ui->comboBoxUsername->setFocus();
+    ui->comboBoxUsername->lineEdit()->clear();
+    ui->lineEditPassword->clear();
+
+    ui->labelDomain->hide();
+    ui->comboBoxDomain->hide();
+    ui->pushButtonLogin->setDisabled(false);
+
+    reloadUsersList();
+}
+
+QString tokenTooltip(const Pkcs11Token & st)
+{
+    auto manufacturerId = QString(QByteArray((char*) st.tokenInfo.manufacturerID, sizeof(st.tokenInfo.manufacturerID)).trimmed());
+    auto label = QString(QByteArray((char*) st.tokenInfo.label, sizeof(st.tokenInfo.label)).trimmed());
+    auto hardware = QString("%1.%2").arg(st.tokenInfo.hardwareVersion.major).arg(st.tokenInfo.hardwareVersion.minor);
+    auto firmware = QString("%1.%2").arg(st.tokenInfo.firmwareVersion.major).arg(st.tokenInfo.firmwareVersion.minor);
+
+    return QString("manufacturer id: %1\nlabel: %2\nhardware version: %3\nfirmware version: %4").
+                            arg(manufacturerId).arg(label).arg(hardware).arg(firmware);
+}
+
+QString sslTooltip(const QSslCertificate & ssl)
+{
+    auto serial = QString(QByteArray::fromHex(ssl.serialNumber()).toHex(':'));
+    auto email = ssl.subjectInfo(QSslCertificate::EmailAddress).join("");
+    auto org = ssl.subjectInfo(QSslCertificate::Organization).join("");
+
+    return QString("serial number: %1\nemail address: %2\nexpired date: %3\norganization: %4\nissuer: %5").
+                            arg(serial).arg(email).arg(ssl.expiryDate().toString()).arg(org).arg(ssl.issuerDisplayName());
+}
+
+void LTSM_HelperWindow::tokensChanged(void)
+{
+#ifdef LTSM_PKCS11_AUTH
+    auto & tokens = pkcs11->getTokens();
+
+    if(tokens.empty())
+    {
+        switchLoginMode();
+        return;
+    }
+
+    tokenAuthMode = true;
+
+    ui->labelDomain->setVisible(true);
+    ui->comboBoxDomain->setVisible(true);
+
+    ui->labelDomain->setText("token id:");
+    ui->labelUsername->setText("certificate:");
+    ui->labelPassword->setText("pin code:");
+
+    ui->comboBoxDomain->clear();
+    ui->comboBoxUsername->clear();
+    ui->lineEditPassword->clear();
+
+    int rowIndex = 0;
+    for(auto & st: tokens)
+    {
+        auto model = QString(QByteArray((char*) st.tokenInfo.model, sizeof(st.tokenInfo.model)).trimmed());
+        auto serialNumber = QString(QByteArray((char*) st.tokenInfo.serialNumber, sizeof(st.tokenInfo.serialNumber)).trimmed());
+
+        ui->comboBoxDomain->addItem(QString("%1 (%2)").arg(model).arg(serialNumber), QByteArray((const char*) & st, sizeof(st)));
+        ui->comboBoxDomain->setItemData(rowIndex, tokenTooltip(st), Qt::ToolTipRole);
+
+        rowIndex++;
+    }
+
+    ui->comboBoxDomain->lineEdit()->setReadOnly(true);
+    ui->comboBoxDomain->setCurrentIndex(0);
+    ui->lineEditPassword->setFocus();
+#endif
+}
+
+void LTSM_HelperWindow::domainIndexChanged(int index)
+{
+    if(index < 0)
+        return;
+
+    if(tokenAuthMode)
+    {
+        auto buf = ui->comboBoxDomain->itemData(index, Qt::UserRole).toByteArray();
+        if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Token))
+        {
+            Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
+            return;
+        }
+
+        ui->comboBoxUsername->clear();
+        ui->lineEditPassword->clear();
+
+        auto tokenPtr = reinterpret_cast<const Pkcs11Token*>(buf.data());
+        ui->comboBoxDomain->setToolTip(tokenTooltip(*tokenPtr));
+
+        int rowIndex = 0;
+        auto certs = pkcs11->getCertificates(tokenPtr->slotId);
+
+        if(certs.empty())
+        {
+            setLabelError("token empty");
+            ui->pushButtonLogin->setDisabled(true);
+            return;
+        }
+
+        for(auto & cert: certs)
+        {
+            auto ssl = QSslCertificate(QByteArray((const char*) cert.objectValue.data(), cert.objectValue.size()), QSsl::Der);
+
+            if(ssl.isNull())
+                continue;
+
+            ui->comboBoxUsername->addItem(ssl.subjectDisplayName(), QByteArray((const char*) & cert, sizeof(cert)));
+            ui->comboBoxUsername->setItemData(rowIndex, sslTooltip(ssl), Qt::ToolTipRole);
+
+            rowIndex++;
+        }
+
+        ui->comboBoxUsername->setCurrentIndex(0);
+        ui->comboBoxUsername->lineEdit()->setReadOnly(true);
+        ui->pushButtonLogin->setDisabled(false);
+    }
+}
+
+void LTSM_HelperWindow::usernameIndexChanged(int index)
+{
+    if(index < 0)
+        return;
+
+    if(tokenAuthMode)
+    {
+        auto buf = ui->comboBoxUsername->itemData(index, Qt::UserRole).toByteArray();
+        if(buf.isEmpty()  || buf.size() != sizeof(Pkcs11Cert))
+        {
+            Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
+            return;
+        }
+
+        auto certPtr = reinterpret_cast<const Pkcs11Cert*>(buf.data());
+        auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()), QSsl::Der);
+
+        ui->comboBoxUsername->setToolTip(sslTooltip(ssl));
+        ui->pushButtonLogin->setDisabled(false);
+
+        if(ssl.expiryDate() < QDateTime::currentDateTime())
+        {
+            setLabelError("certificate expired");
+            ui->pushButtonLogin->setDisabled(true);
+        }
+    }
+    else
+    {
+        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
+    }
 }
 
 void LTSM_HelperWindow::loginClicked(void)
@@ -251,51 +386,68 @@ void LTSM_HelperWindow::loginClicked(void)
         return;
     }
 
-#ifdef LTSM_TOKEN_AUTH
-    // tokenAuthMode
-    auto jo = ui->comboBoxDomain->currentData().toJsonObject();
-    auto serial = jo["serial"].toString();
-    auto cert = ui->comboBoxUsername->currentData().toString();
+#ifdef LTSM_PKCS11_AUTH
+    auto bufToken = ui->comboBoxDomain->currentData(Qt::UserRole).toByteArray();
+    auto tokenPtr = reinterpret_cast<const Pkcs11Token*>(bufToken.data());
 
-    tokenCheck = LTSM::Tools::randomHexString(64);
-    tokenSerial = serial.toStdString();
-    tokenCert = cert.toStdString();
+    auto bufCert = ui->comboBoxUsername->currentData(Qt::UserRole).toByteArray();
+    auto certPtr = reinterpret_cast<const Pkcs11Cert*>(bufCert.data());
+
+    auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()), QSsl::Der);
+    auto pin = ui->lineEditPassword->text().toStdString();
+
+    // generate 32byte hash
+    std::vector<uint8_t> hash1(32);
+    QRandomGenerator::global()->generate(hash1.begin(), hash1.end());
+
+    auto cert = OpenSSL::CertificateDer(certPtr->objectValue.data(), certPtr->objectValue.size());
+    auto crypt = cert.publicKey().encryptData(hash1.data(), hash1.size());
 
     setLabelInfo("check token...");
+    std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, crypt.data(), crypt.size(), CKM_RSA_PKCS);
 
-    th2 = std::thread([this, display = displayNum, content = tokenCheck, cert = cert.toStdString(), serial = serial.toStdString(), pin = ui->lineEditPassword->text().toStdString()]
+    if(hash1 != hash2)
     {
-        // crypt to pkcs7
-        std::unique_ptr<BIO, void(*)(BIO*)> bio1{ BIO_new_mem_buf(cert.data(), cert.size()), BIO_free_all };
-        std::unique_ptr<X509, void(*)(X509*)> x509{ PEM_read_bio_X509(bio1.get(), nullptr, nullptr, nullptr), X509_free };
-        if(! x509)
+        setLabelError("token failed");
+        ui->pushButtonLogin->setDisabled(false);
+        ui->comboBoxUsername->setDisabled(false);
+        //ui->comboBoxUsername->setToolTip("");
+        ui->lineEditPassword->setDisabled(false);
+        ui->lineEditPassword->setFocus();
+        return;
+    }
+
+    if(ldap)
+    {
+        auto der = ssl.toDer();
+        auto dn = ldap->findDnFromCertificate((const uint8_t*) der.data(), der.size());
+
+        if(! dn.empty())
         {
-            return;
+            setLabelInfo("LDAP: certificate found");
+
+            auto login = ldap->findLoginFromDn(dn);
+            if(! login.empty())
+            {
+                setLabelInfo("LDAP: login found");
+
+                sendAuthenticateToken(displayNum, QString::fromStdString(login));
+                return;
+            }
+            else
+            {
+                setLabelError("LDAP: login not found");
+            }
         }
-
-        std::unique_ptr<BIO, void(*)(BIO*)> bio2{ BIO_new(BIO_s_mem()), BIO_free_all };
-        BIO_write(bio2.get(), content.data(), content.size());
-
-        auto sk_X509_free2 = [](stack_st_X509* st)
+        else
         {
-            sk_X509_free(st);
-        };
-    
-        std::unique_ptr<stack_st_X509, void(*)(stack_st_X509*)> certstack{ sk_X509_new_null(), sk_X509_free2 };
-        sk_X509_push(certstack.get(), x509.get());
-    
-        std::unique_ptr<PKCS7, void(*)(PKCS7*)> p7{ PKCS7_encrypt(certstack.get(), bio2.get(), EVP_aes_128_cbc(),  PKCS7_BINARY), PKCS7_free };
-
-        // pkcs7 to der format
-        std::unique_ptr<BIO, void(*)(BIO*)> bio3{ BIO_new(BIO_s_mem()), BIO_free_all };
-        if(0 < i2d_PKCS7_bio(bio3.get(), p7.get()))
-        {
-            uint8_t* buf = nullptr;
-            size_t len = BIO_get_mem_data(bio3.get(), & buf);
-
-            this->sendTokenAuthEncrypted(display, serial, pin, LTSM::Tools::crc32b(cert), buf, len);
+            setLabelError("LDAP: certificate not found");
         }
-    });
+    }
+    else
+    {
+        setLabelError("LDAP: initialize failed");
+    }
 #endif
 }
 
@@ -390,7 +542,7 @@ void LTSM_HelperWindow::reloadUsersList(void)
     ui->comboBoxUsername->clear();
 
     ui->comboBoxUsername->addItems(getUsersList(displayNum));
-    ui->comboBoxUsername->setEditText("");
+    ui->comboBoxUsername->setEditText(prefferedLogin);
 }
 
 void LTSM_HelperWindow::widgetTimezoneCallback(int display, const QString & tz)
@@ -466,7 +618,8 @@ void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & lo
 {
     if(display == displayNum && 0 < login.size())
     {
-        ui->comboBoxUsername->setEditText(login);
+        prefferedLogin = login;
+        ui->comboBoxUsername->setEditText(prefferedLogin);
 
         ui->lineEditPassword->setFocus();
         if(0 < pass.size())
@@ -485,76 +638,7 @@ void LTSM_HelperWindow::xkbStateChangeEvent(int group)
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
 }
 
-struct CertInfo
-{
-    std::string subjectName;
-    std::string issuerName;
-    std::string notBefore;
-    std::string notAfter;
-    std::string serialNumber;
-};
-
-CertInfo getX509CertInfo(const std::string& cert)
-{
-    CertInfo certInfo{ .subjectName = "unknown" };
-
-#ifdef LTSM_TOKEN_AUTH
-    std::unique_ptr<BIO, void(*)(BIO*)> bioX509{ BIO_new_mem_buf(cert.data(), cert.size()), BIO_free_all };
-    std::unique_ptr<X509, void(*)(X509*)> x509{ PEM_read_bio_X509(bioX509.get(), nullptr, nullptr, nullptr), X509_free };
-    if(x509)
-    {
-
-        std::unique_ptr<BIO, void(*)(BIO*)> bio{ BIO_new(BIO_s_mem()), BIO_free_all };
-        if(X509_NAME_print(bio.get(), X509_get_subject_name(x509.get()), 0))
-        {
-            char* ptr = nullptr;
-            size_t len = BIO_get_mem_data(bio.get(), & ptr);
-            certInfo.subjectName.assign(ptr, len);
-        }
-
-        BIO_reset(bio.get());
-
-        if(X509_NAME_print(bio.get(), X509_get_issuer_name(x509.get()), 0))
-        {
-            char* ptr = nullptr;
-            size_t len = BIO_get_mem_data(bio.get(), & ptr);
-            certInfo.issuerName.assign(ptr, len);
-        }
-
-        BIO_reset(bio.get());
-
-        if(ASN1_TIME_print(bio.get(), X509_get_notBefore(x509.get())))
-        {
-            char* ptr = nullptr;
-            size_t len = BIO_get_mem_data(bio.get(), & ptr);
-            certInfo.notBefore.assign(ptr, len);
-        }
-
-        BIO_reset(bio.get());
-
-        if(ASN1_TIME_print(bio.get(), X509_get_notAfter(x509.get())))
-        {
-            char* ptr = nullptr;
-            size_t len = BIO_get_mem_data(bio.get(), & ptr);
-            certInfo.notAfter.assign(ptr, len);
-        }
-
-        BIO_reset(bio.get());
-
-        std::unique_ptr<BIGNUM, void(*)(BIGNUM*)> bn{ ASN1_INTEGER_to_BN(X509_get_serialNumber(x509.get()), NULL), BN_free };
-        if(bn)
-        {
-            size_t len = BN_num_bytes(bn.get());
-            std::vector<uint8_t> buf(len, 0);
-            BN_bn2bin(bn.get(), buf.data());
-
-            certInfo.serialNumber = LTSM::Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, ":", false);
-        }
-    }
-#endif
-    return certInfo;
-}
-
+/*
 QDateTime fromStringTime(const std::string & str)
 {
     // dont use QDateTime::fromString
@@ -567,219 +651,4 @@ QDateTime fromStringTime(const std::string & str)
 
     return QDateTime();
 }
-
-void LTSM_HelperWindow::usernameChanged(const QString & user)
-{
-    if(tokenAuthMode)
-    {
-        auto certInfo = getX509CertInfo(ui->comboBoxUsername->currentData().toString().toStdString());
-        auto tooltip = QString("subjectName: %1\nissuerName: %2\nserialNumber: %3\nnotAfter: %4\nnotBefore: %5").
-            arg(QString::fromStdString(certInfo.subjectName)).
-            arg(QString::fromStdString(certInfo.issuerName)).
-            arg(QString::fromStdString(certInfo.serialNumber)).
-            arg(QString::fromStdString(certInfo.notAfter)).
-            arg(QString::fromStdString(certInfo.notBefore));
-        ui->comboBoxUsername->setToolTip(tooltip);
-
-        // check expired
-        auto notBefore = fromStringTime(certInfo.notBefore);
-        bool loginDisabled = false;
-
-        if(notBefore.isValid() &&
-            notBefore < QDateTime::currentDateTime())
-        {
-            setLabelError("certificate expired");
-            loginDisabled = true;
-        }
-
-        ui->pushButtonLogin->setDisabled(loginDisabled);
-    }
-    else
-        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
-}
-
-void LTSM_HelperWindow::tokenChanged(const QString& serial)
-{
-    if(tokenAuthMode)
-    {
-        auto jo = ui->comboBoxDomain->currentData().toJsonObject();
-        auto certs = jo["certs"].toArray().toVariantList();
-
-        ui->comboBoxUsername->clear();
-        if(certs.size())
-        {
-            for(auto & var : certs)
-            {
-                auto certInfo = getX509CertInfo(var.toString().toStdString());
-                ui->comboBoxUsername->insertItem(0, QString::fromStdString(certInfo.subjectName), var);
-                auto tooltip = QString("subjectName: %1\nissuerName: %2\nserialNumber: %3\nnotAfter: %4\nnotBefore: %5").
-                    arg(QString::fromStdString(certInfo.subjectName)).
-                    arg(QString::fromStdString(certInfo.issuerName)).
-                    arg(QString::fromStdString(certInfo.serialNumber)).
-                    arg(QString::fromStdString(certInfo.notAfter)).
-                    arg(QString::fromStdString(certInfo.notBefore));
-                ui->comboBoxUsername->setItemData(0, tooltip, Qt::ToolTipRole);
-            }
-
-            ui->comboBoxUsername->setCurrentIndex(0);
-            ui->comboBoxUsername->lineEdit()->setReadOnly(true);
-            ui->pushButtonLogin->setDisabled(false);
-        }
-        else
-        {
-            ui->pushButtonLogin->setDisabled(true);
-        }
-    }
-}
-
-void LTSM_HelperWindow::tokenAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
-{
-    if(display == displayNum)
-    {
-        tokenAuthMode = true;
-
-        ui->labelDomain->setVisible(true);
-        ui->comboBoxDomain->setVisible(true);
-
-        ui->labelDomain->setText("token id:");
-        ui->labelUsername->setText("certificate:");
-        ui->labelPassword->setText("pin code:");
-
-        ui->comboBoxUsername->clear();
-        ui->lineEditPassword->clear();
-
-        QJsonArray ja;
-        for(auto & cert : certs)
-            ja.append(QString::fromStdString(cert));
-
-        QJsonObject jo;
-        jo.insert("serial", QString::fromStdString(serial));
-        jo.insert("certs", ja);
-
-        ui->comboBoxDomain->addItem(QString("%1 (%2)").arg(description.c_str()).arg(serial.c_str()), QVariant(jo));
-        ui->comboBoxDomain->lineEdit()->setReadOnly(true);
-        ui->comboBoxDomain->setCurrentIndex(0);
-
-        ui->lineEditPassword->setFocus();
-    }
-}
-
-void LTSM_HelperWindow::tokenDetached(const int32_t& display, const std::string& serial)
-{
-    if(display == displayNum && tokenAuthMode)
-    {
-        if(1 < ui->comboBoxDomain->count())
-        {
-            for(int index = 0; index < ui->comboBoxDomain->count(); ++index)
-            {
-                auto jo = ui->comboBoxDomain->itemData(index).toJsonObject();
-                auto serial2 = jo["serial"].toString();
-
-                if(serial2.toStdString() == serial)
-                {
-                    ui->comboBoxDomain->removeItem(index);
-                    ui->comboBoxDomain->setCurrentIndex(0);
-                    break;
-                }
-            }
-        }
-        else
-        {
-            tokenAuthMode = false;
-
-            ui->labelDomain->setText(tr("domain:"));
-            ui->labelUsername->setText(tr("username:"));
-            ui->labelPassword->setText(tr("password:"));
-
-            ui->comboBoxUsername->lineEdit()->setReadOnly(false);
-            ui->comboBoxDomain->lineEdit()->setReadOnly(false);
-
-            ui->comboBoxUsername->setFocus();
-            ui->comboBoxUsername->lineEdit()->clear();
-            ui->lineEditPassword->clear();
-
-            ui->labelDomain->hide();
-            ui->comboBoxDomain->hide();
-            ui->pushButtonLogin->setDisabled(false);
-
-            reloadUsersList();
-        }
-    }
-}
-
-#ifdef LTSM_TOKEN_AUTH
-std::vector<uint8_t> convertX509Pem2Der(const std::string & pem)
-{
-    std::vector<uint8_t> der;
-    std::unique_ptr<BIO, void(*)(BIO*)> bio1{ BIO_new_mem_buf(pem.data(), pem.size()), BIO_free_all };
-    std::unique_ptr<X509, void(*)(X509*)> x509{ PEM_read_bio_X509(bio1.get(), nullptr, nullptr, nullptr), X509_free };
-
-    if(x509)
-    {
-        std::unique_ptr<BIO, void(*)(BIO*)> bio2{ BIO_new(BIO_s_mem()), BIO_free_all };
-        if(0 < i2d_X509_bio(bio2.get(), x509.get()))
-        {
-            uint8_t* ptr = nullptr;
-            size_t len = BIO_get_mem_data(bio2.get(), & ptr);
-
-            der.assign(ptr, ptr + len);
-        }
-    }
-
-    return der;
-}
-
-#endif
-
-void LTSM_HelperWindow::tokenReplyCheck(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
-{
-    if(display == displayNum && tokenAuthMode)
-    {
-        if(tokenSerial == serial && LTSM::Tools::crc32b(tokenCert) == cert && tokenCheck == decrypt)
-        {
-            // FIXME LDAP find cert login
-#ifdef LTSM_TOKEN_AUTH
-            if(ldap)
-            {
-                auto dn = ldap->findDnFromCertificate(convertX509Pem2Der(tokenCert));
-                if(! dn.empty())
-                {
-                    setLabelInfo("LDAP: certificate found");
-
-                    auto login = ldap->findLoginFromDn(dn);
-                    if(! login.empty())
-                    {
-                        setLabelInfo("LDAP: login found");
-
-                        sendAuthenticateToken(displayNum, QString::fromStdString(login));
-                        return;
-                    }
-                    else
-                    {
-                        setLabelError("LDAP: login not found");
-                    }
-                }
-                else
-                {
-                    setLabelError("LDAP: certificate not found");
-                }
-            }
-            else
-            {
-                setLabelError("LDAP: initialize failed");
-            }
-#endif
-        }
-        else
-        {
-            setLabelError(QString::fromStdString(decrypt));
-        }
-
-        // error
-        ui->pushButtonLogin->setDisabled(false);
-        ui->comboBoxUsername->setDisabled(false);
-        ui->comboBoxUsername->setToolTip("");
-        ui->lineEditPassword->setDisabled(false);
-        ui->lineEditPassword->setFocus();
-    }
-}
+*/

@@ -27,6 +27,7 @@
 
 #include <string>
 #include <memory>
+#include <cstring>
 #include <filesystem>
 
 #include "ltsm_fuse.h"
@@ -350,7 +351,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpGetAttr(const StreamBufRef & sb)
 /*
 bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
 {
-    struct stat st = {0};
+    struct stat st = {};
     int ret = ::fstat(fdh, & st);
     int error = 0 > ret ? errno : 0;
 
@@ -381,7 +382,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
 
 bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
 {
-    struct stat st = {0};
+    struct stat st = {};
     int ret = ::stat(path, & st);
     int error = 0 > ret ? errno : 0;
 

@@ -36,55 +36,10 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
-#ifdef LTSM_RUTOKEN
-    #include "pki-core-cpp.h"
-#endif
-
 #define LTSM_VNC2SDL_VERSION 20240304
 
 namespace LTSM
 {
-    struct token_error : public std::runtime_error
-    {
-        explicit token_error(const std::string & what) : std::runtime_error(what) {}
-        explicit token_error(const char* what) : std::runtime_error(what) {}
-    };
-
-    class TokenAuthInterface
-    {
-    protected:
-        virtual void attachedDevice(const std::string & serial) = 0;
-        virtual void detachedDevice(const std::string & serial) = 0;
-
-    public:
-        TokenAuthInterface() = default;
-        virtual ~TokenAuthInterface() = default;
-
-
-        virtual std::vector<uint8_t> decryptPkcs7(const std::string & serial,
-                const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) = 0;
-    };
-
-#ifdef LTSM_RUTOKEN
-    class RutokenWrapper : public TokenAuthInterface
-    {
-        std::thread thscan;
-        std::atomic<bool> shutdown{false};
-        ChannelClient* sender = nullptr;
-
-    protected:
-        void attachedDevice(const std::string & serial) override;
-        void detachedDevice(const std::string & serial) override;
-
-    public:
-        RutokenWrapper(const std::string &, ChannelClient &);
-        ~RutokenWrapper();
-
-        std::vector<uint8_t> decryptPkcs7(const std::string & serial,
-                                          const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7) override;
-    };
-#endif
-
     struct ColorCursor
     {
         std::vector<uint8_t> pixels;
@@ -110,13 +65,12 @@ namespace LTSM
         std::forward_list<std::string> shareFolders;
 
         std::string             host{"localhost"};
-        std::string             username, seamless, tokenLib;
-        std::string             printerUrl, pcscdUrl, saneUrl;
+        std::string             username, seamless, pkcs11Auth;
+        std::string             printerUrl, saneUrl;
         std::string             prefferedEncoding;
         std::string             audioEncoding{"auto"};
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<TokenAuthInterface> token;
         std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;
 
         std::unordered_map<uint32_t, ColorCursor> cursors;
@@ -133,6 +87,7 @@ namespace LTSM
         std::atomic<bool>       needUpdate{false};
 
         int                     port = 5900;
+        int                     frameRate = 16;
 
         BinaryBuf               clipboardBufRemote;
         BinaryBuf               clipboardBufLocal;
@@ -141,7 +96,9 @@ namespace LTSM
         XCB::Size       setGeometry;
         SDL_Event       sdlEvent;
 
+        bool                    ltsmSupport = true;
         bool                    accelerated = true;
+        bool                    nodamage = false;
         bool                    fullscreen = false;
         bool                    usexkb = true;
         bool                    capslock = true;
@@ -149,6 +106,7 @@ namespace LTSM
         bool                    alwaysRunning = false;
         bool                    serverExtDesktopSizeSupported = false;
         bool                    audioEnable = false;
+        bool                    pcscEnable = false;
 
     protected:
         void                    setPixel(const XCB::Point &, uint32_t pixel) override;
@@ -181,10 +139,11 @@ namespace LTSM
 
         void                    xkbStateChangeEvent(int) override;
         void                    ltsmHandshakeEvent(int flags) override;
-        void                    systemTokenAuth(const JsonObject &) override;
         void                    systemLoginSuccess(const JsonObject &) override;
 
+        const char*             pkcs11Library(void) const override;
         bool                    createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const override;
+        bool                    ltsmSupported(void) const override { return ltsmSupport; }
 
         int                     start(void) override;
         bool                    isAlwaysRunning(void) const;

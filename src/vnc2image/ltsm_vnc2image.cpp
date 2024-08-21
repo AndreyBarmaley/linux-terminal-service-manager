@@ -138,7 +138,7 @@ namespace LTSM
     void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
     {
         // receive server pixel format
-        auto format = PixelFormat(pf.bitsPerPixel, pf.rmask(), pf.gmask(), pf.bmask(), 0);
+        auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
         fbPtr.reset(new FrameBuffer(XCB::Region(0, 0, wsz.width, wsz.height), format));
     }
 

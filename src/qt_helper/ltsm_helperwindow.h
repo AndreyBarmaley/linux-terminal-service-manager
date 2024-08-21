@@ -30,8 +30,9 @@
 
 #include "ltsm_service_proxy.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_sockets.h"
 
-#ifdef LTSM_TOKEN_AUTH
+#ifdef LTSM_PKCS11_AUTH
 #include "ltsm_ldap_wrapper.h"
 #endif
 
@@ -39,6 +40,9 @@ namespace Ui
 {
     class LTSM_HelperWindow;
 }
+
+class Pkcs11Client;
+struct Pkcs11Token;
 
 class LTSM_HelperWindow : public QMainWindow, public LTSM::XCB::XkbClient
 {
@@ -50,7 +54,10 @@ public:
 
 protected slots:
     void                loginClicked(void);
-    void                usernameChanged(const QString &);
+    void                domainIndexChanged(int);
+//    void                tokenChanged(const QString &);
+    void                usernameIndexChanged(int);
+//    void                usernameChanged(const QString &);
     void                passwordChanged(const QString &);
     void                loginFailureCallback(int, const QString &);
     void                loginSuccessCallback(int, const QString &);
@@ -62,10 +69,8 @@ protected slots:
     void                setLabelError(const QString &);
     void                setLabelInfo(const QString &);
     void                reloadUsersList(void);
-    void                tokenAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs);
-    void                tokenDetached(const int32_t& display, const std::string& serial);
-    void                tokenReplyCheck(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt);
-    void                tokenChanged(const QString &);
+
+    void                tokensChanged(void);
 
 protected:
     virtual void        showEvent(QShowEvent*) override;
@@ -84,14 +89,16 @@ protected:
     virtual QString     getTitle(int displayNum) = 0;
     virtual QString     getDateFormat(int displayNum) = 0;
     virtual QStringList getUsersList(int displayNum) = 0;
-    virtual void        sendTokenAuthEncrypted(int displayNum, const std::string & serial, const std::string & pin, uint32_t cert, const uint8_t* ptr, size_t len) = 0;
 
     // xkb client interface
     void                xkbStateChangeEvent(int group) override;
 
+    void                switchLoginMode(void);
+
 private:
     Ui::LTSM_HelperWindow* ui;
     QString             dateFormat;
+    QString             prefferedLogin;
     std::string         tokenCheck, tokenSerial, tokenCert;
     int                 displayNum;
     int                 timerOneSec;
@@ -102,9 +109,10 @@ private:
     bool                initArguments;
     bool                tokenAuthMode;
     QScopedPointer<QPoint> titleBarPressed;
-#ifdef LTSM_TOKEN_AUTH
+
+#ifdef LTSM_PKCS11_AUTH
     QScopedPointer<LTSM::LdapWrapper> ldap;
-    std::thread         th2;
+    QScopedPointer<Pkcs11Client> pkcs11;
 #endif
 };
 
@@ -116,7 +124,7 @@ private:
     void                onDisplayRemoved(const int32_t& display) override {}
     void                onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
     void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override {}
-    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const bool&) override {}
+    void                onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const uint32_t&) override {}
     void                onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
     void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
     void                onDebugLevel(const int32_t& display, const std::string & level) override {}
@@ -127,7 +135,6 @@ private:
     void                onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override {}
     void                onHelperWidgetStarted(const int32_t & display) override {}
     void                onSendBellSignal(const int32_t& display) override {}
-    void                onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override {}
 
 protected:
     // dbus virtual signals
@@ -138,9 +145,6 @@ protected:
     void                onHelperWidgetTimezone(const int32_t& display, const std::string&) override;
     void                onSessionChanged(const int32_t& display) override;
     void                onShutdownConnector(const int32_t & display) override;
-    void                onTokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs) override;
-    void                onTokenAuthDetached(const int32_t& display, const std::string& serial) override;
-    void                onTokenAuthReplyCheck(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt) override;
 
     // helper window interface
     void                sendAuthenticateLoginPass(int displayNum, const QString & user, const QString & pass) override;
@@ -152,7 +156,6 @@ protected:
     QString             getTitle(int displayNum) override;
     QString             getDateFormat(int displayNum) override;
     QStringList         getUsersList(int displayNum) override;
-    void                sendTokenAuthEncrypted(int displayNum, const std::string & serial, const std::string & pin, uint32_t cert, const uint8_t* ptr, size_t len) override;
 
 public:
     LTSM_HelperSDBus();

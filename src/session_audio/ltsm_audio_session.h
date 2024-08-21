@@ -21,35 +21,57 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_FUSE_SESSION_
-#define _LTSM_FUSE_SESSION_
+#ifndef _LTSM_AUDIO_SESSION_
+#define _LTSM_AUDIO_SESSION_
 
+#include <thread>
+#include <atomic>
+#include <memory>
 #include <string>
 #include <forward_list>
 
-#include "ltsm_fuse.h"
-#include "ltsm_fuse_adaptor.h"
+#include "ltsm_streambuf.h"
+#include "ltsm_application.h"
+#include "ltsm_audio_pulse.h"
+#include "ltsm_audio_encoder.h"
+#include "ltsm_audio_adaptor.h"
 
 namespace LTSM
 {
-    struct FuseSession;
-
-    class FuseSessionBus : public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>, public Application
+    struct AudioClient
     {
-        std::forward_list<std::unique_ptr<FuseSession>> childs;
+        std::string socketPath;
+
+        std::unique_ptr<PulseAudio::OutputStream> pulse;
+        std::unique_ptr<AudioEncoder::BaseEncoder> encoder;
+        std::unique_ptr<SocketStream> sock;
+
+        std::thread thread;
+        std::atomic<bool> shutdown{false};
+
+        AudioClient(const std::string &);
+        ~AudioClient();
+    };
+
+    class AudioSessionBus : public sdbus::AdaptorInterfaces<Session::AUDIO_adaptor>, public Application
+    {
+        std::forward_list<AudioClient> clients;
 
     public:
-        FuseSessionBus(sdbus::IConnection &);
-        virtual ~FuseSessionBus();
+        AudioSessionBus(sdbus::IConnection &);
+        virtual ~AudioSessionBus();
 
         int start(void) override;
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
+        void setDebug(const std::string & level) override;
 
-        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) override;
-        void umountPoint(const std::string& point) override;
+        bool connectChannel(const std::string & clientSocket) override;
+        void disconnectChannel(const std::string & clientSocket) override;
+
+        void pulseFragmentSize(const uint32_t & fragsz) override;
     };
 }
 
-#endif // _LTSM_FUSE_
+#endif // _LTSM_AUDIO_SESSION_

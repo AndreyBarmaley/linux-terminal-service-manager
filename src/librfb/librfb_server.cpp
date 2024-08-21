@@ -515,21 +515,21 @@ namespace LTSM
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
         Application::info("%s: bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                           __FUNCTION__, pf.bitsPerPixel, displayDepth, (int) big_endian, 
-                            pf.redMax, pf.redShift, pf.greenMax, pf.greenShift, pf.blueMax, pf.blueShift);
+                           __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) BigEndian, 
+                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         clientPf = serverFormat();
         // send pixel format
-        sendInt8(pf.bitsPerPixel);
+        sendInt8(pf.bitsPerPixel());
         sendInt8(displayDepth);
-        sendInt8(big_endian ? 1 : 0);
+        sendInt8(BigEndian ? 1 : 0);
         // true color
         sendInt8(1);
-        sendIntBE16(pf.redMax);
-        sendIntBE16(pf.greenMax);
-        sendIntBE16(pf.blueMax);
-        sendInt8(pf.redShift);
-        sendInt8(pf.greenShift);
-        sendInt8(pf.blueShift);
+        sendIntBE16(pf.rmax());
+        sendIntBE16(pf.gmax());
+        sendIntBE16(pf.bmax());
+        sendInt8(pf.rshift());
+        sendInt8(pf.gshift());
+        sendInt8(pf.bshift());
         // send padding
         sendInt8(0);
         sendInt8(0);
@@ -593,7 +593,7 @@ namespace LTSM
 
             if(msgType == RFB::PROTOCOL_LTSM)
             {
-                if(! isClientSupportedEncoding(RFB::ENCODING_LTSM))
+                if(! clientLtsmSupported)
                 {
                     Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
                     throw rfb_error(NS_FuncName);
@@ -731,6 +731,7 @@ namespace LTSM
         clientEncodings.clear();
         clientEncodings.reserve(numEncodings);
 
+        bool continueUpdates = false;
         auto disabledEncodings = serverDisabledEncodings();
 
         while(0 < numEncodings--)
@@ -749,6 +750,26 @@ namespace LTSM
                 }
             }
 
+            switch(encoding)
+            {
+                case RFB::ENCODING_LTSM:
+                    clientLtsmSupported = true;
+                    break;
+
+                case RFB::ENCODING_FFMPEG_H264:
+                case RFB::ENCODING_FFMPEG_AV1:
+                case RFB::ENCODING_FFMPEG_VP8:
+                    clientVideoSupported = true;
+                    break;
+
+                case RFB::ENCODING_CONTINUOUS_UPDATES:
+                    continueUpdates = true;
+                    break;
+
+                default:
+                    break;
+            }
+
             clientEncodings.push_back(encoding);
             const char* name = RFB::encodingName(encoding);
 
@@ -758,7 +779,7 @@ namespace LTSM
                 Application::info("%s: request encodings: %s", __FUNCTION__, RFB::encodingName(encoding));
         }
 
-        if(isClientSupportedEncoding(RFB::ENCODING_CONTINUOUS_UPDATES))
+        if(continueUpdates)
             sendContinuousUpdates(true);
 
         recvSetEncodingsEvent(clientEncodings);
@@ -1009,7 +1030,7 @@ namespace LTSM
 
     int RFB::ServerEncoder::sendCPixel(uint32_t pixel)
     {
-        if(clientTrueColor && clientFormat().bitsPerPixel == 32)
+        if(clientTrueColor && clientFormat().bitsPerPixel() == 32)
         {
             auto pixel2 = clientFormat().convertFrom(serverFormat(), pixel);
             auto red = clientFormat().red(pixel2);
@@ -1304,9 +1325,19 @@ namespace LTSM
         sendFlush();
     }
 
+    bool RFB::ServerEncoder::isClientLtsmSupported(void) const
+    {
+        return clientLtsmSupported;
+    }
+
+    bool RFB::ServerEncoder::isClientVideoSupported(void) const
+    {
+        return clientVideoSupported;
+    }
+
     void RFB::ServerEncoder::sendLtsmEvent(uint8_t channel, const uint8_t* buf, size_t len)
     {
-        if(isClientSupportedEncoding(RFB::ENCODING_LTSM))
+        if(clientLtsmSupported)
             sendLtsm(*this, sendLock, channel, buf, len);
     }
 
@@ -1349,9 +1380,6 @@ namespace LTSM
         else
         if(cmd == SystemCommand::ChannelError)
             systemChannelError(jo);
-        else
-        if(cmd == SystemCommand::TokenAuth)
-            systemTokenAuth(jo);
         else
         if(cmd == SystemCommand::LoginSuccess)
             systemLoginSuccess(jo);

@@ -41,7 +41,7 @@ namespace LTSM
 
         if(0 < displayNum())
         {
-            busConnectorTerminated(displayNum());
+            busConnectorTerminated(displayNum(), getpid());
             clientDisconnectedEvent(displayNum());
         }
 
@@ -59,6 +59,8 @@ namespace LTSM
         }
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
+        x11NoDamage = _config->getBoolean("vnc:xcb:nodamage", false);
+        frameRate = _config->getBoolean("vnc:frame:rate", 16);
 
         return rfbCommunication();
     }
@@ -74,7 +76,7 @@ namespace LTSM
             Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s, uid: %" PRIu32, __FUNCTION__, display, userName.c_str(), userUid);
             
             int oldDisplay = displayNum();
-            int newDisplay = busStartUserSession(oldDisplay, userName, _remoteaddr, _conntype);
+            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
             
             if(newDisplay < 0)
             {
@@ -112,7 +114,8 @@ namespace LTSM
             else
             {
                 // full update
-                xcbDisplay()->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
+                if(! x11NoDamage)
+                    xcbDisplay()->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
             }
 
             idleTimeoutSec = _config->getInteger("idle:action:timeout", 0);
@@ -174,7 +177,7 @@ namespace LTSM
     void Connector::VNC::serverHandshakeVersionEvent(void)
     {
         // Xvfb: session request
-        int screen = busStartLoginSession(24, _remoteaddr, "vnc");
+        int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "vnc");
         if(screen <= 0)
         {
             Application::error("%s: login session request: failure", __FUNCTION__);
@@ -250,7 +253,7 @@ namespace LTSM
 
     void Connector::VNC::serverEncodingsEvent(void)
     {
-        if(isClientSupportedEncoding(RFB::ENCODING_LTSM))
+        if(isClientLtsmSupported())
             sendEncodingLtsmSupported();
     }
 
@@ -349,13 +352,21 @@ namespace LTSM
 
     void Connector::VNC::xcbAddDamage(const XCB::Region & reg)
     {
-        if(xcbAllowMessages())
+        if(xcbAllowMessages() && ! x11NoDamage)
             xcbDisplay()->damageAdd(reg);
+    }
+
+    size_t Connector::VNC::frameRateOption(void) const
+    {
+	return frameRate;
     }
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
-	return _config->getBoolean("vnc:xcb:nodamage", false);
+        if(isClientLtsmSupported())
+	    return x11NoDamage;
+
+        return false;
     }
 
     void Connector::VNC::xcbDisableMessages(bool f)
@@ -417,6 +428,9 @@ namespace LTSM
         if(auto opts = jo.getObject("options"))
         {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
+
+            x11NoDamage = opts->getBoolean("x11:nodamage", x11NoDamage);
+            frameRate = opts->getInteger("frame:rate", frameRate);
         }
     }
 
@@ -556,7 +570,7 @@ namespace LTSM
                 // create file transfer channel
                 createChannel(Channel::UrlMode(Channel::ConnectorType::File, filepath, Channel::ConnectorMode::ReadOnly),
                         Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
-			Channel::Opts{Channel::Speed::Slow, Channel::DataPack::Raw});
+			Channel::Opts{Channel::Speed::Slow, 0});
 
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
                 busTransferFileStarted(displayNum(), tmpfile, (*it).second, dstfile.c_str());
@@ -572,7 +586,7 @@ namespace LTSM
         if(display == displayNum())
         {
             createChannel(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode),
-			Channel::Opts{Channel::connectorSpeed(speed), Channel::DataPack::Raw});
+			Channel::Opts{Channel::connectorSpeed(speed), 0});
         }
     }
 
@@ -584,12 +598,12 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const bool& zlib)
+    void Connector::VNC::onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const uint32_t& flags)
     {
         if(display == displayNum())
         {
             createListener(Channel::UrlMode(client, cmode), Channel::UrlMode(server, smode), limit,
-		Channel::Opts{Channel::connectorSpeed(speed), zlib ? Channel::DataPack::ZLib : Channel::DataPack::Raw});
+		Channel::Opts{Channel::connectorSpeed(speed), (int) flags});
         }
     }
 
@@ -606,50 +620,6 @@ namespace LTSM
         if(display == displayNum())
         {
             setChannelDebug(channel, debug);
-        }
-    }
-
-    void Connector::VNC::systemTokenAuth(const JsonObject & jo)
-    {
-        std::string action = jo.getString("action");
-        std::string serial = jo.getString("serial");
-
-        LTSM::Application::info("%s: action: %s, display: %d, serial: %s", __FUNCTION__, action.c_str(), displayNum(), serial.c_str());
-
-        if(action == "attach")
-        {
-            if(auto ja = jo.getArray("certs"))
-                tokenAuthAttached(displayNum(), serial, jo.getString("description"), ja->toStdVector<std::string>());
-        }
-        else
-        if(action == "detach")
-        {
-            tokenAuthDetached(displayNum(), serial);
-        }
-        else
-        if(action == "reply")
-        {
-            tokenAuthReply(displayNum(), serial, jo.getInteger("cert"), jo.getString("decrypt"));
-        }
-        else
-        {
-            Application::warning("%s: unknown action: %s, display: %d", __FUNCTION__, action.c_str(), displayNum());
-        }
-    }
-
-    void Connector::VNC::onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7)
-    {
-        if(display == displayNum())
-        {
-            JsonObjectStream jos;
-            jos.push("cmd", SystemCommand::TokenAuth);
-            jos.push("action", "check");
-            jos.push("serial", serial);
-            jos.push("pin", pin);
-            jos.push("cert", static_cast<size_t>(cert));
-            jos.push("data", Tools::convertBinary2JsonString(RawPtr(pkcs7.data(), pkcs7.size())));
-
-            static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
         }
     }
 

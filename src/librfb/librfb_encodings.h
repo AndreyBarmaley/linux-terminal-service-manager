@@ -158,8 +158,8 @@ namespace LTSM
         protected:
             EncodingRet         sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void                sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, size_t field, const PixelMapWeight &);
-            void                sendRegionPlain(EncoderStream*, const XCB::Region &, const FrameBuffer &, const std::list<PixelLength> &);
-            void                sendRegionPalette(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const std::list<PixelLength> &);
+            void                sendRegionPlain(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelLengthList &);
+            void                sendRegionPalette(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapWeight &, const PixelLengthList &);
             void                sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &);
 
         public:

@@ -34,12 +34,15 @@ namespace LTSM
     inline static const char* dbus_session_audio_name = "ltsm.session.audio";
     inline static const char* dbus_session_audio_path = "/ltsm/session/audio";
 
-    inline static const int service_version = 20240301;
+    inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
+    inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
+
+    inline static const int service_version = 20240820;
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    inline static const bool big_endian = false;
+    inline static const bool BigEndian = false;
 #else
-    inline static const bool big_endian = true;
+    inline static const bool BigEndian = true;
 #endif
 
     namespace NotifyParams

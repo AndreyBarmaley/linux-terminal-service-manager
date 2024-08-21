@@ -28,16 +28,20 @@
 #include <cstdarg>
 #include <string_view>
 
+#ifdef WITH_SYSTEMD
 #include <systemd/sd-journal.h>
+#endif
 
 #include <syslog.h>
 #include <stdio.h>
 
+#ifdef WITH_JSON
 #include "ltsm_json_wrapper.h"
+#endif
 
 namespace LTSM
 {
-    enum class DebugTarget { Quiet, Console, Syslog, SystemD };
+    enum class DebugTarget { Quiet, Console, Syslog };
     enum class DebugLevel { None, Info, Debug, Trace };
 
     class Application
@@ -73,14 +77,12 @@ namespace LTSM
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    vsyslog(LOG_INFO, format, args);
-                }
-                else
-                if(target == DebugTarget::SystemD)
-                {
+#ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_INFO, format, args);
+#else
+                    vsyslog(LOG_INFO, format, args);
+#endif
                 }
-
                 va_end(args);
             }
         }
@@ -101,12 +103,11 @@ namespace LTSM
 	    else
             if(target == DebugTarget::Syslog)
             {
-                vsyslog(LOG_NOTICE, format, args);
-            }
-            else
-            if(target == DebugTarget::SystemD)
-            {
+#ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_NOTICE, format, args);
+#else
+                vsyslog(LOG_NOTICE, format, args);
+#endif
             }
 
             va_end(args);
@@ -130,12 +131,11 @@ namespace LTSM
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-        	    vsyslog(LOG_WARNING, format, args);
-                }
-                else
-                if(target == DebugTarget::SystemD)
-                {
+#ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_WARNING, format, args);
+#else
+        	    vsyslog(LOG_WARNING, format, args);
+#endif
                 }
 
                 va_end(args);
@@ -158,12 +158,11 @@ namespace LTSM
 	    else
             if(target == DebugTarget::Syslog)
             {
-        	vsyslog(LOG_ERR, format, args);
-            }
-            else
-            if(target == DebugTarget::SystemD)
-            {
+#ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_ERR, format, args);
+#else
+        	vsyslog(LOG_ERR, format, args);
+#endif
             }
 
             va_end(args);
@@ -187,12 +186,11 @@ namespace LTSM
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    vsyslog(LOG_DEBUG, format, args);
-                }
-                else
-                if(target == DebugTarget::SystemD)
-                {
+#ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_DEBUG, format, args);
+#else
+                    vsyslog(LOG_DEBUG, format, args);
+#endif
                 }
 
                 va_end(args);
@@ -217,12 +215,11 @@ namespace LTSM
 	        else
                 if(target == DebugTarget::Syslog)
                 {
-                    vsyslog(LOG_DEBUG, format, args);
-                }
-                else
-                if(target == DebugTarget::SystemD)
-                {
+#ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_DEBUG, format, args);
+#else
+                    vsyslog(LOG_DEBUG, format, args);
+#endif
                 }
 
                 va_end(args);
@@ -247,6 +244,7 @@ namespace LTSM
         virtual int start(void) = 0;
     };
 
+#ifdef WITH_JSON
     class ApplicationJsonConfig : public Application
     {
         JsonObject	   json;
@@ -271,6 +269,7 @@ namespace LTSM
 
         const JsonObject & config(void) const;
     };
+#endif
 }
 
 #endif // _LTSM_APPLICATION_
