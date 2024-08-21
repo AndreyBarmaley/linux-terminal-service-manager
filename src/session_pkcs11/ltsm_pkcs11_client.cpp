@@ -229,9 +229,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
     // reply format:
     // <CMD16> - cmd id
     // <LEN16> - slots count
-    // <ID64> - slot id
-    // <DATA> slot info struct
-    // <DATA> token info struct
+    // <ID64>  - slot id
+    // <DATA>  - slot info struct
+    // <DATA>  - token info struct
     reply.writeIntLE16(Pkcs11Op::GetSlots);
 
     auto slots = PKCS11::getSlots(tokenPresentOnly, pkcs11);
@@ -308,7 +308,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     // reply format:
     // <CMD16> - cmd id
     // <LEN16> - mechanisms count
-    // <LEN16> - mech info len, <DATA> mech info struct
+    // <ID64>  - mech id
+    // <DATA>  - mech info struct
     // <LEN16> - mech name len, <DATA> mech name
     reply.writeIntLE16(Pkcs11Op::GetSlotMechanisms);
 
@@ -320,8 +321,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     {
         if(auto mechInfo = slot.getMechInfo(mech))
         {
-            reply.writeIntLE16(sizeof(PKCS11::MechInfo));
-            reply.write(std::addressof(*mechInfo), sizeof(PKCS11::MechInfo));
+            reply.writeIntLE64(mech);
+            reply.writeIntLE64(mechInfo->ulMinKeySize);
+            reply.writeIntLE64(mechInfo->ulMaxKeySize);
+            reply.writeIntLE64(mechInfo->flags);
 
             std::string mechName = PKCS11::mechStringEx(mech);
             reply.writeIntLE16(mechName.size());
@@ -350,6 +353,19 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     bool havePublicPrivateKeys = sb.readInt8();
 
     reply.reset();
+    std::unique_ptr<const PKCS11::Session> sess;
+
+    try
+    {
+        sess = std::make_unique<const PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
+    }
+    catch(const std::exception & err)
+    {
+        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        // certs count
+        reply.writeIntLE16(0);
+        return false;
+    }
 
     // reply format:
     // <CMD16> - cmd id
@@ -359,19 +375,18 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
 
     reply.writeIntLE16(Pkcs11Op::GetSlotCertificates);
 
-    const PKCS11::Session session(slotId, false /* rwmode */, pkcs11);
-    auto certs = session.getCertificates();
+    auto certs = sess->getCertificates(true /* havePulicPrivateKeys */);
     reply.writeIntLE16(certs.size());
 
     for(auto & handle: certs)
     {
-        auto objInfo = session.getObjectInfo(handle, PKCS11::ObjectInfo::types);
+        auto objInfo = sess->getObjectInfo(handle, { CKA_VALUE });
 
         auto rawId = objInfo.getId();
         reply.writeIntLE16(rawId.size());
         reply.write(rawId.data(), rawId.size());
 
-        auto rawValue = objInfo.getRawValue();
+        auto rawValue = objInfo.getRawData(CKA_VALUE);
         reply.writeIntLE32(rawValue.size());
         reply.write(rawValue.data(), rawValue.size());
     }
@@ -382,16 +397,25 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & sb)
 {
-    if(10 > sb.last())
+    if(18 > sb.last())
         throw std::underflow_error(NS_FuncName);
 
     // pkcs11 format:
     // <SLOT64> - slot id
-    // <CERT16> - cert id len, <DATA> cert id
+    // <MECH64> - mech type
+    // <PIN16> - pin len, <DATA> pin data
+    // <CERT16> - cert id len, <DATA> cert id data
     // <DATA32> - data len, <DATA> sign data
     auto slotId = sb.readIntLE64();
-    auto certLen = sb.readIntLE16();
+    auto mechType = sb.readIntLE64();
 
+    auto pinLen = sb.readIntLE16();
+    if(pinLen > sb.last())
+        throw std::underflow_error(NS_FuncName);
+
+    auto pin = sb.readString(pinLen);
+
+    auto certLen = sb.readIntLE16();
     if(certLen > sb.last())
         throw std::underflow_error(NS_FuncName);
 
@@ -400,27 +424,58 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     if(4 > sb.last())
         throw std::underflow_error(NS_FuncName);
 
-    auto dataLen = sb.readIntLE32();
-    auto signData = sb.read(dataLen);
+    auto valLen = sb.readIntLE32();
+    auto values = sb.read(valLen);
 
     reply.reset();
+    std::unique_ptr<PKCS11::Session> sess;
 
-    //owner->sendLtsmEvent(cid, reply.rawbuf());
+    try
+    {
+        sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
+    }
+    catch(const std::exception & err)
+    {
+        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        // certs count
+        reply.writeIntLE32(0);
+        return false;
+    }
+
+    // reply format:
+    // <DATA32> - data len, <DATA> sign data
+
+    sess->login(pin);
+    auto sign = sess->signData(certId, values.data(), values.size(), mechType);
+
+    reply.writeIntLE32(sign.size());
+    reply.write(sign.data(), sign.size());
+
+    owner->sendLtsmEvent(cid, reply.rawbuf());
     return true;
 }
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef & sb)
 {
-    if(10 > sb.last())
+    if(18 > sb.last())
         throw std::underflow_error(NS_FuncName);
 
     // pkcs11 format:
     // <SLOT64> - slot id
-    // <CERT16> - cert id len, <DATA> cert id
+    // <MECH64> - mech type
+    // <PIN16> - pin len, <DATA> pin data
+    // <CERT16> - cert id len, <DATA> cert id data
     // <DATA32> - data len, <DATA> sign data
     auto slotId = sb.readIntLE64();
-    auto certLen = sb.readIntLE16();
+    auto mechType = sb.readIntLE64();
 
+    auto pinLen = sb.readIntLE16();
+    if(pinLen > sb.last())
+        throw std::underflow_error(NS_FuncName);
+
+    auto pin = sb.readString(pinLen);
+
+    auto certLen = sb.readIntLE16();
     if(certLen > sb.last())
         throw std::underflow_error(NS_FuncName);
 
@@ -429,11 +484,34 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     if(4 > sb.last())
         throw std::underflow_error(NS_FuncName);
 
-    auto dataLen = sb.readIntLE32();
-    auto signData = sb.read(dataLen);
+    auto valLen = sb.readIntLE32();
+    auto values = sb.read(valLen);
 
     reply.reset();
 
-    //owner->sendLtsmEvent(cid, reply.rawbuf());
+    std::unique_ptr<PKCS11::Session> sess;
+
+    try
+    {
+        sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
+    }
+    catch(const std::exception & err)
+    {
+        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        // certs count
+        reply.writeIntLE32(0);
+        return false;
+    }
+
+    // reply format:
+    // <DATA32> - data len, <DATA> sign data
+
+    sess->login(pin);
+    auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
+
+    reply.writeIntLE32(sign.size());
+    reply.write(sign.data(), sign.size());
+
+    owner->sendLtsmEvent(cid, reply.rawbuf());
     return true;
 }

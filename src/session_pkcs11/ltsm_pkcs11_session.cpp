@@ -243,14 +243,21 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId)
     sock.sendInt8(1 /* bool havePublicPrivateKeys */);
     sock.sendFlush();
 
+    // client reply
+    auto cmd = sock.recvIntLE16();
+
+    if(cmd != Pkcs11Op::GetSlotCertificates)
+    {
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        return {};
+    }
+
     // certs counts
     uint16_t counts = sock.recvIntLE16();
     std::list<Pkcs11Cert> certs;
 
     while(counts--)
     {
-        Pkcs11Cert cert;
-
         auto idLen = sock.recvIntLE16();
         auto id = sock.recvData(idLen);
 
@@ -263,32 +270,105 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId)
     return certs;
 }
 
-std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::vector<uint8_t> & certId, const void* data, size_t len)
+std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId)
+{
+    std::scoped_lock guard{ lock };
+
+    sock.sendIntLE16(Pkcs11Op::GetSlotMechanisms);
+    sock.sendIntLE64(slotId);
+    sock.sendFlush();
+
+    // client reply
+    auto cmd = sock.recvIntLE16();
+
+    if(cmd != Pkcs11Op::GetSlotMechanisms)
+    {
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        return {};
+    }
+
+    // certs counts
+    uint16_t counts = sock.recvIntLE16();
+    std::list<Pkcs11Mech> res;
+
+    while(counts--)
+    {
+        auto id = sock.recvIntLE64();
+        auto min = sock.recvIntLE64();
+        auto max = sock.recvIntLE64();
+        auto flags = sock.recvIntLE64();
+
+        auto len = sock.recvIntLE16();
+        auto name = sock.recvString(len);
+
+        res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
+    }
+
+    return res;
+}
+
+std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
 {
     std::scoped_lock guard{ lock };
 
     sock.sendIntLE16(Pkcs11Op::SignData);
     sock.sendIntLE64(slotId);
+    sock.sendIntLE64(mechType);
+    sock.sendIntLE16(pin.size());
+    sock.sendString(pin);
     sock.sendIntLE16(certId.size());
     sock.sendData(certId);
     sock.sendIntLE32(len);
     sock.sendRaw(data, len);
     sock.sendFlush();
+
+    // client reply
+    auto cmd = sock.recvIntLE16();
+
+    if(cmd != Pkcs11Op::SignData)
+    {
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        return {};
+    }
+
+    // sign result length
+    uint32_t length = sock.recvIntLE32();
+
+    if(length)
+        return sock.recvData(length);
 
     return {};
 }
 
-std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::vector<uint8_t> & certId, const void* data, size_t len)
+std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
 {
     std::scoped_lock guard{ lock };
 
-    sock.sendIntLE16(Pkcs11Op::SignData);
+    sock.sendIntLE16(Pkcs11Op::DecryptData);
     sock.sendIntLE64(slotId);
+    sock.sendIntLE64(mechType);
+    sock.sendIntLE16(pin.size());
+    sock.sendString(pin);
     sock.sendIntLE16(certId.size());
     sock.sendData(certId);
     sock.sendIntLE32(len);
     sock.sendRaw(data, len);
     sock.sendFlush();
+
+    // client reply
+    auto cmd = sock.recvIntLE16();
+
+    if(cmd != Pkcs11Op::DecryptData)
+    {
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        return {};
+    }
+
+    // decrypt result length
+    uint32_t length = sock.recvIntLE32();
+
+    if(length)
+        return sock.recvData(length);
 
     return {};
 }

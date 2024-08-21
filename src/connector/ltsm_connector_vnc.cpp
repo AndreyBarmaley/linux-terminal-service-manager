@@ -623,50 +623,6 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::systemTokenAuth(const JsonObject & jo)
-    {
-        std::string action = jo.getString("action");
-        std::string serial = jo.getString("serial");
-
-        LTSM::Application::info("%s: action: %s, display: %d, serial: %s", __FUNCTION__, action.c_str(), displayNum(), serial.c_str());
-
-        if(action == "attach")
-        {
-            if(auto ja = jo.getArray("certs"))
-                tokenAuthAttached(displayNum(), serial, jo.getString("description"), ja->toStdVector<std::string>());
-        }
-        else
-        if(action == "detach")
-        {
-            tokenAuthDetached(displayNum(), serial);
-        }
-        else
-        if(action == "reply")
-        {
-            tokenAuthReply(displayNum(), serial, jo.getInteger("cert"), jo.getString("decrypt"));
-        }
-        else
-        {
-            Application::warning("%s: unknown action: %s, display: %d", __FUNCTION__, action.c_str(), displayNum());
-        }
-    }
-
-    void Connector::VNC::onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7)
-    {
-        if(display == displayNum())
-        {
-            JsonObjectStream jos;
-            jos.push("cmd", SystemCommand::TokenAuth);
-            jos.push("action", "check");
-            jos.push("serial", serial);
-            jos.push("pin", pin);
-            jos.push("cert", static_cast<size_t>(cert));
-            jos.push("data", Tools::convertBinary2JsonString(RawPtr(pkcs7.data(), pkcs7.size())));
-
-            static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
-        }
-    }
-
     void Connector::VNC::onLoginFailure(const int32_t & display, const std::string & msg)
     {
         JsonObjectStream jos;

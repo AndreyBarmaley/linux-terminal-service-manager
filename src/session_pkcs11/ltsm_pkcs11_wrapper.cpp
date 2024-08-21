@@ -1,7 +1,8 @@
 /***************************************************************************
  *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
- *   PKCS11: wrapper c++                                                   *
+ *   Part of the LTSM: Linux Terminal Service Manager:                     *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -28,6 +29,7 @@
 #include <sstream>
 #include <numeric>
 #include <cinttypes>
+#include <algorithm>
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
@@ -443,6 +445,19 @@ namespace LTSM
         return "";
     }
 
+    std::string PKCS11::RawDataRef::toHexString(std::string_view sep, bool pref) const
+    {
+        return Tools::buffer2hexstring(data(), size(), 2, sep, pref);
+    }
+
+    bool PKCS11::RawDataRef::operator== (const RawDataRef & raw) const
+    {
+        if(size() != raw.size())
+            return false;
+
+        return std::equal(data(), data() + size(), raw.data());
+    }
+
     // Date
     PKCS11::Date::Date(const RawDataRef & ref)
     {
@@ -592,7 +607,7 @@ namespace LTSM
         islogged = false;
     }
 
-    PKCS11::ObjectList PKCS11::Session::findTokenObjects(const ObjectClass & objectClass, size_t maxObjects, const CK_ATTRIBUTE* attrs, size_t counts) const
+    PKCS11::ObjectList PKCS11::Session::findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE* attrs, size_t counts) const
     {
         if(auto lib = weak.lock())
         {
@@ -639,7 +654,36 @@ namespace LTSM
 
         auto attrsCount = sizeof(attrs) / sizeof(CK_ATTRIBUTE);
 
-        return findTokenObjects(objectClass, maxObjects, attrs, attrsCount);
+        return findTokenObjects(maxObjects, attrs, attrsCount);
+    }
+
+    PKCS11::ObjectList PKCS11::Session::getCertificates(bool havePulicPrivateKeys) const
+    {
+        auto certs = findTokenObjects(CKO_CERTIFICATE);
+
+        if(havePulicPrivateKeys)
+        {
+            auto publicKeys = getPublicKeys();
+
+            auto itend = std::remove_if(certs.begin(), certs.end(), [&](auto & certId)
+            {
+                auto certInfo = getObjectInfo(certId);
+    
+                if(0 == findPublicKey(certInfo.getId()))
+                    return true;
+
+                if(islogged)
+                {
+                    if(0 == findPrivateKey(certInfo.getId()))
+                        return true;
+                }
+
+                return false;
+            });
+            certs.erase(itend, certs.end());
+        }
+
+        return certs;
     }
 
     PKCS11::ObjectInfo PKCS11::Session::getObjectInfo(const ObjectHandle & handle, std::initializer_list<CK_ATTRIBUTE_TYPE> types) const
@@ -855,6 +899,222 @@ namespace LTSM
     PKCS11::RawData PKCS11::Session::digestSHA256(const void* ptr, size_t len) const
     {
         return digestData(ptr, len, CKM_SHA256);
+    }
+
+    PKCS11::ObjectHandle PKCS11::Session::findPublicKey(const ObjectIdRef & objId) const
+    {
+        CK_BBOOL tokenStorage = CK_TRUE;
+        CK_OBJECT_CLASS classPublicKey = CKO_PUBLIC_KEY;
+
+        CK_ATTRIBUTE attrs[] =
+        {
+              { CKA_CLASS, (void*) & classPublicKey, sizeof(classPublicKey) },
+              { CKA_TOKEN, & tokenStorage, sizeof(tokenStorage) },
+              { CKA_ID, (void*) objId.data(), objId.size() }
+        };
+
+        auto attrsCount = sizeof(attrs) / sizeof(CK_ATTRIBUTE);
+        auto publicKeys = findTokenObjects(1, attrs, attrsCount);
+
+        return publicKeys.empty() ? 0 : publicKeys.front();
+    }
+
+    PKCS11::ObjectHandle PKCS11::Session::findPrivateKey(const ObjectIdRef & objId) const
+    {
+        CK_BBOOL tokenStorage = CK_TRUE;
+        CK_OBJECT_CLASS classPublicKey = CKO_PRIVATE_KEY;
+
+        CK_ATTRIBUTE attrs[] =
+        {
+              { CKA_CLASS, (void*) & classPublicKey, sizeof(classPublicKey) },
+              { CKA_TOKEN, & tokenStorage, sizeof(tokenStorage) },
+              { CKA_ID, (void*) objId.data(), objId.size() }
+        };
+
+        auto attrsCount = sizeof(attrs) / sizeof(CK_ATTRIBUTE);
+        auto publicKeys = findTokenObjects(1, attrs, attrsCount);
+
+        return publicKeys.empty() ? 0 : publicKeys.front();
+    }
+
+    PKCS11::RawData PKCS11::Session::signData(const RawDataRef & certId, const void* data, size_t length, const MechType & mechType) const
+    {
+        if(! islogged)
+        {
+            Application::error("%s: not logged session", __FUNCTION__);
+            return {};
+        }
+
+        auto mechInfo = getMechInfo(mechType);
+        if(! mechType)
+        {
+            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            return {};
+        }
+
+        CK_MECHANISM mech = { mechType, nullptr, 0 };
+        CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
+
+        if(! privateHandle)
+        {
+            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            return {};
+        }
+
+        if(auto lib = weak.lock())
+        {
+            if(auto ret = lib->func()->C_SignInit(sid, & mech, privateHandle); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_SignInit", sid, ret, rvString(ret));
+                return {};
+            }
+
+            std::vector<uint8_t> buf;
+            CK_ULONG bufLength = 0;
+
+            // get result size            
+            if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
+                return {};
+            }
+
+            buf.resize(bufLength);
+
+            if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
+                return {};
+            }
+
+            if(bufLength < buf.size())
+                buf.resize(bufLength);
+
+            return buf;
+        }
+
+        return {};
+    }
+
+    PKCS11::RawData PKCS11::Session::encryptData(const RawDataRef & certId, const void* data, size_t length, const MechType & mechType) const
+    {
+        auto mechInfo = getMechInfo(mechType);
+        if(! mechType)
+        {
+            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            return {};
+        }
+
+        CK_MECHANISM mech = { mechType, nullptr, 0 };
+        CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
+
+        if(! publicHandle)
+        {
+            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "public key", certId.toHexString().c_str());
+            return {};
+        }
+
+        if(auto lib = weak.lock())
+        {
+            if(auto ret = lib->func()->C_EncryptInit(sid, & mech, publicHandle); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_EncryptInit", sid, ret, rvString(ret));
+                return {};
+            }
+
+            std::vector<uint8_t> buf;
+            CK_ULONG bufLength = 0;
+
+            // get result size            
+            if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
+                return {};
+            }
+
+            buf.resize(bufLength);
+
+            if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
+                return {};
+            }
+
+            if(bufLength < buf.size())
+                buf.resize(bufLength);
+
+            return buf;
+        }
+
+        return {};
+    }
+
+    PKCS11::RawData PKCS11::Session::decryptData(const RawDataRef & certId, const void* data, size_t length, const MechType & mechType) const
+    {
+        if(! islogged)
+        {
+            Application::error("%s: not logged session", __FUNCTION__);
+            return {};
+        }
+
+        auto mechInfo = getMechInfo(mechType);
+        if(! mechType)
+        {
+            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            return {};
+        }
+
+        CK_MECHANISM mech = { mechType, nullptr, 0 };
+        CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
+
+        if(! privateHandle)
+        {
+            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            return {};
+        }
+
+        if(auto lib = weak.lock())
+        {
+            if(auto ret = lib->func()->C_DecryptInit(sid, & mech, privateHandle); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_DecryptInit", sid, ret, rvString(ret));
+                return {};
+            }
+
+            std::vector<uint8_t> buf;
+            CK_ULONG bufLength = 0;
+
+            // get result size            
+            if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
+                return {};
+            }
+
+            buf.resize(bufLength);
+
+            if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
+                return {};
+            }
+
+            if(bufLength < buf.size())
+                buf.resize(bufLength);
+
+            return buf;
+        }
+
+        return {};
     }
 
     // pkcs11 API

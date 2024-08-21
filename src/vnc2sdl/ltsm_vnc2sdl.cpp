@@ -47,165 +47,11 @@ namespace LTSM
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto krb5def = "TERMSRV@remotehost.name";
 
-#ifdef LTSM_RUTOKEN
-    RutokenWrapper::RutokenWrapper(const std::string & lib,
-                                   ChannelClient & owner) : sender(& owner)
-    {
-        rutoken::pkicore::initialize(std::filesystem::path(lib).parent_path());
-        shutdown = false;
-        thscan = std::thread([this]
-        {
-            std::forward_list<std::string> attached;
-
-            while(! this->shutdown)
-            {
-                std::forward_list<std::string> devices;
-
-                try
-                {
-                    for(auto & dev : rutoken::pkicore::Pkcs11Device::enumerate())
-                    {
-                        devices.emplace_front(dev.getSerialNumber());
-                    }
-
-                    for(auto & serial : devices)
-                        if(std::none_of(attached.begin(), attached.end(), [&](auto & str)
-                    {
-                        return str == serial;
-                    }))
-                    this->attachedDevice(serial);
-
-                    for(auto & serial : attached)
-                        if(std::none_of(devices.begin(), devices.end(), [&](auto & str)
-                    {
-                        return str == serial;
-                    }))
-                    this->detachedDevice(serial);
-                    attached.swap(devices);
-                }
-                catch(const rutoken::pkicore::error::InvalidTokenException &)
-                {
-                }
-
-                std::this_thread::sleep_for(2000ms);
-            }
-
-            shutdown = true;
-        });
-    }
-
-    RutokenWrapper::~RutokenWrapper()
-    {
-        shutdown = true;
-
-        if(thscan.joinable())
-        {
-            thscan.join();
-        }
-
-        rutoken::pkicore::deinitialize();
-    }
-
-    void RutokenWrapper::attachedDevice(const std::string & serial)
-    {
-        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
-        auto devices = rutoken::pkicore::Pkcs11Device::enumerate();
-        auto it = std::find_if(devices.begin(), devices.end(), [ = ](auto & dev)
-        {
-            return dev.getSerialNumber() == serial;
-        });
-
-        if(it != devices.end())
-        {
-            auto & dev = *it;
-            auto certs = dev.enumerateCerts();
-
-            if(! certs.empty())
-            {
-                JsonObjectStream jos;
-                jos.push("cmd", SystemCommand::TokenAuth);
-                jos.push("action", "attach");
-                jos.push("serial", serial);
-                jos.push("description", dev.getLabel());
-                JsonArrayStream jas;
-
-                for(auto & cert : certs)
-                {
-                    jas.push(cert.toPem());
-                }
-
-                jos.push("certs", jas.flush());
-                sender->sendLtsmEvent(Channel::System, jos.flush());
-            }
-        }
-    }
-
-    void RutokenWrapper::detachedDevice(const std::string & serial)
-    {
-        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
-        JsonObjectStream jos;
-        jos.push("cmd", SystemCommand::TokenAuth);
-        jos.push("action", "detach");
-        jos.push("serial", serial);
-        sender->sendLtsmEvent(Channel::System, jos.flush());
-    }
-
-    std::vector<uint8_t> RutokenWrapper::decryptPkcs7(const std::string & serial,
-            const std::string & pin, int cert, const std::vector<uint8_t> & pkcs7)
-    {
-        LTSM::Application::info("%s: serial: %s", __FUNCTION__, serial.c_str());
-        auto devices = rutoken::pkicore::Pkcs11Device::enumerate();
-        auto itd = std::find_if(devices.begin(), devices.end(), [ = ](auto & dev)
-        {
-            return dev.getSerialNumber() == serial;
-        });
-
-        if(itd == devices.end())
-        {
-            LTSM::Application::error("%s: device not found, serial: %s", __FUNCTION__,
-                                     serial.c_str());
-            throw token_error("device not found");
-        }
-
-        auto & dev = *itd;
-
-        if(! dev.isLoggedIn())
-        {
-            dev.login(pin);
-        }
-
-        if(! dev.isLoggedIn())
-        {
-            LTSM::Application::error("%s: incorrect pin code, serial: %s, code: %s",
-                                     __FUNCTION__, serial.c_str(), pin.c_str());
-            throw token_error("incorrect pin code");
-        }
-
-        auto certs = dev.enumerateCerts();
-        auto itc = std::find_if(certs.begin(), certs.end(), [ = ](auto & crt)
-        {
-            return Tools::crc32b(crt.toPem()) == cert;
-        });
-
-        if(itc == certs.end())
-        {
-            LTSM::Application::error("%s: certificate not found, serial: %s", __FUNCTION__,
-                                     serial.c_str());
-            throw token_error("certificate not found");
-        }
-
-        auto & pkcs11Cert = *itc;
-        auto envelopedData = rutoken::pkicore::cms::EnvelopedData::parse(pkcs7);
-        auto params = rutoken::pkicore::cms::EnvelopedData::DecryptParams(pkcs11Cert);
-        auto message = envelopedData.decrypt(params);
-        return rutoken::pkicore::cms::Data::cast(std::move(message)).data();
-    }
-#endif
-
     void printHelp(const char* prog, const std::list<int> & encodings)
     {
         std::cout << std::endl <<
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
+
         std::cout << std::endl <<
                   "usage: " << prog <<
                   ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] "
@@ -221,11 +67,10 @@ namespace LTSM
                   "[--vp8]" <<
 #endif
                   "[--encoding <string>] " <<
-                  "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] "
-                  <<
-                  "[--share-folder <folder>] [--printer [" << printdef << "]] [--sane [" << sanedef << "]] " <<
-                  "[--pcsc] [--pcsc11-auth [" << librtdef << "]" <<
-                  "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+                  "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] [--share-folder <folder>] " <<
+                  "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " << "[--pcsc11-auth [" << librtdef << "]] " <<
+                  "[--pcsc] [--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+
         std::cout << std::endl << "arguments:" << std::endl <<
                   "    --debug (debug mode)" << std::endl <<
                   "    --syslog (to syslog)" << std::endl <<
@@ -685,19 +530,6 @@ namespace LTSM
                 std::this_thread::sleep_for(200ms);
             }
         });
-
-        if(! pkcs11Auth.empty() && std::filesystem::exists(pkcs11Auth))
-        {
-#ifdef LTSM_RUTOKEN
-
-            if(std::filesystem::path(pkcs11Auth).filename() == std::filesystem::path(librtdef).filename())
-            {
-                Application::info("%s: check %s success", __FUNCTION__, "rutoken",
-                                  pkcs11Auth.c_str());
-                token = std::make_unique<RutokenWrapper>pkcs11Auth, static_cast<ChannelClient &>(*this));
-            }
-#endif
-        }
 
         // main thread: sdl processing
         auto clipboardDelay = std::chrono::steady_clock::now();
@@ -1437,61 +1269,10 @@ namespace LTSM
         return jo.flush();
     }
 
-    void Vnc2SDL::systemTokenAuth(const JsonObject & jo)
-    {
-        auto action = jo.getString("action");
-        auto serial = jo.getString("serial");
-        Application::info("%s: action: %s, serial: %s", __FUNCTION__, action.c_str(),
-                          serial.c_str());
-
-        if(! token)
-        {
-            Application::error("%s: token api not loaded", __FUNCTION__);
-            return;
-        }
-
-        if(action == "check")
-        {
-            std::thread([this, ptr = token.get(), serial, pin = jo.getString("pin"),
-                               cert = jo.getInteger("cert"), content = jo.getString("data")]
-            {
-                auto data = Tools::convertJsonString2Binary(content);
-
-                try
-                {
-                    data = ptr->decryptPkcs7(serial, pin, cert, data);
-                }
-                catch(const std::exception & err)
-                {
-                    std::string str = err.what();
-                    data.assign(str.begin(), str.end());
-                }
-
-                JsonObjectStream jos;
-                jos.push("cmd", SystemCommand::TokenAuth);
-                jos.push("action", "reply");
-                jos.push("serial", serial);
-                jos.push("cert", cert);
-                jos.push("decrypt", std::string(data.begin(), data.end()));
-
-                static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
-            }).detach();
-        }
-        else
-        {
-            Application::error("%s: unknown action: %s", __FUNCTION__, action.c_str());
-            throw sdl_error(NS_FuncName);
-        }
-    }
-
     void Vnc2SDL::systemLoginSuccess(const JsonObject & jo)
     {
         if(jo.getBoolean("action", false))
         {
-            if(token)
-            {
-                token.reset();
-            }
         }
         else
         {

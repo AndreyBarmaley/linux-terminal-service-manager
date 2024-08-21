@@ -296,12 +296,14 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
         throw std::invalid_argument(NS_FuncName);
     }
 
+#ifndef LTSM_CLIENT
     if((channelConn->isAllowSessionFor(true) && ! isUserSession()) ||
         (channelConn->isAllowSessionFor(false) && isUserSession()))
     {
-        Application::error("%s: ltsm channel disable for session", __FUNCTION__);
+        Application::error("%s: ltsm channel disable for session: `%s'", __FUNCTION__, (isUserSession() ? "user" : "login"));
         throw std::invalid_argument(NS_FuncName);
     }
+#endif
 
     if(! channelConn->isRemoteConnected())
     {

@@ -1,7 +1,8 @@
 /***************************************************************************
  *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
- *   PKCS11: wrapper c++                                                   *
+ *   Part of the LTSM: Linux Terminal Service Manager:                     *
+ *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -208,13 +209,19 @@ namespace LTSM
         {
             RawDataRef() : std::pair<const uint8_t*, size_t>(nullptr, 0) {}
             RawDataRef(const uint8_t* ptr, size_t len) : std::pair<const uint8_t*, size_t>(ptr, len) {}
+            RawDataRef(const std::vector<uint8_t> & v) : std::pair<const uint8_t*, size_t>(v.data(), v.size()) {}
 
             inline const uint8_t* data(void) const { return first; }
             inline size_t         size(void) const { return second; }
 
             std::string         toString(void) const;
+            std::string         toHexString(std::string_view sep = ",", bool pref = true) const;
             RawData             copy(void) const { return RawData(first, first + second); }
+
+            bool                operator==(const RawDataRef &) const;
         };
+
+        typedef RawDataRef ObjectIdRef;
 
         class Date
         {
@@ -253,7 +260,7 @@ namespace LTSM
             ObjectHandle               handle = 0;
 
         public:
-            inline static const auto types = { CKA_ID, CKA_START_DATE, CKA_END_DATE, CKA_TOKEN, CKA_PRIVATE, CKA_MODIFIABLE, CKA_LABEL, CKA_VALUE };
+            inline static const auto types = { CKA_ID, CKA_START_DATE, CKA_END_DATE, CKA_TOKEN, CKA_PRIVATE, CKA_MODIFIABLE, CKA_LABEL };
 
             ObjectInfo() = default;
             ObjectInfo(ObjectInfo &&) = default;
@@ -264,8 +271,7 @@ namespace LTSM
 
             const ObjectHandle & getHandle(void) const { return handle; }
 
-            RawDataRef          getId(void) const { return getRawData(CKA_ID); }
-            RawDataRef          getRawValue(void) const { return getRawData(CKA_VALUE); }
+            ObjectIdRef         getId(void) const { return getRawData(CKA_ID); }
             std::string         getLabel(void) const;
 
             Date                getStartDate(void) const { return getRawData(CKA_START_DATE); }
@@ -279,11 +285,12 @@ namespace LTSM
         /// Certificate
         struct CertificateInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_ISSUER, CKA_SERIAL_NUMBER };
+            inline static const auto types = { CKA_SUBJECT, CKA_ISSUER, CKA_SERIAL_NUMBER, CKA_VALUE };
 
-            RawDataRef         getSubject(void) const { return getRawData(CKA_SUBJECT); }
-            RawDataRef         getIssuer(void) const { return getRawData(CKA_ISSUER); }
-            RawDataRef         getSerialNumber(void) const { return getRawData(CKA_SERIAL_NUMBER); }
+            RawDataRef          getRawValue(void) const { return getRawData(CKA_VALUE); }
+            RawDataRef          getSubject(void) const { return getRawData(CKA_SUBJECT); }
+            RawDataRef          getIssuer(void) const { return getRawData(CKA_ISSUER); }
+            RawDataRef          getSerialNumber(void) const { return getRawData(CKA_SERIAL_NUMBER); }
 
             CertificateInfo() = default;
             CertificateInfo(ObjectInfo && obj) noexcept : ObjectInfo(std::move(obj)) {}
@@ -292,13 +299,13 @@ namespace LTSM
         /// PublicKey
         struct PublicKeyInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP };
+            inline static const auto types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP,  };
 
-            RawDataRef         getSubject(void) const { return getRawData(CKA_SUBJECT); }
+            RawDataRef          getSubject(void) const { return getRawData(CKA_SUBJECT); }
 
-            bool               isEncrypt(void) const{ return getBool(CKA_ENCRYPT); }
-            bool               isVerify(void) const{ return getBool(CKA_VERIFY); }
-            bool               isWrap(void) const{ return getBool(CKA_WRAP); }
+            bool                isEncrypt(void) const{ return getBool(CKA_ENCRYPT); }
+            bool                isVerify(void) const{ return getBool(CKA_VERIFY); }
+            bool                isWrap(void) const{ return getBool(CKA_WRAP); }
 
             PublicKeyInfo() = default;
             PublicKeyInfo(ObjectInfo && obj) noexcept : ObjectInfo(std::move(obj)) {}
@@ -403,13 +410,16 @@ namespace LTSM
             void                logout(void);
 
             ObjectList          findTokenObjects(const ObjectClass &, size_t maxObjects = 32) const;
-            ObjectList          findTokenObjects(const ObjectClass &, size_t maxObjects, const CK_ATTRIBUTE*, size_t counts) const;
+            ObjectList          findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE*, size_t counts) const;
 
-            ObjectList          getCertificates(void) const { return findTokenObjects(CKO_CERTIFICATE); }
+            ObjectHandle        findPublicKey(const ObjectIdRef &) const;
+            ObjectHandle        findPrivateKey(const ObjectIdRef &) const;
+
+            ObjectList          getCertificates(bool havePulicPrivateKeys = false) const;
             ObjectList          getPublicKeys(void) const { return findTokenObjects(CKO_PUBLIC_KEY); }
             ObjectList          getPrivateKeys(void) const { return findTokenObjects(CKO_PRIVATE_KEY); }
 
-            ObjectInfo          getObjectInfo(const ObjectHandle &, std::initializer_list<CK_ATTRIBUTE_TYPE>) const;
+            ObjectInfo          getObjectInfo(const ObjectHandle &, std::initializer_list<CK_ATTRIBUTE_TYPE> = {}) const;
 
             CertificateInfo     getCertificateInfo(const ObjectHandle &) const;
             PublicKeyInfo       getPublicKeyInfo(const ObjectHandle &) const;
@@ -419,6 +429,11 @@ namespace LTSM
 
             ssize_t             getAttribLength(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
             RawData             getAttribData(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
+
+            RawData             signData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+
+            RawData             encryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+            RawData             decryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
         };
 
     } // PKCS11

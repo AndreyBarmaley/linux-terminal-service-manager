@@ -59,7 +59,6 @@ namespace LTSM
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
-        static const std::string_view TokenAuth{"TokenAuth"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
@@ -235,6 +234,7 @@ namespace LTSM
         protected:
             ChannelClient* owner = nullptr;
             ConnectorMode mode = ConnectorMode::Unknown;
+        public:
             int flags = 0;
 
         public:
@@ -546,7 +546,6 @@ namespace LTSM
         virtual void    systemChannelError(const JsonObject &) { /* empty */ }
 
         virtual void    systemTransferFiles(const JsonObject &) { /* empty */ }
-        virtual void    systemTokenAuth(const JsonObject &) { /* empty */ }
         virtual void    systemLoginSuccess(const JsonObject &) { /* empty */ }
 
         bool            createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);

@@ -1171,7 +1171,7 @@ namespace LTSM
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
 
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", controlCode: 0x08%" PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
+        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", controlCode: 0x%08" PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
                        __FUNCTION__, st.id(), st.context, st.handle, controlCode, sendLength, recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace))

@@ -101,7 +101,6 @@ namespace LTSM
             void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const uint32_t& flags) override;
             void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
             void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
-            void                onTokenAuthCheckPkcs7(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& pkcs7) override;
 
             void                serverHandshakeVersionEvent(void) override;
             void                serverSelectEncodingsEvent(void) override;
@@ -117,7 +116,6 @@ namespace LTSM
             void                systemTransferFiles(const JsonObject &) override;
             void                systemClientVariables(const JsonObject &) override;
             void                systemKeyboardChange(const JsonObject &) override;
-            void                systemTokenAuth(const JsonObject &) override;
 
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}

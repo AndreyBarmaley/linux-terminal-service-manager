@@ -23,7 +23,6 @@
 #ifndef _LTSM_LDAP_WRAPPER_H_
 #define _LTSM_LDAP_WRAPPER_H_
 
-#ifdef LTSM_TOKEN_AUTH
 #include <ldap.h>
 
 #include <string>
@@ -47,9 +46,8 @@ namespace LTSM
         ~LdapWrapper();
 
         std::string findLoginFromDn(std::string_view dn);
-        std::string findDnFromCertificate(const std::vector<uint8_t> &);
+        std::string findDnFromCertificate(const uint8_t*, size_t);
     };
 }
 
-#endif // LTSM_TOKEN_AUTH
 #endif

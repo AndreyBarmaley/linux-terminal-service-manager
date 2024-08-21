@@ -471,7 +471,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
     uint32_t recvLength = sb.readIntLE32();
     auto sendBuffer = sb.read(sendLength);
 
-    Application::info("%s: handle: %" PRIx64 ", controlCode: 0x08%" PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
+    Application::info("%s: handle: %" PRIx64 ", controlCode: 0x%08" PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
                         __FUNCTION__, hCard, controlCode, sendLength, recvLength);
 
     DWORD bytesReturned = 0;

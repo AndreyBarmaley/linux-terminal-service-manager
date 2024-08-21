@@ -1381,9 +1381,6 @@ namespace LTSM
         if(cmd == SystemCommand::ChannelError)
             systemChannelError(jo);
         else
-        if(cmd == SystemCommand::TokenAuth)
-            systemTokenAuth(jo);
-        else
         if(cmd == SystemCommand::LoginSuccess)
             systemLoginSuccess(jo);
         else

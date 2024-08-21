@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>440</width>
-    <height>256</height>
+    <height>274</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -400,22 +400,6 @@ color: rgb(255, 255, 255);</string>
  </resources>
  <connections>
   <connection>
-   <sender>comboBoxUsername</sender>
-   <signal>editTextChanged(QString)</signal>
-   <receiver>LTSM_HelperWindow</receiver>
-   <slot>usernameChanged(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>354</x>
-     <y>125</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>143</x>
-     <y>176</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>pushButtonLogin</sender>
    <signal>clicked()</signal>
    <receiver>LTSM_HelperWindow</receiver>
@@ -463,29 +447,11 @@ color: rgb(255, 255, 255);</string>
     </hint>
    </hints>
   </connection>
-  <connection>
-   <sender>comboBoxDomain</sender>
-   <signal>currentTextChanged(QString)</signal>
-   <receiver>LTSM_HelperWindow</receiver>
-   <slot>tokenChanged(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>272</x>
-     <y>114</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>219</x>
-     <y>127</y>
-    </hint>
-   </hints>
-  </connection>
  </connections>
  <slots>
-  <slot>usernameChanged(QString)</slot>
   <slot>loginClicked()</slot>
   <slot>passwordChanged(QString)</slot>
   <slot>titlePressed()</slot>
   <slot>titleReleased()</slot>
-  <slot>tokenChanged(QString)</slot>
  </slots>
 </ui>

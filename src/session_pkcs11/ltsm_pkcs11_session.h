@@ -59,6 +59,15 @@ struct Pkcs11Token
     }
 };
 
+struct Pkcs11Mech
+{
+    uint64_t mechId;
+    uint64_t minKey;
+    uint64_t maxKey;
+    uint64_t flags;
+    std::string name;
+};
+
 struct Pkcs11Cert
 {
     std::vector<uint8_t> objectId;
@@ -83,9 +92,10 @@ public:
 
     const std::list<Pkcs11Token> & getTokens(void) const;
     std::list<Pkcs11Cert> getCertificates(uint64_t slotId);
+    std::list<Pkcs11Mech> getMechanisms(uint64_t slotId);
 
-    std::vector<uint8_t> signData(uint64_t slotId, const std::vector<uint8_t> & certId, const void* data, size_t len);
-    std::vector<uint8_t> decryptData(uint64_t slotId, const std::vector<uint8_t> & certId, const void* data, size_t len);
+    std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+    std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
 protected:
     void run(void) override;

@@ -19,7 +19,6 @@ option(LTSM_BUILD_SANITIZE "build with sanitize" OFF)
 option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_FB_FAST_CYCLE "build FrameBuffer plain cycles" OFF)
 option(LTSM_PKCS11_AUTH "ltsm pkcs11 auth support" ON)
-option(LTSM_RUTOKEN_BACKEND "client rutoken support" ON)
 #option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
 #option(LTSM_BUILD_X11VNC "build x11vnc utility" OFF)
 #option(LTSM_BUILD_COVERAGE_TESTS "sonarcloud coverage tests" OFF)
@@ -55,20 +54,7 @@ else()
     unset(LTSM_PCSC2SESSION CACHE)
 endif()
 
-if(LTSM_BUILD_CLIENT)
-    if(LTSM_TOKEN_AUTH)
-        set(LTSM_RUTOKEN_BACKEND ON CACHE BOOL "client rutoken support" FORCE)
-    else()
-        unset(LTSM_RUTOKEN_BACKEND CACHE)
-    endif()
-else()
-    unset(LTSM_TOKEN_AUTH CACHE)
-    unset(LTSM_RUTOKEN_BACKEND CACHE)
-endif()
-
 if(LTSM_BUILD_COVERAGE_TESTS)
-    unset(LTSM_RUTOKEN_BACKEND CACHE)
-
     set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} --coverage -DLTSM_COVERAGE_TEST")
 
     set(LTSM_WITH_RDP ON CACHE BOOL "add rdp protocol support" FORCE)
@@ -82,15 +68,6 @@ if(LTSM_BUILD_COVERAGE_TESTS)
     set(LTSM_BUILD_TESTS ON CACHE BOOL "build test utilities" FORCE)
     set(LTSM_BUILD_X11VNC ON CACHE BOOL "build x11vnc utility" FORCE)
     set(LTSM_BUILD_VNC2IMAGE ON CACHE BOOL "build vnc2image utility" FORCE)
-endif()
-
-if(LTSM_GITHUB_WORKFLOW)
-    unset(LTSM_RUTOKEN_BACKEND CACHE)
-endif()
-
-if(LTSM_RUTOKEN_BACKEND)
-    # fix for rutoken/pki-core
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wno-extern-c-compat")
 endif()
 
 include(FindPkgConfig)
@@ -312,7 +289,7 @@ if(LTSM_BUILD_HELPER)
         COMMENT "Generating D-Bus LTSM_SERVICE proxy interface"
     )
 
-    find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
+    find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
     pkg_search_module(P11KIT REQUIRED p11-kit-1)
@@ -329,6 +306,7 @@ if(LTSM_BUILD_HELPER)
         src/qt_helper/main.cpp
         src/qt_helper/ltsm_helperwindow.cpp
         src/qt_helper/ltsm_ldap_wrapper.cpp
+        src/qt_helper/ltsm_openssl_wrapper.cpp
         src/session_pkcs11/ltsm_pkcs11_session.cpp
         src/session_pkcs11/ltsm_pkcs11_wrapper.cpp
         src/qt_helper/ltsm_helperwindow.ui
@@ -337,10 +315,6 @@ if(LTSM_BUILD_HELPER)
     if(LTSM_PKCS11_AUTH)
         target_compile_options(LTSM_helper PRIVATE -DLTSM_PKCS11_AUTH ${P11KIT_DEFINITIONS})
         target_include_directories(LTSM_helper PRIVATE ${P11KIT_INCLUDE_DIRS})
-    endif()
-
-    if(LTSM_TOKEN_AUTH)
-        target_compile_options(LTSM_helper PRIVATE -DLTSM_TOKEN_AUTH)
 
         find_library(LDAP_LIBRARY ldap REQUIRED)
         find_library(LBER_LIBRARY lber REQUIRED)
@@ -351,7 +325,7 @@ if(LTSM_BUILD_HELPER)
     target_compile_options(LTSM_helper PRIVATE ${OPENSSL_DEFINITIONS}
                     -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_helper PRIVATE src/common src/dbus src/session_pkcs11 ${OPENSSL_INCLUDE_DIR} ${GNUTLS_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
-    target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets SDBusCpp::sdbus-c++ ${OPENSSL_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES})
+    target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network SDBusCpp::sdbus-c++ ${OPENSSL_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES})
     set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
@@ -449,12 +423,6 @@ if(LTSM_BUILD_CLIENT)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
     find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
     find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
-
-    if(LTSM_RUTOKEN_BACKEND)
-        target_include_directories(LTSM_client PRIVATE /usr/include/rutoken /usr/include/rutoken/pki-core)
-        target_compile_options(LTSM_client PRIVATE -DLTSM_RUTOKEN)
-        target_link_libraries(LTSM_client -lpki-core)
-    endif()
 
     pkg_search_module(P11KIT REQUIRED p11-kit-1)
     pkg_search_module(PCSCLITE REQUIRED libpcsclite)

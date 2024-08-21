@@ -2349,64 +2349,6 @@ namespace LTSM
         return false;
     }
 
-#ifdef LTSM_TOKEN_AUTH
-    void  Manager::Object::tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
-    {
-        Application::info("%s: display: %" PRId32 ", serial: %s, certs: %u", __FUNCTION__, display, serial.c_str(), certs.size());
-
-        if(auto xvfb = findDisplaySession(display))
-        {
-            if(xvfb->mode == XvfbMode::SessionLogin)
-                emitTokenAuthAttached(display, serial, description, certs);
-        }
-    }
-
-    void  Manager::Object::tokenAuthDetached(const int32_t& display, const std::string& serial)
-    {
-        Application::info("%s: display: %" PRId32 ", serial: %s", __FUNCTION__, display, serial.c_str());
-
-        if(auto xvfb = findDisplaySession(display))
-        {
-            if(xvfb->mode == XvfbMode::SessionLogin)
-                emitTokenAuthDetached(display, serial);
-        }
-    }
-
-    void Manager::Object::tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
-    {
-        if(auto xvfb = findDisplaySession(display))
-        {
-            if(xvfb->mode == XvfbMode::SessionLogin)
-                emitTokenAuthReplyCheck(display, serial, cert, decrypt);
-        }
-    }
-
-    void Manager::Object::helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data)
-    {
-        if(auto xvfb = findDisplaySession(display))
-        {
-            if(xvfb->mode == XvfbMode::SessionLogin)
-                emitTokenAuthCheckPkcs7(display, serial, pin, cert, data);
-        }
-    }
-#else
-    void  Manager::Object::tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs)
-    {
-    }
-
-    void  Manager::Object::tokenAuthDetached(const int32_t& display, const std::string& serial)
-    {
-    }
-
-    void Manager::Object::helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data)
-    {
-    }
-
-    void Manager::Object::tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt)
-    {
-    }
-#endif
-
     bool Manager::Object::helperWidgetStartedAction(const int32_t & display)
     {
         Application::info("%s: display: %" PRId32, __FUNCTION__, display);

@@ -334,11 +334,6 @@ namespace LTSM
             bool                        busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) override;
             bool                        busRenderClear(const int32_t& display) override;
 
-            void                        tokenAuthAttached(const int32_t& display, const std::string& serial, const std::string& description, const std::vector<std::string>& certs) override;
-            void                        tokenAuthDetached(const int32_t& display, const std::string& serial) override;
-            void                        tokenAuthReply(const int32_t& display, const std::string& serial, const uint32_t& cert, const std::string& decrypt) override;
-            void                        helperTokenAuthEncrypted(const int32_t& display, const std::string& serial, const std::string& pin, const uint32_t& cert, const std::vector<uint8_t>& data) override;
-
             void                        startSessionChannels(XvfbSessionPtr, int connectorId);
             void                        stopSessionChannels(XvfbSessionPtr, int connectorId);
 
