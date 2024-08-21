@@ -1729,7 +1729,8 @@ namespace LTSM
             if(_config->getBoolean("session:kill:stop", false))
             {
                 auto cmd = std::string("/usr/bin/killall -s SIGCONT -u ").append(oldSess->userInfo->user());
-                std::system(cmd.c_str());
+                int ret = std::system(cmd.c_str());
+                Application::debug("%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret, oldSess->displayNum);
             }
 
             sessionRunSetxkbmapLayout(oldSess);
@@ -2020,7 +2021,8 @@ namespace LTSM
                 if(_config->getBoolean("session:kill:stop", false))
                 {
                     auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(xvfb->userInfo->user());
-                    std::system(cmd.c_str());
+                    int ret = std::system(cmd.c_str());
+                    Application::debug("%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret, xvfb->displayNum);
                 }
 
                 stopSessionChannels(std::move(xvfb), connectorId);
@@ -2699,8 +2701,11 @@ namespace LTSM
 
         if(! failed)
         {
-            chmod(path.c_str(), mode);
-            chown(path.c_str(), uid, gid);
+            if(0 != chmod(path.c_str(), mode))
+                Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
+
+            if(0 != chown(path.c_str(), uid, gid))
+                Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
         }
     }
 

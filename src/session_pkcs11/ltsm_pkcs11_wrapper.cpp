@@ -1443,10 +1443,14 @@ namespace LTSM
             case CKM_GOST28147: return "GOST28147";
             case CKM_GOST28147_MAC: return "GOST28147_MAC";
             case CKM_GOST28147_KEY_WRAP: return "GOST28147_KEY_WRAP";
+#if defined (CKM_CHACHA20)
             case CKM_CHACHA20_KEY_GEN: return "CHACHA20_KEY_GEN";
             case CKM_CHACHA20: return "CHACHA20";
+#endif
+#if defined(CKM_POLY1305)
             case CKM_POLY1305_KEY_GEN: return "POLY1305_KEY_GEN";
             case CKM_POLY1305: return "POLY1305";
+#endif
             case CKM_DSA_PARAMETER_GEN: return "DSA_PARAMETER_GEN";
             case CKM_DH_PKCS_PARAMETER_GEN: return "DH_PKCS_PARAMETER_GEN";
             case CKM_X9_42_DH_PARAMETER_GEN: return "X9_42_DH_PARAMETER_GEN";
@@ -1478,9 +1482,13 @@ namespace LTSM
             case CKM_RSA_PKCS_TPM_1_1: return "RSA_PKCS_TPM_1_1";
             case CKM_RSA_PKCS_OAEP_TPM_1_1: return "RSA_PKCS_OAEP_TPM_1_1";
             case CKM_EC_EDWARDS_KEY_PAIR_GEN: return "EC_EDWARDS_KEY_PAIR_GEN";
+#if defined(CKM_EC_MONTGOMERY_KEY_PAIR_GEN)
             case CKM_EC_MONTGOMERY_KEY_PAIR_GEN: return "EC_MONTGOMERY_KEY_PAIR_GEN";
+#endif
             case CKM_EDDSA: return "EDDSA";
+#if defined(CKM_XEDDSA)
             case CKM_XEDDSA: return "XEDDSA";
+#endif
         }
 
         return nullptr;
@@ -1593,7 +1601,9 @@ namespace LTSM
             case CKR_PIN_TOO_WEAK: return "PIN_TOO_WEAK";
             case CKR_PUBLIC_KEY_INVALID: return "PUBLIC_KEY_INVALID";
             case CKR_FUNCTION_REJECTED: return "FUNCTION_REJECTED";
+#if defined(CKR_OPERATION_CANCEL_FAILED)
             case CKR_OPERATION_CANCEL_FAILED: return "OPERATION_CANCEL_FAILED";
+#endif
             case CKR_VENDOR_DEFINED: return "VENDOR_DEFINED";
             default: break;
         }
