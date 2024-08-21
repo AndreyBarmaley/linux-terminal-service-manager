@@ -224,7 +224,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext)
         while(*it)
         {
             readers.emplace_back(it);
-            it += strlen(it) + 1;
+            it += strnlen(it, std::min((size_t)MAX_READERNAME, readersLength)) + 1;
         }
     }
 

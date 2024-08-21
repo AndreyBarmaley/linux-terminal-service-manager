@@ -1701,7 +1701,7 @@ namespace LTSM
         for(uint32_t it = 0; it < statesCount; ++it)
         {
             const SCARD_READERSTATE & state = states[it];
-            ltsm->sendIntLE32(strlen(state.szReader));
+            ltsm->sendIntLE32(strnlen(state.szReader, MAX_READERNAME));
             ltsm->sendString(state.szReader);
             ltsm->sendIntLE32(state.dwCurrentState);
             ltsm->sendIntLE32(state.cbAtr);
