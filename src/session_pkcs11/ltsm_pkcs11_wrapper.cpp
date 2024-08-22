@@ -38,32 +38,31 @@
 namespace LTSM
 {
     template <typename Iterator>
-    std::string trimString(Iterator beg, Iterator end)
+    std::string trimString(Iterator first, Iterator last)
     {
-        if(beg == end)
+        if(first == last)
             return "";
 
-        auto it1 = beg;
-        while(it1 != end && std::isspace(*it1)) ++it1;
+        while(first != last && std::isspace(*first)) first = std::next(first);
 
-        if(it1 == end)
+        if(first == last)
             return "";
 
-        auto it2 = end - 1;
-        while(it2 != it1 && std::isspace(*it2)) --it2;
+        last = std::prev(last);
+        while(last != first && std::isspace(*last)) last = std::prev(last);
 
-        return std::string(it1, it2 + 1);
+        return std::string(first, last);
     }
 
     // SlotInfo
     std::string PKCS11::SlotInfo::getDescription(void) const
     {
-        return trimString(slotDescription, slotDescription + sizeof(slotDescription));
+        return trimString(std::begin(slotDescription), std::end(slotDescription));
     }
 
     std::string PKCS11::SlotInfo::getManufacturerID(void) const
     {
-        return trimString(manufacturerID, manufacturerID + sizeof(manufacturerID));
+        return trimString(std::begin(manufacturerID), std::end(manufacturerID));
     }
 
     bool PKCS11::SlotInfo::flagTokenPresent(void) const
@@ -79,27 +78,27 @@ namespace LTSM
     // TokenInfo
     std::string PKCS11::TokenInfo::getLabel(void) const
     {
-        return trimString(label, label + sizeof(label));
+        return trimString(std::begin(label), std::end(label));
     }
 
     std::string PKCS11::TokenInfo::getManufacturerID(void) const
     {
-        return trimString(manufacturerID, manufacturerID + sizeof(manufacturerID));
+        return trimString(std::begin(manufacturerID), std::end(manufacturerID));
     }
 
     std::string PKCS11::TokenInfo::getModel(void) const
     {
-        return trimString(model, model + sizeof(model));
+        return trimString(std::begin(model), std::end(model));
     }
 
     std::string PKCS11::TokenInfo::getSerialNumber(void) const
     {
-        return trimString(serialNumber, serialNumber + sizeof(serialNumber));
+        return trimString(std::begin(serialNumber), std::end(serialNumber));
     }
 
     std::string PKCS11::TokenInfo::getUtcTime(void) const
     {
-        return trimString(utcTime, utcTime + sizeof(utcTime));
+        return trimString(std::begin(utcTime), std::end(utcTime));
     }
 
     bool PKCS11::TokenInfo::flagWriteProtected(void) const
@@ -131,12 +130,12 @@ namespace LTSM
     // LibraryInfo
     std::string PKCS11::LibraryInfo::getDescription(void) const
     {
-        return trimString(libraryDescription, libraryDescription + sizeof(libraryDescription));
+        return trimString(std::begin(libraryDescription), std::end(libraryDescription));
     }
 
     std::string PKCS11::LibraryInfo::getManufacturerID(void) const
     {
-        return trimString(manufacturerID, manufacturerID + sizeof(manufacturerID));
+        return trimString(std::begin(manufacturerID), std::end(manufacturerID));
     }
 
     // Library

@@ -61,8 +61,8 @@ namespace PcscLite
         atrLen = sizeof(atr);
         protocol = 0;
     
-        std::fill(name, name + sizeof(name), 0);
-        std::fill(atr, atr + sizeof(atr), 0);
+        std::fill(std::begin(name), std::end(name), 0);
+        std::fill(std::begin(atr), std::end(atr), 0);
     }
 }
 
@@ -1738,7 +1738,7 @@ namespace LTSM
         const uint32_t timeout = 0;
 
         SCARD_READERSTATE state = { .szReader = readerName.c_str(), .dwCurrentState = SCARD_STATE_UNAWARE, .cbAtr = MAX_ATR_SIZE };
-        std::fill(state.rgbAtr, state.rgbAtr + sizeof(state.rgbAtr), 0);
+        std::fill(std::begin(state.rgbAtr), std::end(state.rgbAtr), 0);
 
         auto ret = pcscGetStatusChange(st, timeout, & state, 1);
 
