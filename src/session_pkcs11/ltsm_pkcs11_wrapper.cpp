@@ -51,7 +51,7 @@ namespace LTSM
         last = std::prev(last);
         while(last != first && std::isspace(*last)) last = std::prev(last);
 
-        return std::string(first, last);
+        return std::string(first, last + 1);
     }
 
     // SlotInfo
