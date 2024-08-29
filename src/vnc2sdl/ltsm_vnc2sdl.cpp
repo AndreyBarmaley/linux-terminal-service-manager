@@ -54,7 +54,7 @@ namespace LTSM
 
         std::cout << std::endl <<
                   "usage: " << prog <<
-                  ": --host <localhost> [--port 5900] [--password <pass>] [--version] [--debug] [--syslog] "
+                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug] [--syslog] "
                   <<
                   "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
                   "[--notls] [--noltsm]"
@@ -78,6 +78,7 @@ namespace LTSM
                   "    --port <port> " << std::endl <<
                   "    --username <user> " << std::endl <<
                   "    --password <pass> " << std::endl <<
+                  "    --password-file <file> (password from file or STDIN)" << std::endl <<
                   "    --noaccel (disable SDL2 acceleration)" << std::endl <<
                   "    --fullscreen (switch to fullscreen mode, Ctrl+F10 toggle)" << std::endl <<
                   "    --nodamage (skip X11 damage events)" << std::endl <<
@@ -345,6 +346,11 @@ namespace LTSM
                 rfbsec.passwdFile.assign(argv[it + 1]);
                 it = it + 1;
             }
+            else if(0 == std::strcmp(argv[it], "--password-file") && it + 1 < argc)
+            {
+                passfile.assign(argv[it + 1]);
+                it = it + 1;
+            }
             else if(0 == std::strcmp(argv[it], "--username") && it + 1 < argc)
             {
                 username.assign(argv[it + 1]);
@@ -466,6 +472,24 @@ namespace LTSM
         if(0 > sockfd)
         {
             return -1;
+        }
+
+        if(rfbsec.passwdFile.empty())
+        {
+            if(auto env = std::getenv("LTSM_PASSWORD"))
+                rfbsec.passwdFile.assign(env);
+
+            if(passfile == "-" || Tools::lower(passfile) == "stdin")
+            {
+                std::getline(std::cin, rfbsec.passwdFile);
+            }
+            else
+            if(std::filesystem::is_regular_file(passfile))
+            {
+                std::ifstream ifs(passfile);
+                if(ifs)
+                    std::getline(ifs, rfbsec.passwdFile);
+            }
         }
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);

@@ -914,7 +914,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(data.data(), data.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
             Application::debug("%s: send data: [ `%s' ]",__FUNCTION__, str.c_str());
         }
 
@@ -934,7 +934,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(data.data(), data.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
             Application::debug("%s: recv data: [ `%s' ]",__FUNCTION__, str.c_str());
         }
 
@@ -1039,7 +1039,7 @@ namespace LTSM
 
                 if(Application::isDebugLevel(DebugLevel::Trace))
                 {
-                    auto str = Tools::buffer2hexstring<uint8_t>(atr.data(), atr.size(), 2, ",", false);
+                    auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
                     Application::debug("%s: atr: [ `%s' ]",__FUNCTION__, str.c_str());
                 }
             }
@@ -1176,7 +1176,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(data.data(), data.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
             Application::debug("%s: send data: [ `%s' ]",__FUNCTION__, str.c_str());
         }
 
@@ -1198,7 +1198,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(data.data(), data.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
             Application::debug("%s: recvLength: %" PRIu32 ", recv data: [ `%s' ]",__FUNCTION__, bytesReturned, str.c_str());
         }
 
@@ -1281,7 +1281,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(attr.data(), attr.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
             Application::debug("%s: attrLength: %" PRIu32 ", attr: [ `%s' ]",__FUNCTION__, attrLen, str.c_str());
         }
 
@@ -1347,7 +1347,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(attr.data(), attr.size(), 2, ",", false);
+            auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
             Application::debug("%s: attr: [ `%s' ]",__FUNCTION__, str.c_str());
         }
 
@@ -1759,7 +1759,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto str = Tools::buffer2hexstring<uint8_t>(state.rgbAtr, state.cbAtr, 2, ",", false);
+            auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
             Application::debug("%s: atr: [ `%s' ]",__FUNCTION__, str.c_str());
         }
 

@@ -39,7 +39,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20221002
+#define JSON_WRAPPER 20240828
 
 namespace LTSM
 {

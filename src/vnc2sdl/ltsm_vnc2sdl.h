@@ -69,6 +69,7 @@ namespace LTSM
         std::string             printerUrl, saneUrl;
         std::string             prefferedEncoding;
         std::string             audioEncoding{"auto"};
+        std::string             passfile;
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;

@@ -853,7 +853,8 @@ namespace LTSM
 
         if(1 < debug)
         {
-            std::string str = Tools::buffer2hexstring<uint8_t>(sb.toVector().data(), sb.toVector().size(), 2);
+            auto & vec = sb.toVector();
+            std::string str = Tools::buffer2hexstring(vec.begin(), vec.end(), 2);
             Application::debug("%s: job id: %d, packed stream: %s", __FUNCTION__, jobId, str.c_str());
         }
     }

@@ -589,7 +589,7 @@ namespace LTSM
 
     bool JsonObject::hasKey(std::string_view key) const
     {
-        return content.end() != content.find(std::string(key));
+        return getValue(key);
     }
 
     std::list<std::string> JsonObject::keys(void) const
@@ -1054,7 +1054,7 @@ namespace LTSM
     {
         auto str = Tools::fileToString(file);
         if(! str.empty())
-            return parseBinary(reinterpret_cast<const char*>(str.data()), str.size());
+            return parseBinary(str.data(), str.size());
 
         return false;
     }

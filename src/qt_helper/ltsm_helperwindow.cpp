@@ -40,13 +40,17 @@
 #include <QSslCertificate>
 #include <QRandomGenerator>
 
+#ifdef LTSM_PKCS11_AUTH
+#include "gnutls/x509.h"
+#include "gnutls/abstract.h"
+#endif
+
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_pkcs11.h"
 #include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
 #include "ltsm_pkcs11_session.h"
-#include "ltsm_openssl_wrapper.h"
 
 #include "ui_ltsm_helperwindow.h"
 
@@ -374,6 +378,68 @@ void LTSM_HelperWindow::usernameIndexChanged(int index)
     }
 }
 
+#ifdef LTSM_PKCS11_AUTH
+struct DatumAlloc : gnutls_datum_t
+{
+    DatumAlloc(const gnutls_datum_t & dt)
+    {
+        data = dt.data;
+        size = dt.size;
+    }
+
+    ~DatumAlloc()
+    {
+        if(data && size)
+            gnutls_free(data);
+    }
+};
+
+std::unique_ptr<DatumAlloc> gnutlsEncryptData(const std::vector<uint8_t> & certder, const std::vector<uint8_t> & vals)
+{
+    gnutls_x509_crt_t ptr1 = nullptr;
+    if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS)
+    {
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err), err);
+        throw gnutls_error(NS_FuncName);
+    }
+        
+    const gnutls_datum_t dt1 = { .data = (unsigned char*) certder.data(), .size = (unsigned int) certder.size() };
+    const gnutls_datum_t dt2 = { .data = (unsigned char*) vals.data(), .size = (unsigned int) vals.size() };
+
+    std::unique_ptr<gnutls_x509_crt_int, void(*)(gnutls_x509_crt_t)> cert = { ptr1, gnutls_x509_crt_deinit };
+
+    if(int err = gnutls_x509_crt_import(cert.get(), & dt1, GNUTLS_X509_FMT_DER); err != GNUTLS_E_SUCCESS)
+    {
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err), err);
+        throw gnutls_error(NS_FuncName);
+    }
+
+    gnutls_pubkey_t ptr2 = nullptr;
+    if(int err = gnutls_pubkey_init(& ptr2); GNUTLS_E_SUCCESS != err)
+    {
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
+        throw gnutls_error(NS_FuncName);
+    }
+
+    std::unique_ptr<gnutls_pubkey_st, void(*)(gnutls_pubkey_t)> pkey = { ptr2, gnutls_pubkey_deinit };
+
+    if(int err = gnutls_pubkey_import_x509(pkey.get(), cert.get(), 0); GNUTLS_E_SUCCESS != err)
+    {
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509", gnutls_strerror(err), err);
+        throw gnutls_error(NS_FuncName);
+    }
+
+    gnutls_datum_t res;
+    if(int err = gnutls_pubkey_encrypt_data(pkey.get(), 0, & dt2, & res); GNUTLS_E_SUCCESS != err)
+    {
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data", gnutls_strerror(err), err);
+        throw gnutls_error(NS_FuncName);
+    }
+
+    return std::make_unique<DatumAlloc>(res);
+}
+#endif
+
 void LTSM_HelperWindow::loginClicked(void)
 {
     ui->pushButtonLogin->setDisabled(true);
@@ -399,14 +465,20 @@ void LTSM_HelperWindow::loginClicked(void)
     // generate 32byte hash
     std::vector<uint8_t> hash1(32);
     QRandomGenerator::global()->generate(hash1.begin(), hash1.end());
-
-    auto cert = OpenSSL::CertificateDer(certPtr->objectValue.data(), certPtr->objectValue.size());
-    auto crypt = cert.publicKey().encryptData(hash1.data(), hash1.size());
-
     setLabelInfo("check token...");
-    std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, crypt.data(), crypt.size(), CKM_RSA_PKCS);
+    bool certValidate = false;
 
-    if(hash1 != hash2)
+    try
+    {
+        auto dt = gnutlsEncryptData(certPtr->objectValue, hash1);
+        std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size, CKM_RSA_PKCS);
+        certValidate = (hash1 == hash2);
+    }
+    catch(const std::exception & err)
+    {
+    }
+
+    if(! certValidate)
     {
         setLabelError("token failed");
         ui->pushButtonLogin->setDisabled(false);

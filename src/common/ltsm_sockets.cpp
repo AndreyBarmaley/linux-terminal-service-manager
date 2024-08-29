@@ -571,7 +571,7 @@ namespace LTSM
 
             if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
             {
-                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+                std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
                 Application::debug("from remote: [%s]", str.c_str());
             }
 
@@ -593,7 +593,7 @@ namespace LTSM
 
             if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
             {
-                std::string str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+                std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
                 Application::debug("from local: [%s]", str.c_str());
             }
 

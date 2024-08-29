@@ -446,7 +446,7 @@ namespace LTSM
 
     std::string PKCS11::RawDataRef::toHexString(std::string_view sep, bool pref) const
     {
-        return Tools::buffer2hexstring(data(), size(), 2, sep, pref);
+        return Tools::buffer2hexstring(data(), data() + size(), 2, sep, pref);
     }
 
     bool PKCS11::RawDataRef::operator== (const RawDataRef & raw) const
@@ -998,6 +998,47 @@ namespace LTSM
         return {};
     }
 
+/*
+    bool PKCS11::Session::verifyData(const RawDataRef & certId, const void* data, size_t length, const MechType & mechType) const
+    {
+        auto mechInfo = getMechInfo(mechType);
+        if(! mechType)
+        {
+            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            return false;
+        }
+
+        CK_MECHANISM mech = { mechType, nullptr, 0 };
+        CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
+
+        if(! publicHandle)
+        {
+            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "public key", certId.toHexString().c_str());
+            return false;
+        }
+
+        if(auto lib = weak.lock())
+        {
+            if(auto ret = lib->func()->C_VerifyInit(sid, & mech, publicHandle); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_VerifyInit", sid, ret, rvString(ret));
+                return false;
+            }
+
+            if(auto ret = lib->func()->C_Verify(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
+            {
+                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    __FUNCTION__, "C_Verify", sid, ret, rvString(ret));
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+*/
     PKCS11::RawData PKCS11::Session::encryptData(const RawDataRef & certId, const void* data, size_t length, const MechType & mechType) const
     {
         auto mechInfo = getMechInfo(mechType);

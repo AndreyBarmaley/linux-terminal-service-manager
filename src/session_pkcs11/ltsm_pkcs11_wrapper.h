@@ -38,8 +38,7 @@ namespace LTSM
 {
     struct pkcs11_error : public std::runtime_error
     {
-        explicit pkcs11_error(const std::string & what) : std::runtime_error(what) {}
-        explicit pkcs11_error(const char* what) : std::runtime_error(what) {}
+        explicit pkcs11_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace PKCS11
@@ -431,6 +430,7 @@ namespace LTSM
             RawData             getAttribData(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
 
             RawData             signData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+        //    bool                verifyData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
 
             RawData             encryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
             RawData             decryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;

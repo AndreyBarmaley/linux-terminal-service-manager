@@ -43,7 +43,7 @@ namespace LTSM
 
     std::string ByteArray::hexString(std::string_view sep, bool prefix) const
     {
-        return Tools::buffer2hexstring<uint8_t>(data(), size(), 2, sep, prefix);
+        return Tools::buffer2hexstring(data(), data() + size(), 2, sep, prefix);
     }
 
     std::string ByteArray::toString(void) const

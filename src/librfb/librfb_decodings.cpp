@@ -364,7 +364,7 @@ namespace LTSM
 
             if(3 < debug)
             {
-                std::string str = Tools::buffer2hexstring<int>(palette.data(), palette.size(), 8);
+                std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
                 Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "packed palette", str.c_str());
             }
 
@@ -446,7 +446,7 @@ namespace LTSM
 
             if(3 < debug)
             {
-                std::string str = Tools::buffer2hexstring<int>(palette.data(), palette.size(), 8);
+                std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
                 Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "rle palette", str.c_str());
             }
 

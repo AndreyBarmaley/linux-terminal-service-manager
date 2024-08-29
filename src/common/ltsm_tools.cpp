@@ -517,7 +517,7 @@ namespace LTSM
     std::string Tools::randomHexString(size_t len)
     {
         auto buf = randomBytes( len );
-        return buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2, "", false);
+        return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
     }
 
     std::string Tools::prettyFuncName(std::string_view name)
@@ -1358,138 +1358,6 @@ namespace LTSM
 		__FUNCTION__, bpp, rmask, gmask, bmask, amask);
 
 	return AV_PIX_FMT_NONE;
-    }
-#endif
-
-#ifdef LTSM_WITH_GNUTLS
-    namespace TLS
-    {
-        X509::InfoPtr X509::parseCertificate(const void* data, unsigned int length, bool isPem /* PEM/DER format */)
-        {
-            gnutls_x509_crt_t crt = nullptr;
-
-            auto err = gnutls_x509_crt_init(& crt);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            auto x509 = std::unique_ptr<gnutls_x509_crt_int, decltype(gnutls_x509_crt_deinit)*>{crt, gnutls_x509_crt_deinit};            
-            gnutls_datum_t dt { (unsigned char*) data, length };
-
-            err = gnutls_x509_crt_import(x509.get(), & dt, isPem ? GNUTLS_X509_FMT_PEM : GNUTLS_X509_FMT_DER);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            auto res = std::make_unique<Info>();
-
-            // fingerprint
-            const gnutls_digest_algorithm_t algo = GNUTLS_DIG_SHA1;
-            size_t buflen = 0;
-
-            err = gnutls_x509_crt_get_fingerprint(x509.get(), algo, nullptr, & buflen);
-            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_fingerprint", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->fingerPrintSHA1.resize(buflen, 0);
-
-            err = gnutls_x509_crt_get_fingerprint(x509.get(), algo, res->fingerPrintSHA1.data(), & buflen);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_fingerprint", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->fingerPrintSHA1.resize(buflen);
-
-            // serial
-            buflen = 0;
-
-            err = gnutls_x509_crt_get_serial(x509.get(), nullptr, & buflen);
-            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_serial", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->serialNumber.resize(buflen, 0);
-
-            err = gnutls_x509_crt_get_serial(x509.get(), res->serialNumber.data(), & buflen);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_serial", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->serialNumber.resize(buflen);
-
-            // owner
-            buflen = 0;
-            err = gnutls_x509_crt_get_dn(x509.get(), nullptr, & buflen);
-        
-            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_dn", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->owner.resize(buflen, 0x20);
-
-            err = gnutls_x509_crt_get_dn(x509.get(), res->owner.data(), & buflen);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_dn", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->owner.resize(buflen);
-
-            // issuer
-            buflen = 0;
-            err = gnutls_x509_crt_get_issuer_dn(x509.get(), nullptr, & buflen);
-        
-            if(GNUTLS_E_SHORT_MEMORY_BUFFER != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_issuer_dn", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->issuer.resize(buflen, 0x20);
-
-            err = gnutls_x509_crt_get_issuer_dn(x509.get(), res->issuer.data(), & buflen);
-            if(GNUTLS_E_SUCCESS != err)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_issuer_dn", gnutls_strerror(err), err);
-                return nullptr;
-            }
-
-            res->issuer.resize(buflen);
-
-            // algorithm
-            err = gnutls_x509_crt_get_pk_algorithm(x509.get(), & res->algorithmBits.second);
-            if(0 > err)
-            {
-                Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_get_pk_algorithm", gnutls_strerror(err), err);
-            }
-            else
-            {
-                res->algorithmBits.first = (gnutls_pk_algorithm_t) err;
-            }
-
-            // others
-            res->version = gnutls_x509_crt_get_version(x509.get());
-            res->expirationTime = gnutls_x509_crt_get_expiration_time(x509.get());
-            res->activationTime = gnutls_x509_crt_get_activation_time(x509.get());
-
-            return nullptr;
-        }
     }
 #endif
 

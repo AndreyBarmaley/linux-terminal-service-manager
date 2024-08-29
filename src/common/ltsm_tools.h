@@ -265,20 +265,22 @@ namespace LTSM
         size_t		maskShifted(size_t mask);
         size_t		maskMaxValue(uint32_t mask);
 
-	template<typename Int>
-	std::string buffer2hexstring(const Int* data, size_t length, size_t width = 8, std::string_view sep = ",", bool prefix = true)
-	{
-    	    std::ostringstream os;
-    	    for(size_t it = 0; it != length; ++it)
-    	    {
+        template<typename Iterator>
+        std::string buffer2hexstring(Iterator it1, Iterator it2, size_t width = 8, std::string_view sep = ",", bool prefix = true)
+        {
+            std::ostringstream os;
+            while(it1 != it2)
+            {
                 if(prefix)
-        	    os << "0x";
-                os << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(data[it]);
-        	if(sep.size() && it + 1 != length) os << sep;
-    	    }
+                    os << "0x";
+                os << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(*it1);
+                auto itn = std::next(it1);
+                if(sep.size() && itn != it2) os << sep;
+                it1 = itn;
+            }
 
-    	    return os.str();
-	}
+            return os.str();
+        }
 
         // BaseSpinLock
         class SpinLock
@@ -461,30 +463,6 @@ namespace LTSM
             }
         };
     }
-
-#ifdef LTSM_WITH_GNUTLS
-    namespace TLS
-    {
-        namespace X509
-        {
-            struct Info
-            {
-                std::string owner;
-                std::string issuer;
-                std::vector<uint8_t> fingerPrintSHA1;
-                std::vector<uint8_t> serialNumber;
-                time_t expirationTime;
-                time_t activationTime;
-                std::pair<gnutls_pk_algorithm_t, unsigned int> algorithmBits;
-                int version = 0;
-            };
-
-            typedef std::unique_ptr<Info> InfoPtr;
-
-            InfoPtr parseCertificate(const void* data, unsigned int length, bool isPem /* PEM/DER format */);
-        }
-    }
-#endif
 
 #define NS_FuncName Tools::prettyFuncName(__PRETTY_FUNCTION__)
 }

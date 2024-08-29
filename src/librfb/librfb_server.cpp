@@ -164,7 +164,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
+            auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
             Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
         }
 
@@ -174,7 +174,7 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto tmp = Tools::buffer2hexstring<uint8_t>(response.data(), response.size(), 2);
+            auto tmp = Tools::buffer2hexstring(response.begin(), response.end(), 2);
             Application::debug("%s: response: %s", __FUNCTION__, tmp.c_str());
         }
 
@@ -188,7 +188,7 @@ namespace LTSM
 
             if(Application::isDebugLevel(DebugLevel::Trace))
             {
-                auto tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
+                auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
                 Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
             }
 

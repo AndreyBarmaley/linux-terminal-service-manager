@@ -995,7 +995,7 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 
     if(channelDebug == channel)
     {
-        auto str = Tools::buffer2hexstring<uint8_t>(buf.data(), buf.size(), 2);
+        auto str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
         Application::info("%s: id: %" PRId8 ", size: %" PRIu16 ", content: [%s]", __FUNCTION__, channel, length, str.c_str());
     }
 
@@ -1033,7 +1033,7 @@ void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
 
     if(channelDebug == channel)
     {
-        auto str = Tools::buffer2hexstring<uint8_t>(buf, len, 2);
+        auto str = Tools::buffer2hexstring(buf, buf + len, 2);
         Application::info("%s: id: %" PRId8 ", size: %u, content: [%s]", __FUNCTION__, channel, len, str.c_str());
     }
 

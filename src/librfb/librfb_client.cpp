@@ -145,13 +145,13 @@ namespace LTSM
         auto challenge = recvData(16);
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto tmp = Tools::buffer2hexstring<uint8_t>(challenge.data(), challenge.size(), 2);
+            auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
             Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
         }
         auto crypt = TLS::encryptDES(challenge, password);
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto tmp = Tools::buffer2hexstring<uint8_t>(crypt.data(), crypt.size(), 2);
+            auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
             Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
         }
         sendRaw(crypt.data(), crypt.size());

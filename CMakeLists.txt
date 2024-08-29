@@ -292,32 +292,31 @@ if(LTSM_BUILD_HELPER)
     find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
-    pkg_search_module(P11KIT REQUIRED p11-kit-1)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
     set(CMAKE_AUTOUIC ON)
 
     find_package(sdbus-c++ REQUIRED)
-    find_package(OpenSSL REQUIRED)
 
     add_executable(LTSM_helper
         ltsm_service_proxy.h
         src/qt_helper/main.cpp
         src/qt_helper/ltsm_helperwindow.cpp
         src/qt_helper/ltsm_ldap_wrapper.cpp
-        src/qt_helper/ltsm_openssl_wrapper.cpp
         src/session_pkcs11/ltsm_pkcs11_session.cpp
         src/session_pkcs11/ltsm_pkcs11_wrapper.cpp
         src/qt_helper/ltsm_helperwindow.ui
         src/qt_helper/ltsm_helper.qrc)
 
     if(LTSM_PKCS11_AUTH)
-        target_compile_options(LTSM_helper PRIVATE -DLTSM_PKCS11_AUTH ${P11KIT_DEFINITIONS})
-        target_include_directories(LTSM_helper PRIVATE ${P11KIT_INCLUDE_DIRS})
+        pkg_search_module(P11KIT REQUIRED p11-kit-1)
 
         find_library(LDAP_LIBRARY ldap REQUIRED)
         find_library(LBER_LIBRARY lber REQUIRED)
+
+        target_compile_options(LTSM_helper PRIVATE -DLTSM_PKCS11_AUTH ${P11KIT_DEFINITIONS})
+        target_include_directories(LTSM_helper PRIVATE ${P11KIT_INCLUDE_DIRS})
 
         target_link_libraries(LTSM_helper ${LBER_LIBRARY} ${LDAP_LIBRARY})
     endif()
