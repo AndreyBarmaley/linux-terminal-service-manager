@@ -605,7 +605,7 @@ namespace LTSM
 
         // inetFd -> bridgeSock
         if(NetworkStream::hasInput(fdin) &&
-                0 < (dataSz = NetworkStream::hasData(fdin)))
+                (0 < (dataSz = NetworkStream::hasData(fdin))))
         {
 
             auto buf = recvData(dataSz);
@@ -628,7 +628,7 @@ namespace LTSM
 
         // bridgeSock -> inetFd
         if(NetworkStream::hasInput(bridgeSock) &&
-                0 < (dataSz = NetworkStream::hasData(bridgeSock)))
+                (0 < (dataSz = NetworkStream::hasData(bridgeSock))))
         {
             std::vector<uint8_t> buf(dataSz);
             recvFrom(bridgeSock, buf.data(), buf.size());

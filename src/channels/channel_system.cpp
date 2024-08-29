@@ -252,9 +252,7 @@ LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
     }
 
     // check addr
-    auto octets = Tools::split(list.front(), '.');
-
-    if(4 == octets.size())
+    if(auto octets = Tools::split(list.front(), '.'); 4 == octets.size())
     {
         bool error = false;
 
@@ -262,7 +260,9 @@ LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
         {
             // check numbers
             if(std::any_of(octets.begin(), octets.end(), [](auto & val) { return 255 < std::stoi(val); }))
-            error = true;
+            {
+                error = true;
+            }
         }
         catch(const std::exception & err)
         {

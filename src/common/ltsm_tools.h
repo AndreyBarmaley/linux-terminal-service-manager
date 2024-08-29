@@ -78,8 +78,8 @@ namespace LTSM
         std::unique_ptr<char[]> buf;
 
     public:
-        UserInfo(std::string_view name);
-        UserInfo(uid_t uid);
+        explicit UserInfo(std::string_view name);
+        explicit UserInfo(uid_t uid);
 
         std::vector<gid_t> groups(void) const;
 
@@ -104,8 +104,8 @@ namespace LTSM
         std::unique_ptr<char[]> buf;
 
     public:
-        GroupInfo(std::string_view name);
-        GroupInfo(gid_t gid);
+        explicit GroupInfo(std::string_view name);
+        explicit GroupInfo(gid_t gid);
 
         std::forward_list<std::string> members(void) const;
 
@@ -165,7 +165,7 @@ namespace LTSM
             int cur = 1;
 
         public:
-            StringFormat(std::string_view);
+            explicit StringFormat(std::string_view);
 
             StringFormat & arg(std::string_view);
             StringFormat & arg(int);
@@ -189,7 +189,7 @@ namespace LTSM
 
         struct StreamBitsPack : StreamBits
         {
-            StreamBitsPack(size_t rez = 32);
+            explicit StreamBitsPack(size_t rez = 32);
 
             void pushBit(bool v);
             void pushValue(int val, size_t field);
@@ -340,7 +340,7 @@ namespace LTSM
             std::chrono::steady_clock::time_point tp;
             TimeType dt;
 
-            Timeout(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
+            explicit Timeout(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
             {
             }
 
@@ -366,9 +366,8 @@ namespace LTSM
             std::atomic<bool> processed{false};
 
         public:
-            BaseTimer() {}
-
-            ~BaseTimer() { stop(true); }
+            BaseTimer() = default;
+            virtual ~BaseTimer() { stop(true); }
 
             std::thread::id getId(void) const
             {
@@ -488,7 +487,7 @@ namespace LTSM
             std::chrono::steady_clock::time_point tp;
             TimeType dt;
 
-            TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
+            explicit TimePoint(TimeType val) : tp(std::chrono::steady_clock::now()), dt(val)
             {
             }
 

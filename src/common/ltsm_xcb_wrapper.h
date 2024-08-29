@@ -54,9 +54,7 @@ namespace LTSM
 {
     struct xcb_error : public std::runtime_error
     {
-        xcb_error(const std::string & what) : std::runtime_error(what) {}
-
-        xcb_error(const char* what) : std::runtime_error(what) {}
+        explicit xcb_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace XCB
@@ -67,15 +65,15 @@ namespace LTSM
 
             Point() : x(-1), y(-1) {}
 
-            Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
+            explicit Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
 
             Point(int16_t px, int16_t py) : x(px), y(py) {}
 
-            virtual ~Point() {}
+            virtual ~Point() = default;
 
-            bool isValid(void) const { return 0 <= x && 0 <= y; }
+            virtual bool isValid(void) const { return 0 <= x && 0 <= y; }
 
-            xcb_point_t toXcb(void) const { return xcb_point_t{x, y}; }
+            xcb_point_t toXcbPoint(void) const { return xcb_point_t{x, y}; }
 
             Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
 
@@ -94,7 +92,7 @@ namespace LTSM
 
             Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
-            virtual ~Size() {}
+            virtual ~Size() = default;
 
             bool isEmpty(void) const { return width == 0 || height == 0; }
 
@@ -113,20 +111,20 @@ namespace LTSM
             PointIterator & operator++(void);
             PointIterator & operator--(void);
 
-            bool isValid(void) const { return Point::isValid() && x < limit.width && y < limit.height; }
+            bool isValid(void) const override { return Point::isValid() && x < limit.width && y < limit.height; }
 
             bool isBeginLine(void) const;
             bool isEndLine(void) const;
-            virtual void lineChanged(void) {}
+            virtual void lineChanged(void) { /* default empty */ }
         };
 
         struct Region : public Point, public Size
         {
-            Region() {}
+            Region() = default;
 
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
 
-            Region(const xcb_rectangle_t & rt) : Point(rt.x, rt.y), Size(rt.width, rt.height) {}
+            explicit Region(const xcb_rectangle_t & rt) : Point(rt.x, rt.y), Size(rt.width, rt.height) {}
 
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
@@ -134,7 +132,7 @@ namespace LTSM
 
             const Size & toSize(void) const { return *this; }
 
-            xcb_rectangle_t toXcb(void) const { return xcb_rectangle_t{x, y, width, height}; }
+            xcb_rectangle_t toXcbRect(void) const { return xcb_rectangle_t{x, y, width, height}; }
 
             PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
 
@@ -179,7 +177,7 @@ namespace LTSM
         {
             RegionPixel(const Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
 
-            RegionPixel() {}
+            RegionPixel() = default;
 
             const uint32_t & pixel(void) const { return second; }
 
@@ -188,20 +186,22 @@ namespace LTSM
 
         struct ConnectionShared : std::shared_ptr<xcb_connection_t>
         {
-            ConnectionShared(xcb_connection_t* conn = nullptr)
+            explicit ConnectionShared(xcb_connection_t* conn = nullptr)
                 : std::shared_ptr<xcb_connection_t>(conn, xcb_disconnect) {}
         };
 
+        void XcbDeleter(void* ptr);
+
         struct GenericError : std::shared_ptr<xcb_generic_error_t>
         {
-            GenericError(xcb_generic_error_t* err = nullptr)
-                : std::shared_ptr<xcb_generic_error_t>(err, std::free) {}
+            explicit GenericError(xcb_generic_error_t* err = nullptr)
+                : std::shared_ptr<xcb_generic_error_t>(err, XcbDeleter) {}
         };
 
         struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
         {
-            GenericEvent(xcb_generic_event_t* ev = nullptr)
-                : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
+            explicit GenericEvent(xcb_generic_event_t* ev = nullptr)
+                : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, XcbDeleter) {}
 
             const xcb_generic_error_t* toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
         };
@@ -209,9 +209,7 @@ namespace LTSM
         template<typename ReplyType>
         struct GenericReply : std::shared_ptr<ReplyType>
         {
-            GenericReply(ReplyType* ptr) : std::shared_ptr<ReplyType>(ptr, std::free)
-            {
-            }
+            explicit GenericReply(ReplyType* ptr) : std::shared_ptr<ReplyType>(ptr, XcbDeleter) {}
         };
 
         struct PropertyReply : GenericReply<xcb_get_property_reply_t>
@@ -269,9 +267,9 @@ namespace LTSM
             virtual size_t size(void) const = 0;
 
             PixmapBase() = default;
-            PixmapBase(uint32_t rm, uint32_t gm, uint32_t bm, uint8_t pp) : rmask(rm), gmask(gm), bmask(bm), bpp(pp) {}
+            virtual ~PixmapBase() = default;
 
-            virtual ~PixmapBase() {}
+            PixmapBase(uint32_t rm, uint32_t gm, uint32_t bm, uint8_t pp) : rmask(rm), gmask(gm), bmask(bm), bpp(pp) {}
 
             uint8_t bitsPerPixel(void) const { return bpp; }
 
@@ -292,9 +290,12 @@ namespace LTSM
             ShmId() = default;
             ~ShmId();
 
+            ShmId(const ShmId &) = delete;
+            ShmId & operator=(const ShmId &) = delete;
+
             void reset(void);
 
-            operator bool(void) const { return conn && 0 < id; };
+            explicit operator bool(void) const { return conn && 0 < id; };
 
             const xcb_shm_seg_t & operator()(void) const { return id; };
         };
@@ -447,7 +448,7 @@ namespace LTSM
 
         struct ModuleDamage : ModuleExtension
         {
-            ModuleDamage(ConnectionShared);
+            explicit ModuleDamage(ConnectionShared);
 
             WindowDamageIdPtr createDamage(xcb_drawable_t win, const xcb_damage_report_level_t &) const;
         };
@@ -470,7 +471,7 @@ namespace LTSM
 
         struct ModuleFixes : ModuleExtension
         {
-            ModuleFixes(ConnectionShared);
+            explicit ModuleFixes(ConnectionShared);
 
             FixesRegionIdPtr createRegion(const xcb_rectangle_t &) const;
             FixesRegionIdPtr createRegions(const xcb_rectangle_t*, size_t counts) const;
@@ -487,7 +488,7 @@ namespace LTSM
 
         struct ModuleTest : ModuleExtension
         {
-            ModuleTest(ConnectionShared);
+            explicit ModuleTest(ConnectionShared);
 
             bool fakeInputRaw(xcb_window_t, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const;
             void fakeInputClickButton(xcb_window_t win, uint8_t button, const Point &) const;
@@ -524,7 +525,7 @@ namespace LTSM
 
         struct ModuleRandr : ModuleExtension
         {
-            ModuleRandr(ConnectionShared);
+            explicit ModuleRandr(ConnectionShared);
 
             std::vector<xcb_randr_output_t> getOutputs(const xcb_screen_t &) const;
             std::vector<xcb_randr_crtc_t> getCrtcs(const xcb_screen_t &) const;
@@ -551,7 +552,7 @@ namespace LTSM
 
         struct ModuleShm : ModuleExtension
         {
-            ModuleShm(ConnectionShared);
+            explicit ModuleShm(ConnectionShared);
 
             ShmIdShared createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
         };
@@ -564,7 +565,7 @@ namespace LTSM
 
             int32_t devid = -1;
 
-            ModuleXkb(ConnectionShared);
+            explicit ModuleXkb(ConnectionShared);
 
             bool resetMapState(void);
 
@@ -578,7 +579,7 @@ namespace LTSM
         {
             xcb_errors_context_t* ctx = nullptr;
 
-            ErrorContext(xcb_connection_t*);
+            explicit ErrorContext(xcb_connection_t*);
             ~ErrorContext();
 
             bool error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const;
@@ -709,21 +710,21 @@ namespace LTSM
             bool setRandrScreenSize(const Size &, uint16_t* sequence = nullptr);
             bool setRandrMonitors(const std::vector<Region> & monitors);
 
-            virtual void displayConnectedEvent(void) {}
+            virtual void displayConnectedEvent(void) { /*default empty */ }
 
-            virtual void xfixesSelectionChangedEvent(void) {}
+            virtual void xfixesSelectionChangedEvent(void) { /*default empty */ }
 
-            virtual void xfixesCursorChangedEvent(void) {}
+            virtual void xfixesCursorChangedEvent(void) { /*default empty */ }
 
-            virtual void damageRegionEvent(const Region &) {}
+            virtual void damageRegionEvent(const Region &) { /*default empty */ }
 
-            virtual void randrScreenSetSizeEvent(const Size &) {}
+            virtual void randrScreenSetSizeEvent(const Size &) { /*default empty */ }
 
-            virtual void randrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) {}
+            virtual void randrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) { /*default empty */ }
 
-            virtual void xkbGroupChangedEvent(int) {}
+            virtual void xkbGroupChangedEvent(int) { /*default empty */ }
 
-            virtual void clipboardChangedEvent(const std::vector<uint8_t> &) {}
+            virtual void clipboardChangedEvent(const std::vector<uint8_t> &) { /*default empty */ }
 
             const xcb_visualtype_t* visual(xcb_visualid_t) const;
 
@@ -781,9 +782,9 @@ namespace LTSM
 
             void bell(uint8_t percent) const;
 
-            virtual void xkbStateChangeEvent(int) {}
+            virtual void xkbStateChangeEvent(int) { /*default empty */ }
 
-            virtual void xkbStateResetEvent(void) {}
+            virtual void xkbStateResetEvent(void) { /*default empty */ }
         };
     }
 }

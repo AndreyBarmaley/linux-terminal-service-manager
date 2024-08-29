@@ -34,9 +34,7 @@ namespace LTSM
 {
     struct rfb_error : public std::runtime_error
     {
-        explicit rfb_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit rfb_error(const char* what) : std::runtime_error(what) {}
+        explicit rfb_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace RFB

@@ -68,9 +68,7 @@ namespace LTSM
     /// channel_error execption
     struct channel_error : public std::runtime_error
     {
-        explicit channel_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit channel_error(const char* what) : std::runtime_error(what) {}
+        explicit channel_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace Channel
@@ -248,7 +246,7 @@ namespace LTSM
 
         public:
             ConnectorBase(uint8_t ch, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv);
-            virtual ~ConnectorBase() {}
+            virtual ~ConnectorBase() = default;
 
             virtual uint8_t channel(void) const = 0;
             virtual int error(void) const = 0;

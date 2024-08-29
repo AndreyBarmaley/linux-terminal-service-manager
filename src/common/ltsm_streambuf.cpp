@@ -404,7 +404,7 @@ namespace LTSM
     {
         if(ptr)
         {
-            it1 = (uint8_t*) ptr;
+            it1 = reinterpret_cast<const uint8_t*>(ptr);
             it2 = it1 + len;
         }
     }
@@ -422,7 +422,7 @@ namespace LTSM
 
     void StreamBufRef::reset(const void* ptr, size_t len)
     {
-        it1 = (uint8_t*) ptr;
+        it1 = reinterpret_cast<const uint8_t*>(ptr);
         it2 = it1 + len;
     }
 

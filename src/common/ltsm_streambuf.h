@@ -61,7 +61,7 @@ namespace LTSM
         RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
 
         template<size_t N>
-        RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
+        explicit RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
 
 
         size_t size(void) const override
@@ -91,12 +91,12 @@ namespace LTSM
 
         BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
 
-        BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
+        explicit BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
 
-        BinaryBuf(std::vector<uint8_t> && v) noexcept { swap(v); }
+        explicit BinaryBuf(std::vector<uint8_t> && v) noexcept { swap(v); }
 
         template<size_t N>
-        BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
+        explicit BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
 
 
         BinaryBuf & operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
@@ -264,16 +264,14 @@ namespace LTSM
 
     struct streambuf_error : public std::runtime_error
     {
-        explicit streambuf_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit streambuf_error(const char* what) : std::runtime_error(what) {}
+        explicit streambuf_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     /// @brief: read only StreamBuf
     class StreamBufRef : public MemoryStream
     {
-        mutable uint8_t* it1 = nullptr;
-        uint8_t* it2 = nullptr;
+        mutable const uint8_t* it1 = nullptr;
+        const uint8_t* it2 = nullptr;
 
     protected:
         void getRaw(void* ptr, size_t len) const override;
@@ -281,6 +279,8 @@ namespace LTSM
 
     public:
         StreamBufRef() = default;
+        ~StreamBufRef() = default;
+
         StreamBufRef(const void*, size_t);
 
         StreamBufRef(StreamBufRef &&) noexcept;
@@ -319,8 +319,10 @@ namespace LTSM
         void putRaw(const void* ptr, size_t len) override;
 
     public:
-        StreamBuf(size_t reserve = 256);
-        StreamBuf(const std::vector<uint8_t> &);
+        ~StreamBuf() = default;
+
+        explicit StreamBuf(size_t reserve = 256);
+        explicit StreamBuf(const std::vector<uint8_t> &);
 
         StreamBuf(const StreamBuf &);
         StreamBuf & operator=(const StreamBuf &);

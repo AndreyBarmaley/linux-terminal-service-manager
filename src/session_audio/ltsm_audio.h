@@ -61,9 +61,7 @@ namespace LTSM
 
     struct audio_error : public std::runtime_error
     {
-        explicit audio_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit audio_error(const char* what) : std::runtime_error(what) {}
+        explicit audio_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 }
 

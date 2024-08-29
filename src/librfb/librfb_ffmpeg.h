@@ -54,9 +54,7 @@ namespace LTSM
 {
     struct ffmpeg_error : public std::runtime_error
     {
-        explicit ffmpeg_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit ffmpeg_error(const char* what) : std::runtime_error(what) {}
+        explicit ffmpeg_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     struct AVCodecContextDeleter

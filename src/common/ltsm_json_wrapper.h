@@ -39,7 +39,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define JSON_WRAPPER 20240828
+#define LTSM_JSON_WRAPPER 20240828
 
 namespace LTSM
 {
@@ -206,6 +206,8 @@ namespace LTSM
     struct JsonValuePtr : std::unique_ptr<JsonValue>
     {
         JsonValuePtr();
+        ~JsonValuePtr() = default;
+
         explicit JsonValuePtr(int);
         explicit JsonValuePtr(bool);
         explicit JsonValuePtr(double);
@@ -239,6 +241,8 @@ namespace LTSM
 
     public:
         JsonArray() = default;
+        ~JsonArray() = default;
+
         JsonArray(const JsonArray &);
         JsonArray(JsonArray && ja) noexcept;
 
@@ -400,6 +404,8 @@ namespace LTSM
 
     public:
         JsonObject() = default;
+        ~JsonObject() = default;
+
         JsonObject(const JsonObject &);
         JsonObject(JsonObject && jo) noexcept;
 
@@ -532,20 +538,20 @@ namespace LTSM
     class JsonContentString : public JsonContent
     {
     public:
-        JsonContentString(std::string_view);
+        explicit JsonContentString(std::string_view);
     };
 
     /* JsonContentFile */
     class JsonContentFile : public JsonContent
     {
     public:
-        JsonContentFile(const std::filesystem::path &);
+        explicit JsonContentFile(const std::filesystem::path &);
     };
 
     /* JsonStream */
     struct json_plain : std::string
     {
-        json_plain(std::string && str) noexcept : std::string(str) {}
+        explicit json_plain(std::string && str) noexcept : std::string(str) {}
     };
 
     class JsonStream

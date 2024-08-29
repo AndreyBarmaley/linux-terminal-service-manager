@@ -44,9 +44,7 @@ namespace LTSM
 {
     struct service_error : public std::runtime_error
     {
-        explicit service_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit service_error(const char* what) : std::runtime_error(what) {}
+        explicit service_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     /// PamService

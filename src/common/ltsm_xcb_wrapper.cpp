@@ -51,6 +51,11 @@ namespace LTSM
 {
     namespace XCB
     {
+        void XcbDeleter(void* ptr)
+        {
+            std::free(ptr);
+        }
+
         bool PointIterator::isBeginLine(void) const
         {
             return x == 0;
@@ -1123,7 +1128,9 @@ namespace LTSM
 
         // mode present
         if(std::any_of(modes.begin(), modes.end(), [&](auto & val) { return val == mode; }))
-        return true;
+        {
+            return true;
+        }
 
         auto cookie = xcb_randr_add_output_mode_checked(conn.get(), output, mode);
 
@@ -1143,7 +1150,9 @@ namespace LTSM
 
         // mode not found
         if(std::none_of(modes.begin(), modes.end(), [&](auto & val) { return val == mode; }))
-        return true;
+        {
+            return true;
+        }
 
         auto cookie = xcb_randr_delete_output_mode_checked(conn.get(), output, mode);
 
@@ -2843,7 +2852,7 @@ namespace LTSM
         {
             _damage = _modDamage->createDamage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
 
-            if(auto regid = _modFixes->createRegion(region().toXcb()))
+            if(auto regid = _modFixes->createRegion(region().toXcbRect()))
             {
                 _damage->addRegion(regid->id());
                 return true;
@@ -3222,7 +3231,7 @@ namespace LTSM
     {
         if(_damage && _modFixes)
         {
-            if(auto regid = _modFixes->createRegion(region.toXcb()))
+            if(auto regid = _modFixes->createRegion(region.toXcbRect()))
             {
                 _damage->addRegion(regid->id());
                 return true;
@@ -3236,7 +3245,7 @@ namespace LTSM
     {
         if(_damage && _modFixes)
         {
-            if(auto regid = _modFixes->createRegion(region.toXcb()))
+            if(auto regid = _modFixes->createRegion(region.toXcbRect()))
             {
                 _damage->subtrackRegion(regid->id());
                 return true;
@@ -3270,7 +3279,7 @@ namespace LTSM
 
             Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                                __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
-            damageRegionEvent(dn->area);
+            damageRegionEvent(Region(dn->area));
         }
         else if(isXFixesSelectionNotify(ev))
         {

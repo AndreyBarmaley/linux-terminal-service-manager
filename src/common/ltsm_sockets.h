@@ -58,9 +58,7 @@ namespace LTSM
 
     struct network_error : public std::runtime_error
     {
-        explicit network_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit network_error(const char* what) : std::runtime_error(what) {}
+        explicit network_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     /// @brief: network stream interface
@@ -79,7 +77,7 @@ namespace LTSM
         static size_t hasData(int fd);
 
 #ifdef LTSM_WITH_GNUTLS
-        virtual void setupTLS(gnutls::session*) const {}
+        virtual void setupTLS(gnutls::session*) const { /* default empty */ }
 
 #endif
 
@@ -103,7 +101,7 @@ namespace LTSM
         NetworkStream & sendZero(size_t);
         NetworkStream & sendData(const std::vector<uint8_t> &);
 
-        virtual void sendFlush(void) {}
+        virtual void sendFlush(void) { /* default empty */ }
 
         virtual void sendRaw(const void*, size_t) = 0;
 
@@ -176,8 +174,8 @@ namespace LTSM
     class InetStream : public NetworkStream
     {
     protected:
-        std::unique_ptr<FILE, decltype(fclose)*> fin{nullptr, fclose};
-        std::unique_ptr<FILE, decltype(fclose)*> fout{nullptr, fclose};
+        std::unique_ptr<FILE, decltype(fclose)*> fin{nullptr, std::fclose};
+        std::unique_ptr<FILE, decltype(fclose)*> fout{nullptr, std::fclose};
         int fdin = 0;
         int fdout = 0;
         std::array<char, tcpMSS> fdbuf;
@@ -248,9 +246,7 @@ namespace LTSM
 #ifdef LTSM_WITH_GNUTLS
     struct gnutls_error : public std::runtime_error
     {
-        explicit gnutls_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit gnutls_error(const char* what) : std::runtime_error(what) {}
+        explicit gnutls_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     /// transport layer security
@@ -330,9 +326,7 @@ namespace LTSM
 #ifdef LTSM_WITH_GSSAPI
     struct gssapi_error : public std::runtime_error
     {
-        explicit gssapi_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit gssapi_error(const char* what) : std::runtime_error(what) {}
+        explicit gssapi_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace GssApi
@@ -399,9 +393,7 @@ namespace LTSM
 
     struct zlib_error : public std::runtime_error
     {
-        explicit zlib_error(const std::string & what) : std::runtime_error(what) {}
-
-        explicit zlib_error(const char* what) : std::runtime_error(what) {}
+        explicit zlib_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
     namespace ZLib
@@ -415,6 +407,9 @@ namespace LTSM
         public:
             explicit DeflateBase(int level = Z_BEST_COMPRESSION);
             virtual ~DeflateBase();
+
+            DeflateBase(const DeflateBase &) = delete;
+            DeflateBase & operator=(const DeflateBase &) = delete;
 
             std::vector<uint8_t> deflateData(const void* buf, size_t len, int flushPolicy = Z_SYNC_FLUSH);
         };
@@ -449,6 +444,9 @@ namespace LTSM
         public:
             InflateBase();
             virtual ~InflateBase();
+
+            InflateBase(const InflateBase &) = delete;
+            InflateBase & operator=(const InflateBase &) = delete;
 
             /// flushPolicy: Z_NO_FLUSH, Z_SYNC_FLUSH, Z_FINISH, Z_BLOCK or Z_TREES
             std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
