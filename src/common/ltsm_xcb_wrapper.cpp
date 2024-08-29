@@ -68,7 +68,9 @@ namespace LTSM
             x++;
 
             if(x < limit.width)
+            {
                 return *this;
+            }
 
             if(y < limit.height)
             {
@@ -95,7 +97,9 @@ namespace LTSM
             x--;
 
             if(0 <= x)
+            {
                 return *this;
+            }
 
             if(y > 0)
             {
@@ -163,10 +167,14 @@ namespace LTSM
             }
 
             if(auto alignW = res.width % val)
+            {
                 res.width += val - alignW;
+            }
 
             if(auto alignH = res.height % val)
+            {
                 res.height += val - alignH;
+            }
 
             return res;
         }
@@ -219,15 +227,21 @@ namespace LTSM
         {
             // check reg1.empty || reg2.empty
             if(reg1.empty() || reg2.empty())
+            {
                 return false;
+            }
 
             // horizontal intersection
             if(std::min(reg1.x + reg1.width, reg2.x + reg2.width) <= std::max(reg1.x, reg2.x))
+            {
                 return false;
+            }
 
             // vertical intersection
             if(std::min(reg1.y + reg1.height, reg2.y + reg2.height) <= std::max(reg1.y, reg2.y))
+            {
                 return false;
+            }
 
             return true;
         }
@@ -237,10 +251,14 @@ namespace LTSM
             bool intersects = Region::intersects(reg1, reg2);
 
             if(! intersects)
+            {
                 return false;
+            }
 
             if(! res)
+            {
                 return intersects;
+            }
 
             // horizontal intersection
             res->x = std::max(reg1.x, reg2.x);
@@ -286,10 +304,11 @@ namespace LTSM
         void error(xcb_connection_t* conn, const xcb_generic_error_t* err, const char* func, const char* xcbname)
         {
 #ifdef LTSM_BUILD_XCB_ERRORS
-	    if(!conn || !ErrorContext(conn).error(err, func, xcbname))
+
+            if(!conn || !ErrorContext(conn).error(err, func, xcbname))
 #endif
-    		error(err, func, xcbname);
-	}
+                error(err, func, xcbname);
+        }
     }
 
     /* XCB::CursorImage */
@@ -327,7 +346,9 @@ namespace LTSM
             std::string getName(xcb_connection_t* conn, xcb_atom_t atom)
             {
                 if(atom == XCB_ATOM_NONE)
+                {
                     return "NONE";
+                }
 
                 auto xcbReply = XCB::getReplyFunc2(xcb_get_atom_name, conn, atom);
 
@@ -351,9 +372,11 @@ namespace LTSM
         PropertyReply getPropertyInfo(xcb_connection_t* conn, xcb_window_t win, xcb_atom_t prop)
         {
             auto xcbReply = getReplyFunc2(xcb_get_property, conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
-            
+
             if(auto err = xcbReply.error())
+            {
                 error(conn, err.get(), __FUNCTION__, "xcb_get_property");
+            }
 
             return xcbReply.reply();
         }
@@ -380,10 +403,12 @@ namespace LTSM
             auto err = ev.toerror();
 
             if(err &&
-                err->major_code == ext->major_opcode)
+                    err->major_code == ext->major_opcode)
             {
                 if(opcode)
+                {
                     *opcode = err->minor_code;
+                }
 
                 error(conn.get(), err, __FUNCTION__, "");
                 return true;
@@ -397,26 +422,28 @@ namespace LTSM
     bool XCB::WindowDamageId::addRegion(const xcb_xfixes_region_t & region)
     {
         auto cookie = xcb_damage_add_checked(conn.get(), win, region);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_add");
             return false;
         }
 
-	Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
+        Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
         return true;
     }
 
     bool XCB::WindowDamageId::subtrackRegion(const xcb_xfixes_region_t & repair)
     {
         auto cookie = xcb_damage_subtract_checked(conn.get(), xid, repair, XCB_XFIXES_REGION_NONE);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_subtract");
             return false;
         }
 
-	Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
+        Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
         return true;
     }
 
@@ -425,7 +452,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_damage_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_damage_query_version, conn.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
@@ -446,13 +475,14 @@ namespace LTSM
         xcb_damage_damage_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_damage_create_checked(conn.get(), res, win, level);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_create");
             res = 0;
         }
 
-	Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
+        Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
         return std::make_unique<WindowDamageId>(conn, win, res);
     }
 
@@ -462,7 +492,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_xfixes_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, conn.get(), XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
@@ -483,30 +515,32 @@ namespace LTSM
         xcb_xfixes_region_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_xfixes_create_region_checked(conn.get(), res, 1, & rect);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
             res = 0;
         }
 
-	Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
-		 __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
+        Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
+                           __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
         return std::make_unique<FixesRegionId>(conn, res);
     }
- 
+
     XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegions(const xcb_rectangle_t* rects, size_t counts) const
     {
         xcb_xfixes_region_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_xfixes_create_region_checked(conn.get(), res, counts, rects);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
             res = 0;
         }
 
-	Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
+        Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -515,13 +549,14 @@ namespace LTSM
         xcb_xfixes_region_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_xfixes_intersect_region_checked(conn.get(), reg1, reg2, res);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_intersect_region");
             res = 0;
         }
 
-	Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+        Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -530,13 +565,14 @@ namespace LTSM
         xcb_xfixes_region_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_xfixes_union_region_checked(conn.get(), reg1, reg2, res);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_union_region");
             res = 0;
         }
 
-	Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+        Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
         return std::make_unique<FixesRegionId>(conn, res);
     }
 
@@ -551,19 +587,21 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-	    auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
-	    int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
+            auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
+            int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
 
-	    if(rects && 0 < count)
-		return rects[0];
+            if(rects && 0 < count)
+            {
+                return rects[0];
+            }
         }
 
-	return xcb_rectangle_t{ 0, 0, 0, 0};
+        return xcb_rectangle_t{ 0, 0, 0, 0};
     }
 
     std::vector<xcb_rectangle_t> XCB::ModuleFixes::fetchRegions(const xcb_xfixes_region_t & reg) const
     {
-	std::vector<xcb_rectangle_t> res;
+        std::vector<xcb_rectangle_t> res;
         auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, conn.get(), reg);
 
         if(auto err = xcbReply.error())
@@ -573,14 +611,16 @@ namespace LTSM
 
         if(auto reply = xcbReply.reply())
         {
-	    auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
-	    int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
+            auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
+            int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
 
-	    if(rects && 0 < count)
-		res.assign(rects, rects + count);
+            if(rects && 0 < count)
+            {
+                res.assign(rects, rects + count);
+            }
         }
 
-	return res;
+        return res;
     }
 
     XCB::CursorImage XCB::ModuleFixes::getCursorImage(void) const
@@ -608,8 +648,11 @@ namespace LTSM
         {
             auto ptr = xcb_xfixes_get_cursor_name_name(reply.get());
             int len = xcb_xfixes_get_cursor_name_name_length(reply.get());
+
             if(ptr && 0 < len)
+            {
                 return std::string(ptr, ptr + len);
+            }
         }
 
         return "";
@@ -621,7 +664,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_test_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_test_get_version, conn.get(), XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
@@ -666,7 +711,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_randr_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_randr_query_version, conn.get(), XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
@@ -957,6 +1004,7 @@ namespace LTSM
         auto cvt = "/usr/bin/cvt";
 
         std::error_code err;
+
         if(! std::filesystem::exists(cvt, err))
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), cvt, getuid());
@@ -980,15 +1028,18 @@ namespace LTSM
         mode_info.mode_flags = 0;
 
         auto it = std::next(params.begin(), 2);
+
         try
         {
             float clock = std::stof(*it);
-    
+
             // dummy drv limited 300
             if(clock > 300)
+            {
                 return cvtCreateMode(screen, sz, vertRef < 10 ? vertRef - 1 : vertRef - 5);
+            }
 
-            mode_info.dot_clock =  clock * 1000000;
+            mode_info.dot_clock = clock * 1000000;
             it = std::next(it);
             mode_info.width = std::stod(*it);
             it = std::next(it);
@@ -1014,16 +1065,24 @@ namespace LTSM
         }
 
         if(*it == "-hsync")
+        {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_NEGATIVE;
+        }
         else if(*it == "+hsync")
+        {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_HSYNC_POSITIVE;
+        }
 
         it = std::next(it);
 
         if(*it == "-vsync")
+        {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_NEGATIVE;
+        }
         else if(*it == "+vsync")
+        {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
+        }
 
         auto name = Tools::StringFormat("%1x%2_%3").arg(mode_info.width).arg(mode_info.height).arg(vertRef);
         mode_info.name_len = name.size();
@@ -1063,8 +1122,8 @@ namespace LTSM
         auto modes = getOutputModes(output);
 
         // mode present
-        if(std::any_of(modes.begin(), modes.end(), [&](auto & val){ return val == mode; }))
-            return true;
+        if(std::any_of(modes.begin(), modes.end(), [&](auto & val) { return val == mode; }))
+        return true;
 
         auto cookie = xcb_randr_add_output_mode_checked(conn.get(), output, mode);
 
@@ -1083,8 +1142,8 @@ namespace LTSM
         auto modes = getOutputModes(output);
 
         // mode not found
-        if(std::none_of(modes.begin(), modes.end(), [&](auto & val){ return val == mode; }))
-            return true;
+        if(std::none_of(modes.begin(), modes.end(), [&](auto & val) { return val == mode; }))
+        return true;
 
         auto cookie = xcb_randr_delete_output_mode_checked(conn.get(), output, mode);
 
@@ -1106,7 +1165,8 @@ namespace LTSM
             for(auto & output: outputs)
             {
                 auto modes = getOutputModes(output);
-                if(std::none_of(modes.begin(), modes.end(), [&](auto & val){ return mode == val; }))
+
+                if(std::none_of(modes.begin(), modes.end(), [&](auto & val) { return mode == val; }))
                 {
                     Application::error("%s: output mode not found, mode: %" PRIu32 ", output: %" PRIu32, __FUNCTION__, mode, output);
                     return false;
@@ -1114,9 +1174,10 @@ namespace LTSM
             }
 
             auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, conn.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
-                                                 posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, outputs.size(), outputs.data() );
+                                           posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, outputs.size(), outputs.data() );
 
-            if( auto err = xcbReply.error() ) {
+            if( auto err = xcbReply.error() )
+            {
                 error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
                 return false;
             }
@@ -1130,9 +1191,10 @@ namespace LTSM
         if(auto info = getScreenInfo(screen))
         {
             auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, conn.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
-                                                 0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr );
+                                           0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr );
 
-            if( auto err = xcbReply.error() ) {
+            if( auto err = xcbReply.error() )
+            {
                 error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
                 return false;
             }
@@ -1147,7 +1209,9 @@ namespace LTSM
     {
         // align size
         if( auto alignW = width % 8 )
+        {
             width += 8 - alignW;
+        }
 
         Application::debug( "%s: size: [%" PRIu16 ", %" PRIu16 "], dpi: %" PRIu16, __FUNCTION__, width, height, dpi );
 
@@ -1169,11 +1233,13 @@ namespace LTSM
     {
         // align size
         if(auto alignW = sz.width % 8)
+        {
             sz.width += 8 - alignW;
+        }
 
         auto screenSizes = getScreenSizes(screen);
         auto its = std::find_if(screenSizes.begin(), screenSizes.end(),
-                            [&](auto & ss){ return ss.width == sz.width && ss.height == sz.height; });
+        [&](auto & ss) { return ss.width == sz.width && ss.height == sz.height; });
 
         xcb_randr_mode_t mode = 0;
         xcb_randr_output_t output = 0;
@@ -1184,7 +1250,7 @@ namespace LTSM
             // add new mode
             auto outputs = getOutputs(screen);
             auto ito = std::find_if(outputs.begin(), outputs.end(),
-                            [this](auto & id){ auto info = this->getOutputInfo(id); return info && info->connected; });
+            [this](auto & id) { auto info = this->getOutputInfo(id); return info && info->connected; });
 
             if(ito == outputs.end())
             {
@@ -1196,7 +1262,9 @@ namespace LTSM
             mode = cvtCreateMode(screen, sz);
 
             if(0 == mode)
+            {
                 return false;
+            }
 
             if(! addOutputMode(output, mode))
             {
@@ -1208,7 +1276,7 @@ namespace LTSM
             // fixed size
             auto modes = getModesInfo(screen);
             auto itm = std::find_if(modes.begin(), modes.end(),
-                                [=](auto & val){ return val.id == mode; });
+            [=](auto & val) { return val.id == mode; });
 
             if(itm == modes.end())
             {
@@ -1224,7 +1292,7 @@ namespace LTSM
             // rescan info
             screenSizes = getScreenSizes(screen);
             its = std::find_if(screenSizes.begin(), screenSizes.end(),
-                            [&](auto & ss) {return ss.width == sz.width && ss.height == sz.height; });
+            [&](auto & ss) {return ss.width == sz.width && ss.height == sz.height; });
 
             if(its == screenSizes.end())
             {
@@ -1236,15 +1304,16 @@ namespace LTSM
         }
 
         auto sizeID = std::distance(screenSizes.begin(), its);
+
         if(auto screenInfo = getScreenInfo(screen))
         {
             auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, conn.get(), screen.root, screenInfo->timestamp,
-                                       screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
+                                           screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
             if(auto err = xcbReply2.error())
             {
                 Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
-                    __FUNCTION__, sz.width, sz.height, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
+                                  __FUNCTION__, sz.width, sz.height, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
 
                 error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;
@@ -1253,7 +1322,9 @@ namespace LTSM
             if(auto reply = xcbReply2.reply())
             {
                 if(sequence)
+                {
                     *sequence = reply->sequence;
+                }
 
                 Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: 0x%04" PRIx16, __FUNCTION__, sz.width, sz.height, sizeID, reply->sequence);
             }
@@ -1270,7 +1341,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_shm_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_shm_query_version, conn.get());
 
@@ -1294,13 +1367,19 @@ namespace LTSM
     void XCB::ShmId::reset(void)
     {
         if(0 < id && conn)
+        {
             xcb_shm_detach(conn.get(), id);
+        }
 
         if(addr)
+        {
             shmdt(addr);
-    
+        }
+
         if(0 <= shm)
+        {
             shmctl(shm, IPC_RMID, nullptr);
+        }
 
         id = 0;
         addr = nullptr;
@@ -1311,13 +1390,16 @@ namespace LTSM
     {
         Application::info("%s: size: %u, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
 
-         const size_t pagesz = 4096;
+        const size_t pagesz = 4096;
 
         // shmsz: align page 4096
         if(auto align = shmsz % pagesz)
+        {
             shmsz += pagesz - align;
+        }
 
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
+
         if(shmId == -1)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmget", strerror(errno), errno);
@@ -1325,6 +1407,7 @@ namespace LTSM
         }
 
         auto shmAddr = reinterpret_cast<uint8_t*>(shmat(shmId, nullptr, (readOnly ? SHM_RDONLY : 0)));
+
         // man shmat: check result
         if(shmAddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno)
         {
@@ -1343,21 +1426,25 @@ namespace LTSM
             else
             {
                 info.shm_perm.uid = owner;
+
                 if(-1 == shmctl(shmId, IPC_SET, & info))
+                {
                     Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+                }
             }
         }
 
         xcb_shm_seg_t res = xcb_generate_id(conn.get());
 
         auto cookie = xcb_shm_attach_checked(conn.get(), res, shmId, 0);
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_shm_attach");
             return nullptr;
         }
 
-	Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, res);
+        Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, res);
         return std::make_shared<ShmId>(conn, shmId, shmAddr, res);
     }
 
@@ -1368,7 +1455,9 @@ namespace LTSM
         ext = xcb_get_extension_data(conn.get(), & xcb_xkb_id);
 
         if(! ext || ! ext->present)
+        {
             throw xcb_error(NS_FuncName);
+        }
 
         auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
@@ -1400,7 +1489,9 @@ namespace LTSM
         }
 
         if(! resetMapState())
+        {
             throw xcb_error(NS_FuncName);
+        }
     }
 
     bool XCB::ModuleXkb::resetMapState(void)
@@ -1436,6 +1527,7 @@ namespace LTSM
         res.reserve(4);
 
         auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
+
         if(auto err = xcbReply.error())
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
@@ -1453,7 +1545,9 @@ namespace LTSM
             // current symbol atom: list.symbolsName;
 
             for(int ii = 0; ii < groups; ++ii)
+            {
                 res.emplace_back(Atom::getName(conn.get(), list.groups[ii]));
+            }
         }
 
         return res;
@@ -1462,6 +1556,7 @@ namespace LTSM
     int XCB::ModuleXkb::getLayoutGroup(void) const
     {
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
+
         if(auto err = xcbReply.error())
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
@@ -1469,7 +1564,9 @@ namespace LTSM
         }
 
         if(auto reply = xcbReply.reply())
+        {
             return reply->group;
+        }
 
         return -1;
     }
@@ -1482,7 +1579,9 @@ namespace LTSM
             auto names = getNames();
 
             if(2 > names.size())
+            {
                 return false;
+            }
 
             group = (getLayoutGroup() + 1) % names.size();
         }
@@ -1508,25 +1607,27 @@ namespace LTSM
         win = xcb_generate_id(conn.get());
         auto cookie = xcb_create_window_checked(conn.get(), 0, win, screen.root, -1, -1, 1, 1, 0,
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
-    
+
         if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_create_window");
             throw xcb_error(NS_FuncName);
         }
 
-	Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, win);
+        Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, win);
 
         // set _wm_name
         const std::string name("LTSM_WINSEL");
         xcb_change_property(conn.get(), XCB_PROP_MODE_REPLACE, win,
-                                Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
+                            Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
     }
 
     XCB::ModuleSelection::~ModuleSelection()
     {
         if(win != XCB_WINDOW_NONE)
+        {
             xcb_destroy_window(conn.get(), win);
+        }
     }
 
     bool XCB::ModuleSelection::clearAction(const xcb_selection_clear_event_t* ev)
@@ -1547,9 +1648,11 @@ namespace LTSM
     {
         const std::scoped_lock guard{ lock };
         buf.assign(ptr, ptr + len);
-            
+
         if(buf.empty())
+        {
             return false;
+        }
 
         for(auto atom: atoms)
         {
@@ -1560,11 +1663,12 @@ namespace LTSM
             {
                 error(conn.get(), err.get(), __FUNCTION__, "xcb_get_selection_owner");
             }
-            else
-            if(auto reply = xcbReply.reply())
+            else if(auto reply = xcbReply.reply())
             {
                 if(reply->owner != win)
+                {
                     xcb_set_selection_owner(conn.get(), win, atom, XCB_CURRENT_TIME);
+                }
             }
         }
 
@@ -1607,7 +1711,9 @@ namespace LTSM
         const std::scoped_lock guard{ lock };
 
         if(buf.empty())
+        {
             return false;
+        }
 
         size_t length = buf.size();
         size_t maxreq = xcb_get_maximum_request_length(conn.get());
@@ -1640,7 +1746,7 @@ namespace LTSM
             auto prop = Atom::getName(conn.get(), ev.property);
             std::string log(buf.begin(), buf.end());
             Application::debug("%s: put selection, size: %u, content: `%s', to window: 0x%08" PRIx32 ", property: `%s'",
-                        __FUNCTION__, buf.size(), log.c_str(), ev.requestor, prop.c_str());
+                               __FUNCTION__, buf.size(), log.c_str(), ev.requestor, prop.c_str());
         }
 
         return true;
@@ -1649,16 +1755,21 @@ namespace LTSM
     bool XCB::ModuleSelection::requestAction(const xcb_selection_request_event_t* ev)
     {
         if(! ev)
+        {
             return false;
+        }
 
         if(ev->selection == Atom::clipboard || ev->selection == Atom::primary)
         {
             if(ev->target == Atom::targets)
+            {
                 return sendNotifyTargets(*ev);
-            else
-            if(ev->property != XCB_ATOM_NONE &&
-                (ev->target == Atom::text || ev->target == Atom::textPlain || ev->target == Atom::utf8String))
+            }
+            else if(ev->property != XCB_ATOM_NONE &&
+                    (ev->target == Atom::text || ev->target == Atom::textPlain || ev->target == Atom::utf8String))
+            {
                 return sendNotifySelData(*ev);
+            }
         }
 
         // other variants: discard request
@@ -1683,7 +1794,7 @@ namespace LTSM
             auto tgt = Atom::getName(conn.get(), ev->target);
             auto prop = Atom::getName(conn.get(), ev->property);
             Application::warning("%s: discard, selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), window: 0x%08" PRIx32,
-                                    __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
+                                 __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
         }
 
         return false;
@@ -1692,7 +1803,9 @@ namespace LTSM
     bool XCB::ModuleSelection::fixesAction(const xcb_xfixes_selection_notify_event_t* ev)
     {
         if(! ev)
+        {
             return false;
+        }
 
         if(ev->owner != XCB_WINDOW_NONE && ev->owner != win)
         {
@@ -1716,6 +1829,7 @@ namespace LTSM
         }
 
         auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, Atom::incr, XCB_ATOM_INTEGER, 0, 1);
+
         if(auto err = xcbReply.error())
         {
             error(conn.get(), err.get(), __FUNCTION__, "xcb_get_property");
@@ -1723,6 +1837,7 @@ namespace LTSM
         }
 
         int selsize = 0;
+
         if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
@@ -1730,15 +1845,16 @@ namespace LTSM
                 auto name = Atom::getName(conn.get(), reply->type);
                 Application::warning("%s: unknown type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, reply->type, name.c_str());
             }
-            else
-            if(reply->format != 32)
+            else if(reply->format != 32)
             {
                 Application::warning("%s: unknown format: %" PRIu8, __FUNCTION__, reply->format);
             }
             else
             {
                 if(auto res = static_cast<int32_t*>(xcb_get_property_value(reply.get())))
+                {
                     selsize = *res;
+                }
             }
         }
 
@@ -1763,7 +1879,9 @@ namespace LTSM
     bool XCB::ModuleSelection::notifyIncrContinue(xcb_atom_t type)
     {
         if(! incr)
+        {
             return false;
+        }
 
         // get data
         auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, atombuf, type, 0, ~0);
@@ -1796,8 +1914,7 @@ namespace LTSM
                     incr.reset();
                 }
             }
-            else
-            if(0 < length)
+            else if(0 < length)
             {
                 const std::scoped_lock guard{ lock };
                 // append mode
@@ -1817,13 +1934,17 @@ namespace LTSM
     bool XCB::ModuleSelection::notifyAction(const xcb_selection_notify_event_t* ev, xcb_atom_t buftype, bool syncPrimaryClipboard)
     {
         if(! ev)
+        {
             return false;
+        }
 
         if(ev->property == XCB_ATOM_NONE)
+        {
             return false;
+        }
 
         bool allowAtom = ev->selection == Atom::primary ||
-            (ev->selection == Atom::clipboard && syncPrimaryClipboard);
+                         (ev->selection == Atom::clipboard && syncPrimaryClipboard);
 
         if(! allowAtom)
         {
@@ -1833,11 +1954,13 @@ namespace LTSM
         }
 
         if(XCB_ATOM_NONE == buftype)
+        {
             return false;
+        }
 
         Application::debug("%s: requestor: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), timestamp: %" PRIu32,
-                    __FUNCTION__, ev->requestor, ev->selection, Atom::getName(conn.get(), ev->selection).c_str(),
-                    ev->target, Atom::getName(conn.get(), ev->target).c_str(), ev->property, Atom::getName(conn.get(), ev->property).c_str(), ev->time);
+                           __FUNCTION__, ev->requestor, ev->selection, Atom::getName(conn.get(), ev->selection).c_str(),
+                           ev->target, Atom::getName(conn.get(), ev->target).c_str(), ev->property, Atom::getName(conn.get(), ev->property).c_str(), ev->time);
 
         // incr mode
         if(Atom::incr == buftype)
@@ -1852,14 +1975,18 @@ namespace LTSM
             Application::warning("%s: unsupported type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, buftype, name.c_str());
 
             if(incr)
+            {
                 incr.reset();
+            }
 
             return false;
         }
 
         // continue incremental
         if(incr)
+        {
             return notifyIncrContinue(buftype);
+        }
 
         // get data
         auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, atombuf, buftype, 0, ~0);
@@ -1882,7 +2009,9 @@ namespace LTSM
 
                 // check equal
                 if(length == buf.size() && std::equal(buf.begin(), buf.end(), ptrbuf))
+                {
                     ret = false;
+                }
                 else
                 {
                     buf.assign(ptrbuf, ptrbuf + length);
@@ -1893,7 +2022,9 @@ namespace LTSM
             auto cookie = xcb_delete_property_checked(conn.get(), win, atombuf);
 
             if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+            {
                 error(conn.get(), err.get(), __FUNCTION__, "xcb_delete_property");
+            }
 
             return ret;
         }
@@ -1910,13 +2041,17 @@ namespace LTSM
     XCB::ErrorContext::~ErrorContext()
     {
         if(ctx)
+        {
             xcb_errors_context_free(ctx);
+        }
     }
 
     bool XCB::ErrorContext::error(const xcb_generic_error_t* err, const char* func, const char* xcbname) const
     {
         if(! ctx)
+        {
             return false;
+        }
 
         const char* extension = nullptr;
         const char* major = xcb_errors_get_name_for_major_code(ctx, err->major_code);
@@ -1924,36 +2059,39 @@ namespace LTSM
         const char* error = xcb_errors_get_name_for_error(ctx, err->error_code, & extension);
 
         Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%08" PRIx32 ", sequence: 0x%08" PRIx32,
-                       func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
-                       err->resource_id, err->sequence);
+                           func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
+                           err->resource_id, err->sequence);
 
         return true;
     }
+
 #endif
 
     std::string getLocalAddr(int displayNum)
     {
-	if(displayNum < 0)
-	{
-	    auto env = getenv("DISPLAY");
-	    return std::string(env ? env : "");
-	}
+        if(displayNum < 0)
+        {
+            auto env = getenv("DISPLAY");
+            return std::string(env ? env : "");
+        }
 
-	return Tools::joinToString(":", displayNum);
+        return Tools::joinToString(":", displayNum);
     }
 
     /* XCB::Connector */
     XCB::Connector::Connector(int displayNum, const AuthCookie* cookie)
     {
         if(! XCB::Connector::displayConnect(displayNum, cookie) )
-    	    throw xcb_error(NS_FuncName);
+        {
+            throw xcb_error(NS_FuncName);
+        }
     }
 
     bool XCB::Connector::displayConnect(int displayNum, const AuthCookie* cookie)
     {
         auto displayAddr = getLocalAddr(displayNum);
 
-        if(cookie) 
+        if(cookie)
         {
             std::string_view magic{"MIT-MAGIC-COOKIE-1"};
             xcb_auth_info_t auth;
@@ -1969,18 +2107,18 @@ namespace LTSM
             _conn = ConnectionShared(xcb_connect(displayAddr.c_str(), nullptr));
         }
 
-    	if(xcb_connection_has_error(_conn.get()))
-    	{
-    	    Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
-    	    return false;
-    	}
+        if(xcb_connection_has_error(_conn.get()))
+        {
+            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
+            return false;
+        }
 
         _setup = xcb_get_setup(_conn.get());
 
         if(! _setup)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
-    	    return false;
+            return false;
         }
 
 #ifdef LTSM_BUILD_XCB_ERRORS
@@ -2013,7 +2151,7 @@ namespace LTSM
     size_t XCB::Connector::bppFromDepth(size_t depth) const
     {
         for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
-            if(fIter.data->depth == depth) return fIter.data->bits_per_pixel;
+            if(fIter.data->depth == depth) { return fIter.data->bits_per_pixel; }
 
         return 0;
     }
@@ -2021,7 +2159,7 @@ namespace LTSM
     size_t XCB::Connector::depthFromBpp(size_t bitsPerPixel) const
     {
         for(auto fIter = xcb_setup_pixmap_formats_iterator(_setup); fIter.rem; xcb_format_next(& fIter))
-            if(fIter.data->bits_per_pixel == bitsPerPixel) return fIter.data->depth;
+            if(fIter.data->bits_per_pixel == bitsPerPixel) { return fIter.data->depth; }
 
         return 0;
     }
@@ -2067,6 +2205,7 @@ namespace LTSM
     void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func, const char* xcbname) const
     {
 #ifdef LTSM_BUILD_XCB_ERRORS
+
         if(! _error || ! _error->error(err, func, xcbname))
 #endif
         {
@@ -2110,8 +2249,7 @@ namespace LTSM
         {
             extendedError(err.get(), __FUNCTION__, "xcb_query_tree");
         }
-        else
-        if(auto reply = xcbReply.reply())
+        else if(auto reply = xcbReply.reply())
         {
             xcb_window_t* ptr = xcb_query_tree_children(reply.get());
             int len = xcb_query_tree_children_length(reply.get());
@@ -2141,15 +2279,18 @@ namespace LTSM
         std::list<xcb_atom_t> res;
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_list_properties");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             auto beg = xcb_list_properties_atoms(reply.get());
             auto end = beg + xcb_list_properties_atoms_length(reply.get());
 
             if(beg && beg < end)
+            {
                 res.assign(beg, end);
+            }
         }
 
         return res;
@@ -2160,7 +2301,9 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
+        }
 
         return xcbReply.reply();
     }
@@ -2176,9 +2319,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_ATOM, offset, 1);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_ATOM)
             {
@@ -2186,8 +2330,7 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
+            else if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get())))
             {
                 return *res;
             }
@@ -2202,9 +2345,10 @@ namespace LTSM
         std::list<xcb_atom_t> res;
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_ATOM)
             {
@@ -2218,7 +2362,9 @@ namespace LTSM
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
         }
 
@@ -2230,9 +2376,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_WINDOW)
             {
@@ -2240,9 +2387,10 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
+            else if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get())))
+            {
                 return *res;
+            }
         }
 
         return XCB_WINDOW_NONE;
@@ -2254,9 +2402,10 @@ namespace LTSM
         std::list<xcb_window_t> res;
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_WINDOW)
             {
@@ -2270,7 +2419,9 @@ namespace LTSM
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_window_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
         }
 
@@ -2282,9 +2433,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_CARDINAL, offset, 1);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_CARDINAL)
             {
@@ -2292,11 +2444,12 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(reply->format == 32)
+            else if(reply->format == 32)
             {
                 if(auto res = static_cast<uint32_t*>(xcb_get_property_value(reply.get())))
+                {
                     return *res;
+                }
             }
             else
             {
@@ -2314,9 +2467,10 @@ namespace LTSM
         std::list<uint32_t> res;
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_CARDINAL)
             {
@@ -2324,14 +2478,15 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(reply->format == 32)
+            else if(reply->format == 32)
             {
                 auto beg = static_cast<uint32_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(uint32_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
             else
             {
@@ -2348,9 +2503,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_INTEGER, offset, 1);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
             {
@@ -2358,29 +2514,33 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(reply->format == 8)
+            else if(reply->format == 8)
             {
                 if(auto res = static_cast<int8_t*>(xcb_get_property_value(reply.get())))
+                {
                     return *res;
+                }
             }
-            else
-            if(reply->format == 16)
+            else if(reply->format == 16)
             {
                 if(auto res = static_cast<int16_t*>(xcb_get_property_value(reply.get())))
+                {
                     return *res;
+                }
             }
-            else
-            if(reply->format == 32)
+            else if(reply->format == 32)
             {
                 if(auto res = static_cast<int32_t*>(xcb_get_property_value(reply.get())))
+                {
                     return *res;
+                }
             }
-            else
-            if(reply->format == 64)
+            else if(reply->format == 64)
             {
                 if(auto res = static_cast<int64_t*>(xcb_get_property_value(reply.get())))
+                {
                     return *res;
+                }
             }
             else
             {
@@ -2398,9 +2558,10 @@ namespace LTSM
         std::list<int> res;
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
             {
@@ -2408,41 +2569,45 @@ namespace LTSM
                 auto name2 = getAtomName(prop);
                 Application::warning("%s: type not %s, type atom(0x%08" PRIx32 ", `%s'), property: %s", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
             }
-            else
-            if(reply->format == 8)
+            else if(reply->format == 8)
             {
                 auto beg = static_cast<int8_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int8_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
-            else
-            if(reply->format == 16)
+            else if(reply->format == 16)
             {
                 auto beg = static_cast<int16_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int16_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
-            else
-            if(reply->format == 32)
+            else if(reply->format == 32)
             {
                 auto beg = static_cast<int32_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int32_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
-            else
-            if(reply->format == 64)
+            else if(reply->format == 64)
             {
                 auto beg = static_cast<int64_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int64_t);
 
                 if(beg && beg < end)
+                {
                     res.assign(beg, end);
+                }
             }
             else
             {
@@ -2474,15 +2639,18 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto len = xcb_get_property_value_length(reply.get());
 
             if(ptr && 0 < len)
+            {
                 return std::string(ptr, ptr + len);
+            }
         }
 
         return "";
@@ -2509,9 +2677,10 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
         if(auto err = xcbReply.error())
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
-        else
-        if(auto reply = xcbReply.reply())
+        }
+        else if(auto reply = xcbReply.reply())
         {
             auto beg = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto end = beg + xcb_get_property_value_length(reply.get());
@@ -2530,7 +2699,9 @@ namespace LTSM
     XCB::RootDisplay::RootDisplay(int displayNum, const AuthCookie* auth)
     {
         if(! XCB::RootDisplay::displayConnect(displayNum, auth) )
+        {
             throw xcb_error(NS_FuncName);
+        }
     }
 
     XCB::RootDisplay::~RootDisplay()
@@ -2545,7 +2716,9 @@ namespace LTSM
     bool XCB::RootDisplay::displayConnect(int displayNum, const AuthCookie* auth)
     {
         if(! Connector::displayConnect(displayNum, auth))
+        {
             return false;
+        }
 
         _minKeycode = _setup->min_keycode;
         _maxKeycode = _setup->max_keycode;
@@ -2613,7 +2786,9 @@ namespace LTSM
         auto cookie = xcb_xkb_select_events_checked(_conn.get(), _modXkb->devid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
 
         if(auto err = checkRequest(cookie))
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_xkb_select_events");
+        }
 
         // create randr notify
         xcb_randr_select_input(_conn.get(), _screen->root,
@@ -2682,13 +2857,26 @@ namespace LTSM
     {
         switch(mod)
         {
-            case Module::SHM:       return _modShm.get();
-            case Module::DAMAGE:    return _modDamage.get();
-            case Module::XFIXES:    return _modFixes.get();
-            case Module::RANDR:     return _modRandr.get();
-            case Module::TEST:      return _modTest.get();
-            case Module::XKB:       return _modXkb.get();
-            case Module::SELECTION: return _modSelection.get();
+            case Module::SHM:
+                return _modShm.get();
+
+            case Module::DAMAGE:
+                return _modDamage.get();
+
+            case Module::XFIXES:
+                return _modFixes.get();
+
+            case Module::RANDR:
+                return _modRandr.get();
+
+            case Module::TEST:
+                return _modTest.get();
+
+            case Module::XKB:
+                return _modXkb.get();
+
+            case Module::SELECTION:
+                return _modSelection.get();
         }
 
         return nullptr;
@@ -2740,20 +2928,26 @@ namespace LTSM
     bool XCB::RootDisplay::setRandrMonitors(const std::vector<Region> & monitors)
     {
         if(! _modRandr)
+        {
             return false;
+        }
 
         // disconnected current CRTCs
         for(auto & outputId: _modRandr->getOutputs(*_screen))
         {
             if(auto info = _modRandr->getOutputInfo(outputId);
-                info && info->connected == XCB_RANDR_CONNECTION_CONNECTED)
-                    _modRandr->crtcDisconnect(*_screen, info->crtc);
+                    info && info->connected == XCB_RANDR_CONNECTION_CONNECTED)
+            {
+                _modRandr->crtcDisconnect(*_screen, info->crtc);
+            }
         }
 
         Region screenArea;
 
         for(auto & monitor: monitors)
+        {
             screenArea.join(monitor);
+        }
 
         if(screenArea.x)
         {
@@ -2768,10 +2962,14 @@ namespace LTSM
         }
 
         if( auto alignW = screenArea.width % 8 )
+        {
             screenArea.width += 8 - alignW;
+        }
 
         if(! _modRandr->setScreenSize(*_screen, screenArea.width, screenArea.height))
+        {
             return false;
+        }
 
         Application::debug("%s: screen area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
 
@@ -2786,7 +2984,8 @@ namespace LTSM
             auto & monitor = monitors[it];
             auto modes = _modRandr->getModesInfo(*_screen);
 
-            auto itm = std::find_if(modes.begin(), modes.end(), [&](auto & info){ return info.width == monitor.width && info.height == monitor.height; });
+            auto itm = std::find_if(modes.begin(), modes.end(), [&](auto & info) { return info.width == monitor.width && info.height == monitor.height; });
+
             const xcb_randr_mode_t mode = itm != modes.end() ? itm->id : _modRandr->cvtCreateMode(*_screen, monitor.toSize());
 
             if(_modRandr->addOutputMode(outputs[it], mode))
@@ -2795,7 +2994,7 @@ namespace LTSM
 
         damageAdd(screenArea);
 
-        // 
+        //
         return true;
     }
 
@@ -2805,8 +3004,10 @@ namespace LTSM
         {
             auto area = region();
 
-	    if(area.toSize() == sz)
-		return true;
+            if(area.toSize() == sz)
+            {
+                return true;
+            }
 
             randrScreenSetSizeEvent(sz);
 
@@ -2814,8 +3015,11 @@ namespace LTSM
             damageSubtrack(area);
 
             auto res = _modRandr->setScreenSizeCompat(*_screen, sz, sequence);
+
             if(! res)
+            {
                 damageAdd(area);
+            }
 
             updateGeometrySize();
 
@@ -2832,11 +3036,15 @@ namespace LTSM
         {
             // release all buttons
             for(uint8_t button = 1; button <= 5; button++)
+            {
                 xcb_test_fake_input(_conn.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
+            }
 
             // release all keys
-            for(int key = _minKeycode;  key <= _maxKeycode; key++)
+            for(int key = _minKeycode; key <= _maxKeycode; key++)
+            {
                 xcb_test_fake_input(_conn.get(), XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
+            }
 
             xcb_flush(_conn.get());
         }
@@ -2859,7 +3067,9 @@ namespace LTSM
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
             {
                 if(id == vIter.data->visual_id)
+                {
                     return vIter.data;
+                }
             }
         }
 
@@ -2913,7 +3123,7 @@ namespace LTSM
         if(shm && 0 < shm->id)
         {
             auto xcbReply = getReplyFunc1(xcb_shm_get_image, _conn.get(), _screen->root, reg.x, reg.y, reg.width, reg.height,
-                                      planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, shm->id, 0);
+                                          planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, shm->id, 0);
             PixmapInfoReply res;
 
             if(auto reply = xcbReply.reply())
@@ -2922,11 +3132,15 @@ namespace LTSM
                 auto bpp = bppFromDepth(reply->depth);
 
                 if(visptr)
+                {
                     return std::make_shared<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, std::move(shm), reply->size);
+                }
             }
 
             if(auto err = xcbReply.error())
+            {
                 extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
+            }
 
             shm->reset();
         }
@@ -2949,7 +3163,9 @@ namespace LTSM
         {
             // last rows
             if(yy + allowRows > reg.y + reg.height)
+            {
                 allowRows = reg.y + reg.height - yy;
+            }
 
             auto xcbReply = getReplyFunc2(xcb_get_image, _conn.get(), XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
@@ -2972,7 +3188,7 @@ namespace LTSM
                         break;
                     }
 
-                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height * pitch));
+                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height* pitch));
                 }
 
                 auto info = static_cast<PixmapBuffer*>(res.get());
@@ -2993,10 +3209,10 @@ namespace LTSM
         if(_damage && _modFixes && rects && counts)
         {
             if(auto regid = _modFixes->createRegions(rects, counts))
-	    {
+            {
                 _damage->addRegion(regid->id());
                 return true;
-	    }
+            }
         }
 
         return false;
@@ -3047,40 +3263,39 @@ namespace LTSM
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height)
             {
                 Application::warning("%s: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-                                        __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
+                                     __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-    	    Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-                                        __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
+            Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                               __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
             damageRegionEvent(dn->area);
         }
-        else
-        if(isXFixesSelectionNotify(ev))
+        else if(isXFixesSelectionNotify(ev))
         {
-	    auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
+            auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
 
-	    Application::debug("%s: selection notify, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
-        		    __FUNCTION__, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
+            Application::debug("%s: selection notify, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
+                               __FUNCTION__, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
 
             if(_modSelection)
+            {
                 _modSelection->fixesAction(sn);
+            }
 
             xfixesSelectionChangedEvent();
         }
-        else
-        if(isXFixesCursorNotify(ev))
+        else if(isXFixesCursorNotify(ev))
         {
-	    auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
+            auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
 
-    	    Application::debug("%s: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `%s'), sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-                            __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
+            Application::debug("%s: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `%s'), sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                               __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
 
             xfixesCursorChangedEvent();
         }
-        else
-        if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
+        else if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
         {
             auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
             const xcb_randr_crtc_change_t & cc = rn->u.cc;
@@ -3092,36 +3307,34 @@ namespace LTSM
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
                     Application::warning("%s: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-                                            __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
+                                         __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
                 Application::info("%s: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-				    __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
+                                  __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
                 createFullScreenDamage();
                 randrScreenChangedEvent(wsz, *rn);
             }
         }
-        else
-        if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY))
+        else if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY))
         {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
             Application::debug("%s: xkb notify: %s, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-			__FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
+                               __FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
 
             _minKeycode = mn->minKeyCode;
             _maxKeycode = mn->maxKeyCode;
 
             _modXkb->resetMapState();
         }
-        else
-        if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY))
+        else if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY))
         {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
             Application::debug("%s: xkb notify: %s, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-			__FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
+                               __FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
 
             if(kn->deviceID == _modXkb->devid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
             {
@@ -3132,12 +3345,11 @@ namespace LTSM
                 _modXkb->resetMapState();
             }
         }
-        else
-        if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY))
+        else if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY))
         {
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
             Application::debug("%s: xkb notify: %s, xkb type: 0x%02" PRIx8 ", devid: %" PRIu8 ", mods: 0x%02" PRIx8 ", group: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
-			__FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
+                               __FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
 
             xkb_state_update_mask(_modXkb->state.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
                                   sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
@@ -3169,6 +3381,7 @@ namespace LTSM
                         const std::scoped_lock guard{ _modSelection->lock };
                         clipboardChangedEvent(_modSelection->buf);
                     }
+
                     break;
 
                 default:
@@ -3242,7 +3455,9 @@ namespace LTSM
 
                 // check normal/shifted keysyms
                 if(keysym == keysyms[index] || keysym == keysyms[index + 1])
+                {
                     return std::make_pair(keycode, group);
+                }
             }
         }
 
@@ -3317,11 +3532,15 @@ namespace LTSM
 
             // check normal keysyms
             if(keysym == keysyms[index])
+            {
                 return keycode;
+            }
 
             // check shifted keysyms
             if(keysym == keysyms[index + 1])
+            {
                 return keycode;
+            }
         }
 
         Application::warning("%s: keysym not found 0x%08" PRIx32 ", curent group: %d", __FUNCTION__, keysym, group);
@@ -3331,7 +3550,9 @@ namespace LTSM
     void XCB::RootDisplay::fakeInputKeycode(xcb_keycode_t keycode, bool pressed) const
     {
         if(_modTest)
+        {
             _modTest->fakeInputRaw(_screen->root, pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, 0, 0);
+        }
     }
 
     void XCB::RootDisplay::fakeInputKeysym(xcb_keysym_t keysym, bool pressed)
@@ -3345,23 +3566,31 @@ namespace LTSM
             if(keysymKeycode != NULL_KEYCODE)
             {
                 if(pressed)
+                {
                     Application::debug("%s: keysym 0x%08" PRIx32 " was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
+                }
 
                 if(_modXkb)
+                {
                     _modXkb->switchLayoutGroup(keysymGroup);
+                }
 
                 keycode = keysymKeycode;
             }
         }
 
         if(keycode != NULL_KEYCODE)
+        {
             fakeInputKeycode(keycode, pressed);
+        }
     }
 
     void XCB::RootDisplay::fakeInputButton(int button, const Point & pos) const
     {
         if(_modTest)
+        {
             _modTest->fakeInputClickButton(_screen->root, button, pos);
+        }
     }
 
     void XCB::RootDisplay::fillBackground(int r, int g, int b)
@@ -3382,17 +3611,21 @@ namespace LTSM
             color = (r << 11) | (g << 5) | b;
         }
 
-        uint32_t colors[]  = { color };
+        uint32_t colors[] = { color };
         auto cookie = xcb_change_window_attributes(_conn.get(), _screen->root, XCB_CW_BACK_PIXEL, colors);
 
         if(auto err = checkRequest(cookie))
+        {
             extendedError(err.get(), __FUNCTION__, "xcb_change_window_attributes");
+        }
         else
         {
             cookie = xcb_clear_area_checked(_conn.get(), 0, _screen->root, reg.x, reg.y, reg.width, reg.height);
 
             if(auto err = checkRequest(cookie))
+            {
                 extendedError(err.get(), __FUNCTION__, "xcb_clear_area");
+            }
         }
     }
 
@@ -3400,6 +3633,7 @@ namespace LTSM
     XCB::XkbClient::XkbClient()
     {
         conn.reset(xcb_connect(nullptr, nullptr));
+
         if(xcb_connection_has_error(conn.get()))
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_connect");
@@ -3407,6 +3641,7 @@ namespace LTSM
         }
 
         auto setup = xcb_get_setup(conn.get());
+
         if(! setup)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
@@ -3417,6 +3652,7 @@ namespace LTSM
         maxKeycode = setup->max_keycode;
 
         xkbext = xcb_get_extension_data(conn.get(), &xcb_xkb_id);
+
         if(! xkbext)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_get_extension_data");
@@ -3432,6 +3668,7 @@ namespace LTSM
         }
 
         xkbdevid = xkb_x11_get_core_keyboard_device_id(conn.get());
+
         if(xkbdevid < 0)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
@@ -3439,6 +3676,7 @@ namespace LTSM
         }
 
         xkbctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
+
         if(! xkbctx)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_context_new");
@@ -3446,6 +3684,7 @@ namespace LTSM
         }
 
         xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+
         if(!xkbmap)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
@@ -3453,6 +3692,7 @@ namespace LTSM
         }
 
         xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
+
         if(!xkbstate)
         {
             Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
@@ -3465,6 +3705,7 @@ namespace LTSM
         uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
 
         auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
+
         if(GenericError(xcb_request_check(conn.get(), cookie)))
         {
             Application::error("%s: %s failed", __FUNCTION__, "xcb_xkb_select_events");
@@ -3475,25 +3716,31 @@ namespace LTSM
     std::string XCB::XkbClient::atomName(xcb_atom_t atom) const
     {
         auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
+
         if(auto reply = xcbReply.reply())
         {
             const char* name = xcb_get_atom_name_name(reply.get());
             size_t len = xcb_get_atom_name_name_length(reply.get());
             return std::string(name, name + len);
         }
- 
+
         return "NONE";
     }
 
     int XCB::XkbClient::xkbGroup(void) const
     {
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
+
         if(auto err = xcbReply.error())
+        {
             throw xcb_error("xcb_xkb_get_names");
- 
+        }
+
         if(auto reply = xcbReply.reply())
+        {
             return reply->group;
- 
+        }
+
         return -1;
     }
 
@@ -3502,7 +3749,9 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
         if(xcbReply.error())
+        {
             throw xcb_error("xcb_xkb_get_names");
+        }
 
         std::vector<std::string> res;
         res.reserve(4);
@@ -3513,42 +3762,54 @@ namespace LTSM
             xcb_xkb_get_names_value_list_t list;
 
             xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
-                                            reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
+                                                reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
             int groups = xcb_xkb_get_names_value_list_groups_length(reply.get(), & list);
 
             for(int ii = 0; ii < groups; ++ii)
+            {
                 res.emplace_back(atomName(list.groups[ii]));
+            }
         }
-    
+
         return res;
     }
 
     xcb_keysym_t XCB::XkbClient::keycodeGroupToKeysym(xcb_keycode_t keycode, int group, bool shifted) const
     {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
- 
+
         auto reply = xcbReply.reply();
+
         if(! reply)
+        {
             throw xcb_error("xcb_get_keyboard_mapping");
+        }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
+
         if(! keysyms)
+        {
             throw xcb_error("xcb_get_keyboard_mapping_keysyms");
+        }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
+
         if(1 > keysymsPerKeycode)
+        {
             throw xcb_error("keysyms_per_keycode");
-        
+        }
+
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
         Application::debug("%s: keycode: 0x%02" PRIx8 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         int index = (keycode - minKeycode) * keysymsPerKeycode + group * 2;
+
         if(index + 1 >= keysymsLength)
         {
-                Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                                   __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+            Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                               __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
             return 0;
         }
 
@@ -3559,19 +3820,28 @@ namespace LTSM
     {
         auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
- 
+
         auto reply = xcbReply.reply();
+
         if(! reply)
+        {
             throw xcb_error("xcb_get_keyboard_mapping");
+        }
 
         const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
+
         if(! keysyms)
+        {
             throw xcb_error("xcb_get_keyboard_mapping_keysyms");
+        }
 
         int keysymsPerKeycode = reply->keysyms_per_keycode;
+
         if(1 > keysymsPerKeycode)
+        {
             throw xcb_error("keysyms_per_keycode");
-        
+        }
+
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
         Application::debug("%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
@@ -3592,13 +3862,15 @@ namespace LTSM
                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                     return empty;
                 }
-                
+
                 // check normal/shifted keysyms
                 if(keysym == keysyms[index] || keysym == keysyms[index + 1])
+                {
                     return std::make_pair(keycode, group);
+                }
             }
         }
-        
+
         Application::warning("%s: keysym not found 0x%08" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(xkbNames(), ",").c_str());
         return empty;
     }
@@ -3638,6 +3910,7 @@ namespace LTSM
             if(xkbext->first_event == type)
             {
                 auto xkbev = ev->pad0;
+
                 if(XCB_XKB_MAP_NOTIFY == xkbev)
                 {
                     auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
@@ -3645,8 +3918,7 @@ namespace LTSM
                     minKeycode = mn->minKeyCode;
                     maxKeycode = mn->maxKeyCode;
                 }
-                else
-                if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
+                else if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
                 {
                     if(auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get()))
                     {
@@ -3658,15 +3930,17 @@ namespace LTSM
                         }
                     }
                 }
-                else
-                if(xkbev == XCB_XKB_STATE_NOTIFY)
+                else if(xkbev == XCB_XKB_STATE_NOTIFY)
                 {
                     if(auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get()))
                     {
                         xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
-                                                      sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+                                              sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
+
                         if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
+                        {
                             xkbStateChangeEvent(sn->group);
+                        }
                     }
                 }
             }

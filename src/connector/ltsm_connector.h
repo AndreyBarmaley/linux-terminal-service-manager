@@ -38,104 +38,134 @@ namespace LTSM
         const RenderType type;
 
         RenderPrimitive(const RenderType & val) : type(val) {}
+
         virtual ~RenderPrimitive() {}
     };
 
     struct RenderRect : RenderPrimitive
     {
         sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> region;
-        sdbus::Struct<uint8_t, uint8_t, uint8_t>            color;
-        bool                                                fill;
+        sdbus::Struct<uint8_t, uint8_t, uint8_t> color;
+        bool fill;
 
-        RenderRect(const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col, bool v)
+        RenderRect(const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt,
+                   const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col, bool v)
             : RenderPrimitive(RenderType::RenderRect), region(rt), color(col), fill(v) {}
 
-        XCB::Region toRegion(void) const { return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region)); }
+        XCB::Region toRegion(void) const
+        {
+            return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region));
+        }
     };
 
     struct RenderText : RenderPrimitive
     {
-        std::string	                                    text;
+        std::string text;
         sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> region;
-        sdbus::Struct<uint8_t, uint8_t, uint8_t>            color;
+        sdbus::Struct<uint8_t, uint8_t, uint8_t> color;
 
-        RenderText(const std::string & str, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col)
+        RenderText(const std::string & str, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rt,
+                   const sdbus::Struct<uint8_t, uint8_t, uint8_t> & col)
             : RenderPrimitive(RenderType::RenderText), text(str), region(rt), color(col) {}
 
-        XCB::Region toRegion(void) const { return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region)); }
+        XCB::Region toRegion(void) const
+        {
+            return XCB::Region(std::get<0>(region), std::get<1>(region), std::get<2>(region), std::get<3>(region));
+        }
     };
 
     namespace Connector
     {
-        std::string                     homeRuntime(void);
+        std::string homeRuntime(void);
 
         /* Connector::SignalProxy */
         class SignalProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
         {
         protected:
             std::list<std::unique_ptr<RenderPrimitive>>
-                                        _renderPrimitives;
+            _renderPrimitives;
 
-            std::string		        _conntype;
-            std::string			_remoteaddr;
+            std::string _conntype;
+            std::string _remoteaddr;
 
-            const JsonObject*           _config = nullptr;
+            const JsonObject* _config = nullptr;
 
-            std::atomic<int>            _xcbDisplayNum{0};
-            std::atomic<bool>           _xcbDisable{true};
+            std::atomic<int> _xcbDisplayNum{0};
+            std::atomic<bool> _xcbDisable{true};
 
         private:
             // dbus virtual signals
-            void                        onLoginFailure(const int32_t & display, const std::string & msg) override {}
-            void                        onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin) override {}
-	    void			onHelperWidgetCentered(const int32_t& display) override {}
-            void                        onHelperWidgetTimezone(const int32_t& display, const std::string&) override {}
-            void                        onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
-	    void			onSessionChanged(const int32_t& display) override {}
-	    void			onDisplayRemoved(const int32_t& display) override {}
-            void                        onCreateChannel(const int32_t & display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&) override {}
-            void                        onDestroyChannel(const int32_t& display, const uint8_t& channel) override {};
-            void                        onCreateListener(const int32_t& display, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const uint8_t&, const uint32_t&) override {}
-            void                        onDestroyListener(const int32_t& display, const std::string&, const std::string&) override {}
-            void                        onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile,  const std::string& dstdir) override {}
-            void                        onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override {}
+            void onLoginFailure(const int32_t & display, const std::string & msg) override {}
+
+            void onHelperSetLoginPassword(const int32_t & display, const std::string & login,
+                                          const std::string & pass, const bool & autologin) override {}
+
+            void onHelperWidgetCentered(const int32_t & display) override {}
+
+            void onHelperWidgetTimezone(const int32_t & display, const std::string &) override {}
+
+            void onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
+
+            void onSessionChanged(const int32_t & display) override {}
+
+            void onDisplayRemoved(const int32_t & display) override {}
+
+            void onCreateChannel(const int32_t & display, const std::string &, const std::string &,
+                                 const std::string &, const std::string &, const std::string &) override {}
+
+            void onDestroyChannel(const int32_t & display, const uint8_t & channel) override {};
+
+            void onCreateListener(const int32_t & display, const std::string &, const std::string &,
+                                  const std::string &, const std::string &, const std::string &, const uint8_t &, const uint32_t &) override {}
+
+            void onDestroyListener(const int32_t & display, const std::string &,
+                                   const std::string &) override {}
+
+            void onTransferAllow(const int32_t & display, const std::string & filepath,
+                                 const std::string & tmpfile, const std::string & dstdir) override {}
+
+            void onDebugChannel(const int32_t & display, const uint8_t & channel,
+                                const bool & debug) override {}
 
         protected:
             // dbus virtual signals
-            void                        onDebugLevel(const int32_t& display, const std::string & level) override;
-	    void			onPingConnector(const int32_t & display) override;
-            void			onClearRenderPrimitives(const int32_t & display) override;
-            void			onAddRenderRect(const int32_t & display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
-            void			onAddRenderText(const int32_t & display, const std::string & text, const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
+            void onDebugLevel(const int32_t & display, const std::string & level) override;
+            void onPingConnector(const int32_t & display) override;
+            void onClearRenderPrimitives(const int32_t & display) override;
+            void onAddRenderRect(const int32_t & display,
+                                 const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect,
+                                 const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
+            void onAddRenderText(const int32_t & display, const std::string & text,
+                                 const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
 
-            void                        renderPrimitivesToFB(FrameBuffer &) const;
+            void renderPrimitivesToFB(FrameBuffer &) const;
 
-            virtual void                xcbAddDamage(const XCB::Region &) = 0;
+            virtual void xcbAddDamage(const XCB::Region &) = 0;
 
-    	    int	                        displayNum(void) const;
-            bool                        xcbConnect(int screen, XCB::RootDisplay &);
-	    void                        xcbDisableMessages(bool f);
-	    bool                        xcbAllowMessages(void) const;
+            int displayNum(void) const;
+            bool xcbConnect(int screen, XCB::RootDisplay &);
+            void xcbDisableMessages(bool f);
+            bool xcbAllowMessages(void) const;
 
         public:
             SignalProxy(const JsonObject &, const char* conntype);
             virtual ~SignalProxy();
 
-    	    virtual int	                communication(void) = 0;
+            virtual int communication(void) = 0;
 
-	    std::string         	checkFileOption(const std::string &) const;
+            std::string checkFileOption(const std::string &) const;
 
         };
 
         /* Connector::Service */
         class Service : public ApplicationJsonConfig
         {
-            std::string                 _type;
+            std::string _type;
 
         public:
             Service(int argc, const char** argv);
 
-            int    		        start(void);
+            int start(void);
         };
     }
 }

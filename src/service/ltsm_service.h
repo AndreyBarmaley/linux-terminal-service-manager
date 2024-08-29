@@ -44,8 +44,9 @@ namespace LTSM
 {
     struct service_error : public std::runtime_error
     {
-        explicit service_error(const std::string & what) : std::runtime_error(what){}
-        explicit service_error(const char* what) : std::runtime_error(what){}
+        explicit service_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit service_error(const char* what) : std::runtime_error(what) {}
     };
 
     /// PamService
@@ -60,6 +61,7 @@ namespace LTSM
 
     public:
         PamService(std::string_view name) : service(name) {}
+
         virtual ~PamService();
 
         bool pamStart(const std::string & username);
@@ -77,11 +79,18 @@ namespace LTSM
         std::string login;
         std::string password;
 
-        struct pam_conv pamc{ pam_conv_func, this };
+        struct pam_conv pamc
+        {
+            pam_conv_func, this
+        };
+
         bool authenticateSuccess = false;
 
     protected:
-        struct pam_conv* pamConv(void) override { return & pamc; }
+        struct pam_conv* pamConv(void) override
+        {
+            return & pamc;
+        }
 
     public:
         PamAuthenticate(std::string_view service, const std::string & user, const std::string & pass)
@@ -89,8 +98,15 @@ namespace LTSM
 
         bool authenticate(void);
 
-        bool isAuthenticated(void) const { return authenticateSuccess; }
-        bool isLogin(std::string_view name) const { return login == name; }
+        bool isAuthenticated(void) const
+        {
+            return authenticateSuccess;
+        }
+
+        bool isLogin(std::string_view name) const
+        {
+            return login == name;
+        }
     };
 
     /// PamSession
@@ -101,10 +117,12 @@ namespace LTSM
     protected:
 
     public:
-        PamSession(std::string_view service, const std::string & user, const std::string & pass) : PamAuthenticate(service, user, pass) {}
+        PamSession(std::string_view service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
+                    user, pass) {}
+
         ~PamSession();
 
-        enum Cred { Establish  = PAM_ESTABLISH_CRED, Refresh = PAM_REFRESH_CRED, Reinit = PAM_REINITIALIZE_CRED };
+        enum Cred { Establish = PAM_ESTABLISH_CRED, Refresh = PAM_REFRESH_CRED, Reinit = PAM_REINITIALIZE_CRED };
 
         bool validateAccount(void);
         bool openSession(void);
@@ -148,53 +166,67 @@ namespace LTSM
     struct XvfbSession
     {
         std::unordered_map<std::string, std::string>
-                                        environments;
+        environments;
 
         std::unordered_map<std::string, std::string>
-                                        options;
+        options;
 
-        std::filesystem::path           xauthfile;
+        std::filesystem::path xauthfile;
 
-        UserInfoPtr                     userInfo;
-        GroupInfoPtr                    groupInfo;
+        UserInfoPtr userInfo;
+        GroupInfoPtr groupInfo;
 
-        std::string                     displayAddr;
-        std::string                     remoteAddr;
-        std::string                     conntype;
-        std::string                     encryption;
-        std::string                     layout;
+        std::string displayAddr;
+        std::string remoteAddr;
+        std::string conntype;
+        std::string encryption;
+        std::string layout;
 
         std::chrono::system_clock::time_point tpstart;
 
-        int                             displayNum = -1;
+        int displayNum = -1;
 
-        int                             pid1 = 0; // xvfb pid
-        int                             pid2 = 0; // session pid
+        int pid1 = 0; // xvfb pid
+        int pid2 = 0; // session pid
 
-        std::atomic<size_t>             durationLimit{0};
-        std::atomic<size_t>             statusFlags{0};
-        int                             loginFailures = 0;
+        std::atomic<size_t> durationLimit{0};
+        std::atomic<size_t> statusFlags{0};
+        int loginFailures = 0;
 
-        uint16_t                        width = 0;
-        uint16_t                        height = 0;
-        uint8_t                         depth = 0;
+        uint16_t width = 0;
+        uint16_t height = 0;
+        uint8_t depth = 0;
 
-        std::shared_future<int>         idleActionRunning;
-        std::unique_ptr<PamSession>     pam;
+        std::shared_future<int> idleActionRunning;
+        std::unique_ptr<PamSession> pam;
 
-        std::atomic<XvfbMode>           mode{XvfbMode::SessionLogin};
-	SessionPolicy			policy = SessionPolicy::AuthTake;
+        std::atomic<XvfbMode> mode{XvfbMode::SessionLogin};
+        SessionPolicy policy = SessionPolicy::AuthTake;
 
-        bool                            checkStatus(size_t st) const { return statusFlags & st; }
-        void                            setStatus(size_t st) { statusFlags |= st; }
-        void                            resetStatus(size_t st) { statusFlags &= ~st; }
+        bool checkStatus(size_t st) const
+        {
+            return statusFlags & st;
+        }
 
-        std::chrono::seconds            aliveSec(void) const { return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpstart); }
+        void setStatus(size_t st)
+        {
+            statusFlags |= st;
+        }
+
+        void resetStatus(size_t st)
+        {
+            statusFlags &= ~st;
+        }
+
+        std::chrono::seconds aliveSec(void) const
+        {
+            return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpstart);
+        }
 
         XvfbSession() = default;
-	~XvfbSession();
+        ~XvfbSession();
 
-        std::string                     toJsonString(void) const;
+        std::string toJsonString(void) const;
     };
 
     typedef std::shared_ptr<XvfbSession> XvfbSessionPtr;
@@ -206,168 +238,187 @@ namespace LTSM
     class XvfbSessions
     {
     protected:
-        std::vector<XvfbSessionPtr>     sessions;
-        mutable std::mutex              lockSessions;
+        std::vector<XvfbSessionPtr> sessions;
+        mutable std::mutex lockSessions;
 
     public:
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
-        XvfbSessionPtr                  findDisplaySession(int display);
-        XvfbSessionPtr                  findUserSession(const std::string & username);
-        XvfbSessionPtr                  registryNewSession(int min, int max);
-        void                            removeDisplaySession(int display);
+        XvfbSessionPtr findDisplaySession(int display);
+        XvfbSessionPtr findUserSession(const std::string & username);
+        XvfbSessionPtr registryNewSession(int min, int max);
+        void removeDisplaySession(int display);
         std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void);
         std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
 
-        std::string                      toJsonString(void) const;
+        std::string toJsonString(void) const;
     };
 
     namespace Manager
     {
-        std::forward_list<std::string>  getSessionDBusAddresses(const UserInfo &);
-	void				redirectStdoutStderrTo(bool out, bool err, std::string_view);
-        void                            closefds(int exclude = -1);
-        bool                            checkFileReadable(const std::filesystem::path &);
-	void			        setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
-	bool			        runSystemScript(XvfbSessionPtr, const std::string & cmd);
-        bool	                        switchToUser(const UserInfo &);
-        std::string                     quotedString(std::string_view);
+        std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &);
+        void redirectStdoutStderrTo(bool out, bool err, std::string_view);
+        void closefds(int exclude = -1);
+        bool checkFileReadable(const std::filesystem::path &);
+        void setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
+        bool runSystemScript(XvfbSessionPtr, const std::string & cmd);
+        bool switchToUser(const UserInfo &);
+        std::string quotedString(std::string_view);
 
         class Object : public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
         {
-	    std::forward_list<PidStatus> childsRunning;
-            std::mutex                  lockRunning;
+            std::forward_list<PidStatus> childsRunning;
+            std::mutex lockRunning;
 
             std::forward_list<std::string> allowTransfer;
-            std::mutex                  lockTransfer;
+            std::mutex lockTransfer;
 
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
 
-	    const Application*		_app = nullptr;
-            const JsonObject*		_config = nullptr;
-            std::atomic<bool>           loginsDisable = false;
+            const Application* _app = nullptr;
+            const JsonObject* _config = nullptr;
+            std::atomic<bool> loginsDisable = false;
 
-            pid_t                       runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &, std::list<std::string>);
-            void                        waitPidBackgroundSafe(pid_t pid);
+            pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
+                    std::list<std::string>);
+            void waitPidBackgroundSafe(pid_t pid);
 
-            bool                        sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
-            void                        sessionRunSetxkbmapLayout(XvfbSessionPtr);
+            bool sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
+            void sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
-            static void                 transferFileStartBackground(Object* owner, XvfbSessionPtr,
-                                            std::string tmpfile, std::string dstfile, uint32_t filesz);
-            static void                 transferFilesRequestCommunication(Object* owner, XvfbSessionPtr,
-                                            std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
-                                            std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject, std::shared_future<int>);
+            static void transferFileStartBackground(Object* owner, XvfbSessionPtr,
+                    std::string tmpfile, std::string dstfile, uint32_t filesz);
+            static void transferFilesRequestCommunication(Object* owner, XvfbSessionPtr,
+                    std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
+                    std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject,
+                    std::shared_future<int>);
         protected:
-	    void			closeSystemSession(XvfbSessionPtr);
-            std::filesystem::path	createXauthFile(int display, const std::vector<uint8_t> & mcookie);
-            bool                        createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
-            XvfbSessionPtr              runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height, UserInfoPtr userInfo);
-            int				runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
-	    void			runSessionScript(XvfbSessionPtr, const std::string & cmd);
-            bool			waitXvfbStarting(int display, uint32_t waitms) const;
-            bool			checkXvfbSocket(int display) const;
-	    void			removeXvfbSocket(int display) const;
-            bool			displayShutdown(XvfbSessionPtr, bool emitSignal);
-            bool                        pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
+            void closeSystemSession(XvfbSessionPtr);
+            std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
+            bool createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
+            XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
+                    UserInfoPtr userInfo);
+            int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
+            void runSessionScript(XvfbSessionPtr, const std::string & cmd);
+            bool waitXvfbStarting(int display, uint32_t waitms) const;
+            bool checkXvfbSocket(int display) const;
+            void removeXvfbSocket(int display) const;
+            bool displayShutdown(XvfbSessionPtr, bool emitSignal);
+            bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
+                    bool token);
 
             std::forward_list<std::string> getAllowLogins(void) const;
 
-	    void			sessionsTimeLimitAction(void);
-	    void			sessionsEndedAction(void);
-	    void			sessionsCheckAliveAction(void);
+            void sessionsTimeLimitAction(void);
+            void sessionsEndedAction(void);
+            void sessionsCheckAliveAction(void);
 
-            void                        childEndedEvent(void);
+            void childEndedEvent(void);
 
         public:
             Object(sdbus::IConnection &, const JsonObject &, size_t displays, const Application &);
             ~Object();
 
-            void                        shutdownService(void);
-            void                        configReloadedEvent(void);
+            void shutdownService(void);
+            void configReloadedEvent(void);
 
-        private:                        /* virtual dbus methods */
-            int32_t                     busGetServiceVersion(void) override;
-            void                        busShutdownService(void) override;
-            int32_t                     busStartLoginSession(const int32_t & connectorId, const uint8_t& depth, const std::string & remoteAddr, const std::string & connType) override;
-            int32_t                     busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId, const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
-            std::string                 busCreateAuthFile(const int32_t & display) override;
-            std::string                 busEncryptionInfo(const int32_t & display) override;
-            bool                        busShutdownDisplay(const int32_t & display) override;
-            bool                        busShutdownConnector(const int32_t & display) override;
-            bool                        busConnectorTerminated(const int32_t & display, const int32_t & connectorId) override;
-	    bool			busConnectorAlive(const int32_t & display) override;
-            bool                        busIdleTimeoutAction(const int32_t& display) override;
-	    bool			busSetLoginsDisable(const bool & action) override;
-            void                        busSetDebugLevel(const std::string & level) override;
-            void                        busSetChannelDebug(const int32_t& display, const uint8_t& channel, const bool& debug) override;
-            void                        busSetConnectorDebugLevel(const int32_t& display, const std::string& level) override;
-            bool                        busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
-	    bool			busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
-	    bool			busSetSessionPolicy(const int32_t& display, const std::string& policy) override;
-            bool                        busSetSessionEnvironments(const int32_t& display, const std::map<std::string, std::string>& map) override;
-            bool                        busSetSessionOptions(const int32_t& display, const std::map<std::string, std::string>& map) override;
-            bool                        busSetSessionKeyboardLayouts(const int32_t& display, const std::vector<std::string>& layouts) override;
-            bool                        busSendMessage(const int32_t& display, const std::string& message) override;
-            bool                        busSendNotify(const int32_t& display, const std::string& summary, const std::string& body, const uint8_t& icontype, const uint8_t& urgency) override;
-	    bool			busDisplayResized(const int32_t& display, const uint16_t& width, const uint16_t& height) override;
-            bool                        busCreateChannel(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
-            bool                        busDestroyChannel(const int32_t& display, const uint8_t& channel) override;
-            bool                        busTransferFilesRequest(const int32_t& display, const std::vector<sdbus::Struct<std::string, uint32_t>>& files) override;
-            bool                        busTransferFileStarted(const int32_t& display, const std::string& tmpfile, const uint32_t& filesz, const std::string& dstfile) override;
+        private: /* virtual dbus methods */
+            int32_t busGetServiceVersion(void) override;
+            void busShutdownService(void) override;
+            int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
+                    const std::string & remoteAddr, const std::string & connType) override;
+            int32_t busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId,
+                    const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
+            std::string busCreateAuthFile(const int32_t & display) override;
+            std::string busEncryptionInfo(const int32_t & display) override;
+            bool busShutdownDisplay(const int32_t & display) override;
+            bool busShutdownConnector(const int32_t & display) override;
+            bool busConnectorTerminated(const int32_t & display, const int32_t & connectorId) override;
+            bool busConnectorAlive(const int32_t & display) override;
+            bool busIdleTimeoutAction(const int32_t & display) override;
+            bool busSetLoginsDisable(const bool & action) override;
+            void busSetDebugLevel(const std::string & level) override;
+            void busSetChannelDebug(const int32_t & display, const uint8_t & channel,
+                    const bool & debug) override;
+            void busSetConnectorDebugLevel(const int32_t & display, const std::string & level) override;
+            bool busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
+            bool busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
+            bool busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
+            bool busSetSessionEnvironments(const int32_t & display,
+                    const std::map<std::string, std::string> & map) override;
+            bool busSetSessionOptions(const int32_t & display,
+                    const std::map<std::string, std::string> & map) override;
+            bool busSetSessionKeyboardLayouts(const int32_t & display,
+                    const std::vector<std::string> & layouts) override;
+            bool busSendMessage(const int32_t & display, const std::string & message) override;
+            bool busSendNotify(const int32_t & display, const std::string & summary,
+                    const std::string & body, const uint8_t & icontype, const uint8_t & urgency) override;
+            bool busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) override;
+            bool busCreateChannel(const int32_t & display, const std::string & client,
+                    const std::string & cmode, const std::string & server, const std::string & smode, const std::string & speed) override;
+            bool busDestroyChannel(const int32_t & display, const uint8_t & channel) override;
+            bool busTransferFilesRequest(const int32_t & display,
+                    const std::vector<sdbus::Struct<std::string, uint32_t>> & files) override;
+            bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
+                    const uint32_t & filesz, const std::string & dstfile) override;
 
-            bool                        helperWidgetStartedAction(const int32_t & display) override;
-            std::vector<std::string>    helperGetUsersList(const int32_t & display) override;
-            bool                        helperIsAutoComplete(const int32_t & display) override;
-            std::string                 helperGetTitle(const int32_t & display) override;
-            std::string                 helperGetDateFormat(const int32_t & display) override;
-            bool                        helperSetSessionLoginPassword(const int32_t& display, const std::string& login, const std::string& password, const bool& action) override;
+            bool helperWidgetStartedAction(const int32_t & display) override;
+            std::vector<std::string> helperGetUsersList(const int32_t & display) override;
+            bool helperIsAutoComplete(const int32_t & display) override;
+            std::string helperGetTitle(const int32_t & display) override;
+            std::string helperGetDateFormat(const int32_t & display) override;
+            bool helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
+                    const std::string & password, const bool & action) override;
 
-            bool                        busSetAuthenticateLoginPass(const int32_t & display, const std::string & login, const std::string & password) override;
-            bool                        busSetAuthenticateToken(const int32_t & display, const std::string & login) override;
+            bool busSetAuthenticateLoginPass(const int32_t & display, const std::string & login,
+                    const std::string & password) override;
+            bool busSetAuthenticateToken(const int32_t & display, const std::string & login) override;
 
-            std::string                 busGetSessionJson(const int32_t& display) override;
-            std::string                 busGetSessionsJson(void) override;
+            std::string busGetSessionJson(const int32_t & display) override;
+            std::string busGetSessionsJson(void) override;
 
-            bool                        busRenderRect(const int32_t& display, const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>& rect, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color, const bool& fill) override;
-            bool                        busRenderText(const int32_t& display, const std::string& text, const sdbus::Struct<int16_t, int16_t>& pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t>& color) override;
-            bool                        busRenderClear(const int32_t& display) override;
+            bool busRenderRect(const int32_t & display,
+                    const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect,
+                    const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override;
+            bool busRenderText(const int32_t & display, const std::string & text,
+                    const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
+            bool busRenderClear(const int32_t & display) override;
 
-            void                        startSessionChannels(XvfbSessionPtr, int connectorId);
-            void                        stopSessionChannels(XvfbSessionPtr, int connectorId);
+            void startSessionChannels(XvfbSessionPtr, int connectorId);
+            void stopSessionChannels(XvfbSessionPtr, int connectorId);
 
-            void                        startLoginChannels(XvfbSessionPtr, int connectorId);
-            void                        stopLoginChannels(XvfbSessionPtr, int connectorId);
+            void startLoginChannels(XvfbSessionPtr, int connectorId);
+            void stopLoginChannels(XvfbSessionPtr, int connectorId);
 
-            bool                        startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool                        startAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool                        startFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool                        startPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool                        startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool                        startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool startAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool startFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool startPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
 
 
-            void                        stopAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void                        stopFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void                        stopPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void                        stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void stopAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void stopFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void stopPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
         };
 
         class Service : public ApplicationJsonConfig
         {
             std::unique_ptr<Tools::BaseTimer> timerInotifyWatchConfig;
-            bool                           isBackground = false;
+            bool isBackground = false;
 
         protected:
-            bool                        createXauthDir(void);
-            bool                        inotifyWatchConfigStart(void);
+            bool createXauthDir(void);
+            bool inotifyWatchConfigStart(void);
 
         public:
             Service(int argc, const char** argv);
 
-            int                         start(void);
-            static void                 signalHandler(int);
+            int start(void);
+            static void signalHandler(int);
         };
     }
 }

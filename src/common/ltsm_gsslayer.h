@@ -50,21 +50,21 @@ namespace Gss
     enum CredentialUsage
     {
         Initiate = GSS_C_INITIATE, ///< Identifies applications that only initiate security contexts
-        Accept = GSS_C_ACCEPT,     ///< Identifies applications that only accept security contexts
-        Both = GSS_C_BOTH          ///< Identifies applications that can initiate or accept security contexts
+        Accept = GSS_C_ACCEPT, ///< Identifies applications that only accept security contexts
+        Both = GSS_C_BOTH ///< Identifies applications that can initiate or accept security contexts
     };
 
     enum ContextFlag
     {
-        Delegate = GSS_C_DELEG_FLAG,        ///< delegated credentials are available by means of the delegated_cred_handle parameter
-        Mutual = GSS_C_MUTUAL_FLAG,         ///< a remote peer asked for mutual authentication
-        Replay = GSS_C_REPLAY_FLAG,         ///< replay of protected messages will be detected
-        Sequence = GSS_C_SEQUENCE_FLAG,     ///< out of sequence protected messages will be detected
-        Confidential = GSS_C_CONF_FLAG,     ///< confidentiality service may be invoked by calling the gss_wrap() routine
-        Integrity = GSS_C_INTEG_FLAG,       ///< integrity service may be invoked by calling either the gss_get_mic(3GSS) or the gss_wrap(3GSS) routine
-        Anonymous = GSS_C_ANON_FLAG,        ///< the initiator does not wish to be authenticated. The src_name parameter, if requested, contains an anonymous internal name
+        Delegate = GSS_C_DELEG_FLAG, ///< delegated credentials are available by means of the delegated_cred_handle parameter
+        Mutual = GSS_C_MUTUAL_FLAG, ///< a remote peer asked for mutual authentication
+        Replay = GSS_C_REPLAY_FLAG, ///< replay of protected messages will be detected
+        Sequence = GSS_C_SEQUENCE_FLAG, ///< out of sequence protected messages will be detected
+        Confidential = GSS_C_CONF_FLAG, ///< confidentiality service may be invoked by calling the gss_wrap() routine
+        Integrity = GSS_C_INTEG_FLAG, ///< integrity service may be invoked by calling either the gss_get_mic(3GSS) or the gss_wrap(3GSS) routine
+        Anonymous = GSS_C_ANON_FLAG, ///< the initiator does not wish to be authenticated. The src_name parameter, if requested, contains an anonymous internal name
         Protection = GSS_C_PROT_READY_FLAG, ///< the protection services specified by the states of GSS_C_CONF_FLAG and GSS_C_INTEG_FLAG are available if the accompanying major status return value is either GSS_S_COMPLETE or GSS_S_CONTINUE_NEEDED
-        Transfer = GSS_C_TRANS_FLAG         ///< the resultant security context may be transferred to other processes by means of a call to gss_export_sec_context(3GSS)
+        Transfer = GSS_C_TRANS_FLAG ///< the resultant security context may be transferred to other processes by means of a call to gss_export_sec_context(3GSS)
     };
 
     struct Credential
@@ -74,8 +74,8 @@ namespace Gss
         gss_OID_set mechs = nullptr;
         OM_uint32 timerec = 0;
 
-	Credential() = default;
-	~Credential();
+        Credential() = default;
+        ~Credential();
     };
 
     typedef std::unique_ptr<Credential> CredentialPtr;
@@ -89,8 +89,8 @@ namespace Gss
         OM_uint32 supported = 0;
         OM_uint32 timerec = 0;
 
-	Security() = default;
-	~Security();
+        Security() = default;
+        ~Security();
     };
 
     typedef std::unique_ptr<Security> SecurityPtr;
@@ -117,7 +117,7 @@ namespace Gss
     class BaseContext
     {
     protected:
-	SecurityPtr		ctx;
+        SecurityPtr ctx;
 
     public:
         BaseContext() = default;
@@ -128,19 +128,20 @@ namespace Gss
 
         virtual std::vector<uint8_t> recvToken(void) const = 0;
         virtual void sendToken(const void*, size_t) = 0;
-	virtual void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const = 0;
+        virtual void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const = 0;
 
-        std::vector<uint8_t>    recvMessage(void);
-        bool                    sendMessage(const void*, size_t, bool encrypt = true);
+        std::vector<uint8_t> recvMessage(void);
+        bool sendMessage(const void*, size_t, bool encrypt = true);
 
-        bool                    recvMIC(const void*, size_t);
-        bool                    sendMIC(const void*, size_t);
+        bool recvMIC(const void*, size_t);
+        bool sendMIC(const void*, size_t);
 
-	Security*		securityContext(void) { return ctx.get(); }
-	const Security*		securityContext(void) const { return ctx.get(); }
+        Security* securityContext(void) { return ctx.get(); }
+
+        const Security* securityContext(void) const { return ctx.get(); }
     };
 
-    CredentialPtr acquireCredential(std::string_view name, const NameType & , const CredentialUsage &, ErrorCodes* = nullptr);
+    CredentialPtr acquireCredential(std::string_view name, const NameType &, const CredentialUsage &, ErrorCodes* = nullptr);
 
     CredentialPtr acquireUserCredential(std::string_view username, ErrorCodes* = nullptr);
     CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view pass, ErrorCodes* = nullptr);

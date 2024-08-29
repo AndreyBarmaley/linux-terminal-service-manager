@@ -40,23 +40,23 @@ namespace LTSM
     public:
         virtual ~ByteArray() = default;
 
-        virtual size_t  size(void) const = 0;
+        virtual size_t size(void) const = 0;
 
         virtual uint8_t* data(void) = 0;
         virtual const uint8_t* data(void) const = 0;
 
-        std::string     hexString(std::string_view sep = ", ", bool prefix = true) const;
-        std::string     toString(void) const;
+        std::string hexString(std::string_view sep = ", ", bool prefix = true) const;
+        std::string toString(void) const;
 
-        uint32_t        crc32b(void) const;
+        uint32_t crc32b(void) const;
 
-        bool            operator== (const ByteArray &) const;
-        bool            operator!= (const ByteArray &) const;
+        bool operator== (const ByteArray &) const;
+        bool operator!= (const ByteArray &) const;
     };
 
     /// @brief: raw array wrapper
     template<typename T>
-    struct RawPtr :  ByteArray, std::pair<T*, size_t>
+    struct RawPtr : ByteArray, std::pair<T*, size_t>
     {
         RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
 
@@ -86,60 +86,68 @@ namespace LTSM
         BinaryBuf() = default;
 
         BinaryBuf(size_t len, uint8_t val = 0) : std::vector<uint8_t>(len, val) {}
+
         BinaryBuf(const_iterator it1, const_iterator it2) : std::vector<uint8_t>(it1, it2) {}
+
         BinaryBuf(const uint8_t* ptr, size_t len) : std::vector<uint8_t>(ptr, ptr + len) {}
+
         BinaryBuf(const std::vector<uint8_t> & v) : std::vector<uint8_t>(v) {}
+
         BinaryBuf(std::vector<uint8_t> && v) noexcept { swap(v); }
 
         template<size_t N>
         BinaryBuf(uint8_t (&arr)[N]) : std::vector<uint8_t>(arr, arr + N) {}
 
 
-        BinaryBuf &     operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
-        BinaryBuf &     operator= (const ByteArray & v) { assign(v.data(), v.data() + v.size()); return *this; }
-        BinaryBuf &     operator= (std::vector<uint8_t> && v) noexcept { swap(v); return *this; }
+        BinaryBuf & operator= (const std::vector<uint8_t> & v) { assign(v.begin(), v.end()); return *this; }
 
-        BinaryBuf &     append(const uint8_t*, size_t);
-        BinaryBuf &     append(const std::vector<uint8_t> &);
-        BinaryBuf &     append(std::string_view);
-        BinaryBuf       copy(void) const;
+        BinaryBuf & operator= (const ByteArray & v) { assign(v.data(), v.data() + v.size()); return *this; }
 
-        size_t          size(void) const override;
-        uint8_t*        data(void) override;
-        const uint8_t*  data(void) const override;
+        BinaryBuf & operator= (std::vector<uint8_t> && v) noexcept { swap(v); return *this; }
+
+        BinaryBuf & append(const uint8_t*, size_t);
+        BinaryBuf & append(const std::vector<uint8_t> &);
+        BinaryBuf & append(std::string_view);
+        BinaryBuf copy(void) const;
+
+        size_t size(void) const override;
+        uint8_t* data(void) override;
+        const uint8_t* data(void) const override;
     };
 
     /// @brief: base stream interface
     class ByteOrderInterface
     {
     protected:
-        virtual void    getRaw(void* ptr, size_t len) const = 0;
-        virtual void    putRaw(const void* ptr, size_t len) = 0;
+        virtual void getRaw(void* ptr, size_t len) const = 0;
+        virtual void putRaw(const void* ptr, size_t len) = 0;
 
     public:
-	virtual ~ByteOrderInterface() = default;
+        virtual ~ByteOrderInterface() = default;
 
-        uint8_t         getInt8(void) const;
-        void            putInt8(uint8_t);
+        uint8_t getInt8(void) const;
+        void putInt8(uint8_t);
 
-        uint16_t        getIntLE16(void) const;
-        uint32_t        getIntLE32(void) const;
-        uint64_t        getIntLE64(void) const;
+        uint16_t getIntLE16(void) const;
+        uint32_t getIntLE32(void) const;
+        uint64_t getIntLE64(void) const;
 
-        uint16_t        getIntBE16(void) const;
-        uint32_t        getIntBE32(void) const;
-        uint64_t        getIntBE64(void) const;
+        uint16_t getIntBE16(void) const;
+        uint32_t getIntBE32(void) const;
+        uint64_t getIntBE64(void) const;
 
-        void            putIntLE16(uint16_t);
-        void            putIntLE32(uint32_t);
-        void            putIntLE64(uint64_t);
+        void putIntLE16(uint16_t);
+        void putIntLE32(uint32_t);
+        void putIntLE64(uint64_t);
 
-        void            putIntBE16(uint16_t);
-        void            putIntBE32(uint32_t);
-        void            putIntBE64(uint64_t);
+        void putIntBE16(uint16_t);
+        void putIntBE32(uint32_t);
+        void putIntBE64(uint64_t);
 
         static inline uint16_t swap16(uint16_t x) { return __builtin_bswap16(x); }
+
         static inline uint32_t swap32(uint32_t x) { return __builtin_bswap32(x); }
+
         static inline uint64_t swap64(uint64_t x) { return __builtin_bswap64(x); }
     };
 
@@ -148,35 +156,40 @@ namespace LTSM
     {
     public:
         /// @brief: get last count
-        virtual size_t  last(void) const = 0;
+        virtual size_t last(void) const = 0;
         /// @brief: peek from front
         virtual uint8_t peek(void) const = 0;
         /// @brief: set endian mode (default: system)
-        virtual bool    bigendian(void) const;
+        virtual bool bigendian(void) const;
 
-        inline uint8_t  readInt8(void) const { return getInt8(); }
-        inline void     writeInt8(uint8_t v) { putInt8(v); }
+        inline uint8_t readInt8(void) const { return getInt8(); }
+
+        inline void writeInt8(uint8_t v) { putInt8(v); }
 
         /// @brief: read uint16 (depends on current endian mode)
-        uint16_t        readInt16(void) const;
+        uint16_t readInt16(void) const;
         /// @brief: read uint32 (depends on current endian mode)
-        uint32_t        readInt32(void) const;
+        uint32_t readInt32(void) const;
         /// @brief: read uint64 (depends on current endian mode)
-        uint64_t        readInt64(void) const;
+        uint64_t readInt64(void) const;
 
         inline uint16_t readIntLE16(void) const { return getIntLE16(); }
+
         inline uint32_t readIntLE32(void) const { return getIntLE32(); }
+
         inline uint64_t readIntLE64(void) const { return getIntLE64(); }
 
         inline uint16_t readIntBE16(void) const { return getIntBE16(); }
+
         inline uint32_t readIntBE32(void) const { return getIntBE32(); }
+
         inline uint64_t readIntBE64(void) const { return getIntBE64(); };
 
-        void            readTo(void*, size_t) const;
+        void readTo(void*, size_t) const;
 
         virtual BinaryBuf read(size_t = 0) const = 0;
-        std::string     readString(size_t = 0) const;
-        virtual void    skip(size_t) const = 0;
+        std::string readString(size_t = 0) const;
+        virtual void skip(size_t) const = 0;
 
         const MemoryStream & operator>>(uint8_t &) const;
         const MemoryStream & operator>>(uint16_t &) const;
@@ -202,32 +215,36 @@ namespace LTSM
         }
 
         /// @brief: write uint16 (depends on current endian mode)
-        MemoryStream &  writeInt16(uint16_t);
+        MemoryStream & writeInt16(uint16_t);
         /// @brief: write uint32 (depends on current endian mode)
-        MemoryStream &  writeInt32(uint32_t);
+        MemoryStream & writeInt32(uint32_t);
         /// @brief: write uint64 (depends on current endian mode)
-        MemoryStream &  writeInt64(uint64_t);
+        MemoryStream & writeInt64(uint64_t);
 
         inline MemoryStream & writeIntLE16(uint16_t v) { putIntLE16(v); return *this; }
+
         inline MemoryStream & writeIntLE32(uint32_t v) { putIntLE32(v); return *this; }
+
         inline MemoryStream & writeIntLE64(uint64_t v) { putIntLE64(v); return *this; }
 
         inline MemoryStream & writeIntBE16(uint16_t v) { putIntBE16(v); return *this; }
+
         inline MemoryStream & writeIntBE32(uint32_t v) { putIntBE32(v); return *this; }
+
         inline MemoryStream & writeIntBE64(uint64_t v) { putIntBE64(v); return *this; }
 
-        MemoryStream &  write(const void*, size_t);
-        MemoryStream &  write(std::string_view);
-        MemoryStream &  write(const std::vector<uint8_t> &);
+        MemoryStream & write(const void*, size_t);
+        MemoryStream & write(std::string_view);
+        MemoryStream & write(const std::vector<uint8_t> &);
         /// @brief: fill version
         MemoryStream & fill(size_t, char);
 
-        MemoryStream &  operator<<(const uint8_t &);
-        MemoryStream &  operator<<(const uint16_t &);
-        MemoryStream &  operator<<(const uint32_t &);
-        MemoryStream &  operator<<(const uint64_t &);
-        MemoryStream &  operator<<(const std::string_view &);
-        MemoryStream &  operator<<(const std::vector<uint8_t> &);
+        MemoryStream & operator<<(const uint8_t &);
+        MemoryStream & operator<<(const uint16_t &);
+        MemoryStream & operator<<(const uint32_t &);
+        MemoryStream & operator<<(const uint64_t &);
+        MemoryStream & operator<<(const std::string_view &);
+        MemoryStream & operator<<(const std::vector<uint8_t> &);
 
         /// @brief: fixed data from array
         template<typename T>
@@ -247,8 +264,9 @@ namespace LTSM
 
     struct streambuf_error : public std::runtime_error
     {
-        explicit streambuf_error(const std::string & what) : std::runtime_error(what){}
-        explicit streambuf_error(const char* what) : std::runtime_error(what){}
+        explicit streambuf_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit streambuf_error(const char* what) : std::runtime_error(what) {}
     };
 
     /// @brief: read only StreamBuf
@@ -258,84 +276,85 @@ namespace LTSM
         uint8_t* it2 = nullptr;
 
     protected:
-        void            getRaw(void* ptr, size_t len) const override;
-        void            putRaw(const void* ptr, size_t len) override;
+        void getRaw(void* ptr, size_t len) const override;
+        void putRaw(const void* ptr, size_t len) override;
 
     public:
         StreamBufRef() = default;
         StreamBufRef(const void*, size_t);
 
         StreamBufRef(StreamBufRef &&) noexcept;
-        StreamBufRef &  operator=(StreamBufRef &&) noexcept;
+        StreamBufRef & operator=(StreamBufRef &&) noexcept;
 
         StreamBufRef(const StreamBufRef &) = delete;
-        StreamBufRef &  operator=(const StreamBufRef &) = delete;
+        StreamBufRef & operator=(const StreamBufRef &) = delete;
 
-        bool            bigendian(void) const override { return false; }
-        void            reset(const void* ptr, size_t len);
+        bool bigendian(void) const override { return false; }
 
-        BinaryBuf       read(size_t = 0) const override;
-        size_t          last(void) const override;
-        uint8_t         peek(void) const override;
-        void            skip(size_t) const override;
+        void reset(const void* ptr, size_t len);
 
-        const uint8_t*  data(void) const;
+        BinaryBuf read(size_t = 0) const override;
+        size_t last(void) const override;
+        uint8_t peek(void) const override;
+        void skip(size_t) const override;
 
-        uint16_t        peekIntLE16(void) const;
-        uint16_t        peekIntBE16(void) const;
-        uint32_t        peekIntLE32(void) const;
-        uint32_t        peekIntBE32(void) const;
-        uint64_t        peekIntLE64(void) const;
-        uint64_t        peekIntBE64(void) const;
+        const uint8_t* data(void) const;
+
+        uint16_t peekIntLE16(void) const;
+        uint16_t peekIntBE16(void) const;
+        uint32_t peekIntLE32(void) const;
+        uint32_t peekIntBE32(void) const;
+        uint64_t peekIntLE64(void) const;
+        uint64_t peekIntBE64(void) const;
     };
 
     /// @brief: read/write StreamBuf
     class StreamBuf : public MemoryStream
     {
         mutable BinaryBuf::iterator it;
-        BinaryBuf       vec;
+        BinaryBuf vec;
 
     protected:
-        void            getRaw(void* ptr, size_t len) const override;
-        void            putRaw(const void* ptr, size_t len) override;
+        void getRaw(void* ptr, size_t len) const override;
+        void putRaw(const void* ptr, size_t len) override;
 
     public:
         StreamBuf(size_t reserve = 256);
         StreamBuf(const std::vector<uint8_t> &);
 
         StreamBuf(const StreamBuf &);
-        StreamBuf &     operator=(const StreamBuf &);
+        StreamBuf & operator=(const StreamBuf &);
 
         StreamBuf(StreamBuf &&) noexcept;
-        StreamBuf &     operator=(StreamBuf &&) noexcept;
+        StreamBuf & operator=(StreamBuf &&) noexcept;
 
-        bool            bigendian(void) const override { return false; }
+        bool bigendian(void) const override { return false; }
 
-        void            reset(void);
-        void            reset(const std::vector<uint8_t> &);
+        void reset(void);
+        void reset(const std::vector<uint8_t> &);
 
-        BinaryBuf       read(size_t = 0) const override;
-        size_t          last(void) const override;
-        uint8_t         peek(void) const override;
-        void            skip(size_t) const override;
+        BinaryBuf read(size_t = 0) const override;
+        size_t last(void) const override;
+        uint8_t peek(void) const override;
+        void skip(size_t) const override;
 
-        size_t          tell(void) const;
+        size_t tell(void) const;
 
         const BinaryBuf & rawbuf(void) const;
-        BinaryBuf &     rawbuf(void);
+        BinaryBuf & rawbuf(void);
 
-        void            shrink(void);
+        void shrink(void);
     };
 
     /// @brief: descriptor stream
     class DescriptorStream : public ByteOrderInterface
     {
-        int             fd = 0;
-        bool            autoClose = true;
+        int fd = 0;
+        bool autoClose = true;
 
     protected:
-        void            getRaw(void* ptr, size_t len) const override;
-        void            putRaw(const void* ptr, size_t len) override;
+        void getRaw(void* ptr, size_t len) const override;
+        void putRaw(const void* ptr, size_t len) override;
 
     public:
         DescriptorStream() = default;
@@ -346,14 +365,15 @@ namespace LTSM
         DescriptorStream(const DescriptorStream &) = delete;
         DescriptorStream & operator=(const DescriptorStream &) = delete;
 
-        void            setDescriptor(int fd0) { fd = fd0; }
-        int             getDescriptor(void) const { return fd; }
+        void setDescriptor(int fd0) { fd = fd0; }
 
-        void            readTo(void* ptr, ssize_t len) const;
-        void            writeFrom(const void* ptr, ssize_t len) const;
+        int getDescriptor(void) const { return fd; }
 
-        static void     readFromTo(int fd, void* ptr, ssize_t len);
-        static void     writeFromTo(const void* ptr, ssize_t len, int fd);
+        void readTo(void* ptr, ssize_t len) const;
+        void writeFrom(const void* ptr, ssize_t len) const;
+
+        static void readFromTo(int fd, void* ptr, ssize_t len);
+        static void writeFromTo(const void* ptr, ssize_t len, int fd);
     };
 
 } // _LTSM_STREAMBUF_

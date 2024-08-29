@@ -58,7 +58,8 @@ using namespace std::chrono_literals;
 using namespace LTSM;
 
 /// LTSM_HelperSDBus
-LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(),
+            LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
 {
     registerProxy();
 }
@@ -73,27 +74,28 @@ void LTSM_HelperSDBus::onLoginFailure(const int32_t & display, const std::string
     loginFailureCallback(display, QString::fromStdString(msg));
 }
 
-void LTSM_HelperSDBus::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid)
+void LTSM_HelperSDBus::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
 {
     loginSuccessCallback(display, QString::fromStdString(userName));
 }
 
-void LTSM_HelperSDBus::onHelperSetLoginPassword(const int32_t& display, const std::string& login, const std::string& pass, const bool& autologin)
+void LTSM_HelperSDBus::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
+        const std::string & pass, const bool & autologin)
 {
     setLoginPasswordCallback(display, QString::fromStdString(login), QString::fromStdString(pass), autologin);
 }
 
-void LTSM_HelperSDBus::onHelperWidgetCentered(const int32_t& display)
+void LTSM_HelperSDBus::onHelperWidgetCentered(const int32_t & display)
 {
     widgetCenteredCallback(display);
 }
 
-void LTSM_HelperSDBus::onHelperWidgetTimezone(const int32_t& display, const std::string& tz)
+void LTSM_HelperSDBus::onHelperWidgetTimezone(const int32_t & display, const std::string & tz)
 {
     widgetTimezoneCallback(display, QString::fromStdString(tz));
 }
 
-void LTSM_HelperSDBus::onSessionChanged(const int32_t& display)
+void LTSM_HelperSDBus::onSessionChanged(const int32_t & display)
 {
     sessionChangedCallback(display);
 }
@@ -157,8 +159,12 @@ QString LTSM_HelperSDBus::getDateFormat(int displayNum)
 QStringList LTSM_HelperSDBus::getUsersList(int displayNum)
 {
     QStringList res;
+
     for(auto & user : helperGetUsersList(displayNum))
+    {
         res << QString::fromStdString(user);
+    }
+
     return res;
 }
 
@@ -166,10 +172,9 @@ QStringList LTSM_HelperSDBus::getUsersList(int displayNum)
 LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::LTSM_HelperWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer300ms(0),
-        timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
+    timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
 {
     Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-
     ui->setupUi(this);
     ui->labelDomain->hide();
     ui->comboBoxDomain->hide();
@@ -179,24 +184,27 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui->comboBoxUsername->setFocus();
     setWindowFlags(Qt::FramelessWindowHint);
     setMouseTracking(true);
-
-    connect(ui->comboBoxDomain, SIGNAL(currentIndexChanged(int)), this, SLOT(domainIndexChanged(int)), Qt::QueuedConnection);
-    connect(ui->comboBoxUsername, SIGNAL(currentIndexChanged(int)), this, SLOT(usernameIndexChanged(int)), Qt::QueuedConnection);
-
+    connect(ui->comboBoxDomain, SIGNAL(currentIndexChanged(int)), this, SLOT(domainIndexChanged(int)),
+            Qt::QueuedConnection);
+    connect(ui->comboBoxUsername, SIGNAL(currentIndexChanged(int)), this, SLOT(usernameIndexChanged(int)),
+            Qt::QueuedConnection);
     auto val = qgetenv("DISPLAY");
 
     if(val.size() && val[0] == ':')
+    {
         displayNum = val.remove(0, 1).toInt();
+    }
 
     timerOneSec = startTimer(std::chrono::seconds(1));
     timer300ms = startTimer(std::chrono::milliseconds(300));
     timerReloadUsers = startTimer(std::chrono::minutes(3));
-
     auto group = xkbGroup();
     auto names = xkbNames();
 
     if(0 <= group && group < names.size())
+    {
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+    }
 
 #ifdef LTSM_PKCS11_AUTH
     ldap.reset(new LdapWrapper());
@@ -215,34 +223,29 @@ LTSM_HelperWindow::~LTSM_HelperWindow()
 void LTSM_HelperWindow::switchLoginMode(void)
 {
     tokenAuthMode = false;
-
     ui->labelDomain->setText(tr("domain:"));
     ui->labelUsername->setText(tr("username:"));
     ui->labelPassword->setText(tr("password:"));
-
     ui->comboBoxUsername->lineEdit()->setReadOnly(false);
     ui->comboBoxDomain->lineEdit()->setReadOnly(false);
-
     ui->comboBoxUsername->setFocus();
     ui->comboBoxUsername->lineEdit()->clear();
     ui->lineEditPassword->clear();
-
     ui->labelDomain->hide();
     ui->comboBoxDomain->hide();
     ui->pushButtonLogin->setDisabled(false);
-
     reloadUsersList();
 }
 
 QString tokenTooltip(const Pkcs11Token & st)
 {
-    auto manufacturerId = QString(QByteArray((char*) st.tokenInfo.manufacturerID, sizeof(st.tokenInfo.manufacturerID)).trimmed());
+    auto manufacturerId = QString(QByteArray((char*) st.tokenInfo.manufacturerID,
+                                  sizeof(st.tokenInfo.manufacturerID)).trimmed());
     auto label = QString(QByteArray((char*) st.tokenInfo.label, sizeof(st.tokenInfo.label)).trimmed());
     auto hardware = QString("%1.%2").arg(st.tokenInfo.hardwareVersion.major).arg(st.tokenInfo.hardwareVersion.minor);
     auto firmware = QString("%1.%2").arg(st.tokenInfo.firmwareVersion.major).arg(st.tokenInfo.firmwareVersion.minor);
-
     return QString("manufacturer id: %1\nlabel: %2\nhardware version: %3\nfirmware version: %4").
-                            arg(manufacturerId).arg(label).arg(hardware).arg(firmware);
+           arg(manufacturerId).arg(label).arg(hardware).arg(firmware);
 }
 
 QString sslTooltip(const QSslCertificate & ssl)
@@ -250,9 +253,8 @@ QString sslTooltip(const QSslCertificate & ssl)
     auto serial = QString(QByteArray::fromHex(ssl.serialNumber()).toHex(':'));
     auto email = ssl.subjectInfo(QSslCertificate::EmailAddress).join("");
     auto org = ssl.subjectInfo(QSslCertificate::Organization).join("");
-
     return QString("serial number: %1\nemail address: %2\nexpired date: %3\norganization: %4\nissuer: %5").
-                            arg(serial).arg(email).arg(ssl.expiryDate().toString()).arg(org).arg(ssl.issuerDisplayName());
+           arg(serial).arg(email).arg(ssl.expiryDate().toString()).arg(org).arg(ssl.issuerDisplayName());
 }
 
 void LTSM_HelperWindow::tokensChanged(void)
@@ -267,27 +269,23 @@ void LTSM_HelperWindow::tokensChanged(void)
     }
 
     tokenAuthMode = true;
-
     ui->labelDomain->setVisible(true);
     ui->comboBoxDomain->setVisible(true);
-
     ui->labelDomain->setText("token id:");
     ui->labelUsername->setText("certificate:");
     ui->labelPassword->setText("pin code:");
-
     ui->comboBoxDomain->clear();
     ui->comboBoxUsername->clear();
     ui->lineEditPassword->clear();
-
     int rowIndex = 0;
-    for(auto & st: tokens)
+
+    for(auto & st : tokens)
     {
         auto model = QString(QByteArray((char*) st.tokenInfo.model, sizeof(st.tokenInfo.model)).trimmed());
         auto serialNumber = QString(QByteArray((char*) st.tokenInfo.serialNumber, sizeof(st.tokenInfo.serialNumber)).trimmed());
-
-        ui->comboBoxDomain->addItem(QString("%1 (%2)").arg(model).arg(serialNumber), QByteArray((const char*) & st, sizeof(st)));
+        ui->comboBoxDomain->addItem(QString("%1 (%2)").arg(model).arg(serialNumber), QByteArray((const char*) & st,
+                                    sizeof(st)));
         ui->comboBoxDomain->setItemData(rowIndex, tokenTooltip(st), Qt::ToolTipRole);
-
         rowIndex++;
     }
 
@@ -300,11 +298,14 @@ void LTSM_HelperWindow::tokensChanged(void)
 void LTSM_HelperWindow::domainIndexChanged(int index)
 {
     if(index < 0)
+    {
         return;
+    }
 
     if(tokenAuthMode)
     {
         auto buf = ui->comboBoxDomain->itemData(index, Qt::UserRole).toByteArray();
+
         if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Token))
         {
             Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
@@ -313,10 +314,8 @@ void LTSM_HelperWindow::domainIndexChanged(int index)
 
         ui->comboBoxUsername->clear();
         ui->lineEditPassword->clear();
-
         auto tokenPtr = reinterpret_cast<const Pkcs11Token*>(buf.data());
         ui->comboBoxDomain->setToolTip(tokenTooltip(*tokenPtr));
-
         int rowIndex = 0;
         auto certs = pkcs11->getCertificates(tokenPtr->slotId);
 
@@ -327,16 +326,17 @@ void LTSM_HelperWindow::domainIndexChanged(int index)
             return;
         }
 
-        for(auto & cert: certs)
+        for(auto & cert : certs)
         {
             auto ssl = QSslCertificate(QByteArray((const char*) cert.objectValue.data(), cert.objectValue.size()), QSsl::Der);
 
             if(ssl.isNull())
+            {
                 continue;
+            }
 
             ui->comboBoxUsername->addItem(ssl.subjectDisplayName(), QByteArray((const char*) & cert, sizeof(cert)));
             ui->comboBoxUsername->setItemData(rowIndex, sslTooltip(ssl), Qt::ToolTipRole);
-
             rowIndex++;
         }
 
@@ -349,20 +349,23 @@ void LTSM_HelperWindow::domainIndexChanged(int index)
 void LTSM_HelperWindow::usernameIndexChanged(int index)
 {
     if(index < 0)
+    {
         return;
+    }
 
     if(tokenAuthMode)
     {
         auto buf = ui->comboBoxUsername->itemData(index, Qt::UserRole).toByteArray();
-        if(buf.isEmpty()  || buf.size() != sizeof(Pkcs11Cert))
+
+        if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Cert))
         {
             Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
             return;
         }
 
         auto certPtr = reinterpret_cast<const Pkcs11Cert*>(buf.data());
-        auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()), QSsl::Der);
-
+        auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()),
+                                   QSsl::Der);
         ui->comboBoxUsername->setToolTip(sslTooltip(ssl));
         ui->pushButtonLogin->setDisabled(false);
 
@@ -374,7 +377,8 @@ void LTSM_HelperWindow::usernameIndexChanged(int index)
     }
     else
     {
-        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
+        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() ||
+                                         ui->lineEditPassword->text().isEmpty());
     }
 }
 
@@ -390,31 +394,36 @@ struct DatumAlloc : gnutls_datum_t
     ~DatumAlloc()
     {
         if(data && size)
+        {
             gnutls_free(data);
+        }
     }
 };
 
 std::unique_ptr<DatumAlloc> gnutlsEncryptData(const std::vector<uint8_t> & certder, const std::vector<uint8_t> & vals)
 {
     gnutls_x509_crt_t ptr1 = nullptr;
+
     if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS)
     {
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err), err);
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
+                           err);
         throw gnutls_error(NS_FuncName);
     }
-        
+
     const gnutls_datum_t dt1 = { .data = (unsigned char*) certder.data(), .size = (unsigned int) certder.size() };
     const gnutls_datum_t dt2 = { .data = (unsigned char*) vals.data(), .size = (unsigned int) vals.size() };
-
     std::unique_ptr<gnutls_x509_crt_int, void(*)(gnutls_x509_crt_t)> cert = { ptr1, gnutls_x509_crt_deinit };
 
     if(int err = gnutls_x509_crt_import(cert.get(), & dt1, GNUTLS_X509_FMT_DER); err != GNUTLS_E_SUCCESS)
     {
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err), err);
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
+                           err);
         throw gnutls_error(NS_FuncName);
     }
 
     gnutls_pubkey_t ptr2 = nullptr;
+
     if(int err = gnutls_pubkey_init(& ptr2); GNUTLS_E_SUCCESS != err)
     {
         Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
@@ -425,19 +434,23 @@ std::unique_ptr<DatumAlloc> gnutlsEncryptData(const std::vector<uint8_t> & certd
 
     if(int err = gnutls_pubkey_import_x509(pkey.get(), cert.get(), 0); GNUTLS_E_SUCCESS != err)
     {
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509", gnutls_strerror(err), err);
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509",
+                           gnutls_strerror(err), err);
         throw gnutls_error(NS_FuncName);
     }
 
     gnutls_datum_t res;
+
     if(int err = gnutls_pubkey_encrypt_data(pkey.get(), 0, & dt2, & res); GNUTLS_E_SUCCESS != err)
     {
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data", gnutls_strerror(err), err);
+        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data",
+                           gnutls_strerror(err), err);
         throw gnutls_error(NS_FuncName);
     }
 
     return std::make_unique<DatumAlloc>(res);
 }
+
 #endif
 
 void LTSM_HelperWindow::loginClicked(void)
@@ -455,13 +468,11 @@ void LTSM_HelperWindow::loginClicked(void)
 #ifdef LTSM_PKCS11_AUTH
     auto bufToken = ui->comboBoxDomain->currentData(Qt::UserRole).toByteArray();
     auto tokenPtr = reinterpret_cast<const Pkcs11Token*>(bufToken.data());
-
     auto bufCert = ui->comboBoxUsername->currentData(Qt::UserRole).toByteArray();
     auto certPtr = reinterpret_cast<const Pkcs11Cert*>(bufCert.data());
-
-    auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()), QSsl::Der);
+    auto ssl = QSslCertificate(QByteArray((const char*) certPtr->objectValue.data(), certPtr->objectValue.size()),
+                               QSsl::Der);
     auto pin = ui->lineEditPassword->text().toStdString();
-
     // generate 32byte hash
     std::vector<uint8_t> hash1(32);
     QRandomGenerator::global()->generate(hash1.begin(), hash1.end());
@@ -471,7 +482,8 @@ void LTSM_HelperWindow::loginClicked(void)
     try
     {
         auto dt = gnutlsEncryptData(certPtr->objectValue, hash1);
-        std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size, CKM_RSA_PKCS);
+        std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size,
+                                     CKM_RSA_PKCS);
         certValidate = (hash1 == hash2);
     }
     catch(const std::exception & err)
@@ -497,12 +509,11 @@ void LTSM_HelperWindow::loginClicked(void)
         if(! dn.empty())
         {
             setLabelInfo("LDAP: certificate found");
-
             auto login = ldap->findLoginFromDn(dn);
+
             if(! login.empty())
             {
                 setLabelInfo("LDAP: login found");
-
                 sendAuthenticateToken(displayNum, QString::fromStdString(login));
                 return;
             }
@@ -520,21 +531,26 @@ void LTSM_HelperWindow::loginClicked(void)
     {
         setLabelError("LDAP: initialize failed");
     }
+
 #endif
 }
 
 void LTSM_HelperWindow::passwordChanged(const QString & pass)
 {
     if(tokenAuthMode)
+    {
         ui->pushButtonLogin->setDisabled(pass.isEmpty());
+    }
     else
-        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() || ui->lineEditPassword->text().isEmpty());
+    {
+        ui->pushButtonLogin->setDisabled(ui->comboBoxUsername->currentText().isEmpty() ||
+                                         ui->lineEditPassword->text().isEmpty());
+    }
 }
 
 void LTSM_HelperWindow::showEvent(QShowEvent*)
 {
     widgetStartedAction(displayNum);
-
     auto screen = QGuiApplication::primaryScreen();
     auto pos = (screen->size() - size()) / 2;
     move(pos.width(), pos.height());
@@ -547,18 +563,18 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
         {
             auto version = getServiceVersion();
             title.replace("%{version}", QString::number(version));
-
             ui->labelTitle->setText(title);
         }
 
         dateFormat = getDateFormat(displayNum);
         loginAutoComplete = isAutoComplete(displayNum);
-
         auto encryption = getEncryptionInfo(displayNum);
         ui->lineEditEncryption->setText(encryption);
 
         if(loginAutoComplete)
+        {
             reloadUsersList();
+        }
 
         initArguments = true;
     }
@@ -569,19 +585,23 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
     if(ev->timerId() == timerOneSec)
     {
         if(0 < labelPause)
+        {
             labelPause--;
+        }
         else
         {
             ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
             ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
         }
     }
-    else
-    if(ev->timerId() == timer300ms)
+    else if(ev->timerId() == timer300ms)
+    {
         xcbEventProcessing();
-    else
-    if(ev->timerId() == timerReloadUsers && loginAutoComplete)
+    }
+    else if(ev->timerId() == timerReloadUsers && loginAutoComplete)
+    {
         reloadUsersList();
+    }
 }
 
 void LTSM_HelperWindow::mouseMoveEvent(QMouseEvent* ev)
@@ -597,7 +617,9 @@ void LTSM_HelperWindow::mouseMoveEvent(QMouseEvent* ev)
 void LTSM_HelperWindow::mousePressEvent(QMouseEvent* ev)
 {
     if(ui->labelTitle->geometry().contains(ev->pos()))
+    {
         titleBarPressed.reset(new QPoint(ev->globalPos()));
+    }
 }
 
 void LTSM_HelperWindow::mouseReleaseEvent(QMouseEvent*)
@@ -612,7 +634,6 @@ void LTSM_HelperWindow::keyPressEvent(QKeyEvent*)
 void LTSM_HelperWindow::reloadUsersList(void)
 {
     ui->comboBoxUsername->clear();
-
     ui->comboBoxUsername->addItems(getUsersList(displayNum));
     ui->comboBoxUsername->setEditText(prefferedLogin);
 }
@@ -629,13 +650,13 @@ void LTSM_HelperWindow::widgetCenteredCallback(int display)
 {
     if(display == displayNum)
     {
-	if(auto primary = QGuiApplication::primaryScreen())
-	{
-	    auto screenGeometry = primary->geometry();
-    	    int nx = (screenGeometry.width() - width()) / 2;
-    	    int ny = (screenGeometry.height() - height()) / 2;
-    	    move(nx, ny);
-	}
+        if(auto primary = QGuiApplication::primaryScreen())
+        {
+            auto screenGeometry = primary->geometry();
+            int nx = (screenGeometry.width() - width()) / 2;
+            int ny = (screenGeometry.height() - height()) / 2;
+            move(nx, ny);
+        }
     }
 }
 
@@ -669,13 +690,17 @@ void LTSM_HelperWindow::setLabelInfo(const QString & info)
 void LTSM_HelperWindow::shutdownConnectorCallback(int display)
 {
     if(display == displayNum)
+    {
         close();
+    }
 }
 
 void LTSM_HelperWindow::sessionChangedCallback(int display)
 {
     if(display == displayNum)
+    {
         ui->lineEditEncryption->setText(getEncryptionInfo(displayNum));
+    }
 }
 
 void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & username)
@@ -686,19 +711,24 @@ void LTSM_HelperWindow::loginSuccessCallback(int display, const QString & userna
     }
 }
 
-void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass, const bool & autoLogin)
+void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass,
+        const bool & autoLogin)
 {
     if(display == displayNum && 0 < login.size())
     {
         prefferedLogin = login;
         ui->comboBoxUsername->setEditText(prefferedLogin);
-
         ui->lineEditPassword->setFocus();
+
         if(0 < pass.size())
+        {
             ui->lineEditPassword->setText(pass);
+        }
 
         if(autoLogin)
+        {
             loginClicked();
+        }
     }
 }
 
@@ -707,7 +737,9 @@ void LTSM_HelperWindow::xkbStateChangeEvent(int group)
     auto names = xkbNames();
 
     if(0 <= group && group < names.size())
+    {
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+    }
 }
 
 /*

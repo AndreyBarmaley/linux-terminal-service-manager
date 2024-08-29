@@ -34,8 +34,9 @@ namespace LTSM
 {
     struct rfb_error : public std::runtime_error
     {
-        explicit rfb_error(const std::string & what) : std::runtime_error(what){}
-        explicit rfb_error(const char* what) : std::runtime_error(what){}
+        explicit rfb_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit rfb_error(const char* what) : std::runtime_error(what) {}
     };
 
     namespace RFB
@@ -93,7 +94,7 @@ namespace LTSM
         const int ENCODING_ZLIBHEX = 8;
         const int ENCODING_TRLE = 15;
         const int ENCODING_ZRLE = 16;
- 
+
         // hextile constants
         const int HEXTILE_RAW = 1;
         const int HEXTILE_BACKGROUND = 2;
@@ -102,7 +103,7 @@ namespace LTSM
         const int HEXTILE_COLOURED = 16;
         const int HEXTILE_ZLIBRAW = 32;
         const int HEXTILE_ZLIB = 64;
- 
+
         // pseudo encodings
         const int ENCODING_DESKTOP_SIZE = -223;
         const int ENCODING_EXT_DESKTOP_SIZE = -308;
@@ -125,15 +126,15 @@ namespace LTSM
         const int ENCODING_FFMPEG_VP8 = 0x56503800;
         const int PROTOCOL_LTSM = 119;
 
-	struct ScreenInfo
-	{
-            uint32_t		id = 0;
-            uint16_t		posx = 0;
-            uint16_t		posy = 0;
-            uint16_t		width = 0;
-            uint16_t		height = 0;
-            uint32_t		flags = 0;
-	};
+        struct ScreenInfo
+        {
+            uint32_t id = 0;
+            uint16_t posx = 0;
+            uint16_t posy = 0;
+            uint16_t width = 0;
+            uint16_t height = 0;
+            uint32_t flags = 0;
+        };
 
         enum class DesktopResizeStatus { ServerRuntime, ClientSide, OtherClient };
         enum class DesktopResizeError { NoError, ResizeProhibited, OutOfResources, InvalidScreenLayout };
@@ -146,22 +147,22 @@ namespace LTSM
         /// SecurityInfo
         struct SecurityInfo
         {
-            std::string         passwdFile;
-            std::string         tlsPriority{"NORMAL:+ANON-ECDH:+ANON-DH"};
-            std::string         caFile;
-            std::string         certFile;
-            std::string         keyFile;
-            std::string         crlFile;
-            std::string         krb5Service;
-            std::string         krb5Name;
+            std::string passwdFile;
+            std::string tlsPriority{"NORMAL:+ANON-ECDH:+ANON-DH"};
+            std::string caFile;
+            std::string certFile;
+            std::string keyFile;
+            std::string crlFile;
+            std::string krb5Service;
+            std::string krb5Name;
 
-            int                 tlsDebug = 0;
+            int tlsDebug = 0;
 
-            bool                authNone = false;
-            bool                authVnc = false;
-            bool                authVenCrypt = false;
-	    bool		authKrb5 = false;
-            bool                tlsAnonMode = false;
+            bool authNone = false;
+            bool authVnc = false;
+            bool authVenCrypt = false;
+            bool authKrb5 = false;
+            bool tlsAnonMode = false;
         };
     }
 }

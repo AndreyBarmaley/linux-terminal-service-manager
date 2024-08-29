@@ -56,8 +56,9 @@ namespace LTSM
 
     struct fuse_error : public std::runtime_error
     {
-        explicit fuse_error(const std::string & what) : std::runtime_error(what){}
-        explicit fuse_error(const char* what) : std::runtime_error(what){}
+        explicit fuse_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit fuse_error(const char* what) : std::runtime_error(what) {}
     };
 }
 

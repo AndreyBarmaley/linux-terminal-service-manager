@@ -38,8 +38,9 @@ namespace LTSM
 {
     struct vnc_error : public std::runtime_error
     {
-        explicit vnc_error(const std::string & what) : std::runtime_error(what){}
-        explicit vnc_error(const char* what) : std::runtime_error(what){}
+        explicit vnc_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit vnc_error(const char* what) : std::runtime_error(what) {}
     };
 
     namespace Connector
@@ -47,81 +48,88 @@ namespace LTSM
         /* Connector::VNC */
         class VNC : public SignalProxy, protected RFB::X11Server
         {
-            PixelFormat         serverPf;
+            PixelFormat serverPf;
 
             std::unordered_map<uint32_t, int>
-                                keymap;
+            keymap;
 
             std::list<std::pair<std::string, size_t>> transfer;
-            std::mutex          lockTransfer;
+            std::mutex lockTransfer;
 
             std::chrono::time_point<std::chrono::steady_clock>
-                                idleSession;
-            size_t              idleTimeoutSec = 0;
+            idleSession;
+            size_t idleTimeoutSec = 0;
 
             std::atomic<size_t> frameRate{16};
-            std::atomic<bool>   loginWidgetStarted{false};
-            std::atomic<bool>   userSession{false};
-            std::atomic<bool>   x11NoDamage{false};
-            uid_t               shmUid = 0;
+            std::atomic<bool> loginWidgetStarted{false};
+            std::atomic<bool> userSession{false};
+            std::atomic<bool> x11NoDamage{false};
+            uid_t shmUid = 0;
 
         protected:
-	    // rfb server encoding
+            // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
-            void                xcbFrameBufferModify(FrameBuffer &) const override;
+            void xcbFrameBufferModify(FrameBuffer &) const override;
             std::list<std::string> serverDisabledEncodings(void) const override;
- 
+
             // x11server
-            bool                xcbNoDamageOption(void) const override;
-            void                xcbDisableMessages(bool) override;
-            bool                xcbAllowMessages(void) const override;
-            size_t              frameRateOption(void) const override;
+            bool xcbNoDamageOption(void) const override;
+            void xcbDisableMessages(bool) override;
+            bool xcbAllowMessages(void) const override;
+            size_t frameRateOption(void) const override;
 
-            bool                rfbClipboardEnable(void) const override;
-            bool                rfbDesktopResizeEnabled(void) const override;
-            RFB::SecurityInfo   rfbSecurityInfo(void) const override;
-            int                 rfbUserKeycode(uint32_t) const override;
+            bool rfbClipboardEnable(void) const override;
+            bool rfbDesktopResizeEnabled(void) const override;
+            RFB::SecurityInfo rfbSecurityInfo(void) const override;
+            int rfbUserKeycode(uint32_t) const override;
 
-            void                recvKeyEvent(bool pressed, uint32_t keysym) override;
-            void                recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
+            void recvKeyEvent(bool pressed, uint32_t keysym) override;
+            void recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
             // dbus virtual signals
-            void                onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t& userUid) override;
-            void                onShutdownConnector(const int32_t & display) override;
-            void                onHelperWidgetStarted(const int32_t & display) override;
-            void                onSendBellSignal(const int32_t & display) override;
+            void onLoginSuccess(const int32_t & display, const std::string & userName,
+                                const uint32_t & userUid) override;
+            void onShutdownConnector(const int32_t & display) override;
+            void onHelperWidgetStarted(const int32_t & display) override;
+            void onSendBellSignal(const int32_t & display) override;
 
             // connector
-            void                xcbAddDamage(const XCB::Region &) override;
+            void xcbAddDamage(const XCB::Region &) override;
 
-            void                onLoginFailure(const int32_t & display, const std::string & msg) override;
-            void                onCreateChannel(const int32_t & display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed) override;
-            void                onDestroyChannel(const int32_t& display, const uint8_t& channel) override;
-            void                onTransferAllow(const int32_t& display, const std::string& filepath, const std::string& tmpfile, const std::string& dstdir) override;
-            void                onCreateListener(const int32_t& display, const std::string& client, const std::string& cmode, const std::string& server, const std::string& smode, const std::string& speed, const uint8_t& limit, const uint32_t& flags) override;
-            void                onDestroyListener(const int32_t& display, const std::string& client, const std::string& server) override;
-            void                onDebugChannel(const int32_t& display, const uint8_t& channel, const bool& debug) override;
+            void onLoginFailure(const int32_t & display, const std::string & msg) override;
+            void onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
+                                 const std::string & server, const std::string & smode, const std::string & speed) override;
+            void onDestroyChannel(const int32_t & display, const uint8_t & channel) override;
+            void onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,
+                                 const std::string & dstdir) override;
+            void onCreateListener(const int32_t & display, const std::string & client, const std::string & cmode,
+                                  const std::string & server, const std::string & smode, const std::string & speed, const uint8_t & limit,
+                                  const uint32_t & flags) override;
+            void onDestroyListener(const int32_t & display, const std::string & client,
+                                   const std::string & server) override;
+            void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override;
 
-            void                serverHandshakeVersionEvent(void) override;
-            void                serverSelectEncodingsEvent(void) override;
-            void                serverSecurityInitEvent(void) override;
-            void                serverConnectedEvent(void) override;
-            void                serverMainLoopEvent(void) override;
-            void                serverDisplayResizedEvent(const XCB::Size &) override;
-            void                serverEncodingsEvent(void) override;
+            void serverHandshakeVersionEvent(void) override;
+            void serverSelectEncodingsEvent(void) override;
+            void serverSecurityInitEvent(void) override;
+            void serverConnectedEvent(void) override;
+            void serverMainLoopEvent(void) override;
+            void serverDisplayResizedEvent(const XCB::Size &) override;
+            void serverEncodingsEvent(void) override;
 
             // rfb channel client
-            bool                isUserSession(void) const override;
-            void                systemChannelError(const JsonObject &) override;
-            void                systemTransferFiles(const JsonObject &) override;
-            void                systemClientVariables(const JsonObject &) override;
-            void                systemKeyboardChange(const JsonObject &) override;
+            bool isUserSession(void) const override;
+            void systemChannelError(const JsonObject &) override;
+            void systemTransferFiles(const JsonObject &) override;
+            void systemClientVariables(const JsonObject &) override;
+            void systemKeyboardChange(const JsonObject &) override;
 
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}
+
             ~VNC();
 
-            int		        communication(void) override;
+            int communication(void) override;
         };
     }
 }

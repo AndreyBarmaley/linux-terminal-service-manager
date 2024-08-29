@@ -38,10 +38,17 @@ namespace LTSM
         }
 
         int protover = 3;
-        if(int ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &protover); ret != LDAP_SUCCESS)
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
 
-        struct berval cred { 0, nullptr };
+        if(int ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &protover); ret != LDAP_SUCCESS)
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
+        }
+
+        struct berval cred
+        {
+            0, nullptr
+        };
+
         if(int ret = ldap_sasl_bind_s(ldap, nullptr, nullptr, & cred, nullptr, nullptr, nullptr); ret != LDAP_SUCCESS)
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
@@ -52,7 +59,9 @@ namespace LTSM
     LdapWrapper::~LdapWrapper()
     {
         if(ldap)
+        {
             ldap_unbind_ext_s(ldap, NULL, NULL);
+        }
     }
 
     std::string LdapWrapper::findLoginFromDn(std::string_view dn)
@@ -60,9 +69,8 @@ namespace LTSM
         std::string res;
         const char* attrs[] = { "uid", nullptr };
         LDAPMessage* msg = NULL;
-
         int ret = ldap_search_ext_s(ldap, dn.data(), LDAP_SCOPE_BASE,
-                        nullptr, (char**) attrs, 0, nullptr, nullptr, nullptr, 0, & msg);
+                                    nullptr, (char**) attrs, 0, nullptr, nullptr, nullptr, 0, & msg);
 
         if(ret == LDAP_SUCCESS)
         {
@@ -71,18 +79,26 @@ namespace LTSM
             if(LDAPMessage* entry = ldap_first_entry(ldap, msg))
             {
                 BerElement* ber = nullptr;
+
                 if(char* attr = ldap_first_attribute(ldap, entry, & ber))
                 {
                     if(berval** vals = ldap_get_values_len(ldap, entry, attr))
                     {
                         if(0 < ldap_count_values_len(vals))
+                        {
                             res.assign(vals[0]->bv_val, vals[0]->bv_len);
+                        }
 
                         ldap_value_free_len(vals);
                     }
+
                     ldap_memfree(attr);
                 }
-                if(ber) ber_free(ber, 0);
+
+                if(ber)
+                {
+                    ber_free(ber, 0);
+                }
             }
         }
         else
@@ -91,7 +107,9 @@ namespace LTSM
         }
 
         if(msg)
+        {
             ldap_msgfree(msg);
+        }
 
         return res;
     }
@@ -101,9 +119,8 @@ namespace LTSM
         std::string res;
         const char* attrs[] = { "userCertificate", nullptr };
         LDAPMessage* msg = NULL;
-
         int ret = ldap_search_ext_s(ldap, nullptr, LDAP_SCOPE_SUBTREE,
-                        "userCertificate;binary=*", (char**) attrs, 0, nullptr, nullptr, nullptr, 0, & msg);
+                                    "userCertificate;binary=*", (char**) attrs, 0, nullptr, nullptr, nullptr, 0, & msg);
 
         if(ret == LDAP_SUCCESS)
         {
@@ -116,7 +133,7 @@ namespace LTSM
                 BerElement* ber = nullptr;
 
                 for(char* attr = ldap_first_attribute(ldap, entry, & ber);
-                    attr && res.empty(); attr = ldap_next_attribute(ldap, entry, ber))
+                        attr && res.empty(); attr = ldap_next_attribute(ldap, entry, ber))
                 {
                     if(berval** vals = ldap_get_values_len(ldap, entry, attr))
                     {
@@ -125,17 +142,28 @@ namespace LTSM
                             for(size_t ii = 0; ii < count; ++ii)
                             {
                                 if(length == vals[ii]->bv_len &&
-                                    std::equal(derform, derform + length, (uint8_t*) vals[ii]->bv_val))
+                                        std::equal(derform, derform + length, (uint8_t*) vals[ii]->bv_val))
+                                {
                                     res.assign(dn);
+                                }
                             }
                         }
+
                         ldap_value_free_len(vals);
                     }
+
                     ldap_memfree(attr);
                 }
 
-                if(ber) ber_free(ber, 0);
-                if(dn) ldap_memfree(dn);
+                if(ber)
+                {
+                    ber_free(ber, 0);
+                }
+
+                if(dn)
+                {
+                    ldap_memfree(dn);
+                }
             }
         }
         else
@@ -144,7 +172,9 @@ namespace LTSM
         }
 
         if(msg)
+        {
             ldap_msgfree(msg);
+        }
 
         return res;
     }

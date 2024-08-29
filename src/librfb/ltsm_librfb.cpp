@@ -29,10 +29,16 @@ namespace LTSM
     {
         switch(status)
         {
-            case DesktopResizeStatus::ServerRuntime: return 0;
-            case DesktopResizeStatus::ClientSide:    return 1;
-            case DesktopResizeStatus::OtherClient:   return 2;
+            case DesktopResizeStatus::ServerRuntime:
+                return 0;
+
+            case DesktopResizeStatus::ClientSide:
+                return 1;
+
+            case DesktopResizeStatus::OtherClient:
+                return 2;
         }
+
         return 0;
     }
 
@@ -40,11 +46,19 @@ namespace LTSM
     {
         switch(err)
         {
-            case DesktopResizeError::NoError:             return 0;
-            case DesktopResizeError::ResizeProhibited:    return 1;
-            case DesktopResizeError::OutOfResources:      return 2;
-            case DesktopResizeError::InvalidScreenLayout: return 3;
+            case DesktopResizeError::NoError:
+                return 0;
+
+            case DesktopResizeError::ResizeProhibited:
+                return 1;
+
+            case DesktopResizeError::OutOfResources:
+                return 2;
+
+            case DesktopResizeError::InvalidScreenLayout:
+                return 3;
         }
+
         return 0;
     }
 

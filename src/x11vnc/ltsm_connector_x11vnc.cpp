@@ -34,9 +34,11 @@ namespace LTSM
     {
         _config = & jo;
         _remoteaddr.assign("local");
-    
+
         if(auto env = std::getenv("REMOTE_ADDR"))
+        {
             _remoteaddr.assign(env);
+        }
 
         loadKeymap();
     }
@@ -44,7 +46,9 @@ namespace LTSM
     bool Connector::X11VNC::loadKeymap(void)
     {
         if(! _config->hasKey("keymapfile"))
+        {
             return false;
+        }
 
         auto jc = JsonContentFile(_config->getString("keymapfile"));
 
@@ -55,6 +59,7 @@ namespace LTSM
         }
 
         auto jo = jc.toObject();
+
         for(auto & skey : jo.keys())
         {
             try
@@ -122,10 +127,13 @@ namespace LTSM
         secInfo.tlsDebug = 0;
 
         if(Application::isDebugLevel(DebugLevel::Debug))
+        {
             secInfo.tlsDebug = 1;
-        else
-        if(Application::isDebugLevel(DebugLevel::Trace))
+        }
+        else if(Application::isDebugLevel(DebugLevel::Trace))
+        {
             secInfo.tlsDebug = 3;
+        }
 
         return secInfo;
     }
@@ -150,11 +158,11 @@ namespace LTSM
         }
 
         xcbDisplay()->resetInputs();
-
-        Application::info("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(), xcbDisplay()->height(), xcbDisplay()->depth());
+        Application::info("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(),
+                          xcbDisplay()->height(), xcbDisplay()->depth());
         Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
-
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
+
         if(! visual)
         {
             Application::error("%s: xcb visual empty", __FUNCTION__);
@@ -162,10 +170,8 @@ namespace LTSM
         }
 
         xcbShmInit();
-
         // init server format
         _pf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
-
         return true;
     }
 

@@ -60,24 +60,34 @@ namespace LTSM
     bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
         if(0 > fd)
+        {
             return false;
+        }
 
         struct pollfd fds = {};
+
         fds.fd = fd;
+
         fds.events = POLLIN;
 
         int ret = poll(& fds, 1, timeoutMS);
 
         // A value of 0 indicates that the call timed out and no file descriptors were ready
         if(0 == ret)
+        {
             return false;
+        }
 
         if(0 < ret && (fds.revents & POLLIN))
+        {
             return true;
-    
-        // interrupted system call        
+        }
+
+        // interrupted system call
         if(errno == EINTR)
+        {
             return hasInput(fd, timeoutMS);
+        }
 
         Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pool", strerror(errno), errno);
         throw network_error(NS_FuncName);
@@ -86,9 +96,12 @@ namespace LTSM
     size_t NetworkStream::hasData(int fd)
     {
         if(0 > fd)
+        {
             return 0;
+        }
 
         int count;
+
         if(0 > ioctl(fd, FIONREAD, & count))
         {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ioctl", strerror(errno), errno);
@@ -168,13 +181,17 @@ namespace LTSM
     void NetworkStream::recvSkip(size_t length) const
     {
         while(length--)
+        {
             recvInt8();
+        }
     }
 
     NetworkStream & NetworkStream::sendZero(size_t length)
     {
         while(length--)
+        {
             sendInt8(0);
+        }
 
         return *this;
     }
@@ -194,7 +211,9 @@ namespace LTSM
     std::vector<uint8_t> NetworkStream::recvData(size_t length) const
     {
         std::vector<uint8_t> res(length, 0);
-        if(length) recvData(res.data(), res.size());
+
+        if(length) { recvData(res.data(), res.size()); }
+
         return res;
     }
 
@@ -206,7 +225,9 @@ namespace LTSM
     std::string NetworkStream::recvString(size_t length) const
     {
         std::string res(length, 0);
-        if(length) recvData(& res[0], length);
+
+        if(length) { recvData(& res[0], length); }
+
         return res;
     }
 
@@ -217,7 +238,9 @@ namespace LTSM
             ssize_t real = recv(fd, ptr, len, 0);
 
             if(len == real)
+            {
                 break;
+            }
 
             if(0 < real && real < len)
             {
@@ -235,7 +258,9 @@ namespace LTSM
 
             // error
             if(EAGAIN == errno || EINTR == errno)
+            {
                 continue;
+            }
 
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "recv", strerror(errno), errno);
             throw network_error(NS_FuncName);
@@ -249,7 +274,9 @@ namespace LTSM
             ssize_t real = send(fd, ptr, len, MSG_NOSIGNAL);
 
             if(len == real)
+            {
                 break;
+            }
 
             if(0 < real && real < len)
             {
@@ -267,7 +294,9 @@ namespace LTSM
 
             // error
             if(EAGAIN == errno || EINTR == errno)
+            {
                 continue;
+            }
 
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "send", strerror(errno), errno);
             throw network_error(NS_FuncName);
@@ -283,7 +312,9 @@ namespace LTSM
     SocketStream::~SocketStream()
     {
         if(0 < sock)
+        {
             close(sock);
+        }
     }
 
 #ifdef LTSM_WITH_GNUTLS
@@ -291,6 +322,7 @@ namespace LTSM
     {
         sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(sock));
     }
+
 #endif
 
     bool SocketStream::hasInput(void) const
@@ -380,6 +412,7 @@ namespace LTSM
         sess->set_transport_ptr(reinterpret_cast<gnutls_transport_ptr_t>(fdin),
                                 reinterpret_cast<gnutls_transport_ptr_t>(fdout));
     }
+
 #endif
 
     bool InetStream::hasInput(void) const
@@ -400,7 +433,9 @@ namespace LTSM
             size_t real = std::fread(ptr, 1, len, fin.get());
 
             if(len == real)
+            {
                 break;
+            }
 
             if(std::feof(fin.get()))
             {
@@ -426,7 +461,9 @@ namespace LTSM
             size_t real = std::fwrite(ptr, 1, len, fout.get());
 
             if(len == real)
+            {
                 break;
+            }
 
             if(std::feof(fout.get()))
             {
@@ -500,13 +537,15 @@ namespace LTSM
             clientSock = -1;
         }
 
-        if(loopThread.joinable()) loopThread.join();
+        if(loopThread.joinable()) { loopThread.join(); }
 
         std::error_code err;
         std::filesystem::remove(socketPath, err);
 
         if(err)
+        {
             Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), socketPath.c_str(), getuid());
+        }
     }
 
     int ProxySocket::proxyClientSocket(void) const
@@ -535,7 +574,9 @@ namespace LTSM
                 try
                 {
                     if(! this->transmitDataIteration())
+                    {
                         this->loopTransmission = false;
+                    }
                 }
                 catch(const std::exception & err)
                 {
@@ -556,13 +597,15 @@ namespace LTSM
     bool ProxySocket::transmitDataIteration(void)
     {
         if(! fin || std::feof(fin.get()) || std::ferror(fin.get()))
+        {
             return false;
+        }
 
         size_t dataSz = 0;
 
         // inetFd -> bridgeSock
         if(NetworkStream::hasInput(fdin) &&
-            0 < (dataSz = NetworkStream::hasData(fdin)))
+                0 < (dataSz = NetworkStream::hasData(fdin)))
         {
 
             auto buf = recvData(dataSz);
@@ -579,11 +622,13 @@ namespace LTSM
         }
 
         if(! fout || std::feof(fout.get()) || std::ferror(fout.get()))
+        {
             return false;
+        }
 
         // bridgeSock -> inetFd
         if(NetworkStream::hasInput(bridgeSock) &&
-            0 < (dataSz = NetworkStream::hasData(bridgeSock)))
+                0 < (dataSz = NetworkStream::hasData(bridgeSock)))
         {
             std::vector<uint8_t> buf(dataSz);
             recvFrom(bridgeSock, buf.data(), buf.size());
@@ -602,7 +647,9 @@ namespace LTSM
 
         // no action
         if(dataSz == 0)
+        {
             std::this_thread::sleep_for(1ms);
+        }
 
         return true;
     }
@@ -614,21 +661,24 @@ namespace LTSM
 
     int TCPSocket::listen(std::string_view ipaddr, uint16_t port, int conn)
     {
-        int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);            
+        int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+
         if(0 > fd)
         {
             Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.data(), port);
             return -1;
         }
-            
+
         int reuse = 1;
         int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
+
         if(0 > err)
         {
             Application::warning("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.data(), port);
         }
 
         struct sockaddr_in sockaddr;
+
         memset(& sockaddr, 0, sizeof(struct sockaddr_in));
 
         sockaddr.sin_family = AF_INET;
@@ -644,7 +694,7 @@ namespace LTSM
         }
 
         Application::debug("%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
-        
+
         if(0 != ::listen(fd, conn))
         {
             Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "listen", strerror(errno), errno, ipaddr.data(), port);
@@ -660,9 +710,13 @@ namespace LTSM
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock)
+        {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "accept", strerror(errno), errno);
+        }
         else
+        {
             Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+        }
 
         return sock;
     }
@@ -678,6 +732,7 @@ namespace LTSM
         }
 
         struct sockaddr_in sockaddr;
+
         memset(& sockaddr, 0, sizeof(struct sockaddr_in));
         sockaddr.sin_family = AF_INET;
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.data());
@@ -685,14 +740,16 @@ namespace LTSM
 
         Application::debug("%s: ipaddr: %s, port: %" PRIu16, __FUNCTION__, ipaddr.data(), port);
 
-        if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_in)))
+        if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
             Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "connect", strerror(errno), errno, ipaddr.data(), port);
             close(sock);
             sock = -1;
         }
         else
+        {
             Application::debug("%s: fd: %d", __FUNCTION__, sock);
+        }
 
         return sock;
     }
@@ -702,7 +759,9 @@ namespace LTSM
         struct in_addr in;
 
         if(0 == inet_aton(ipaddr.data(), &in))
+        {
             Application::error("%s: invalid ip address: %s", __FUNCTION__, ipaddr.data());
+        }
         else
         {
             std::vector<char> strbuf(1024, 0);
@@ -713,7 +772,9 @@ namespace LTSM
             if(0 == gethostbyaddr_r(& in.s_addr, sizeof(in.s_addr), AF_INET, & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
             {
                 if(res)
+                {
                     return std::string(res->h_name);
+                }
             }
             else
             {
@@ -738,6 +799,7 @@ namespace LTSM
             if(res)
             {
                 struct in_addr in;
+
                 while(res->h_addr_list && *res->h_addr_list)
                 {
                     std::copy_n(*res->h_addr_list, sizeof(in_addr), (char*) & in);
@@ -767,6 +829,7 @@ namespace LTSM
             if(res)
             {
                 struct in_addr in;
+
                 if(res->h_addr_list && *res->h_addr_list)
                 {
                     std::copy_n(*res->h_addr_list, sizeof(in_addr), (char*) & in);
@@ -785,6 +848,7 @@ namespace LTSM
     int UnixSocket::connect(const std::filesystem::path & path)
     {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+
         if(0 > sock)
         {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "socket", strerror(errno), errno, path.c_str());
@@ -792,26 +856,31 @@ namespace LTSM
         }
 
         struct sockaddr_un sockaddr;
+
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
 
         const std::string & native = path.native();
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1)
+        {
             Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+        }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
         Application::debug("%s: path: %s", __FUNCTION__, sockaddr.sun_path);
 
-        if(0 != connect(sock, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un)))
+        if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "connect", strerror(errno), errno, path.c_str());
             close(sock);
             sock = -1;
         }
         else
+        {
             Application::debug("%s: fd: %d", __FUNCTION__, sock);
+        }
 
         return sock;
     }
@@ -830,15 +899,20 @@ namespace LTSM
         std::filesystem::remove(path, err);
 
         if(err)
+        {
             Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
+        }
 
         struct sockaddr_un sockaddr;
+
         memset(& sockaddr, 0, sizeof(struct sockaddr_un));
         sockaddr.sun_family = AF_UNIX;
         const std::string & native = path.native();
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1)
+        {
             Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+        }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
@@ -868,9 +942,13 @@ namespace LTSM
         int sock = ::accept(fd, nullptr, nullptr);
 
         if(0 > sock)
+        {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "accept", strerror(errno), errno);
+        }
         else
+        {
             Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+        }
 
         return sock;
     }
@@ -880,9 +958,12 @@ namespace LTSM
         int srvfd = UnixSocket::listen(path);
 
         if(0 > srvfd)
+        {
             return false;
+        }
 
         std::error_code err;
+
         if(! std::filesystem::is_socket(path, err))
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not socket"), path.c_str(), getuid());
@@ -894,6 +975,7 @@ namespace LTSM
         bridgeSock = -1;
         // socket fd: client part
         clientSock = UnixSocket::connect(socketPath);
+
         if(0 > clientSock)
         {
             close(srvfd);
@@ -907,7 +989,9 @@ namespace LTSM
         close(srvfd);
 
         if(0 > bridgeSock)
+        {
             return false;
+        }
 
         fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
         return true;
@@ -918,9 +1002,11 @@ namespace LTSM
     {
         void gnutls_log(int level, const char* str)
         {
-	    // remove end line
-	    if(size_t len = strlen(str))
-        	Application::info("gnutls debug: %.*s", len-1, str);
+            // remove end line
+            if(size_t len = strlen(str))
+            {
+                Application::info("gnutls debug: %.*s", len-1, str);
+            }
         }
 
         /* TLS::Stream */
@@ -961,7 +1047,9 @@ namespace LTSM
             gnutls_global_set_log_function(gnutls_log);
 
             if(priority.empty())
+            {
                 priority = "NORMAL:+ANON-ECDH:+ANON-DH";
+            }
 
             if(srvmode)
             {
@@ -994,7 +1082,9 @@ namespace LTSM
             gnutls_global_set_log_function(gnutls_log);
 
             if(priority.empty())
+            {
                 priority = "NORMAL:+ANON-ECDH:+ANON-DH";
+            }
 
 
             if(certFile.empty())
@@ -1010,6 +1100,7 @@ namespace LTSM
             }
 
             std::error_code err;
+
             if(! std::filesystem::exists(certFile, err))
             {
                 Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), certFile.c_str(), getuid());
@@ -1040,10 +1131,14 @@ namespace LTSM
             if(! caFile.empty())
             {
                 if(std::filesystem::exists(caFile, err))
+                {
                     certcred->set_x509_trust_file(caFile.c_str(), GNUTLS_X509_FMT_PEM);
+                }
 
                 if(err)
+                {
                     Application::warning("%s, %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), caFile.c_str(), getuid());
+                }
             }
 
             certcred->set_x509_key_file(certFile.c_str(), keyFile.c_str(), GNUTLS_X509_FMT_PEM);
@@ -1051,10 +1146,14 @@ namespace LTSM
             if(! crlFile.empty())
             {
                 if(std::filesystem::exists(crlFile, err))
+                {
                     certcred->set_x509_crl_file(crlFile.c_str(), GNUTLS_X509_FMT_PEM);
+                }
 
                 if(err)
+                {
                     Application::warning("%s, %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), crlFile.c_str(), getuid());
+                }
             }
 
             session->set_credentials(*cred.get());
@@ -1099,7 +1198,9 @@ namespace LTSM
             while((ret = session->recv(ptr, len)) < 0)
             {
                 if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                {
                     continue;
+                }
 
                 break;
             }
@@ -1109,15 +1210,18 @@ namespace LTSM
                 Application::error("gnutls_record_recv ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
+                {
                     throw gnutls_error(NS_FuncName);
+                }
             }
             else
-            // eof
-            if(0 == ret)
-            {
-                Application::warning("%s: %s", __FUNCTION__, "end stream");
-                throw gnutls_error(NS_FuncName);
-            }
+
+                // eof
+                if(0 == ret)
+                {
+                    Application::warning("%s: %s", __FUNCTION__, "end stream");
+                    throw gnutls_error(NS_FuncName);
+                }
 
             if(ret < static_cast<ssize_t>(len))
             {
@@ -1134,7 +1238,9 @@ namespace LTSM
             while((ret = session->send(ptr, len)) < 0)
             {
                 if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                {
                     continue;
+                }
 
                 break;
             }
@@ -1144,7 +1250,9 @@ namespace LTSM
                 Application::error("gnutls_record_send ret: %ld, error: %s", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret))
+                {
                     throw gnutls_error(NS_FuncName);
+                }
             }
         }
 
@@ -1174,7 +1282,7 @@ namespace LTSM
         }
 
         X509Session::X509Session(const NetworkStream* st, const std::string & cafile, const std::string & cert, const std::string & key,
-                        const std::string & crl, std::string_view priority, bool serverMode, int debug) : Stream(st)
+                                 const std::string & crl, std::string_view priority, bool serverMode, int debug) : Stream(st)
         {
             initX509Handshake(priority, serverMode, cafile, cert, key, crl, debug);
         }
@@ -1193,7 +1301,7 @@ namespace LTSM
 
             // Reverse the order of bits in the byte
             for(auto & val : _key)
-                if(val) val = ((val * 0x0202020202ULL & 0x010884422010ULL) % 1023) & 0xfe;
+                if(val) { val = ((val * 0x0202020202ULL & 0x010884422010ULL) % 1023) & 0xfe; }
 
             size_t offset = 0;
 
@@ -1232,6 +1340,7 @@ namespace LTSM
         }
 
     } // TLS
+
 #endif
 
     namespace ZLib
@@ -1242,7 +1351,9 @@ namespace LTSM
             zs.data_type = Z_BINARY;
 
             if(level < Z_BEST_SPEED || Z_BEST_COMPRESSION < level)
+            {
                 level = Z_BEST_COMPRESSION;
+            }
 
             int ret = deflateInit(& zs, level);
             //int ret = deflateInit2(& zs, level, Z_DEFLATED, MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
@@ -1266,23 +1377,25 @@ namespace LTSM
             zs.avail_in = len;
 
             std::vector<uint8_t> res;
-	    res.reserve(std::max(deflateBound(& zs, len), tmp.size()));
+            res.reserve(std::max(deflateBound(& zs, len), tmp.size()));
 
-	    do
-	    {
-        	zs.next_out = tmp.data();
-        	zs.avail_out = tmp.size();
+            do
+            {
+                zs.next_out = tmp.data();
+                zs.avail_out = tmp.size();
 
-        	int ret = deflate(& zs, flushPolicy);
+                int ret = deflate(& zs, flushPolicy);
 
-    		if(ret < Z_OK)
-        	{
-            	    Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflate", ret);
-            	    throw zlib_error(NS_FuncName);
-        	}
+                if(ret < Z_OK)
+                {
+                    Application::error("%s: %s failed, error code: %d", __FUNCTION__, "deflate", ret);
+                    throw zlib_error(NS_FuncName);
+                }
 
                 if(zs.avail_out < tmp.size())
+                {
                     res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
+                }
             }
             while(zs.avail_out == 0);
 
@@ -1298,16 +1411,23 @@ namespace LTSM
         std::vector<uint8_t> DeflateStream::deflateFlush(void)
         {
             auto last = deflateData(nullptr, 0, Z_SYNC_FLUSH);
+
             if(last.size())
-		bb.insert(bb.end(), last.begin(), last.end());
+            {
+                bb.insert(bb.end(), last.begin(), last.end());
+            }
+
             return std::move(bb);
         }
 
         void DeflateStream::sendRaw(const void* ptr, size_t len)
         {
             auto data = deflateData(ptr, len, Z_NO_FLUSH);
+
             if(data.size())
-		bb.insert(bb.end(), data.begin(), data.end());
+            {
+                bb.insert(bb.end(), data.begin(), data.end());
+            }
         }
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const
@@ -1338,8 +1458,9 @@ namespace LTSM
         InflateBase::InflateBase()
         {
             zs.data_type = Z_BINARY;
-    
+
             int ret = inflateInit2(& zs, MAX_WBITS);
+
             if(ret < Z_OK)
             {
                 Application::error("%s: %s failed, error code: %d", __FUNCTION__, "inflateInit2", ret);
@@ -1355,7 +1476,8 @@ namespace LTSM
         std::vector<uint8_t> InflateBase::inflateData(const void* buf, size_t len, int flushPolicy)
         {
             std::vector<uint8_t> res;
-            if(len) res.reserve(len * 7);
+
+            if(len) { res.reserve(len * 7); }
 
             zs.next_in = (Bytef*) buf;
             zs.avail_in = len;
@@ -1373,7 +1495,9 @@ namespace LTSM
                 }
 
                 if(zs.avail_out < tmp.size())
+                {
                     res.insert(res.end(), tmp.begin(), std::next(tmp.begin(), tmp.size() - zs.avail_out));
+                }
             }
             while(zs.avail_in > 0);
 
@@ -1384,7 +1508,7 @@ namespace LTSM
         InflateStream::InflateStream() : sb(4096 /* reserve */)
         {
         }
-    
+
         void InflateStream::appendData(const std::vector<uint8_t> & zip)
         {
             sb.shrink();
@@ -1395,9 +1519,9 @@ namespace LTSM
         {
             if(sb.last() < len)
             {
-            	Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
-            	throw std::invalid_argument(NS_FuncName);
-	    }
+                Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
+                throw std::invalid_argument(NS_FuncName);
+            }
 
             sb.readTo(static_cast<uint8_t*>(ptr), len);
         }
@@ -1442,7 +1566,9 @@ namespace LTSM
         bool BaseLayer::hasInput(void) const
         {
             if(rcvbuf.last())
+            {
                 return true;
+            }
 
             if(layer && layer->hasInput())
             {
@@ -1456,7 +1582,9 @@ namespace LTSM
         size_t BaseLayer::hasData(void) const
         {
             if(layer && layer->hasInput())
+            {
                 rcvbuf.write(recvLayer());
+            }
 
             return rcvbuf.last();
         }
@@ -1469,7 +1597,9 @@ namespace LTSM
         void BaseLayer::recvRaw(void* data, size_t len) const
         {
             while(rcvbuf.last() < len)
+            {
                 rcvbuf.write(recvLayer());
+            }
 
             rcvbuf.readTo(static_cast<uint8_t*>(data), len);
         }
@@ -1530,7 +1660,9 @@ namespace LTSM
             auto cred = Gss::acquireServiceCredential(service, & err);
 
             if(cred)
+            {
                 return true;
+            }
 
             error(__FUNCTION__, err.func, err.code1, err.code2);
             return false;
@@ -1563,7 +1695,9 @@ namespace LTSM
             auto cred = acquireUserCredential(username, & err);
 
             if(cred)
+            {
                 return true;
+            }
 
             error(__FUNCTION__, err.func, err.code1, err.code2);
             return false;
@@ -1577,7 +1711,9 @@ namespace LTSM
                 auto cred = acquireUserCredential(username, & err);
 
                 if(cred)
+                {
                     return connectService(service, mutual, std::move(cred));
+                }
 
                 error(__FUNCTION__, err.func, err.code1, err.code2);
             }
@@ -1591,5 +1727,6 @@ namespace LTSM
             Application::error("%s: %s failed, error: \"%s\", codes: [ 0x%08" PRIx32 ", 0x%08" PRIx32 "]", func, subfunc, err.c_str(), code1, code2);
         }
     } // GssApi
+
 #endif
 } // LTSM

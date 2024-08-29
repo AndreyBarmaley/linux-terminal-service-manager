@@ -24,25 +24,23 @@
 #include <QApplication>
 #include <QTranslator>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     int res = 0;
 
     try
     {
-	QApplication a(argc, argv);
-
+        QApplication a(argc, argv);
         QTranslator t;
         t.load(QLocale(), QLatin1String("ltsm_sessions"), QLatin1String("_"), QLatin1String(":/i18n"));
         a.installTranslator(& t);
-
-	LTSM_Sessions w;
-	w.show();
-	res = a.exec();
+        LTSM_Sessions w;
+        w.show();
+        res = a.exec();
     }
     catch(int e)
     {
-	res = e;
+        res = e;
     }
 
     return res;

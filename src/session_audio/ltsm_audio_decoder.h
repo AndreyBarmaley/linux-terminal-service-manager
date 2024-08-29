@@ -73,6 +73,7 @@ namespace LTSM
             const uint8_t* data(void) const override;
             size_t size(void) const override;
         };
+
 #endif
     }
 }

@@ -39,29 +39,30 @@ namespace LTSM
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
-        std::string             host{"localhost"};
-        std::string             password;
-        std::string             filename{"screenshot.png"};
-        int                     port = 5900;
-        int                     timeout = 0;
-        bool                    notls = false;
+        std::string host{"localhost"};
+        std::string password;
+        std::string filename{"screenshot.png"};
+        int port = 5900;
+        int timeout = 0;
+        bool notls = false;
 
     protected:
-        void                    setPixel(const XCB::Point &, uint32_t pixel) override;
-        void                    fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void                    updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat & pf) override;
-        const PixelFormat &     clientFormat(void) const override;
-        XCB::Size               clientSize(void) const override;
+        void setPixel(const XCB::Point &, uint32_t pixel) override;
+        void fillPixel(const XCB::Region &, uint32_t pixel) override;
+        void updateRawPixels(const void*, const XCB::Size &, uint16_t pitch,
+                                                const PixelFormat & pf) override;
+        const PixelFormat & clientFormat(void) const override;
+        XCB::Size clientSize(void) const override;
 
-        int    		        startSocket(std::string_view host, int port) const;
+        int startSocket(std::string_view host, int port) const;
 
     public:
         Vnc2Image(int argc, const char** argv);
 
-        void                    pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
-        void                    fbUpdateEvent(void) override;
+        void pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void fbUpdateEvent(void) override;
 
-        int    		        start(void) override;
+        int start(void) override;
     };
 }
 

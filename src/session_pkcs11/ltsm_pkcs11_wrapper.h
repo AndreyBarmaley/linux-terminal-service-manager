@@ -59,19 +59,65 @@ namespace LTSM
             }
             */
 
-            inline bool isHardware(void) const { return flags & CKF_HW; }
-            inline bool isEncrypt(void) const { return flags & CKF_ENCRYPT; }
-            inline bool isDecrypt(void) const { return flags & CKF_DECRYPT; }
-            inline bool isDigest(void) const { return flags & CKF_DIGEST; }
-            inline bool isSign(void) const { return flags & CKF_SIGN; }
-            inline bool isVerify(void) const { return flags & CKF_VERIFY; }
-            inline bool isWrap(void) const { return flags & CKF_WRAP; }
-            inline bool isUnwrap(void) const { return flags & CKF_UNWRAP; }
-            inline bool isGenerate(void) const { return flags & CKF_GENERATE; }
-            inline bool isDerive(void) const { return flags & CKF_DERIVE; }
+            inline bool isHardware(void) const
+            {
+                return flags & CKF_HW;
+            }
 
-            inline size_t getMinKeySize(void) const { return ulMinKeySize; }
-            inline size_t getMaxKeySize(void) const { return ulMaxKeySize; }
+            inline bool isEncrypt(void) const
+            {
+                return flags & CKF_ENCRYPT;
+            }
+
+            inline bool isDecrypt(void) const
+            {
+                return flags & CKF_DECRYPT;
+            }
+
+            inline bool isDigest(void) const
+            {
+                return flags & CKF_DIGEST;
+            }
+
+            inline bool isSign(void) const
+            {
+                return flags & CKF_SIGN;
+            }
+
+            inline bool isVerify(void) const
+            {
+                return flags & CKF_VERIFY;
+            }
+
+            inline bool isWrap(void) const
+            {
+                return flags & CKF_WRAP;
+            }
+
+            inline bool isUnwrap(void) const
+            {
+                return flags & CKF_UNWRAP;
+            }
+
+            inline bool isGenerate(void) const
+            {
+                return flags & CKF_GENERATE;
+            }
+
+            inline bool isDerive(void) const
+            {
+                return flags & CKF_DERIVE;
+            }
+
+            inline size_t getMinKeySize(void) const
+            {
+                return ulMinKeySize;
+            }
+
+            inline size_t getMaxKeySize(void) const
+            {
+                return ulMaxKeySize;
+            }
         };
 
         typedef CK_MECHANISM_TYPE MechType;
@@ -206,18 +252,30 @@ namespace LTSM
 
         struct RawDataRef : std::pair<const uint8_t*, size_t>
         {
-            RawDataRef() : std::pair<const uint8_t*, size_t>(nullptr, 0) {}
-            RawDataRef(const uint8_t* ptr, size_t len) : std::pair<const uint8_t*, size_t>(ptr, len) {}
-            RawDataRef(const std::vector<uint8_t> & v) : std::pair<const uint8_t*, size_t>(v.data(), v.size()) {}
+            RawDataRef() : std::pair<const uint8_t *, size_t>(nullptr, 0) {}
 
-            inline const uint8_t* data(void) const { return first; }
-            inline size_t         size(void) const { return second; }
+            RawDataRef(const uint8_t* ptr, size_t len) : std::pair<const uint8_t *, size_t>(ptr, len) {}
 
-            std::string         toString(void) const;
-            std::string         toHexString(std::string_view sep = ",", bool pref = true) const;
-            RawData             copy(void) const { return RawData(first, first + second); }
+            RawDataRef(const std::vector<uint8_t> & v) : std::pair<const uint8_t *, size_t>(v.data(), v.size()) {}
 
-            bool                operator==(const RawDataRef &) const;
+            inline const uint8_t* data(void) const
+            {
+                return first;
+            }
+
+            inline size_t size(void) const
+            {
+                return second;
+            }
+
+            std::string toString(void) const;
+            std::string toHexString(std::string_view sep = ",", bool pref = true) const;
+            RawData copy(void) const
+            {
+                return RawData(first, first + second);
+            }
+
+            bool operator==(const RawDataRef &) const;
         };
 
         typedef RawDataRef ObjectIdRef;
@@ -241,11 +299,22 @@ namespace LTSM
             Date() = default;
             Date(const RawDataRef &);
 
-            int                 getYear(void) const { return year; }
-            int                 getMonth(void) const { return month; }
-            int                 getDay(void) const { return day; }
+            int getYear(void) const
+            {
+                return year;
+            }
 
-            std::string         toString(std::string_view format = "%Y%m%d" /*strftime format*/) const;
+            int getMonth(void) const
+            {
+                return month;
+            }
+
+            int getDay(void) const
+            {
+                return day;
+            }
+
+            std::string toString(std::string_view format = "%Y%m%d" /*strftime format*/) const;
         };
 
         /// BaseObject
@@ -254,9 +323,9 @@ namespace LTSM
         protected:
             friend class Session;
 
-            std::vector<CK_ATTRIBUTE>  attrs;
+            std::vector<CK_ATTRIBUTE> attrs;
             std::unique_ptr<uint8_t[]> ptr;
-            ObjectHandle               handle = 0;
+            ObjectHandle handle = 0;
 
         public:
             inline static const auto types = { CKA_ID, CKA_START_DATE, CKA_END_DATE, CKA_TOKEN, CKA_PRIVATE, CKA_MODIFIABLE, CKA_LABEL };
@@ -265,20 +334,45 @@ namespace LTSM
             ObjectInfo(ObjectInfo &&) = default;
             virtual ~ObjectInfo() = default;
 
-            RawDataRef          getRawData(const CK_ATTRIBUTE_TYPE &) const;
-            bool                getBool(const CK_ATTRIBUTE_TYPE &) const;
+            RawDataRef getRawData(const CK_ATTRIBUTE_TYPE &) const;
+            bool getBool(const CK_ATTRIBUTE_TYPE &) const;
 
-            const ObjectHandle & getHandle(void) const { return handle; }
+            const ObjectHandle & getHandle(void) const
+            {
+                return handle;
+            }
 
-            ObjectIdRef         getId(void) const { return getRawData(CKA_ID); }
-            std::string         getLabel(void) const;
+            ObjectIdRef getId(void) const
+            {
+                return getRawData(CKA_ID);
+            }
 
-            Date                getStartDate(void) const { return getRawData(CKA_START_DATE); }
-            Date                getEndDate(void) const { return getRawData(CKA_END_DATE); }
+            std::string getLabel(void) const;
 
-            bool                isToken(void) const { return getBool(CKA_TOKEN); };
-            bool                isPrivate(void) const { return getBool(CKA_PRIVATE); };
-            bool                isModifiable(void) const { return getBool(CKA_MODIFIABLE); };
+            Date getStartDate(void) const
+            {
+                return getRawData(CKA_START_DATE);
+            }
+
+            Date getEndDate(void) const
+            {
+                return getRawData(CKA_END_DATE);
+            }
+
+            bool isToken(void) const
+            {
+                return getBool(CKA_TOKEN);
+            };
+
+            bool isPrivate(void) const
+            {
+                return getBool(CKA_PRIVATE);
+            };
+
+            bool isModifiable(void) const
+            {
+                return getBool(CKA_MODIFIABLE);
+            };
         };
 
         /// Certificate
@@ -286,10 +380,25 @@ namespace LTSM
         {
             inline static const auto types = { CKA_SUBJECT, CKA_ISSUER, CKA_SERIAL_NUMBER, CKA_VALUE };
 
-            RawDataRef          getRawValue(void) const { return getRawData(CKA_VALUE); }
-            RawDataRef          getSubject(void) const { return getRawData(CKA_SUBJECT); }
-            RawDataRef          getIssuer(void) const { return getRawData(CKA_ISSUER); }
-            RawDataRef          getSerialNumber(void) const { return getRawData(CKA_SERIAL_NUMBER); }
+            RawDataRef getRawValue(void) const
+            {
+                return getRawData(CKA_VALUE);
+            }
+
+            RawDataRef getSubject(void) const
+            {
+                return getRawData(CKA_SUBJECT);
+            }
+
+            RawDataRef getIssuer(void) const
+            {
+                return getRawData(CKA_ISSUER);
+            }
+
+            RawDataRef getSerialNumber(void) const
+            {
+                return getRawData(CKA_SERIAL_NUMBER);
+            }
 
             CertificateInfo() = default;
             CertificateInfo(ObjectInfo && obj) noexcept : ObjectInfo(std::move(obj)) {}
@@ -298,13 +407,27 @@ namespace LTSM
         /// PublicKey
         struct PublicKeyInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP,  };
+            inline static const auto types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP, };
 
-            RawDataRef          getSubject(void) const { return getRawData(CKA_SUBJECT); }
+            RawDataRef getSubject(void) const
+            {
+                return getRawData(CKA_SUBJECT);
+            }
 
-            bool                isEncrypt(void) const{ return getBool(CKA_ENCRYPT); }
-            bool                isVerify(void) const{ return getBool(CKA_VERIFY); }
-            bool                isWrap(void) const{ return getBool(CKA_WRAP); }
+            bool isEncrypt(void) const
+            {
+                return getBool(CKA_ENCRYPT);
+            }
+
+            bool isVerify(void) const
+            {
+                return getBool(CKA_VERIFY);
+            }
+
+            bool isWrap(void) const
+            {
+                return getBool(CKA_WRAP);
+            }
 
             PublicKeyInfo() = default;
             PublicKeyInfo(ObjectInfo && obj) noexcept : ObjectInfo(std::move(obj)) {}
@@ -315,21 +438,39 @@ namespace LTSM
         {
             inline static const auto types = { CKA_SUBJECT, CKA_DECRYPT, CKA_SIGN, CKA_UNWRAP, CKA_ALWAYS_AUTHENTICATE };
 
-            RawDataRef         getSubject(void) const { return getRawData(CKA_SUBJECT); }
+            RawDataRef getSubject(void) const
+            {
+                return getRawData(CKA_SUBJECT);
+            }
 
-            bool               isDecrypt(void) const{ return getBool(CKA_DECRYPT); }
-            bool               isSign(void) const{ return getBool(CKA_SIGN); }
-            bool               isUnwrap(void) const{ return getBool(CKA_UNWRAP); }
-            bool               isAlwaysAuthenticate(void) const{ return getBool(CKA_ALWAYS_AUTHENTICATE); }
+            bool isDecrypt(void) const
+            {
+                return getBool(CKA_DECRYPT);
+            }
+
+            bool isSign(void) const
+            {
+                return getBool(CKA_SIGN);
+            }
+
+            bool isUnwrap(void) const
+            {
+                return getBool(CKA_UNWRAP);
+            }
+
+            bool isAlwaysAuthenticate(void) const
+            {
+                return getBool(CKA_ALWAYS_AUTHENTICATE);
+            }
 
             PrivateKeyInfo() = default;
             PrivateKeyInfo(ObjectInfo && obj) noexcept : ObjectInfo(std::move(obj)) {}
         };
 
         // API
-        LibraryPtr              loadLibrary(std::string_view);
-        SessionPtr              createSession(const SlotId &, bool rwmode, const LibraryPtr &);
-        SlotList                getSlots(bool tokenPresentOnly, const LibraryPtr &);
+        LibraryPtr loadLibrary(std::string_view);
+        SessionPtr createSession(const SlotId &, bool rwmode, const LibraryPtr &);
+        SlotList getSlots(bool tokenPresentOnly, const LibraryPtr &);
 
         /// Library
         class Library
@@ -345,8 +486,8 @@ namespace LTSM
         protected:
             friend class Session;
 
-            CK_SESSION_HANDLE   sessionOpen(const SlotId &, bool rwmode);
-            void                sessionClose(CK_SESSION_HANDLE);
+            CK_SESSION_HANDLE sessionOpen(const SlotId &, bool rwmode);
+            void sessionClose(CK_SESSION_HANDLE);
 
         public:
             Library();
@@ -357,10 +498,13 @@ namespace LTSM
 
             ~Library();
 
-            CK_FUNCTION_LIST_PTR func(void) { return pFunctionList; }
+            CK_FUNCTION_LIST_PTR func(void)
+            {
+                return pFunctionList;
+            }
 
-            LibraryInfoPtr      getLibraryInfo(void) const;
-            bool                waitSlotEvent(bool async, SlotId & res) const;
+            LibraryInfoPtr getLibraryInfo(void) const;
+            bool waitSlotEvent(bool async, SlotId & res) const;
         };
 
         /// Slot
@@ -368,72 +512,85 @@ namespace LTSM
         {
         protected:
             std::weak_ptr<Library> weak;
-            SlotId              id = ULONG_MAX;
+            SlotId id = ULONG_MAX;
 
         public:
             Slot(const SlotId &, const LibraryPtr &);
             virtual ~Slot() {}
 
-            const SlotId & slotId(void) const { return id; }
+            const SlotId & slotId(void) const
+            {
+                return id;
+            }
 
-            MechList            getMechanisms(void) const;
+            MechList getMechanisms(void) const;
 
-            bool                getSlotInfo(SlotInfo &) const;
-            bool                getTokenInfo(TokenInfo &) const;
+            bool getSlotInfo(SlotInfo &) const;
+            bool getTokenInfo(TokenInfo &) const;
 
-            SlotInfoPtr         getSlotInfo(void) const;
-            TokenInfoPtr        getTokenInfo(void) const;
-            MechInfoPtr         getMechInfo(const MechType &) const;
+            SlotInfoPtr getSlotInfo(void) const;
+            TokenInfoPtr getTokenInfo(void) const;
+            MechInfoPtr getMechInfo(const MechType &) const;
         };
 
         /// Session
         class Session : public Slot
         {
-            CK_SESSION_HANDLE   sid = CK_INVALID_HANDLE;
-            bool                islogged = false;
+            CK_SESSION_HANDLE sid = CK_INVALID_HANDLE;
+            bool islogged = false;
 
         public:
             Session(const SlotId &, bool rwmode, const LibraryPtr &);
             ~Session();
 
-            SessionInfoPtr      getInfo(void) const;
-            RawData             generateRandom(size_t) const;
+            SessionInfoPtr getInfo(void) const;
+            RawData generateRandom(size_t) const;
 
-            RawData             digestData(const void* ptr, size_t len, const MechType &) const;
+            RawData digestData(const void* ptr, size_t len, const MechType &) const;
 
-            RawData             digestMD5(const void* ptr, size_t len) const;
-            RawData             digestSHA1(const void* ptr, size_t len) const;
-            RawData             digestSHA256(const void* ptr, size_t len) const;
+            RawData digestMD5(const void* ptr, size_t len) const;
+            RawData digestSHA1(const void* ptr, size_t len) const;
+            RawData digestSHA256(const void* ptr, size_t len) const;
 
-            bool                login(std::string_view pin, bool admin = false);
-            void                logout(void);
+            bool login(std::string_view pin, bool admin = false);
+            void logout(void);
 
-            ObjectList          findTokenObjects(const ObjectClass &, size_t maxObjects = 32) const;
-            ObjectList          findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE*, size_t counts) const;
+            ObjectList findTokenObjects(const ObjectClass &, size_t maxObjects = 32) const;
+            ObjectList findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE*, size_t counts) const;
 
-            ObjectHandle        findPublicKey(const ObjectIdRef &) const;
-            ObjectHandle        findPrivateKey(const ObjectIdRef &) const;
+            ObjectHandle findPublicKey(const ObjectIdRef &) const;
+            ObjectHandle findPrivateKey(const ObjectIdRef &) const;
 
-            ObjectList          getCertificates(bool havePulicPrivateKeys = false) const;
-            ObjectList          getPublicKeys(void) const { return findTokenObjects(CKO_PUBLIC_KEY); }
-            ObjectList          getPrivateKeys(void) const { return findTokenObjects(CKO_PRIVATE_KEY); }
+            ObjectList getCertificates(bool havePulicPrivateKeys = false) const;
+            ObjectList getPublicKeys(void) const
+            {
+                return findTokenObjects(CKO_PUBLIC_KEY);
+            }
 
-            ObjectInfo          getObjectInfo(const ObjectHandle &, std::initializer_list<CK_ATTRIBUTE_TYPE> = {}) const;
+            ObjectList getPrivateKeys(void) const
+            {
+                return findTokenObjects(CKO_PRIVATE_KEY);
+            }
 
-            CertificateInfo     getCertificateInfo(const ObjectHandle &) const;
-            PublicKeyInfo       getPublicKeyInfo(const ObjectHandle &) const;
-            PrivateKeyInfo      getPrivateKeyInfo(const ObjectHandle &) const;
+            ObjectInfo getObjectInfo(const ObjectHandle &, std::initializer_list<CK_ATTRIBUTE_TYPE> = {}) const;
 
-            bool                getAttributes(const ObjectHandle &, const CK_ATTRIBUTE*, size_t counts) const;
+            CertificateInfo getCertificateInfo(const ObjectHandle &) const;
+            PublicKeyInfo getPublicKeyInfo(const ObjectHandle &) const;
+            PrivateKeyInfo getPrivateKeyInfo(const ObjectHandle &) const;
 
-            ssize_t             getAttribLength(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
-            RawData             getAttribData(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
+            bool getAttributes(const ObjectHandle &, const CK_ATTRIBUTE*, size_t counts) const;
 
-            RawData             signData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
-        //    bool                verifyData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+            ssize_t getAttribLength(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
+            RawData getAttribData(const ObjectHandle &, const CK_ATTRIBUTE_TYPE &) const;
 
-            RawData             encryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
-            RawData             decryptData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+            RawData signData(const ObjectIdRef & certId, const void* ptr, size_t len,
+                                         const MechType & = CKM_RSA_PKCS) const;
+            // bool                verifyData(const ObjectIdRef & certId, const void* ptr, size_t len, const MechType & = CKM_RSA_PKCS) const;
+
+            RawData encryptData(const ObjectIdRef & certId, const void* ptr, size_t len,
+                                            const MechType & = CKM_RSA_PKCS) const;
+            RawData decryptData(const ObjectIdRef & certId, const void* ptr, size_t len,
+                                            const MechType & = CKM_RSA_PKCS) const;
         };
 
     } // PKCS11

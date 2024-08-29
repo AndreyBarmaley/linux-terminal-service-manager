@@ -51,7 +51,6 @@ namespace LTSM
     {
         std::cout << std::endl <<
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
-
         std::cout << std::endl <<
                   "usage: " << prog <<
                   ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug] [--syslog] "
@@ -67,10 +66,10 @@ namespace LTSM
                   "[--vp8]" <<
 #endif
                   "[--encoding <string>] " <<
-                  "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] [--share-folder <folder>] " <<
+                  "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] [--share-folder <folder>] "
+                  <<
                   "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " << "[--pcsc11-auth [" << librtdef << "]] " <<
                   "[--pcsc] [--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
-
         std::cout << std::endl << "arguments:" << std::endl <<
                   "    --debug (debug mode)" << std::endl <<
                   "    --syslog (to syslog)" << std::endl <<
@@ -219,8 +218,7 @@ namespace LTSM
 
                 auto encodings = supportedEncodings();
 
-                if(std::none_of(encodings.begin(), encodings.end(),
-                        [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; }))
+                if(std::none_of(encodings.begin(), encodings.end(), [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; }))
                 {
                     Application::warning("%s: incorrect encoding: %s", __FUNCTION__,
                                          prefferedEncoding.c_str());
@@ -332,8 +330,12 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--share-folder") && it + 1 < argc)
             {
                 auto dir = argv[it + 1];
+
                 if(std::filesystem::is_directory(dir))
+                {
                     shareFolders.emplace_front(argv[it + 1]);
+                }
+
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--tls-priority") && it + 1 < argc)
@@ -375,13 +377,13 @@ namespace LTSM
                 try
                 {
                     frameRate = std::stoi(argv[it + 1]);
+
                     if(frameRate < 5)
                     {
                         frameRate = 5;
                         std::cerr << "set frame rate: " << frameRate << std::endl;
                     }
-                    else
-                    if(frameRate > 25)
+                    else if(frameRate > 25)
                     {
                         frameRate = 25;
                         std::cerr << "set frame rate: " << frameRate << std::endl;
@@ -477,18 +479,22 @@ namespace LTSM
         if(rfbsec.passwdFile.empty())
         {
             if(auto env = std::getenv("LTSM_PASSWORD"))
+            {
                 rfbsec.passwdFile.assign(env);
+            }
 
             if(passfile == "-" || Tools::lower(passfile) == "stdin")
             {
                 std::getline(std::cin, rfbsec.passwdFile);
             }
-            else
-            if(std::filesystem::is_regular_file(passfile))
+            else if(std::filesystem::is_regular_file(passfile))
             {
                 std::ifstream ifs(passfile);
+
                 if(ifs)
+                {
                     std::getline(ifs, rfbsec.passwdFile);
+                }
             }
         }
 
@@ -507,13 +513,18 @@ namespace LTSM
             if(username.empty())
             {
                 if(auto env = std::getenv("USER"))
+                {
                     rfbsec.krb5Name.assign(env);
-                else
-                if(auto env = std::getenv("USERNAME"))
+                }
+                else if(auto env = std::getenv("USERNAME"))
+                {
                     rfbsec.krb5Name.assign(env);
+                }
             }
             else
+            {
                 rfbsec.krb5Name.assign(username);
+            }
         }
 
         if(rfbsec.authKrb5)
@@ -541,6 +552,7 @@ namespace LTSM
         {
             this->rfbMessagesLoop();
         });
+
         // xcb thread: wait xkb event
         auto thxcb = std::thread([this]()
         {
@@ -577,7 +589,7 @@ namespace LTSM
             }
 
             if(! dropFiles.empty() &&
-                std::chrono::steady_clock::now() - dropStart > 700ms)
+                    std::chrono::steady_clock::now() - dropStart > 700ms)
             {
                 ChannelClient::sendSystemTransferFiles(dropFiles);
                 dropFiles.clear();
@@ -585,7 +597,7 @@ namespace LTSM
 
             // send clipboard
             if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
-                ! focusLost && SDL_HasClipboardText())
+                    ! focusLost && SDL_HasClipboardText())
             {
                 if(thclip.joinable())
                 {
@@ -602,7 +614,7 @@ namespace LTSM
                                                                    SDL_strlen(ptr));
 
                             if(clipboardBufRemote != clipboardBufSdl &&
-                                clipboardBufLocal != clipboardBufSdl)
+                                    clipboardBufLocal != clipboardBufSdl)
                             {
                                 clipboardBufLocal = clipboardBufSdl;
                                 this->sendCutTextEvent(ptr, SDL_strlen(ptr));
@@ -748,7 +760,7 @@ namespace LTSM
 
                 // ctrl + F10 -> fast close
                 if(ev.key()->keysym.sym == SDLK_F10 &&
-                    (KMOD_CTRL & SDL_GetModState()))
+                        (KMOD_CTRL & SDL_GetModState()))
                 {
                     exitEvent();
                     return true;
@@ -756,7 +768,7 @@ namespace LTSM
 
                 // ctrl + F11 -> fullscreen toggle
                 if(ev.key()->keysym.sym == SDLK_F11 &&
-                    (KMOD_CTRL & SDL_GetModState()))
+                        (KMOD_CTRL & SDL_GetModState()))
                 {
                     if(fullscreen)
                     {
@@ -825,7 +837,7 @@ namespace LTSM
             {
                 // resize event
                 if(ev.user()->code == LocalEvent::Resize ||
-                    ev.user()->code == LocalEvent::ResizeCont)
+                        ev.user()->code == LocalEvent::ResizeCont)
                 {
                     auto width = (size_t) ev.user()->data1;
                     auto height = (size_t) ev.user()->data2;
@@ -883,7 +895,7 @@ namespace LTSM
         SDL_UserEvent event;
         event.type = SDL_USEREVENT;
         event.code = contUpdateResume ? LocalEvent::ResizeCont :
-                          LocalEvent::Resize;
+                     LocalEvent::Resize;
         event.data1 = (void*)(ptrdiff_t) nsz.width;
         event.data2 = (void*)(ptrdiff_t) nsz.height;
 
@@ -1136,7 +1148,7 @@ namespace LTSM
                                ", %" PRIu16 "], sdl format: %s",
                                __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
-                      reg.height, clientPf.bitsPerPixel(), reg.width * clientPf.bytePerPixel(),
+                      reg.height, clientPf.bitsPerPixel(), reg.width* clientPf.bytePerPixel(),
                       sdlFormat);
 
             if(! sf)
@@ -1227,10 +1239,13 @@ namespace LTSM
         if(username.empty())
         {
             if(auto env = std::getenv("USER"))
+            {
                 jo.push("username", env);
-            else
-            if(auto env = std::getenv("USERNAME"))
+            }
+            else if(auto env = std::getenv("USERNAME"))
+            {
                 jo.push("username", env);
+            }
         }
         else
         {
@@ -1263,8 +1278,12 @@ namespace LTSM
         if(! shareFolders.empty())
         {
             JsonArrayStream ja;
-            for(auto & dir: shareFolders)
+
+            for(auto & dir : shareFolders)
+            {
                 ja.push(dir);
+            }
+
             jo.push("redirect:fuse", ja.flush());
         }
 
@@ -1284,10 +1303,15 @@ namespace LTSM
 #ifdef LTSM_WITH_OPUS
             allowEncoding.emplace_front("opus");
 #endif
-            if(std::any_of(allowEncoding.begin(), allowEncoding.end(), [&](auto & enc){ return enc == audioEncoding; }))
+
+            if(std::any_of(allowEncoding.begin(), allowEncoding.end(), [&](auto & enc) { return enc == audioEncoding; }))
+            {
                 jo.push("redirect:audio", audioEncoding);
+            }
             else
+            {
                 Application::warning("%s: unsupported audio: %s", __FUNCTION__, audioEncoding.c_str());
+            }
         }
 
         return jo.flush();
@@ -1311,11 +1335,12 @@ namespace LTSM
         bell(75);
     }
 
-    bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content, const Channel::ConnectorMode & mode) const
+    bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
+                                     const Channel::ConnectorMode & mode) const
     {
         if(type == Channel::ConnectorType::Fuse)
         {
-            if(! std::any_of(shareFolders.begin(), shareFolders.end(), [&](auto & val){ return val == content; }))
+            if(! std::any_of(shareFolders.begin(), shareFolders.end(), [&](auto & val) { return val == content; }))
             {
                 Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "share", content.c_str());
                 return false;

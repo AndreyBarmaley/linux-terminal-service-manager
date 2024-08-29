@@ -68,8 +68,9 @@ namespace LTSM
 
     struct pcsc_error : public std::runtime_error
     {
-        explicit pcsc_error(const std::string & what) : std::runtime_error(what){}
-        explicit pcsc_error(const char* what) : std::runtime_error(what){}
+        explicit pcsc_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit pcsc_error(const char* what) : std::runtime_error(what) {}
     };
 }
 

@@ -47,18 +47,18 @@ namespace LTSM
         {
         }
 
-/*
-        void xcbShmInit(uid_t uid)
-        {
-            if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM)))
-            {
-                auto dsz = XCB::RootDisplay::size();
-                auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
+        /*
+                void xcbShmInit(uid_t uid)
+                {
+                    if(auto ext = static_cast<const XCB::ModuleShm*>(XCB::RootDisplay::getExtension(XCB::Module::SHM)))
+                    {
+                        auto dsz = XCB::RootDisplay::size();
+                        auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
 
-                shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
-            }
-        }
-*/
+                        shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+                    }
+                }
+        */
 
         bool sdlFakeInputTest(int type, const SDL_Keysym & keysym)
         {
@@ -68,6 +68,7 @@ namespace LTSM
                 auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
                 return keycode != XCB_NO_SYMBOL ? test->fakeInputRaw(root(), type, keycode, 0, 0) : false;
             }
+
             return false;
         }
 
@@ -103,7 +104,10 @@ namespace LTSM
         {
             auto ev = SDL::Window::poolEvent();
 
-            if(! ev.isValid()) return false;
+            if(! ev.isValid())
+            {
+                return false;
+            }
 
             switch(ev.type())
             {
@@ -133,6 +137,7 @@ namespace LTSM
                         auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
                         test->fakeInputRaw(root(), XCB_BUTTON_PRESS, ev.button()->button, coordX, coordY);
                     }
+
                     break;
 
                 case SDL_MOUSEBUTTONUP:
@@ -141,6 +146,7 @@ namespace LTSM
                         auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
                         test->fakeInputRaw(root(), XCB_BUTTON_RELEASE, ev.button()->button, coordX, coordY);
                     }
+
                     break;
 
                 case SDL_MOUSEMOTION:
@@ -149,6 +155,7 @@ namespace LTSM
                         auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
                         test->fakeInputRaw(root(), XCB_MOTION_NOTIFY, 0, coordX, coordY);
                     }
+
                     break;
 
                 case SDL_MOUSEWHEEL:
@@ -158,8 +165,7 @@ namespace LTSM
                         SDL_GetMouseState(& posx, &posy);
                         fakeInputButton(4, XCB::Point(posx, posy));
                     }
-                    else
-                    if(ev.wheel()->y < 0)
+                    else if(ev.wheel()->y < 0)
                     {
                         int posx, posy;
                         SDL_GetMouseState(& posx, &posy);
@@ -179,6 +185,7 @@ namespace LTSM
                             XCB::RootDisplay::setClipboard((const uint8_t*) clipboard.get(), len);
                         }
                     }
+
                     break;
 
                 case SDL_QUIT:
@@ -195,7 +202,6 @@ namespace LTSM
         int start(void)
         {
             const size_t bytePerPixel = bitsPerPixel() >> 3;
-
             bool quit = false;
 
             while(! quit)
@@ -218,21 +224,20 @@ namespace LTSM
 
                     if(auto reply = copyRootImageRegion(damage))
                     {
-                        const size_t alignRowBytes = reply->size() > (damage.width * damage.height * bytePerPixel) ?
+                        const size_t alignRowBytes = reply->size() > (damage.width* damage.height* bytePerPixel) ?
                                                      reply->size() / damage.height - damage.width * bytePerPixel : 0;
-
                         SDL_Rect dstrt = { damage.x, damage.y, damage.width, damage.height };
-
                         auto format = SDL_MasksToPixelFormatEnum(reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask, 0);
+
                         if(SDL_PIXELFORMAT_UNKNOWN == format)
+                        {
                             throw sdl_error("unknown pixel format");
+                        }
 
                         auto tx = createTexture(damage.width, damage.height, format);
-                        tx.updateRect(nullptr, reply->data(), damage.width * bytePerPixel + alignRowBytes);
-
+                        tx.updateRect(nullptr, reply->data(), damage.width* bytePerPixel + alignRowBytes);
                         renderTexture(tx.get(), nullptr, nullptr, & dstrt);
                         renderPresent();
-
                         XCB::RootDisplay::damageSubtrack(damage);
                     }
 
@@ -240,7 +245,9 @@ namespace LTSM
                 }
 
                 if(delay)
+                {
                     SDL_Delay(5);
+                }
             }
 
             return EXIT_SUCCESS;
@@ -250,7 +257,8 @@ namespace LTSM
 
 int printHelp(const char* prog)
 {
-    std::cout << "usage: " << prog << " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug] [--syslog]" << std::endl;
+    std::cout << "usage: " << prog <<
+              " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug] [--syslog]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -262,7 +270,6 @@ int main(int argc, const char** argv)
     std::string xauth;
     std::string geometry;
     std::string title = "SDL2X11";
-
     LTSM::Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::Info);
 
     if(auto val = getenv("SDL2X11_SCALE"))
@@ -285,23 +292,29 @@ int main(int argc, const char** argv)
     if(1 < argc)
     {
         if(0 == std::strcmp(argv[1], "--help") || 0 == std::strcmp(argv[1], "-h"))
+        {
             return printHelp(argv[0]);
+        }
 
         for(int it = 1; it < argc; ++it)
         {
             if(0 == std::strcmp(argv[it], "--debug"))
+            {
                 LTSM::Application::setDebugLevel(LTSM::DebugLevel::Debug);
-            else
-            if(0 == std::strcmp(argv[it], "--syslog"))
+            }
+            else if(0 == std::strcmp(argv[it], "--syslog"))
+            {
                 LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog);
-            else
-            if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
+            }
+            else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc)
+            {
                 xauth.assign(argv[it + 1]);
-            else
-            if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
+            }
+            else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc)
+            {
                 title.assign(argv[it + 1]);
-            else
-            if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc)
+            }
+            else if(0 == std::strcmp(argv[it], "--scale") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
                 size_t idx;
@@ -317,8 +330,7 @@ int main(int argc, const char** argv)
                     return printHelp(argv[0]);
                 }
             }
-            else
-            if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
+            else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
                 const char* val = argv[it + 1];
 
@@ -335,14 +347,20 @@ int main(int argc, const char** argv)
         }
 
         if(xauth.size())
+        {
             setenv("XAUTHORITY", xauth.c_str(), 1);
+        }
     }
 
     if(argc < 2 || display < 0 || xauth.empty())
+    {
         return printHelp(argv[0]);
+    }
 
     if(0 > SDL_Init(SDL_INIT_VIDEO))
+    {
         return -1;
+    }
 
     try
     {
@@ -355,6 +373,5 @@ int main(int argc, const char** argv)
     }
 
     SDL_Quit();
-
     return 0;
 }

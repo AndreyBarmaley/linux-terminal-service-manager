@@ -35,76 +35,91 @@ namespace LTSM
     {
         class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder
         {
-            XCB::Region         clientRegion;
-            XCB::Region         damageRegion;
+            XCB::Region clientRegion;
+            XCB::Region damageRegion;
 
-            std::mutex          serverLock;
+            std::mutex serverLock;
 
-            std::atomic<int>    pressedMask{0};
-            std::atomic<int>    randrSequence{0};
-	    std::atomic<int>	sendUpdateFPS{0};
+            std::atomic<int> pressedMask{0};
+            std::atomic<int> randrSequence{0};
+            std::atomic<int> sendUpdateFPS{0};
 
-            std::atomic<bool>   displayResizeNegotiation{false};
-            std::atomic<bool>   displayResizeProcessed{false};
-            std::atomic<bool>   clientUpdateReq{false};
-            std::atomic<bool>   clientUpdateCursor{false};
-            std::atomic<bool>   fullscreenUpdateReq{false};
-            std::atomic<bool>   xcbMessages{true};
+            std::atomic<bool> displayResizeNegotiation{false};
+            std::atomic<bool> displayResizeProcessed{false};
+            std::atomic<bool> clientUpdateReq{false};
+            std::atomic<bool> clientUpdateCursor{false};
+            std::atomic<bool> fullscreenUpdateReq{false};
+            std::atomic<bool> xcbMessages{true};
 
-            XCB::ShmIdShared    shm;
+            XCB::ShmIdShared shm;
 
         protected:
             // root display
-            void                xfixesCursorChangedEvent(void) override;
-            void                damageRegionEvent(const XCB::Region &) override;
-            void                randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
-            void                randrScreenSetSizeEvent(const XCB::Size &) override;
-            void                clipboardChangedEvent(const std::vector<uint8_t> &) override;
-            void                displayConnectedEvent(void) override;
- 
-	    // rfb server encoding
-            XcbFrameBuffer      xcbFrameBuffer(const XCB::Region &) const override;
-            virtual void        xcbFrameBufferModify(FrameBuffer &) const {}
+            void xfixesCursorChangedEvent(void) override;
+            void damageRegionEvent(const XCB::Region &) override;
+            void randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+            void randrScreenSetSizeEvent(const XCB::Size &) override;
+            void clipboardChangedEvent(const std::vector<uint8_t> &) override;
+            void displayConnectedEvent(void) override;
 
-            XCB::RootDisplay*   xcbDisplay(void) { return this; }
-            void                xcbShmInit(uid_t = 0);
-            bool                xcbProcessingEvents(void);
+            // rfb server encoding
+            XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const override;
+            virtual void xcbFrameBufferModify(FrameBuffer &) const {}
 
-            virtual bool        xcbAllowMessages(void) const = 0;
-            virtual void        xcbDisableMessages(bool) = 0;
-            virtual bool        xcbNoDamageOption(void) const = 0;
-            virtual size_t      frameRateOption(void) const = 0;
+            XCB::RootDisplay* xcbDisplay(void)
+            {
+                return this;
+            }
 
-            const XCB::Region & getClientRegion(void) const { return clientRegion; }
+            void xcbShmInit(uid_t = 0);
+            bool xcbProcessingEvents(void);
 
-            virtual bool        rfbClipboardEnable(void) const = 0;
-            virtual bool        rfbDesktopResizeEnabled(void) const = 0;
+            virtual bool xcbAllowMessages(void) const = 0;
+            virtual void xcbDisableMessages(bool) = 0;
+            virtual bool xcbNoDamageOption(void) const = 0;
+            virtual size_t frameRateOption(void) const = 0;
+
+            const XCB::Region & getClientRegion(void) const
+            {
+                return clientRegion;
+            }
+
+            virtual bool rfbClipboardEnable(void) const = 0;
+            virtual bool rfbDesktopResizeEnabled(void) const = 0;
             virtual SecurityInfo rfbSecurityInfo(void) const = 0;
-            virtual int         rfbUserKeycode(uint32_t) const { return 0; }
+            virtual int rfbUserKeycode(uint32_t) const
+            {
+                return 0;
+            }
 
-            virtual void        serverHandshakeVersionEvent(void) {}
-            virtual void        serverSecurityInitEvent(void) {}
-            virtual void        serverConnectedEvent(void) {}
-            virtual void        serverMainLoopEvent(void) {}
-            virtual void        serverDisplayResizedEvent(const XCB::Size &) {}
-            virtual void        serverEncodingsEvent(void) {}
+            virtual void serverHandshakeVersionEvent(void) {}
 
-            void                sendUpdateRichCursor(void);
+            virtual void serverSecurityInitEvent(void) {}
+
+            virtual void serverConnectedEvent(void) {}
+
+            virtual void serverMainLoopEvent(void) {}
+
+            virtual void serverDisplayResizedEvent(const XCB::Size &) {}
+
+            virtual void serverEncodingsEvent(void) {}
+
+            void sendUpdateRichCursor(void);
 
         public:
             X11Server(int fd = -1) : ServerEncoder(fd) {}
 
-            int		        rfbCommunication(void);
+            int rfbCommunication(void);
 
             // RFB::ServerEncoder
-            void                recvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;
-            void                recvSetEncodingsEvent(const std::vector<int> &) override;
-            void                recvKeyEvent(bool pressed, uint32_t keysym) override;
-            void                recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
-            void                recvCutTextEvent(const std::vector<uint8_t> &) override;
-            void                recvFramebufferUpdateEvent(bool full, const XCB::Region &) override;
-            void                sendFrameBufferUpdateEvent(const XCB::Region &) override;
-            void                recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> &) override;
+            void recvPixelFormatEvent(const PixelFormat &, bool bigEndian) override;
+            void recvSetEncodingsEvent(const std::vector<int> &) override;
+            void recvKeyEvent(bool pressed, uint32_t keysym) override;
+            void recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
+            void recvCutTextEvent(const std::vector<uint8_t> &) override;
+            void recvFramebufferUpdateEvent(bool full, const XCB::Region &) override;
+            void sendFrameBufferUpdateEvent(const XCB::Region &) override;
+            void recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> &) override;
         };
     }
 }

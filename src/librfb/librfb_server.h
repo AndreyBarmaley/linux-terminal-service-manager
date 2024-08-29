@@ -40,38 +40,38 @@ namespace LTSM
 
     namespace RFB
     {
-	int serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings);
+        int serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings);
 
         /// ServerEncoder
         class ServerEncoder : public ChannelListener, protected EncoderStream
         {
-            std::vector<int>    clientEncodings;
-	    std::string		clientAuthName;
-	    std::string		clientAuthDomain;
+            std::vector<int> clientEncodings;
+            std::string clientAuthName;
+            std::string clientAuthDomain;
 
-            std::unique_ptr<NetworkStream> socket;      /// socket layer
-            std::unique_ptr<TLS::Stream> tls;           /// tls layer
+            std::unique_ptr<NetworkStream> socket; /// socket layer
+            std::unique_ptr<TLS::Stream> tls; /// tls layer
             std::unique_ptr<EncodingBase> encoder;
 
-            PixelFormat         clientPf;
-            ColorMap            colourMap;
-            std::mutex          sendLock;
+            PixelFormat clientPf;
+            ColorMap colourMap;
+            std::mutex sendLock;
 
-            std::atomic<bool>   rfbMessages{true};
-            std::atomic<bool>   fbUpdateProcessing{false};
+            std::atomic<bool> rfbMessages{true};
+            std::atomic<bool> fbUpdateProcessing{false};
 
-            mutable size_t      netStatRx = 0;
-            mutable size_t      netStatTx = 0;
+            mutable size_t netStatRx = 0;
+            mutable size_t netStatTx = 0;
 
-            NetworkStream*      streamIn = nullptr;
-            NetworkStream*      streamOut = nullptr;
+            NetworkStream* streamIn = nullptr;
+            NetworkStream* streamOut = nullptr;
 
-            bool                clientLtsmSupported = false;
-            bool                clientVideoSupported = false;
-            bool                clientTrueColor = true;
-            bool                clientBigEndian = false;
-            bool                continueUpdatesSupport = false;
-            bool                continueUpdatesProcessed = false;
+            bool clientLtsmSupported = false;
+            bool clientVideoSupported = false;
+            bool clientTrueColor = true;
+            bool clientBigEndian = false;
+            bool continueUpdatesSupport = false;
+            bool continueUpdatesProcessed = false;
 
         protected:
             friend class EncodingBase;
@@ -82,99 +82,114 @@ namespace LTSM
             friend class EncodingZlib;
             friend class EncodingFFmpeg;
 
-            const EncodingBase* getEncoder(void) const { return encoder.get(); }
+            const EncodingBase* getEncoder(void) const
+            {
+                return encoder.get();
+            }
 
             // ServerEncoder
             virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
             virtual std::list<std::string> serverDisabledEncodings(void) const = 0;
 
             // network stream interface
-            void                sendFlush(void) override;
-            void                sendRaw(const void* ptr, size_t len) override;
-            void                recvRaw(void* ptr, size_t len) const override;
-            bool                hasInput(void) const override;
-            size_t              hasData(void) const override;
-            uint8_t             peekInt8(void) const override;
+            void sendFlush(void) override;
+            void sendRaw(const void* ptr, size_t len) override;
+            void recvRaw(void* ptr, size_t len) const override;
+            bool hasInput(void) const override;
+            size_t hasData(void) const override;
+            uint8_t peekInt8(void) const override;
 
-            std::string         serverEncryptionInfo(void) const;
-            virtual void        serverSelectEncodingsEvent(void) {}
+            std::string serverEncryptionInfo(void) const;
+            virtual void serverSelectEncodingsEvent(void) {}
 
-            void                setEncodingDebug(int v);
-            void                setEncodingThreads(int v);
-            bool                isClientLtsmSupported(void) const;
-            bool                isClientVideoSupported(void) const;
-            bool                isClientSupportedEncoding(int) const;
-            bool                isClientEncoding(int) const;
-            bool                isContinueUpdatesSupport(void) const;
-            bool                isContinueUpdatesProcessed(void) const;
+            void setEncodingDebug(int v);
+            void setEncodingThreads(int v);
+            bool isClientLtsmSupported(void) const;
+            bool isClientVideoSupported(void) const;
+            bool isClientSupportedEncoding(int) const;
+            bool isClientEncoding(int) const;
+            bool isContinueUpdatesSupport(void) const;
+            bool isContinueUpdatesProcessed(void) const;
 
-            bool                isUpdateProcessed(void) const;
-            void                waitUpdateProcess(void);
+            bool isUpdateProcessed(void) const;
+            void waitUpdateProcess(void);
 
-            bool                serverSelectClientEncoding(void);
+            bool serverSelectClientEncoding(void);
 
-            bool                authVncInit(const std::string &);
-            bool                authVenCryptInit(const SecurityInfo &);
+            bool authVncInit(const std::string &);
+            bool authVenCryptInit(const SecurityInfo &);
 
-            bool                sendFrameBufferUpdate(const FrameBuffer &);
-            void                sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
-            void                sendColourMap(int first);
-            void                sendBellEvent(void);
-            void                sendCutTextEvent(const std::vector<uint8_t> &);
-            void                sendContinuousUpdates(bool enable);
-            bool                sendUpdateSafe(const XCB::Region &);
-            void                sendEncodingLtsmSupported(void);
-            void                recvChannelSystem(const std::vector<uint8_t> &) override;
-            bool                serverSide(void) const override { return true; }
+            bool sendFrameBufferUpdate(const FrameBuffer &);
+            void sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
+            void sendColourMap(int first);
+            void sendBellEvent(void);
+            void sendCutTextEvent(const std::vector<uint8_t> &);
+            void sendContinuousUpdates(bool enable);
+            bool sendUpdateSafe(const XCB::Region &);
+            void sendEncodingLtsmSupported(void);
+            void recvChannelSystem(const std::vector<uint8_t> &) override;
+            bool serverSide(void) const override
+            {
+                return true;
+            }
 
-            void                recvPixelFormat(void);
-            void                recvSetEncodings(void);
-            void                recvKeyCode(void);
-            void                recvPointer(void);
-            void                recvCutText(void);
-            void                recvFramebufferUpdate(void);
-            void                recvSetContinuousUpdates(void);
-            void                recvSetDesktopSize(void);
+            void recvPixelFormat(void);
+            void recvSetEncodings(void);
+            void recvKeyCode(void);
+            void recvPointer(void);
+            void recvCutText(void);
+            void recvFramebufferUpdate(void);
+            void recvSetContinuousUpdates(void);
+            void recvSetDesktopSize(void);
 
         public:
             ServerEncoder(int sockfd = 0);
 
             // EncoderStream interface
             const PixelFormat & clientFormat(void) const override;
-            bool                clientIsBigEndian(void) const override;
+            bool clientIsBigEndian(void) const override;
 
-            int                 serverHandshakeVersion(void);
-            bool                serverSecurityInit(int protover, const SecurityInfo &);
-            void                serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
-            bool                rfbMessagesRunning(void) const;
-            void                rfbMessagesLoop(void);
-            void                rfbMessagesShutdown(void);
+            int serverHandshakeVersion(void);
+            bool serverSecurityInit(int protover, const SecurityInfo &);
+            void serverClientInit(std::string_view, const XCB::Size & size, int depth, const PixelFormat &);
+            bool rfbMessagesRunning(void) const;
+            void rfbMessagesLoop(void);
+            void rfbMessagesShutdown(void);
 
-            void                serverSelectEncodings(void);
+            void serverSelectEncodings(void);
 
-	    void		sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
-            void                sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
+            void sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
+            void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
-            void                clientDisconnectedEvent(int display);
-            void                displayResizeEvent(const XCB::Size &);
+            void clientDisconnectedEvent(int display);
+            void displayResizeEvent(const XCB::Size &);
 
-            int                 sendPixel(uint32_t pixel);
-            int                 sendCPixel(uint32_t pixel);
-            int                 sendRunLength(size_t length);
+            int sendPixel(uint32_t pixel);
+            int sendCPixel(uint32_t pixel);
+            int sendRunLength(size_t length);
 
             std::pair<std::string, std::string> authInfo(void) const;
 
             // ServerEncoder
-            virtual void        recvPixelFormatEvent(const PixelFormat &, bool bigEndian) {}
-            virtual void        recvSetEncodingsEvent(const std::vector<int> &) {}
-            virtual void        recvKeyEvent(bool pressed, uint32_t keysym) {}
-            virtual void        recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {}
-            virtual void        recvCutTextEvent(const std::vector<uint8_t> &) {}
-            virtual void        recvFramebufferUpdateEvent(bool full, const XCB::Region &) {}
-            virtual void        recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
-            virtual void        recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
-            virtual void        sendFrameBufferUpdateEvent(const XCB::Region &) {}
-            virtual void        sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+            virtual void recvPixelFormatEvent(const PixelFormat &, bool bigEndian) {}
+
+            virtual void recvSetEncodingsEvent(const std::vector<int> &) {}
+
+            virtual void recvKeyEvent(bool pressed, uint32_t keysym) {}
+
+            virtual void recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {}
+
+            virtual void recvCutTextEvent(const std::vector<uint8_t> &) {}
+
+            virtual void recvFramebufferUpdateEvent(bool full, const XCB::Region &) {}
+
+            virtual void recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
+
+            virtual void recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
+
+            virtual void sendFrameBufferUpdateEvent(const XCB::Region &) {}
+
+            virtual void sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
         };
     }
 }

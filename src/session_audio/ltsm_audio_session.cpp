@@ -48,7 +48,9 @@ namespace LTSM
             shutdownAudio = true;
 
             if(conn)
+            {
                 conn->leaveEventLoop();
+            }
         }
     }
 
@@ -56,7 +58,7 @@ namespace LTSM
     bool audioClientSocketInitialize(AudioClient* client)
     {
         std::error_code fserr;
-        
+
         while(! client->shutdown)
         {
             // wait socket
@@ -67,13 +69,15 @@ namespace LTSM
                     client->sock = std::make_unique<SocketStream>(fd);
                     break;
                 }
-        
+
                 std::this_thread::sleep_for(100ms);
             }
         }
-        
+
         if(client->shutdown)
+        {
             return false;
+        }
 
         if(! client->sock)
         {
@@ -84,26 +88,21 @@ namespace LTSM
         const pa_sample_format_t defaultFormat = PA_SAMPLE_S16LE;
         const uint8_t defaultChannels = 2;
         const uint16_t bitsPerSample = PulseAudio::formatBits(defaultFormat);
-
         // send initialize packet
         client->sock->sendIntLE16(AudioOp::Init);
         // send proto ver
         client->sock->sendIntLE16(1);
-
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
         numenc++;
 #endif
-
         // send num encodings
         client->sock->sendIntLE16(numenc);
-
         // encoding type PCM
         client->sock->sendIntLE16(AudioEncoding::PCM);
         client->sock->sendIntLE16(defaultChannels);
         client->sock->sendIntLE32(44100);
         client->sock->sendIntLE16(bitsPerSample);
-
 #ifdef LTSM_WITH_OPUS
         // encoding type OPUS
         client->sock->sendIntLE16(AudioEncoding::OPUS);
@@ -112,7 +111,6 @@ namespace LTSM
         client->sock->sendIntLE16(bitsPerSample);
 #endif
         client->sock->sendFlush();
-
         // client reply
         auto cmd = client->sock->recvIntLE16();
         auto err = client->sock->recvIntLE16();
@@ -122,7 +120,7 @@ namespace LTSM
             Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
             return false;
         }
-        
+
         if(err)
         {
             auto str = client->sock->recvString(err);
@@ -134,12 +132,9 @@ namespace LTSM
         auto ver = client->sock->recvIntLE16();
         // encoding
         auto enc = client->sock->recvIntLE16();
-
         Application::info("%s: client proto version: %" PRIu16 ", encode type: 0x%" PRIx16, __FUNCTION__, ver, enc);
-
         uint32_t defaultBitRate = 44100;
         uint32_t bufFragSize = 1024;
-
         // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
         const uint32_t opusFrames = 480;
 
@@ -147,7 +142,6 @@ namespace LTSM
         {
 #ifdef LTSM_WITH_OPUS
             defaultBitRate = 48000;
-
             const uint32_t opusFrameLength = defaultChannels * bitsPerSample / 8;
             bufFragSize = opusFrames * opusFrameLength;
 #endif
@@ -169,7 +163,9 @@ namespace LTSM
                 const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
 
                 if(client->pulse->streamConnect(false /* not paused */, & bufferAttr))
+                {
                     break;
+                }
             }
             else
             {
@@ -199,7 +195,7 @@ namespace LTSM
             if(! client->pulse->pcmEmpty())
             {
                 auto raw = client->pulse->pcmData();
-                bool sampleNotSilent = std::any_of(raw.begin(), raw.end(), [](auto & val){ return val != 0; });
+                bool sampleNotSilent = std::any_of(raw.begin(), raw.end(), [](auto & val) { return val != 0; });
 
                 if(sampleNotSilent)
                 {
@@ -244,7 +240,9 @@ namespace LTSM
             try
             {
                 if(audioClientSocketInitialize(this))
+                {
                     return;
+                }
             }
             catch(const std::exception & err)
             {
@@ -260,7 +258,9 @@ namespace LTSM
         shutdown = true;
 
         if(thread.joinable())
+        {
             thread.join();
+        }
     }
 
     /// AudioSessionBus
@@ -269,9 +269,7 @@ namespace LTSM
     {
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
-
         registerAdaptor();
     }
 
@@ -315,7 +313,7 @@ namespace LTSM
     {
         Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
 
-        if(std::any_of(clients.begin(), clients.end(), [&](auto & cli){ return cli.socketPath == clientSocket && !! cli.sock; }))
+        if(std::any_of(clients.begin(), clients.end(), [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; }))
         {
             Application::error("%s: socket busy, path: `%s'", __FUNCTION__, clientSocket.c_str());
             return false;
@@ -328,15 +326,21 @@ namespace LTSM
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket)
     {
         Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
-        clients.remove_if([&](auto & cli){ return cli.socketPath == clientSocket; });
+        clients.remove_if([&](auto & cli)
+        {
+            return cli.socketPath == clientSocket;
+        });
     }
 
     void AudioSessionBus::pulseFragmentSize(const uint32_t & fragsz)
     {
         Application::info("%s: fragment size: %" PRIu32, __FUNCTION__, fragsz);
 
-        for(auto & cl: clients)
-            if(cl.pulse) cl.pulse->setFragSize(fragsz);
+        for(auto & cl : clients)
+            if(cl.pulse)
+            {
+                cl.pulse->setFragSize(fragsz);
+            }
     }
 }
 
@@ -349,8 +353,7 @@ int main(int argc, char** argv)
             std::cout << "usage: " << argv[0] << std::endl;
             return EXIT_SUCCESS;
         }
-        else
-        if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
+        else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
         {
             std::cout << "version: " << LTSM_AUDIO2SESSION_VERSION << std::endl;
             return EXIT_SUCCESS;
@@ -366,6 +369,7 @@ int main(int argc, char** argv)
     try
     {
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_audio_name);
+
         if(! LTSM::conn)
         {
             LTSM::Application::error("dbus connection failed, uid: %d", getuid());

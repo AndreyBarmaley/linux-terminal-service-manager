@@ -48,8 +48,9 @@ namespace LTSM
         void serviceShutdown(void) override;
         void setDebug(const std::string & level) override;
 
-        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) override;
-        void umountPoint(const std::string& point) override;
+        bool mountPoint(const std::string & localPoint, const std::string & remotePoint,
+                        const std::string & fuseSocket) override;
+        void umountPoint(const std::string & point) override;
     };
 }
 

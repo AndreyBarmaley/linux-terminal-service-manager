@@ -43,7 +43,8 @@ namespace LTSM
 
         if(! ctx || error != OPUS_OK)
         {
-            Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__, "opus_decoder_create", error, samplesPerSec, audioChannels);
+            Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__,
+                               "opus_decoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
         }
     }
@@ -59,9 +60,11 @@ namespace LTSM
         }
 
         if(0 == frames)
+        {
             return false;
+        }
 
-        tmp.resize(frames * sampleLength);
+        tmp.resize(frames* sampleLength);
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 
         if(nSamples < 0)
@@ -89,5 +92,6 @@ namespace LTSM
 
         return decodeSize;
     }
+
 #endif
 }

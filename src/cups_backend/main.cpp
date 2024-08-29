@@ -55,8 +55,8 @@ namespace LTSM
 
     class CupsBackend : public Application
     {
-        int     jobId = 0;
-        int     jobNumPage = 0;
+        int jobId = 0;
+        int jobNumPage = 0;
 
         std::string jobUser;
         std::string jobTitle;
@@ -92,6 +92,7 @@ namespace LTSM
         int readWriteStream(std::istream* is, int fd, size_t delay)
         {
             std::vector<uint8_t> buf(blocksz);
+
             while(*is)
             {
                 is->read(reinterpret_cast<char*>(buf.data()), buf.size());
@@ -120,10 +121,13 @@ namespace LTSM
             if(auto deviceURI = getenv("DEVICE_URI"))
             {
                 if(auto ptr = std::strstr(deviceURI, "://"))
+                {
                     socketFormat = ptr + 3;
+                }
             }
 
             std::filesystem::path socketPath = Tools::replace(socketFormat, "username", jobUser);
+
             if(! std::filesystem::is_socket(socketPath))
             {
                 Application::error("%s: socket not found: %s", __FUNCTION__, socketPath.c_str());
@@ -137,17 +141,24 @@ namespace LTSM
             }
 
             auto sock = UnixSocket::connect(socketPath);
+
             if(0 > sock)
+            {
                 return CUPS_BACKEND_HOLD;
+            }
 
             // wait for data from the stdin
             if(jobFile.empty())
+            {
                 return readWriteStream(& std::cin, sock, 75);
-        
+            }
+
             std::ifstream ifs(jobFile, std::ifstream::in | std::ifstream::binary);
 
             if(! ifs.is_open())
+            {
                 return CUPS_BACKEND_CANCEL;
+            }
 
             return readWriteStream(& ifs, sock, 75);
         }
@@ -159,8 +170,7 @@ int main(int argc, const char** argv)
     if(2 > argc)
     {
         std::cout << LTSM::backendType << " " << LTSM::backendName << " " <<
-            std::quoted("Unknown") << " " << std::quoted(LTSM::backendDescription) << std::endl;
-
+                  std::quoted("Unknown") << " " << std::quoted(LTSM::backendDescription) << std::endl;
         return CUPS_BACKEND_OK;
     }
 

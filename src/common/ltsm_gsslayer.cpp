@@ -28,7 +28,7 @@ namespace Gss
 {
     int apiVersion(void)
     {
-	return 20210328;
+        return 20210328;
     }
 
     std::string error2str(OM_uint32 code1, OM_uint32 code2)
@@ -57,23 +57,48 @@ namespace Gss
 
         switch(type)
         {
-            case NameType::NoName: oid = (gss_OID) GSS_C_NO_NAME; break;
-            case NameType::NoOid: oid = GSS_C_NO_OID; break;
-            case NameType::NtAnonymous: oid = GSS_C_NT_ANONYMOUS; break;
-            case NameType::NtExportName: oid = GSS_C_NT_EXPORT_NAME; break;
-            case NameType::NtHostService: oid = GSS_C_NT_HOSTBASED_SERVICE; break;
-            case NameType::NtMachineUid: oid = GSS_C_NT_MACHINE_UID_NAME; break;
-            case NameType::NtStringUid: oid = GSS_C_NT_STRING_UID_NAME; break;
-            case NameType::NtUserName: oid = GSS_C_NT_USER_NAME; break;
+            case NameType::NoName:
+                oid = (gss_OID) GSS_C_NO_NAME;
+                break;
+
+            case NameType::NoOid:
+                oid = GSS_C_NO_OID;
+                break;
+
+            case NameType::NtAnonymous:
+                oid = GSS_C_NT_ANONYMOUS;
+                break;
+
+            case NameType::NtExportName:
+                oid = GSS_C_NT_EXPORT_NAME;
+                break;
+
+            case NameType::NtHostService:
+                oid = GSS_C_NT_HOSTBASED_SERVICE;
+                break;
+
+            case NameType::NtMachineUid:
+                oid = GSS_C_NT_MACHINE_UID_NAME;
+                break;
+
+            case NameType::NtStringUid:
+                oid = GSS_C_NT_STRING_UID_NAME;
+                break;
+
+            case NameType::NtUserName:
+                oid = GSS_C_NT_USER_NAME;
+                break;
         }
- 
+
         gss_buffer_desc buf{ name.size(), (void*) name.data() };
         gss_name_t res = nullptr;
 
         auto ret = gss_import_name(& stat, & buf, oid, & res);
 
         if(ret == GSS_S_COMPLETE)
+        {
             return res;
+        }
 
         if(err)
         {
@@ -95,9 +120,10 @@ namespace Gss
         auto ret = gss_display_name(& stat, name, & buf, nullptr);
 
         if(ret == GSS_S_COMPLETE)
+        {
             res.assign((char*) buf.value, (char*) buf.value + buf.length);
-        else
-        if(err)
+        }
+        else if(err)
         {
             err->func = "gss_display_name";
             err->code1 = ret;
@@ -114,12 +140,13 @@ namespace Gss
         gss_name_t name2 = nullptr;
         std::string res;
 
-	auto ret = gss_canonicalize_name(& stat, name1, mech, & name2);
+        auto ret = gss_canonicalize_name(& stat, name1, mech, & name2);
 
         if(ret == GSS_S_COMPLETE)
-    	    res = displayName(name2, err);
-        else
-        if(err)
+        {
+            res = displayName(name2, err);
+        }
+        else if(err)
         {
             err->func = "gss_canonicalize_name";
             err->code1 = ret;
@@ -139,9 +166,10 @@ namespace Gss
         std::string res;
 
         if(ret == GSS_S_COMPLETE)
+        {
             res.assign((char*) buf.value, (char*) buf.value + buf.length);
-        else
-        if(err)
+        }
+        else if(err)
         {
             err->func = "gss_display_name";
             err->code1 = ret;
@@ -150,20 +178,20 @@ namespace Gss
 
         gss_release_buffer(& stat, & buf);
 
-/*
-        "{ 1 2 840 113554 1 2 1 }" gssapi generic
-        "{ 1 2 840 113554 1 2 2 }" gssapi krb5
-        "{ 1 2 840 113554 1 2 3 }" gssapi krb5v2
+        /*
+                "{ 1 2 840 113554 1 2 1 }" gssapi generic
+                "{ 1 2 840 113554 1 2 2 }" gssapi krb5
+                "{ 1 2 840 113554 1 2 3 }" gssapi krb5v2
 
-        "{ 1 2 840 113554 1 2 1 1 }" gssapi generic user-name
-        "{ 1 2 840 113554 1 2 1 2 }" gssapi generic machine-uid-name
-        "{ 1 2 840 113554 1 2 1 3 }" gssapi generic string-uid-name
-        "{ 1 2 840 113554 1 2 1 4 }" gssapi generic service-name
+                "{ 1 2 840 113554 1 2 1 1 }" gssapi generic user-name
+                "{ 1 2 840 113554 1 2 1 2 }" gssapi generic machine-uid-name
+                "{ 1 2 840 113554 1 2 1 3 }" gssapi generic string-uid-name
+                "{ 1 2 840 113554 1 2 1 4 }" gssapi generic service-name
 
-        "{ 1 2 840 113554 1 2 2 1 }" gssapi krb5 krb5-name
-        "{ 1 2 840 113554 1 2 2 2 }" gssapi krb5 krb5-principal
-        "{ 1 2 840 113554 1 2 2 3 }" gssapi krb5 user-to-user-mechanism
-*/
+                "{ 1 2 840 113554 1 2 2 1 }" gssapi krb5 krb5-name
+                "{ 1 2 840 113554 1 2 2 2 }" gssapi krb5 krb5-principal
+                "{ 1 2 840 113554 1 2 2 3 }" gssapi krb5 user-to-user-mechanism
+        */
 
         return res;
     }
@@ -172,16 +200,35 @@ namespace Gss
     {
         switch(flag)
         {
-            case ContextFlag::Delegate: return "delegate";
-            case ContextFlag::Mutual:   return "mutual";
-            case ContextFlag::Replay:   return "replay";
-            case ContextFlag::Sequence: return "sequence";
-            case ContextFlag::Confidential: return "confidential";
-            case ContextFlag::Integrity: return "integrity";
-            case ContextFlag::Anonymous: return "anonymous";
-            case ContextFlag::Protection: return "protection";
-            case ContextFlag::Transfer: return"transfer";
-            default: break;
+            case ContextFlag::Delegate:
+                return "delegate";
+
+            case ContextFlag::Mutual:
+                return "mutual";
+
+            case ContextFlag::Replay:
+                return "replay";
+
+            case ContextFlag::Sequence:
+                return "sequence";
+
+            case ContextFlag::Confidential:
+                return "confidential";
+
+            case ContextFlag::Integrity:
+                return "integrity";
+
+            case ContextFlag::Anonymous:
+                return "anonymous";
+
+            case ContextFlag::Protection:
+                return "protection";
+
+            case ContextFlag::Transfer:
+                return"transfer";
+
+            default:
+                break;
         }
 
         return "unknown";
@@ -190,12 +237,13 @@ namespace Gss
     std::list<ContextFlag> exportFlags(int flags)
     {
         auto all = { ContextFlag::Delegate, ContextFlag::Mutual, ContextFlag::Replay, ContextFlag::Sequence, ContextFlag::Confidential,
-                ContextFlag::Integrity, ContextFlag::Anonymous, ContextFlag::Protection, ContextFlag::Transfer };
+                     ContextFlag::Integrity, ContextFlag::Anonymous, ContextFlag::Protection, ContextFlag::Transfer
+                   };
 
         std::list<ContextFlag> res;
 
         for(auto & v : all)
-            if(flags & v) res.push_front(v);
+            if(flags & v) { res.push_front(v); }
 
         return res;
     }
@@ -208,6 +256,7 @@ namespace Gss
         gss_OID_set mech_types;
 
         auto ret = gss_inquire_mechs_for_name(& stat, name, & mech_types);
+
         if(ret == GSS_S_COMPLETE)
         {
             for(int it = 0; it < mech_types->count; ++it)
@@ -215,11 +264,12 @@ namespace Gss
                 auto name = oidName(& mech_types->elements[it]);
 
                 if(! name.empty())
+                {
                     res.emplace_back(std::move(name));
+                }
             }
         }
-        else
-        if(err)
+        else if(err)
         {
             err->func = "gss_inquire_mechs_for_name";
             err->code1 = ret;
@@ -238,6 +288,7 @@ namespace Gss
         gss_OID_set mech_names;
 
         auto ret = gss_inquire_names_for_mech(& stat, oid, & mech_names);
+
         if(ret == GSS_S_COMPLETE)
         {
             for(int it = 0; it < mech_names->count; ++it)
@@ -245,11 +296,12 @@ namespace Gss
                 auto name = oidName(& mech_names->elements[it]);
 
                 if(! name.empty())
+                {
                     res.emplace_back(std::move(name));
+                }
             }
         }
-        else
-        if(err)
+        else if(err)
         {
             err->func = "gss_inquire_names_for_mech";
             err->code1 = ret;
@@ -303,16 +355,20 @@ namespace Gss
         auto name = importName(service, type, err);
 
         if(! name)
+        {
             return nullptr;
+        }
 
         CredentialPtr res = std::make_unique<Credential>();
-	res->name = name;
+        res->name = name;
 
         OM_uint32 stat;
         auto ret = gss_acquire_cred(& stat, res->name, 0, GSS_C_NULL_OID_SET, usage, & res->cred, & res->mechs, & res->timerec);
 
         if(ret == GSS_S_COMPLETE)
+        {
             return res;
+        }
 
         if(err)
         {
@@ -329,18 +385,22 @@ namespace Gss
         auto name = importName(username.data(), Gss::NameType::NtUserName, err);
 
         if(! name)
+        {
             return nullptr;
+        }
 
         gss_buffer_desc pass{ password.size(), (void*) password.data() };
 
         CredentialPtr res = std::make_unique<Credential>();
-	res->name = name;
+        res->name = name;
 
         OM_uint32 stat;
         auto ret = gss_acquire_cred_with_password(& stat, res->name, & pass, 0, GSS_C_NULL_OID_SET, Gss::CredentialUsage::Initiate, & res->cred, & res->mechs, & res->timerec);
 
         if(ret == GSS_S_COMPLETE)
+        {
             return res;
+        }
 
         if(err)
         {
@@ -365,8 +425,10 @@ namespace Gss
     // BaseContext
     std::vector<uint8_t> BaseContext::recvMessage(void)
     {
-	if(! ctx)
-	    throw std::invalid_argument("context is null");
+        if(! ctx)
+        {
+            throw std::invalid_argument("context is null");
+        }
 
         OM_uint32 stat;
         auto buf = recvToken();
@@ -386,15 +448,17 @@ namespace Gss
             error(__FUNCTION__, "gss_unwrap", ret, stat);
             res.clear();
         }
-        
+
         gss_release_buffer(& stat, & out_buf);
         return res;
     }
 
     bool BaseContext::sendMessage(const void* buf, size_t len, bool encrypt)
     {
-	if(! ctx)
-	    throw std::invalid_argument("context is null");
+        if(! ctx)
+        {
+            throw std::invalid_argument("context is null");
+        }
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ len, (void*) buf };
@@ -412,15 +476,17 @@ namespace Gss
             error(__FUNCTION__, "gss_wrap", ret, stat);
             res = false;
         }
-        
+
         gss_release_buffer(& stat, & out_buf);
         return res;
     }
 
     bool BaseContext::recvMIC(const void* msg, size_t msgsz)
     {
-	if(! ctx)
-	    throw std::invalid_argument("context is null");
+        if(! ctx)
+        {
+            throw std::invalid_argument("context is null");
+        }
 
         // recv token
         auto buf = recvToken();
@@ -432,7 +498,9 @@ namespace Gss
         auto ret = gss_verify_mic(& stat, ctx->sec, & in_buf, & out_buf, nullptr);
 
         if(ret == GSS_S_COMPLETE)
+        {
             return true;
+        }
 
         error(__FUNCTION__, "gss_verify_mic", ret, stat);
         return false;
@@ -440,8 +508,10 @@ namespace Gss
 
     bool BaseContext::sendMIC(const void* msg, size_t msgsz)
     {
-	if(! ctx)
-	    throw std::invalid_argument("context is null");
+        if(! ctx)
+        {
+            throw std::invalid_argument("context is null");
+        }
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
@@ -481,7 +551,7 @@ namespace Gss
             gss_buffer_desc send_tok{ 0, nullptr };
 
             ret = gss_accept_sec_context(& stat, & ctx->sec, ptr ? ptr->cred : GSS_C_NO_CREDENTIAL, & recv_tok, GSS_C_NO_CHANNEL_BINDINGS,
-                                     & ctx->name, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec, nullptr);
+                                         & ctx->name, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec, nullptr);
 
             if(0 < send_tok.length)
             {
@@ -491,15 +561,17 @@ namespace Gss
         }
 
         if(ret == GSS_S_COMPLETE)
-	{
-    	    if(ptr)
-        	ctx->cred = std::move(ptr);
+        {
+            if(ptr)
+            {
+                ctx->cred = std::move(ptr);
+            }
 
             return true;
-	}
+        }
 
-	ctx.reset();
-	error(__FUNCTION__, "gss_accept_sec_context", ret, stat);
+        ctx.reset();
+        error(__FUNCTION__, "gss_accept_sec_context", ret, stat);
 
         return false;
     }
@@ -507,17 +579,17 @@ namespace Gss
     // ClientContext
     bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr)
     {
-	ErrorCodes err;
+        ErrorCodes err;
         auto name = importName(service, NameType::NtHostService, & err);
 
         if(! name)
-	{
-	    error(__FUNCTION__, err.func, err.code1, err.code2);
+        {
+            error(__FUNCTION__, err.func, err.code1, err.code2);
             return false;
-	}
+        }
 
         ctx = std::make_unique<Security>();
-	ctx->name = name;
+        ctx->name = name;
 
         gss_channel_bindings_t input_chan_bindings = nullptr; // no channel bindings
         std::vector<uint8_t> buf;
@@ -526,22 +598,28 @@ namespace Gss
         int flags = GSS_C_REPLAY_FLAG;
 
         if(mutual)
+        {
             flags |= GSS_C_MUTUAL_FLAG;
+        }
 
         gss_buffer_desc recv_tok{ 0, nullptr };
         gss_buffer_desc send_tok{ service.size(), (void*) service.data() };
 
         OM_uint32 ret = GSS_S_CONTINUE_NEEDED;
+
         while(ret == GSS_S_CONTINUE_NEEDED)
         {
             ret = gss_init_sec_context(& stat, ptr ? ptr->cred : GSS_C_NO_CREDENTIAL, & ctx->sec, ctx->name, GSS_C_NULL_OID, flags,
-                                    0, input_chan_bindings, & recv_tok, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec);
+                                       0, input_chan_bindings, & recv_tok, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec);
 
             if(0 < send_tok.length)
             {
                 sendToken(send_tok.value, send_tok.length);
+
                 if(send_tok.value != service.data())
+                {
                     gss_release_buffer(& stat, & send_tok);
+                }
             }
 
             if(ret == GSS_S_CONTINUE_NEEDED)
@@ -553,15 +631,17 @@ namespace Gss
         }
 
         if(ret == GSS_S_COMPLETE)
-	{
-    	    if(ptr)
-        	ctx->cred = std::move(ptr);
+        {
+            if(ptr)
+            {
+                ctx->cred = std::move(ptr);
+            }
 
             return true;
-	}
+        }
 
-	ctx.reset();
-	error(__FUNCTION__, "gss_init_sec_context", ret, stat);
+        ctx.reset();
+        error(__FUNCTION__, "gss_init_sec_context", ret, stat);
 
         return false;
     }

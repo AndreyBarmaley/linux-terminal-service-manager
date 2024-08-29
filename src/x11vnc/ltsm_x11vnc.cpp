@@ -41,7 +41,9 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_X11VNC_VERSION << std::endl;
-        std::cout << "usage: " << prog << " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]" << std::endl;
+        std::cout << "usage: " << prog <<
+                  " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]"
+                  << std::endl;
     }
 
     /* X11Vnc */
@@ -70,10 +72,16 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
             {
                 auto str = argv[it + 1];
+
                 if(str[0] == ':')
+                {
                     configSetInteger("display", std::stoi(str + 1));
+                }
                 else
+                {
                     configSetInteger("display", std::stoi(str));
+                }
+
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc)
@@ -108,27 +116,45 @@ namespace LTSM
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--noauth"))
+            {
                 configSetBoolean("noauth", true);
+            }
             else if(0 == std::strcmp(argv[it], "--inetd"))
+            {
                 configSetBoolean("inetd", true);
+            }
             else if(0 == std::strcmp(argv[it], "--notls"))
+            {
                 configSetBoolean("notls", true);
+            }
             else if(0 == std::strcmp(argv[it], "--syslog"))
+            {
                 configSetBoolean("syslog", true);
+            }
             else if(0 == std::strcmp(argv[it], "--background"))
+            {
                 configSetBoolean("background", true);
+            }
             else if(0 == std::strcmp(argv[it], "--nodamage"))
+            {
                 configSetBoolean("nodamage", true);
+            }
             else if(0 == std::strcmp(argv[it], "+DesktopResized"))
+            {
                 configSetBoolean("DesktopResized", true);
+            }
             else if(0 == std::strcmp(argv[it], "+ClipBoard"))
+            {
                 configSetBoolean("ClipBoard", true);
+            }
         }
 
         bool error = false;
 
         if(configGetBoolean("inetd"))
+        {
             configSetBoolean("syslog", true);
+        }
 
         Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::None);
 
@@ -138,7 +164,9 @@ namespace LTSM
             auto debug = configGetString("debug");
 
             if(! debug.empty())
+            {
                 Application::setDebugLevel(debug);
+            }
         }
 
         if(1)
@@ -146,7 +174,9 @@ namespace LTSM
             std::string file = configGetString("authfile");
 
             if(! file.empty() && ! std::filesystem::exists(file))
+            {
                 Application::warning("authfile not found: `%s'", file.c_str());
+            }
         }
 
         if(! configGetBoolean("noauth"))
@@ -176,8 +206,11 @@ namespace LTSM
     int X11Vnc::startSocket(int port) const
     {
         int fd = TCPSocket::listen(port);
+
         if(fd < 0)
+        {
             return -1;
+        }
 
         Application::info("listen inet port: %d", port);
         signal(SIGCHLD, SIG_IGN);
@@ -185,13 +218,14 @@ namespace LTSM
         while(int sock = TCPSocket::accept(fd))
         {
             if(0 > sock)
+            {
                 return -1;
+            }
 
             // child
             if(0 == fork())
             {
                 openChildSyslog();
-
                 close(fd);
                 int res = EXIT_FAILURE;
 
@@ -206,7 +240,7 @@ namespace LTSM
                 }
 
                 close(sock);
-		// exit child
+                // exit child
                 return res;
             }
 
@@ -239,7 +273,9 @@ namespace LTSM
         Application::info("x11vnc version: %d", LTSM_X11VNC_VERSION);
 
         if(configGetBoolean("background") && fork())
+        {
             return 0;
+        }
 
         return configGetBoolean("inetd") ?
                startInetd() : startSocket(configGetInteger("port"));

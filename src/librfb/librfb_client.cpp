@@ -54,7 +54,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 streamOut->sendFlush();
+            }
         }
         catch(const std::exception & err)
         {
@@ -68,7 +70,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 streamOut->sendRaw(ptr, len);
+            }
         }
         catch(const std::exception & err)
         {
@@ -82,7 +86,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 streamIn->recvRaw(ptr, len);
+            }
         }
         catch(const std::exception & err)
         {
@@ -96,7 +102,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 return streamIn->hasInput();
+            }
         }
         catch(const std::exception & err)
         {
@@ -112,7 +120,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 return streamIn->hasData();
+            }
         }
         catch(const std::exception & err)
         {
@@ -128,7 +138,9 @@ namespace LTSM
         try
         {
             if(rfbMessages)
+            {
                 return streamIn->peekInt8();
+            }
         }
         catch(const std::exception & err)
         {
@@ -143,20 +155,23 @@ namespace LTSM
     {
         // recv challenge 16 bytes
         auto challenge = recvData(16);
+
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
             Application::debug("%s: challenge: %s", __FUNCTION__, tmp.c_str());
         }
+
         auto crypt = TLS::encryptDES(challenge, password);
+
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
             Application::debug("%s: encrypt: %s", __FUNCTION__, tmp.c_str());
         }
+
         sendRaw(crypt.data(), crypt.size());
         sendFlush();
-
         return true;
     }
 
@@ -165,9 +180,7 @@ namespace LTSM
         // server VenCrypt version
         int majorVer = recvInt8();
         int minorVer = recvInt8();
-
         Application::debug("%s: server vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
-
         // client VenCrypt version 0.2
         sendInt8(0).sendInt8(2).sendFlush();
 
@@ -189,12 +202,15 @@ namespace LTSM
         }
 
         while(typesCount--)
+        {
             venCryptTypes.push_back(recvIntBE32());
+        }
 
         int mode = RFB::SECURITY_VENCRYPT02_TLSNONE;
+
         if(sec.tlsAnonMode)
         {
-            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val){ return val == RFB::SECURITY_VENCRYPT02_TLSNONE; }))
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_TLSNONE; }))
             {
                 Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "anon");
                 return false;
@@ -202,18 +218,19 @@ namespace LTSM
         }
         else
         {
-            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val){ return val == RFB::SECURITY_VENCRYPT02_X509NONE; }))
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [ = ](auto & val) { return val == RFB::SECURITY_VENCRYPT02_X509NONE; }))
             {
                 Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "x509");
                 return false;
             }
+
             mode = RFB::SECURITY_VENCRYPT02_X509NONE;
         }
 
         Application::debug("%s: send vencrypt mode: %d", __FUNCTION__, mode);
         sendIntBE32(mode).sendFlush();
-
         int status = recvInt8();
+
         if(0 == status)
         {
             Application::error("%s: server invalid status", __FUNCTION__);
@@ -224,9 +241,11 @@ namespace LTSM
         {
             if(mode == RFB::SECURITY_VENCRYPT02_X509NONE)
                 tls = std::make_unique<TLS::X509Session>(socket.get(), sec.caFile, sec.certFile, sec.keyFile,
-                            sec.crlFile, sec.tlsPriority, false, sec.tlsDebug);
+                      sec.crlFile, sec.tlsPriority, false, sec.tlsDebug);
             else
+            {
                 tls = std::make_unique<TLS::AnonSession>(socket.get(), sec.tlsPriority, false, sec.tlsDebug);
+            }
         }
         catch(gnutls::exception & err)
         {
@@ -235,7 +254,6 @@ namespace LTSM
         }
 
         streamIn = streamOut = tls.get();
-
         return true;
     }
 
@@ -250,23 +268,22 @@ namespace LTSM
 
             if(krb->handshakeLayer(sec.krb5Service, mutual, sec.krb5Name))
             {
-        	Application::info("%s: kerberos auth: %s", __FUNCTION__, "success");
-
+                Application::info("%s: kerberos auth: %s", __FUNCTION__, "success");
                 JsonObjectStream jo;
                 jo.push("continue:tls", sec.authVenCrypt);
                 auto json = jo.flush();
-
-		// send security info json
+                // send security info json
                 krb->sendIntBE32(json.size());
                 krb->sendString(json);
                 krb->sendFlush();
-
                 // stop kerberos session
-		krb.reset();
+                krb.reset();
 
                 // continue tls
                 if(sec.authVenCrypt)
+                {
                     return authVenCryptInit(sec);
+                }
 
                 return true;
             }
@@ -277,10 +294,10 @@ namespace LTSM
         }
 
         const std::string err("security kerberos failed");
-	Application::error("%s: error: %s", __FUNCTION__, err.c_str());
-
-	return false;
+        Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+        return false;
     }
+
 #endif
 
     bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec)
@@ -306,7 +323,6 @@ namespace LTSM
 
         // 12 bytes
         sendString(version).sendFlush();
-
         // RFB 1.7.1.2 security
         int counts = recvInt8();
         Application::debug("%s: security counts: %d", __FUNCTION__, counts);
@@ -320,50 +336,56 @@ namespace LTSM
         }
 
         std::vector<int> security;
+
         while(0 < counts--)
+        {
             security.push_back(recvInt8());
+        }
 
 #ifdef LTSM_WITH_GSSAPI
-	Gss::CredentialPtr krb5Cred;
+        Gss::CredentialPtr krb5Cred;
 
-	if(sec.authKrb5 && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_GSSAPI; }))
-	{
-	    // check local ticket
-	    if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name); krb5Cred)
-	    {
-		auto canon = Gss::displayName(krb5Cred->name);
-        	Application::info("%s: kerberos local ticket: %s", __FUNCTION__, canon.c_str());
-	    }
-	}
+        if(sec.authKrb5 && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_GSSAPI; }))
+        {
+            // check local ticket
+            if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name); krb5Cred)
+            {
+                auto canon = Gss::displayName(krb5Cred->name);
+                Application::info("%s: kerberos local ticket: %s", __FUNCTION__, canon.c_str());
+            }
+        }
 
-	if(krb5Cred)
+        if(krb5Cred)
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "gssapi");
             sendInt8(RFB::SECURITY_TYPE_GSSAPI).sendFlush();
 
             if(! authGssApiInit(sec))
-		return false;
-	}
+            {
+                return false;
+            }
+        }
         else
 #endif
-        if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VENCRYPT; }))
+            if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; }))
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "vencrypt");
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
 
             if(! authVenCryptInit(sec))
-		return false;
+            {
+                return false;
+            }
         }
-        else
-        if(sec.authNone && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_NONE; }))
+        else if(sec.authNone && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_NONE; }))
         {
             Application::debug("%s: security: %s selected", __FUNCTION__, "noauth");
             sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
         }
-        else
-        if(sec.authVnc && std::any_of(security.begin(), security.end(), [=](auto & val){ return val == RFB::SECURITY_TYPE_VNC; }))
+        else if(sec.authVnc && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_VNC; }))
         {
             auto & password = sec.passwdFile;
+
             if(password.empty())
             {
                 Application::error("%s: security vnc: password empty", __FUNCTION__);
@@ -390,15 +412,13 @@ namespace LTSM
         }
 
         bool shared = false;
-        Application::debug("%s: send share flags: %d", __FUNCTION__,  (int) shared);
+        Application::debug("%s: send share flags: %d", __FUNCTION__, (int) shared);
         // RFB 6.3.1 client init (shared flag)
         sendInt8(shared ? 1 : 0).sendFlush();
-        
         // RFB 6.3.2 server init
         auto fbWidth = recvIntBE16();
         auto fbHeight = recvIntBE16();
         Application::debug("%s: remote framebuffer size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, fbWidth, fbHeight);
-
         // recv server pixel format
         int bpp = recvInt8();
         int depth = recvInt8();
@@ -411,17 +431,18 @@ namespace LTSM
         int gshift = recvInt8();
         int bshift = recvInt8();
         recvSkip(3);
-
         serverPf = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
-
-        Application::debug("%s: remote pixel format: bpp: %" PRIu8 ", depth: %d, bigendian: %d, true color: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                    __FUNCTION__, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
-                    serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
+        Application::debug("%s: remote pixel format: bpp: %" PRIu8 ", depth: %d, bigendian: %d, true color: %d, red(%" PRIu16
+                           ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                           __FUNCTION__, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
+                           serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
 
         // check server format
         switch(serverPf.bitsPerPixel())
         {
-            case 32: case 16: case 8:
+            case 32:
+            case 16:
+            case 8:
                 break;
 
             default:
@@ -436,13 +457,10 @@ namespace LTSM
         }
 
         pixelFormatEvent(serverPf, XCB::Size(fbWidth, fbHeight));
-
         // recv name desktop
         auto nameLen = recvIntBE32();
         auto nameDesktop = recvString(nameLen);
-
         Application::debug("%s: server desktop name: %s", __FUNCTION__, nameDesktop.c_str());
-
         return true;
     }
 
@@ -475,23 +493,23 @@ namespace LTSM
 
     std::list<int> RFB::ClientDecoder::supportedEncodings(void) const
     {
-        return { 
-                    ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
-                    ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
+        return
+        {
+            ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
+            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
 
 #ifdef LTSM_DECODING_FFMPEG
-	            ENCODING_FFMPEG_H264,
-	            ENCODING_FFMPEG_AV1,
-	            ENCODING_FFMPEG_VP8,
+            ENCODING_FFMPEG_H264,
+            ENCODING_FFMPEG_AV1,
+            ENCODING_FFMPEG_VP8,
 #endif
 
-		     ENCODING_RAW };
+            ENCODING_RAW };
     }
 
     void RFB::ClientDecoder::rfbMessagesLoop(void)
     {
         auto encodings = supportedEncodings();
-
         // added pseudo encodings
         encodings.push_front(ENCODING_LAST_RECT);
         encodings.push_front(ENCODING_RICH_CURSOR);
@@ -499,25 +517,40 @@ namespace LTSM
         encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
 
         if(ltsmSupported())
+        {
             encodings.push_front(ENCODING_LTSM);
+        }
 
         auto prefferedEncoding = clientEncoding();
-
 #ifdef LTSM_DECODING_FFMPEG
+
         // experimental feature remove and added from preffered
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_H264)))
+        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_H264)))
+        {
             encodings.remove(ENCODING_FFMPEG_H264);
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_AV1)))
+        }
+
+        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_AV1)))
+        {
             encodings.remove(ENCODING_FFMPEG_AV1);
-	if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP8)))
+        }
+
+        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP8)))
+        {
             encodings.remove(ENCODING_FFMPEG_VP8);
+        }
+
 #endif
 
-        if( ! prefferedEncoding.empty())
+        if(! prefferedEncoding.empty())
         {
             // preffered set priority
             auto it = std::find_if(encodings.begin(), encodings.end(),
-                            [&](auto & enc){ return prefferedEncoding == Tools::lower(RFB::encodingName(enc)); });
+                                   [&](auto & enc)
+            {
+                return prefferedEncoding == Tools::lower(RFB::encodingName(enc));
+            });
+
             if(it != encodings.end())
             {
                 auto enc = *it;
@@ -531,9 +564,7 @@ namespace LTSM
         sendPixelFormat();
         // request full update
         sendFrameBufferUpdate(false);
-
         Application::debug("%s: wait remote messages...", __FUNCTION__);
-
         auto cur = std::chrono::steady_clock::now();
 
         while(rfbMessages)
@@ -541,7 +572,7 @@ namespace LTSM
             auto now = std::chrono::steady_clock::now();
 
             if((! continueUpdatesSupport || ! continueUpdatesProcessed) &&
-                std::chrono::milliseconds(300) <= now - cur)
+                    std::chrono::milliseconds(300) <= now - cur)
             {
                 // request incr update
                 sendFrameBufferUpdate(true);
@@ -571,11 +602,14 @@ namespace LTSM
                 {
                     Application::error("%s: exception: %s", __FUNCTION__, err.what());
                 }
+
                 continue;
             }
 
             if(! rfbMessages)
+            {
                 break;
+            }
 
             switch(msgType)
             {
@@ -588,12 +622,25 @@ namespace LTSM
                     {
                         rfbMessagesShutdown();
                     }
+
                     break;
 
-                case SERVER_SET_COLOURMAP:      recvColorMapEvent(); break;
-                case SERVER_BELL:               recvBellEvent(); break;
-                case SERVER_CUT_TEXT:           recvCutTextEvent(); break;
-                case SERVER_CONTINUOUS_UPDATES: recvContinuousUpdatesEvent(); break;
+                case SERVER_SET_COLOURMAP:
+                    recvColorMapEvent();
+                    break;
+
+                case SERVER_BELL:
+                    recvBellEvent();
+                    break;
+
+                case SERVER_CUT_TEXT:
+                    recvCutTextEvent();
+                    break;
+
+                case SERVER_CONTINUOUS_UPDATES:
+                    recvContinuousUpdatesEvent();
+                    break;
+
                 default:
                 {
                     Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
@@ -605,30 +652,30 @@ namespace LTSM
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz)
     {
-	Application::info("%s: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
-
+        Application::info("%s: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
 #ifdef LTSM_DECODING_FFMPEG
-	// event background
-	std::thread([this, sz = dsz]()
-	{
-    	    if(this->decoder &&
-		(this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
-		this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP8))
-    		this->decoder->resizedEvent(sz);
-	}).detach();
+        // event background
+        std::thread([this, sz = dsz]()
+        {
+            if(this->decoder &&
+                    (this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
+                     this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP8))
+            {
+                this->decoder->resizedEvent(sz);
+            }
+        }).detach();
+
 #endif
     }
 
     void RFB::ClientDecoder::sendPixelFormat(void)
     {
         auto & pf = clientFormat();
-
-        Application::debug("%s: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                    __FUNCTION__, pf.bitsPerPixel(), (int) BigEndian,
-                    pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
-
+        Application::debug("%s: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
+                           ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+                           __FUNCTION__, pf.bitsPerPixel(), (int) BigEndian,
+                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         std::scoped_lock guard{ sendLock };
-
         // send pixel format
         sendInt8(RFB::CLIENT_SET_PIXEL_FORMAT);
         sendZero(3); // padding
@@ -649,24 +696,27 @@ namespace LTSM
     void RFB::ClientDecoder::sendEncodings(const std::list<int> & encodings)
     {
         for(auto type : encodings)
+        {
             Application::debug("%s: %s", __FUNCTION__, encodingName(type));
+        }
 
         std::scoped_lock guard{ sendLock };
-
         sendInt8(RFB::CLIENT_SET_ENCODINGS);
         sendZero(1); // padding
         sendIntBE16(encodings.size());
+
         for(auto val : encodings)
+        {
             sendIntBE32(val);
+        }
+
         sendFlush();
     }
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym)
     {
         Application::debug("%s: keysym: 0x%08" PRIx32 ", pressed: %d", __FUNCTION__, keysym, (int) pressed);
-
         std::scoped_lock guard{ sendLock };
-
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
         // padding
@@ -677,12 +727,9 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy)
     {
-        Application::debug("%s: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%02" PRIx8 , __FUNCTION__, posx, posy, buttons);
-
+        Application::debug("%s: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%02" PRIx8, __FUNCTION__, posx, posy, buttons);
         std::scoped_lock guard{ sendLock };
-
         sendInt8(RFB::CLIENT_EVENT_POINTER);
-
         sendInt8(buttons);
         sendIntBE16(posx);
         sendIntBE16(posy);
@@ -692,9 +739,7 @@ namespace LTSM
     void RFB::ClientDecoder::sendCutTextEvent(const char* buf, size_t len)
     {
         Application::debug("%s: buffer size: %u", __FUNCTION__, len);
-
         std::scoped_lock guard{ sendLock };
-
         sendInt8(RFB::CLIENT_CUT_TEXT);
         // padding
         sendZero(3);
@@ -705,8 +750,8 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg)
     {
-        Application::debug("%s: status: %s, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
-
+        Application::debug("%s: status: %s, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                           (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
         sendInt8(enable ? 1 : 0);
@@ -715,7 +760,6 @@ namespace LTSM
         sendIntBE16(reg.width);
         sendIntBE16(reg.height);
         sendFlush();
-
         continueUpdatesProcessed = enable;
     }
 
@@ -727,10 +771,9 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr)
     {
-        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
+        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+                           reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
-
         // send framebuffer update request
         sendInt8(CLIENT_REQUEST_FB_UPDATE);
         sendInt8(incr ? 1 : 0);
@@ -748,21 +791,41 @@ namespace LTSM
         {
             switch(type)
             {
-                case ENCODING_RAW:      decoder = std::make_unique<DecodingRaw>(); break;
-                case ENCODING_RRE:      decoder = std::make_unique<DecodingRRE>(false); break;
-                case ENCODING_CORRE:    decoder = std::make_unique<DecodingRRE>(true); break;
-                case ENCODING_HEXTILE:  decoder = std::make_unique<DecodingHexTile>(false); break;
-                case ENCODING_TRLE:     decoder = std::make_unique<DecodingTRLE>(false); break;
-                case ENCODING_ZRLE:     decoder = std::make_unique<DecodingTRLE>(true); break;
-                case ENCODING_ZLIB:     decoder = std::make_unique<DecodingZlib>(); break;
+                case ENCODING_RAW:
+                    decoder = std::make_unique<DecodingRaw>();
+                    break;
 
+                case ENCODING_RRE:
+                    decoder = std::make_unique<DecodingRRE>(false);
+                    break;
+
+                case ENCODING_CORRE:
+                    decoder = std::make_unique<DecodingRRE>(true);
+                    break;
+
+                case ENCODING_HEXTILE:
+                    decoder = std::make_unique<DecodingHexTile>(false);
+                    break;
+
+                case ENCODING_TRLE:
+                    decoder = std::make_unique<DecodingTRLE>(false);
+                    break;
+
+                case ENCODING_ZRLE:
+                    decoder = std::make_unique<DecodingTRLE>(true);
+                    break;
+
+                case ENCODING_ZLIB:
+                    decoder = std::make_unique<DecodingZlib>();
+                    break;
 #ifdef LTSM_DECODING_FFMPEG
-        	case ENCODING_FFMPEG_H264:
-        	case ENCODING_FFMPEG_AV1:
-        	case ENCODING_FFMPEG_VP8:
-		    decoder = std::make_unique<DecodingFFmpeg>(type);
-		    decoder->setDebug(4 /* AV_LOG_VERBOSE */);
-		    break;
+
+                case ENCODING_FFMPEG_H264:
+                case ENCODING_FFMPEG_AV1:
+                case ENCODING_FFMPEG_VP8:
+                    decoder = std::make_unique<DecodingFFmpeg>(type);
+                    decoder->setDebug(4 /* AV_LOG_VERBOSE */);
+                    break;
 #endif
 
                 default:
@@ -779,12 +842,10 @@ namespace LTSM
     void RFB::ClientDecoder::recvFBUpdateEvent(void)
     {
         auto start = std::chrono::steady_clock::now();
-
         // padding
         recvSkip(1);
         auto numRects = recvIntBE16();
         XCB::Region reg;
-
         Application::debug("%s: num rects: %" PRIu16, __FUNCTION__, numRects);
 
         while(0 < numRects--)
@@ -794,9 +855,8 @@ namespace LTSM
             reg.width = recvIntBE16();
             reg.height = recvIntBE16();
             int encodingType = recvIntBE32();
-
             Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], encodingType: %s",
-                     __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
+                               __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
 
             switch(encodingType)
             {
@@ -825,12 +885,10 @@ namespace LTSM
                     updateRegion(encodingType, reg);
                     break;
             }
-
         }
 
         auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
         Application::debug("%s: update time: %uus", __FUNCTION__, dt.count());
-
         fbUpdateEvent();
     }
 
@@ -841,7 +899,6 @@ namespace LTSM
         auto firstColor = recvIntBE16();
         auto numColors = recvIntBE16();
         Application::debug("%s: num colors: %" PRIu16 ", first color: %" PRIu16, __FUNCTION__, numColors, firstColor);
-
         std::vector<Color> colors(numColors);
 
         for(auto & col : colors)
@@ -851,7 +908,9 @@ namespace LTSM
             col.b = recvInt8();
 
             if(Application::isDebugLevel(DebugLevel::Trace))
+            {
                 Application::debug("%s: color [0x%02" PRIx8 ",0x%02" PRIx8 ",0x%02" PRIx8 "]", __FUNCTION__, col.r, col.g, col.b);
+            }
         }
 
         setColorMapEvent(colors);
@@ -868,7 +927,6 @@ namespace LTSM
         // padding
         recvSkip(3);
         auto length = recvIntBE32();
-
         Application::debug("%s: length: %" PRIu32, __FUNCTION__, length);
 
         if(0 < length)
@@ -881,33 +939,32 @@ namespace LTSM
     void RFB::ClientDecoder::recvContinuousUpdatesEvent(void)
     {
         continueUpdatesSupport = true;
-
-        sendContinuousUpdates(false, { XCB::Point(0,0), clientSize() });
+        sendContinuousUpdates(false, { XCB::Point(0, 0), clientSize() });
     }
 
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg)
     {
-        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                           reg.y, reg.width, reg.height);
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg)
     {
-        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
-        auto buf = recvData(reg.width * reg.height * serverPf.bytePerPixel());
+        Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                           reg.y, reg.width, reg.height);
+        auto buf = recvData(reg.width* reg.height* serverPf.bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
-
         richCursorEvent(reg, std::move(buf), std::move(mask));
     }
 
     void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz)
     {
-        Application::info("%s: status: %d, error: %d, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, status, err, sz.width, sz.height);
-
+        Application::info("%s: status: %d, error: %d, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, status, err, sz.width,
+                          sz.height);
         auto numOfScreens = recvInt8();
         recvSkip(3);
-
         std::vector<RFB::ScreenInfo> screens(numOfScreens);
+
         for(auto & screen : screens)
         {
             screen.id = recvIntBE32();
@@ -916,27 +973,24 @@ namespace LTSM
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug("%s: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08" PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
+            Application::debug("%s: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08"
+                               PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 
-        decodingExtDesktopSizeEvent(status, err, sz, screens); 
+        decodingExtDesktopSizeEvent(status, err, sz, screens);
     }
 
     void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz)
     {
         Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
-
         std::scoped_lock guard{ sendLock };
-        
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
         sendIntBE16(wsz.width);
         sendIntBE16(wsz.height);
-
         // num of screens
         sendInt8(1);
         sendZero(1);
-
         // screen id
         sendIntBE32(0);
         // posx, posy
@@ -945,14 +999,12 @@ namespace LTSM
         sendIntBE16(wsz.height);
         // flag
         sendIntBE32(0);
-
         sendFlush();
     }
 
     void RFB::ClientDecoder::recvDecodingLtsm(const XCB::Region & reg)
     {
         Application::info("%s: success", __FUNCTION__);
-
         ltsmServer = true;
         size_t type = recvIntBE32();
 
@@ -965,7 +1017,6 @@ namespace LTSM
         else
         {
             // auto data = recvData(len);
-
             Application::error("%s: %s", __FUNCTION__, "unknown decoding");
             throw rfb_error(NS_FuncName);
         }
@@ -997,22 +1048,29 @@ namespace LTSM
         }
 
         if(cmd == SystemCommand::ChannelOpen)
+        {
             systemChannelOpen(jo);
-        else
-        if(cmd == SystemCommand::ChannelListen)
+        }
+        else if(cmd == SystemCommand::ChannelListen)
+        {
             systemChannelListen(jo);
-        else
-        if(cmd == SystemCommand::ChannelClose)
+        }
+        else if(cmd == SystemCommand::ChannelClose)
+        {
             systemChannelClose(jo);
-        else
-        if(cmd == SystemCommand::ChannelConnected)
+        }
+        else if(cmd == SystemCommand::ChannelConnected)
+        {
             systemChannelConnected(jo);
-        else
-        if(cmd == SystemCommand::ChannelError)
+        }
+        else if(cmd == SystemCommand::ChannelError)
+        {
             systemChannelError(jo);
-        else
-        if(cmd == SystemCommand::LoginSuccess)
+        }
+        else if(cmd == SystemCommand::LoginSuccess)
+        {
             systemLoginSuccess(jo);
+        }
         else
         {
             Application::error("%s: %s", __FUNCTION__, "unknown cmd");

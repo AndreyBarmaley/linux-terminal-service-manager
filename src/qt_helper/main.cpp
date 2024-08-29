@@ -40,7 +40,6 @@ public:
         QTranslator tr;
         tr.load(QLocale(), QLatin1String("ltsm_helper"), QLatin1String("_"), QLatin1String(":/i18n"));
         installTranslator(& tr);
-
         LTSM_HelperSDBus win;
         win.show();
         return exec();
@@ -64,6 +63,6 @@ int main(int argc, char* argv[])
     {
         LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
     }
- 
+
     return res;
 }

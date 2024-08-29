@@ -28,34 +28,36 @@
 #include "../include/sane/config.h"
 
 typedef struct Unix_Device
-  {
+{
     struct Unix_Device *next;
     const char *name;
     struct sockaddr addr;
-    int ctl;			/* socket descriptor (or -1) */
+    int ctl; /* socket descriptor (or -1) */
     Wire wire;
     int auth_active;
-  }
+}
+
 Unix_Device;
 
 typedef struct Unix_Scanner
-  {
+{
     /* all the state needed to define a scan request: */
     struct Unix_Scanner *next;
 
-    int options_valid;			/* are the options current? */
+    int options_valid; /* are the options current? */
     SANE_Option_Descriptor_Array opt, local_opt;
 
-    SANE_Word handle;		/* remote handle (it's a word, not a ptr!) */
+    SANE_Word handle; /* remote handle (it's a word, not a ptr!) */
 
-    int data;			/* data socket descriptor */
+    int data; /* data socket descriptor */
     int reclen_buf_offset;
     u_char reclen_buf[4];
-    size_t bytes_remaining;	/* how many bytes left in this record? */
+    size_t bytes_remaining; /* how many bytes left in this record? */
 
     /* device (host) info: */
     Unix_Device *hw;
-  }
+}
+
 Unix_Scanner;
 
 #endif /* unix_h */

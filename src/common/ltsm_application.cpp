@@ -32,7 +32,7 @@
 namespace LTSM
 {
     std::string ident{"application"};
-    int  facility = LOG_USER;
+    int facility = LOG_USER;
 
     // Application
     FILE* Application::fdlog = stderr;
@@ -50,10 +50,13 @@ namespace LTSM
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
         if(target != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
+        {
             openlog(ident.c_str(), 0, facility);
-        else
-        if(target == DebugTarget::Syslog && tgt != DebugTarget::Syslog)
+        }
+        else if(target == DebugTarget::Syslog && tgt != DebugTarget::Syslog)
+        {
             closelog();
+        }
 
         target = tgt;
     }
@@ -66,12 +69,17 @@ namespace LTSM
     void Application::setDebugTarget(std::string_view tgt)
     {
         if(tgt == "console")
+        {
             setDebugTarget(DebugTarget::Console);
-        else
-        if(tgt == "syslog")
+        }
+        else if(tgt == "syslog")
+        {
             setDebugTarget(DebugTarget::Syslog);
+        }
         else
+        {
             setDebugTarget(DebugTarget::Quiet);
+        }
     }
 
     bool Application::isDebugLevel(const DebugLevel & lvl)
@@ -87,15 +95,21 @@ namespace LTSM
     void Application::setDebugLevel(std::string_view lvl)
     {
         if(lvl == "info")
+        {
             setDebugLevel(DebugLevel::Info);
-        else
-        if(lvl == "debug")
+        }
+        else if(lvl == "debug")
+        {
             setDebugLevel(DebugLevel::Debug);
-        else
-        if(lvl == "trace")
+        }
+        else if(lvl == "trace")
+        {
             setDebugLevel(DebugLevel::Trace);
+        }
         else
+        {
             setDebugLevel(DebugLevel::None);
+        }
     }
 
     Application::Application(std::string_view sid)
@@ -106,7 +120,9 @@ namespace LTSM
     Application::~Application()
     {
         if(isDebugTarget(DebugTarget::Syslog))
+        {
             closelog();
+        }
     }
 
     void Application::openChildSyslog(const char* file)
@@ -116,8 +132,11 @@ namespace LTSM
             if(file)
             {
                 fdlog = fopen(file, "a");
+
                 if(! fdlog)
+                {
                     fdlog = stderr;
+                }
             }
 
             // child: switch syslog to stderr
@@ -130,14 +149,19 @@ namespace LTSM
         : Application(ident)
     {
         if(fconf)
+        {
             readConfig(fconf);
+        }
         else
         {
             std::list<std::filesystem::path> files;
 
             auto env = std::getenv("LTSM_CONFIG");
+
             if(env)
+            {
                 files.emplace_back(env);
+            }
 
             files.emplace_back(std::filesystem::current_path() / "config.json");
             files.emplace_back("/etc/ltsm/config.json");
@@ -147,7 +171,7 @@ namespace LTSM
                 auto st = std::filesystem::status(path);
 
                 if(std::filesystem::file_type::not_found != st.type() &&
-                   (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
+                        (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
                 {
                     readConfig(path);
                     break;
@@ -159,6 +183,7 @@ namespace LTSM
     void ApplicationJsonConfig::readConfig(const std::filesystem::path & file)
     {
         std::error_code err;
+
         if(! std::filesystem::exists(file, err))
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
@@ -192,15 +217,40 @@ namespace LTSM
         {
             switch(str[5])
             {
-                case '0': facility = LOG_LOCAL0; break;
-                case '1': facility = LOG_LOCAL1; break;
-                case '2': facility = LOG_LOCAL2; break;
-                case '3': facility = LOG_LOCAL3; break;
-                case '4': facility = LOG_LOCAL4; break;
-                case '5': facility = LOG_LOCAL5; break;
-                case '6': facility = LOG_LOCAL6; break;
-                case '7': facility = LOG_LOCAL7; break;
-                default: break;
+                case '0':
+                    facility = LOG_LOCAL0;
+                    break;
+
+                case '1':
+                    facility = LOG_LOCAL1;
+                    break;
+
+                case '2':
+                    facility = LOG_LOCAL2;
+                    break;
+
+                case '3':
+                    facility = LOG_LOCAL3;
+                    break;
+
+                case '4':
+                    facility = LOG_LOCAL4;
+                    break;
+
+                case '5':
+                    facility = LOG_LOCAL5;
+                    break;
+
+                case '6':
+                    facility = LOG_LOCAL6;
+                    break;
+
+                case '7':
+                    facility = LOG_LOCAL7;
+                    break;
+
+                default:
+                    break;
             }
         }
 
@@ -260,5 +310,6 @@ namespace LTSM
     {
         json.swap(jo);
     }
+
 #endif
 }

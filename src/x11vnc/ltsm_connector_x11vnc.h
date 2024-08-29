@@ -39,33 +39,36 @@ namespace LTSM
         {
             std::unordered_map<uint32_t, int> keymap;
 
-            const JsonObject*           _config = nullptr;
-            std::string                 _remoteaddr;
+            const JsonObject* _config = nullptr;
+            std::string _remoteaddr;
 
-            PixelFormat                _pf;
+            PixelFormat _pf;
 
-            std::atomic<int>           _display{0};
-            std::atomic<bool>          _xcbDisable{true};
+            std::atomic<int> _display{0};
+            std::atomic<bool> _xcbDisable{true};
 
         protected:
             // rfb server encoding
-            const PixelFormat &        serverFormat(void) const override;
-            std::list<std::string>     serverDisabledEncodings(void) const override;
+            const PixelFormat & serverFormat(void) const override;
+            std::list<std::string> serverDisabledEncodings(void) const override;
 
-            bool                       xcbNoDamageOption(void) const override;
-            bool                       xcbAllowMessages(void) const override;
-            void                       xcbDisableMessages(bool) override;
+            bool xcbNoDamageOption(void) const override;
+            bool xcbAllowMessages(void) const override;
+            void xcbDisableMessages(bool) override;
 
-            bool                       rfbClipboardEnable(void) const override;
-            bool                       rfbDesktopResizeEnabled(void) const override;
-            RFB::SecurityInfo          rfbSecurityInfo(void) const override;
-            int                        rfbUserKeycode(uint32_t) const override;
+            bool rfbClipboardEnable(void) const override;
+            bool rfbDesktopResizeEnabled(void) const override;
+            RFB::SecurityInfo rfbSecurityInfo(void) const override;
+            int rfbUserKeycode(uint32_t) const override;
 
-            void                       serverHandshakeVersionEvent(void) override;
-            size_t                     frameRateOption(void) const override { return 16; }
+            void serverHandshakeVersionEvent(void) override;
+            size_t frameRateOption(void) const override
+            {
+                return 16;
+            }
 
-            bool                       xcbConnect(void);
-            bool                       loadKeymap(void);
+            bool xcbConnect(void);
+            bool loadKeymap(void);
 
         public:
             X11VNC(int fd, const JsonObject & jo);

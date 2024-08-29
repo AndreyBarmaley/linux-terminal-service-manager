@@ -68,11 +68,12 @@ namespace LTSM
     std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir)
     {
         std::vector<char> linkto(dir.size() + 1024, 0);
-        auto len = readlink(path.c_str(), linkto.data(), linkto.size()-1);
+        auto len = readlink(path.c_str(), linkto.data(), linkto.size() - 1);
+
         if(len < 0)
         {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                    __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
 
@@ -94,7 +95,7 @@ namespace LTSM
         if(0 > ::stat(linkto.data(), & st2))
         {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                        __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
 
@@ -107,21 +108,21 @@ namespace LTSM
         auto items = Tools::readDir(dir, true);
         std::list<std::pair<ino_t, ino_t>> symlinks;
 
-        for(auto & path: items)
+        for(auto & path : items)
         {
             struct stat st = {};
 
             if(0 > ::stat(path.c_str(), & st))
             {
                 Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                        __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
+                                   __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
                 continue;
             }
 
             if(0 == (st.st_mode & (S_IFREG | S_IFLNK | S_IFDIR)))
             {
                 Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
-                        __FUNCTION__, "special skipped", st.st_mode, path.c_str());
+                                     __FUNCTION__, "special skipped", st.st_mode, path.c_str());
                 continue;
             }
 
@@ -142,16 +143,17 @@ namespace LTSM
         }
 
         reply.writeIntLE32(inodes.size());
-        for(auto & st: inodes)
+
+        for(auto & st : inodes)
         {
             reply.writeIntLE16(std::min(size_t(UINT16_MAX), st.second.first.size()));
             reply.write(st.second.first);
-
             replyWriteStatStruct(reply, st.second.second);
         }
 
         reply.writeIntLE32(symlinks.size());
-        for(auto & st: symlinks)
+
+        for(auto & st : symlinks)
         {
             reply.writeIntLE64(st.first);
             reply.writeIntLE64(st.second);
@@ -160,10 +162,11 @@ namespace LTSM
 }
 
 // createClientFuseConnector
-std::unique_ptr<LTSM::Channel::ConnectorBase>
-    LTSM::Channel::createClientFuseConnector(uint8_t channel, const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
+                      Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown)
     {
@@ -175,11 +178,11 @@ std::unique_ptr<LTSM::Channel::ConnectorBase>
 }
 
 /// ConnectorClientFuse
-LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
+LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod,
+        const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch)
 {
     Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
-
     // start threads
     setRunning(true);
 }
@@ -188,8 +191,10 @@ LTSM::Channel::ConnectorClientFuse::~ConnectorClientFuse()
 {
     setRunning(false);
 
-    for(auto & fd: opens)
+    for(auto & fd : opens)
+    {
         ::close(fd);
+    }
 }
 
 int LTSM::Channel::ConnectorClientFuse::error(void) const
@@ -224,7 +229,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
 
     const uint8_t* beginPacket = nullptr;
     const uint8_t* endPacket = nullptr;
-        
+
     try
     {
         while(2 < sb.last())
@@ -234,7 +239,6 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
             // <DATA> - audio data
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
-
             auto fuseCmd = sb.readIntLE16();
             Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
 
@@ -246,16 +250,27 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
 
             switch(fuseCmd)
             {
-                case FuseOp::Init:      fuseOpInit(sb); break;
+                case FuseOp::Init:
+                    fuseOpInit(sb);
+                    break;
+
                 // disabled, only for session part
                 //case FuseOp::Quit:    fuseOpQuit(sb); break;
                 //case FuseOp::GetAttr: fuseOpGetAttr(sb); break;
                 //case FuseOp::ReadDir: fuseOpReadDir(sb); break;
                 //case FuseOp::Lookup:  fuseOpLookup(sb); break;
                 //
-                case FuseOp::Open:      fuseOpOpen(sb); break;
-                case FuseOp::Read:      fuseOpRead(sb); break;
-                case FuseOp::Release:   fuseOpRelease(sb); break;
+                case FuseOp::Open:
+                    fuseOpOpen(sb);
+                    break;
+
+                case FuseOp::Read:
+                    fuseOpRead(sb);
+                    break;
+
+                case FuseOp::Release:
+                    fuseOpRelease(sb);
+                    break;
 
                 default:
                     Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %u", __FUNCTION__, "fuse", fuseCmd, recv.size());
@@ -264,16 +279,22 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
         }
 
         if(sb.last())
+        {
             throw std::underflow_error(NS_FuncName);
+        }
     }
     catch(const std::underflow_error &)
     {
         Application::warning("%s: underflow data: %u", __FUNCTION__, sb.last());
 
         if(beginPacket)
+        {
             last.assign(beginPacket, endPacket);
+        }
         else
+        {
             last.swap(recv);
+        }
     }
 }
 
@@ -283,13 +304,17 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb)
     // <VER16> - proto version
     // <LEN16><MOUNTPOINT> - mount point
     if(sb.last() < 4)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     fuseVer = sb.readIntLE16();
     auto len = sb.readIntLE16();
 
     if(sb.last() < len)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto mountPoint = sb.readString(len);
 
@@ -307,7 +332,6 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb)
 
     // reply format:
     reply.reset();
-
     // <CMD16> - return code
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Init);
@@ -321,12 +345,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb)
         reply.writeIntLE32(getuid());
         // <GID32> - local gid
         reply.writeIntLE32(getgid());
-
         replyWriteShareRootInfo(reply, shareRoot);
     }
 
     owner->sendLtsmEvent(cid, reply.rawbuf());
-
     return true;
 }
 
@@ -424,22 +446,23 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb)
     // <FLAG32> - open flags
     // <LEN16><PATH> - fuse path
     if(sb.last() < 6)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto flags = sb.readIntLE32();
     auto len = sb.readIntLE16();
 
     if(sb.last() < len)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto path = shareRoot + sb.readString(len);
-
     int ret = ::open(path.c_str(), flags);
     int error = 0 > ret ? errno : 0;
-
     // reply format:
     reply.reset();
-
     // <CMD16> - return code
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Open);
@@ -448,14 +471,12 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb)
     if(0 > ret)
     {
         Application::error("%s: %s failed, error: %s, code: %d, path: `%s', flags: 0x%" PRIx32,
-                    __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
+                           __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
     }
     else
     {
         Application::debug("%s: path: `%s', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
-
         opens.push_front(ret);
-
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);
     }
@@ -469,16 +490,15 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb)
     // cmd format:
     // <FDH32> - fd handle
     if(sb.last() < 4)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto fdh = sb.readIntLE32();
-
     int ret = ::close(fdh);
     int error = 0 > ret ? errno : 0;
-
     // reply format:
     reply.reset();
-
     // <CMD16> - return code
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Release);
@@ -487,12 +507,11 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb)
     if(0 > ret)
     {
         Application::error("%s: %s failed, error: %s, code: %d, fd: %" PRId32,
-                    __FUNCTION__, "close", strerror(error), error, fdh);
+                           __FUNCTION__, "close", strerror(error), error, fdh);
     }
     else
     {
         Application::debug("%s: fd: %" PRId32, __FUNCTION__, fdh);
-
         opens.remove(fdh);
     }
 
@@ -506,17 +525,16 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     // <FDH32> - fd handle
     // <SIZE16> - blocksz
     // <OFF64> - offset
-
     if(sb.last() < 20)
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     int fdh = sb.readIntLE32();
     uint16_t blocksz = sb.readIntLE16();
     size_t offset = sb.readIntLE64();
-
     int ret = lseek(fdh, offset, SEEK_SET);
     int error = 0 > ret ? errno : 0;
-
     // reply format:
     reply.reset();
 
@@ -526,19 +544,16 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
         // <ERR32> - errno
         reply.writeIntLE16(FuseOp::Read);
         reply.writeIntLE32(error);
-
         Application::error("%s: %s failed, error: %s, code: %d, offset: %u",
-                    __FUNCTION__, "lseek", strerror(error), error, offset);
+                           __FUNCTION__, "lseek", strerror(error), error, offset);
         owner->sendLtsmEvent(cid, reply.rawbuf());
         return true;
     }
 
     const uint16_t blockmax = 48 * 1024;
     std::vector<uint8_t> buf(std::min(blocksz, blockmax));
-
     ssize_t rsz = ::read(fdh, buf.data(), buf.size());
     error = 0 > rsz ? errno : 0;
-
     // <CMD16> - return code
     // <ERR32> - errno
     reply.writeIntLE16(FuseOp::Read);
@@ -547,14 +562,16 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     if(0 > rsz)
     {
         Application::error("%s: %s failed, error: %s, code: %d, fd: %d",
-                    __FUNCTION__, "read", strerror(error), error, fdh);
+                           __FUNCTION__, "read", strerror(error), error, fdh);
     }
     else
     {
         Application::debug("%s: request block size: %u, send block size: %u, offset: %u", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size())
+        {
             buf.resize(rsz);
+        }
 
         // <LEN16>
         reply.writeIntLE16(buf.size());

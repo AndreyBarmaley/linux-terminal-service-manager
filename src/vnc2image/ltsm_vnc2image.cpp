@@ -37,7 +37,9 @@ namespace LTSM
     void connectorHelp(const char* prog)
     {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
-        std::cout << "usage: " << prog << " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]" << std::endl;
+        std::cout << "usage: " << prog <<
+                  " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]"
+                  << std::endl;
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
@@ -78,9 +80,13 @@ namespace LTSM
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--notls"))
+            {
                 notls = true;
+            }
             else if(0 == std::strcmp(argv[it], "--debug"))
+            {
                 Application::setDebugLevel(DebugLevel::Debug);
+            }
         }
     }
 
@@ -90,11 +96,12 @@ namespace LTSM
         int sockfd = TCPSocket::connect(ipaddr, port);
 
         if(0 > sockfd)
+        {
             return -1;
+        }
 
         RFB::ClientDecoder::setSocketStreamMode(sockfd);
         RFB::SecurityInfo rfbsec;
-
         rfbsec.authVenCrypt = ! notls;
         rfbsec.authNone = password.empty();
         rfbsec.authVnc = ! password.empty();
@@ -121,11 +128,15 @@ namespace LTSM
     void Vnc2Image::fbUpdateEvent(void)
     {
         if(0 < timeout &&
-            std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
+                std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
+        {
             return;
+        }
 
         if(! filename.empty() && fbPtr)
+        {
             PNG::save(*fbPtr, filename);
+        }
 
         RFB::ClientDecoder::rfbMessagesShutdown();
     }

@@ -54,19 +54,19 @@ namespace LTSM
     {
         return static_cast<uint32_t>(redMax) << redShift;
     }
-    
+
     uint32_t PixelFormat::gmask(void) const
     {
         return static_cast<uint32_t>(greenMax) << greenShift;
     }
-    
+
     uint32_t PixelFormat::bmask(void) const
     {
         return static_cast<uint32_t>(blueMax) << blueShift;
     }
-               
+
     uint32_t PixelFormat::amask(void) const
-    {   
+    {
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
@@ -74,17 +74,17 @@ namespace LTSM
     {
         return (pixel >> redShift) & redMax;
     }
-                
+
     uint8_t PixelFormat::green(int pixel) const
     {
         return (pixel >> greenShift) & greenMax;
     }
-        
+
     uint8_t PixelFormat::blue(int pixel) const
     {
         return (pixel >> blueShift) & blueMax;
     }
-        
+
     uint8_t PixelFormat::alpha(int pixel) const
     {
         return (pixel >> alphaShift) & alphaMax;
@@ -101,16 +101,16 @@ namespace LTSM
         uint32_t r = col.r;
         uint32_t g = col.g;
         uint32_t b = col.b;
-        a = (a * alphaMax) >> 8;
-        r = (r * redMax) >> 8;
-        g = (g * greenMax) >> 8;
-        b = (b * blueMax) >> 8;
+        a = (a* alphaMax) >> 8;
+        r = (r* redMax) >> 8;
+        g = (g* greenMax) >> 8;
+        b = (b* blueMax) >> 8;
         return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
     uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
     {
-        return max1 ? (col1 * max2) / max1 : 0;
+        return max1 ? (col1* max2) / max1 : 0;
     }
 
     uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
@@ -123,7 +123,7 @@ namespace LTSM
             int a = pf.alphaMax == alphaMax ? pf.alpha(pixel) : convertMax(pf.alpha(pixel), pf.alphaMax, alphaMax);
             return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
         }
-        
+
         return pixel;
     }
 
@@ -146,7 +146,9 @@ namespace LTSM
     fbinfo_t::~fbinfo_t()
     {
         if(allocated)
+        {
             delete [] buffer;
+        }
     }
 
     int PixelMapWeight::maxWeightPixel(void) const
@@ -155,6 +157,7 @@ namespace LTSM
         {
             return p1.second < p2.second;
         });
+
         return it != end() ? (*it).first : 0;
     }
 
@@ -170,7 +173,7 @@ namespace LTSM
     {
         if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
         {
-            void* offset = pitchData(pos.y) + (pos.x * bytePerPixel());
+            void* offset = pitchData(pos.y) + (pos.x* bytePerPixel());
             // fix out of range
             length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
             auto bpp = bitsPerPixel();
@@ -185,7 +188,9 @@ namespace LTSM
             {
                 case 32:
                     if(auto ptr = static_cast<uint32_t*>(offset))
+                    {
                         std::fill(ptr, ptr + length, pixel);
+                    }
 
                     break;
 
@@ -214,13 +219,17 @@ namespace LTSM
 
                 case 16:
                     if(auto ptr = static_cast<uint16_t*>(offset))
+                    {
                         std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
+                    }
 
                     break;
 
                 case 8:
                     if(auto ptr = static_cast<uint8_t*>(offset))
+                    {
                         std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
+                    }
 
                     break;
 
@@ -233,7 +242,7 @@ namespace LTSM
         {
             Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
             throw std::out_of_range(NS_FuncName);
-         }
+        }
     }
 
     void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat* fmt)
@@ -251,7 +260,9 @@ namespace LTSM
             auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
 
             for(int yy = 0; yy < reg.height; ++yy)
+            {
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+            }
         }
     }
 
@@ -270,7 +281,9 @@ namespace LTSM
             auto raw = pixelFormat().pixel(col);
 
             for(int yy = 0; yy < reg.height; ++yy)
+            {
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
+            }
         }
     }
 
@@ -376,6 +389,7 @@ namespace LTSM
         res.reserve(reg.width * (64 < reg.height ? reg.height / 2 : reg.height));
 
 #ifdef FB_FAST_CYCLE
+
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = pitchData(reg.y + py);
@@ -386,21 +400,32 @@ namespace LTSM
                 auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
 
                 if(res.size() && res.back().pixel() == pix)
+                {
                     res.back().second++;
+                }
                 else
+                {
                     res.emplace_back(pix, 1);
+                }
             }
         }
+
 #else
+
         for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
         {
             auto pix = coord.pixel();
 
             if(res.size() && res.back().pixel() == pix)
+            {
                 res.back().second++;
+            }
             else
+            {
                 res.emplace_back(pix, 1);
+            }
         }
+
 #endif
         return res;
     }
@@ -412,7 +437,9 @@ namespace LTSM
         if(pixelFormat() != fb.pixelFormat())
         {
             for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
+            {
                 setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
+            }
         }
         else
         {
@@ -420,7 +447,7 @@ namespace LTSM
             {
                 auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
                 size_t length = dst.width * fb.bytePerPixel();
-                std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x * bytePerPixel());
+                std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x* bytePerPixel());
             }
         }
     }
@@ -436,19 +463,24 @@ namespace LTSM
         for(auto coord = coordBegin(); coord.isValid(); ++coord)
         {
             if(coord.isBeginLine())
+            {
                 pitch = pitchData(fbreg.y + coord.y);
+            }
 
             auto ptr = pitch + ((fbreg.x + coord.x) * bytePerPixel());
             auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
 
             map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
         }
+
 #else
+
         for(auto coord = PixelIterator(coordBegin(), fbreg, *this); coord.isValid(); ++coord)
         {
             auto pix = coord.pixel();
             map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
         }
+
 #endif
         return map;
     }
@@ -458,6 +490,7 @@ namespace LTSM
         PixelMapWeight map;
 
 #ifdef FB_FAST_CYCLE
+
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = pitchData(reg.y + py);
@@ -469,22 +502,33 @@ namespace LTSM
                 auto it = map.find(pix);
 
                 if(it != map.end())
+                {
                     (*it).second += 1;
+                }
                 else
+                {
                     map.emplace(pix, 1);
+                }
             }
         }
+
 #else
+
         for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
         {
             auto pix = coord.pixel();
             auto it = map.find(pix);
 
             if(it != map.end())
+            {
                 (*it).second += 1;
+            }
             else
+            {
                 map.emplace(pix, 1);
+            }
         }
+
 #endif
         return map;
     }
@@ -492,6 +536,7 @@ namespace LTSM
     bool FrameBuffer::allOfPixel(uint32_t pixel, const XCB::Region & reg) const
     {
 #ifdef FB_FAST_CYCLE
+
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = pitchData(reg.y + py);
@@ -499,12 +544,16 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                if(pixel != rawPixel(ptr, bitsPerPixel(), BigEndian)) return false;
+
+                if(pixel != rawPixel(ptr, bitsPerPixel(), BigEndian)) { return false; }
             }
         }
+
 #else
+
         for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
-            if(pixel != coord.pixel()) return false;
+            if(pixel != coord.pixel()) { return false; }
+
 #endif
         return true;
     }
@@ -516,24 +565,28 @@ namespace LTSM
             size_t offsetx = ch * _systemfont.width * _systemfont.height >> 3;
 
             if(offsetx >= sizeof(_systemfont.data))
+            {
                 return false;
+            }
 
             bool res = false;
 
             for(int yy = 0; yy < _systemfont.height; ++yy)
             {
-                if(pos.y + yy < 0) continue;
+                if(pos.y + yy < 0) { continue; }
 
                 size_t offsety = yy * _systemfont.width >> 3;
 
                 if(offsetx + offsety >= sizeof(_systemfont.data))
+                {
                     continue;
+                }
 
                 int line = *(_systemfont.data + offsetx + offsety);
 
                 for(int xx = 0; xx < _systemfont.width; ++xx)
                 {
-                    if(pos.x + xx < 0) continue;
+                    if(pos.x + xx < 0) { continue; }
 
                     if(0x80 & (line << xx))
                     {
@@ -595,7 +648,7 @@ namespace LTSM
             row = fbreg.y + row;
         }
 
-        return fbptr->buffer + (fbptr->pitch * row) + col;
+        return fbptr->buffer + (fbptr->pitch* row) + col;
     }
 
     size_t FrameBuffer::pitchSize(void) const
@@ -616,8 +669,7 @@ namespace PNG
             back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
             return save(back, file);
         }
-        else
-        if(fb.pixelFormat() != RGB24)
+        else if(fb.pixelFormat() != RGB24)
         {
             LTSM::FrameBuffer back(LTSM::XCB::Size(fb.width(), fb.height()), RGB24);
             back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
@@ -626,24 +678,32 @@ namespace PNG
 
         // write png
         png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+
         if (!png_ptr)
+        {
             return false;
+        }
 
         png_infop info_ptr = png_create_info_struct(png_ptr);
+
         if (!info_ptr)
+        {
             return false;
+        }
 
         setjmp(png_jmpbuf(png_ptr));
         std::unique_ptr<FILE, decltype(fclose)*> fp{fopen(file.data(), "wb"), fclose};
 
         png_init_io(png_ptr, fp.get());
         png_set_IHDR(png_ptr, info_ptr, fb.width(), fb.height(), 8,
-                fb.pixelFormat().amask() ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+                     fb.pixelFormat().amask() ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+                     PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
         png_write_info(png_ptr, info_ptr);
 
         for(size_t row = 0; row < fb.height(); row++)
+        {
             png_write_row(png_ptr, fb.pitchData(row));
+        }
 
         png_write_end(png_ptr, nullptr);
         png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -651,4 +711,5 @@ namespace PNG
         return true;
     }
 }
+
 #endif

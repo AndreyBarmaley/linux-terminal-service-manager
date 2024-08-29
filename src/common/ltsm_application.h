@@ -61,21 +61,20 @@ namespace LTSM
 
         static void info(const char* format, ...)
         {
-	    if(level != DebugLevel::None)
-	    {
+            if(level != DebugLevel::None)
+            {
                 va_list args;
                 va_start(args, format);
 
                 if(target == DebugTarget::Console)
-	        {
+                {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fdlog, "[info] ");
-		    vfprintf(fdlog, format, args);
-		    fprintf(fdlog, "\n");
-	        }
-	        else
-                if(target == DebugTarget::Syslog)
+                    fprintf(fdlog, "[info] ");
+                    vfprintf(fdlog, format, args);
+                    fprintf(fdlog, "\n");
+                }
+                else if(target == DebugTarget::Syslog)
                 {
 #ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_INFO, format, args);
@@ -83,6 +82,7 @@ namespace LTSM
                     vsyslog(LOG_INFO, format, args);
 #endif
                 }
+
                 va_end(args);
             }
         }
@@ -93,15 +93,14 @@ namespace LTSM
             va_start(args, format);
 
             if(target == DebugTarget::Console)
-	    {
+            {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fdlog, "[notice] ");
-		vfprintf(fdlog, format, args);
-	    	fprintf(fdlog, "\n");
-	    }
-	    else
-            if(target == DebugTarget::Syslog)
+                fprintf(fdlog, "[notice] ");
+                vfprintf(fdlog, format, args);
+                fprintf(fdlog, "\n");
+            }
+            else if(target == DebugTarget::Syslog)
             {
 #ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_NOTICE, format, args);
@@ -115,26 +114,25 @@ namespace LTSM
 
         static void warning(const char* format, ...)
         {
-	    if(level != DebugLevel::None)
-	    {
+            if(level != DebugLevel::None)
+            {
                 va_list args;
                 va_start(args, format);
 
                 if(target == DebugTarget::Console)
-	        {
+                {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fdlog, "[warning] ");
-		    vfprintf(fdlog, format, args);
-		    fprintf(fdlog, "\n");
-	        }
-	        else
-                if(target == DebugTarget::Syslog)
+                    fprintf(fdlog, "[warning] ");
+                    vfprintf(fdlog, format, args);
+                    fprintf(fdlog, "\n");
+                }
+                else if(target == DebugTarget::Syslog)
                 {
 #ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_WARNING, format, args);
 #else
-        	    vsyslog(LOG_WARNING, format, args);
+                    vsyslog(LOG_WARNING, format, args);
 #endif
                 }
 
@@ -148,20 +146,19 @@ namespace LTSM
             va_start(args, format);
 
             if(target == DebugTarget::Console)
-	    {
+            {
                 const std::scoped_lock guard{ logging };
 
-		fprintf(fdlog, "[error] ");
-		vfprintf(fdlog, format, args);
-		fprintf(fdlog, "\n");
-	    }
-	    else
-            if(target == DebugTarget::Syslog)
+                fprintf(fdlog, "[error] ");
+                vfprintf(fdlog, format, args);
+                fprintf(fdlog, "\n");
+            }
+            else if(target == DebugTarget::Syslog)
             {
 #ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_ERR, format, args);
 #else
-        	vsyslog(LOG_ERR, format, args);
+                vsyslog(LOG_ERR, format, args);
 #endif
             }
 
@@ -170,21 +167,20 @@ namespace LTSM
 
         static void debug(const char* format, ...)
         {
-	    if(level == DebugLevel::Debug || level == DebugLevel::Trace)
-	    {
+            if(level == DebugLevel::Debug || level == DebugLevel::Trace)
+            {
                 va_list args;
                 va_start(args, format);
 
                 if(target == DebugTarget::Console)
-	        {
+                {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fdlog, "[debug] ");
-		    vfprintf(fdlog, format, args);
-		    fprintf(fdlog, "\n");
-	        }
-	        else
-                if(target == DebugTarget::Syslog)
+                    fprintf(fdlog, "[debug] ");
+                    vfprintf(fdlog, format, args);
+                    fprintf(fdlog, "\n");
+                }
+                else if(target == DebugTarget::Syslog)
                 {
 #ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_DEBUG, format, args);
@@ -199,21 +195,20 @@ namespace LTSM
 
         static void trace(const char* format, ...)
         {
-	    if(level == DebugLevel::Trace)
-	    {
+            if(level == DebugLevel::Trace)
+            {
                 va_list args;
                 va_start(args, format);
 
                 if(target == DebugTarget::Console)
-	        {
+                {
                     const std::scoped_lock guard{ logging };
 
-		    fprintf(fdlog, "[trace] ");
-		    vfprintf(fdlog, format, args);
-		    fprintf(fdlog, "\n");
-	        }
-	        else
-                if(target == DebugTarget::Syslog)
+                    fprintf(fdlog, "[trace] ");
+                    vfprintf(fdlog, format, args);
+                    fprintf(fdlog, "\n");
+                }
+                else if(target == DebugTarget::Syslog)
                 {
 #ifdef WITH_SYSTEMD
                     sd_journal_printv(LOG_DEBUG, format, args);
@@ -247,28 +242,29 @@ namespace LTSM
 #ifdef WITH_JSON
     class ApplicationJsonConfig : public Application
     {
-        JsonObject	   json;
+        JsonObject json;
 
     protected:
-        void               configSet(JsonObject &&) noexcept;
+        void configSet(JsonObject &&) noexcept;
 
     public:
         ApplicationJsonConfig(std::string_view ident, const char* fconf = nullptr);
 
-        void               readConfig(const std::filesystem::path &);
+        void readConfig(const std::filesystem::path &);
 
-        void               configSetInteger(const std::string &, int);
-        void               configSetBoolean(const std::string &, bool);
-        void               configSetString(const std::string &, std::string_view);
-        void               configSetDouble(const std::string &, double);
+        void configSetInteger(const std::string &, int);
+        void configSetBoolean(const std::string &, bool);
+        void configSetString(const std::string &, std::string_view);
+        void configSetDouble(const std::string &, double);
 
-        int                configGetInteger(std::string_view, int = 0) const;
-        bool               configGetBoolean(std::string_view, bool = false) const;
-        std::string        configGetString(std::string_view, std::string_view = "") const;
-        double             configGetDouble(std::string_view, double = 0) const;
+        int configGetInteger(std::string_view, int = 0) const;
+        bool configGetBoolean(std::string_view, bool = false) const;
+        std::string configGetString(std::string_view, std::string_view = "") const;
+        double configGetDouble(std::string_view, double = 0) const;
 
         const JsonObject & config(void) const;
     };
+
 #endif
 }
 

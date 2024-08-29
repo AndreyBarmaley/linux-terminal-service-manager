@@ -64,6 +64,7 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
 #endif
 #endif
 
@@ -83,12 +84,17 @@ namespace LTSM
         std::vector<gid_t> groups(void) const;
 
         inline const char* user(void) const { return st.pw_name; }
+
         inline const char* home(void) const { return st.pw_dir; }
+
         inline const char* shell(void) const { return st.pw_shell; }
+
         inline const char* gecos(void) const { return st.pw_gecos; }
 
         inline const uid_t & uid(void) const { return st.pw_uid; }
+
         inline const gid_t & gid(void) const { return st.pw_gid; }
+
         inline std::string runtime_dir(void) const { return std::string("/run/user/").append(std::to_string(st.pw_uid)); }
     };
 
@@ -104,21 +110,22 @@ namespace LTSM
         std::forward_list<std::string> members(void) const;
 
         inline const char* group(void) const { return st.gr_name; }
+
         inline gid_t gid(void) const { return st.gr_gid; }
     };
 
-    typedef std::unique_ptr<UserInfo>  UserInfoPtr;
+    typedef std::unique_ptr<UserInfo> UserInfoPtr;
     typedef std::unique_ptr<GroupInfo> GroupInfoPtr;
 
     namespace Tools
     {
 #if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-	bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int *bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
-	AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
+        bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
+        AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
 #endif
 
-	bool binaryToFile(const void*, size_t len, std::string_view);
-	std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
+        bool binaryToFile(const void*, size_t len, std::string_view);
+        std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
         std::list<std::string> readDir(const std::string & path, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
@@ -155,7 +162,7 @@ namespace LTSM
 
         class StringFormat : public std::string
         {
-            int             cur = 1;
+            int cur = 1;
 
         public:
             StringFormat(std::string_view);
@@ -174,7 +181,7 @@ namespace LTSM
         struct StreamBits
         {
             std::vector<uint8_t> vecbuf;
-            size_t               bitpos = 0;
+            size_t bitpos = 0;
 
             bool empty(void) const;
             const std::vector<uint8_t> & toVector(void) const;
@@ -208,7 +215,9 @@ namespace LTSM
                     it1 = std::next(it1);
 
                     if(it1 == it2)
+                    {
                         return it2;
+                    }
                 }
             }
 
@@ -226,56 +235,64 @@ namespace LTSM
             return os.str();
         }
 
-	template<typename Iterator>
-        std::string     join(Iterator it1, Iterator it2, std::string_view sep = "")
+        template<typename Iterator>
+        std::string join(Iterator it1, Iterator it2, std::string_view sep = "")
         {
             std::ostringstream os;
- 
+
             for(auto it = it1; it != it2; ++it)
             {
                 os << *it;
- 
+
                 if(std::next(it) != it2)
+                {
                     os << sep;
+                }
             }
- 
+
             return os.str();
         }
 
-        std::string     join(const std::list<std::string> &, std::string_view sep = "");
-        std::string     join(const std::vector<std::string> &, std::string_view sep = "");
+        std::string join(const std::list<std::string> &, std::string_view sep = "");
+        std::string join(const std::vector<std::string> &, std::string_view sep = "");
 
-        std::string     lower(std::string);
-        std::string     runcmd(std::string_view);
+        std::string lower(std::string);
+        std::string runcmd(std::string_view);
 
-        std::string     escaped(std::string_view, bool quote);
-        std::string     unescaped(std::string);
+        std::string escaped(std::string_view, bool quote);
+        std::string unescaped(std::string);
 
-        std::string     replace(const std::string & src, std::string_view pred, std::string_view val);
-        std::string     replace(const std::string & src, std::string_view pred, int val);
+        std::string replace(const std::string & src, std::string_view pred, std::string_view val);
+        std::string replace(const std::string & src, std::string_view pred, int val);
 
-        std::string     hex(int value, int width = 8);
+        std::string hex(int value, int width = 8);
 
-        uint32_t        crc32b(std::string_view);
-        uint32_t        crc32b(const uint8_t* ptr, size_t size);
-        uint32_t        crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
+        uint32_t crc32b(std::string_view);
+        uint32_t crc32b(const uint8_t* ptr, size_t size);
+        uint32_t crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
-        bool            checkUnixSocket(const std::filesystem::path &);
+        bool checkUnixSocket(const std::filesystem::path &);
 
-        size_t		maskShifted(size_t mask);
-        size_t		maskMaxValue(uint32_t mask);
+        size_t maskShifted(size_t mask);
+        size_t maskMaxValue(uint32_t mask);
 
         template<typename Iterator>
         std::string buffer2hexstring(Iterator it1, Iterator it2, size_t width = 8, std::string_view sep = ",", bool prefix = true)
         {
             std::ostringstream os;
+
             while(it1 != it2)
             {
                 if(prefix)
+                {
                     os << "0x";
+                }
+
                 os << std::setw(width) << std::setfill('0') << std::uppercase << std::hex << static_cast<int>(*it1);
                 auto itn = std::next(it1);
-                if(sep.size() && itn != it2) os << sep;
+
+                if(sep.size() && itn != it2) { os << sep; }
+
                 it1 = itn;
             }
 
@@ -288,10 +305,10 @@ namespace LTSM
             std::atomic<bool> flag{false};
 
         public:
-            bool tryLock(void) noexcept 
+            bool tryLock(void) noexcept
             {
                 return ! flag.load(std::memory_order_relaxed) &&
-                    ! flag.exchange(true, std::memory_order_acquire);
+                       ! flag.exchange(true, std::memory_order_acquire);
             }
 
             void lock(void) noexcept
@@ -299,10 +316,14 @@ namespace LTSM
                 for(;;)
                 {
                     if(! flag.exchange(true, std::memory_order_acquire))
+                    {
                         break;
+                    }
 
                     while(flag.load(std::memory_order_relaxed))
+                    {
                         std::this_thread::yield();
+                    }
                 }
             }
 
@@ -326,7 +347,7 @@ namespace LTSM
             bool check(void)
             {
                 auto now = std::chrono::steady_clock::now();
-        
+
                 if(dt < now - tp)
                 {
                     tp = now;
@@ -337,106 +358,128 @@ namespace LTSM
             }
         };
 
-	// BaseTimer
-	class BaseTimer
-	{
-	protected:
-	    std::thread         thread;
-	    std::atomic<bool>   processed{false};
+        // BaseTimer
+        class BaseTimer
+        {
+        protected:
+            std::thread thread;
+            std::atomic<bool> processed{false};
 
-	public:
-	    BaseTimer() {}
+        public:
+            BaseTimer() {}
+
             ~BaseTimer() { stop(true); }
-    
-	    std::thread::id 	getId(void) const
+
+            std::thread::id getId(void) const
             {
                 return thread.get_id();
             }
 
-	    void		stop(bool wait = false)
+            void stop(bool wait = false)
             {
                 processed = false;
-                if(wait && thread.joinable()) thread.join();
+
+                if(wait && thread.joinable()) { thread.join(); }
             }
 
-	    // usage:
-	    // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
-	    // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, repeat, func, param1, param2, param3);
-	    //
-	    template <class TimeType = std::chrono::milliseconds, class Func>
-	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call)
-	    {
-    		auto ptr = std::make_unique<BaseTimer>();
-    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]()
-    		{
-        	    timer->processed = true;
-        	    auto start = std::chrono::steady_clock::now();
-        	    while(timer->processed)
-        	    {
-            		std::this_thread::sleep_for(TimeType(1));
-            		auto cur = std::chrono::steady_clock::now();
+            // usage:
+            // auto bt1 = BaseTimer::create<std::chrono::microseconds>(100, repeat, [=](){ func(param1, param2, param3); });
+            // auto bt2 = BaseTimer::create<std::chrono::seconds>(3, repeat, func, param1, param2, param3);
+            //
+            template <class TimeType = std::chrono::milliseconds, class Func>
+            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call)
+            {
+                auto ptr = std::make_unique<BaseTimer>();
+                ptr->thread = std::thread([delay, repeat, timer = ptr.get(), call = std::forward<Func>(call)]()
+                {
+                    timer->processed = true;
+                    auto start = std::chrono::steady_clock::now();
 
-            		if(TimeType(delay) <= cur - start)
-            		{
-			    if(!timer->processed)
-				break;
+                    while(timer->processed)
+                    {
+                        std::this_thread::sleep_for(TimeType(1));
+                        auto cur = std::chrono::steady_clock::now();
 
-                	    call();
+                        if(TimeType(delay) <= cur - start)
+                        {
+                            if(!timer->processed)
+                            {
+                                break;
+                            }
 
-                            if(repeat)
-        	                start = std::chrono::steady_clock::now();
-                            else
-                	        timer->processed = false;
-            		}
-        	    }
-    		});
-    		return ptr;
-	    }
-
-	    template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
-	    static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call, Args&&... args)
-	    {
-    		auto ptr = std::make_unique<BaseTimer>();
-    		ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
-		    call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]()
-    		{
-        	    timer->processed = true;
-        	    auto start = std::chrono::steady_clock::now();
-        	    while(timer->processed)
-        	    {
-            		std::this_thread::sleep_for(TimeType(1));
-
-            		if(TimeType(delay) <= std::chrono::steady_clock::now() - start)
-            		{
-			    if(!timer->processed)
-				break;
-
-                	    std::apply(call, args);
+                            call();
 
                             if(repeat)
-        	                start = std::chrono::steady_clock::now();
+                            {
+                                start = std::chrono::steady_clock::now();
+                            }
                             else
-                	        timer->processed = false;
-            		}
-        	    }
-    		});
-    		return ptr;
-	    }
-	};
+                            {
+                                timer->processed = false;
+                            }
+                        }
+                    }
+                });
 
-	// 
-	template <class TimeType, class Func>
+                return ptr;
+            }
+
+            template <class TimeType = std::chrono::milliseconds, class Func, class... Args>
+            static std::unique_ptr<BaseTimer> create(uint32_t delay, bool repeat, Func&& call, Args&&... args)
+            {
+                auto ptr = std::make_unique<BaseTimer>();
+                ptr->thread = std::thread([delay, repeat, timer = ptr.get(),
+                                           call = std::forward<Func>(call), args = std::make_tuple(std::forward<Args>(args)...)]()
+                {
+                    timer->processed = true;
+                    auto start = std::chrono::steady_clock::now();
+
+                    while(timer->processed)
+                    {
+                        std::this_thread::sleep_for(TimeType(1));
+
+                        if(TimeType(delay) <= std::chrono::steady_clock::now() - start)
+                        {
+                            if(!timer->processed)
+                            {
+                                break;
+                            }
+
+                            std::apply(call, args);
+
+                            if(repeat)
+                            {
+                                start = std::chrono::steady_clock::now();
+                            }
+                            else
+                            {
+                                timer->processed = false;
+                            }
+                        }
+                    }
+                });
+
+                return ptr;
+            }
+        };
+
+        //
+        template <class TimeType, class Func>
         bool waitCallable(uint32_t delay, uint32_t pause, Func&& call)
-	{
+        {
             auto now = std::chrono::steady_clock::now();
-    	    while(call())
-    	    {
-            	if(TimeType(delay) <= std::chrono::steady_clock::now() - now)
-            	    return false;
 
-        	std::this_thread::sleep_for(TimeType(pause));
-	    }
-	    return true;
+            while(call())
+            {
+                if(TimeType(delay) <= std::chrono::steady_clock::now() - now)
+                {
+                    return false;
+                }
+
+                std::this_thread::sleep_for(TimeType(pause));
+            }
+
+            return true;
         }
 
         template<typename TimeType = std::chrono::milliseconds>

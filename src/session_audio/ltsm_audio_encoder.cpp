@@ -33,37 +33,42 @@ namespace LTSM
         : framesCount(frames), sampleLength(audioChannels * (bitsPerSample >> 3))
     {
         const size_t reserveSize = 256 * 1024;
-        last.reserve( reserveSize );
-
+        last.reserve(reserveSize);
         int error = OPUS_OK;
         ctx.reset(opus_encoder_create(samplesPerSec, audioChannels,
-            OPUS_APPLICATION_AUDIO /* OPUS_APPLICATION_RESTRICTED_LOWDELAY OPUS_APPLICATION_VOIP OPUS_APPLICATION_AUDIO */, & error));
+                                      OPUS_APPLICATION_AUDIO /* OPUS_APPLICATION_RESTRICTED_LOWDELAY OPUS_APPLICATION_VOIP OPUS_APPLICATION_AUDIO */,
+                                      & error));
 
         if(! ctx || error != OPUS_OK)
         {
-            Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__, "opus_encoder_create", error, samplesPerSec, audioChannels);
+            Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__,
+                               "opus_encoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
         }
 
-/*
-        error = opus_encoder_ctl(ctx.get(), OPUS_SET_BITRATE(bitRate));
-        if(error != OPUS_OK)
-        {
-            Application::error("%s: %s failed, error: %d", __FUNCTION__, "opus_encoder_ctl", error);
-            throw audio_error(NS_FuncName);
-        }
-*/
+        /*
+                error = opus_encoder_ctl(ctx.get(), OPUS_SET_BITRATE(bitRate));
+                if(error != OPUS_OK)
+                {
+                    Application::error("%s: %s failed, error: %d", __FUNCTION__, "opus_encoder_ctl", error);
+                    throw audio_error(NS_FuncName);
+                }
+        */
     }
 
     bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len)
     {
         if(len)
+        {
             last.insert(last.end(), ptr, ptr + len);
-        
+        }
+
         const size_t samplesCount = last.size() / sampleLength;
 
         if(framesCount > samplesCount)
+        {
             return false;
+        }
 
         auto src = (const opus_int16*) last.data();
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
@@ -74,9 +79,8 @@ namespace LTSM
             return false;
         }
 
-        last.erase(last.begin(), std::next(last.begin(), framesCount * sampleLength));
+        last.erase(last.begin(), std::next(last.begin(), framesCount* sampleLength));
         encodeSize = nBytes;
-
         return 0 < encodeSize;
     }
 
@@ -95,5 +99,6 @@ namespace LTSM
 
         return encodeSize;
     }
+
 #endif
 }

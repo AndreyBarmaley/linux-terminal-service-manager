@@ -114,14 +114,28 @@ namespace LTSM
     {
         switch(type)
         {
-            case JsonType::Null: return "null";
-            case JsonType::Integer: return "integer";
-            case JsonType::Double: return "double";
-            case JsonType::String: return "string";
-            case JsonType::Boolean: return "boolean";
-            case JsonType::Object: return "object";
-            case JsonType::Array: return "array";
+            case JsonType::Null:
+                return "null";
+
+            case JsonType::Integer:
+                return "integer";
+
+            case JsonType::Double:
+                return "double";
+
+            case JsonType::String:
+                return "string";
+
+            case JsonType::Boolean:
+                return "boolean";
+
+            case JsonType::Object:
+                return "object";
+
+            case JsonType::Array:
+                return "array";
         }
+
         return "unknown";
     }
 
@@ -309,10 +323,14 @@ namespace LTSM
         auto content = getString();
 
         if(content.compare(0, 4, "fals") == 0)
+        {
             return false;
+        }
 
         if(content.compare(0, 4, "true") == 0)
+        {
             return true;
+        }
 
         int res = 0;
 
@@ -597,7 +615,9 @@ namespace LTSM
         std::list<std::string> res;
 
         for(auto & [key, value] : content)
+        {
             res.push_back(key);
+        }
 
         return res;
     }
@@ -708,7 +728,7 @@ namespace LTSM
             {
                 os << Tools::escaped((*it).first, true) << ": " << (*it).second->toString();
 
-                if(std::next(it) != content.end()) os << ", ";
+                if(std::next(it) != content.end()) { os << ", "; }
             }
         }
 
@@ -721,9 +741,13 @@ namespace LTSM
         auto it = content.find(key);
 
         if(it != content.end())
+        {
             (*it).second = JsonValuePtr();
+        }
         else
+        {
             content.emplace(key, JsonValuePtr());
+        }
     }
 
     void JsonObject::addInteger(const std::string & key, const int & val)
@@ -780,27 +804,39 @@ namespace LTSM
                 auto it = content.find(key);
 
                 if(it != content.end() && (*it).second->isArray())
+                {
                     static_cast<JsonArray*>((*it).second.get())->join(static_cast<const JsonArray &>(*valptr.get()));
+                }
                 else
+                {
                     content.emplace(key, valptr);
+                }
             }
             else if(valptr->isObject())
             {
                 auto it = content.find(key);
 
                 if(it != content.end() && (*it).second->isArray())
+                {
                     static_cast<JsonObject*>((*it).second.get())->join(static_cast<const JsonObject &>(*valptr.get()));
+                }
                 else
+                {
                     content.emplace(key, valptr);
+                }
             }
             else
             {
                 auto it = content.find(key);
 
                 if(it != content.end())
+                {
                     (*it).second = valptr;
+                }
                 else
+                {
                     content.emplace(key, valptr);
+                }
             }
         }
     }
@@ -810,14 +846,17 @@ namespace LTSM
     {
         return 0;
     }
+
     std::string JsonArray::getString(void) const
     {
         return "";
     }
+
     double JsonArray::getDouble(void) const
     {
         return 0;
     }
+
     bool JsonArray::getBoolean(void) const
     {
         return false;
@@ -865,12 +904,12 @@ namespace LTSM
         return isValid(index) ? content[index]->getInteger() : 0;
     }
 
-    std::string JsonArray::getString(size_t index)  const
+    std::string JsonArray::getString(size_t index) const
     {
         return isValid(index) ? content[index]->getString() : "";
     }
 
-    double JsonArray::getDouble(size_t index)  const
+    double JsonArray::getDouble(size_t index) const
     {
         return isValid(index) ? content[index]->getDouble() : 0;
     }
@@ -916,7 +955,7 @@ namespace LTSM
         {
             os << (*it)->toString();
 
-            if(std::next(it) != content.end()) os << ", ";
+            if(std::next(it) != content.end()) { os << ", "; }
         }
 
         os << " ]";
@@ -980,21 +1019,31 @@ namespace LTSM
                 if(ptr2->isArray())
                 {
                     if(ptr1->isArray())
+                    {
                         static_cast<JsonArray*>(ptr1.get())->join(static_cast<const JsonArray &>(*ptr2.get()));
+                    }
                     else
+                    {
                         ptr1.assign(ptr2);
+                    }
                 }
                 else if(ptr2->isObject())
                 {
                     if(ptr1->isObject())
+                    {
                         static_cast<JsonObject*>(ptr1.get())->join(static_cast<const JsonObject &>(*ptr2.get()));
+                    }
                     else
+                    {
                         ptr1.assign(ptr2);
+                    }
                 }
             }
         }
         else
+        {
             content = ja.content;
+        }
     }
 
     /* JsonContent */
@@ -1034,13 +1083,13 @@ namespace LTSM
         }
         else if(counts == JSMN_ERROR_PART)
         {
-            Application::error("%s: %s",  __FUNCTION__, "the content is not a full JSON packet, more bytes expected");
+            Application::error("%s: %s", __FUNCTION__, "the content is not a full JSON packet, more bytes expected");
             clear();
             return false;
         }
         else if(counts < 0)
         {
-            Application::error("%s: %s",  __FUNCTION__, "unknown error");
+            Application::error("%s: %s", __FUNCTION__, "unknown error");
             clear();
             return false;
         }
@@ -1053,8 +1102,11 @@ namespace LTSM
     bool JsonContent::readFile(const std::filesystem::path & file)
     {
         auto str = Tools::fileToString(file);
+
         if(! str.empty())
+        {
             return parseBinary(str.data(), str.size());
+        }
 
         return false;
     }
@@ -1062,7 +1114,9 @@ namespace LTSM
     std::string JsonContent::stringToken(const JsmnToken & tok) const
     {
         if(0 > tok.start() || 1 > tok.size())
+        {
             return "";
+        }
 
         return content.substr(tok.start(), tok.size());
     }
@@ -1090,7 +1144,9 @@ namespace LTSM
             auto [ptr, count] = getValue(itval, nullptr);
 
             if(ptr)
+            {
                 arr->content.emplace_back(std::move(ptr));
+            }
 
             skip += count;
             itval = Tools::nextToEnd(it, skip, end());
@@ -1098,8 +1154,10 @@ namespace LTSM
 
         // reset reference
         if(cont)
+        {
             arr = nullptr;
-        
+        }
+
         return std::make_pair(JsonValuePtr(arr), skip);
     }
 
@@ -1128,9 +1186,13 @@ namespace LTSM
                 auto it = obj->content.find(key);
 
                 if(it != obj->content.end())
+                {
                     (*it).second = std::move(ptr);
+                }
                 else
+                {
                     obj->content.emplace(key, std::move(ptr));
+                }
             }
 
             skip += 1 + count;
@@ -1140,8 +1202,10 @@ namespace LTSM
 
         // reset reference
         if(cont)
+        {
             obj = nullptr;
-        
+        }
+
         return std::make_pair(JsonValuePtr(obj), skip);
     }
 
@@ -1151,7 +1215,9 @@ namespace LTSM
         auto val = stringToken(*it);
 
         if(! (*it).isValue())
+        {
             Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
+        }
 
         size_t dotpos = val.find(".");
 
@@ -1171,10 +1237,14 @@ namespace LTSM
         catch(const std::invalid_argument &)
         {
             if(Tools::lower(val).compare(0, 5, "false") == 0)
+            {
                 return std::make_pair(JsonValuePtr(false), 1);
+            }
 
             if(Tools::lower(val).compare(0, 4, "true") == 0)
+            {
                 return std::make_pair(JsonValuePtr(true), 1);
+            }
         }
 
         return std::make_pair(JsonValuePtr(), 1);
@@ -1186,18 +1256,26 @@ namespace LTSM
         const JsmnToken & tok = *it;
 
         if(tok.isArray())
+        {
             return getValueArray(it, cont);
+        }
 
         if(tok.isObject())
+        {
             return getValueObject(it, cont);
+        }
 
         if(tok.isPrimitive())
+        {
             return getValuePrimitive(it, cont);
-    
+        }
+
         auto val = stringToken(tok);
 
         if(! tok.isValue())
+        {
             Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
+        }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
     }
@@ -1207,7 +1285,9 @@ namespace LTSM
         JsonObject res;
 
         if(isObject())
+        {
             getValue(begin(), & res);
+        }
 
         return res;
     }
@@ -1217,7 +1297,9 @@ namespace LTSM
         JsonArray res;
 
         if(isArray())
+        {
             getValue(begin(), & res);
+        }
 
         return res;
     }
@@ -1242,78 +1324,87 @@ namespace LTSM
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, const json_plain & val)
     {
-        if(comma) os << ",";
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << val;
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string & val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string_view & val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, const char* val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, size_t val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << val;
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, int val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << val;
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, double val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << val;
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key, bool val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << (val ? "true" : "false");
         comma = true;
         return *this;
     }
 
     JsonObjectStream & JsonObjectStream::push(std::string_view key)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(key) << ":" << "null";
         comma = true;
         return *this;
     }
 
     json_plain JsonObjectStream::flush(void)
-    {   
+    {
         os << "}";
         return json_plain(os.str());
     }
@@ -1325,56 +1416,63 @@ namespace LTSM
     }
 
     JsonArrayStream & JsonArrayStream::push(const json_plain & val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << val;
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(const std::string & val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(const std::string_view & val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(const char* val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << std::quoted(val);
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(int val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << val;
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(size_t val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << val;
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(double val)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << val;
         comma = true;
         return *this;
@@ -1382,15 +1480,17 @@ namespace LTSM
 
     JsonArrayStream & JsonArrayStream::push(bool val)
     {
-        if(comma) os << ",";
+        if(comma) { os << ","; }
+
         os << (val ? "true" : "false");
         comma = true;
         return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(void)
-    {   
-        if(comma) os << ",";
+    {
+        if(comma) { os << ","; }
+
         os << "null";
         comma = true;
         return *this;

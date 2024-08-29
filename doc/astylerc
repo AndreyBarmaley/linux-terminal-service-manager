@@ -1,0 +1,13 @@
+-A1
+-S
+-N
+-Y
+-f
+--pad-negation
+--unpad-brackets
+--align-pointer=type
+--align-reference=middle
+--add-braces
+--keep-one-line-blocks
+--convert-tabs
+--squeeze-ws

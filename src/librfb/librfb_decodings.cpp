@@ -39,15 +39,17 @@ namespace LTSM
 #else
                 return recvIntLE32();
 #endif
-
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
                 return recvIntBE16();
 #else
                 return recvIntLE16();
 #endif
 
-            case 1: return recvInt8();
-            default: break;
+            case 1:
+                return recvInt8();
+
+            default:
+                break;
         }
 
         Application::error("%s: %s", __FUNCTION__, "unknown format");
@@ -55,7 +57,7 @@ namespace LTSM
     }
 
     int RFB::DecoderStream::recvCPixel(void)
-    {   
+    {
         if(clientFormat().bitsPerPixel() == 32)
         {
             auto colr = recvInt8();
@@ -85,63 +87,79 @@ namespace LTSM
                 break;
             }
         }
-            
+
         return length;
     }
 
     size_t RFB::DecoderStream::recvZlibData(ZLib::InflateStream* zlib, bool uint16sz)
     {
-	size_t zipsz = 0;
+        size_t zipsz = 0;
 
         if(uint16sz)
+        {
             zipsz = recvIntBE16();
+        }
         else
+        {
             zipsz = recvIntBE32();
+        }
 
         auto zip = recvData(zipsz);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
+        {
             Application::debug("%s: compress data length: %u", __FUNCTION__, zip.size());
+        }
 
         zlib->appendData(zip);
-	return zipsz;
+        return zipsz;
     }
 
-    //  DecodingBase
+    // DecodingBase
     RFB::DecodingBase::DecodingBase(int v) : type(v)
     {
         Application::info("%s: init decoding: %s", __FUNCTION__, encodingName(type));
     }
 
     int RFB::DecodingBase::getType(void) const
-    {   
+    {
         return type;
     }
-        
+
     void RFB::DecodingBase::setDebug(int v)
-    {   
+    {
         debug = v;
     }
 
     void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
 
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        {
             cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
+        }
     }
 
     void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
 
         auto subRects = cli.recvIntBE32();
         auto bgColor = cli.recvPixel();
 
         if(1 < debug)
+        {
             Application::debug("%s: back pixel: 0x%08x, sub rects: %" PRIu32, __FUNCTION__, bgColor, subRects);
+        }
 
         cli.fillPixel(reg, bgColor);
 
@@ -166,7 +184,10 @@ namespace LTSM
             }
 
             if(2 < debug)
-                Application::debug("%s: sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dst.x, dst.y, dst.width, dst.height);
+            {
+                Application::debug("%s: sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dst.x, dst.y,
+                                   dst.width, dst.height);
+            }
 
             dst.x += reg.x;
             dst.y += reg.y;
@@ -185,12 +206,16 @@ namespace LTSM
     {
         if(16 < reg.width || 16 < reg.height)
         {
-            Application::error("%s: invalid hextile region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+            Application::error("%s: invalid hextile region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               reg.x, reg.y, reg.width, reg.height);
             throw rfb_error(NS_FuncName);
         }
 
         if(debug)
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
 
         updateRegionColors(cli, reg);
     }
@@ -200,15 +225,22 @@ namespace LTSM
         auto flag = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding mask: 0x%02" PRIx8 ", sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: sub encoding mask: 0x%02" PRIx8 ", sub region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                               "]", __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
+        }
 
         if(flag & RFB::HEXTILE_RAW)
         {
             if(2 < debug)
+            {
                 Application::debug("%s: type: %s", __FUNCTION__, "raw");
+            }
 
             for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-                    cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
+            {
+                cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
+            }
         }
         else
         {
@@ -217,7 +249,9 @@ namespace LTSM
                 bgColor = cli.recvPixel();
 
                 if(2 < debug)
+                {
                     Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "background", bgColor);
+                }
             }
 
             cli.fillPixel(reg, bgColor);
@@ -228,7 +262,9 @@ namespace LTSM
                 flag &= ~HEXTILE_COLOURED;
 
                 if(2 < debug)
+                {
                     Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "foreground", fgColor);
+                }
             }
 
             if(flag & HEXTILE_SUBRECTS)
@@ -237,28 +273,36 @@ namespace LTSM
                 XCB::Region dst;
 
                 if(2 < debug)
+                {
                     Application::debug("%s: type: %s, count: %d", __FUNCTION__, "subrects", subRects);
+                }
 
                 while(0 < subRects--)
                 {
                     auto pixel = fgColor;
+
                     if(flag & HEXTILE_COLOURED)
                     {
                         pixel = cli.recvPixel();
+
                         if(3 < debug)
+                        {
                             Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "colored", pixel);
+                        }
                     }
 
                     auto val1 = cli.recvInt8();
                     auto val2 = cli.recvInt8();
-
                     dst.x = (0x0F & (val1 >> 4));
                     dst.y = (0x0F & val1);
                     dst.width = 1 + (0x0F & (val2 >> 4));
                     dst.height = 1 + (0x0F & val2);
 
                     if(3 < debug)
-                        Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], pixel: 0x%08x", __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
+                    {
+                        Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], pixel: 0x%08x",
+                                           __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
+                    }
 
                     dst.x += reg.x;
                     dst.y += reg.y;
@@ -278,29 +322,38 @@ namespace LTSM
     RFB::DecodingTRLE::DecodingTRLE(bool zip) : DecodingBase(zip ? ENCODING_ZRLE : ENCODING_TRLE)
     {
         if(zip)
-	    zlib.reset(new ZLib::InflateStream());
+        {
+            zlib.reset(new ZLib::InflateStream());
+        }
     }
 
     void RFB::DecodingTRLE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
 
         const XCB::Size bsz(64, 64);
 
         if(isZRLE())
-	{
-	    cli.recvZlibData(zlib.get(), false);
-	    DecoderWrapper wrap(zlib.get(), & cli);
+        {
+            cli.recvZlibData(zlib.get(), false);
+            DecoderWrapper wrap(zlib.get(), & cli);
 
-    	    for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
-    		updateSubRegion(wrap, reg0);
-	}
-	else
-	{
-    	    for(auto & reg0: reg.XCB::Region::divideBlocks(bsz))
-    		updateSubRegion(cli, reg0);
-	}
+            for(auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
+            {
+                updateSubRegion(wrap, reg0);
+            }
+        }
+        else
+        {
+            for(auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
+            {
+                updateSubRegion(cli, reg0);
+            }
+        }
     }
 
     void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg)
@@ -308,14 +361,17 @@ namespace LTSM
         auto type = cli.recvInt8();
 
         if(1 < debug)
-            Application::debug("%s: sub encoding type: 0x%02" PRIx8 ", sub region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], zrle: %d",
-                        __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
+            Application::debug("%s: sub encoding type: 0x%02" PRIx8 ", sub region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                               "], zrle: %d",
+                               __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
 
         // trle raw
         if(0 == type)
         {
             if(2 < debug)
+            {
                 Application::debug("%s: type: %s", __FUNCTION__, "raw");
+            }
 
             for(auto coord = XCB::PointIterator(0, 0, reg.toSize()); coord.isValid(); ++coord)
             {
@@ -324,166 +380,123 @@ namespace LTSM
             }
 
             if(3 < debug)
+            {
                 Application::debug("%s: complete: %s", __FUNCTION__, "raw");
-        }
-        else
-        // trle solid
-        if(1 == type)
-        {
-            auto solid = cli.recvCPixel();
-
-            if(2 < debug)
-                Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "solid", solid);
-
-            cli.fillPixel(reg, solid);
-
-            if(3 < debug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "solid");
-        }
-        else
-        if(2 <= type && type <= 16)
-        {
-            size_t field = 1;
-
-            if(4 < type)
-                field = 4;
-            else
-            if(2 < type)
-                field = 2;
-
-            size_t bits = field * reg.width;
-            size_t rowsz = bits >> 3;
-            if((rowsz << 3) < bits) rowsz++;
-
-            //  recv palette
-            std::vector<int> palette(type);
-            for(auto & val : palette) val = cli.recvCPixel();
-
-            if(2 < debug)
-                Application::debug("%s: type: %s, size: %u", __FUNCTION__, "packed palette", palette.size());
-
-            if(3 < debug)
-            {
-                std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
-                Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "packed palette", str.c_str());
             }
+        }
+        else
 
-            // recv packed rows
-            for(int oy = 0; oy < reg.height; ++oy)
+            // trle solid
+            if(1 == type)
             {
-                Tools::StreamBitsUnpack sb(cli.recvData(rowsz), reg.width, field);
+                auto solid = cli.recvCPixel();
 
-                for(int ox = reg.width - 1; 0 <= ox; --ox)
+                if(2 < debug)
                 {
-                    auto pos = reg.topLeft() + XCB::Point(ox, oy);
-                    auto index = sb.popValue(field);
+                    Application::debug("%s: type: %s, pixel: 0x%08x", __FUNCTION__, "solid", solid);
+                }
 
-                    if(4 < debug)
-                        Application::debug("%s: type: %s, pos: [%" PRId16 ", %" PRId16 "], index: %d", __FUNCTION__, "packed palette", pos.x, pos.y, index);
+                cli.fillPixel(reg, solid);
 
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    cli.setPixel(pos, palette[index]);
+                if(3 < debug)
+                {
+                    Application::debug("%s: complete: %s", __FUNCTION__, "solid");
                 }
             }
-
-            if(3 < debug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "packed palette");
-        }
-        else
-        if((17 <= type && type <= 127) || type == 129)
-        {
-            Application::error("%s: %s", __FUNCTION__, "invalid trle type");
-            throw rfb_error(NS_FuncName);
-        }
-        else
-        if(128 == type)
-        {
-            if(2 < debug)
-                Application::debug("%s: type: %s", __FUNCTION__, "plain rle");
-
-            auto coord = XCB::PointIterator(0, 0, reg.toSize());
-
-            while(coord.isValid())
+            else if(2 <= type && type <= 16)
             {
-                auto pixel = cli.recvCPixel();
-                auto runLength = cli.recvRunLength();
+                size_t field = 1;
 
-                if(4 < debug)
-                    Application::debug("%s: type: %s, pixel: 0x%08x, length: %u", __FUNCTION__, "plain rle", pixel, runLength);
-
-                while(runLength--)
+                if(4 < type)
                 {
-                    cli.setPixel(reg.topLeft() + coord, pixel);
-                    ++coord;
+                    field = 4;
+                }
+                else if(2 < type)
+                {
+                    field = 2;
+                }
 
-                    if(! coord.isValid() && runLength)
+                size_t bits = field * reg.width;
+                size_t rowsz = bits >> 3;
+
+                if((rowsz << 3) < bits)
+                {
+                    rowsz++;
+                }
+
+                // recv palette
+                std::vector<int> palette(type);
+
+                for(auto & val : palette)
+                {
+                    val = cli.recvCPixel();
+                }
+
+                if(2 < debug)
+                {
+                    Application::debug("%s: type: %s, size: %u", __FUNCTION__, "packed palette", palette.size());
+                }
+
+                if(3 < debug)
+                {
+                    std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
+                    Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "packed palette", str.c_str());
+                }
+
+                // recv packed rows
+                for(int oy = 0; oy < reg.height; ++oy)
+                {
+                    Tools::StreamBitsUnpack sb(cli.recvData(rowsz), reg.width, field);
+
+                    for(int ox = reg.width - 1; 0 <= ox; --ox)
                     {
-                        Application::error("%s: %s", __FUNCTION__, "plain rle: coord out of range");
-                        throw rfb_error(NS_FuncName);
+                        auto pos = reg.topLeft() + XCB::Point(ox, oy);
+                        auto index = sb.popValue(field);
+
+                        if(4 < debug)
+                        {
+                            Application::debug("%s: type: %s, pos: [%" PRId16 ", %" PRId16 "], index: %d", __FUNCTION__, "packed palette", pos.x,
+                                               pos.y, index);
+                        }
+
+                        if(index >= palette.size())
+                        {
+                            Application::error("%s: %s", __FUNCTION__, "index out of range");
+                            throw rfb_error(NS_FuncName);
+                        }
+
+                        cli.setPixel(pos, palette[index]);
                     }
                 }
-            }
 
-            if(3 < debug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "plain rle");
-        }
-        else
-        if(130 <= type)
-        {
-            size_t palsz = type - 128;
-            std::vector<int> palette(palsz);
-            
-            for(auto & val: palette)
-                val = cli.recvCPixel();
-
-            if(2 < debug)
-                Application::debug("%s: type: %s, size: %u", __FUNCTION__, "rle palette", palsz);
-
-            if(3 < debug)
-            {
-                std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
-                Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "rle palette", str.c_str());
-            }
-
-            auto coord = XCB::PointIterator(0, 0, reg.toSize());
-
-            while(coord.isValid())
-            {
-                auto index = cli.recvInt8();
-
-                if(index < 128)
+                if(3 < debug)
                 {
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
-
-                    auto pixel = palette[index];
-                    cli.setPixel(reg.topLeft() + coord, pixel);
-
-                    ++coord;
+                    Application::debug("%s: complete: %s", __FUNCTION__, "packed palette");
                 }
-                else
+            }
+            else if((17 <= type && type <= 127) || type == 129)
+            {
+                Application::error("%s: %s", __FUNCTION__, "invalid trle type");
+                throw rfb_error(NS_FuncName);
+            }
+            else if(128 == type)
+            {
+                if(2 < debug)
                 {
-                    index -= 128;
+                    Application::debug("%s: type: %s", __FUNCTION__, "plain rle");
+                }
 
-                    if(index >= palette.size())
-                    {
-                        Application::error("%s: %s", __FUNCTION__, "index out of range");
-                        throw rfb_error(NS_FuncName);
-                    }
+                auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
-                    auto pixel = palette[index];
+                while(coord.isValid())
+                {
+                    auto pixel = cli.recvCPixel();
                     auto runLength = cli.recvRunLength();
 
                     if(4 < debug)
-                        Application::debug("%s: type: %s, index: %" PRIu8 ", length: %u", __FUNCTION__, "rle palette", index, runLength);
+                    {
+                        Application::debug("%s: type: %s, pixel: 0x%08x, length: %u", __FUNCTION__, "plain rle", pixel, runLength);
+                    }
 
                     while(runLength--)
                     {
@@ -492,16 +505,93 @@ namespace LTSM
 
                         if(! coord.isValid() && runLength)
                         {
-                            Application::error("%s: %s", __FUNCTION__, "rle palette: coord out of range");
+                            Application::error("%s: %s", __FUNCTION__, "plain rle: coord out of range");
                             throw rfb_error(NS_FuncName);
                         }
                     }
                 }
-            }
 
-            if(3 < debug)
-                Application::debug("%s: complete: %s", __FUNCTION__, "rle palette");
-        }
+                if(3 < debug)
+                {
+                    Application::debug("%s: complete: %s", __FUNCTION__, "plain rle");
+                }
+            }
+            else if(130 <= type)
+            {
+                size_t palsz = type - 128;
+                std::vector<int> palette(palsz);
+
+                for(auto & val : palette)
+                {
+                    val = cli.recvCPixel();
+                }
+
+                if(2 < debug)
+                {
+                    Application::debug("%s: type: %s, size: %u", __FUNCTION__, "rle palette", palsz);
+                }
+
+                if(3 < debug)
+                {
+                    std::string str = Tools::buffer2hexstring(palette.begin(), palette.end(), 8);
+                    Application::debug("%s: type: %s, palette: %s", __FUNCTION__, "rle palette", str.c_str());
+                }
+
+                auto coord = XCB::PointIterator(0, 0, reg.toSize());
+
+                while(coord.isValid())
+                {
+                    auto index = cli.recvInt8();
+
+                    if(index < 128)
+                    {
+                        if(index >= palette.size())
+                        {
+                            Application::error("%s: %s", __FUNCTION__, "index out of range");
+                            throw rfb_error(NS_FuncName);
+                        }
+
+                        auto pixel = palette[index];
+                        cli.setPixel(reg.topLeft() + coord, pixel);
+                        ++coord;
+                    }
+                    else
+                    {
+                        index -= 128;
+
+                        if(index >= palette.size())
+                        {
+                            Application::error("%s: %s", __FUNCTION__, "index out of range");
+                            throw rfb_error(NS_FuncName);
+                        }
+
+                        auto pixel = palette[index];
+                        auto runLength = cli.recvRunLength();
+
+                        if(4 < debug)
+                        {
+                            Application::debug("%s: type: %s, index: %" PRIu8 ", length: %u", __FUNCTION__, "rle palette", index, runLength);
+                        }
+
+                        while(runLength--)
+                        {
+                            cli.setPixel(reg.topLeft() + coord, pixel);
+                            ++coord;
+
+                            if(! coord.isValid() && runLength)
+                            {
+                                Application::error("%s: %s", __FUNCTION__, "rle palette: coord out of range");
+                                throw rfb_error(NS_FuncName);
+                            }
+                        }
+                    }
+                }
+
+                if(3 < debug)
+                {
+                    Application::debug("%s: complete: %s", __FUNCTION__, "rle palette");
+                }
+            }
     }
 
     RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB)
@@ -512,13 +602,18 @@ namespace LTSM
     void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
         if(debug)
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        {
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
 
-	cli.recvZlibData(zlib.get(), false);
-	DecoderWrapper wrap(zlib.get(), & cli);
+        cli.recvZlibData(zlib.get(), false);
+        DecoderWrapper wrap(zlib.get(), & cli);
 
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-                wrap.setPixel(reg.topLeft() + coord, wrap.recvPixel());
+        {
+            wrap.setPixel(reg.topLeft() + coord, wrap.recvPixel());
+        }
     }
 }
 

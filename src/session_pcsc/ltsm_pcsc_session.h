@@ -44,13 +44,13 @@ namespace PcscLite
     struct ReaderState
     {
         char name[MAX_READERNAME];///< reader name
-        uint32_t event = 0;       ///< number of card events
-        uint32_t state = 0;       ///< SCARD_* bit field
-        int32_t share = 0;        ///< PCSCLITE_SHARING_* sharing status
- 
+        uint32_t event = 0; ///< number of card events
+        uint32_t state = 0; ///< SCARD_* bit field
+        int32_t share = 0; ///< PCSCLITE_SHARING_* sharing status
+
         uint8_t atr[MAX_ATR_SIZE];///< ATR
-        uint32_t atrLen = 0;      ///< ATR length
-        uint32_t protocol = 0;    ///< SCARD_PROTOCOL_* value
+        uint32_t atrLen = 0; ///< ATR length
+        uint32_t protocol = 0; ///< SCARD_PROTOCOL_* value
 
         void reset(void);
     };
@@ -81,15 +81,21 @@ namespace LTSM
         void stop(void)
         {
             stopped = true;
+
             if(job.valid())
+            {
                 job.get();
+            }
         }
 
         void cancel(void)
         {
             canceled = true;
+
             if(job.valid())
+            {
                 job.get();
+            }
         }
     };
 
@@ -115,7 +121,10 @@ namespace LTSM
         PcscClient(int fd, PcscSessionBus* sessionBus);
         ~PcscClient();
 
-        int id(void) const { return sock.fd(); }
+        int id(void) const
+        {
+            return sock.fd();
+        }
     };
 
     class PcscSessionBus : public sdbus::AdaptorInterfaces<Session::PCSC_adaptor>, public Application

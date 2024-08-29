@@ -284,9 +284,13 @@ namespace LTSM
     MemoryStream & MemoryStream::writeInt16(uint16_t v)
     {
         if(bigendian())
+        {
             writeIntBE16(v);
+        }
         else
+        {
             writeIntLE16(v);
+        }
 
         return *this;
     }
@@ -294,9 +298,13 @@ namespace LTSM
     MemoryStream & MemoryStream::writeInt32(uint32_t v)
     {
         if(bigendian())
+        {
             writeIntBE32(v);
+        }
         else
+        {
             writeIntLE32(v);
+        }
 
         return *this;
     }
@@ -304,9 +312,13 @@ namespace LTSM
     MemoryStream & MemoryStream::writeInt64(uint64_t v)
     {
         if(bigendian())
+        {
             writeIntBE64(v);
+        }
         else
+        {
             writeIntLE64(v);
+        }
 
         return *this;
     }
@@ -332,7 +344,9 @@ namespace LTSM
     MemoryStream & MemoryStream::fill(size_t len, char c)
     {
         while(len--)
+        {
             writeInt8(c);
+        }
 
         return *this;
     }
@@ -376,7 +390,10 @@ namespace LTSM
     std::string MemoryStream::readString(size_t len) const
     {
         if(len == 0)
+        {
             len = last();
+        }
+
         std::string str(len, 0x20);
         readTo(str.data(), str.size());
         return str;
@@ -437,7 +454,9 @@ namespace LTSM
         }
 
         if(len == 0)
+        {
             len = last();
+        }
 
         auto it0 = it1;
         it1 = std::next(it1, len);
@@ -606,7 +625,9 @@ namespace LTSM
         }
 
         if(len == 0)
+        {
             len = last();
+        }
 
         auto it0 = it;
         it = std::next(it, len);
@@ -666,8 +687,7 @@ namespace LTSM
                 vec.clear();
                 it = vec.begin();
             }
-            else
-            if(vec.size() > 10 * last())
+            else if(vec.size() > 10 * last())
             {
                 std::vector<uint8_t> tmp(it, vec.end());
                 vec.swap(tmp);
@@ -679,12 +699,14 @@ namespace LTSM
     // DescriptorStream
     DescriptorStream::DescriptorStream(int fd0, bool autoclose) : fd(fd0), autoClose(autoclose)
     {
-    } 
+    }
 
     DescriptorStream::~DescriptorStream()
     {
         if(autoClose && 0 < fd)
+        {
             ::close(fd);
+        }
     }
 
     void DescriptorStream::readFromTo(int fd, void* ptr, ssize_t len)
@@ -694,7 +716,9 @@ namespace LTSM
             ssize_t real = ::read(fd, ptr, len);
 
             if(len == real)
+            {
                 break;
+            }
 
             if(0 < real && real < len)
             {
@@ -702,17 +726,19 @@ namespace LTSM
                 len -= real;
                 continue;
             }
-            
+
             // eof
             if(0 == real)
             {
                 Application::warning("%s: %s", __FUNCTION__, "end stream");
                 throw streambuf_error(NS_FuncName);
             }
-            
+
             // error
             if(EAGAIN == errno || EINTR == errno)
+            {
                 continue;
+            }
 
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "read", strerror(errno), errno);
             throw streambuf_error(NS_FuncName);
@@ -726,7 +752,9 @@ namespace LTSM
             ssize_t real = ::write(fd, ptr, len);
 
             if(len == real)
+            {
                 break;
+            }
 
             if(0 < real && real < len)
             {
@@ -744,7 +772,9 @@ namespace LTSM
 
             // error
             if(EAGAIN == errno || EINTR == errno)
+            {
                 continue;
+            }
 
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "write", strerror(errno), errno);
             throw streambuf_error(NS_FuncName);

@@ -35,21 +35,21 @@
 
 struct XvfbInfo
 {
-    int         display = -1;
-    int         pid1 = 0;
-    int         pid2 = 0;
-    int         width = 0;
-    int         height = 0;
-    int         uid = 0;
-    int         gid = 0;
-    int         durationLimit = 0;
-    int         mode = 0;
-    int         policy = 0;
-    QString     user;
-    QString     authfile;
-    QString     remoteaddr;
-    QString     conntype;
-    QString     encryption;
+    int display = -1;
+    int pid1 = 0;
+    int pid2 = 0;
+    int width = 0;
+    int height = 0;
+    int uid = 0;
+    int gid = 0;
+    int durationLimit = 0;
+    int mode = 0;
+    int policy = 0;
+    QString user;
+    QString authfile;
+    QString remoteaddr;
+    QString conntype;
+    QString encryption;
 };
 
 Q_DECLARE_METATYPE(XvfbInfo);
@@ -59,8 +59,8 @@ struct RowItem : QTableWidgetItem
     RowItem(const XvfbInfo &, const QString &);
     RowItem(const XvfbInfo &, const QIcon &, const QString &);
 
-    XvfbInfo    xvfbInfo(void) const;
-    int		display(void) const;
+    XvfbInfo xvfbInfo(void) const;
+    int display(void) const;
 };
 
 namespace Ui
@@ -73,30 +73,30 @@ class LTSM_Sessions : public QDialog
     Q_OBJECT
 
 protected slots:
-    void	tableReload(void);
-    void	disconnectClicked(void);
-    void	logoffClicked(void);
-    void	showClicked(void);
-    void	showInformation(void);
-    void	sendmsgClicked(void);
-    void	itemSelectionChanged(void);
-    void        itemDoubleClicked(QTableWidgetItem*);
-    void        displayRemovedCallback(int);
-    void        sessionChangedCallback(int);
-    void	customContextMenu(QPoint);
-    void	changeSessionPolicy(void);
-    void	changeSessionDuration(void);
+    void tableReload(void);
+    void disconnectClicked(void);
+    void logoffClicked(void);
+    void showClicked(void);
+    void showInformation(void);
+    void sendmsgClicked(void);
+    void itemSelectionChanged(void);
+    void itemDoubleClicked(QTableWidgetItem*);
+    void displayRemovedCallback(int);
+    void sessionChangedCallback(int);
+    void customContextMenu(QPoint);
+    void changeSessionPolicy(void);
+    void changeSessionDuration(void);
 
 public:
     explicit LTSM_Sessions(QWidget* parent = 0);
     ~LTSM_Sessions();
 
 private:
-    Ui::LTSM_Sessions*             ui;
+    Ui::LTSM_Sessions* ui;
     QScopedPointer<QDBusInterface> dbusInterfacePtr;
-    const RowItem*                 selectedRow;
-    QFileInfo	                   sdl2x11;
-    QProcess	                   process;
+    const RowItem* selectedRow;
+    QFileInfo sdl2x11;
+    QProcess process;
 };
 
 #endif // LTSM_SESSIONS_H

@@ -44,6 +44,7 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
 #endif
 
 #include "librfb_encodings.h"
@@ -53,8 +54,9 @@ namespace LTSM
 {
     struct ffmpeg_error : public std::runtime_error
     {
-        explicit ffmpeg_error(const std::string & what) : std::runtime_error(what){}
-        explicit ffmpeg_error(const char* what) : std::runtime_error(what){}
+        explicit ffmpeg_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit ffmpeg_error(const char* what) : std::runtime_error(what) {}
     };
 
     struct AVCodecContextDeleter
@@ -69,33 +71,33 @@ namespace LTSM
 #endif
         }
     };
-        
+
     struct SwsContextDeleter
-    {   
+    {
         void operator()(SwsContext* ctx)
         {
             sws_freeContext(ctx);
         }
     };
-        
+
     struct SwrContextDeleter
-    {   
+    {
         void operator()(SwrContext* ctx)
         {
             swr_free(& ctx);
         }
     };
-        
+
     struct AVFrameDeleter
-    {   
+    {
         void operator()(AVFrame* ptr)
         {
             av_frame_free(& ptr);
         }
     };
-        
+
     struct AVPacketDeleter
-    {   
+    {
         void operator()(AVPacket* ptr)
         {
             av_packet_free(& ptr);
@@ -111,7 +113,7 @@ namespace LTSM
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;
-	    std::unique_ptr<AVPacket, AVPacketDeleter> packet;
+            std::unique_ptr<AVPacket, AVPacketDeleter> packet;
 
 #if LIBAVFORMAT_VERSION_MAJOR < 59
             AVCodec* codec = nullptr;
@@ -119,7 +121,7 @@ namespace LTSM
             const AVCodec* codec = nullptr;
 #endif
 
-            std::mutex          lockUpdate;
+            std::mutex lockUpdate;
             std::chrono::steady_clock::time_point updatePoint;
 
             //int bitrate = 1024;
@@ -127,32 +129,33 @@ namespace LTSM
             int pts = 0;
 
         protected:
-	    void		initContext(const XCB::Size &);
+            void initContext(const XCB::Size &);
 
         public:
-            void                resizedEvent(const XCB::Size &) override;
-            void                sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-	    void                setDebug(int) override;
+            void resizedEvent(const XCB::Size &) override;
+            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            void setDebug(int) override;
 
-            size_t              updateTimeMS(void) const;
+            size_t updateTimeMS(void) const;
 
             EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
         };
+
 #endif // ENCODING_FFMPEG
 
 #ifdef LTSM_DECODING_FFMPEG
         /// DecodingFFmpeg
         class DecodingFFmpeg : public DecodingBase
         {
-	    PixelFormat 	pf;
+            PixelFormat pf;
 
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;
-	    std::unique_ptr<AVPacket, AVPacketDeleter> packet;
-	    std::unique_ptr<AVFrame, AVFrameDeleter> rgb;
-	    std::unique_ptr<uint8_t, decltype(av_free)*> rgbdata{nullptr, av_free};
+            std::unique_ptr<AVPacket, AVPacketDeleter> packet;
+            std::unique_ptr<AVFrame, AVFrameDeleter> rgb;
+            std::unique_ptr<uint8_t, decltype(av_free)*> rgbdata{nullptr, av_free};
 
 #if LIBAVFORMAT_VERSION_MAJOR < 59
             AVCodec* codec = nullptr;
@@ -160,19 +163,20 @@ namespace LTSM
             const AVCodec* codec = nullptr;
 #endif
 
-            std::mutex          lockUpdate;
+            std::mutex lockUpdate;
 
         protected:
-	    void		initContext(const XCB::Size &);
+            void initContext(const XCB::Size &);
 
         public:
-            void                resizedEvent(const XCB::Size &) override;
-            void                updateRegion(DecoderStream &, const XCB::Region &) override;
-	    void                setDebug(int) override;
-            
+            void resizedEvent(const XCB::Size &) override;
+            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void setDebug(int) override;
+
             DecodingFFmpeg(int type);
             ~DecodingFFmpeg() = default;
         };
+
 #endif //  DECODING_FFMPEG
     }
 }

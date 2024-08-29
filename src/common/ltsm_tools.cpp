@@ -88,7 +88,7 @@ namespace LTSM
     {
         int ngroups = 0;
         getgrouplist(st.pw_name, st.pw_gid, nullptr, & ngroups);
-     
+
         if(0 < ngroups)
         {
             std::vector<gid_t> res(ngroups, st.pw_gid);
@@ -128,10 +128,11 @@ namespace LTSM
     }
 
     std::forward_list<std::string> GroupInfo::members(void) const
-    {   
+    {
         if(auto ptr = st.gr_mem)
         {
             std::forward_list<std::string> res;
+
             while(const char* memb = *ptr)
             {
                 res.emplace_front(memb);
@@ -257,12 +258,18 @@ namespace LTSM
     std::forward_list<std::string> Tools::getSystemUsers(uid_t uidMin, uid_t uidMax)
     {
         if(uidMin > uidMax)
+        {
             std::swap(uidMin, uidMax);
+        }
 
         struct passwd st = {};
+
         auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+
         auto buf = std::make_unique<char[]>(buflen);
+
         struct passwd* res = nullptr;
+
         std::forward_list<std::string> logins;
 
         setpwent();
@@ -270,10 +277,14 @@ namespace LTSM
         while(0 == getpwent_r(& st, buf.get(), buflen, & res))
         {
             if(! res)
+            {
                 break;
+            }
 
             if(uidMin <= res->pw_uid && res->pw_uid <= uidMax)
+            {
                 logins.emplace_front(res->pw_name);
+            }
         }
 
         endpwent();
@@ -288,7 +299,9 @@ namespace LTSM
         for(auto const & entry : std::filesystem::directory_iterator{path, err})
         {
             if(recurse && entry.is_directory())
+            {
                 res.splice(res.end(), readDir(entry.path(), true));
+            }
 
             res.emplace_back(entry.path().native());
         }
@@ -300,7 +313,7 @@ namespace LTSM
     {
         std::error_code err;
         return std::filesystem::exists(path, err) && std::filesystem::is_symlink(path, err) ?
-            resolveSymLink(std::filesystem::read_symlink(path, err)) : path;
+               resolveSymLink(std::filesystem::read_symlink(path, err)) : path;
     }
 
     std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)
@@ -312,17 +325,19 @@ namespace LTSM
             res.resize(::compressBound(arr.size()));
             uLong dstsz = res.size();
             int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz,
-                        reinterpret_cast<const Bytef*>(arr.data()), arr.size());
+                                 reinterpret_cast<const Bytef*>(arr.data()), arr.size());
 
             if(ret == Z_OK)
+            {
                 res.resize(dstsz);
+            }
             else
             {
                 res.clear();
                 Application::error("%s: %s failed, error: %d", __FUNCTION__, "compress", ret);
             }
         }
-    
+
         return res;
     }
 
@@ -337,15 +352,17 @@ namespace LTSM
             int ret = Z_BUF_ERROR;
 
             while(Z_BUF_ERROR ==
-                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                      reinterpret_cast<const Bytef*>(arr.data()), arr.size())))
+                    (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
+                                        reinterpret_cast<const Bytef*>(arr.data()), arr.size())))
             {
                 dstsz = res.size() * 2;
                 res.resize(dstsz);
             }
-            
+
             if(ret == Z_OK)
+            {
                 res.resize(dstsz);
+            }
             else
             {
                 res.clear();
@@ -360,21 +377,31 @@ namespace LTSM
     {
         // 0 <=> 25
         if(v <= ('Z' - 'A'))
+        {
             return v + 'A';
+        }
 
         // 26 <=> 51
         if(v <= (26 + ('z' - 'a')))
+        {
             return v + 'a' - 26;
-            
+        }
+
         // 52 <=> 61
         if(v <= (52 + ('9' - '0')))
+        {
             return v + '0' - 52;
-                  
+        }
+
         if(v == 62)
+        {
             return '+';
-                
+        }
+
         if(v == 63)
+        {
             return '/';
+        }
 
         return 0;
     }
@@ -382,20 +409,30 @@ namespace LTSM
     uint8_t base64DecodeChar(char v)
     {
         if(v == '+')
+        {
             return 62;
+        }
 
         if(v == '/')
+        {
             return 63;
+        }
 
         if('0' <= v && v <= '9')
+        {
             return v - '0' + 52;
+        }
 
         if('A' <= v && v <= 'Z')
+        {
             return v - 'A';
+        }
 
         if('a' <= v && v <= 'z')
+        {
             return v - 'a' + 26;
-    
+        }
+
         return 0;
     }
 
@@ -419,7 +456,7 @@ namespace LTSM
             uint32_t b3 = next2 < end ? *next2 : 0;
 
             uint32_t triple = (b1 << 16) | (b2 << 8) | b3;
-    
+
             res.push_back(base64EncodeChar(0x3F & (triple >> 18)));
             res.push_back(base64EncodeChar(0x3F & (triple >> 12)));
             res.push_back(next1 < end ? base64EncodeChar(0x3F & (triple >> 6)) : '=');
@@ -438,9 +475,10 @@ namespace LTSM
         if(0 < str.length() && 0 == (str.length() % 4))
         {
             size_t len = 3 * str.length() / 4;
-        
-            if(str[str.length() - 1] == '=') len--;
-            if(str[str.length() - 2] == '=') len--;
+
+            if(str[str.length() - 1] == '=') { len--; }
+
+            if(str[str.length() - 2] == '=') { len--; }
 
             res.reserve(len);
 
@@ -453,9 +491,11 @@ namespace LTSM
 
                 uint32_t triple = (sxtet_a << 18) + (sxtet_b << 12) + (sxtet_c << 6) + sxtet_d;
 
-                if(res.size() < len) res.push_back((triple >> 16) & 0xFF);
-                if(res.size() < len) res.push_back((triple >> 8) & 0xFF);
-                if(res.size() < len) res.push_back(triple & 0xFF);
+                if(res.size() < len) { res.push_back((triple >> 16) & 0xFF); }
+
+                if(res.size() < len) { res.push_back((triple >> 8) & 0xFF); }
+
+                if(res.size() < len) { res.push_back(triple & 0xFF); }
             }
         }
         else
@@ -469,13 +509,13 @@ namespace LTSM
     std::string Tools::convertBinary2JsonString(const ByteArray & buf)
     {
         auto zip = zlibCompress(buf);
-    
+
         StreamBuf sb;
         sb.writeIntBE32(buf.size());
         sb.write(zip);
 
         return base64Encode(sb.rawbuf());
-     }
+    }
 
     std::vector<uint8_t> Tools::convertJsonString2Binary(const std::string & content)
     {
@@ -523,9 +563,11 @@ namespace LTSM
     std::string Tools::prettyFuncName(std::string_view name)
     {
         size_t end = name.find('(');
-        if(end == std::string::npos) end = name.size();
+
+        if(end == std::string::npos) { end = name.size(); }
 
         size_t begin = 0;
+
         for(size_t it = end; it; --it)
         {
             if(name[it] == 0x20)
@@ -534,7 +576,7 @@ namespace LTSM
                 break;
             }
         }
-        
+
         auto sub = name.substr(begin, end - begin);
         return std::string(sub.begin(), sub.end());
     }
@@ -547,6 +589,7 @@ namespace LTSM
         if(std::filesystem::exists(file, err))
         {
             std::ifstream ifs(file, std::ios::binary);
+
             if(ifs.is_open())
             {
                 auto fsz = std::filesystem::file_size(file);
@@ -575,8 +618,8 @@ namespace LTSM
         {
             Application::warning( "%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
             return "localhost";
-        }       
-     
+        }
+
         return std::string(buf.data());
     }
 
@@ -590,10 +633,10 @@ namespace LTSM
         {
             str.assign(env);
         }
-        else
-        if(std::filesystem::is_symlink(localtime, err))
+        else if(std::filesystem::is_symlink(localtime, err))
         {
             auto path = std::filesystem::read_symlink(localtime, err);
+
             if(! err)
             {
                 auto tz = path.parent_path().filename() / path.filename();
@@ -612,14 +655,16 @@ namespace LTSM
             ::strftime(buf, sizeof(buf)-1, "%Z", &tt);
             str.assign(buf);
         }
-            
+
         return str;
     }
 
     std::string Tools::lower(std::string str)
     {
         if(! str.empty())
+        {
             std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+        }
 
         return str;
     }
@@ -639,7 +684,7 @@ namespace LTSM
         std::string res = src;
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(pred))) res.replace(pos, pred.size(), val);
+        while(std::string::npos != (pos = res.find(pred))) { res.replace(pos, pred.size(), val); }
 
         return res;
     }
@@ -659,7 +704,7 @@ namespace LTSM
             auto itend = std::search(itbeg, str.end(), sep.begin(), sep.end());
             list.emplace_back(itbeg, itend);
 
-            if(itend >= str.end()) break;
+            if(itend >= str.end()) { break; }
 
             itbeg = itend;
             std::advance(itbeg, sep.size());
@@ -689,11 +734,15 @@ namespace LTSM
         while(!std::feof(pipe.get()))
         {
             if(std::fgets(buffer.data(), buffer.size(), pipe.get()))
+            {
                 result.append(buffer.data());
+            }
         }
 
         if(result.size() && result.back() == '\n')
+        {
             result.pop_back();
+        }
 
         return result;
     }
@@ -724,6 +773,7 @@ namespace LTSM
                 {
                     return ! std::isdigit(ch);
                 });
+
                 int argc = 0;
 
                 try
@@ -736,7 +786,7 @@ namespace LTSM
                     return *this;
                 }
 
-                if(cur == argc) break;
+                if(cur == argc) { break; }
             }
 
             it1++;
@@ -768,7 +818,7 @@ namespace LTSM
         std::string res(begin(), end());
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(id))) res.replace(pos, id.size(), val);
+        while(std::string::npos != (pos = res.find(id))) { res.replace(pos, id.size(), val); }
 
         std::swap(*this, res);
         return *this;
@@ -804,7 +854,9 @@ namespace LTSM
 
         // start quote
         if(quote)
+        {
             os << "\"";
+        }
 
         // variants: \\, \", \/, \t, \n, \r, \f, \b
         for(auto & ch : str)
@@ -851,7 +903,9 @@ namespace LTSM
 
         // end quote
         if(quote)
+        {
             os << "\"";
+        }
 
         return os.str();
     }
@@ -859,14 +913,16 @@ namespace LTSM
     std::string Tools::unescaped(std::string str)
     {
         if(str.size() < 2)
+        {
             return str;
+        }
 
         // variants: \\, \", \/, \t, \n, \r, \f, \b
         for(auto it = str.begin(); it != str.end(); ++it)
         {
             auto itn = std::next(it);
 
-            if(itn == str.end()) break;
+            if(itn == str.end()) { break; }
 
             if(*it == '\\')
             {
@@ -924,6 +980,7 @@ namespace LTSM
     {
         return crc32b((const uint8_t*) str.data(), str.size());
     }
+
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size)
     {
         return crc32b(ptr, size, 0xEDB88320);
@@ -943,12 +1000,14 @@ namespace LTSM
 
             return crc;
         });
+
         return ~res;
     }
 
     bool Tools::checkUnixSocket(const std::filesystem::path & path)
     {
         std::error_code err;
+
         // check present
         if(std::filesystem::is_socket(path, err))
         {
@@ -963,10 +1022,12 @@ namespace LTSM
                 const std::string & native = path.native();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1)
+                {
                     Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+                }
 
                 std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
-                int res = connect(socket_fd, (struct sockaddr*) &sockaddr,  sizeof(struct sockaddr_un));
+                int res = connect(socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
                 close(socket_fd);
                 return res == 0;
             }
@@ -979,9 +1040,9 @@ namespace LTSM
     bool Tools::StreamBits::empty(void) const
     {
         return vecbuf.empty() ||
-                (vecbuf.size() == 1 && bitpos == 7);
+               (vecbuf.size() == 1 && bitpos == 7);
     }
-        
+
     const std::vector<uint8_t> & Tools::StreamBits::toVector(void) const
     {
         return vecbuf;
@@ -997,7 +1058,9 @@ namespace LTSM
     void Tools::StreamBitsPack::pushBit(bool v)
     {
         if(bitpos == 7)
+        {
             vecbuf.push_back(0);
+        }
 
         if(v)
         {
@@ -1006,9 +1069,13 @@ namespace LTSM
         }
 
         if(bitpos == 0)
+        {
             bitpos = 7;
+        }
         else
+        {
             bitpos--;
+        }
     }
 
     void Tools::StreamBitsPack::pushAlign(void)
@@ -1034,7 +1101,8 @@ namespace LTSM
         // check size
         size_t bits = field * counts;
         size_t len = bits >> 3;
-        if((len << 3) < bits) len++;
+
+        if((len << 3) < bits) { len++; }
 
         if(len < v.size())
         {
@@ -1080,7 +1148,9 @@ namespace LTSM
         while(mask1)
         {
             if(popBit())
+            {
                 val |= mask2;
+            }
 
             mask1 >>= 1;
             mask2 <<= 1;
@@ -1112,7 +1182,9 @@ namespace LTSM
         if(mask)
         {
             while((mask & 1) == 0)
+            {
                 mask = mask >> 1;
+            }
 
             res = ~static_cast<size_t>(0) & mask;
         }
@@ -1123,17 +1195,19 @@ namespace LTSM
     bool Tools::binaryToFile(const void* buf, size_t len, std::string_view file)
     {
         std::ofstream ofs(file.data(), std::ofstream::out | std::ios::binary | std::ofstream::trunc);
+
         if(ofs.is_open())
         {
             ofs.write((const char*) buf, len);
             ofs.close();
-	    return true;
+            return true;
         }
         else
         {
             Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "write", file.data());
         }
-	return false;
+
+        return false;
     }
 
     std::vector<uint8_t> Tools::fileToBinaryBuf(const std::filesystem::path & file)
@@ -1144,6 +1218,7 @@ namespace LTSM
         if(std::filesystem::exists(file, err))
         {
             std::ifstream ifs(file, std::ios::binary);
+
             if(ifs.is_open())
             {
                 auto fsz = std::filesystem::file_size(file);
@@ -1165,200 +1240,292 @@ namespace LTSM
     }
 
 #if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-    bool Tools::AV_PixelFormatEnumToMasks(AVPixelFormat format, int *bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug)
+    bool Tools::AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug)
     {
-	switch(format)
-	{
-    	    case AV_PIX_FMT_RGB24:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB24");
-        	*bpp = 24; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	std::swap(*rmask, *bmask);
-#endif
-        	return true;
+        switch(format)
+        {
+            case AV_PIX_FMT_RGB24:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB24"); }
 
-    	    case AV_PIX_FMT_BGR24:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR24");
-        	*bpp = 24; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+                *bpp = 24;
+                *amask = 0;
+                *rmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *bmask = 0x000000FF;
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	std::swap(*rmask, *bmask);
+                std::swap(*rmask, *bmask);
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_RGB0:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB0");
+            case AV_PIX_FMT_BGR24:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR24"); }
+
+                *bpp = 24;
+                *amask = 0;
+                *bmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *rmask = 0x000000FF;
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+                std::swap(*rmask, *bmask);
+#endif
+                return true;
+
+            case AV_PIX_FMT_RGB0:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB0"); }
+
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+                *bpp = 32;
+                *amask = 0;
+                *bmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *rmask = 0x000000FF;
 #else
-        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0;
+                *bpp = 32;
+                *rmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *bmask = 0x0000FF00;
+                *amask = 0;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_0BGR:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0BGR");
+            case AV_PIX_FMT_0BGR:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0BGR"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0;
+                *bpp = 32;
+                *rmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *bmask = 0x0000FF00;
+                *amask = 0;
 #else
-        	*bpp = 32; *amask = 0; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0;
+                *bmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *rmask = 0x000000FF;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_BGR0:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR0");
+            case AV_PIX_FMT_BGR0:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR0"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0;
+                *rmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *bmask = 0x000000FF;
 #else
-        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0;
+                *bpp = 32;
+                *bmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *rmask = 0x0000FF00;
+                *amask = 0;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_0RGB:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0RGB");
+            case AV_PIX_FMT_0RGB:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0RGB"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0;
+                *bpp = 32;
+                *bmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *rmask = 0x0000FF00;
+                *amask = 0;
 #else
-        	*bpp = 32; *amask = 0; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0;
+                *rmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *bmask = 0x000000FF;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_RGBA:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGBA");
+            case AV_PIX_FMT_RGBA:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGBA"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *amask = 0xFF000000; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0xFF000000;
+                *bmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *rmask = 0x000000FF;
 #else
-        	*bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0x000000FF;
+                *bpp = 32;
+                *rmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *bmask = 0x0000FF00;
+                *amask = 0x000000FF;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_ABGR:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ABGR");
+            case AV_PIX_FMT_ABGR:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ABGR"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    	        *bpp = 32; *rmask = 0xFF000000; *gmask = 0x00FF0000; *bmask = 0x0000FF00; *amask = 0x000000FF;
+                *bpp = 32;
+                *rmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *bmask = 0x0000FF00;
+                *amask = 0x000000FF;
 #else
-        	*bpp = 32; *amask = 0xFF000000; *bmask = 0x00FF0000; *gmask = 0x0000FF00; *rmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0xFF000000;
+                *bmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *rmask = 0x000000FF;
 #endif
-        	return true;
+                return true;
 
-    	    case AV_PIX_FMT_BGRA:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGRA");
+            case AV_PIX_FMT_BGRA:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGRA"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	*bpp = 32; *amask = 0xFF000000; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0xFF000000;
+                *rmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *bmask = 0x000000FF;
 #else
-        	*bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0x000000FF;
+                *bpp = 32;
+                *bmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *rmask = 0x0000FF00;
+                *amask = 0x000000FF;
 #endif
-        	return true;
+                return true;
 
 
-    	    case AV_PIX_FMT_ARGB:
-        	if(debug) Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ARGB");
+            case AV_PIX_FMT_ARGB:
+                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ARGB"); }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            *bpp = 32; *bmask = 0xFF000000; *gmask = 0x00FF0000; *rmask = 0x0000FF00; *amask = 0x000000FF;
+                *bpp = 32;
+                *bmask = 0xFF000000;
+                *gmask = 0x00FF0000;
+                *rmask = 0x0000FF00;
+                *amask = 0x000000FF;
 #else
-            *bpp = 32; *amask = 0xFF000000; *rmask = 0x00FF0000; *gmask = 0x0000FF00; *bmask = 0x000000FF;
+                *bpp = 32;
+                *amask = 0xFF000000;
+                *rmask = 0x00FF0000;
+                *gmask = 0x0000FF00;
+                *bmask = 0x000000FF;
 #endif
-            return true;
+                return true;
 
-    	    default:
-        	break;
-	}
+            default:
+                break;
+        }
 
-	return false;
+        return false;
     }
 
     AVPixelFormat Tools::AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug)
     {
-	if(debug)
-	{
+        if(debug)
+        {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-	    bool bigEndian = false;
+            bool bigEndian = false;
 #else
-	    bool bigEndian = true;
+            bool bigEndian = true;
 #endif
-	    Application::info("%s: pixel format, bpp: %d, rmask: 0x%08" PRIx32 ", gmask: 0x%08" PRIx32 ", bmask: 0x%08" PRIx32 ", amask: 0x%08" PRIx32 ", be: %d",
-		__FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
-	}
-    
-	if(24 == bpp)
-	{
-    	    if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+            Application::info("%s: pixel format, bpp: %d, rmask: 0x%08" PRIx32 ", gmask: 0x%08" PRIx32 ", bmask: 0x%08" PRIx32 ", amask: 0x%08" PRIx32 ", be: %d",
+                              __FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
+        }
+
+        if(24 == bpp)
+        {
+            if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_BGR24;
+                return AV_PIX_FMT_BGR24;
+
 #else
-        	return AV_PIX_FMT_RGB24;
+                return AV_PIX_FMT_RGB24;
 #endif
 
-    	    if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
+            if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_RGB24;
-#else
-        	return AV_PIX_FMT_BGR24;
-#endif
-	}
-	else
-	if(32 == bpp)
-	{
-    	    if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0)
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_0BGR;
-#else
-        	return AV_PIX_FMT_RGB0;
-#endif
+                return AV_PIX_FMT_RGB24;
 
-    	    if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_RGB0;
 #else
-        	return AV_PIX_FMT_0BGR;
+                return AV_PIX_FMT_BGR24;
+#endif
+        }
+        else if(32 == bpp)
+        {
+            if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+                return AV_PIX_FMT_0BGR;
+
+#else
+                return AV_PIX_FMT_RGB0;
 #endif
 
-    	    if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0)
+            if(amask == 0 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_0RGB;
+                return AV_PIX_FMT_RGB0;
+
 #else
-        	return AV_PIX_FMT_BGR0;
+                return AV_PIX_FMT_0BGR;
 #endif
 
-    	    if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+            if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_BGR0;
+                return AV_PIX_FMT_0RGB;
+
 #else
-        	return AV_PIX_FMT_0RGB;
+                return AV_PIX_FMT_BGR0;
 #endif
 
-    	    if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0x000000FF)
+            if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_ABGR;
+                return AV_PIX_FMT_BGR0;
+
 #else
-        	return AV_PIX_FMT_RGBA;
+                return AV_PIX_FMT_0RGB;
 #endif
 
-    	    if(amask == 0xFF000000 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
+            if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_RGBA;
+                return AV_PIX_FMT_ABGR;
+
 #else
-        	return AV_PIX_FMT_ABGR;
+                return AV_PIX_FMT_RGBA;
 #endif
 
-    	    if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0x000000FF)
+            if(amask == 0xFF000000 && bmask == 0x00FF0000 && gmask == 0x0000FF00 && rmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_ARGB;
+                return AV_PIX_FMT_RGBA;
+
 #else
-        	return AV_PIX_FMT_BGRA;
+                return AV_PIX_FMT_ABGR;
 #endif
 
-    	    if(amask == 0xFF000000 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+            if(bmask == 0xFF000000 && gmask == 0x00FF0000 && rmask == 0x0000FF00 && amask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-        	return AV_PIX_FMT_BGRA;
+                return AV_PIX_FMT_ARGB;
+
 #else
-        	return AV_PIX_FMT_ARGB;
+                return AV_PIX_FMT_BGRA;
 #endif
-	}
 
-	Application::error("%s: unsupported pixel format, bpp: %d, rmask: 0x%08" PRIx32 ", gmask: 0x%08" PRIx32 ", bmask: 0x%08" PRIx32 ", amask: 0x%08" PRIx32,
-		__FUNCTION__, bpp, rmask, gmask, bmask, amask);
+            if(amask == 0xFF000000 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+                return AV_PIX_FMT_BGRA;
 
-	return AV_PIX_FMT_NONE;
+#else
+                return AV_PIX_FMT_ARGB;
+#endif
+        }
+
+        Application::error("%s: unsupported pixel format, bpp: %d, rmask: 0x%08" PRIx32 ", gmask: 0x%08" PRIx32 ", bmask: 0x%08" PRIx32 ", amask: 0x%08" PRIx32,
+                           __FUNCTION__, bpp, rmask, gmask, bmask, amask);
+
+        return AV_PIX_FMT_NONE;
     }
+
 #endif
 
 } // LTSM

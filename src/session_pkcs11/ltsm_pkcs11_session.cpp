@@ -36,7 +36,8 @@
 using namespace LTSM;
 using namespace std::chrono_literals;
 
-Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj), templatePath("/var/run/ltsm/pkcs11/%{display}/sock")
+Pkcs11Client::Pkcs11Client(int displayNum, QObject* obj) : QThread(obj),
+    templatePath("/var/run/ltsm/pkcs11/%{display}/sock")
 {
     templatePath.replace(QString("%{display}"), QString::number(displayNum));
 }
@@ -73,18 +74,16 @@ void Pkcs11Client::run(void)
             continue;
         }
 
-        fd = UnixSocket::connect(socketPath);        
+        fd = UnixSocket::connect(socketPath);
     }
 
     Application::debug("%s: connected, socket fd: %" PRId32, __FUNCTION__, fd);
     sock.setSocket(fd);
-
     // send initialize packet
     sock.sendIntLE16(Pkcs11Op::Init);
     // send proto ver
     sock.sendIntLE16(1);
     sock.sendFlush();
-
     // client reply
     auto cmd = sock.recvIntLE16();
     auto err = sock.recvIntLE16();
@@ -96,7 +95,7 @@ void Pkcs11Client::run(void)
         emit pkcs11Shutdown();
         return;
     }
-        
+
     if(err)
     {
         auto str = sock.recvString(err);
@@ -117,16 +116,19 @@ void Pkcs11Client::run(void)
     sock.recvData(& info.libraryDescription, 32);
     info.libraryVersion.major = sock.recvInt8();
     info.libraryVersion.minor = sock.recvInt8();
-
     auto updateTokensTime = Tools::TimePoint(std::chrono::seconds(1));
 
     while(true)
     {
         if(shutdown)
+        {
             break;
+        }
 
         if(updateTokensTime.check())
+        {
             updateTokens();
+        }
 
         msleep(250);
     }
@@ -143,18 +145,15 @@ const std::list<Pkcs11Token> & Pkcs11Client::getTokens(void) const
 bool Pkcs11Client::updateTokens(void)
 {
     std::scoped_lock guard{ lock };
-
     sock.sendIntLE16(Pkcs11Op::GetSlots);
     sock.sendInt8(1 /* bool tokenPresentOnly */);
     sock.sendFlush();
-
     // client reply
     // <CMD16> - cmd id
     // <LEN16> - slots count
     // <ID64> - slot id
     // <DATA> slot info struct
     // <DATA> token info struct
-
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlots)
@@ -170,8 +169,8 @@ bool Pkcs11Client::updateTokens(void)
     while(counts--)
     {
         auto slotId = sock.recvIntLE64();
-
         PKCS11::SlotInfo slotInfo;
+
         if(sock.recvInt8())
         {
             sock.recvData(slotInfo.slotDescription, 64);
@@ -184,13 +183,13 @@ bool Pkcs11Client::updateTokens(void)
         }
 
         PKCS11::TokenInfo tokenInfo;
+
         if(sock.recvInt8())
         {
             sock.recvData(tokenInfo.label, 32);
             sock.recvData(tokenInfo.manufacturerID, 32);
             sock.recvData(tokenInfo.model, 16);
             sock.recvData(tokenInfo.serialNumber, 16);
-
             tokenInfo.flags = sock.recvIntLE64();
             tokenInfo.ulMaxSessionCount = sock.recvIntLE64();
             tokenInfo.ulSessionCount = sock.recvIntLE64();
@@ -202,7 +201,6 @@ bool Pkcs11Client::updateTokens(void)
             tokenInfo.ulFreePublicMemory = sock.recvIntLE64();
             tokenInfo.ulTotalPrivateMemory = sock.recvIntLE64();
             tokenInfo.ulFreePrivateMemory = sock.recvIntLE64();
-
             tokenInfo.hardwareVersion.major = sock.recvInt8();
             tokenInfo.hardwareVersion.minor = sock.recvInt8();
             tokenInfo.firmwareVersion.major = sock.recvInt8();
@@ -214,13 +212,10 @@ bool Pkcs11Client::updateTokens(void)
     }
 
     newTokens.sort();
-
     std::list<Pkcs11Token> removedTokens, addedTokens;
-
     std::set_difference(tokens.begin(), tokens.end(),
                         newTokens.begin(), newTokens.end(),
                         std::back_inserter(removedTokens));
-
     std::set_difference(newTokens.begin(), newTokens.end(),
                         tokens.begin(), tokens.end(),
                         std::back_inserter(addedTokens));
@@ -237,12 +232,10 @@ bool Pkcs11Client::updateTokens(void)
 std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId)
 {
     std::scoped_lock guard{ lock };
-
     sock.sendIntLE16(Pkcs11Op::GetSlotCertificates);
     sock.sendIntLE64(slotId);
     sock.sendInt8(1 /* bool havePublicPrivateKeys */);
     sock.sendFlush();
-
     // client reply
     auto cmd = sock.recvIntLE16();
 
@@ -260,10 +253,8 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId)
     {
         auto idLen = sock.recvIntLE16();
         auto id = sock.recvData(idLen);
-
         auto valueLen = sock.recvIntLE32();
         auto value = sock.recvData(valueLen);
-
         certs.emplace_back(Pkcs11Cert{ .objectId = std::move(id), .objectValue = std::move(value) });
     }
 
@@ -273,11 +264,9 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId)
 std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId)
 {
     std::scoped_lock guard{ lock };
-
     sock.sendIntLE16(Pkcs11Op::GetSlotMechanisms);
     sock.sendIntLE64(slotId);
     sock.sendFlush();
-
     // client reply
     auto cmd = sock.recvIntLE16();
 
@@ -297,20 +286,18 @@ std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId)
         auto min = sock.recvIntLE64();
         auto max = sock.recvIntLE64();
         auto flags = sock.recvIntLE64();
-
         auto len = sock.recvIntLE16();
         auto name = sock.recvString(len);
-
         res.emplace_back(Pkcs11Mech{ .mechId = id, .minKey = min, .maxKey = max, .flags = flags, .name = name });
     }
 
     return res;
 }
 
-std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
+std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string & pin,
+        const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
 {
     std::scoped_lock guard{ lock };
-
     sock.sendIntLE16(Pkcs11Op::SignData);
     sock.sendIntLE64(slotId);
     sock.sendIntLE64(mechType);
@@ -321,7 +308,6 @@ std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string &
     sock.sendIntLE32(len);
     sock.sendRaw(data, len);
     sock.sendFlush();
-
     // client reply
     auto cmd = sock.recvIntLE16();
 
@@ -335,15 +321,17 @@ std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string &
     uint32_t length = sock.recvIntLE32();
 
     if(length)
+    {
         return sock.recvData(length);
+    }
 
     return {};
 }
 
-std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
+std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::string & pin,
+        const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType)
 {
     std::scoped_lock guard{ lock };
-
     sock.sendIntLE16(Pkcs11Op::DecryptData);
     sock.sendIntLE64(slotId);
     sock.sendIntLE64(mechType);
@@ -354,7 +342,6 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
     sock.sendIntLE32(len);
     sock.sendRaw(data, len);
     sock.sendFlush();
-
     // client reply
     auto cmd = sock.recvIntLE16();
 
@@ -368,7 +355,9 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
     uint32_t length = sock.recvIntLE32();
 
     if(length)
+    {
         return sock.recvData(length);
+    }
 
     return {};
 }

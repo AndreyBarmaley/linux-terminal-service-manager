@@ -44,7 +44,7 @@ struct Pkcs11Token
     bool operator== (const Pkcs11Token & st) const
     {
         return tokenInfo.getModel() == st.tokenInfo.getModel() &&
-            tokenInfo.getSerialNumber() == st.tokenInfo.getSerialNumber();
+               tokenInfo.getSerialNumber() == st.tokenInfo.getSerialNumber();
     }
 
     bool operator< (const Pkcs11Token & st) const
@@ -53,7 +53,9 @@ struct Pkcs11Token
         auto model2 = st.tokenInfo.getModel();
 
         if(model1 == model2)
+        {
             return tokenInfo.getSerialNumber() < st.tokenInfo.getSerialNumber();
+        }
 
         return model1 < model2;
     }
@@ -94,8 +96,10 @@ public:
     std::list<Pkcs11Cert> getCertificates(uint64_t slotId);
     std::list<Pkcs11Mech> getMechanisms(uint64_t slotId);
 
-    std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
-    std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId, const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+    std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                  const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+    std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                     const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
 protected:
     void run(void) override;

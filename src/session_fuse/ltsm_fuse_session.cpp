@@ -57,7 +57,7 @@ namespace LTSM
     std::unique_ptr<sdbus::IConnection> conn;
     std::atomic<bool> shutdownDbus{false};
 
-    void signalHandler( int sig )
+    void signalHandler(int sig)
     {
         if(sig == SIGTERM || sig == SIGINT)
         {
@@ -82,30 +82,39 @@ namespace LTSM
         void addEntry(fuse_req_t req, const std::string & name, const struct stat & st)
         {
             auto need = fuse_add_direntry(req, nullptr, 0, name.c_str(), nullptr, 0);
-
             auto used = size();
             resize(size() + need);
             auto ptr = std::next(begin(), used);
-
             fuse_add_direntry(req, std::addressof(*ptr), need, name.c_str(), & st, size());
         }
     };
 
     class PathStat : protected std::pair<std::string, struct stat>
-    {
-    public:
-        PathStat() = default;
-        PathStat(const std::string & str, struct stat && st) : std::pair<std::string, struct stat>(str, st) {}
-        virtual ~PathStat() = default;
+        {
+            public:
+            PathStat() = default;
+            PathStat(const std::string & str, struct stat && st) : std::pair<std::string, struct stat>(str, st) {}
 
-        std::string localPath(const FuseSession*) const;
-        std::string remotePath(const FuseSession*) const;
-        std::string joinPath(std::string_view) const;
-        const std::string & relativePath(void) const { return first; }
+            virtual ~PathStat() = default;
 
-        const struct stat & statRef(void) const { return second; }
-        const struct stat* statPtr(void) const { return std::addressof(second); }
-    };
+            std::string localPath(const FuseSession*) const;
+            std::string remotePath(const FuseSession*) const;
+            std::string joinPath(std::string_view) const;
+            const std::string & relativePath(void) const
+            {
+                return first;
+            }
+
+            const struct stat & statRef(void) const
+            {
+                return second;
+            }
+
+            const struct stat* statPtr(void) const
+            {
+                return std::addressof(second);
+            }
+        };
 
     typedef std::pair<ino_t, ino_t> LinkInfo;
 
@@ -118,7 +127,7 @@ namespace LTSM
         std::map<std::string, const struct stat*> pathes;
         std::forward_list<LinkInfo> symlinks;
 
-    	std::unique_ptr<SocketStream> sock;
+        std::unique_ptr<SocketStream> sock;
         std::unique_ptr<fuse_session, void(*)(fuse_session*)> ses{ nullptr, fuse_session_destroy };
 
         DirBuf dirBuf;
@@ -150,14 +159,21 @@ namespace LTSM
     std::string PathStat::joinPath(std::string_view str) const
     {
         if(str.empty())
+        {
             return first;
+        }
 
         if(first.empty())
+        {
             return std::string(str.begin(), str.end());
+        }
 
         bool appendSlash = first.back() != '/' && str.front() != '/';
+
         if(appendSlash)
+        {
             return std::string(first).append("/").append(str);
+        }
 
         return std::string(first).append(str);
     }
@@ -178,29 +194,31 @@ namespace LTSM
         {
             std::error_code fserr;
 
-	    while(! fuse->shutdown)
-	    {
+            while(! fuse->shutdown)
+            {
                 // wait socket
-	        if(std::filesystem::is_socket(fuse->socketPath, fserr))
-    	        {
+                if(std::filesystem::is_socket(fuse->socketPath, fserr))
+                {
                     int fd = UnixSocket::connect(fuse->socketPath);
 
-	            if(0 < fd)
+                    if(0 < fd)
                     {
                         fuse->sock = std::make_unique<SocketStream>(fd);
                         break;
                     }
                 }
 
-	        std::this_thread::sleep_for(100ms);
+                std::this_thread::sleep_for(100ms);
             }
 
-	    if(fuse->shutdown)
+            if(fuse->shutdown)
+            {
                 return;
+            }
 
             if(! fuse->sock)
             {
-	        Application::error("%s: %s failed", __FUNCTION__, "socket");
+                Application::error("%s: %s failed", __FUNCTION__, "socket");
                 fuse->exitSession();
                 return;
             }
@@ -216,18 +234,18 @@ namespace LTSM
 
             if(fuse->waitReplyError())
             {
-	        Application::error("%s: %s failed", __FUNCTION__, "wait");
+                Application::error("%s: %s failed", __FUNCTION__, "wait");
                 fuse->exitSession();
                 return;
-    	    }
+            }
 
             // reply format:
             // <CMD16> - fuse cmd
-	    // <ERR32> - errno
-	    auto cmd = fuse->sock->recvIntLE16();
+            // <ERR32> - errno
+            auto cmd = fuse->sock->recvIntLE16();
             auto err = fuse->sock->recvIntLE32();
 
-    	    if(cmd != FuseOp::Init)
+            if(cmd != FuseOp::Init)
             {
                 Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse->exitSession();
@@ -235,18 +253,18 @@ namespace LTSM
             }
 
             if(err)
-    	    {
-    	        Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+            {
+                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
                 fuse->exitSession();
                 return;
-    	    }
+            }
+
             // <UID16> - proto
             auto protoVer = fuse->sock->recvIntLE16();
             // <UID32> - remote uid
             fuse->remoteUid = fuse->sock->recvIntLE32();
             // <GID32> - remote gid
             fuse->remoteGid = fuse->sock->recvIntLE32();
-
             fuse->recvShareRootInfo();
         }
     }
@@ -254,8 +272,8 @@ namespace LTSM
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path)
     {
         Application::debug("%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
-
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -269,6 +287,7 @@ namespace LTSM
         }
 
         auto st = fuse->findChildStat(parent, path);
+
         if(! st)
         {
             fuse_reply_err(req, ENOENT);
@@ -277,23 +296,24 @@ namespace LTSM
 
         // <STAT> - stat struct
         fuse_entry_param entry = {};
-
         entry.attr = *st;
         entry.attr_timeout = 1.0;
         entry.entry_timeout = 1.0;
         entry.ino = st->st_ino;
-
         fuse_reply_entry(req, & entry);
     }
 
-    void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+    void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
         Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
+        {
             Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+        }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             Application::error("%s: %s filed", __FUNCTION__, "fuse");
@@ -309,6 +329,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             Application::error("%s: %s filed", __FUNCTION__, "inode");
@@ -322,8 +343,8 @@ namespace LTSM
     void ll_readlink(fuse_req_t req, fuse_ino_t ino)
     {
         Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
-
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             Application::error("%s: %s filed", __FUNCTION__, "fuse");
@@ -339,6 +360,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             Application::error("%s: %s filed", __FUNCTION__, "inode");
@@ -365,14 +387,17 @@ namespace LTSM
         fuse_reply_err(req, EINVAL);
     }
 
-    void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info *fi)
+    void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi)
     {
         Application::debug("%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
 
         if(fi)
+        {
             Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+        }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -386,6 +411,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             fuse_reply_err(req, ENOENT);
@@ -402,15 +428,21 @@ namespace LTSM
         auto & path = pathStat->relativePath();
 
         if(fuse->dirBuf.root != path)
+        {
             fuse->dirBuf = fuse->createDirBuf(req, path, pathStat->statRef());
+        }
 
         if((size_t) off < fuse->dirBuf.size())
+        {
             fuse_reply_buf(req, fuse->dirBuf.data() + off, std::min(fuse->dirBuf.size() - off, maxsize));
+        }
         else
+        {
             fuse_reply_buf(req, nullptr, 0);
+        }
     }
 
-    void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+    void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
         Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
 
@@ -426,6 +458,7 @@ namespace LTSM
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -439,6 +472,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             fuse_reply_err(req, ENOENT);
@@ -453,9 +487,7 @@ namespace LTSM
 
         //
         fuse->sock->sendIntLE16(FuseOp::Open);
-
         auto & path = pathStat->relativePath();
-
         // <FLAG32> - open flags
         // <LEN16><PATH> - fuse path
         fuse->sock->sendIntLE32(fi->flags);
@@ -496,7 +528,7 @@ namespace LTSM
         fuse_reply_open(req, fi);
     }
 
-    void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+    void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
         Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
 
@@ -512,6 +544,7 @@ namespace LTSM
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -525,6 +558,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             fuse_reply_err(req, EBADF);
@@ -539,7 +573,6 @@ namespace LTSM
 
         //
         fuse->sock->sendIntLE16(FuseOp::Release);
-
         // <FDH32> - fd handle
         fuse->sock->sendIntLE32(fi->fh);
         fuse->sock->sendFlush();
@@ -575,7 +608,7 @@ namespace LTSM
         fuse_reply_err(req, 0);
     }
 
-    void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info *fi)
+    void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info* fi)
     {
         Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
 
@@ -591,6 +624,7 @@ namespace LTSM
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -604,6 +638,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             fuse_reply_err(req, EBADF);
@@ -619,7 +654,6 @@ namespace LTSM
         //
         fuse->sock->sendIntLE16(FuseOp::Read);
         const size_t blockmax = 48 * 1024;
-
         // <FDH32> - fd handle
         // <SIZE16> - blocksz
         // <OFF64> - offset
@@ -631,7 +665,7 @@ namespace LTSM
         // wait reply
         if(fuse->waitReplyError())
         {
-	    Application::error("%s: %s failed", __FUNCTION__, "wait");
+            Application::error("%s: %s failed", __FUNCTION__, "wait");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -672,8 +706,8 @@ namespace LTSM
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask)
     {
         Application::debug("%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
-
         auto fuse = (FuseSession*) fuse_req_userdata(req);
+
         if(! fuse)
         {
             fuse_reply_err(req, EFAULT);
@@ -687,6 +721,7 @@ namespace LTSM
         }
 
         auto pathStat = fuse->findInode(ino);
+
         if(! pathStat)
         {
             fuse_reply_err(req, ENOENT);
@@ -698,33 +733,32 @@ namespace LTSM
             fuse_reply_err(req, 0);
             return;
         }
-        else
-        if(mask & (R_OK | W_OK | X_OK))
+        else if(mask & (R_OK | W_OK | X_OK))
         {
             auto & st = pathStat->statRef();
 
             if((mask & R_OK) &&
-                (0 == (S_IROTH & st.st_mode) &&
-                (0 == (S_IRGRP & st.st_mode) || st.st_gid != fuse->remoteGid) && 
-                (0 == (S_IRUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+                    (0 == (S_IROTH & st.st_mode) &&
+                     (0 == (S_IRGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
+                     (0 == (S_IRUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
             {
                 fuse_reply_err(req, EACCES);
                 return;
             }
 
             if((mask & W_OK) &&
-                (0 == (S_IWOTH & st.st_mode) &&
-                (0 == (S_IWGRP & st.st_mode) || st.st_gid != fuse->remoteGid) && 
-                (0 == (S_IWUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+                    (0 == (S_IWOTH & st.st_mode) &&
+                     (0 == (S_IWGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
+                     (0 == (S_IWUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
             {
                 fuse_reply_err(req, EACCES);
                 return;
             }
 
             if((mask & X_OK) &&
-                (0 == (S_IXOTH & st.st_mode) &&
-                (0 == (S_IXGRP & st.st_mode) || st.st_gid != fuse->remoteGid) && 
-                (0 == (S_IXUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+                    (0 == (S_IXOTH & st.st_mode) &&
+                     (0 == (S_IXGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
+                     (0 == (S_IXUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
             {
                 fuse_reply_err(req, EACCES);
                 return;
@@ -738,37 +772,37 @@ namespace LTSM
     }
 
     // FuseSession
-    FuseSession::FuseSession(const std::string & local, const std::string & remote, const std::string & socket) : localPoint(local), remotePoint(remote), socketPath(socket)
+    FuseSession::FuseSession(const std::string & local, const std::string & remote,
+                             const std::string & socket) : localPoint(local), remotePoint(remote), socketPath(socket)
     {
         // added parent inode: 1
         struct stat st = {};
 
         if(0 > ::stat(local.c_str(), & st))
         {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "stat", strerror(errno), errno, local.c_str());
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "stat", strerror(errno), errno,
+                               local.c_str());
             throw fuse_error(NS_FuncName);
         }
 
         Application::debug("%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
         auto pair = inodes.emplace(1, PathStat{"/", std::move(st)});
         pathes.emplace("/", pair.first->second.statPtr());
-
         // fuse init
-        oper.init     = ll_init;
-        oper.lookup   = ll_lookup;
-        oper.getattr  = ll_getattr;
-        oper.readdir  = ll_readdir;
-        oper.open     = ll_open;
-        oper.release  = ll_release;
-        oper.read     = ll_read;
-        oper.access   = ll_access;
+        oper.init = ll_init;
+        oper.lookup = ll_lookup;
+        oper.getattr = ll_getattr;
+        oper.readdir = ll_readdir;
+        oper.open = ll_open;
+        oper.release = ll_release;
+        oper.read = ll_read;
+        oper.access = ll_access;
         oper.readlink = ll_readlink;
-
-        ses.reset(fuse_session_new(& args, & oper, sizeof(oper), this) );
+        ses.reset(fuse_session_new(& args, & oper, sizeof(oper), this));
 
         if(! ses)
         {
-	    Application::error("%s: %s failed", __FUNCTION__, "fuse_session_new");
+            Application::error("%s: %s failed", __FUNCTION__, "fuse_session_new");
             throw fuse_error(NS_FuncName);
         }
 
@@ -803,7 +837,9 @@ namespace LTSM
         }
 
         if(thloop.joinable())
+        {
             thloop.join();
+        }
 
         fuse_opt_free_args(& args);
     }
@@ -823,10 +859,14 @@ namespace LTSM
         while(! shutdown)
         {
             if(! sock)
+            {
                 break;
+            }
 
             if(sock->hasInput() && 6 <= sock->hasData())
+            {
                 break;
+            }
 
             std::this_thread::sleep_for(5ms);
         }
@@ -866,16 +906,14 @@ namespace LTSM
             auto len = sock->recvIntLE16();
             // remote path
             auto path = sock->recvString(len);
-
             struct stat st;
             recvStatStruct(& st);
             auto ino = st.st_ino;
 
             if(ino != 1 &&
-                path.substr(0, remotePoint.size()) == remotePoint)
+                    path.substr(0, remotePoint.size()) == remotePoint)
             {
                 path = path.substr(remotePoint.size());
-
                 Application::debug("%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
                 // added relative path
                 auto pair = inodes.emplace(ino, PathStat{path, std::move(st)});
@@ -885,18 +923,22 @@ namespace LTSM
 
         // symlinks
         count = sock->recvIntLE32();
+
         while(count--)
         {
             auto ino1 = sock->recvIntLE64();
             auto ino2 = sock->recvIntLE64();
-
             symlinks.emplace_front(std::make_pair(ino1, ino2));
         }
     }
 
     const LinkInfo* FuseSession::findLink(fuse_ino_t inode) const
     {
-        auto it = std::find_if(symlinks.begin(), symlinks.end(), [&](auto & st){ return st.first == inode; });
+        auto it = std::find_if(symlinks.begin(), symlinks.end(), [&](auto & st)
+        {
+            return st.first == inode;
+        });
+
         return it != symlinks.end() ? std::addressof(*it) : nullptr;
     }
 
@@ -905,7 +947,9 @@ namespace LTSM
         auto iti = inodes.find(inode);
 
         if(iti == inodes.end())
+        {
             return nullptr;
+        }
 
         return std::addressof(iti->second);
     }
@@ -915,12 +959,16 @@ namespace LTSM
         auto iti = inodes.find(parent);
 
         if(iti == inodes.end())
+        {
             return nullptr;
+        }
 
         auto path = iti->second.joinPath(child);
 
         if(auto itp = pathes.find(path); itp != pathes.end())
+        {
             return itp->second;
+        }
 
         Application::warning("%s: not found, ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path.c_str());
         return nullptr;
@@ -929,17 +977,18 @@ namespace LTSM
     DirBuf FuseSession::createDirBuf(fuse_req_t req, const std::string & dir, const struct stat & st) const
     {
         DirBuf dirBuf(dir);
-
         dirBuf.addEntry(req, ".", st);
         dirBuf.addEntry(req, "..", st);
-
         auto it = pathes.upper_bound(dir);
+
         while(it != pathes.end())
         {
             auto path = std::filesystem::path(it->first);
 
             if(path.parent_path() == dir)
+            {
                 dirBuf.addEntry(req, path.filename(), *it->second);
+            }
 
             it = std::next(it);
         }
@@ -953,9 +1002,7 @@ namespace LTSM
     {
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
-
         registerAdaptor();
     }
 
@@ -975,8 +1022,10 @@ namespace LTSM
             std::this_thread::sleep_for(5ms);
         }
 
-        for(auto & st: childs)
+        for(auto & st : childs)
+        {
             st->shutdown = true;
+        }
 
         return EXIT_SUCCESS;
     }
@@ -984,7 +1033,6 @@ namespace LTSM
     int32_t FuseSessionBus::getVersion(void)
     {
         Application::debug("%s", __FUNCTION__);
-
         return LTSM_FUSE2SESSION_VERSION;
     }
 
@@ -994,11 +1042,13 @@ namespace LTSM
         shutdownDbus = true;
     }
 
-    bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint, const std::string & fuseSocket)
+    bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
+                                    const std::string & fuseSocket)
     {
-        Application::info("%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(), remotePoint.c_str(), fuseSocket.c_str());
+        Application::info("%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
+                          remotePoint.c_str(), fuseSocket.c_str());
 
-        if(std::any_of(childs.begin(), childs.end(), [&](auto & ptr){ return ptr->localPoint == localPoint; }))
+        if(std::any_of(childs.begin(), childs.end(), [&](auto & ptr) { return ptr->localPoint == localPoint; }))
         {
             Application::error("%s: point busy, point: `%s'", __FUNCTION__, localPoint.c_str());
             return false;
@@ -1016,8 +1066,7 @@ namespace LTSM
             return false;
         }
 
-        childs.emplace_front( std::move(ptr) );
-
+        childs.emplace_front(std::move(ptr));
         return true;
     }
 
@@ -1029,8 +1078,10 @@ namespace LTSM
     void FuseSessionBus::umountPoint(const std::string & localPoint)
     {
         LTSM::Application::info("%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
-
-        childs.remove_if([&](auto & ptr){ return ptr->localPoint == localPoint; });
+        childs.remove_if([&](auto & ptr)
+        {
+            return ptr->localPoint == localPoint;
+        });
     }
 }
 
@@ -1043,8 +1094,7 @@ int main(int argc, char** argv)
             std::cout << "usage: " << argv[0] << std::endl;
             return EXIT_SUCCESS;
         }
-        else
-        if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
+        else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
         {
             std::cout << "version: " << LTSM_FUSE2SESSION_VERSION << std::endl;
             return EXIT_SUCCESS;
@@ -1063,6 +1113,7 @@ int main(int argc, char** argv)
     try
     {
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
+
         if(! LTSM::conn)
         {
             LTSM::Application::error("dbus connection failed, uid: %d", getuid());

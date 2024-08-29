@@ -62,7 +62,7 @@ namespace LTSM
             std::unique_ptr<OpusEncoder, OpusDeleter> ctx;
 
             // ref: https://www.opus-codec.org/docs/html_api/group__opusencoder.html
-            // max_packet is the maximum number of bytes that can be written in the packet (1276 bytes is recommended) 
+            // max_packet is the maximum number of bytes that can be written in the packet (1276 bytes is recommended)
             std::array<uint8_t, 1276> tmp;
             size_t encodeSize = 0;
 
@@ -80,6 +80,7 @@ namespace LTSM
             const uint8_t* data(void) const override;
             size_t size(void) const override;
         };
+
 #endif
     }
 }

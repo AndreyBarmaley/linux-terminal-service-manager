@@ -66,9 +66,14 @@ std::string LTSM::Channel::createUrl(const ConnectorType & type, std::string_vie
 LTSM::Channel::ConnectorType LTSM::Channel::connectorType(std::string_view str)
 {
 
-    for(auto type : { ConnectorType::Unix, ConnectorType::Socket, ConnectorType::File, ConnectorType::Command,
-                        ConnectorType::Fuse, ConnectorType::Audio, ConnectorType::Pcsc, ConnectorType::Pkcs11 })
-        if(str == Connector::typeString(type)) return type;
+    for(auto type :
+            {
+                ConnectorType::Unix, ConnectorType::Socket, ConnectorType::File, ConnectorType::Command,
+                ConnectorType::Fuse, ConnectorType::Audio, ConnectorType::Pcsc, ConnectorType::Pkcs11
+            })
+    {
+        if(str == Connector::typeString(type)) { return type; }
+    }
 
     return ConnectorType::Unknown;
 }
@@ -76,7 +81,9 @@ LTSM::Channel::ConnectorType LTSM::Channel::connectorType(std::string_view str)
 LTSM::Channel::ConnectorMode LTSM::Channel::connectorMode(std::string_view str)
 {
     for(auto mode : { ConnectorMode::ReadOnly, ConnectorMode::ReadWrite, ConnectorMode::WriteOnly })
-        if(str == Connector::modeString(mode)) return mode;
+    {
+        if(str == Connector::modeString(mode)) { return mode; }
+    }
 
     return ConnectorMode::Unknown;
 }
@@ -84,7 +91,9 @@ LTSM::Channel::ConnectorMode LTSM::Channel::connectorMode(std::string_view str)
 LTSM::Channel::Speed LTSM::Channel::connectorSpeed(std::string_view str)
 {
     for(auto speed : { Speed::VerySlow, Speed::Slow, Speed::Medium, Speed::Fast, Speed::UltraFast })
-        if(str == Connector::speedString(speed)) return speed;
+    {
+        if(str == Connector::speedString(speed)) { return speed; }
+    }
 
     return Speed::VerySlow;
 }
@@ -93,15 +102,32 @@ const char* LTSM::Channel::Connector::typeString(const ConnectorType & type)
 {
     switch(type)
     {
-        case ConnectorType::Unix:       return "unix";
-        case ConnectorType::File:       return "file";
-        case ConnectorType::Socket:     return "socket";
-        case ConnectorType::Command:    return "command";
-        case ConnectorType::Fuse:       return "fuse";
-        case ConnectorType::Audio:      return "audio";
-        case ConnectorType::Pcsc:       return "pcsc";
-        case ConnectorType::Pkcs11:     return "pkcs11";
-        default: break;
+        case ConnectorType::Unix:
+            return "unix";
+
+        case ConnectorType::File:
+            return "file";
+
+        case ConnectorType::Socket:
+            return "socket";
+
+        case ConnectorType::Command:
+            return "command";
+
+        case ConnectorType::Fuse:
+            return "fuse";
+
+        case ConnectorType::Audio:
+            return "audio";
+
+        case ConnectorType::Pcsc:
+            return "pcsc";
+
+        case ConnectorType::Pkcs11:
+            return "pkcs11";
+
+        default:
+            break;
     }
 
     return "unknown";
@@ -112,10 +138,17 @@ const char* LTSM::Channel::Connector::modeString(const ConnectorMode & mode)
     switch(mode)
     {
         // default mode - unix: rw, socket: rw, file(present): ro, file(not found): wo
-        case ConnectorMode::ReadWrite:  return "rw";
-        case ConnectorMode::ReadOnly:   return "ro";
-        case ConnectorMode::WriteOnly:  return "wo";
-        default: break;
+        case ConnectorMode::ReadWrite:
+            return "rw";
+
+        case ConnectorMode::ReadOnly:
+            return "ro";
+
+        case ConnectorMode::WriteOnly:
+            return "wo";
+
+        default:
+            break;
     }
 
     return "unknown";
@@ -125,54 +158,83 @@ const char* LTSM::Channel::Connector::speedString(const Speed & speed)
 {
     switch(speed)
     {
-        case Speed::Slow:       return "slow";
-        case Speed::Medium:     return "medium";
-        case Speed::Fast:       return "fast";
-        case Speed::UltraFast:  return "ultra";
-        default: break;
+        case Speed::Slow:
+            return "slow";
+
+        case Speed::Medium:
+            return "medium";
+
+        case Speed::Fast:
+            return "fast";
+
+        case Speed::UltraFast:
+            return "ultra";
+
+        default:
+            break;
     }
 
     return "very";
 }
 
 std::pair<LTSM::Channel::ConnectorType, std::string>
-    LTSM::Channel::parseUrl(std::string_view url)
+LTSM::Channel::parseUrl(std::string_view url)
 {
     if(0 == url.compare(0, 7, "file://"))
+    {
         return std::make_pair(Channel::ConnectorType::File, std::string(url.substr(7)));
+    }
 
     if(0 == url.compare(0, 7, "unix://"))
+    {
         return std::make_pair(Channel::ConnectorType::Unix, std::string(url.substr(7)));
+    }
 
     if(0 == url.compare(0, 7, "sock://"))
+    {
         return std::make_pair(Channel::ConnectorType::Socket, std::string(url.substr(7)));
+    }
 
     if(0 == url.compare(0, 9, "socket://"))
+    {
         return std::make_pair(Channel::ConnectorType::Socket, std::string(url.substr(9)));
+    }
 
     if(0 == url.compare(0, 6, "cmd://"))
+    {
         return std::make_pair(Channel::ConnectorType::Command, std::string(url.substr(6)));
+    }
 
     if(0 == url.compare(0, 10, "command://"))
+    {
         return std::make_pair(Channel::ConnectorType::Command, std::string(url.substr(10)));
+    }
 
     if(0 == url.compare(0, 7, "fuse://"))
+    {
         return std::make_pair(Channel::ConnectorType::Fuse, std::string(url.substr(7)));
+    }
 
     if(0 == url.compare(0, 8, "audio://"))
+    {
         return std::make_pair(Channel::ConnectorType::Audio, std::string(url.substr(8)));
+    }
 
     if(0 == url.compare(0, 7, "pcsc://"))
+    {
         return std::make_pair(Channel::ConnectorType::Pcsc, std::string(url.substr(7)));
+    }
 
     if(0 == url.compare(0, 9, "pkcs11://"))
+    {
         return std::make_pair(Channel::ConnectorType::Pkcs11, std::string(url.substr(9)));
+    }
 
     return std::make_pair(Channel::ConnectorType::Unknown, std::string(url.begin(), url.end()));
 }
 
 std::pair<std::string, int>
-    LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
+LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
 {
     Application::debug("%s: addr: `%s'", __FUNCTION__, addrPort.data());
 
@@ -185,38 +247,47 @@ std::pair<std::string, int>
     std::string addr = "127.0.0.1";
 
     if(2 != list.size())
-	return std::make_pair(addr, port);
+    {
+        return std::make_pair(addr, port);
+    }
 
     // check addr
     auto octets = Tools::split(list.front(), '.');
+
     if(4 == octets.size())
     {
         bool error = false;
 
         try
         {
-    	    // check numbers
-	    if(std::any_of(octets.begin(), octets.end(), [](auto & val){ return 255 < std::stoi(val); }))
-                error = true;
+            // check numbers
+            if(std::any_of(octets.begin(), octets.end(), [](auto & val) { return 255 < std::stoi(val); }))
+            error = true;
         }
-    	catch(const std::exception & err)
+        catch(const std::exception & err)
         {
             Application::error("%s: exception: %s", __FUNCTION__, err.what());
             error = true;
         }
 
         if(error)
+        {
             Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect ipaddr", addrPort.data());
+        }
     }
     else
-    // resolv hostname
+        // resolv hostname
     {
         std::string addr2 = TCPSocket::resolvHostname(list.front());
 
         if(addr2.empty())
+        {
             Application::error("%s: %s, addr: `%s'", __FUNCTION__, "incorrect hostname", addrPort.data());
+        }
         else
+        {
             addr = addr2;
+        }
     }
 
     // check port
@@ -236,14 +307,16 @@ std::pair<std::string, int>
 LTSM::Channel::ConnectorBase* LTSM::ChannelClient::findChannel(uint8_t channel)
 {
     const std::scoped_lock guard{lockch};
-    auto it = std::find_if(channels.begin(), channels.end(), [=](auto & ptr){ return ptr && ptr->channel() == channel; });
+    auto it = std::find_if(channels.begin(), channels.end(), [=](auto & ptr) { return ptr && ptr->channel() == channel; });
+
     return it != channels.end() ? (*it).get() : nullptr;
 }
 
 LTSM::Channel::Planned* LTSM::ChannelClient::findPlanned(uint8_t channel)
 {
     const std::scoped_lock guard{lockpl};
-    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [=](auto & st){ return st.channel == channel; });
+    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [=](auto & st) { return st.channel == channel; });
+
     return it != channelsPlanned.end() ? & (*it) : nullptr;
 }
 
@@ -252,6 +325,7 @@ size_t LTSM::ChannelClient::countFreeChannels(void) const
     const std::scoped_lock guard{lockch, lockpl};
 
     size_t used = (2 + channels.size() + channelsPlanned.size());
+
     if(used > 0xFF)
     {
         Application::error("%s: used channel count is large, count: %u", __FUNCTION__, used);
@@ -280,9 +354,13 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
     }
 
     if(channel == Channel::System)
+    {
         recvChannelSystem(buf);
+    }
     else
+    {
         recvChannelData(channel, std::move(buf));
+    }
 }
 
 void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> && buf)
@@ -290,6 +368,7 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
     Application::debug("%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, buf.size());
 
     auto channelConn = findChannel(channel);
+
     if(! channelConn)
     {
         Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel not found", channel);
@@ -297,12 +376,14 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
     }
 
 #ifndef LTSM_CLIENT
+
     if((channelConn->isAllowSessionFor(true) && ! isUserSession()) ||
-        (channelConn->isAllowSessionFor(false) && isUserSession()))
+            (channelConn->isAllowSessionFor(false) && isUserSession()))
     {
         Application::error("%s: ltsm channel disable for session: `%s'", __FUNCTION__, (isUserSession() ? "user" : "login"));
         throw std::invalid_argument(NS_FuncName);
     }
+
 #endif
 
     if(! channelConn->isRemoteConnected())
@@ -344,6 +425,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     }
 
     Channel::ConnectorMode mode = Channel::connectorMode(smode);
+
     if(mode == Channel::ConnectorMode::Unknown)
     {
         Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "unknown channel mode", channel);
@@ -362,28 +444,37 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
         Channel::Opts chopts{ Channel::connectorSpeed(sspeed), flags};
 
         if(type == Channel::ConnectorType::Unix)
+        {
             replyError = ! createChannelUnix(channel, jo.getString("path"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::File)
+        }
+        else if(type == Channel::ConnectorType::File)
+        {
             replyError = ! createChannelFile(channel, jo.getString("path"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Socket)
+        }
+        else if(type == Channel::ConnectorType::Socket)
+        {
             replyError = ! createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Command)
+        }
+        else if(type == Channel::ConnectorType::Command)
+        {
             replyError = ! createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Fuse)
+        }
+        else if(type == Channel::ConnectorType::Fuse)
+        {
             replyError = ! createChannelClientFuse(channel, jo.getString("fuse"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Audio)
+        }
+        else if(type == Channel::ConnectorType::Audio)
+        {
             replyError = ! createChannelClientAudio(channel, jo.getString("audio"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Pcsc)
+        }
+        else if(type == Channel::ConnectorType::Pcsc)
+        {
             replyError = ! createChannelClientPcsc(channel, jo.getString("pcsc"), mode, chopts);
-        else
-        if(type == Channel::ConnectorType::Pkcs11)
+        }
+        else if(type == Channel::ConnectorType::Pkcs11)
+        {
             replyError = ! createChannelClientPkcs11(channel, jo.getString("pkcs11"), mode, chopts);
+        }
         else
         {
             Application::error("%s: %s `%s', id: %" PRId8, __FUNCTION__, "unknown channel type", stype.c_str(), channel);
@@ -392,7 +483,9 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
     }
 
     if(replyError)
+    {
         sendSystemChannelConnected(channel, flags, false);
+    }
 }
 
 bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
@@ -403,7 +496,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
     // move planed to running
     const std::scoped_lock guard{lockpl};
-    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [=](auto & st){ return st.channel == channel; });
+    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [=](auto & st) { return st.channel == channel; });
 
     if(it != channelsPlanned.end())
     {
@@ -415,33 +508,39 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
         if(error)
         {
             Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "client connect error", channel);
+
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
                 job.serverFd = -1;
             }
+
             return false;
         }
 
         if(job.channel <= Channel::System || job.channel >= Channel::Reserved)
         {
             Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", job.channel);
+
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
                 job.serverFd = -1;
             }
+
             return false;
         }
 
         if(findChannel(job.channel))
         {
             Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel busy", channel);
+
             if(0 <= job.serverFd)
             {
                 close(job.serverFd);
                 job.serverFd = -1;
             }
+
             return false;
         }
 
@@ -464,8 +563,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
                     throw channel_error(NS_FuncName);
             }
         }
-        else
-        if(! job.serverOpts.content.empty())
+        else if(! job.serverOpts.content.empty())
         {
             Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
 
@@ -547,8 +645,10 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
 {
     Application::info("%s", __FUNCTION__);
 
-    files.remove_if([](auto & file){
+    files.remove_if([](auto & file)
+    {
         std::error_code err;
+
         if(! std::filesystem::is_regular_file(file, err))
         {
             Application::warning("%s: %s, path: `%s', uid: %d", "sendSystemTransferFiles", err.message().c_str(), file.c_str(), getuid());
@@ -578,9 +678,13 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
     for(auto & fname : files)
     {
         std::error_code err;
+
         if(auto fsize = std::filesystem::file_size(fname, err))
+        {
             ja.push(JsonObjectStream().push("file", fname).push("size", fsize).flush());
+        }
     }
+
     jo.push("files", ja.flush());
 
     sendLtsmEvent(Channel::System, jo.flush());
@@ -602,7 +706,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
     }
 
     if(serverOpts.mode == clientOpts.mode &&
-        (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly))
+            (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly))
     {
         Application::error("%s: incorrect modes pair (wo,wo) or (ro,ro)", __FUNCTION__);
         return false;
@@ -624,10 +728,13 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
 
     // find free channel
     uint8_t channel = 1;
+
     for(; channel < Channel::Reserved; ++channel)
     {
         if(! findChannel(channel) && ! findPlanned(channel))
+        {
             break;
+        }
     }
 
     if(channel == Channel::Reserved)
@@ -640,7 +747,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
         const std::scoped_lock guard{lockpl};
 
         channelsPlanned.emplace_back(
-            Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .channel = channel });
+                           Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .channel = channel });
     }
 
     // send channel open to client
@@ -894,6 +1001,7 @@ void LTSM::ChannelClient::destroyChannel(uint8_t channel)
         const std::scoped_lock guard{this->lockch};
 
         auto it = std::find_if(this->channels.begin(), this->channels.end(), [=](auto & ptr) { return ptr && ptr->channel() == channel; });
+
         if(it != this->channels.end())
         {
             (*it)->setRunning(false);
@@ -926,28 +1034,23 @@ void LTSM::ChannelClient::sendSystemChannelOpen(uint8_t channel, const Channel::
         jo.push("port", port);
         jo.push("ipaddr", ipaddr);
     }
-    else
-    if(clientOpts.type == Channel::ConnectorType::Command)
+    else if(clientOpts.type == Channel::ConnectorType::Command)
     {
         jo.push("runcmd", clientOpts.content);
     }
-    else
-    if(clientOpts.type == Channel::ConnectorType::Fuse)
+    else if(clientOpts.type == Channel::ConnectorType::Fuse)
     {
         jo.push("fuse", clientOpts.content);
     }
-    else
-    if(clientOpts.type == Channel::ConnectorType::Audio)
+    else if(clientOpts.type == Channel::ConnectorType::Audio)
     {
         jo.push("audio", clientOpts.content);
     }
-    else
-    if(clientOpts.type == Channel::ConnectorType::Pcsc)
+    else if(clientOpts.type == Channel::ConnectorType::Pcsc)
     {
         jo.push("pcsc", clientOpts.content);
     }
-    else
-    if(clientOpts.type == Channel::ConnectorType::Pkcs11)
+    else if(clientOpts.type == Channel::ConnectorType::Pkcs11)
     {
         jo.push("pkcs11", clientOpts.content);
     }
@@ -972,15 +1075,16 @@ void LTSM::ChannelClient::sendSystemChannelClose(uint8_t channel)
 void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int flags, bool noerror)
 {
     sendLtsmEvent(Channel::System, JsonObjectStream().
-        push("cmd", SystemCommand::ChannelConnected).
-        push("flags", flags).
-        push("error", ! noerror).
-        push("id", channel).flush());
+                  push("cmd", SystemCommand::ChannelConnected).
+                  push("flags", flags).
+                  push("error", ! noerror).
+                  push("id", channel).flush());
 }
 
 void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 {
     int version = ns.recvInt8();
+
     if(version != LtsmProtocolVersion)
     {
         Application::error("%s: unknown version: 0x%02x", __FUNCTION__, version);
@@ -1003,7 +1107,7 @@ void LTSM::ChannelClient::recvLtsm(const NetworkStream & ns)
 }
 
 void LTSM::ChannelClient::sendLtsm(NetworkStream & ns, std::mutex & sendLock,
-                                    uint8_t channel, const uint8_t* buf, size_t len)
+                                   uint8_t channel, const uint8_t* buf, size_t len)
 {
     Application::debug("%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, len);
 
@@ -1047,8 +1151,7 @@ void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & 
     {
         channelDebug = channel;
     }
-    else
-    if(channelDebug == channel)
+    else if(channelDebug == channel)
     {
         channelDebug = -1;
     }
@@ -1057,8 +1160,11 @@ void LTSM::ChannelClient::setChannelDebug(const uint8_t & channel, const bool & 
 void LTSM::ChannelClient::channelsShutdown(void)
 {
     const std::scoped_lock guard{lockch};
+
     for(auto & ptr : channels)
+    {
         ptr->setRunning(false);
+    }
 }
 
 // ChannelListener
@@ -1070,8 +1176,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
     {
         const std::scoped_lock guard{lockls};
 
-        if(std::any_of(listeners.begin(), listeners.end(),
-                [&](auto & ptr){ return ptr->getServerUrl() == serverOpts.url; }))
+        if(std::any_of(listeners.begin(), listeners.end(), [&](auto & ptr) { return ptr->getServerUrl() == serverOpts.url; }))
         {
             Application::debug("%s: listen present, url: %s", __FUNCTION__, serverOpts.url.c_str());
             return true;
@@ -1082,8 +1187,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
             listeners.emplace_back(Channel::createUnixListener(serverOpts, listen, clientOpts, chOpts, *this));
             return true;
         }
-        else
-        if(serverOpts.type == Channel::ConnectorType::Socket)
+        else if(serverOpts.type == Channel::ConnectorType::Socket)
         {
             listeners.emplace_back(Channel::createTcpListener(serverOpts, listen, clientOpts, chOpts, *this));
             return true;
@@ -1129,7 +1233,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
     }
 
     if(serverOpts.mode == clientOpts.mode &&
-        (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly))
+            (serverOpts.mode == Channel::ConnectorMode::ReadOnly || serverOpts.mode == Channel::ConnectorMode::WriteOnly))
     {
         Application::error("%s: incorrect modes pair (wo,wo) or (ro,ro)", __FUNCTION__);
         return false;
@@ -1146,10 +1250,13 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
 
     // find free channel
     uint8_t channel = 1;
+
     for(; channel < Channel::Reserved; ++channel)
     {
         if(! findChannel(channel) && ! findPlanned(channel))
+        {
             break;
+        }
     }
 
     if(channel == Channel::Reserved)
@@ -1162,7 +1269,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
         const std::scoped_lock guard{lockpl};
 
         channelsPlanned.emplace_back(
-            Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock, .channel = channel });
+                           Channel::Planned{ .serverOpts = serverOpts, .clientOpts = clientOpts, .chOpts = chOpts, .serverFd = sock, .channel = channel });
     }
 
     // send channel open to client
@@ -1178,7 +1285,9 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
 LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid)
 {
     if(Channel::OptsFlags::ZLibCompression & flags)
+    {
         zlib = std::make_unique<ZLib::InflateBase>();
+    }
 }
 
 LTSM::Channel::Remote2Local::~Remote2Local()
@@ -1226,7 +1335,9 @@ bool LTSM::Channel::Remote2Local::writeData(void)
     auto buf = popData();
 
     if(buf.empty())
+    {
         return true;
+    }
 
     transfer1 += buf.size();
 
@@ -1238,6 +1349,7 @@ bool LTSM::Channel::Remote2Local::writeData(void)
     }
 
     size_t writesz = 0;
+
     while(writesz < buf.size())
     {
         ssize_t real = writeDataFrom(buf.data() + writesz, buf.size() - writesz);
@@ -1250,7 +1362,9 @@ bool LTSM::Channel::Remote2Local::writeData(void)
         }
 
         if(EAGAIN == errno || EINTR == errno)
+        {
             continue;
+        }
 
         error = errno;
         return false;
@@ -1294,7 +1408,9 @@ LTSM::Channel::Remote2Local_FD::Remote2Local_FD(uint8_t cid, int fd0, bool close
 LTSM::Channel::Remote2Local_FD::~Remote2Local_FD()
 {
     if(needClose && 0 <= fd)
+    {
         close(fd);
+    }
 }
 
 ssize_t LTSM::Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t len)
@@ -1306,7 +1422,9 @@ ssize_t LTSM::Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t le
 LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid)
 {
     if(Channel::OptsFlags::ZLibCompression & flags)
+    {
         zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
+    }
 
     buf.reserve(0xFFFF);
 }
@@ -1323,7 +1441,9 @@ bool LTSM::Channel::Local2Remote::readData(void)
     try
     {
         if(hasInput())
-    	    dtsz = hasData();
+        {
+            dtsz = hasData();
+        }
     }
     catch(const std::exception & err)
     {
@@ -1350,7 +1470,7 @@ bool LTSM::Channel::Local2Remote::readData(void)
         {
             auto buf2 = zlib->deflateData(buf.data(), buf.size(), Z_SYNC_FLUSH);
             transfer2 += buf2.size();
-	    buf.swap(buf2);
+            buf.swap(buf2);
             // Application::debug("%s: deflate, size1: %d, size2: %d", __FUNCTION__, buf2.size(), buf.size());
         }
         else
@@ -1363,7 +1483,9 @@ bool LTSM::Channel::Local2Remote::readData(void)
 
     // eof
     if(0 == real)
+    {
         return false;
+    }
 
     if(EAGAIN == errno || EINTR == errno)
     {
@@ -1420,7 +1542,9 @@ LTSM::Channel::Local2Remote_FD::Local2Remote_FD(uint8_t cid, int fd0, bool close
 LTSM::Channel::Local2Remote_FD::~Local2Remote_FD()
 {
     if(needClose && 0 <= fd)
+    {
         close(fd);
+    }
 }
 
 bool LTSM::Channel::Local2Remote_FD::hasInput(void) const
@@ -1507,13 +1631,15 @@ void LTSM::Channel::Connector::loopWriter(ConnectorBase* cn, Remote2Local* st)
         // all data write
         while(! st->isEmpty())
         {
-            if(! st->writeData()) break;
+            if(! st->writeData()) { break; }
         }
     }
 
     // read/write priority send
     if(! cn->isMode(ConnectorMode::ReadWrite) || cn->isMode(ConnectorMode::WriteOnly))
+    {
         owner->sendSystemChannelClose(st->cid());
+    }
 }
 
 void LTSM::Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st)
@@ -1555,7 +1681,9 @@ void LTSM::Channel::Connector::loopReader(ConnectorBase* cn, Local2Remote* st)
 
     // read/write priority send
     if(cn->isMode(ConnectorMode::ReadWrite) || cn->isMode(ConnectorMode::ReadOnly))
+    {
         owner->sendSystemChannelClose(st->cid());
+    }
 }
 
 /// ConnectorFD_R
@@ -1569,7 +1697,9 @@ LTSM::Channel::ConnectorFD_R::ConnectorFD_R(uint8_t ch, int fd0, bool close, con
     localRemote->setSpeed(chOpts.speed);
 
     if(localRemote)
+    {
         thr = std::thread(Connector::loopReader, this, localRemote.get());
+    }
 }
 
 LTSM::Channel::ConnectorFD_R::~ConnectorFD_R()
@@ -1577,7 +1707,9 @@ LTSM::Channel::ConnectorFD_R::~ConnectorFD_R()
     setRunning(false);
 
     if(thr.joinable())
+    {
         thr.join();
+    }
 }
 
 int LTSM::Channel::ConnectorFD_R::error(void) const
@@ -1593,7 +1725,9 @@ uint8_t LTSM::Channel::ConnectorFD_R::channel(void) const
 void LTSM::Channel::ConnectorFD_R::setSpeed(const Channel::Speed & speed)
 {
     if(localRemote)
+    {
         localRemote->setSpeed(speed);
+    }
 }
 
 /// ConnectorFD_W
@@ -1607,7 +1741,9 @@ LTSM::Channel::ConnectorFD_W::ConnectorFD_W(uint8_t ch, int fd0, bool close, con
     remoteLocal->setSpeed(chOpts.speed);
 
     if(remoteLocal)
+    {
         thw = std::thread(Connector::loopWriter, this, remoteLocal.get());
+    }
 }
 
 LTSM::Channel::ConnectorFD_W::~ConnectorFD_W()
@@ -1615,7 +1751,9 @@ LTSM::Channel::ConnectorFD_W::~ConnectorFD_W()
     setRunning(false);
 
     if(thw.joinable())
+    {
         thw.join();
+    }
 }
 
 int LTSM::Channel::ConnectorFD_W::error(void) const
@@ -1631,13 +1769,17 @@ uint8_t LTSM::Channel::ConnectorFD_W::channel(void) const
 void LTSM::Channel::ConnectorFD_W::setSpeed(const Channel::Speed & speed)
 {
     if(remoteLocal)
+    {
         remoteLocal->setSpeed(speed);
+    }
 }
 
 void LTSM::Channel::ConnectorFD_W::pushData(std::vector<uint8_t> && buf)
 {
     if(! buf.empty() && remoteLocal)
+    {
         remoteLocal->pushData(std::move(buf));
+    }
 }
 
 /// ConnectorFD_RW
@@ -1654,10 +1796,14 @@ LTSM::Channel::ConnectorFD_RW::ConnectorFD_RW(uint8_t ch, int fd0, const Opts & 
     remoteLocal->setSpeed(chOpts.speed);
 
     if(localRemote)
+    {
         thr = std::thread(Connector::loopReader, this, localRemote.get());
+    }
 
     if(remoteLocal)
+    {
         thw = std::thread(Connector::loopWriter, this, remoteLocal.get());
+    }
 }
 
 LTSM::Channel::ConnectorFD_RW::~ConnectorFD_RW()
@@ -1665,10 +1811,14 @@ LTSM::Channel::ConnectorFD_RW::~ConnectorFD_RW()
     setRunning(false);
 
     if(thr.joinable())
+    {
         thr.join();
+    }
 
     if(thw.joinable())
+    {
         thw.join();
+    }
 }
 
 int LTSM::Channel::ConnectorFD_RW::error(void) const
@@ -1682,10 +1832,14 @@ int LTSM::Channel::ConnectorFD_RW::error(void) const
 uint8_t LTSM::Channel::ConnectorFD_RW::channel(void) const
 {
     if(remoteLocal)
+    {
         return remoteLocal->cid();
+    }
 
     if(localRemote)
+    {
         return localRemote->cid();
+    }
 
     return 0;
 }
@@ -1693,16 +1847,22 @@ uint8_t LTSM::Channel::ConnectorFD_RW::channel(void) const
 void LTSM::Channel::ConnectorFD_RW::setSpeed(const Channel::Speed & speed)
 {
     if(localRemote)
+    {
         localRemote->setSpeed(speed);
+    }
 
     if(remoteLocal)
+    {
         remoteLocal->setSpeed(speed);
+    }
 }
 
 void LTSM::Channel::ConnectorFD_RW::pushData(std::vector<uint8_t> && buf)
 {
     if(! buf.empty() && remoteLocal)
+    {
         remoteLocal->pushData(std::move(buf));
+    }
 }
 
 // ConnectorCMD_W
@@ -1714,7 +1874,9 @@ LTSM::Channel::ConnectorCMD_W::ConnectorCMD_W(uint8_t channel, FILE* ptr, const 
 LTSM::Channel::ConnectorCMD_W::~ConnectorCMD_W()
 {
     if(fcmd)
+    {
         pclose(fcmd);
+    }
 }
 
 // ConnectorCMD_R
@@ -1726,14 +1888,17 @@ LTSM::Channel::ConnectorCMD_R::ConnectorCMD_R(uint8_t channel, FILE* ptr, const 
 LTSM::Channel::ConnectorCMD_R::~ConnectorCMD_R()
 {
     if(fcmd)
+    {
         pclose(fcmd);
+    }
 }
 
 /// createUnixConnector
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     std::error_code err;
+
     if(! std::filesystem::is_socket(path, err))
     {
         Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
@@ -1743,6 +1908,7 @@ LTSM::Channel::ConnectorBasePtr
     Application::info("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
     int fd = UnixSocket::connect(path);
+
     if(0 > fd)
     {
         Application::error("%s: %s, id: %" PRId8 ", path: `%s'", __FUNCTION__, "unix failed", channel, path.c_str());
@@ -1750,20 +1916,26 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadWrite)
+    {
         return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
 }
 
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createUnixConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createUnixConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     Application::info("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
@@ -1774,13 +1946,19 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadWrite)
+    {
         return std::make_unique<ConnectorFD_RW>(channel, sock, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorFD_R>(channel, sock, true, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorFD_W>(channel, sock, true, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
@@ -1788,11 +1966,12 @@ LTSM::Channel::ConnectorBasePtr
 
 /// createTcpConnector
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createTcpConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createTcpConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     Application::info("%s: id: %" PRId8 ", addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipaddr.data(), port, Channel::Connector::modeString(mode));
 
     int fd = TCPSocket::connect(ipaddr, port);
+
     if(0 > fd)
     {
         Application::error("%s: %s, id: %" PRId8 ", addr: %s, port: %d", __FUNCTION__, "socket failed", channel, ipaddr.data(), port);
@@ -1800,20 +1979,26 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadWrite)
+    {
         return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
 }
 
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createTcpConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createTcpConnector(uint8_t channel, int sock, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     Application::info("%s: id: %" PRId8 ", sock: %d, mode: %s", __FUNCTION__, channel, sock, Channel::Connector::modeString(mode));
 
@@ -1824,13 +2009,19 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadWrite)
+    {
         return std::make_unique<ConnectorFD_RW>(channel, sock, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorFD_R>(channel, sock, true, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorFD_W>(channel, sock, true, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
@@ -1838,7 +2029,7 @@ LTSM::Channel::ConnectorBasePtr
 
 /// createFileConnector
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     Application::info("%s: id: %" PRId8 ", path: `%s', mode: %s", __FUNCTION__, channel, path.c_str(), Channel::Connector::modeString(mode));
 
@@ -1849,6 +2040,7 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     std::error_code err;
+
     if(mode == ConnectorMode::ReadOnly &&
             ! std::filesystem::exists(path, err))
     {
@@ -1863,8 +2055,7 @@ LTSM::Channel::ConnectorBasePtr
     {
         fd = open(path.c_str(), O_RDONLY);
     }
-    else
-    if(mode == ConnectorMode::WriteOnly)
+    else if(mode == ConnectorMode::WriteOnly)
     {
         int flags = O_WRONLY;
 
@@ -1888,13 +2079,19 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadWrite)
+    {
         return std::make_unique<ConnectorFD_RW>(channel, fd, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorFD_R>(channel, fd, true, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorFD_W>(channel, fd, true, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
@@ -1902,7 +2099,7 @@ LTSM::Channel::ConnectorBasePtr
 
 /// createCommandConnector
 LTSM::Channel::ConnectorBasePtr
-    LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcmd, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcmd, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
     Application::info("%s: id: %" PRId8 ", run cmd: `%s', mode: %s", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
 
@@ -1913,6 +2110,7 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     auto list = Tools::split(runcmd, 0x20);
+
     if(list.empty())
     {
         Application::error("%s: %s", __FUNCTION__, "cmd empty");
@@ -1920,6 +2118,7 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     std::error_code err;
+
     if(! std::filesystem::exists(list.front(), err))
     {
         Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, err.message().c_str(), list.front().c_str(), getuid());
@@ -1937,8 +2136,7 @@ LTSM::Channel::ConnectorBasePtr
 
         fcmd = popen(runcmd2.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     }
-    else
-    if(std::filesystem::is_regular_file(list.front(), err))
+    else if(std::filesystem::is_regular_file(list.front(), err))
     {
         fcmd = popen(runcmd.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     }
@@ -1950,10 +2148,14 @@ LTSM::Channel::ConnectorBasePtr
     }
 
     if(mode == ConnectorMode::ReadOnly)
+    {
         return std::make_unique<ConnectorCMD_R>(channel, fcmd, chOpts, sender);
+    }
 
     if(mode == ConnectorMode::WriteOnly)
+    {
         return std::make_unique<ConnectorCMD_W>(channel, fcmd, chOpts, sender);
+    }
 
     Application::error("%s: id: %" PRId8 ", %s failed", __FUNCTION__, channel, "mode");
     throw channel_error(NS_FuncName);
@@ -1972,17 +2174,23 @@ LTSM::Channel::Listener::~Listener()
     loopRunning = false;
 
     if(th.joinable())
+    {
         th.join();
+    }
 
     if(0 <= srvfd)
+    {
         close(srvfd);
+    }
 
     if(isUnix())
     {
         try
         {
             if(std::filesystem::exists(sopts.content) && std::filesystem::is_socket(sopts.content))
+            {
                 std::filesystem::remove(sopts.content);
+            }
         }
         catch(const std::filesystem::filesystem_error &)
         {
@@ -2020,15 +2228,16 @@ void LTSM::Channel::Listener::loopAccept(Listener* st)
         if(input)
         {
             auto sock = st->isUnix() ?
-                UnixSocket::accept(st->srvfd) : TCPSocket::accept(st->srvfd);
+                        UnixSocket::accept(st->srvfd) : TCPSocket::accept(st->srvfd);
 
             if(sock < 0)
             {
                 st->loopRunning = false;
             }
-            else
-            if(! st->owner->createChannelAcceptFd(st->copts, sock, st->sopts, st->chopts))
+            else if(! st->owner->createChannelAcceptFd(st->copts, sock, st->sopts, st->chopts))
+            {
                 close(sock);
+            }
         }
         else
         {
@@ -2038,20 +2247,21 @@ void LTSM::Channel::Listener::loopAccept(Listener* st)
 }
 
 std::unique_ptr<LTSM::Channel::Listener>
-    LTSM::Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
-        const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender)
+LTSM::Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
+                                  const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender)
 {
     auto & path = serverOpts.content;
     std::error_code err;
 
     if(std::filesystem::exists(path, err) &&
-        ! std::filesystem::is_socket(path, err))
+            ! std::filesystem::is_socket(path, err))
     {
         Application::error("%s: %s, path: `%s'", __FUNCTION__, "not socket", path.c_str());
         throw channel_error(NS_FuncName);
     }
 
     int srvfd = UnixSocket::listen(path, listen);
+
     if(0 > srvfd)
     {
         Application::error("%s: %s, path: `%s'", __FUNCTION__, "unix failed", path.c_str());
@@ -2063,10 +2273,11 @@ std::unique_ptr<LTSM::Channel::Listener>
 
 
 std::unique_ptr<LTSM::Channel::Listener>
-    LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
-        const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender)
+LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
+                                 const UrlMode & clientOpts, const Channel::Opts & chOpts, ChannelListener & sender)
 {
     auto [ ipaddr, port ] = Connector::parseAddrPort(serverOpts.content);
+
     if(0 >= port)
     {
         Application::error("%s: %s, url: `%s'", __FUNCTION__, "socket format", serverOpts.content.data());
@@ -2075,9 +2286,12 @@ std::unique_ptr<LTSM::Channel::Listener>
 
     // hardcore server listen
     if(sender.serverSide())
+    {
         ipaddr = "127.0.0.1";
+    }
 
     int srvfd = TCPSocket::listen(ipaddr, port, listen);
+
     if(0 > srvfd)
     {
         Application::error("%s: %s, ipaddr: %s, port: %d", __FUNCTION__, "socket failed", ipaddr.c_str(), port);

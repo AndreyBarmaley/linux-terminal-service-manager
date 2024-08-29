@@ -59,7 +59,8 @@ namespace LTSM
     namespace PulseAudio
     {
         enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02,
-            StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15 };
+                      StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
+                    };
 
         struct MainLoopDeleter
         {
@@ -182,7 +183,11 @@ namespace LTSM
             ~InputStream();
 
 
-            const char* streamName(void) const override { return "LTSM Audio Input"; }
+            const char* streamName(void) const override
+            {
+                return "LTSM Audio Input";
+            }
+
             bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) override;
 
             void streamPlayImmediatly(void);
@@ -195,6 +200,7 @@ namespace LTSM
 
             void setLatencyMs(uint32_t ms);
         };
+
 #else
         class OutputStream : public BaseStream
         {
@@ -212,7 +218,11 @@ namespace LTSM
             OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels);
             ~OutputStream();
 
-            const char* streamName(void) const override { return "LTSM Audio Output"; }
+            const char* streamName(void) const override
+            {
+                return "LTSM Audio Output";
+            }
+
             bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) override;
 
             void setFragSize(uint32_t fragsz);
@@ -220,6 +230,7 @@ namespace LTSM
             bool pcmEmpty(void) const;
             std::vector<uint8_t> pcmData(void);
         };
+
 #endif
         struct SimpleDeleter
         {
@@ -247,7 +258,7 @@ namespace LTSM
         {
         public:
             Playback(std::string_view appName, std::string_view streamName, const pa_sample_format_t &,
-                    uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
+                     uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
 
             bool streamWrite(const uint8_t*, size_t) const;
             bool streamDrain(void) const;
@@ -257,7 +268,7 @@ namespace LTSM
         {
         public:
             Record(std::string_view appName, std::string_view streamName, const pa_sample_format_t &,
-                    uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
+                   uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
 
             std::vector<uint8_t> streamRead(size_t) const;
         };

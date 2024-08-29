@@ -33,8 +33,9 @@ namespace LTSM
 {
     struct ldap_error : public std::runtime_error
     {
-        explicit ldap_error(const std::string & what) : std::runtime_error(what){}
-        explicit ldap_error(const char* what) : std::runtime_error(what){}
+        explicit ldap_error(const std::string & what) : std::runtime_error(what) {}
+
+        explicit ldap_error(const char* what) : std::runtime_error(what) {}
     };
 
     class LdapWrapper

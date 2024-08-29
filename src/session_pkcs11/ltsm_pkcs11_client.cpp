@@ -48,10 +48,11 @@ namespace LTSM
 using namespace std::chrono_literals;
 
 // createClientPkcs11Connector
-std::unique_ptr<LTSM::Channel::ConnectorBase>
-    LTSM::Channel::createClientPkcs11Connector(uint8_t channel, const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
+std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(uint8_t channel,
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
 {
-    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
+                      Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown)
     {
@@ -63,11 +64,11 @@ std::unique_ptr<LTSM::Channel::ConnectorBase>
 }
 
 /// ConnectorClientPkcs11
-LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url, const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
+LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url,
+        const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch)
 {
     Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
-
     // start threads
     setRunning(true);
 }
@@ -94,7 +95,6 @@ void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv)
 {
     Application::debug("%s: size: %u", __FUNCTION__, recv.size());
-
     StreamBufRef sb;
 
     if(last.empty())
@@ -121,27 +121,33 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             // <DATA> - audio data
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
-
             auto pkcs11Cmd = sb.readIntLE16();
             Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
 
             if(Pkcs11Op::Init == pkcs11Cmd)
+            {
                 pkcs11Init(sb);
-            else
-            if(Pkcs11Op::GetSlots == pkcs11Cmd)
+            }
+            else if(Pkcs11Op::GetSlots == pkcs11Cmd)
+            {
                 pkcs11GetSlots(sb);
-            else
-            if(Pkcs11Op::GetSlotMechanisms == pkcs11Cmd)
+            }
+            else if(Pkcs11Op::GetSlotMechanisms == pkcs11Cmd)
+            {
                 pkcs11GetSlotMechanisms(sb);
-            else
-            if(Pkcs11Op::GetSlotCertificates == pkcs11Cmd)
+            }
+            else if(Pkcs11Op::GetSlotCertificates == pkcs11Cmd)
+            {
                 pkcs11GetSlotCertificates(sb);
-            else
-            if(Pkcs11Op::SignData == pkcs11Cmd)
+            }
+            else if(Pkcs11Op::SignData == pkcs11Cmd)
+            {
                 pkcs11SignData(sb);
-            else
-            if(Pkcs11Op::DecryptData == pkcs11Cmd)
+            }
+            else if(Pkcs11Op::DecryptData == pkcs11Cmd)
+            {
                 pkcs11DecryptData(sb);
+            }
             else
             {
                 Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %u", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
@@ -150,16 +156,22 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
         }
 
         if(sb.last())
+        {
             throw std::underflow_error(NS_FuncName);
+        }
     }
     catch(const std::underflow_error &)
     {
         Application::warning("%s: underflow data: %u", __FUNCTION__, sb.last());
-        
+
         if(beginPacket)
+        {
             last.assign(beginPacket, endPacket);
+        }
         else
+        {
             last.swap(recv);
+        }
     }
 }
 
@@ -167,14 +179,13 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
 {
     // pkcs11 format:
     // <VER16> - proto ver
-            
     if(2 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     protoVer = sb.readIntLE16();
-
     reply.reset();
-
     // reply format:
     // <CMD16> - cmd id
     // <ERR16> - err len
@@ -197,7 +208,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     }
 
     auto info = pkcs11->getLibraryInfo();
-
     // no errors
     reply.writeIntLE16(0);
     // proto ver
@@ -210,7 +220,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     reply.write(info->libraryDescription, 32);
     reply.writeInt8(info->libraryVersion.major);
     reply.writeInt8(info->libraryVersion.minor);
-
     owner->sendLtsmEvent(cid, reply.rawbuf());
     return true;
 }
@@ -218,14 +227,14 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & sb)
 {
     if(1 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     // pkcs11 format:
     // <ONLY8> - with token only
     bool tokenPresentOnly = sb.readInt8();
-
     reply.reset();
-
     // reply format:
     // <CMD16> - cmd id
     // <LEN16> - slots count
@@ -233,14 +242,12 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
     // <DATA>  - slot info struct
     // <DATA>  - token info struct
     reply.writeIntLE16(Pkcs11Op::GetSlots);
-
     auto slots = PKCS11::getSlots(tokenPresentOnly, pkcs11);
     reply.writeIntLE16(slots.size());
-
     PKCS11::SlotInfo slotInfo;
     PKCS11::TokenInfo tokenInfo;
 
-    for(auto & slot: slots)
+    for(auto & slot : slots)
     {
         reply.writeIntLE64(slot.slotId());
 
@@ -297,14 +304,14 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamBufRef & sb)
 {
     if(8 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     // pkcs11 format:
     // <SLOT64> - slot id
     auto slotId = sb.readIntLE64();
-
     reply.reset();
-
     // reply format:
     // <CMD16> - cmd id
     // <LEN16> - mechanisms count
@@ -312,12 +319,11 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     // <DATA>  - mech info struct
     // <LEN16> - mech name len, <DATA> mech name
     reply.writeIntLE16(Pkcs11Op::GetSlotMechanisms);
-
     const PKCS11::Slot slot(slotId, pkcs11);
     auto mechs = slot.getMechanisms();
     reply.writeIntLE16(mechs.size());
 
-    for(auto & mech: mechs)
+    for(auto & mech : mechs)
     {
         if(auto mechInfo = slot.getMechInfo(mech))
         {
@@ -325,7 +331,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
             reply.writeIntLE64(mechInfo->ulMinKeySize);
             reply.writeIntLE64(mechInfo->ulMaxKeySize);
             reply.writeIntLE64(mechInfo->flags);
-
             std::string mechName = PKCS11::mechStringEx(mech);
             reply.writeIntLE16(mechName.size());
             reply.write(mechName);
@@ -343,15 +348,15 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const StreamBufRef & sb)
 {
     if(9 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     // pkcs11 format:
     // <SLOT64> - slot id
     auto slotId = sb.readIntLE64();
-
     // <PAIR8> - have public/private pair
     bool havePublicPrivateKeys = sb.readInt8();
-
     reply.reset();
     std::unique_ptr<const PKCS11::Session> sess;
 
@@ -372,20 +377,16 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     // <LEN16> - objects count
     // <LEN16> - obj id len, <DATA> - obj id data
     // <LEN32> - cert len, <DATA> - cert data
-
     reply.writeIntLE16(Pkcs11Op::GetSlotCertificates);
-
     auto certs = sess->getCertificates(true /* havePulicPrivateKeys */);
     reply.writeIntLE16(certs.size());
 
-    for(auto & handle: certs)
+    for(auto & handle : certs)
     {
         auto objInfo = sess->getObjectInfo(handle, { CKA_VALUE });
-
         auto rawId = objInfo.getId();
         reply.writeIntLE16(rawId.size());
         reply.write(rawId.data(), rawId.size());
-
         auto rawValue = objInfo.getRawData(CKA_VALUE);
         reply.writeIntLE32(rawValue.size());
         reply.write(rawValue.data(), rawValue.size());
@@ -398,7 +399,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & sb)
 {
     if(18 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     // pkcs11 format:
     // <SLOT64> - slot id
@@ -408,25 +411,30 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     // <DATA32> - data len, <DATA> sign data
     auto slotId = sb.readIntLE64();
     auto mechType = sb.readIntLE64();
-
     auto pinLen = sb.readIntLE16();
+
     if(pinLen > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto pin = sb.readString(pinLen);
-
     auto certLen = sb.readIntLE16();
+
     if(certLen > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto certId = sb.read(certLen);
 
     if(4 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto valLen = sb.readIntLE32();
     auto values = sb.read(valLen);
-
     reply.reset();
     std::unique_ptr<PKCS11::Session> sess;
 
@@ -444,13 +452,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
 
     // reply format:
     // <DATA32> - data len, <DATA> sign data
-
     sess->login(pin);
     auto sign = sess->signData(certId, values.data(), values.size(), mechType);
-
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-
     owner->sendLtsmEvent(cid, reply.rawbuf());
     return true;
 }
@@ -458,7 +463,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef & sb)
 {
     if(18 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     // pkcs11 format:
     // <SLOT64> - slot id
@@ -468,27 +475,31 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     // <DATA32> - data len, <DATA> sign data
     auto slotId = sb.readIntLE64();
     auto mechType = sb.readIntLE64();
-
     auto pinLen = sb.readIntLE16();
+
     if(pinLen > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto pin = sb.readString(pinLen);
-
     auto certLen = sb.readIntLE16();
+
     if(certLen > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto certId = sb.read(certLen);
 
     if(4 > sb.last())
+    {
         throw std::underflow_error(NS_FuncName);
+    }
 
     auto valLen = sb.readIntLE32();
     auto values = sb.read(valLen);
-
     reply.reset();
-
     std::unique_ptr<PKCS11::Session> sess;
 
     try
@@ -505,13 +516,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
 
     // reply format:
     // <DATA32> - data len, <DATA> sign data
-
     sess->login(pin);
     auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
-
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-
     owner->sendLtsmEvent(cid, reply.rawbuf());
     return true;
 }

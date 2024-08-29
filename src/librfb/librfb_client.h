@@ -39,22 +39,22 @@ namespace LTSM
         {
             PixelFormat serverPf;
 
-            std::unique_ptr<NetworkStream> socket;           /// socket layer
-            std::unique_ptr<TLS::Stream> tls;                /// tls layer
-            std::unique_ptr<ZLib::InflateStream> zlib;       /// zlib layer
+            std::unique_ptr<NetworkStream> socket; /// socket layer
+            std::unique_ptr<TLS::Stream> tls; /// tls layer
+            std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
             std::unique_ptr<DecodingBase> decoder;
 
             NetworkStream* streamIn;
             NetworkStream* streamOut;
 
             std::atomic<bool> rfbMessages{true};
-            std::mutex      sendLock;
+            std::mutex sendLock;
 
-            bool            serverTrueColor = true;
-            bool            serverBigEndian = false;
-            bool            continueUpdatesSupport = false;
-            bool            continueUpdatesProcessed = false;
-            bool            ltsmServer = false;
+            bool serverTrueColor = true;
+            bool serverBigEndian = false;
+            bool continueUpdatesSupport = false;
+            bool continueUpdatesProcessed = false;
+            bool ltsmServer = false;
 
         protected:
             friend class DecodingRaw;
@@ -65,75 +65,90 @@ namespace LTSM
             friend class DecodingFFmpeg;
 
             // network stream interface
-            void            sendFlush(void) override;
-            void            sendRaw(const void* ptr, size_t len) override;
-            void            recvRaw(void* ptr, size_t len) const override;
-            bool            hasInput(void) const override;
-            size_t          hasData(void) const override;
-            uint8_t         peekInt8(void) const override;
+            void sendFlush(void) override;
+            void sendRaw(const void* ptr, size_t len) override;
+            void recvRaw(void* ptr, size_t len) const override;
+            bool hasInput(void) const override;
+            size_t hasData(void) const override;
+            uint8_t peekInt8(void) const override;
 
-	    // decoder stream interface
+            // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
 
-            bool            authVncInit(std::string_view pass);
-            bool            authVenCryptInit(const SecurityInfo &);
+            bool authVncInit(std::string_view pass);
+            bool authVenCryptInit(const SecurityInfo &);
 #ifdef LTSM_WITH_GSSAPI
-            bool            authGssApiInit(const SecurityInfo &);
+            bool authGssApiInit(const SecurityInfo &);
 #endif
 
-            void            sendPixelFormat(void);
-            void            sendEncodings(const std::list<int> &);
-            void            sendFrameBufferUpdate(bool incr);
-            void            sendFrameBufferUpdate(const XCB::Region &, bool incr);
-            void            sendSetDesktopSize(const XCB::Size &);
-            void            sendContinuousUpdates(bool enable, const XCB::Region &);
+            void sendPixelFormat(void);
+            void sendEncodings(const std::list<int> &);
+            void sendFrameBufferUpdate(bool incr);
+            void sendFrameBufferUpdate(const XCB::Region &, bool incr);
+            void sendSetDesktopSize(const XCB::Size &);
+            void sendContinuousUpdates(bool enable, const XCB::Region &);
 
-            void            recvFBUpdateEvent(void);
-            void            recvColorMapEvent(void);
-            void            recvBellEvent(void);
-            void            recvCutTextEvent(void);
-            void            recvContinuousUpdatesEvent(void);
+            void recvFBUpdateEvent(void);
+            void recvColorMapEvent(void);
+            void recvBellEvent(void);
+            void recvCutTextEvent(void);
+            void recvContinuousUpdatesEvent(void);
 
-            void            recvDecodingLtsm(const XCB::Region &);
-            void            recvChannelSystem(const std::vector<uint8_t> &) override;
-            bool            isUserSession(void) const override { return true; }
+            void recvDecodingLtsm(const XCB::Region &);
+            void recvChannelSystem(const std::vector<uint8_t> &) override;
+            bool isUserSession(void) const override
+            {
+                return true;
+            }
 
-            void            recvDecodingLastRect(const XCB::Region &);
-            void            recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
-            void            recvDecodingRichCursor(const XCB::Region &);
+            void recvDecodingLastRect(const XCB::Region &);
+            void recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
+            void recvDecodingRichCursor(const XCB::Region &);
 
-            void            setSocketStreamMode(int sockd);
-            void            setInetStreamMode(void);
-            void            updateRegion(int type, const XCB::Region &);
+            void setSocketStreamMode(int sockd);
+            void setInetStreamMode(void);
+            void updateRegion(int type, const XCB::Region &);
 
         public:
             ClientDecoder() = default;
 
-            bool            rfbHandshake(const SecurityInfo &);
-            bool            rfbMessagesRunning(void) const;
-            void            rfbMessagesLoop(void);
-            void            rfbMessagesShutdown(void);
-            bool            isContinueUpdatesSupport(void) const;
-            bool            isContinueUpdatesProcessed(void) const;
+            bool rfbHandshake(const SecurityInfo &);
+            bool rfbMessagesRunning(void) const;
+            void rfbMessagesLoop(void);
+            void rfbMessagesShutdown(void);
+            bool isContinueUpdatesSupport(void) const;
+            bool isContinueUpdatesProcessed(void) const;
 
-            void            sendKeyEvent(bool pressed, uint32_t keysym);
-            void            sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-            void            sendCutTextEvent(const char*, size_t);
-            void            sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+            void sendKeyEvent(bool pressed, uint32_t keysym);
+            void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
+            void sendCutTextEvent(const char*, size_t);
+            void sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
 
-            std::list<int>  supportedEncodings(void) const;
+            std::list<int> supportedEncodings(void) const;
 
-            virtual void    ltsmHandshakeEvent(int flags) { /* empty */ }
-            virtual void    decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz, const std::vector<RFB::ScreenInfo> &) { /* empty */ }
-            virtual void    pixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
-            virtual void    fbUpdateEvent(void) { /* empty */ }
-            virtual void    setColorMapEvent(const std::vector<Color> &) { /* empty */ }
-            virtual void    bellEvent(void) { /* empty */ }
-            virtual void    cutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
-            virtual void    richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
-	    virtual void    displayResizeEvent(const XCB::Size &);
+            virtual void ltsmHandshakeEvent(int flags) { /* empty */ }
+
+            virtual void decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz,
+                    const std::vector<RFB::ScreenInfo> &) { /* empty */ }
+
+            virtual void pixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
+
+            virtual void fbUpdateEvent(void) { /* empty */ }
+
+            virtual void setColorMapEvent(const std::vector<Color> &) { /* empty */ }
+
+            virtual void bellEvent(void) { /* empty */ }
+
+            virtual void cutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
+
+            virtual void richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
+
+            virtual void displayResizeEvent(const XCB::Size &);
             //
-            virtual bool    ltsmSupported(void) const { return false; }
+            virtual bool ltsmSupported(void) const
+            {
+                return false;
+            }
         };
 
         class ClientDecoderSocket : public ClientDecoder

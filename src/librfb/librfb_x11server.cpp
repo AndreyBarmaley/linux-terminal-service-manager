@@ -54,7 +54,10 @@ namespace LTSM
         if(rfbClipboardEnable())
         {
             // thread async and copy buf
-            std::thread([this, buf](){ this->sendCutTextEvent(buf); }).detach();
+            std::thread([this, buf]()
+            {
+                this->sendCutTextEvent(buf);
+            }).detach();
         }
     }
 
@@ -66,7 +69,7 @@ namespace LTSM
         }
     }
 
-    void  RFB::X11Server::randrScreenSetSizeEvent(const XCB::Size & wsz)
+    void RFB::X11Server::randrScreenSetSizeEvent(const XCB::Size & wsz)
     {
         Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
         displayResizeProcessed = true;
@@ -74,19 +77,17 @@ namespace LTSM
 
     void RFB::X11Server::randrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify)
     {
-        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16, __FUNCTION__, wsz.width, wsz.height, (uint16_t) notify.sequence);
-
+        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16, __FUNCTION__, wsz.width, wsz.height,
+                          (uint16_t) notify.sequence);
         xcbShmInit();
         displayResizeProcessed = false;
-
         serverDisplayResizedEvent(wsz);
 
         if(isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE))
         {
             auto status = randrSequence == notify.sequence ?
-                RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
-
-            std::thread([=]()
+                          RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
+            std::thread([ = ]()
             {
                 if(status == RFB::DesktopResizeStatus::ServerRuntime)
                 {
@@ -94,13 +95,14 @@ namespace LTSM
                     this->displayResizeEvent(wsz);
                 }
                 else
-                // clientSide
-                if(this->displayResizeNegotiation)
-                {
-                    this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
-                    this->displayResizeEvent(wsz);
-                    this->displayResizeNegotiation = false;
-                }
+
+                    // clientSide
+                    if(this->displayResizeNegotiation)
+                    {
+                        this->sendEncodingDesktopResize(status, RFB::DesktopResizeError::NoError, wsz);
+                        this->displayResizeEvent(wsz);
+                        this->displayResizeNegotiation = false;
+                    }
             }).detach();
         }
     }
@@ -128,16 +130,17 @@ namespace LTSM
                 if(auto extShm = XCB::RootDisplay::getExtension(XCB::Module::SHM))
                 {
                     uint16_t opcode = 0;
+
                     if(shm && extShm->isEventError(ev, & opcode))
                     {
                         Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "shm", opcode);
                         shm.reset();
                     }
                 }
-                else
-                if(auto extFixes = XCB::RootDisplay::getExtension(XCB::Module::XFIXES))
+                else if(auto extFixes = XCB::RootDisplay::getExtension(XCB::Module::XFIXES))
                 {
                     uint16_t opcode = 0;
+
                     if(extFixes->isEventError(ev, & opcode))
                     {
                         Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xfixes", opcode);
@@ -157,7 +160,6 @@ namespace LTSM
     int RFB::X11Server::rfbCommunication(void)
     {
         serverSelectEncodings();
-
         // vnc session not activated trigger
         auto timerNotActivated = Tools::BaseTimer::create<std::chrono::seconds>(30, false, [this]()
         {
@@ -170,40 +172,39 @@ namespace LTSM
 
         // RFB 6.1.1 version
         int protover = serverHandshakeVersion();
+
         if(protover == 0)
+        {
             return EXIT_FAILURE;
+        }
 
         serverHandshakeVersionEvent();
 
         // RFB 6.1.2 security
         if(! serverSecurityInit(protover, rfbSecurityInfo()))
+        {
             return EXIT_FAILURE;
+        }
 
         serverSecurityInitEvent();
-
         // RFB 6.3.1 client init
         serverClientInit("X11 Remote Desktop", XCB::RootDisplay::size(), XCB::RootDisplay::depth(), serverFormat());
-
         timerNotActivated->stop();
-
         xcbShmInit();
         serverConnectedEvent();
-
         Application::info("%s: wait RFB messages...", __FUNCTION__);
-
         // xcb on
         xcbDisableMessages(false);
         bool mainLoop = true;
         auto frameTimePoint = std::chrono::steady_clock::now();
         size_t delayTimeout = 75;
-
         // process rfb messages background
-        auto rfbThread = std::thread([=]()
+        auto rfbThread = std::thread([ = ]()
         {
             this->rfbMessagesLoop();
         });
 
-        auto xcbThread = std::thread([=]()
+        auto xcbThread = std::thread([ = ]()
         {
             this->xcbProcessingEvents();
         });
@@ -242,49 +243,48 @@ namespace LTSM
             if(isClientLtsmSupported())
             {
 #ifdef LTSM_ENCODING_FFMPEG
-    	        if(isClientVideoSupported())
-	        {
+
+                if(isClientVideoSupported())
+                {
                     if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
                     {
                         auto upms = ffmpeg->updateTimeMS();
 
-		        if(upms < delayTimeout)
+                        if(upms < delayTimeout)
                         {
                             Application::trace("%s: update time ms: %u", __FUNCTION__, upms);
                             std::this_thread::sleep_for(1ms);
-            	            continue;
+                            continue;
                         }
                     }
 
                     std::scoped_lock guard{ serverLock };
-
                     clientUpdateReq = true;
-            	    damageRegion = XCB::RootDisplay::region();
+                    damageRegion = XCB::RootDisplay::region();
                 }
                 else
 #endif
-                if(delayTimeout)
-                {
-                    auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
-                    if(dt.count() < delayTimeout)
+                    if(delayTimeout)
                     {
-                        Application::trace("%s: update time ms: %u", __FUNCTION__, dt.count());
-                        std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
-            	        continue;
+                        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+
+                        if(dt.count() < delayTimeout)
+                        {
+                            Application::trace("%s: update time ms: %u", __FUNCTION__, dt.count());
+                            std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
+                            continue;
+                        }
                     }
-                }
             }
 
             if(xcbNoDamageOption() || fullscreenUpdateReq)
             {
                 std::scoped_lock guard{ serverLock };
                 damageRegion = XCB::RootDisplay::region();
-
                 fullscreenUpdateReq = false;
                 clientUpdateReq = true;
             }
-            else
-            if(damageRegion.empty())
+            else if(damageRegion.empty())
             {
                 // wait loop
                 std::this_thread::sleep_for(5ms);
@@ -294,14 +294,13 @@ namespace LTSM
             // frame update
             std::scoped_lock guard{ serverLock };
             auto serverRegion = XCB::RootDisplay::region();
-
             // fix out of screen
             damageRegion = serverRegion.intersected(damageRegion.align(4));
             damageRegion = clientRegion.intersected(damageRegion);
 
             if(! sendUpdateSafe(damageRegion))
             {
-                rfbMessagesShutdown(); 
+                rfbMessagesShutdown();
                 continue;
             }
 
@@ -313,25 +312,27 @@ namespace LTSM
 
             damageRegion.reset();
             clientUpdateReq = false;
-
             auto frameRate = frameRateOption();
             delayTimeout = frameRate ? 1000 / frameRate : 0;
-
             frameTimePoint = std::chrono::steady_clock::now();
         } // main loop
 
         waitUpdateProcess();
 
         if(xcbThread.joinable())
+        {
             xcbThread.join();
+        }
 
         if(rfbThread.joinable())
+        {
             rfbThread.join();
+        }
 
         return EXIT_SUCCESS;
     }
 
-    void  RFB::X11Server::recvPixelFormatEvent(const PixelFormat &, bool bigEndian)
+    void RFB::X11Server::recvPixelFormatEvent(const PixelFormat &, bool bigEndian)
     {
         if(serverFormat() != clientFormat())
         {
@@ -339,7 +340,7 @@ namespace LTSM
         }
     }
 
-    void  RFB::X11Server::recvSetEncodingsEvent(const std::vector<int> &)
+    void RFB::X11Server::recvSetEncodingsEvent(const std::vector<int> &)
     {
         serverSelectEncodings();
         serverEncodingsEvent();
@@ -358,9 +359,13 @@ namespace LTSM
         if(xcbAllowMessages())
         {
             if(auto keycode = rfbUserKeycode(keysym))
+            {
                 XCB::RootDisplay::fakeInputKeycode(keycode, 0 < pressed);
+            }
             else
+            {
                 XCB::RootDisplay::fakeInputKeysym(keysym, 0 < pressed);
+            }
         }
 
         clientUpdateReq = true;
@@ -371,10 +376,13 @@ namespace LTSM
         if(xcbAllowMessages())
         {
             auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST));
-            if(! test)
-                return;
 
-            if(pressedMask ^ mask)
+            if(! test)
+            {
+                return;
+            }
+
+            if(pressedMask^ mask)
             {
                 for(int num = 0; num < 8; ++num)
                 {
@@ -383,7 +391,9 @@ namespace LTSM
                     if(bit & mask)
                     {
                         if(Application::isDebugLevel(DebugLevel::Trace))
+                        {
                             Application::debug("%s: xfb fake input pressed: %d", __FUNCTION__, num + 1);
+                        }
 
                         test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_PRESS, num + 1, posx, posy);
                         pressedMask |= bit;
@@ -391,7 +401,9 @@ namespace LTSM
                     else if(bit & pressedMask)
                     {
                         if(Application::isDebugLevel(DebugLevel::Trace))
+                        {
                             Application::debug("%s: xfb fake input released: %d", __FUNCTION__, num + 1);
+                        }
 
                         test->fakeInputRaw(XCB::RootDisplay::root(), XCB_BUTTON_RELEASE, num + 1, posx, posy);
                         pressedMask &= ~bit;
@@ -401,7 +413,9 @@ namespace LTSM
             else
             {
                 if(Application::isDebugLevel(DebugLevel::Trace))
+                {
                     Application::debug("%s: xfb fake input move, pos: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, posx, posy);
+                }
 
                 test->fakeInputRaw(XCB::RootDisplay::root(), XCB_MOTION_NOTIFY, 0, posx, posy);
             }
@@ -430,7 +444,9 @@ namespace LTSM
         }
 
         if(fullUpdateReq)
+        {
             fullscreenUpdateReq = true;
+        }
 
         if(region != clientRegion)
         {
@@ -444,39 +460,40 @@ namespace LTSM
     void RFB::X11Server::recvSetDesktopSizeEvent(const std::vector<RFB::ScreenInfo> & screens)
     {
         XCB::Region desktop(0, 0, 0, 0);
+
         for(auto & info : screens)
         {
-            Application::info("%s: screen id: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08" PRIx32,
-                    __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
-
+            Application::info("%s: screen id: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                              "], flags: 0x%08" PRIx32,
+                              __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
             desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
         }
 
         if(desktop.x != 0 && desktop.y != 0)
         {
-            Application::error("%s: incorrect desktop size: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, desktop.x, desktop.y, desktop.width, desktop.height);
-            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout, XCB::RootDisplay::size());
+            Application::error("%s: incorrect desktop size: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               desktop.x, desktop.y, desktop.width, desktop.height);
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout,
+                                      XCB::RootDisplay::size());
         }
-        else
-        if(! xcbAllowMessages())
+        else if(! xcbAllowMessages())
         {
             Application::error("%s: xcb disabled", __FUNCTION__);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::Size{0, 0});
         }
-        else
-        if(RootDisplay::size() == desktop.toSize())
-	{
-            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError, XCB::RootDisplay::size());
-	}
+        else if(RootDisplay::size() == desktop.toSize())
+        {
+            sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::NoError,
+                                      XCB::RootDisplay::size());
+        }
         else
         {
             displayResizeNegotiation = true;
-
-            std::thread([&, sz = desktop.toSize()]
+            std::thread([ &, sz = desktop.toSize()]
             {
                 uint16_t sequence = 0;
 
-		waitUpdateProcess();
+                waitUpdateProcess();
 
                 if(XCB::RootDisplay::setRandrScreenSize(sz, & sequence))
                 {
@@ -484,8 +501,9 @@ namespace LTSM
                 }
                 else
                 {
-                    sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources, XCB::RootDisplay::size());
-            	    displayResizeNegotiation = false;
+                    sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources,
+                                              XCB::RootDisplay::size());
+                    displayResizeNegotiation = false;
                     randrSequence = 0;
                 }
             }).detach();
@@ -508,7 +526,6 @@ namespace LTSM
                 {
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
                     auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
-
                     sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 }
             }
@@ -532,16 +549,16 @@ namespace LTSM
         {
             auto dsz = XCB::RootDisplay::size();
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
-
-            shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+            shm = ext->createShm(dsz.width* dsz.height* bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
         }
     }
 
     XcbFrameBuffer RFB::X11Server::xcbFrameBuffer(const XCB::Region & reg) const
     {
-        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
-
+        Application::debug("%s: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+                           reg.width, reg.height);
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
+
         if(! pixmapReply)
         {
             Application::error("%s: %s", __FUNCTION__, "xcb copy region empty");
@@ -550,21 +567,23 @@ namespace LTSM
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            Application::debug("%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8 ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
-                            __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask, pixmapReply->gmask, pixmapReply->bmask);
+            Application::debug("%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8
+                               ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
+                               __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
+                               pixmapReply->gmask, pixmapReply->bmask);
         }
 
         // fix align
-        if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel())
+        if(pixmapReply->size() != reg.width* reg.height* pixmapReply->bytePerPixel())
         {
-            Application::error("%s: region not aligned, reply size: %u, reg size: [%" PRIu16 ", %" PRIu16 "], byte per pixel: %" PRIu8,
-                    __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
+            Application::error("%s: region not aligned, reply size: %u, reg size: [%" PRIu16 ", %" PRIu16 "], byte per pixel: %"
+                               PRIu8,
+                               __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);
         }
 
         FrameBuffer fb(pixmapReply->data(), reg, serverFormat());
         xcbFrameBufferModify(fb);
-
         return XcbFrameBuffer{pixmapReply, fb};
     }
 }
