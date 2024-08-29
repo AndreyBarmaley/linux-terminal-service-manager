@@ -1,5 +1,7 @@
 name: clang-tidy-review
 on:
+  push:
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
