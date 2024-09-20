@@ -784,18 +784,11 @@ namespace LTSM
     RFB::EncodingRet RFB::EncodingTRLE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId)
     {
-        auto map = fb.pixelMapWeight(reg);
-        // convert to palette
-        int index = 0;
+        auto map = fb.pixelMapPalette(reg);
         // thread buffer
         BinaryBuf bb;
-        bb.reserve(reg.width* reg.height* fb.bytePerPixel());
+        bb.reserve(reg.width * reg.height * fb.bytePerPixel());
         EncoderWrapper wrap(& bb, st);
-
-        for(auto & pair : map)
-        {
-            pair.second = index++;
-        }
 
         if(map.size() == 1)
         {
@@ -880,7 +873,7 @@ namespace LTSM
     }
 
     void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
-            size_t field, const PixelMapWeight & pal)
+            size_t field, const PixelMapPalette & pal)
     {
         // subencoding type: packed palette
         st->sendInt8(pal.size());
@@ -891,7 +884,7 @@ namespace LTSM
             st->sendCPixel(pair.first);
         }
 
-        const size_t rez = (reg.width* reg.height) >> 2;
+        const size_t rez = (reg.width * reg.height) >> 2;
         Tools::StreamBitsPack sb(rez ? rez : 32);
         // send packed rows
 #ifdef FB_FAST_CYCLE
@@ -904,8 +897,8 @@ namespace LTSM
             {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
                 auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
-                auto it = pal.find(pix);
-                auto index = it != pal.end() ? (*it).second : 0;
+                auto index = pal.findColorIndex(pix);
+                assertm(0 <= index, "palette color not found");
                 sb.pushValue(index, field);
             }
 
@@ -917,8 +910,8 @@ namespace LTSM
         for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
         {
             auto pix = fb.pixel(reg.topLeft() + coord);
-            auto it = pal.find(pix);
-            auto index = it != pal.end() ? (*it).second : 0;
+            auto index = pal.findColorIndex(pix);
+            assertm(0 <= index, "palette color not found");
             sb.pushValue(index, field);
 
             if(coord.isEndLine())
@@ -953,7 +946,7 @@ namespace LTSM
     }
 
     void RFB::EncodingTRLE::sendRegionPalette(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
-            const PixelMapWeight & pal, const PixelLengthList & rle)
+            const PixelMapPalette & pal, const PixelLengthList & rle)
     {
         // subencoding type: rle palette
         st->sendInt8(pal.size() + 128);
@@ -967,8 +960,8 @@ namespace LTSM
         // send rle indexes
         for(auto & pair : rle)
         {
-            auto it = pal.find(pair.pixel());
-            auto index = it != pal.end() ? (*it).second : 0;
+            int index = pal.findColorIndex(pair.pixel());
+            assertm(0 <= index, "palette color not found");
 
             if(1 == pair.length())
             {

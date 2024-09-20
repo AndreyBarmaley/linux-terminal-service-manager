@@ -910,8 +910,10 @@ namespace LTSM
         return os.str();
     }
 
-    std::string Tools::unescaped(std::string str)
+    std::string Tools::unescaped(std::string_view val)
     {
+        std::string str(val.begin(), val.end());
+
         if(str.size() < 2)
         {
             return str;

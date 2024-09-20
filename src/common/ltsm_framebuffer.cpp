@@ -151,6 +151,12 @@ namespace LTSM
         }
     }
 
+    int PixelMapPalette::findColorIndex(const uint32_t & col) const
+    {
+        auto it = find(col);
+        return it != end() ? (*it).second : -1;
+    }
+
     int PixelMapWeight::maxWeightPixel(void) const
     {
         auto it = std::max_element(begin(), end(), [](auto & p1, auto & p2)
@@ -161,10 +167,10 @@ namespace LTSM
         return it != end() ? (*it).first : 0;
     }
 
-    FrameBuffer FrameBuffer::copyRegion(const XCB::Region* reg) const
+    FrameBuffer FrameBuffer::copyRegion(const XCB::Region & reg) const
     {
-        FrameBuffer res(reg ? reg->toSize() : fbreg.toSize(), pixelFormat(), pitchSize());
-        res.blitRegion(*this, reg ? *reg : res.fbreg, XCB::Point(0, 0));
+        FrameBuffer res(reg.toSize(), pixelFormat(), pitchSize());
+        res.blitRegion(*this, reg, XCB::Point(0, 0));
 
         return res;
     }
@@ -485,6 +491,41 @@ namespace LTSM
         return map;
     }
 
+    PixelMapPalette FrameBuffer::pixelMapPalette(const XCB::Region & reg) const
+    {
+        PixelMapPalette map;
+
+#ifdef FB_FAST_CYCLE
+
+        for(uint16_t py = 0; py < reg.height; ++py)
+        {
+            const uint8_t* pitch = pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
+            {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                map.emplace(rawPixel(ptr, bitsPerPixel(), BigEndian), 0);
+            }
+        }
+
+#else
+
+        for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
+        {
+            map.emplace(coord.pixel(), 0);
+        }
+
+#endif
+
+        int index = 0;
+        for(auto & pair: map)
+        {
+            pair.second = index++;
+        }
+
+        return map;
+    }
+
     PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const
     {
         PixelMapWeight map;
@@ -499,15 +540,10 @@ namespace LTSM
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                 auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
-                auto it = map.find(pix);
-
-                if(it != map.end())
+                auto ret = map.emplace(pix, 1);
+                if(! ret.second)
                 {
-                    (*it).second += 1;
-                }
-                else
-                {
-                    map.emplace(pix, 1);
+                    ret.first->second += 1;
                 }
             }
         }
@@ -517,15 +553,10 @@ namespace LTSM
         for(auto coord = PixelIterator(reg.coordBegin(), reg, *this); coord.isValid(); ++coord)
         {
             auto pix = coord.pixel();
-            auto it = map.find(pix);
-
-            if(it != map.end())
+            auto ret = map.emplace(pix, 1);
+            if(! ret.second)
             {
-                (*it).second += 1;
-            }
-            else
-            {
-                map.emplace(pix, 1);
+                ret.first->second += 1;
             }
         }
 
@@ -628,12 +659,12 @@ namespace LTSM
         return pixelFormat().bytePerPixel();
     }
 
-    size_t FrameBuffer::width(void) const
+    const uint16_t & FrameBuffer::width(void) const
     {
         return fbreg.width;
     }
 
-    size_t FrameBuffer::height(void) const
+    const uint16_t & FrameBuffer::height(void) const
     {
         return fbreg.height;
     }

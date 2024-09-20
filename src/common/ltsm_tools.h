@@ -260,7 +260,7 @@ namespace LTSM
         std::string runcmd(std::string_view);
 
         std::string escaped(std::string_view, bool quote);
-        std::string unescaped(std::string);
+        std::string unescaped(std::string_view);
 
         std::string replace(const std::string & src, std::string_view pred, std::string_view val);
         std::string replace(const std::string & src, std::string_view pred, int val);

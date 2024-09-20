@@ -207,7 +207,14 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     }
 
 #ifdef LTSM_PKCS11_AUTH
-    ldap.reset(new LdapWrapper());
+    try
+    {
+        ldap.reset(new LdapWrapper());
+    }
+    catch(const std::exception &)
+    {
+    }
+
     //
     pkcs11.reset(new Pkcs11Client(displayNum, this));
     connect(pkcs11.get(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);

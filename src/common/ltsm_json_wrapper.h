@@ -39,7 +39,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define LTSM_JSON_WRAPPER 20240828
+#define LTSM_JSON_WRAPPER 20240916
 
 namespace LTSM
 {
@@ -49,9 +49,9 @@ namespace LTSM
     public:
         JsmnToken();
 
-        int counts(void) const;
-        int start(void) const;
-        int size(void) const;
+        const int & counts(void) const;
+        const int & start(void) const;
+        const int & end(void) const;
 
         bool isKey(void) const;
         bool isValue(void) const;
@@ -510,7 +510,7 @@ namespace LTSM
         std::string content;
 
     protected:
-        std::string stringToken(const JsmnToken &) const;
+        std::string_view stringToken(const JsmnToken &) const;
         jsmntok_t* toJsmnTok(void);
 
         std::pair<JsonValuePtr, int> getValueArray(const const_iterator &, JsonContainer* cont) const;

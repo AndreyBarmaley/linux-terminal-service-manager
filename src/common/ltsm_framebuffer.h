@@ -79,6 +79,11 @@ namespace LTSM
     {
     };
 
+    struct PixelMapPalette : INTMAP<uint32_t /* pixel */, uint32_t /* index */>
+    {
+        int findColorIndex(const uint32_t &) const;
+    };
+
     struct PixelMapWeight : INTMAP<uint32_t /* pixel */, uint32_t /* weight */>
     {
         int maxWeightPixel(void) const;
@@ -215,14 +220,15 @@ namespace LTSM
 
         uint32_t pixel(const XCB::Point &) const;
 
-        FrameBuffer copyRegion(const XCB::Region* = nullptr) const;
+        FrameBuffer copyRegion(const XCB::Region &) const;
         ColorMap colourMap(void) const;
+        PixelMapPalette pixelMapPalette(const XCB::Region &) const;
         PixelMapWeight pixelMapWeight(const XCB::Region &) const;
         PixelLengthList toRLE(const XCB::Region &) const;
         bool allOfPixel(uint32_t pixel, const XCB::Region &) const;
 
-        size_t width(void) const;
-        size_t height(void) const;
+        const uint16_t & width(void) const;
+        const uint16_t & height(void) const;
         size_t pitchSize(void) const;
         uint8_t* pitchData(size_t row) const;
 

@@ -37,7 +37,7 @@ namespace LTSM
     inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
     inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
 
-    inline static const int service_version = 20240828;
+    inline static const int service_version = 20240918;
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
     inline static const bool BigEndian = false;
