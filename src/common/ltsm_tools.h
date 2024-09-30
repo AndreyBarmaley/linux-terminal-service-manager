@@ -55,19 +55,6 @@
 #include "gnutls/gnutls.h"
 #endif
 
-#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "libavformat/avformat.h"
-
-#ifdef __cplusplus
-}
-
-#endif
-#endif
-
 namespace LTSM
 {
     class ByteArray;
@@ -119,11 +106,6 @@ namespace LTSM
 
     namespace Tools
     {
-#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-        bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
-        AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
-#endif
-
         bool binaryToFile(const void*, size_t len, std::string_view);
         std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
@@ -156,9 +138,6 @@ namespace LTSM
 
         std::string base64Encode(const ByteArray &);
         std::vector<uint8_t> base64Decode(const std::string &);
-
-        std::string convertBinary2JsonString(const ByteArray &);
-        std::vector<uint8_t> convertJsonString2Binary(const std::string &);
 
         class StringFormat : public std::string
         {

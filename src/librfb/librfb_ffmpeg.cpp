@@ -26,6 +26,7 @@
 
 #include "ltsm_application.h"
 #include "librfb_ffmpeg.h"
+#include "ffmpeg_tools.h"
 
 namespace LTSM
 {

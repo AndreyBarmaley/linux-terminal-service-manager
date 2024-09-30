@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
+ *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
  *   Part of the LTSM: Linux Terminal Service Manager:                     *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
@@ -20,47 +20,26 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_GLOBALS_
-#define _LTSM_GLOBALS_
+#ifndef _FFMPEG_TOOLS_
+#define _FFMPEG_TOOLS_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libavformat/avformat.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 namespace LTSM
 {
-    inline static const char* dbus_manager_service_name = "ltsm.manager.service";
-    inline static const char* dbus_manager_service_path = "/ltsm/manager/service";
-
-    inline static const char* dbus_session_fuse_name = "ltsm.session.fuse";
-    inline static const char* dbus_session_fuse_path = "/ltsm/session/fuse";
-
-    inline static const char* dbus_session_audio_name = "ltsm.session.audio";
-    inline static const char* dbus_session_audio_path = "/ltsm/session/audio";
-
-    inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
-    inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
-
-    inline static const int service_version = 20240929;
-
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    inline static const bool BigEndian = false;
-#else
-    inline static const bool BigEndian = true;
-#endif
-
-    namespace NotifyParams
+    namespace Tools
     {
-        enum IconType { Information, Warning, Error, Question };
-        enum UrgencyLevel { Low = 0, Normal = 1, Critical = 2 };
-    };
+        bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
+        AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
+    }
 }
 
-#ifdef LTSM_BUILD_STD_MAP
-#include <unordered_map>
-#include <unordered_set>
-#define INTMAP std::unordered_map
-#define INTSET std::unordered_set
-#else
-#include "flat_hash_map/unordered_map.hpp"
-#define INTMAP ska::unordered_map
-#define INTSET ska::unordered_set
-#endif
-
-#endif // _LTSM_GLOBALS_
+#endif // _FFMPEG_TOOLS_

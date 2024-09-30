@@ -209,7 +209,7 @@ if(LTSM_BUILD_CONNECTOR)
         pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
         pkg_search_module(AVUTIL REQUIRED libavutil)
 
-        target_sources(LTSM_connector PRIVATE src/librfb/librfb_ffmpeg.cpp)
+        target_sources(LTSM_connector PRIVATE src/librfb/ffmpeg_tools.cpp src/librfb/librfb_ffmpeg.cpp)
 
         target_compile_options(LTSM_connector PRIVATE
                 ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS}
@@ -453,7 +453,7 @@ if(LTSM_BUILD_CLIENT)
         pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
         pkg_search_module(AVUTIL REQUIRED libavutil)
 
-        target_sources(LTSM_client PRIVATE src/librfb/librfb_ffmpeg.cpp)
+        target_sources(LTSM_client PRIVATE src/librfb/ffmpeg_tools.cpp src/librfb/librfb_ffmpeg.cpp)
         target_compile_options(LTSM_client PRIVATE ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS} ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS} -DLTSM_DECODING_FFMPEG)
         target_link_options(LTSM_client PRIVATE ${AVDEVICE_LDFLAGS} ${AVFORMAT_LDFLAGS} ${AVCODEC_LDFLAGS} ${AVSWSCALE_LDFLAGS} ${AVSWRESAMPLE_LDFLAGS} ${AVUTIL_LDFLAGS})
         target_link_libraries(LTSM_client ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES} ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})

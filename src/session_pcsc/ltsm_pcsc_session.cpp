@@ -1374,11 +1374,6 @@ namespace LTSM
         // wait
         ret = ltsm->recvIntLE32();
 
-        if(attrLen)
-        {
-            attr = ltsm->recvData(attrLen);
-        }
-
         assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
         // reply
         st.sock.
