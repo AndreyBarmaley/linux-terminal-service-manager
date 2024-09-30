@@ -66,11 +66,11 @@ This is an experimental graphical client that implements the mechanism of multip
 * Automatic keyboard layout, client-side layout always takes precedence (nothing needs to be configured on the server-side)
 * File transfer via drag & drop (client side to remote virtual session)
 * Implemented file printing (using an additional [backend for CUPS](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/cups_backend))
-* Implemented audio redirect via pulseaudio
-* Implemented pkcs11 support via pcscd redirect
+* Implemented audio redirect via **PulseAudio**
+* Implemented smartcard redirect via **PCSC**
 * Implemented scanning redirect (using an additional [backend for SANE](https://github.com/AndreyBarmaley/linux-terminal-service-manager/tree/main/src/sane_backend))
 * Directory redirection via **FUSE** has been implemented (so far only in read only mode)
-* Implemented authentication to a virtual session via **rutoken** with certificate storage in **LDAP**
+* Implemented authentication to a virtual session via **Rutoken PKCS11** with certificate storage in **LDAP**
 * Implemented SSO authentication via **GSSAPI** (kerberos5)
 * Implemented **x264** encoding/decoding via **ffmpeg**
 
