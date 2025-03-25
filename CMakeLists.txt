@@ -257,7 +257,6 @@ if(LTSM_BUILD_CONNECTOR)
 
     target_compile_options(LTSM_connector PRIVATE
                     -DLTSM_WITH_GNUTLS
-                    -DGNUTLS_GNUTLSXX_NO_HEADERONLY
                     -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
 
     target_include_directories(LTSM_connector PRIVATE
@@ -323,7 +322,7 @@ if(LTSM_BUILD_HELPER)
     endif()
 
     target_compile_options(LTSM_helper PRIVATE ${OPENSSL_DEFINITIONS}
-                    -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
+                    -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_helper PRIVATE src/common src/dbus src/session_pkcs11 ${OPENSSL_INCLUDE_DIR} ${GNUTLS_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
     target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network SDBusCpp::sdbus-c++ ${OPENSSL_LIBRARIES} ${GNUTLS_LIBRARIES})
     set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -364,7 +363,7 @@ if(LTSM_BUILD_X11VNC)
 
     find_package(GnuTLS REQUIRED)
 
-    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
+    target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} z)
 
@@ -385,7 +384,7 @@ if(LTSM_BUILD_VNC2IMAGE)
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
 
-    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS)
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
