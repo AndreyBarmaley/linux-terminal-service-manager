@@ -44,29 +44,27 @@ foreach(DIR IN ITEMS encodings x11enc)
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/common)
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/channels)
 
-    if(LTSM_FFMPEG)
-        pkg_search_module(AVDEVICE REQUIRED libavdevice)
-        pkg_search_module(AVFORMAT REQUIRED libavformat)
-        pkg_search_module(AVCODEC REQUIRED libavcodec)
-        pkg_search_module(AVSWSCALE REQUIRED libswscale)
-        pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
-        pkg_search_module(AVUTIL REQUIRED libavutil)
+    pkg_search_module(AVDEVICE REQUIRED libavdevice)
+    pkg_search_module(AVFORMAT REQUIRED libavformat)
+    pkg_search_module(AVCODEC REQUIRED libavcodec)
+    pkg_search_module(AVSWSCALE REQUIRED libswscale)
+    pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
+    pkg_search_module(AVUTIL REQUIRED libavutil)
 
-        target_sources(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/librfb/ffmpeg_tools.cpp ${CMAKE_SOURCE_DIR}/src/librfb/librfb_ffmpeg.cpp)
+    target_sources(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/librfb/ffmpeg_tools.cpp ${CMAKE_SOURCE_DIR}/src/librfb/librfb_ffmpeg.cpp)
     
-        target_compile_options(LTSM_test_${DIR} PRIVATE
+    target_compile_options(LTSM_test_${DIR} PRIVATE
                 ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS}
                 ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS}
                 -DLTSM_ENCODING_FFMPEG)
 
-        target_link_options(LTSM_test_${DIR} PRIVATE
+    target_link_options(LTSM_test_${DIR} PRIVATE
                 ${AVDEVICE_LDFLAGS} ${AVFORMAT_LDFLAGS} ${AVCODEC_LDFLAGS}
                 ${AVSWSCALE_LDFLAGS} ${AVSWRESAMPLE_LDFLAGS} ${AVUTIL_LDFLAGS})
 
-        target_link_libraries(LTSM_test_${DIR}
+    target_link_libraries(LTSM_test_${DIR}
                 ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES}
                 ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})
-    endif()
 
     if(LTSM_PKCS11_AUTH)
         pkg_search_module(P11KIT REQUIRED p11-kit-1)
