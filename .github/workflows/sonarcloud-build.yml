@@ -29,10 +29,11 @@ jobs:
         run: |
          sudo apt-get -y install dbus wget curl unzip openssl socat rsyslog zenity \
            xserver-xorg-video-dummy xserver-xorg xterm x11-xserver-utils dbus-x11 \
-           libexpat1 libpam0g-dev libgnutlsxx28 libgnutls28-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
+           libexpat1 libpam0g-dev gnutls-dev freerdp2-dev libxcb1-dev libxcb-xtest0-dev \
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
-           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev
+           libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
+           liblz4-dev libxkbfile-dev
 
       - name: Set up JDK 11
         uses: actions/setup-java@v1
@@ -77,7 +78,7 @@ jobs:
       - name: Run build-wrapper
         run: |
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-                -DLTSM_BUILD_SERVER=on -DLTSM_TOKEN_AUTH=on \
+                -DLTSM_BUILD_SERVER=on \
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_WITH_RDP=on \
                 -DLTSM_FUSE2SESSION=on \
@@ -86,7 +87,6 @@ jobs:
                 -DLTSM_PKCS11_AUTH=on \
                 -DLTSM_BUILD_X11VNC=on -DLTSM_BUILD_VNC2IMAGE=on \
                 -DLTSM_CUPS_BACKEND=on \
-                -DLTSM_GITHUB_WORKFLOW=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
