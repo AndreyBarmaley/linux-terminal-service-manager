@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 env:
-    SONAR_SCANNER_VERSION: 6.2.1.4610 # https://github.com/SonarSource/sonar-scanner-cli/releases
+    SONAR_SCANNER_VERSION: 5.0.1.3006 # https://github.com/SonarSource/sonar-scanner-cli/releases
     SONAR_SERVER_URL: "https://sonarcloud.io"
     BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
     BUILD_TYPE: Release
@@ -61,7 +61,7 @@ jobs:
 
       - name: Download and set up sonar-scanner
         env:
-          SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux-x64.zip
+          SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
         run: |
           mkdir -p $HOME/.sonar
           curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }} 
@@ -146,7 +146,7 @@ jobs:
 
       - name: Collect coverage into one XML report
         run: |
-          gcovr --sonarqube > coverage.xml
+          gcovr --gcov-ignore-parse-errors --sonarqube > coverage.xml
 
       - name: Run sonar-scanner
         env:

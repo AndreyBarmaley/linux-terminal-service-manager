@@ -127,14 +127,13 @@ namespace LTSM
         return pixel;
     }
 
-    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt)
+    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1)
     {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
         pitch = std::max(pitch1, pitch2);
         size_t length = pitch * fbsz.height;
         buffer = new uint8_t[length];
         std::fill(buffer, buffer + length, 0);
-        allocated = 1;
     }
 
     fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), buffer(ptr)

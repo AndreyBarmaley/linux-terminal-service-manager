@@ -1255,11 +1255,9 @@ namespace LTSM
         {
             gnutls_cipher_hd_t ctx;
             std::vector<uint8_t> res(data);
-            std::array<uint8_t, 8> _key;
-            std::array<uint8_t, 8> _iv;
-            std::fill(_key.begin(), _key.end(), 0);
-            std::fill(_iv.begin(), _iv.end(), 0);
-            std::copy_n(str.begin(), std::min(str.size(), _key.size()), _key.begin());
+            std::array<uint8_t, 8> _key = {0,0,0,0,0,0,0,0};
+            std::array<uint8_t, 8> _iv = {0,0,0,0,0,0,0,0};
+            std::copy_n(reinterpret_cast<const uint8_t*>(str.begin()), std::min(str.size(), _key.size()), _key.begin());
             gnutls_datum_t key = { _key.data(), _key.size() };
             gnutls_datum_t iv = { _iv.data(), _iv.size() };
 
