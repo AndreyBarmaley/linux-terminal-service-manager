@@ -103,7 +103,7 @@ namespace LTSM
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                     return CUPS_BACKEND_HOLD;
                 }
 

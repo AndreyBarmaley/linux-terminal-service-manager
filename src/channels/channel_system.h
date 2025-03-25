@@ -38,6 +38,9 @@
 #include "ltsm_audio.h"
 #include "ltsm_audio_pulse.h"
 #include "ltsm_audio_decoder.h"
+#endif
+
+#ifdef LTSM_PKCS11_AUTH
 #include "ltsm_pkcs11_wrapper.h"
 #endif
 
@@ -441,7 +444,9 @@ namespace LTSM
         {
             StreamBuf reply;
 
+#ifdef LTSM_PKCS11_AUTH
             PKCS11::LibraryPtr pkcs11;
+#endif
             std::vector<uint8_t> last;
 
             uint16_t protoVer = 0;

@@ -236,7 +236,7 @@ namespace LTSM
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                 }
 
                 close(sock);
@@ -262,7 +262,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         }
 
         return res;
@@ -293,7 +293,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

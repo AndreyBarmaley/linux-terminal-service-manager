@@ -64,13 +64,25 @@ namespace LTSM
             return false;
         }
 
-        struct pollfd fds = {};
-
-        fds.fd = fd;
-
-        fds.events = POLLIN;
+        struct pollfd fds = {
+            .fd = fd,
+            .events = POLLIN,
+            .revents = 0
+        };
 
         int ret = poll(& fds, 1, timeoutMS);
+
+        if(0 > ret)
+        {
+            // interrupted system call
+            if(errno == EINTR)
+            {
+                return hasInput(fd, timeoutMS);
+            }
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "poll", strerror(errno), errno);
+            throw network_error(NS_FuncName);
+        }
 
         // A value of 0 indicates that the call timed out and no file descriptors were ready
         if(0 == ret)
@@ -78,19 +90,7 @@ namespace LTSM
             return false;
         }
 
-        if(0 < ret && (fds.revents & POLLIN))
-        {
-            return true;
-        }
-
-        // interrupted system call
-        if(errno == EINTR)
-        {
-            return hasInput(fd, timeoutMS);
-        }
-
-        Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "pool", strerror(errno), errno);
-        throw network_error(NS_FuncName);
+        return (fds.revents & POLLIN);
     }
 
     size_t NetworkStream::hasData(int fd)
@@ -109,6 +109,31 @@ namespace LTSM
         }
 
         return count < 0 ? 0 : count;
+    }
+
+    NetworkStream::NetworkStream()
+    {
+        tp = std::chrono::steady_clock::now();
+    }
+
+    NetworkStream::~NetworkStream()
+    {
+        if(showStatistic)
+        {
+            auto dt = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tp);
+
+            if(bytesIn)
+            {
+                auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
+                Application::info("%s: recv %u bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
+            }
+
+            if(bytesOut)
+            {
+                auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
+                Application::info("%s: send %u bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+            }
+        }
     }
 
     NetworkStream & NetworkStream::sendInt8(uint8_t val)
@@ -306,7 +331,6 @@ namespace LTSM
     /* SocketStream */
     SocketStream::SocketStream(int fd) : sock(fd)
     {
-        buf.reserve(tcpMSS);
     }
 
     SocketStream::~SocketStream()
@@ -338,38 +362,14 @@ namespace LTSM
     void SocketStream::recvRaw(void* ptr, size_t len) const
     {
         recvFrom(sock, ptr, len);
+        NetworkStream::bytesIn += len;
     }
 
     void SocketStream::sendRaw(const void* ptr, size_t len)
     {
-        if(ptr && len)
-        {
-            if(buf.size() + len < tcpMSS)
-            {
-                auto beg = static_cast<const uint8_t*>(ptr);
-                buf.insert(buf.end(), beg, beg + len);
-            }
-            else
-            {
-                size_t last = tcpMSS - buf.size();
-                auto beg = static_cast<const uint8_t*>(ptr);
-                buf.insert(buf.end(), beg, beg + last);
-
-                sendTo(sock, buf.data(), buf.size());
-                buf.clear();
-
-                buf.insert(buf.end(), beg + last, beg + len);
-            }
-        }
-    }
-
-    void SocketStream::sendFlush(void)
-    {
-        if(buf.size())
-        {
-            sendTo(sock, buf.data(), buf.size());
-            buf.clear();
-        }
+        assertm(ptr && len, "invalid pointer");
+        sendTo(sock, ptr, len);
+        NetworkStream::bytesOut += len;
     }
 
     uint8_t SocketStream::peekInt8(void) const
@@ -390,20 +390,21 @@ namespace LTSM
     {
         fdin = dup(fileno(stdin));
         fdout = dup(fileno(stdout));
-        fin.reset(fdopen(fdin, "rb"));
-        fout.reset(fdopen(fdout, "wb"));
-        // reset buffering
-        std::setvbuf(fin.get(), nullptr, _IONBF, 0);
-        std::clearerr(fin.get());
-        // set buffering, optimal for tcp mtu size
-        std::setvbuf(fout.get(), fdbuf.data(), _IOFBF, fdbuf.size());
-        std::clearerr(fout.get());
     }
 
     void InetStream::inetFdClose(void)
     {
-        fin.reset();
-        fout.reset();
+        if(0 <= fdin)
+        {
+            close(fdin);
+            fdin = -1;
+        }
+
+        if(0 <= fdout)
+        {
+            close(fdout);
+            fdout = -1;
+        }
     }
 
 #ifdef LTSM_WITH_GNUTLS
@@ -417,100 +418,37 @@ namespace LTSM
 
     bool InetStream::hasInput(void) const
     {
-        return ! fin || std::feof(fin.get()) || std::ferror(fin.get()) ?
-               false : NetworkStream::hasInput(fdin);
+        return 0 <= fdin ? NetworkStream::hasInput(fdin) : false;
     }
 
     size_t InetStream::hasData(void) const
     {
-        return NetworkStream::hasData(fdin);
+        return 0 <= fdin ? NetworkStream::hasData(fdin) : false;
     }
 
     void InetStream::recvRaw(void* ptr, size_t len) const
     {
-        while(true)
-        {
-            size_t real = std::fread(ptr, 1, len, fin.get());
-
-            if(len == real)
-            {
-                break;
-            }
-
-            if(std::feof(fin.get()))
-            {
-                Application::warning("%s: %s", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
-            }
-
-            if(std::ferror(fin.get()))
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fread", strerror(errno), errno);
-                throw network_error(NS_FuncName);
-            }
-
-            ptr = static_cast<uint8_t*>(ptr) + real;
-            len -= real;
-        }
+        recvFrom(fdin, ptr, len);
+        NetworkStream::bytesIn += len;
     }
 
     void InetStream::sendRaw(const void* ptr, size_t len)
     {
-        while(true)
-        {
-            size_t real = std::fwrite(ptr, 1, len, fout.get());
-
-            if(len == real)
-            {
-                break;
-            }
-
-            if(std::feof(fout.get()))
-            {
-                Application::warning("%s: %s", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
-            }
-
-            if(std::ferror(fout.get()))
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fwrite", strerror(errno), errno);
-                throw network_error(NS_FuncName);
-            }
-
-            ptr = static_cast<const uint8_t*>(ptr) + real;
-            len -= real;
-        }
-    }
-
-    void InetStream::sendFlush(void)
-    {
-        std::fflush(fout.get());
-    }
-
-    bool InetStream::checkError(void) const
-    {
-        return ! fin || ! fout || std::ferror(fin.get()) || std::ferror(fout.get()) ||
-               std::feof(fin.get()) || std::feof(fout.get());
+        sendTo(fdout, ptr, len);
+        NetworkStream::bytesOut += len;
     }
 
     uint8_t InetStream::peekInt8(void) const
     {
-        int res = std::fgetc(fin.get());
-
-        if(std::feof(fin.get()))
+        uint8_t res = 0;
+ 
+        if(1 != recv(fdin, & res, 1, MSG_PEEK))
         {
-            Application::warning("%s: %s", __FUNCTION__, "end stream");
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "recv", strerror(errno), errno);
             throw network_error(NS_FuncName);
         }
 
-        if(std::ferror(fin.get()))
-        {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fgetc", strerror(errno), errno);
-            throw network_error(NS_FuncName);
-        }
-
-        std::ungetc(res, fin.get());
-        return static_cast<uint8_t>(res);
+        return res;
     }
 
     /* ProxySocket */
@@ -596,7 +534,7 @@ namespace LTSM
 
     bool ProxySocket::transmitDataIteration(void)
     {
-        if(! fin || std::feof(fin.get()) || std::ferror(fin.get()))
+        if(0 > fdin)
         {
             return false;
         }
@@ -612,7 +550,7 @@ namespace LTSM
             sendTo(bridgeSock, buf.data(), buf.size());
 #ifdef LTSM_DEBUG
 
-            if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
+            if(Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
                 Application::debug("from remote: [%s]", str.c_str());
@@ -621,7 +559,7 @@ namespace LTSM
 #endif
         }
 
-        if(! fout || std::feof(fout.get()) || std::ferror(fout.get()))
+        if(0 > fdout)
         {
             return false;
         }
@@ -636,7 +574,7 @@ namespace LTSM
             sendFlush();
 #ifdef LTSM_DEBUG
 
-            if(! checkError() && Application::isDebugLevel(DebugLevel::Trace))
+            if(Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
                 Application::debug("from local: [%s]", str.c_str());
@@ -1026,7 +964,12 @@ namespace LTSM
 
             do
             {
-                ret = session->handshake();
+                try
+                {
+                    ret = session->handshake();
+                }catch(...)
+                {
+                }
             }
             while(ret < 0 && gnutls_error_is_fatal(ret) == 0);
 
@@ -1195,14 +1138,21 @@ namespace LTSM
 
             ssize_t ret = 0;
 
-            while((ret = session->recv(ptr, len)) < 0)
+            try
             {
-                if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                while((ret = session->recv(ptr, len)) < 0)
                 {
-                    continue;
-                }
+                    if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                    {
+                        continue;
+                    }
 
-                break;
+                    break;
+                }
+            }
+            catch(const gnutls::exception & err)
+            {
+                ret = const_cast<gnutls::exception &>(err).get_code();
             }
 
             if(0 > ret)
@@ -1215,13 +1165,13 @@ namespace LTSM
                 }
             }
             else
+            // eof
+            if(0 == ret)
+            {
+                Application::warning("%s: %s", __FUNCTION__, "end stream");
+                throw gnutls_error(NS_FuncName);
+            }
 
-                // eof
-                if(0 == ret)
-                {
-                    Application::warning("%s: %s", __FUNCTION__, "end stream");
-                    throw gnutls_error(NS_FuncName);
-                }
 
             if(ret < static_cast<ssize_t>(len))
             {
@@ -1229,20 +1179,29 @@ namespace LTSM
                 len = len - ret;
                 recvRaw(ptr, len);
             }
+
+            NetworkStream::bytesIn += ret;
         }
 
         void Stream::sendRaw(const void* ptr, size_t len)
         {
             ssize_t ret = 0;
 
-            while((ret = session->send(ptr, len)) < 0)
+            try
             {
-                if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                while((ret = session->send(ptr, len)) < 0)
                 {
-                    continue;
-                }
+                    if(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED)
+                    {
+                        continue;
+                    }
 
-                break;
+                    break;
+                }
+            }
+            catch(const gnutls::exception & err)
+            {
+                ret = const_cast<gnutls::exception &>(err).get_code();
             }
 
             if(ret != static_cast<ssize_t>(len))
@@ -1254,6 +1213,8 @@ namespace LTSM
                     throw gnutls_error(NS_FuncName);
                 }
             }
+
+            NetworkStream::bytesOut += len;
         }
 
         uint8_t Stream::peekInt8(void) const
@@ -1602,6 +1563,7 @@ namespace LTSM
             }
 
             rcvbuf.readTo(static_cast<uint8_t*>(data), len);
+            NetworkStream::bytesIn += len;
         }
 
         void BaseLayer::sendRaw(const void* data, size_t len)
@@ -1637,7 +1599,9 @@ namespace LTSM
             }
 
             auto len = layer->recvIntBE32();
-            return layer->recvData(len);
+            auto buf = layer->recvData(len);
+            NetworkStream::bytesIn += buf.size();
+            return buf;
         }
 
         void BaseLayer::sendLayer(const void* buf, size_t len)
@@ -1651,6 +1615,7 @@ namespace LTSM
             layer->sendIntBE32(len);
             layer->sendRaw(buf, len);
             layer->sendFlush();
+            NetworkStream::bytesOut += len;
         }
 
         // GssApi::Server

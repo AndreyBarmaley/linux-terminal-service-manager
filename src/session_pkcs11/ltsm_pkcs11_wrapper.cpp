@@ -1228,7 +1228,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         }
 
         return nullptr;
@@ -1297,18 +1297,22 @@ namespace LTSM
             case CKM_DSA_SHA1:
                 return "DSA_SHA1";
 
+#if defined(CKM_DSA_SHA224)
             case CKM_DSA_SHA224:
                 return "DSA_SHA224";
-
+#endif
+#if defined(CKM_DSA_SHA256)
             case CKM_DSA_SHA256:
                 return "DSA_SHA256";
-
+#endif
+#if defined(CKM_DSA_SHA384)
             case CKM_DSA_SHA384:
                 return "DSA_SHA384";
-
+#endif
+#if defined(CKM_DSA_SHA512)
             case CKM_DSA_SHA512:
                 return "DSA_SHA512";
-
+#endif
             case CKM_DH_PKCS_KEY_PAIR_GEN:
                 return "DH_PKCS_KEY_PAIR_GEN";
 
@@ -1345,6 +1349,7 @@ namespace LTSM
             case CKM_SHA512_RSA_PKCS_PSS:
                 return "SHA512_RSA_PKCS_PSS";
 
+#if defined(CKM_SHA512_224)
             case CKM_SHA512_224:
                 return "SHA512_224";
 
@@ -1356,7 +1361,8 @@ namespace LTSM
 
             case CKM_SHA512_224_KEY_DERIVATION:
                 return "SHA512_224_KEY_DERIVATION";
-
+#endif
+#if defined(CKM_SHA512_256)
             case CKM_SHA512_256:
                 return "SHA512_256";
 
@@ -1368,7 +1374,8 @@ namespace LTSM
 
             case CKM_SHA512_256_KEY_DERIVATION:
                 return "SHA512_256_KEY_DERIVATION";
-
+#endif
+#if defined(CKM_SHA512_T)
             case CKM_SHA512_T:
                 return "SHA512_T";
 
@@ -1380,7 +1387,7 @@ namespace LTSM
 
             case CKM_SHA512_T_KEY_DERIVATION:
                 return "SHA512_T_KEY_DERIVATION";
-
+#endif
             case CKM_RC2_KEY_GEN:
                 return "RC2_KEY_GEN";
 
@@ -1426,6 +1433,7 @@ namespace LTSM
             case CKM_DES2_KEY_GEN:
                 return "DES2_KEY_GEN";
 
+#if defined(CKM_DES3_KEY_GEN)
             case CKM_DES3_KEY_GEN:
                 return "DES3_KEY_GEN";
 
@@ -1443,13 +1451,14 @@ namespace LTSM
 
             case CKM_DES3_CBC_PAD:
                 return "DES3_CBC_PAD";
-
+#endif
+#if defined(CKM_DES3_CMAC)
             case CKM_DES3_CMAC_GENERAL:
                 return "DES3_CMAC_GENERAL";
 
             case CKM_DES3_CMAC:
                 return "DES3_CMAC";
-
+#endif
             case CKM_CDMF_KEY_GEN:
                 return "CDMF_KEY_GEN";
 
@@ -1552,24 +1561,27 @@ namespace LTSM
             case CKM_SHA512_HMAC_GENERAL:
                 return "SHA512_HMAC_GENERAL";
 
+#if defined(CKM_SECURID)
             case CKM_SECURID_KEY_GEN:
                 return "SECURID_KEY_GEN";
 
             case CKM_SECURID:
                 return "SECURID";
-
+#endif
+#if defined(CKM_HOTP)
             case CKM_HOTP_KEY_GEN:
                 return "HOTP_KEY_GEN";
 
             case CKM_HOTP:
                 return "HOTP";
-
+#endif
+#if defined(CKM_ACTI)
             case CKM_ACTI:
                 return "ACTI";
 
             case CKM_ACTI_KEY_GEN:
                 return "ACTI_KEY_GEN";
-
+#endif
             case CKM_CAST_KEY_GEN:
                 return "CAST_KEY_GEN";
 
@@ -1797,12 +1809,14 @@ namespace LTSM
             case CKM_WTLS_CLIENT_KEY_AND_MAC_DERIVE:
                 return "WTLS_CLIENT_KEY_AND_MAC_DERIVE";
 
+#if defined(CKM_TLS10_MAC_SERVER)
             case CKM_TLS10_MAC_SERVER:
                 return "TLS10_MAC_SERVER";
 
             case CKM_TLS10_MAC_CLIENT:
                 return "TLS10_MAC_CLIENT";
-
+#endif
+#if defined(CKM_TLS12_MAC)
             case CKM_TLS12_MAC:
                 return "TLS12_MAC";
 
@@ -1820,13 +1834,15 @@ namespace LTSM
 
             case CKM_TLS12_KEY_SAFE_DERIVE:
                 return "TLS12_KEY_SAFE_DERIVE";
-
+#endif
+#if defined(CKM_TLS_MAC)
             case CKM_TLS_MAC:
                 return "TLS_MAC";
-
+#endif
+#if defined(CKM_TLS_KDF)
             case CKM_TLS_KDF:
                 return "TLS_KDF";
-
+#endif
             case CKM_KEY_WRAP_LYNKS:
                 return "KEY_WRAP_LYNKS";
 
@@ -1836,6 +1852,7 @@ namespace LTSM
             case CKM_CMS_SIG:
                 return "CMS_SIG";
 
+#if defined(CKM_KIP_MAC)
             case CKM_KIP_DERIVE:
                 return "KIP_DERIVE";
 
@@ -1844,7 +1861,8 @@ namespace LTSM
 
             case CKM_KIP_MAC:
                 return "KIP_MAC";
-
+#endif
+#if defined(CKM_ARIA_KEY_GEN)
             case CKM_ARIA_KEY_GEN:
                 return "ARIA_KEY_GEN";
 
@@ -1868,31 +1886,38 @@ namespace LTSM
 
             case CKM_ARIA_CBC_ENCRYPT_DATA:
                 return "ARIA_CBC_ENCRYPT_DATA";
-
+#endif
+#if defined(CKM_SEED_KEY_GEN)
             case CKM_SEED_KEY_GEN:
                 return "SEED_KEY_GEN";
-
+#endif
+#if defined(CKM_SEED_ECB)
             case CKM_SEED_ECB:
                 return "SEED_ECB";
-
+#endif
+#if defined(CKM_SEED_CBC)
             case CKM_SEED_CBC:
                 return "SEED_CBC";
-
+#endif
+#if defined(CKM_SEED_MAC)
             case CKM_SEED_MAC:
                 return "SEED_MAC";
 
             case CKM_SEED_MAC_GENERAL:
                 return "SEED_MAC_GENERAL";
-
+#endif
+#if defined(CKM_SEED_CBC_PAD)
             case CKM_SEED_CBC_PAD:
                 return "SEED_CBC_PAD";
-
+#endif
+#if defined(CKM_SEED_ECB_ENCRYPT_DATA)
             case CKM_SEED_ECB_ENCRYPT_DATA:
                 return "SEED_ECB_ENCRYPT_DATA";
-
+#endif
+#if defined(CKM_SEED_CBC_ENCRYPT_DATA)
             case CKM_SEED_CBC_ENCRYPT_DATA:
                 return "SEED_CBC_ENCRYPT_DATA";
-
+#endif
             case CKM_SKIPJACK_KEY_GEN:
                 return "SKIPJACK_KEY_GEN";
 
@@ -1966,18 +1991,25 @@ namespace LTSM
             case CKM_ECDSA_SHA1:
                 return "ECDSA_SHA1";
 
+#if defined(CKM_ECDSA_SHA224)
             case CKM_ECDSA_SHA224:
                 return "ECDSA_SHA224";
+#endif
 
+#if defined(CKM_ECDSA_SHA256)
             case CKM_ECDSA_SHA256:
                 return "ECDSA_SHA256";
+#endif
 
+#if defined(CKM_ECDSA_SHA384)
             case CKM_ECDSA_SHA384:
                 return "ECDSA_SHA384";
+#endif
 
+#if defined(CKM_ECDSA_SHA512)
             case CKM_ECDSA_SHA512:
                 return "ECDSA_SHA512";
-
+#endif
             case CKM_ECDH1_DERIVE:
                 return "ECDH1_DERIVE";
 
@@ -1987,12 +2019,14 @@ namespace LTSM
             case CKM_ECMQV_DERIVE:
                 return "ECMQV_DERIVE";
 
+#if defined(CKM_ECDH_AES_KEY_WRAP)
             case CKM_ECDH_AES_KEY_WRAP:
                 return "ECDH_AES_KEY_WRAP";
-
+#endif
+#if defined(CKM_RSA_AES_KEY_WRAP)
             case CKM_RSA_AES_KEY_WRAP:
                 return "RSA_AES_KEY_WRAP";
-
+#endif
             case CKM_JUNIPER_KEY_GEN:
                 return "JUNIPER_KEY_GEN";
 
@@ -2020,63 +2054,78 @@ namespace LTSM
             case CKM_AES_ECB:
                 return "AES_ECB";
 
+#if defined(CKM_AES_CBC)
             case CKM_AES_CBC:
                 return "AES_CBC";
 
+            case CKM_AES_CBC_PAD:
+                return "AES_CBC_PAD";
+#endif
             case CKM_AES_MAC:
                 return "AES_MAC";
 
             case CKM_AES_MAC_GENERAL:
                 return "AES_MAC_GENERAL";
 
-            case CKM_AES_CBC_PAD:
-                return "AES_CBC_PAD";
-
+#if defined(CKM_AES_CTR)
             case CKM_AES_CTR:
                 return "AES_CTR";
-
+#endif
+#if defined(CKM_AES_CGM)
             case CKM_AES_GCM:
                 return "AES_GCM";
+#endif
 
+#if defined(CKM_AES_CCM)
             case CKM_AES_CCM:
                 return "AES_CCM";
+#endif
 
+#if defined(CKM_AES_CTS)
             case CKM_AES_CTS:
                 return "AES_CTS";
-
+#endif
+#if defined(CKM_AES_CMAC)
             case CKM_AES_CMAC:
                 return "AES_CMAC";
 
             case CKM_AES_CMAC_GENERAL:
                 return "AES_CMAC_GENERAL";
-
+#endif
+#if defined(CKM_AES_XCBC_MAC)
             case CKM_AES_XCBC_MAC:
                 return "AES_XCBC_MAC";
 
             case CKM_AES_XCBC_MAC_96:
                 return "AES_XCBC_MAC_96";
-
+#endif
+#if defined(CKM_AES_GMAC)
             case CKM_AES_GMAC:
                 return "AES_GMAC";
-
-            case CKM_BLOWFISH_KEY_GEN:
-                return "BLOWFISH_KEY_GEN";
-
-            case CKM_BLOWFISH_CBC:
-                return "BLOWFISH_CBC";
-
+#endif
+#if defined(CKM_TWOFISH_CBC)
             case CKM_TWOFISH_KEY_GEN:
                 return "TWOFISH_KEY_GEN";
 
             case CKM_TWOFISH_CBC:
                 return "TWOFISH_CBC";
-
-            case CKM_BLOWFISH_CBC_PAD:
-                return "BLOWFISH_CBC_PAD";
-
+#endif
+#if defined(CKM_TWOFISH_CBC_PAD)
             case CKM_TWOFISH_CBC_PAD:
                 return "TWOFISH_CBC_PAD";
+#endif
+#if defined(CKM_BLOWFISH_CBC)
+            case CKM_BLOWFISH_KEY_GEN:
+                return "BLOWFISH_KEY_GEN";
 
+            case CKM_BLOWFISH_CBC:
+                return "BLOWFISH_CBC";
+#endif
+
+#if defined(CKM_BLOWFISH_CBC_PAD)
+            case CKM_BLOWFISH_CBC_PAD:
+                return "BLOWFISH_CBC_PAD";
+#endif
             case CKM_DES_ECB_ENCRYPT_DATA:
                 return "DES_ECB_ENCRYPT_DATA";
 
@@ -2095,11 +2144,13 @@ namespace LTSM
             case CKM_AES_CBC_ENCRYPT_DATA:
                 return "AES_CBC_ENCRYPT_DATA";
 
-            case CKM_GOSTR3410_KEY_PAIR_GEN:
-                return "GOSTR3410_KEY_PAIR_GEN";
 
+#if defined(CKM_GOSTR3411)
             case CKM_GOSTR3410:
                 return "GOSTR3410";
+
+            case CKM_GOSTR3410_KEY_PAIR_GEN:
+                return "GOSTR3410_KEY_PAIR_GEN";
 
             case CKM_GOSTR3410_WITH_GOSTR3411:
                 return "GOSTR3410_WITH_GOSTR3411";
@@ -2109,12 +2160,17 @@ namespace LTSM
 
             case CKM_GOSTR3410_DERIVE:
                 return "GOSTR3410_DERIVE";
-
+#endif
+#if defined(CKM_GOSTR3411)
             case CKM_GOSTR3411:
                 return "GOSTR3411";
 
             case CKM_GOSTR3411_HMAC:
                 return "GOSTR3411_HMAC";
+#endif
+#if defined(CKM_GOST28147)
+            case CKM_GOST28147:
+                return "GOST28147";
 
             case CKM_GOST28147_KEY_GEN:
                 return "GOST28147_KEY_GEN";
@@ -2122,14 +2178,12 @@ namespace LTSM
             case CKM_GOST28147_ECB:
                 return "GOST28147_ECB";
 
-            case CKM_GOST28147:
-                return "GOST28147";
-
             case CKM_GOST28147_MAC:
                 return "GOST28147_MAC";
 
             case CKM_GOST28147_KEY_WRAP:
                 return "GOST28147_KEY_WRAP";
+#endif
 #if defined (CKM_CHACHA20)
 
             case CKM_CHACHA20_KEY_GEN:
@@ -2156,27 +2210,35 @@ namespace LTSM
             case CKM_X9_42_DH_PARAMETER_GEN:
                 return "X9_42_DH_PARAMETER_GEN";
 
+#if defined(CKM_DSA_PROBABLISTIC_PARAMETER_GEN)
             case CKM_DSA_PROBABLISTIC_PARAMETER_GEN:
                 return "DSA_PROBABLISTIC_PARAMETER_GEN";
-
+#endif
+#if defined(CKM_DSA_SHAWE_TAYLOR_PARAMETER_GEN)
             case CKM_DSA_SHAWE_TAYLOR_PARAMETER_GEN:
                 return "DSA_SHAWE_TAYLOR_PARAMETER_GEN";
-
+#endif
+#if defined(CKM_AES_OFB)
             case CKM_AES_OFB:
                 return "AES_OFB";
-
+#endif
+#if defined(CKM_AES_CFB64)
             case CKM_AES_CFB64:
                 return "AES_CFB64";
-
+#endif
+#if defined(CKM_AES_CFB8)
             case CKM_AES_CFB8:
                 return "AES_CFB8";
-
+#endif
+#if defined(CKM_AES_CFB128)
             case CKM_AES_CFB128:
                 return "AES_CFB128";
+#endif
 
+#if defined(CKM_AES_CFB1)
             case CKM_AES_CFB1:
                 return "AES_CFB1";
-
+#endif
             case CKM_VENDOR_DEFINED:
                 return "VENDOR_DEFINED";
 
@@ -2222,31 +2284,37 @@ namespace LTSM
             case CKM_CAMELLIA_CBC_ENCRYPT_DATA:
                 return "CAMELLIA_CBC_ENCRYPT_DATA";
 
+#if defined(CKM_CAMELLIA_CTR)
             case CKM_CAMELLIA_CTR:
                 return "CAMELLIA_CTR";
-
+#endif
             case CKM_AES_KEY_WRAP:
                 return "AES_KEY_WRAP";
 
             case CKM_AES_KEY_WRAP_PAD:
                 return "AES_KEY_WRAP_PAD";
 
+#if defined(CKM_RSA_PKCS_TPM_1_1)
             case CKM_RSA_PKCS_TPM_1_1:
                 return "RSA_PKCS_TPM_1_1";
-
+#endif
+#if defined(CKM_RSA_PKCS_OAEP_TPM_1_1)
             case CKM_RSA_PKCS_OAEP_TPM_1_1:
                 return "RSA_PKCS_OAEP_TPM_1_1";
-
+#endif
+#if defined(CKM_EC_EDWARDS_KEY_PAIR_GEN)
             case CKM_EC_EDWARDS_KEY_PAIR_GEN:
                 return "EC_EDWARDS_KEY_PAIR_GEN";
+#endif
 #if defined(CKM_EC_MONTGOMERY_KEY_PAIR_GEN)
 
             case CKM_EC_MONTGOMERY_KEY_PAIR_GEN:
                 return "EC_MONTGOMERY_KEY_PAIR_GEN";
 #endif
-
+#if defined(CKM_EDDSA)
             case CKM_EDDSA:
                 return "EDDSA";
+#endif
 #if defined(CKM_XEDDSA)
 
             case CKM_XEDDSA:
@@ -2312,9 +2380,10 @@ namespace LTSM
             case CKR_ATTRIBUTE_VALUE_INVALID:
                 return "ATTRIBUTE_VALUE_INVALID";
 
+#if defined(CKR_ACTION_PROHIBITED)
             case CKR_ACTION_PROHIBITED:
                 return "ACTION_PROHIBITED";
-
+#endif
             case CKR_DATA_INVALID:
                 return "DATA_INVALID";
 
@@ -2498,9 +2567,10 @@ namespace LTSM
             case CKR_DOMAIN_PARAMS_INVALID:
                 return "DOMAIN_PARAMS_INVALID";
 
+#if defined(CKR_CURVE_NOT_SUPPORTED)
             case CKR_CURVE_NOT_SUPPORTED:
                 return "CURVE_NOT_SUPPORTED";
-
+#endif
             case CKR_BUFFER_TOO_SMALL:
                 return "BUFFER_TOO_SMALL";
 
@@ -2525,27 +2595,34 @@ namespace LTSM
             case CKR_MUTEX_NOT_LOCKED:
                 return "MUTEX_NOT_LOCKED";
 
+#if defined(CKR_NEW_PIN_MODE)
             case CKR_NEW_PIN_MODE:
                 return "NEW_PIN_MODE";
-
+#endif
+#if defined(CKR_NEXT_OTP)
             case CKR_NEXT_OTP:
                 return "NEXT_OTP";
-
+#endif
+#if defined(CKR_EXCEEDED_MAX_ITERATIONS)
             case CKR_EXCEEDED_MAX_ITERATIONS:
                 return "EXCEEDED_MAX_ITERATIONS";
-
+#endif
+#if defined(CKR_FIPS_SELF_TEST_FAILED)
             case CKR_FIPS_SELF_TEST_FAILED:
                 return "FIPS_SELF_TEST_FAILED";
-
+#endif
+#if defined(CKR_LIBRARY_LOAD_FAILED)
             case CKR_LIBRARY_LOAD_FAILED:
                 return "LIBRARY_LOAD_FAILED";
-
+#endif
+#if defined(CKR_PIN_TOO_WEAK)
             case CKR_PIN_TOO_WEAK:
                 return "PIN_TOO_WEAK";
-
+#endif
+#if defined(CKR_PUBLIC_KEY_INVALID)
             case CKR_PUBLIC_KEY_INVALID:
                 return "PUBLIC_KEY_INVALID";
-
+#endif
             case CKR_FUNCTION_REJECTED:
                 return "FUNCTION_REJECTED";
 #if defined(CKR_OPERATION_CANCEL_FAILED)

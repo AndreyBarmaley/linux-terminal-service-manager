@@ -217,7 +217,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
         }
@@ -273,7 +273,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             return false;
         }
 
@@ -471,7 +471,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
     }
     catch(int val)
     {

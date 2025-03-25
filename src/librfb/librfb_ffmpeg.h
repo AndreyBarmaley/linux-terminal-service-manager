@@ -61,7 +61,9 @@ namespace LTSM
     {
         void operator()(AVCodecContext* ctx)
         {
-            avcodec_close(ctx);
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(61, 19, 100)
+            avcodec_close(ctx); // deprecated
+#endif
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(55, 69, 100)
             avcodec_free_context(& ctx);
 #else
@@ -134,10 +136,10 @@ namespace LTSM
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
             void setDebug(int) override;
 
-            size_t updateTimeMS(void) const;
-
             EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
+
+            const char* getTypeName(void) const;
         };
 
 #endif // ENCODING_FFMPEG

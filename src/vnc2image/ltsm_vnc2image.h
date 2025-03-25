@@ -49,7 +49,7 @@ namespace LTSM
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const void*, const XCB::Size &, uint16_t pitch,
+        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch,
                                                 const PixelFormat & pf) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;

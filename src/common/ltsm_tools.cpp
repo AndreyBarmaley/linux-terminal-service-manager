@@ -527,7 +527,7 @@ namespace LTSM
         return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
     }
 
-    std::string Tools::prettyFuncName(std::string_view name)
+    std::string Tools::prettyFuncName(const std::string & name)
     {
         size_t end = name.find('(');
 
@@ -544,8 +544,7 @@ namespace LTSM
             }
         }
 
-        auto sub = name.substr(begin, end - begin);
-        return std::string(sub.begin(), sub.end());
+        return name.substr(begin, end - begin);
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file)
@@ -646,9 +645,9 @@ namespace LTSM
         return join(cont.begin(), cont.end(), sep);
     }
 
-    std::string Tools::replace(const std::string & src, std::string_view pred, std::string_view val)
+    std::string Tools::replace(std::string_view src, std::string_view pred, std::string_view val)
     {
-        std::string res = src;
+        std::string res{src.begin(), src.end()};
         size_t pos = std::string::npos;
 
         while(std::string::npos != (pos = res.find(pred))) { res.replace(pos, pred.size(), val); }
@@ -656,7 +655,7 @@ namespace LTSM
         return res;
     }
 
-    std::string Tools::replace(const std::string & src, std::string_view pred, int val)
+    std::string Tools::replace(std::string_view src, std::string_view pred, int val)
     {
         return replace(src, pred, std::to_string(val));
     }
@@ -689,7 +688,7 @@ namespace LTSM
     {
         std::array<char, 128> buffer;
         std::fill(buffer.begin(), buffer.end(), 0);
-        std::unique_ptr<FILE, decltype(pclose)*> pipe{popen(cmd.data(), "r"), pclose};
+        std::unique_ptr<FILE, int(*)(FILE*)> pipe{popen(cmd.data(), "r"), pclose};
         std::string result;
 
         if(!pipe)

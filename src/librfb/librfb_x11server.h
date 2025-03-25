@@ -26,6 +26,7 @@
 
 #include <memory>
 #include <atomic>
+#include <shared_mutex>
 
 #include "librfb_server.h"
 

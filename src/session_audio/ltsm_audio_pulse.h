@@ -32,7 +32,10 @@
 #include <thread>
 #include <condition_variable>
 
+#ifdef LTSM_CLIENT
 #include "pulse/simple.h"
+#endif
+
 #include "pulse/stream.h"
 #include "pulse/context.h"
 #include "pulse/mainloop.h"
@@ -58,7 +61,7 @@ namespace LTSM
 
     namespace PulseAudio
     {
-        enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02,
+        enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02, ContextLoadModule = 0xAB03, ContextSourceInfo = 0xAB04,
                       StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
                     };
 
@@ -110,9 +113,14 @@ namespace LTSM
             static void streamSuspendedCallback(pa_stream* stream, void* userData);
             static void streamOverflowCallback(pa_stream* stream, void* userData);
             static void streamUnderflowCallback(pa_stream* stream, void* userData);
+            static void sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData);
 
             static void contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData);
+            static void contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData);
+            static void contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData);
             static void contextDrainCallback(pa_context* ctx, void* userData);
+
+
             static void streamCorkCallback(pa_stream* stream, int success, void* userData);
             static void streamTriggerCallback(pa_stream* stream, int success, void* userData);
             static void streamFlushCallback(pa_stream* stream, int success, void* userData);
@@ -123,6 +131,12 @@ namespace LTSM
 
             void contextServerInfoNotify(const pa_server_info*);
             const pa_server_info* contextServerInfoWait(void);
+
+            void contextLoadModuleNotify(uint32_t idx);
+            uint32_t contextLoadModuleWait(std::string_view name, std::string_view args);
+
+            void contextSourceInfoNotify(const pa_source_info* info, int eol);
+            const pa_source_info* contextSourceInfoWait(std::string_view name);
 
             void streamCorkNotify(int success);
             bool streamCorkWait(bool);
@@ -137,6 +151,7 @@ namespace LTSM
             bool streamDrainWait(void);
 
             virtual void contextStateEvent(const pa_context_state_t &);
+            virtual void sourceInfoEvent(const pa_source_info* info, int eol);
             virtual void streamStateEvent(const pa_stream_state_t &);
             virtual void streamSuspendedEvent(int state);
             virtual void streamOverflowEvent(void);
@@ -155,6 +170,8 @@ namespace LTSM
             virtual bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) = 0;
 
             void streamDisconnect(void);
+
+            bool sourceInfo(std::string_view name);
 
             bool streamPaused(void) const;
             bool streamSuspended(void) const;
@@ -232,6 +249,8 @@ namespace LTSM
         };
 
 #endif
+
+#ifdef LTSM_CLIENT
         struct SimpleDeleter
         {
             void operator()(pa_simple* ctx)
@@ -272,6 +291,7 @@ namespace LTSM
 
             std::vector<uint8_t> streamRead(size_t) const;
         };
+#endif // LTSM_CLIENT
     }
 }
 

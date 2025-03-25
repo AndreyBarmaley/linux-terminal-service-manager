@@ -58,8 +58,16 @@ namespace LTSM
         }
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
+
         x11NoDamage = _config->getBoolean("vnc:xcb:nodamage", false);
-        frameRate = _config->getBoolean("vnc:frame:rate", 16);
+        frameRate = _config->getInteger("vnc:frame:rate", 16);
+
+        if(frameRate <= 0)
+        {
+            Application::warning("%s: invalid value for: `%s'", __FUNCTION__, "vnc:frame:rate");
+            frameRate = 16;
+        }
+        
         return rfbCommunication();
     }
 

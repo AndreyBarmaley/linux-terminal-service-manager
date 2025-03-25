@@ -222,6 +222,10 @@
         <signal name="helperWidgetCentered">
             <arg type="i" name="display" />
         </signal>
+        <signal name="helperPkcs11ListennerStarted">
+            <arg type="i" name="display" />
+            <arg type="i" name="connectorId" />
+        </signal>
         <signal name="loginFailure">
             <arg type="i" name="display" />
             <arg type="s" name="msg" />

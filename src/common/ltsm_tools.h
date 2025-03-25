@@ -112,7 +112,7 @@ namespace LTSM
         std::list<std::string> readDir(const std::string & path, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
-        std::string prettyFuncName(std::string_view);
+        std::string prettyFuncName(const std::string &);
         std::string randomHexString(size_t len);
 
         std::string fileToString(const std::filesystem::path &);
@@ -241,8 +241,8 @@ namespace LTSM
         std::string escaped(std::string_view, bool quote);
         std::string unescaped(std::string_view);
 
-        std::string replace(const std::string & src, std::string_view pred, std::string_view val);
-        std::string replace(const std::string & src, std::string_view pred, int val);
+        std::string replace(std::string_view src, std::string_view pred, std::string_view val);
+        std::string replace(std::string_view src, std::string_view pred, int val);
 
         std::string hex(int value, int width = 8);
 
@@ -485,7 +485,7 @@ namespace LTSM
         };
     }
 
-#define NS_FuncName Tools::prettyFuncName(__PRETTY_FUNCTION__)
 }
+#define NS_FuncName LTSM::Tools::prettyFuncName(__PRETTY_FUNCTION__)
 
 #endif // _LTSM_TOOLS_

@@ -163,11 +163,8 @@ namespace LTSM
     /// XvfbSession
     struct XvfbSession
     {
-        std::unordered_map<std::string, std::string>
-        environments;
-
-        std::unordered_map<std::string, std::string>
-        options;
+        std::unordered_map<std::string, std::string> environments;
+        std::unordered_map<std::string, std::string> options;
 
         std::filesystem::path xauthfile;
 
@@ -186,6 +183,7 @@ namespace LTSM
 
         int pid1 = 0; // xvfb pid
         int pid2 = 0; // session pid
+        int connectorId = 0; // connector pid
 
         std::atomic<size_t> durationLimit{0};
         std::atomic<size_t> statusFlags{0};
@@ -257,7 +255,7 @@ namespace LTSM
     {
         std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &);
         void redirectStdoutStderrTo(bool out, bool err, std::string_view);
-        void closefds(int exclude = -1);
+        void closefds(std::initializer_list<int> exclude);
         bool checkFileReadable(const std::filesystem::path &);
         void setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);
         bool runSystemScript(XvfbSessionPtr, const std::string & cmd);
@@ -383,24 +381,23 @@ namespace LTSM
                     const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override;
             bool busRenderClear(const int32_t & display) override;
 
-            void startSessionChannels(XvfbSessionPtr, int connectorId);
-            void stopSessionChannels(XvfbSessionPtr, int connectorId);
+            void startSessionChannels(XvfbSessionPtr);
+            void stopSessionChannels(XvfbSessionPtr);
 
-            void startLoginChannels(XvfbSessionPtr, int connectorId);
-            void stopLoginChannels(XvfbSessionPtr, int connectorId);
+            void startLoginChannels(XvfbSessionPtr);
+            void stopLoginChannels(XvfbSessionPtr);
 
             bool startPrinterListener(XvfbSessionPtr, const std::string & clientUrl);
-            bool startAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool startFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool startPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            bool startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            bool startAudioListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool startFuseListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool startPcscListener(XvfbSessionPtr, const std::string & clientUrl);
+            bool startPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
             bool startSaneListener(XvfbSessionPtr, const std::string & clientUrl);
 
-
-            void stopAudioListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void stopFuseListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void stopPcscListener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
-            void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl, int connectorId);
+            void stopAudioListener(XvfbSessionPtr, const std::string & clientUrl);
+            void stopFuseListener(XvfbSessionPtr, const std::string & clientUrl);
+            void stopPcscListener(XvfbSessionPtr, const std::string & clientUrl);
+            void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
         };
 
         class Service : public ApplicationJsonConfig

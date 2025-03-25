@@ -85,19 +85,34 @@ If the client supports LTSM encoding, they the server will send this message to 
  array    | u8       |            | channel data
 ----------+----------+------------+---------------------
 
------------+--------------
+-----------+-----------------
 channel id | channel name 
------------+--------------
+-----------+-----------------
  0x00      | system
  0x01      | channel data 1
  0x02      | channel data 2
  ...       | ...
  0xFE      | channel data 254
  0xFF      | reserved
------------+--------------
+-----------+-----------------
 
 All numbers (u16, u32, u64) are sent as big endian format.
 
+------------------------+-------+-----------------
+ ChannelName            | Part  | 
+------------------------+-------+-----------------
+ System                 | 2.1   |
+------------------------+-------+-----------------
+ Redirect Audio         | 2.8   |
+------------------------+-------+-----------------
+ Redirect Folder        | 2.9   |
+------------------------+-------+-----------------
+ PKCS11 Auth            | 2.10  |
+------------------------+-------+-----------------
+ Redirect Smartcard     | 2.11  |
+------------------------+-------+-----------------
+ Redirect Microphone    | 2.12  |
+------------------------+-------+-----------------
 
 [2.0] Channel DATA (stream)
 
@@ -1086,4 +1101,77 @@ All numbers (u16, u32, u64) are sent as little endian format.
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
  4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+
+[2.12] Channel MICROPHONE
+
+Initial part from session side, see 2.12.1
+All numbers (u16, u32, u64) are sent as little endian format.
+
+--------------+--------+---------+---------
+ commands     | value  | session | client
+--------------+--------+---------+---------
+ MicOp::Init  | 0xFB01 | 2.12.1   | 2.12.3
+ MicOp::Data  | 0xFB02 | 2.12.2   | 2.12.4
+--------------+--------+---------+---------
+
+----------+--------------
+ encoding | value
+----------+--------------
+ PCM      | 0
+ OPUS     | 1
+ AAC      | 2
+----------+--------------
+
+encoding structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      |            | type
+ 2        | u16      |            | channel
+ 4        | u32      | 44100 etc  | sample rate
+ 2        | u16      | 16, 24, 32 | bits per sample
+----------+----------+------------+---------------------
+
+[2.12.1] Channel MICROPHONE send Init (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | encodings count
+ variadic | u8       |            | encodings data
+----------+----------+------------+---------------------
+
+[2.12.2] Channel MICROPHONE send Data (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB02     | MicOp::Data
+ 4        | u32      |            | length
+ array    | u8       |            | raw audio data
+----------+----------+------------+---------------------
+
+[2.12.3] Channel MICROPHONE reply Init (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      | 0          | no error
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | selected encoding
+----------+----------+------------+---------------------
+
+[2.12.3.1] Channel MICROPHONE reply Init failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      |            | error length
+ string   | u8       |            | error message
 ----------+----------+------------+---------------------

@@ -30,6 +30,10 @@
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
+#ifdef LTSM_ENCODING
+#include <lz4.h>
+#endif
+
 namespace LTSM
 {
     namespace RFB
@@ -107,6 +111,7 @@ namespace LTSM
 
             virtual void sendFrameBuffer(EncoderStream*, const FrameBuffer &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
+            virtual const char* getTypeName(void) const = 0;
 
             int getType(void) const;
             bool jobsEmpty(void) const;
@@ -126,6 +131,7 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return "Raw"; }
 
             EncodingRaw() : EncodingBase(ENCODING_RAW) {}
         };
@@ -138,9 +144,9 @@ namespace LTSM
             void sendRects(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                                           const std::list<XCB::RegionPixel> &);
 
-
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return getType() == ENCODING_CORRE ? "CoRRE": "RRE"; }
 
             EncodingRRE(bool co) : EncodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
@@ -163,6 +169,7 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return "HexTile"; }
 
             EncodingHexTile(void) : EncodingBase(ENCODING_HEXTILE) {}
         };
@@ -183,6 +190,7 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE"; }
 
             EncodingTRLE(bool zlib);
 
@@ -203,9 +211,26 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return "ZLib"; }
 
             EncodingZlib(int zlevel = Z_BEST_SPEED);
         };
+
+#ifdef LTSM_ENCODING
+
+        /// EncodingLZ4
+        class EncodingLZ4 : public EncodingBase
+        {
+        protected:
+            EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+
+        public:
+            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const { return "LZ4"; }
+
+            EncodingLZ4() : EncodingBase(ENCODING_LTSM_LZ4) {}
+        };
+#endif
     }
 }
 

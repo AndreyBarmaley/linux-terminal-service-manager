@@ -184,32 +184,26 @@ namespace LTSM
             const Region & region(void) const { return first; }
         };
 
-        struct ConnectionShared : std::shared_ptr<xcb_connection_t>
-        {
-            explicit ConnectionShared(xcb_connection_t* conn = nullptr)
-                : std::shared_ptr<xcb_connection_t>(conn, xcb_disconnect) {}
-        };
+        typedef std::shared_ptr<xcb_connection_t> ConnectionShared;
 
-        void XcbDeleter(void* ptr);
-
-        struct GenericError : std::shared_ptr<xcb_generic_error_t>
+        struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
         {
             explicit GenericError(xcb_generic_error_t* err = nullptr)
-                : std::shared_ptr<xcb_generic_error_t>(err, XcbDeleter) {}
+                : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}
         };
 
         struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
         {
             explicit GenericEvent(xcb_generic_event_t* ev = nullptr)
-                : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, XcbDeleter) {}
+                : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
 
             const xcb_generic_error_t* toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
         };
 
         template<typename ReplyType>
-        struct GenericReply : std::shared_ptr<ReplyType>
+        struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)>
         {
-            explicit GenericReply(ReplyType* ptr) : std::shared_ptr<ReplyType>(ptr, XcbDeleter) {}
+            explicit GenericReply(ReplyType* ptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
         };
 
         struct PropertyReply : GenericReply<xcb_get_property_reply_t>
@@ -220,7 +214,7 @@ namespace LTSM
 
             PropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
 
-            PropertyReply(const GenericReply<xcb_get_property_reply_t> & ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
+            PropertyReply(GenericReply<xcb_get_property_reply_t> && ptr) noexcept : GenericReply<xcb_get_property_reply_t>(std::move(ptr)) {}
         };
 
         template<typename ReplyType>
@@ -245,6 +239,7 @@ namespace LTSM
         }
 
 #define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
+#define getReplyUncheckedFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME##_unchecked(conn,##__VA_ARGS__))
 #define NULL_KEYCODE 0
 
         template<typename Reply, typename Cookie>
@@ -276,16 +271,16 @@ namespace LTSM
             uint8_t bytePerPixel(void) const { return bpp >> 3; }
         };
 
-        typedef std::shared_ptr<PixmapBase> PixmapInfoReply;
+        typedef std::unique_ptr<PixmapBase> PixmapInfoReply;
 
         struct ShmId
         {
-            ConnectionShared conn;
+            std::weak_ptr<xcb_connection_t> conn;
             int shm = -1;
             uint8_t* addr = nullptr;
             xcb_shm_seg_t id = 0;
 
-            ShmId(ConnectionShared ptr, int s, uint8_t* a, const xcb_shm_seg_t & v) : conn(ptr), shm(s), addr(a), id(v) {}
+            ShmId(const std::weak_ptr<xcb_connection_t> & ptr, int s, uint8_t* a, const xcb_shm_seg_t & v) : conn(ptr), shm(s), addr(a), id(v) {}
 
             ShmId() = default;
             ~ShmId();
@@ -295,7 +290,7 @@ namespace LTSM
 
             void reset(void);
 
-            explicit operator bool(void) const { return conn && 0 < id; };
+            explicit operator bool(void) const { return ! conn.expired() && 0 < id; };
 
             const xcb_shm_seg_t & operator()(void) const { return id; };
         };
@@ -341,7 +336,7 @@ namespace LTSM
             const uint32_t* data(void) const;
             size_t size(void) const;
 
-            CursorImage(ReplyCursor && rc) : ReplyCursor(rc) {}
+            CursorImage(ReplyCursor && rc) : ReplyCursor(std::move(rc)) {}
         };
 
         enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB, SELECTION };
@@ -412,11 +407,11 @@ namespace LTSM
 
         struct ModuleExtension
         {
-            ConnectionShared conn;
+            std::weak_ptr<xcb_connection_t> conn;
             Module type;
             const xcb_query_extension_reply_t* ext = nullptr;
 
-            ModuleExtension(ConnectionShared ptr, const Module & mod) : conn(ptr), type(mod) {}
+            ModuleExtension(const std::weak_ptr<xcb_connection_t> & ptr, const Module & mod) : conn(ptr), type(mod) {}
 
             virtual ~ModuleExtension() = default;
 
@@ -428,15 +423,14 @@ namespace LTSM
 
         struct WindowDamageId
         {
-            ConnectionShared conn;
+            std::weak_ptr<xcb_connection_t> conn;
             xcb_drawable_t win = 0;
             xcb_damage_damage_t xid = 0;
 
-            WindowDamageId(ConnectionShared ptr, const xcb_drawable_t & w, const xcb_damage_damage_t & v) : conn(ptr), win(w), xid(v) {}
+            WindowDamageId(const std::weak_ptr<xcb_connection_t> & ptr, const xcb_drawable_t & w, const xcb_damage_damage_t & v) : conn(ptr), win(w), xid(v) {}
+            ~WindowDamageId();
 
-            ~WindowDamageId() { if(0 < xid && conn) xcb_damage_destroy(conn.get(), xid); }
-
-            bool valid(void) const { return conn && 0 < xid; };
+            bool valid(void) const { return ! conn.expired() && 0 < xid; };
 
             const xcb_damage_damage_t & id(void) const { return xid; };
 
@@ -448,21 +442,20 @@ namespace LTSM
 
         struct ModuleDamage : ModuleExtension
         {
-            explicit ModuleDamage(ConnectionShared);
+            explicit ModuleDamage(const ConnectionShared &);
 
             WindowDamageIdPtr createDamage(xcb_drawable_t win, const xcb_damage_report_level_t &) const;
         };
 
         struct FixesRegionId
         {
-            ConnectionShared conn;
+            std::weak_ptr<xcb_connection_t> conn;
             xcb_xfixes_region_t xid = 0;
 
-            FixesRegionId(ConnectionShared ptr, const xcb_xfixes_region_t & v) : conn(ptr), xid(v) {}
+            FixesRegionId(const std::weak_ptr<xcb_connection_t> & ptr, const xcb_xfixes_region_t & v) : conn(ptr), xid(v) {}
+            ~FixesRegionId();
 
-            ~FixesRegionId() { if(0 < xid && conn) xcb_xfixes_destroy_region(conn.get(), xid); }
-
-            bool valid(void) const { return conn && 0 < xid; };
+            bool valid(void) const { return ! conn.expired() && 0 < xid; };
 
             const xcb_xfixes_region_t & id(void) const { return xid; };
         };
@@ -471,7 +464,7 @@ namespace LTSM
 
         struct ModuleFixes : ModuleExtension
         {
-            explicit ModuleFixes(ConnectionShared);
+            explicit ModuleFixes(const ConnectionShared &);
 
             FixesRegionIdPtr createRegion(const xcb_rectangle_t &) const;
             FixesRegionIdPtr createRegions(const xcb_rectangle_t*, size_t counts) const;
@@ -488,7 +481,7 @@ namespace LTSM
 
         struct ModuleTest : ModuleExtension
         {
-            explicit ModuleTest(ConnectionShared);
+            explicit ModuleTest(const ConnectionShared &);
 
             bool fakeInputRaw(xcb_window_t, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const;
             void fakeInputClickButton(xcb_window_t win, uint8_t button, const Point &) const;
@@ -501,12 +494,10 @@ namespace LTSM
             std::vector<uint8_t> buf;
             std::mutex lock;
 
-            std::unique_ptr<SelectionIncrMode>
-            incr;
-
+            std::unique_ptr<SelectionIncrMode> incr;
             xcb_atom_t atombuf = XCB_ATOM_NONE;
 
-            ModuleSelection(ConnectionShared, const xcb_screen_t &, xcb_atom_t);
+            ModuleSelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t);
             ~ModuleSelection();
 
             bool sendNotifyTargets(const xcb_selection_request_event_t &);
@@ -525,7 +516,7 @@ namespace LTSM
 
         struct ModuleRandr : ModuleExtension
         {
-            explicit ModuleRandr(ConnectionShared);
+            explicit ModuleRandr(const ConnectionShared &);
 
             std::vector<xcb_randr_output_t> getOutputs(const xcb_screen_t &) const;
             std::vector<xcb_randr_crtc_t> getCrtcs(const xcb_screen_t &) const;
@@ -552,7 +543,7 @@ namespace LTSM
 
         struct ModuleShm : ModuleExtension
         {
-            explicit ModuleShm(ConnectionShared);
+            explicit ModuleShm(const ConnectionShared &);
 
             ShmIdShared createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
         };
@@ -565,7 +556,7 @@ namespace LTSM
 
             int32_t devid = -1;
 
-            explicit ModuleXkb(ConnectionShared);
+            explicit ModuleXkb(const ConnectionShared &);
 
             bool resetMapState(void);
 
@@ -608,6 +599,7 @@ namespace LTSM
 
             virtual bool displayConnect(int displayNum, const AuthCookie* = nullptr);
 
+
             size_t depthFromBpp(size_t bitsPerPixel) const;
             size_t bppFromDepth(size_t depth) const;
 
@@ -617,6 +609,7 @@ namespace LTSM
             const xcb_connection_t* xcb_ptr(void) const;
 
             int hasError(void) const;
+            static const char* errorString(int err);
 
             GenericError checkRequest(const xcb_void_cookie_t &) const;
 
@@ -748,6 +741,7 @@ namespace LTSM
             bool damageAdd(const xcb_rectangle_t*, size_t);
             bool damageAdd(const Region &);
             bool damageSubtrack(const Region &);
+            void damageDisable(void);
 
             GenericEvent poolEvent(void);
             Size updateGeometrySize(void) const;

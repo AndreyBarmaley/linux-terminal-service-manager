@@ -240,41 +240,24 @@ namespace LTSM
                 clientUpdateReq = true;
             }
 
-            if(isClientLtsmSupported())
+            // check timepoint frame
+            if(isClientLtsmSupported() && delayTimeout)
             {
-#ifdef LTSM_ENCODING_FFMPEG
+                auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
+
+                if(dt.count() < delayTimeout)
+                {
+                    Application::trace("%s: update time ms: %u", __FUNCTION__, dt.count());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
+                    continue;
+                }
 
                 if(isClientVideoSupported())
                 {
-                    if(auto ffmpeg = static_cast<const RFB::EncodingFFmpeg*>(getEncoder()))
-                    {
-                        auto upms = ffmpeg->updateTimeMS();
-
-                        if(upms < delayTimeout)
-                        {
-                            Application::trace("%s: update time ms: %u", __FUNCTION__, upms);
-                            std::this_thread::sleep_for(1ms);
-                            continue;
-                        }
-                    }
-
                     std::scoped_lock guard{ serverLock };
                     clientUpdateReq = true;
                     damageRegion = XCB::RootDisplay::region();
                 }
-                else
-#endif
-                    if(delayTimeout)
-                    {
-                        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
-
-                        if(dt.count() < delayTimeout)
-                        {
-                            Application::trace("%s: update time ms: %u", __FUNCTION__, dt.count());
-                            std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
-                            continue;
-                        }
-                    }
             }
 
             if(xcbNoDamageOption() || fullscreenUpdateReq)
@@ -284,37 +267,49 @@ namespace LTSM
                 fullscreenUpdateReq = false;
                 clientUpdateReq = true;
             }
-            else if(damageRegion.empty())
+
+            if(clientRegion.empty())
             {
                 // wait loop
                 std::this_thread::sleep_for(5ms);
                 continue;
             }
 
-            // frame update
-            std::scoped_lock guard{ serverLock };
-            auto serverRegion = XCB::RootDisplay::region();
-            // fix out of screen
-            damageRegion = serverRegion.intersected(damageRegion.align(4));
-            damageRegion = clientRegion.intersected(damageRegion);
-
-            if(! sendUpdateSafe(damageRegion))
+            if(damageRegion.empty())
             {
-                rfbMessagesShutdown();
-                continue;
+                // wait loop
+                std::this_thread::sleep_for(5ms);
             }
-
-            if(clientUpdateCursor)
+            else
             {
-                sendUpdateRichCursor();
-                clientUpdateCursor = false;
-            }
+                // processed frame update
+                frameTimePoint = std::chrono::steady_clock::now();
+                auto serverRegion = XCB::RootDisplay::region();
 
-            damageRegion.reset();
-            clientUpdateReq = false;
-            auto frameRate = frameRateOption();
-            delayTimeout = frameRate ? 1000 / frameRate : 0;
-            frameTimePoint = std::chrono::steady_clock::now();
+                std::scoped_lock guard{ serverLock };
+                // fix out of screen
+                damageRegion = serverRegion.intersected(damageRegion.align(4));
+                damageRegion = clientRegion.intersected(damageRegion);
+
+                if(! sendUpdateSafe(damageRegion))
+                {
+                    rfbMessagesShutdown();
+                    continue;
+                }
+
+                if(clientUpdateCursor)
+                {
+                    sendUpdateRichCursor();
+                    clientUpdateCursor = false;
+                }
+
+                damageRegion.reset();
+                clientUpdateReq = false;
+
+                // update timepoint
+                auto frameRate = frameRateOption();
+                delayTimeout = frameRate ? 1000 / frameRate : 0;
+            }
         } // main loop
 
         waitUpdateProcess();
@@ -515,7 +510,7 @@ namespace LTSM
         if(auto fixes = static_cast<const XCB::ModuleFixes*>(XCB::RootDisplay::getExtension(XCB::Module::XFIXES)))
         {
             XCB::CursorImage replyCursor = fixes->getCursorImage();
-            auto reply = replyCursor.reply();
+            const auto & reply = replyCursor.reply();
 
             if(auto ptr = replyCursor.data())
             {
@@ -549,7 +544,7 @@ namespace LTSM
         {
             auto dsz = XCB::RootDisplay::size();
             auto bpp = XCB::RootDisplay::bitsPerPixel() >> 3;
-            shm = ext->createShm(dsz.width* dsz.height* bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
+            shm = ext->createShm(dsz.width * dsz.height * bpp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP, false, uid);
         }
     }
 
@@ -584,6 +579,7 @@ namespace LTSM
 
         FrameBuffer fb(pixmapReply->data(), reg, serverFormat());
         xcbFrameBufferModify(fb);
-        return XcbFrameBuffer{pixmapReply, fb};
+
+        return XcbFrameBuffer{std::move(pixmapReply), std::move(fb)};
     }
 }

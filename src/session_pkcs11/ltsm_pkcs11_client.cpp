@@ -199,7 +199,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
@@ -366,7 +366,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         // certs count
         reply.writeIntLE16(0);
         return false;
@@ -444,7 +444,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
@@ -508,7 +508,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;

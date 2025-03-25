@@ -60,6 +60,9 @@ namespace LTSM
 #ifdef LTSM_WITH_GSSAPI
                   "[--kerberos <" << krb5def << ">] " <<
 #endif
+#ifdef LTSM_DECODING
+                  "[--lz4]" <<
+#endif
 #ifdef LTSM_DECODING_FFMPEG
                   "[--h264]" <<
                   "[--av1]" <<
@@ -90,6 +93,9 @@ namespace LTSM
                   "    --kerberos <" << krb5def <<
                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
+#ifdef LTSM_DECODING
+                  "    --lz4 (the same as --encoding ltsm_lz4)" << std::endl <<
+#endif
 #ifdef LTSM_DECODING_FFMPEG
                   "    --h264 (the same as --encoding ffmpeg_h264)" << std::endl <<
                   "    --av1 (the same as --encoding ffmpeg_av1)" << std::endl <<
@@ -115,7 +121,9 @@ namespace LTSM
                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
                   "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
                   "    --pcsc (redirect smartcard)" << std::endl <<
+#ifdef LTSM_PKCS11_AUTH
                   "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
+#endif
                   std::endl <<
                   std::endl;
         std::cout << std::endl << "supported encodings: " << std::endl <<
@@ -190,6 +198,13 @@ namespace LTSM
                 pcscEnable = true;
             }
 
+#ifdef LTSM_DECODING
+            else if(0 == std::strcmp(argv[it], "--lz4"))
+            {
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                        RFB::ENCODING_LTSM_LZ4)));
+            }
+#endif
 #ifdef LTSM_DECODING_FFMPEG
             else if(0 == std::strcmp(argv[it], "--h264"))
             {
@@ -292,6 +307,7 @@ namespace LTSM
                     it = it + 1;
                 }
             }
+#ifdef LTSM_PKCS11_AUTH
             else if(0 == std::strcmp(argv[it], "--pkcs11-auth"))
             {
                 pkcs11Auth.assign(librtdef);
@@ -309,6 +325,7 @@ namespace LTSM
                     pkcs11Auth.clear();
                 }
             }
+#endif
             else if(0 == std::strcmp(argv[it], "--debug"))
             {
                 Application::setDebugLevel(DebugLevel::Debug);
@@ -463,7 +480,11 @@ namespace LTSM
 
     const char* Vnc2SDL::pkcs11Library(void) const
     {
+#ifdef LTSM_PKCS11_AUTH
         return pkcs11Auth.c_str();
+#else
+        return nullptr;
+#endif
     }
 
     int Vnc2SDL::start(void)
@@ -1036,52 +1057,45 @@ namespace LTSM
         }
     }
 
-    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Size & wsz,
-                                  uint16_t pitch, const PixelFormat & pf)
+    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Region & wrt,
+                                  uint32_t pitch, const PixelFormat & pf)
     {
+        // lock part
         const std::scoped_lock guard{ renderLock };
 
-        if(windowSize == wsz)
-        {
-            std::unique_ptr<SDL_Surface, SurfaceDeleter> sfframe;
+        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
+            SDL_CreateRGBSurfaceFrom((void*) data, wrt.width, wrt.height,
+                                                   pf.bitsPerPixel(), pitch,
+                                                   pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()),
+            SDL_FreeSurface};
 
-            if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
-            {
-                sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
+        if(! sfframe)
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                                   "SDL_CreateSurfaceFrom", SDL_GetError());
+            throw sdl_error(NS_FuncName);
+        }
+
+        if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
+        {
+            sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
                                                   clientPf.bitsPerPixel(),
                                                   clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
-
-                if(! sfback)
-                {
-                    Application::error("%s: %s failed, error: %s", __FUNCTION__,
-                                       "SDL_CreateSurface", SDL_GetError());
-                    throw sdl_error(NS_FuncName);
-                }
-            }
-
-            sfframe.reset(SDL_CreateRGBSurfaceFrom((void*) data, wsz.width, wsz.height,
-                                                   pf.bitsPerPixel(), pitch,
-                                                   pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()));
-
-            if(! sfframe)
+            if(! sfback)
             {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__,
-                                   "SDL_CreateSurfaceFrom", SDL_GetError());
-                throw sdl_error(NS_FuncName);
-            }
-
-            if(0 > SDL_BlitSurface(sfframe.get(), nullptr, sfback.get(), nullptr))
-            {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_BlitSurface",
-                                   SDL_GetError());
+                                       "SDL_CreateSurface", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
         }
-        else
+
+        SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
+
+        if(0 > SDL_BlitSurface(sfframe.get(), nullptr, sfback.get(), & dstrt))
         {
-            Application::warning("%s: incorrect geometry, win size: [%" PRIu16 ", %" PRIu16
-                                 "], frame size: [%" PRIu16 ", %" PRIu16 "]",
-                                 __FUNCTION__, windowSize.width, windowSize.height, wsz.width, wsz.height);
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_BlitSurface",
+                                   SDL_GetError());
+            throw sdl_error(NS_FuncName);
         }
     }
 
@@ -1292,10 +1306,12 @@ namespace LTSM
             jo.push("redirect:pcsc", "enable");
         }
 
+#ifdef LTSM_PKCS11_AUTH
         if(! pkcs11Auth.empty())
         {
             jo.push("pkcs11:auth", pkcs11Auth);
         }
+#endif
 
         if(audioEnable)
         {
@@ -1386,7 +1402,7 @@ int main(int argc, const char** argv)
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             LTSM::Application::info("program: %s", "terminate...");
         }
     }
