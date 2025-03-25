@@ -34,7 +34,8 @@ jobs:
             libxcb-xkb-dev libxkbcommon-x11-dev \
             libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
             libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
-            liblz4-dev libxkbfile-dev
+            liblz4-dev libxkbfile-dev \
+            libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
@@ -42,6 +43,7 @@ jobs:
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
         -DLTSM_BUILD_SERVER=on \
         -DLTSM_BUILD_CLIENT=on \
+        -DLTSM_FFMPEG=on \
         -DLTSM_WITH_RDP=on \
         -DLTSM_FUSE2SESSION=on \
         -DLTSM_AUDIO2SESSION=on \
