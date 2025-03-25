@@ -32,11 +32,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#ifdef LTSM_WITH_GNUTLS
-#include "gnutls/gnutls.h"
-#include "gnutls/crypto.h"
-#endif
-
 #include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -50,6 +45,14 @@
 
 #include "ltsm_application.h"
 #include "ltsm_tools.h"
+
+#ifdef LTSM_WITH_GNUTLS
+#include "gnutls/gnutls.h"
+#include "gnutls/crypto.h"
+#undef GNUTLS_GNUTLSXX_NO_HEADERONLY
+#include "gnutls/gnutlsxx.h"
+#endif
+
 #include "ltsm_sockets.h"
 
 using namespace std::chrono_literals;
