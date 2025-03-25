@@ -74,23 +74,23 @@ namespace LTSM
 
     struct ClientContext
     {
-        int test;
+        int test = 0;
     };
 
     struct ServerContext : rdpContext
     {
-        BITMAP_PLANAR_CONTEXT* planar;
-        BITMAP_INTERLEAVED_CONTEXT* interleaved;
-        HANDLE vcm;
-        CliprdrServerContext* cliprdr;
+        BITMAP_PLANAR_CONTEXT* planar = nullptr;
+        BITMAP_INTERLEAVED_CONTEXT* interleaved = nullptr;
+        HANDLE vcm = nullptr;
+        CliprdrServerContext* cliprdr = nullptr;
 
-        bool activated;
-        bool clipboard;
-        size_t frameId;
+        bool activated = false;
+        bool clipboard = false;
+        size_t frameId = 0;
 
-        const JsonObject* config;
-        Connector::RDP* rdp;
-        JsonObject* keymap;
+        const JsonObject* config = nullptr;
+        Connector::RDP* rdp2 = nullptr;
+        JsonObject* keymap = nullptr;
     };
 
     int ServerContextNew(rdp_freerdp_peer* peer, ServerContext* context)
@@ -110,7 +110,7 @@ namespace LTSM
         context->clipboard = true;
         context->frameId = 0;
         context->config = nullptr;
-        context->rdp = nullptr;
+        context->rdp2 = nullptr;
         context->keymap = nullptr;
         Application::info("%s: success", __FUNCTION__);
         return TRUE;
@@ -220,7 +220,7 @@ namespace LTSM
             Application::debug("rdp context: %p", peer->context);
             context = static_cast<ServerContext*>(peer->context);
             context->config = & config;
-            context->rdp = connector;
+            context->rdp2 = connector;
             context->clipboard = false;
             const std::string keymapFile = config.getString("rdp:keymap:file");
 
@@ -1007,7 +1007,7 @@ namespace LTSM
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
 
         if(! connector->createX11Session(24))
         {
@@ -1031,7 +1031,7 @@ namespace LTSM
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
-        //auto connector = context->rdp;
+        //auto connector = context->rdp2;
         //peer->settings->ColorDepth = static_cast<XCB::RootDisplay*>(connector)->bitsPerPixel();
         //peer->settings->ColorDepth = 32;
         // if(peer->settings->ColorDepth == 15 || peer->settings->ColorDepth == 16)
@@ -1044,7 +1044,7 @@ namespace LTSM
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
         auto wsz = xcbDisplay->size();
 
@@ -1080,7 +1080,7 @@ namespace LTSM
     {
         Application::info("%s: peer:%p", __FUNCTION__, peer);
         auto context = static_cast<ServerContext*>(peer->context);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
 
         if(1)
         {
@@ -1193,7 +1193,7 @@ namespace LTSM
         Application::debug("%s: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: %p, context: %p", __FUNCTION__, flags, code,
                            input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
         if(connector->xcbAllowMessages())
@@ -1255,7 +1255,7 @@ namespace LTSM
         Application::debug("%s: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: %p, context: %p", __FUNCTION__,
                            flags, posx, posy, input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
         if(connector->xcbAllowMessages())
@@ -1310,7 +1310,7 @@ namespace LTSM
     {
         Application::debug("%s: count rects: %d, context: %p", __FUNCTION__, (int) count, rdpctx);
         auto context = static_cast<ServerContext*>(rdpctx);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
         std::vector<xcb_rectangle_t> rectangles(0 < count ? count : 1);
 
@@ -1339,7 +1339,7 @@ namespace LTSM
     BOOL Connector::RDP::cbServerSuppressOutput(rdpContext* rdpctx, BYTE allow, const RECTANGLE_16* area)
     {
         auto context = static_cast<ServerContext*>(rdpctx);
-        auto connector = context->rdp;
+        auto connector = context->rdp2;
 
         if(area && 0 < allow)
         {
