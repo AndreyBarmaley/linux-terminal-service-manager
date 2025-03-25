@@ -42,6 +42,7 @@
 
 #ifdef LTSM_WITH_GNUTLS
 #include "gnutls/gnutls.h"
+#define GNUTLS_GNUTLSXX_NO_HEADERONLY 1
 #include "gnutls/gnutlsxx.h"
 #endif
 

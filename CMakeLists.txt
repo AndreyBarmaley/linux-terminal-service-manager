@@ -93,6 +93,7 @@ pkg_search_module(XCB_DAMAGE REQUIRED xcb-damage)
 pkg_search_module(XCB_XFIXES REQUIRED xcb-xfixes)
 pkg_search_module(XCB_XTEST REQUIRED xcb-xtest)
 pkg_search_module(XCB_RANDR REQUIRED xcb-randr)
+pkg_search_module(P11KIT REQUIRED p11-kit-1)
 
 if(LTSM_WITH_SYSTEMD)
     pkg_search_module(SYSTEMD REQUIRED libsystemd)
@@ -101,6 +102,7 @@ endif()
 
 if(LTSM_PKCS11_AUTH)
     add_compile_options(-DLTSM_PKCS11_AUTH)
+    include_directories(src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
 endif()
 
 add_compile_options(${XCB_CFLAGS})
@@ -163,11 +165,6 @@ if(LTSM_BUILD_SERVICE)
         src/service/ltsm_service.cpp
         src/channels/channel_system.cpp)
 
-    if(LTSM_PKCS11_AUTH)
-        pkg_search_module(P11KIT REQUIRED p11-kit-1)
-        target_include_directories(LTSM_service PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
-    endif()
-
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
         target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
@@ -199,7 +196,6 @@ if(LTSM_BUILD_CONNECTOR)
 
     find_package(sdbus-c++ REQUIRED)
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
     find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 
     add_executable(LTSM_connector
@@ -247,11 +243,6 @@ if(LTSM_BUILD_CONNECTOR)
 	target_link_libraries(LTSM_connector ${GSSAPI_LIBRARIES})
     endif()
 
-    if(LTSM_PKCS11_AUTH)
-        pkg_search_module(P11KIT REQUIRED p11-kit-1)
-        target_include_directories(LTSM_connector PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
-    endif()
-
     if(LTSM_WITH_RDP)
         pkg_search_module(FreeRDP2 REQUIRED freerdp2)
         pkg_search_module(WinPR2 REQUIRED winpr2)
@@ -275,7 +266,7 @@ if(LTSM_BUILD_CONNECTOR)
 
     target_link_libraries(LTSM_connector
                     LTSM_common SDBusCpp::sdbus-c++
-                    ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${LZ4_LIBRARY} z)
+                    ${GNUTLS_LIBRARIES} ${LZ4_LIBRARY} z)
 
     set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -305,7 +296,6 @@ if(LTSM_BUILD_HELPER)
 
     find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -326,12 +316,8 @@ if(LTSM_BUILD_HELPER)
             src/session_pkcs11/ltsm_pkcs11_session.cpp
             src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
 
-        pkg_search_module(P11KIT REQUIRED p11-kit-1)
-
         find_library(LDAP_LIBRARY ldap REQUIRED)
         find_library(LBER_LIBRARY lber REQUIRED)
-
-        target_include_directories(LTSM_helper PRIVATE ${P11KIT_INCLUDE_DIRS})
 
         target_link_libraries(LTSM_helper ${LBER_LIBRARY} ${LDAP_LIBRARY} dl)
     endif()
@@ -339,7 +325,7 @@ if(LTSM_BUILD_HELPER)
     target_compile_options(LTSM_helper PRIVATE ${OPENSSL_DEFINITIONS}
                     -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_helper PRIVATE src/common src/dbus src/session_pkcs11 ${OPENSSL_INCLUDE_DIR} ${GNUTLS_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
-    target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network SDBusCpp::sdbus-c++ ${OPENSSL_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES})
+    target_link_libraries(LTSM_helper LTSM_common Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network SDBusCpp::sdbus-c++ ${OPENSSL_LIBRARIES} ${GNUTLS_LIBRARIES})
     set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
@@ -377,11 +363,10 @@ if(LTSM_BUILD_X11VNC)
         src/librfb/ltsm_librfb.cpp)
 
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
-    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
+    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} z)
 
     set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -399,12 +384,11 @@ if(LTSM_BUILD_VNC2IMAGE)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
 
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
     target_compile_options(LTSM_vnc2image PRIVATE -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
-    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
+    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -432,7 +416,6 @@ if(LTSM_BUILD_CLIENT)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
-    find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
     find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
     find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
     find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
@@ -448,7 +431,6 @@ if(LTSM_BUILD_CLIENT)
             src/session_pkcs11/ltsm_pkcs11_client.cpp
             src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
 
-        target_include_directories(LTSM_client PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
         target_link_libraries(LTSM_client ${P11KIT_LIBRARIES} dl)
     endif()
 
@@ -483,10 +465,10 @@ if(LTSM_BUILD_CLIENT)
 	target_link_libraries(LTSM_client ${GSSAPI_LIBRARIES})
     endif()
 
-    target_compile_options(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
+    target_compile_options(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_WITH_GNUTLS)
     target_compile_options(LTSM_client PRIVATE -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS} ${PULSEAUDIO_CFLAGS} ${PCSCLITE_CFLAGS})
     target_include_directories(LTSM_client PRIVATE src/common src/channels src/session_audio src/session_pcsc src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} ${PULSEAUDIO_INCLUDE_DIR} ${PCSCLITE_INCLUDE_DIR})
-    target_link_libraries(LTSM_client LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} ${PCSCLITE_LIBRARIES} ${LZ4_LIBRARY} z)
+    target_link_libraries(LTSM_client LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} ${PCSCLITE_LIBRARIES} ${LZ4_LIBRARY} z)
 
     set_target_properties(LTSM_client PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
