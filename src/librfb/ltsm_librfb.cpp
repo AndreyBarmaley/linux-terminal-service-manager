@@ -150,6 +150,9 @@ namespace LTSM
             case ENCODING_FFMPEG_VP8:
                 return "FFMPEG_VP8";
 
+            case ENCODING_LTSM_LZ4:
+                return "LTSM_LZ4";
+
             default:
                 break;
         }

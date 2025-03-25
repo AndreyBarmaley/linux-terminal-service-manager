@@ -104,6 +104,8 @@ namespace LTSM
 
             void onHelperWidgetTimezone(const int32_t & display, const std::string &) override {}
 
+            void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override {}
+
             void onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 
             void onSessionChanged(const int32_t & display) override {}

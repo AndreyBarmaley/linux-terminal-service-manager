@@ -85,19 +85,34 @@ If the client supports LTSM encoding, they the server will send this message to 
  array    | u8       |            | channel data
 ----------+----------+------------+---------------------
 
------------+--------------
+-----------+-----------------
 channel id | channel name 
------------+--------------
+-----------+-----------------
  0x00      | system
  0x01      | channel data 1
  0x02      | channel data 2
  ...       | ...
  0xFE      | channel data 254
  0xFF      | reserved
------------+--------------
+-----------+-----------------
 
 All numbers (u16, u32, u64) are sent as big endian format.
 
+------------------------+-------+-----------------
+ ChannelName            | Part  | 
+------------------------+-------+-----------------
+ System                 | 2.1   |
+------------------------+-------+-----------------
+ Redirect Audio         | 2.8   |
+------------------------+-------+-----------------
+ Redirect Folder        | 2.9   |
+------------------------+-------+-----------------
+ PKCS11 Auth            | 2.10  |
+------------------------+-------+-----------------
+ Redirect Smartcard     | 2.11  |
+------------------------+-------+-----------------
+ Redirect Microphone    | 2.12  |
+------------------------+-------+-----------------
 
 [2.0] Channel DATA (stream)
 
@@ -120,7 +135,6 @@ Content is JSON format
 ------------------------+-------+-----------------
  TransferFiles          | 2.3.1 | client -> server
  KeyboardChange         | 2.4.1 | client -> server
- TokenAuth              | 2.6.1 | any
  LoginSuccess           | 2.7.1 | server -> client
 ------------------------+-------+------------------
 
@@ -279,48 +293,7 @@ the client requests the ability to transfer the files.
 all supported keyboard layouts are transmitted in advance via the environment:keyboard.
 
 
-[2.6.1] System message TOKEN AUTH
-
-{ "cmd": "TokenAuth", "action": string }
-
------------+---------+------------------+-------------
- action    | part    | direct           | description
------------+---------+------------------+-------------
- attach    | 2.6.1.1 | client -> server | token attach
- detach    | 2.6.1.2 | client -> server | token detach
- check     | 2.6.1.3 | server -> client | check pkcs7
- reply     | 2.6.1.4 | client -> client | reply decrypt
-
-
-[2.6.1.1] System message RUTOKEN ATTACH
-
-{ "cmd": "TokenAuth", "action": "attach", "serial": string, "description": string, "certs": [ "cert1", "cert2", "cert3", ...] }
-
-the "certs" field is list with certificates content
-
-[2.6.1.2] System message RUTOKEN DETACH
-
-{ "cmd": "TokenAuth", "action": "detach", "serial": string }
-
-
-[2.6.1.3] System message RUTOKEN CHECK pkcs7
-
-{ "cmd": "TokenAuth", "action": "check", "serial": string, "pin": string, "cert": int, "data": string }
-
-the "cert" field is integer(crc32b) from certificate content
-the "data" field is a binary data format, see 2.6.2
-
-
-[2.6.1.4] System message RUTOKEN REPLY decrypt
-
-{ "cmd": "TokenAuth", "action": "reply", "serial": string, "cert": int, "decrypt": string }
-
-the "cert" field is integer(crc32b) from certificate content
-
-
-[2.6.2] TOKEN AUTH binary data format [binary to string]
-
-[ base64 encode string [ uin32be_t raw size data [ uint8_t[] gzip::compress binary data ]]]
+[2.6.1] None
 
 
 [2.7.1] System message LOGIN SUCCESS
@@ -451,7 +424,7 @@ stat structure:
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE01     | FuseOp::Init
+ 2        | u16      | 0xFF01     | FuseOp::Init
  2        | u16      | 0          | no error
  2        | u16      | 1          | proto version
  4        | u32      |            | client uid
@@ -465,7 +438,7 @@ stat structure:
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE01     | FuseOp::Init
+ 2        | u16      | 0xFF01     | FuseOp::Init
  2        | u16      |            | error length
  string   | u8       |            | error message
 ----------+----------+------------+---------------------
@@ -526,7 +499,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE04     | FuseOp::Open
+ 2        | u16      | 0xFF04     | FuseOp::Open
  4        | u32      |            | open flags
  2        | u16      | length     | open path
  variadic | u8       | string     | open path
@@ -537,7 +510,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE04     | FuseOp::Open
+ 2        | u16      | 0xFF04     | FuseOp::Open
  4        | u32      | 0          | errno
  4        | u32      |            | file description
 ----------+----------+------------+---------------------
@@ -547,7 +520,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE04     | FuseOp::Open
+ 2        | u16      | 0xFF04     | FuseOp::Open
  4        | u32      |            | errno
 ----------+----------+------------+---------------------
 
@@ -556,7 +529,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE05     | FuseOp::Read
+ 2        | u16      | 0xFF05     | FuseOp::Read
  4        | u32      |            | file description
  2        | u16      |            | block size
  8        | u64      |            | offset
@@ -567,7 +540,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE05     | FuseOp::Read
+ 2        | u16      | 0xFF05     | FuseOp::Read
  4        | u32      | 0          | errno
  2        | u16      |            | block size
  variadic | u8       |            | raw data
@@ -578,7 +551,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE05     | FuseOp::Read
+ 2        | u16      | 0xFF05     | FuseOp::Read
  4        | u32      |            | errno
 ----------+----------+------------+---------------------
 
@@ -587,7 +560,7 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE05     | FuseOp::Release
+ 2        | u16      | 0xFF05     | FuseOp::Release
  4        | u32      |            | file description
 ----------+----------+------------+---------------------
 
@@ -596,6 +569,609 @@ Not usage.
 ----------+----------+------------+---------------------
  num byte | type     | value      | description
 ----------+----------+------------+---------------------
- 2        | u16      | 0xFE06     | FuseOp::Release
+ 2        | u16      | 0xFF06     | FuseOp::Release
  4        | u32      |            | errno
+----------+----------+------------+---------------------
+
+[2.10] Channel PKCS11
+
+Initial part from session side, see 2.10.1
+All numbers (u16, u32, u64) are sent as little endian format.
+
+-------------------------------+--------+---------+---------
+ commands                      | value  | session | client
+-------------------------------+--------+---------+---------
+ Pkcs11Op::Init                | 0xFC01 | 2.10.1  | 2.10.2
+ Pkcs11Op::GetSlots            | 0xFC02 | 2.10.3  | 2.10.4
+ Pkcs11Op::GetSlotMechanism    | 0xFC03 | 2.10.5  | 2.10.6
+ Pkcs11Op::GetSlotCertificates | 0xFC04 | 2.10.7  | 2.10.8
+ Pkcs11Op::SignData            | 0xFC11 | 2.10.9  | 2.10.10
+ Pkcs11Op::DecryptData         | 0xFC12 | 2.10.11 | 2.10.12
+-------------------------------+--------+---------+---------
+
+[2.10.1] Channel PKCS11 send Init (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC01     | Pkcs11Op::Init
+ 2        | u16      | 1          | proto version
+----------+----------+------------+---------------------
+
+[2.10.2] Channel PKCS11 reply Init (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC01     | Pkcs11Op::Init
+ 2        | u16      | 0          | no error
+ 2        | u16      | 1          | proto version
+ variadic | u8       |            | CK_INFO
+----------+----------+------------+---------------------
+
+[2.10.2.1] Channel PKCS11 reply Init failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC01     | Pkcs11Op::Init
+ 2        | u16      |            | error length
+ string   | u8       |            | error message
+----------+----------+------------+---------------------
+
+[2.10.2.2] CK_INFO data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      |            | cryptokiVersion
+ 32       | u8       |            | manufacturerID
+ 8        | u64      |            | flags
+ 32       | u8       |            | libraryDescription
+ 2        | u16      |            | libraryVersion
+----------+----------+------------+---------------------
+
+[2.10.3] Channel PKCS11 send GetSlots (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC02     | Pkcs11Op::GetSlots
+ 1        | u8       |            | with tokens only
+----------+----------+------------+---------------------
+
+[2.10.4] Channel PKCS11 reply GetSlots (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC02     | Pkcs11Op::GetSlots
+ 2        | u16      |            | slots count
+ variadic | u8       |            | slots data
+----------+----------+------------+---------------------
+
+[2.10.4.1] Slot data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | slot id
+ 1        | u8       | 1          | slot present
+ variadic | u8       |            | CK_SLOT_INFO
+ 1        | u8       | 1          | token present
+ variadic | u8       |            | CK_TOKEN_INFO
+----------+----------+------------+---------------------
+
+CK_SLOT_INFO structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 64       | u8       |            | slotDescription
+ 32       | u8       |            | manufacturerID
+ 8        | u64      |            | flags
+ 2        | u16      |            | hardwareVersion
+ 2        | u16      |            | softwareVersion
+----------+----------+------------+---------------------
+
+CK_TOKEN_INFO structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 32       | u8       |            | label
+ 32       | u8       |            | manufacturerID
+ 16       | u8       |            | model
+ 16       | u8       |            | serial
+ 8        | u64      |            | flags
+ 8        | u64      |            | maxSessionCount
+ 8        | u64      |            | sessionCount
+ 8        | u64      |            | maxRwSessionCount
+ 8        | u64      |            | rwSessionCount
+ 8        | u64      |            | maxPinLen
+ 8        | u64      |            | minPinLen
+ 8        | u64      |            | totalPublicMemory
+ 8        | u64      |            | freePublicMemory
+ 8        | u64      |            | totalPrivateMemory
+ 8        | u64      |            | freePrivateMemory
+ 2        | u16      |            | hardwareVersion
+ 2        | u16      |            | softwareVersion
+ 16       | u8       |            | utcTime
+----------+----------+------------+---------------------
+
+[2.10.5] Channel PKCS11 send GetSlotMechanism (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC03     | Pkcs11Op::GetSlotMechanism
+ 8        | u64      |            | slot id
+----------+----------+------------+---------------------
+
+[2.10.6] Channel PKCS11 reply GetSlotMechanism (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC03     | Pkcs11Op::GetSlotMechanism
+ 2        | u16      |            | mechanisms count
+ variadic | u8       |            | mechanisms data
+----------+----------+------------+---------------------
+
+[2.10.6.1] Mechanism data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | mech id
+ 8        | u64      |            | minKeySize
+ 8        | u64      |            | maxKeySize
+ 8        | u64      |            | flags
+ 2        | u16      |            | mech name length
+ string   | u8       |            | mech name string
+----------+----------+------------+---------------------
+
+[2.10.7] Channel PKCS11 send GetSlotCertificates (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC04     | Pkcs11Op::GetSlotCertificates
+ 8        | u64      |            | slot id
+ 1        | u8       |            | have public/private pairs
+----------+----------+------------+---------------------
+
+[2.10.8] Channel PKCS11 reply GetSlotCertificates (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC04     | Pkcs11Op::GetSlotCertificates
+ 2        | u16      |            | objects count
+ variadic | u8       |            | objects data
+----------+----------+------------+---------------------
+
+[2.10.8.1] Objects data format
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | length     | cert id length
+ variadic | u8       |            | cert id data
+ 4        | u32      | length     | cert content length
+ variadic | u8       |            | cert content data
+----------+----------+------------+---------------------
+
+[2.10.9] Channel PKCS11 send SignData (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC11     | Pkcs11Op::SignData
+ 8        | u64      |            | slot id
+ 8        | u64      |            | mech type
+ 2        | u16      | length     | pincode length
+ variadic | u8       |            | pincode data
+ 2        | u16      | length     | cert id length
+ variadic | u8       |            | cert id data
+ 4        | u32      | length     | user length
+ variadic | u8       |            | user data
+----------+----------+------------+---------------------
+
+[2.10.10] Channel PKCS11 reply SignData (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC11     | Pkcs11Op::SignData
+ 4        | u32      | length     | sign length
+ variadic | u8       |            | sign data
+----------+----------+------------+---------------------
+
+[2.10.11] Channel PKCS11 send DecryptData (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC12     | Pkcs11Op::Decrypt
+ 8        | u64      |            | slot id
+ 8        | u64      |            | mech type
+ 2        | u16      | length     | pincode length
+ variadic | u8       |            | pincode data
+ 2        | u16      | length     | cert id length
+ variadic | u8       |            | cert id data
+ 4        | u32      | length     | encrypt length
+ variadic | u8       |            | encrypt data
+----------+----------+------------+---------------------
+
+[2.10.12] Channel PKCS11 reply DecryptData (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFC12     | Pkcs11Op::DecryptData
+ 4        | u32      | length     | decrypt length
+ variadic | u8       |            | decrypt data
+----------+----------+------------+---------------------
+
+[2.11] Channel PCSC
+
+Initial part from session side, see 2.11.1
+All numbers (u16, u32, u64) are sent as little endian format.
+
+------------+--------
+ commands   | value  
+------------+--------
+ Pcsc::Init | 0xFD01 
+------------+--------
+
+----------------------------+--------+---------+---------
+ PCSC cmd                   | value  | session | client
+----------------------------+--------+---------+---------
+ EstablishContext           | 0x01   | 2.11.1  | 2.11.2
+ ReleaseContext             | 0x02   | 2.11.3  | 2.11.4
+ ListReaders                | 0x03   | not used| not used
+ Connect                    | 0x04   | 2.11.7  | 2.11.8
+ Reconnect                  | 0x05   | 2.11.9  | 2.11.10
+ Disconnect                 | 0x06   | 2.11.11 | 2.11.12
+ BeginTransaction           | 0x07   | 2.11.13 | 2.11.14
+ EndTransaction             | 0x08   | 2.11.15 | 2.11.16
+ Transmit                   | 0x09   | 2.11.17 | 2.11.18
+ Control                    | 0x0A   | 2.11.19 | 2.11.20
+ Status                     | 0x0B   | 2.11.21 | 2.11.22
+ GetStatusChange            | 0x0C   | not used| not used
+ Cancel                     | 0x0D   | not used| not used
+ CancelTransaction          | 0x0E   | not used| not used
+ GetAttrib                  | 0x0F   | 2.11.29 | 2.11.30
+ SetAttrib                  | 0x10   | 2.11.31 | 2.11.32
+ GetVersion                 | 0x11   | not used| not used
+ GetReaderState             | 0x12   | not used| not used
+ WaitReaderStateChangeStart | 0x13   | not used| not used
+ WaitReaderStateChangeStop  | 0x14   | not used| not used
+----------------------------+--------+---------+---------
+
+[2.11.1] Channel PCSC send EstablishContext (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x01       | EstablishContext
+ 4        | u32      |            | scope
+----------+----------+------------+---------------------
+
+[2.11.2] Channel PCSC reply EstablishContext (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | context
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.3] Channel PCSC send ReleaseContext (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x02       | ReleaseContext
+ 8        | u64      |            | context
+----------+----------+------------+---------------------
+
+[2.11.4] Channel PCSC reply ReleaseContext (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.7] Channel PCSC send Connect (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x04       | Connect
+ 8        | u64      |            | context
+ 4        | u32      |            | share mode
+ 4        | u32      |            | preffered protocols
+ 4        | u32      | length     | readerName length
+ variadic | u8       | string     | readerName string
+----------+----------+------------+---------------------
+
+[2.11.8] Channel PCSC reply Connect (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 8        | u64      |            | handle
+ 4        | u32      |            | active protocol
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.9] Channel PCSC send Reconnect (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x05       | Reconnect
+ 8        | u64      |            | handle
+ 4        | u32      |            | share mode
+ 4        | u32      |            | preffered protocols
+ 4        | u32      |            | initialization
+----------+----------+------------+---------------------
+
+[2.11.10] Channel PCSC reply Reconnect (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | active protocol
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.11] Channel PCSC send Disconnect (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x06       | Disconnect
+ 8        | u64      |            | handle
+ 4        | u32      |            | disposition
+----------+----------+------------+---------------------
+
+[2.11.12] Channel PCSC reply Disconnect (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.13] Channel PCSC send BeginTransaction (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x07       | BeginTransaction
+ 8        | u64      |            | handle
+----------+----------+------------+---------------------
+
+[2.11.14] Channel PCSC reply BeginTransaction (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.15] Channel PCSC send EndTransaction (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x08       | EndTransaction
+ 8        | u64      |            | handle
+ 4        | u32      |            | disposition
+----------+----------+------------+---------------------
+
+[2.11.16] Channel PCSC reply EndTransaction (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.17] Channel PCSC send Transmit (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x09       | Transmit
+ 8        | u64      |            | handle
+ 4        | u32      |            | io pci protocol
+ 4        | u32      |            | io pci length
+ 4        | u32      | length     | send length
+ variadic | u8       |            | send data
+----------+----------+------------+---------------------
+
+[2.11.18] Channel PCSC reply Transmit (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | io pci protocol
+ 4        | u32      |            | io pci length
+ 4        | u32      | length     | recv length
+ 4        | u32      |            | ret code
+ variadic | u8       |            | recv data
+----------+----------+------------+---------------------
+
+[2.11.19] Channel PCSC send Control (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x0A       | Control
+ 8        | u64      |            | handle
+ 4        | u32      |            | code
+ 4        | u32      | length     | send length
+ 4        | u32      | length     | recv length
+ variadic | u8       |            | send data
+----------+----------+------------+---------------------
+
+[2.11.20] Channel PCSC reply Control (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      | length     | recv length
+ 4        | u32      |            | ret code
+ variadic | u8       |            | recv data
+----------+----------+------------+---------------------
+
+[2.11.21] Channel PCSC send Status (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x0B       | Status
+ 8        | u64      |            | handle
+----------+----------+------------+---------------------
+
+[2.11.22] Channel PCSC reply Status (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      | length     | readerName length
+ variadic | u8       |            | readerName string
+ 4        | u32      |            | state
+ 4        | u32      |            | protocol
+ 4        | u32      | length     | atr length
+ variadic | u8       |            | atr data
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+[2.11.23] Channel PCSC send GetAttrib (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x0F       | GetAttrib
+ 8        | u64      |            | handle
+ 4        | u32      |            | attr id
+----------+----------+------------+---------------------
+
+[2.11.24] Channel PCSC reply GetAttrib (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      | length     | attr length
+ 4        | u32      |            | ret code
+ variadic | u8       |            | attr data
+----------+----------+------------+---------------------
+
+[2.11.25] Channel PCSC send SetAttrib (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFD01     | Pcsc::Init
+ 2        | u16      | 0x10       | SetAttrib
+ 8        | u64      |            | handle
+ 4        | u32      |            | attr id
+ 4        | u32      | length     | attr length
+ variadic | u8       |            | attr data
+----------+----------+------------+---------------------
+
+[2.11.26] Channel PCSC reply SetAttrib (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 4        | u32      |            | ret code
+----------+----------+------------+---------------------
+
+
+[2.12] Channel MICROPHONE
+
+Initial part from session side, see 2.12.1
+All numbers (u16, u32, u64) are sent as little endian format.
+
+--------------+--------+---------+---------
+ commands     | value  | session | client
+--------------+--------+---------+---------
+ MicOp::Init  | 0xFB01 | 2.12.1   | 2.12.3
+ MicOp::Data  | 0xFB02 | 2.12.2   | 2.12.4
+--------------+--------+---------+---------
+
+----------+--------------
+ encoding | value
+----------+--------------
+ PCM      | 0
+ OPUS     | 1
+ AAC      | 2
+----------+--------------
+
+encoding structure:
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      |            | type
+ 2        | u16      |            | channel
+ 4        | u32      | 44100 etc  | sample rate
+ 2        | u16      | 16, 24, 32 | bits per sample
+----------+----------+------------+---------------------
+
+[2.12.1] Channel MICROPHONE send Init (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | encodings count
+ variadic | u8       |            | encodings data
+----------+----------+------------+---------------------
+
+[2.12.2] Channel MICROPHONE send Data (session side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB02     | MicOp::Data
+ 4        | u32      |            | length
+ array    | u8       |            | raw audio data
+----------+----------+------------+---------------------
+
+[2.12.3] Channel MICROPHONE reply Init (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      | 0          | no error
+ 2        | u16      | 1          | proto version
+ 2        | u16      |            | selected encoding
+----------+----------+------------+---------------------
+
+[2.12.3.1] Channel MICROPHONE reply Init failed (client side)
+
+----------+----------+------------+---------------------
+ num byte | type     | value      | description
+----------+----------+------------+---------------------
+ 2        | u16      | 0xFB01     | MicOp::Init
+ 2        | u16      |            | error length
+ string   | u8       |            | error message
 ----------+----------+------------+---------------------

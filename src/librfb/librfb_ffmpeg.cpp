@@ -26,6 +26,7 @@
 
 #include "ltsm_application.h"
 #include "librfb_ffmpeg.h"
+#include "ffmpeg_tools.h"
 
 namespace LTSM
 {
@@ -97,7 +98,6 @@ namespace LTSM
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
-        updatePoint = std::chrono::steady_clock::now();
 
         switch(type)
         {
@@ -123,6 +123,20 @@ namespace LTSM
                                encodingName(type));
             throw ffmpeg_error(NS_FuncName);
         }
+    }
+
+    const char* RFB::EncodingFFmpeg::getTypeName(void) const
+    {
+        switch(getType())
+        {
+            case RFB::ENCODING_FFMPEG_H264: return "FFMPEG_H264";
+            case RFB::ENCODING_FFMPEG_VP8: return "FFMPEG_VP8";
+            case RFB::ENCODING_FFMPEG_AV1: return "FFMPEG_AV1";
+            default:
+                break;
+        }
+
+        return "FFMPEG_UNKNOWN";
     }
 
     void RFB::EncodingFFmpeg::setDebug(int val)
@@ -222,16 +236,17 @@ namespace LTSM
                 break;
         }
 
+        avcctx->thread_count = threads;
         avcctx->pix_fmt = AV_PIX_FMT_YUV420P;
         avcctx->width = csz.width;
         avcctx->height = csz.height;
         avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
         avcctx->flags |= AV_CODEC_FLAG_LOOP_FILTER;
 
-        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
-        {
-            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
-        }
+//        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+//        {
+//            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+//        }
 
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
@@ -325,7 +340,6 @@ namespace LTSM
             st->sendIntBE32(packet->size);
             Application::trace("%s: packet size: %d", __FUNCTION__, packet->size);
             st->sendRaw(packet->data, packet->size);
-            updatePoint = std::chrono::steady_clock::now();
         }
         else
         {
@@ -333,12 +347,6 @@ namespace LTSM
         }
 
         st->sendFlush();
-    }
-
-    size_t RFB::EncodingFFmpeg::updateTimeMS(void) const
-    {
-        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - updatePoint);
-        return dt.count();
     }
 
 #endif
@@ -441,10 +449,10 @@ namespace LTSM
             throw ffmpeg_error(NS_FuncName);
         }
 
-        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
-        {
-            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
-        }
+//        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+//        {
+//            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+//        }
 
         avcctx->time_base = (AVRational)
         {
@@ -626,7 +634,7 @@ namespace LTSM
 
             if(heightResult == avcctx->height)
             {
-                cli.updateRawPixels(rgb->data[0], XCB::Size(avcctx->width, avcctx->height), rgb->linesize[0], pf);
+                cli.updateRawPixels(rgb->data[0], XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->linesize[0], pf);
             }
 
             av_frame_unref(frame.get());

@@ -38,7 +38,6 @@
 #include <QDesktopWidget>
 #include <QGuiApplication>
 #include <QSslCertificate>
-#include <QRandomGenerator>
 
 #ifdef LTSM_PKCS11_AUTH
 #include "gnutls/x509.h"
@@ -83,6 +82,11 @@ void LTSM_HelperSDBus::onHelperSetLoginPassword(const int32_t & display, const s
         const std::string & pass, const bool & autologin)
 {
     setLoginPasswordCallback(display, QString::fromStdString(login), QString::fromStdString(pass), autologin);
+}
+
+void LTSM_HelperSDBus::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId)
+{
+    pkcs11ListennerCallback(display, connectorId);
 }
 
 void LTSM_HelperSDBus::onHelperWidgetCentered(const int32_t & display)
@@ -205,21 +209,6 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     {
         ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
     }
-
-#ifdef LTSM_PKCS11_AUTH
-    try
-    {
-        ldap.reset(new LdapWrapper());
-    }
-    catch(const std::exception &)
-    {
-    }
-
-    //
-    pkcs11.reset(new Pkcs11Client(displayNum, this));
-    connect(pkcs11.get(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
-    pkcs11->start();
-#endif
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
@@ -260,8 +249,13 @@ QString sslTooltip(const QSslCertificate & ssl)
     auto serial = QString(QByteArray::fromHex(ssl.serialNumber()).toHex(':'));
     auto email = ssl.subjectInfo(QSslCertificate::EmailAddress).join("");
     auto org = ssl.subjectInfo(QSslCertificate::Organization).join("");
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 0)
+    auto issuer = ssl.issuerInfo(QSslCertificate::CommonName).join(":");
+#else
+    auto issuer = ssl.issuerDisplayName();
+#endif
     return QString("serial number: %1\nemail address: %2\nexpired date: %3\norganization: %4\nissuer: %5").
-           arg(serial).arg(email).arg(ssl.expiryDate().toString()).arg(org).arg(ssl.issuerDisplayName());
+           arg(serial).arg(email).arg(ssl.expiryDate().toString()).arg(org).arg(issuer);
 }
 
 void LTSM_HelperWindow::tokensChanged(void)
@@ -342,7 +336,12 @@ void LTSM_HelperWindow::domainIndexChanged(int index)
                 continue;
             }
 
-            ui->comboBoxUsername->addItem(ssl.subjectDisplayName(), QByteArray((const char*) & cert, sizeof(cert)));
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 0)
+            auto subject = ssl.subjectInfo(QSslCertificate::CommonName).join(":");
+#else
+            auto subject = ssl.subjectDisplayName();
+#endif
+            ui->comboBoxUsername->addItem(subject, QByteArray((const char*) & cert, sizeof(cert)));
             ui->comboBoxUsername->setItemData(rowIndex, sslTooltip(ssl), Qt::ToolTipRole);
             rowIndex++;
         }
@@ -481,8 +480,7 @@ void LTSM_HelperWindow::loginClicked(void)
                                QSsl::Der);
     auto pin = ui->lineEditPassword->text().toStdString();
     // generate 32byte hash
-    std::vector<uint8_t> hash1(32);
-    QRandomGenerator::global()->generate(hash1.begin(), hash1.end());
+    std::vector<uint8_t> hash1 = Tools::randomBytes(32);
     setLabelInfo("check token...");
     bool certValidate = false;
 
@@ -643,6 +641,29 @@ void LTSM_HelperWindow::reloadUsersList(void)
     ui->comboBoxUsername->clear();
     ui->comboBoxUsername->addItems(getUsersList(displayNum));
     ui->comboBoxUsername->setEditText(prefferedLogin);
+}
+
+void LTSM_HelperWindow::pkcs11ListennerCallback(int display, int connectorId)
+{
+    if(display == displayNum)
+    {
+#ifdef LTSM_PKCS11_AUTH
+        if(! pkcs11)
+        {
+            try
+            {
+                ldap.reset(new LdapWrapper());
+            }
+            catch(const std::exception &)
+            {
+            }
+
+            pkcs11.reset(new Pkcs11Client(displayNum, this));
+            connect(pkcs11.data(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
+            pkcs11->start();
+        }
+#endif
+    }
 }
 
 void LTSM_HelperWindow::widgetTimezoneCallback(int display, const QString & tz)

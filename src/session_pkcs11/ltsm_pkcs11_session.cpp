@@ -79,18 +79,33 @@ void Pkcs11Client::run(void)
 
     Application::debug("%s: connected, socket fd: %" PRId32, __FUNCTION__, fd);
     sock.setSocket(fd);
-    // send initialize packet
-    sock.sendIntLE16(Pkcs11Op::Init);
-    // send proto ver
-    sock.sendIntLE16(1);
-    sock.sendFlush();
-    // client reply
-    auto cmd = sock.recvIntLE16();
-    auto err = sock.recvIntLE16();
+
+    uint16_t cmd = 0;
+    uint16_t err = 0;
+
+    // client may be not supported PKCS11 and closed socket
+    try
+    {
+        // send initialize packet
+        sock.sendIntLE16(Pkcs11Op::Init);
+        // send proto ver
+        sock.sendIntLE16(1);
+        sock.sendFlush();
+        // client reply
+        cmd = sock.recvIntLE16();
+        err = sock.recvIntLE16();
+    }
+    catch(const std::exception & exp)
+    {
+        Application::error("%s: exception: %s", NS_FuncName.data(), "PKCS11 initialization failed");
+        emit pkcs11Error("PKCS11 initialization failed");
+        emit pkcs11Shutdown();
+        return;
+    }
 
     if(cmd != Pkcs11Op::Init)
     {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, NS_FuncName.data(), "id", cmd);
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;

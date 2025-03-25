@@ -25,6 +25,7 @@
 #define _LTSM_SOCKETS_
 
 #include <list>
+#include <chrono>
 #include <array>
 #include <atomic>
 #include <vector>
@@ -50,12 +51,10 @@
 
 #include "ltsm_streambuf.h"
 
-#define LTSM_SOCKETS_VERSION 20240810
+#define LTSM_SOCKETS_VERSION 20250320
 
 namespace LTSM
 {
-    inline static const size_t tcpMSS = 1460;
-
     struct network_error : public std::runtime_error
     {
         explicit network_error(std::string_view what) : std::runtime_error(what.data()) {}
@@ -64,14 +63,23 @@ namespace LTSM
     /// @brief: network stream interface
     class NetworkStream : protected ByteOrderInterface
     {
+        std::chrono::steady_clock::time_point tp;
+
+    protected:
+        bool showStatistic = true;
+        mutable size_t bytesIn = 0;
+        mutable size_t bytesOut = 0;
+
     protected:
         inline void getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
 
         inline void putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
 
     public:
-        NetworkStream() = default;
-        virtual ~NetworkStream() = default;
+        NetworkStream();
+        virtual ~NetworkStream();
+
+        void useStatistic(bool f) { showStatistic = f; }
 
         static bool hasInput(int fd, int timeoutMS = 1);
         static size_t hasData(int fd);
@@ -144,7 +152,6 @@ namespace LTSM
     {
     protected:
         int sock;
-        std::vector<uint8_t> buf;
 
     public:
         explicit SocketStream(int fd = 0);
@@ -165,8 +172,6 @@ namespace LTSM
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
 
-        void sendFlush(void) override;
-
         int fd(void) const { return sock; }
     };
 
@@ -174,11 +179,8 @@ namespace LTSM
     class InetStream : public NetworkStream
     {
     protected:
-        std::unique_ptr<FILE, decltype(fclose)*> fin{nullptr, std::fclose};
-        std::unique_ptr<FILE, decltype(fclose)*> fout{nullptr, std::fclose};
-        int fdin = 0;
-        int fdout = 0;
-        std::array<char, tcpMSS> fdbuf;
+        int fdin = -1;
+        int fdout = -1;
 
         void inetFdClose(void);
 
@@ -191,9 +193,6 @@ namespace LTSM
         bool hasInput(void) const override;
         size_t hasData(void) const override;
         uint8_t peekInt8(void) const override;
-
-        void sendFlush(void) override;
-        bool checkError(void) const;
 
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;

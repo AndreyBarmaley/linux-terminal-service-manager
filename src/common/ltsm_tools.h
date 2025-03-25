@@ -55,19 +55,6 @@
 #include "gnutls/gnutls.h"
 #endif
 
-#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "libavformat/avformat.h"
-
-#ifdef __cplusplus
-}
-
-#endif
-#endif
-
 namespace LTSM
 {
     class ByteArray;
@@ -119,18 +106,13 @@ namespace LTSM
 
     namespace Tools
     {
-#if defined(LTSM_ENCODING_FFMPEG) || defined(LTSM_DECODING_FFMPEG)
-        bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
-        AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
-#endif
-
         bool binaryToFile(const void*, size_t len, std::string_view);
         std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
         std::list<std::string> readDir(const std::string & path, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
-        std::string prettyFuncName(std::string_view);
+        std::string prettyFuncName(const std::string &);
         std::string randomHexString(size_t len);
 
         std::string fileToString(const std::filesystem::path &);
@@ -156,9 +138,6 @@ namespace LTSM
 
         std::string base64Encode(const ByteArray &);
         std::vector<uint8_t> base64Decode(const std::string &);
-
-        std::string convertBinary2JsonString(const ByteArray &);
-        std::vector<uint8_t> convertJsonString2Binary(const std::string &);
 
         class StringFormat : public std::string
         {
@@ -262,8 +241,8 @@ namespace LTSM
         std::string escaped(std::string_view, bool quote);
         std::string unescaped(std::string_view);
 
-        std::string replace(const std::string & src, std::string_view pred, std::string_view val);
-        std::string replace(const std::string & src, std::string_view pred, int val);
+        std::string replace(std::string_view src, std::string_view pred, std::string_view val);
+        std::string replace(std::string_view src, std::string_view pred, int val);
 
         std::string hex(int value, int width = 8);
 
@@ -506,7 +485,7 @@ namespace LTSM
         };
     }
 
-#define NS_FuncName Tools::prettyFuncName(__PRETTY_FUNCTION__)
 }
+#define NS_FuncName LTSM::Tools::prettyFuncName(__PRETTY_FUNCTION__)
 
 #endif // _LTSM_TOOLS_

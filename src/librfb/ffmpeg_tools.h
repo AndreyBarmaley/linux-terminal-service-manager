@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
+ *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
  *   Part of the LTSM: Linux Terminal Service Manager:                     *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
@@ -18,52 +18,28 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
- **************************************************************************/
+ ***************************************************************************/
 
-#ifndef _LTSM_VNC2IMAGE_
-#define _LTSM_VNC2IMAGE_
+#ifndef _FFMPEG_TOOLS_
+#define _FFMPEG_TOOLS_
 
-#include <chrono>
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#include "ltsm_global.h"
-#include "ltsm_application.h"
-#include "ltsm_framebuffer.h"
+#include "libavformat/avformat.h"
 
-#define LTSM_VNC2IMAGE_VERSION 20220829
+#ifdef __cplusplus
+}
+#endif
 
 namespace LTSM
 {
-    class Vnc2Image : public Application, protected RFB::ClientDecoder
+    namespace Tools
     {
-        std::chrono::steady_clock::time_point tp;
-        std::unique_ptr<FrameBuffer> fbPtr;
-
-        std::string host{"localhost"};
-        std::string password;
-        std::string filename{"screenshot.png"};
-        int port = 5900;
-        int timeout = 0;
-        bool notls = false;
-
-    protected:
-        void setPixel(const XCB::Point &, uint32_t pixel) override;
-        void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch,
-                                                const PixelFormat & pf) override;
-        const PixelFormat & clientFormat(void) const override;
-        XCB::Size clientSize(void) const override;
-
-        int startSocket(std::string_view host, int port) const;
-
-    public:
-        Vnc2Image(int argc, const char** argv);
-
-        void pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
-        void fbUpdateEvent(void) override;
-
-        int start(void) override;
-    };
+        bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
+        AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
+    }
 }
 
-#endif // _LTSM_VNC2IMAGE_
+#endif // _FFMPEG_TOOLS_

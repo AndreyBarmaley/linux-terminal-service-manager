@@ -1053,4 +1053,96 @@ namespace LTSM
         zlib->sendData(buf);
         return std::make_pair(reg + top, BinaryBuf{});
     }
+
+#ifdef LTSM_ENCODING
+    /// EncodingLZ4
+    void RFB::EncodingLZ4::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
+    {
+        const XCB::Region & reg0 = fb.region();
+
+        if(debug)
+        {
+            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               "LZ4", reg0.x, reg0.y, reg0.width, reg0.height);
+        }
+
+        const XCB::Size bsz(fb.width(), fb.height() / 4);
+        const size_t fbBlockBytes = fb.pitchSize() * bsz.height;
+
+        const XCB::Point top(reg0.x, reg0.y);
+        auto regions = reg0.divideBlocks(bsz);
+        // regions counts
+        st->sendIntBE16(regions.size());
+        int jobId = 1;
+
+        // make pool jobs
+        while(jobId <= threads && ! regions.empty())
+        {
+            jobs.emplace_back(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, regions.front() - top, fb,
+                                         jobId));
+            regions.pop_front();
+            jobId++;
+        }
+
+        // renew completed job
+        while(! regions.empty())
+        {
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
+            {
+                return job.wait_for(1us) != std::future_status::ready;
+            });
+
+            if(busy < threads)
+            {
+                jobs.emplace_back(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, regions.front() - top, fb,
+                                             jobId));
+                regions.pop_front();
+                jobId++;
+            }
+
+            std::this_thread::sleep_for(100us);
+        }
+
+        // wait jobs
+        for(auto & job : jobs)
+        {
+            job.wait();
+            auto ret = job.get();
+            st->sendHeader(getType(), ret.first);
+            // ltsm lz4 format
+            st->sendIntBE32(fbBlockBytes);
+            st->sendIntBE32(fb.pitchSize());
+            st->sendIntBE32(ret.second.size());
+            st->sendData(ret.second);
+        }
+
+        st->sendFlush();
+        jobs.clear();
+    }
+
+    RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
+            const FrameBuffer & fb, int jobId)
+    {
+        assertm(fb.width() == reg.width, "continues data required");
+
+        // thread buffer
+        const size_t fbBlockBytes = fb.pitchSize() * reg.height;
+        BinaryBuf bb(LZ4_compressBound(fbBlockBytes));
+
+        auto inbuf = fb.pitchData(reg.y);
+        auto inlen = fb.pitchSize() * reg.height;
+
+        int ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
+
+        if(ret <= 0)
+        {
+            Application::error("%s: %s failed, ret: %d", __FUNCTION__, "LZ4_compress_fast_continue", ret);
+            throw rfb_error(NS_FuncName);
+        }
+
+        bb.resize(ret);
+        return std::make_pair(reg + top, bb);
+    }
+#endif
 }

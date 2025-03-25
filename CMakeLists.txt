@@ -15,8 +15,9 @@ option(LTSM_GSSAPI "GSSAPI security" OFF)
 option(LTSM_FFMPEG "ffmpeg encoding support" OFF)
 option(LTSM_BUILD_SYSTEMD "build with systemd" OFF)
 
+option(LTSM_BUILD_PROFILING "build with profiling" OFF)
 option(LTSM_BUILD_SANITIZE "build with sanitize" OFF)
-option(LTSM_BUILD_TESTS "build test utilities" OFF)
+#option(LTSM_BUILD_TESTS "build test utilities" OFF)
 option(LTSM_BUILD_FB_FAST_CYCLE "build FrameBuffer plain cycles" OFF)
 option(LTSM_PKCS11_AUTH "ltsm pkcs11 auth support" ON)
 #option(LTSM_BUILD_VNC2IMAGE "build vnc2image utility" OFF)
@@ -26,6 +27,14 @@ option(LTSM_PKCS11_AUTH "ltsm pkcs11 auth support" ON)
 
 if(LTSM_BUILD_SANITIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+endif()
+
+if(LTSM_BUILD_PROFILING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+endif()
+
+if(LTSM_BUILD_FB_FAST_CYCLE)
+    set(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} -DFB_FAST_CYCLE")
 endif()
 
 if(LTSM_BUILD_SERVER)
@@ -90,6 +99,10 @@ if(LTSM_WITH_SYSTEMD)
     add_compile_options(-DWITH_SYSTEMD)
 endif()
 
+if(LTSM_PKCS11_AUTH)
+    add_compile_options(-DLTSM_PKCS11_AUTH)
+endif()
+
 add_compile_options(${XCB_CFLAGS})
 add_compile_options(${XCB_SHM_CFLAGS})
 add_compile_options(${XCB_XFIXES_CFLAGS})
@@ -150,17 +163,18 @@ if(LTSM_BUILD_SERVICE)
         src/service/ltsm_service.cpp
         src/channels/channel_system.cpp)
 
+    if(LTSM_PKCS11_AUTH)
+        pkg_search_module(P11KIT REQUIRED p11-kit-1)
+        target_include_directories(LTSM_service PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
+    endif()
+
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
         target_compile_options(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
-    if(LTSM_PKCS11_AUTH)
-        target_compile_options(LTSM_service PRIVATE -DLTSM_PKCS11_AUTH)
-    endif()
-
     target_include_directories(LTSM_service PRIVATE
             src/common src/channels src/session_fuse
-            src/session_audio src/session_pcsc src/session_pkcs11 src/librfb
+            src/session_audio src/session_pcsc src/librfb
             ${PAM_INCLUDE_PATH}
             ${CMAKE_BINARY_DIR})
 
@@ -186,6 +200,7 @@ if(LTSM_BUILD_CONNECTOR)
     find_package(sdbus-c++ REQUIRED)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
+    find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 
     add_executable(LTSM_connector
         ltsm_service_proxy.h
@@ -197,9 +212,7 @@ if(LTSM_BUILD_CONNECTOR)
         src/librfb/librfb_x11server.cpp
         src/librfb/ltsm_librfb.cpp)
 
-    if(LTSM_BUILD_FB_FAST_CYCLE)
-        target_compile_options(LTSM_connector PRIVATE -DFB_FAST_CYCLE)
-    endif()
+    target_compile_options(LTSM_connector PRIVATE -DLTSM_ENCODING)
 
     if(LTSM_FFMPEG)
         pkg_search_module(AVDEVICE REQUIRED libavdevice)
@@ -209,7 +222,7 @@ if(LTSM_BUILD_CONNECTOR)
         pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
         pkg_search_module(AVUTIL REQUIRED libavutil)
 
-        target_sources(LTSM_connector PRIVATE src/librfb/librfb_ffmpeg.cpp)
+        target_sources(LTSM_connector PRIVATE src/librfb/ffmpeg_tools.cpp src/librfb/librfb_ffmpeg.cpp)
 
         target_compile_options(LTSM_connector PRIVATE
                 ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS}
@@ -234,16 +247,17 @@ if(LTSM_BUILD_CONNECTOR)
 	target_link_libraries(LTSM_connector ${GSSAPI_LIBRARIES})
     endif()
 
+    if(LTSM_PKCS11_AUTH)
+        pkg_search_module(P11KIT REQUIRED p11-kit-1)
+        target_include_directories(LTSM_connector PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
+    endif()
+
     if(LTSM_WITH_RDP)
         pkg_search_module(FreeRDP2 REQUIRED freerdp2)
         pkg_search_module(WinPR2 REQUIRED winpr2)
         target_compile_options(LTSM_connector PRIVATE ${FreeRDP2_CFLAGS} ${WinPR2_CFLAGS} -DLTSM_WITH_RDP)
         target_link_libraries(LTSM_connector ${FreeRDP2_LIBRARIES} ${WinPR2_LIBRARIES})
         target_sources(LTSM_connector PRIVATE src/connector/ltsm_connector_rdp.cpp)
-    endif()
-
-    if(LTSM_PKCS11_AUTH)
-        target_compile_options(LTSM_connector PRIVATE -DLTSM_PKCS11_AUTH)
     endif()
 
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
@@ -256,12 +270,12 @@ if(LTSM_BUILD_CONNECTOR)
                     -DLTSM_WITH_SDBUS ${GNUTLS_DEFINITIONS})
 
     target_include_directories(LTSM_connector PRIVATE
-                    src/common src/channels src/librfb src/dbus
+                    src/common src/channels src/librfb src/dbus 
                     ${GNUTLS_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
 
     target_link_libraries(LTSM_connector
                     LTSM_common SDBusCpp::sdbus-c++
-                    ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} z)
+                    ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${LZ4_LIBRARY} z)
 
     set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -304,21 +318,22 @@ if(LTSM_BUILD_HELPER)
         src/qt_helper/main.cpp
         src/qt_helper/ltsm_helperwindow.cpp
         src/qt_helper/ltsm_ldap_wrapper.cpp
-        src/session_pkcs11/ltsm_pkcs11_session.cpp
-        src/session_pkcs11/ltsm_pkcs11_wrapper.cpp
         src/qt_helper/ltsm_helperwindow.ui
         src/qt_helper/ltsm_helper.qrc)
 
     if(LTSM_PKCS11_AUTH)
+        target_sources(LTSM_helper PRIVATE
+            src/session_pkcs11/ltsm_pkcs11_session.cpp
+            src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
+
         pkg_search_module(P11KIT REQUIRED p11-kit-1)
 
         find_library(LDAP_LIBRARY ldap REQUIRED)
         find_library(LBER_LIBRARY lber REQUIRED)
 
-        target_compile_options(LTSM_helper PRIVATE -DLTSM_PKCS11_AUTH ${P11KIT_DEFINITIONS})
         target_include_directories(LTSM_helper PRIVATE ${P11KIT_INCLUDE_DIRS})
 
-        target_link_libraries(LTSM_helper ${LBER_LIBRARY} ${LDAP_LIBRARY})
+        target_link_libraries(LTSM_helper ${LBER_LIBRARY} ${LDAP_LIBRARY} dl)
     endif()
 
     target_compile_options(LTSM_helper PRIVATE ${OPENSSL_DEFINITIONS}
@@ -411,8 +426,6 @@ if(LTSM_BUILD_CLIENT)
         src/session_audio/ltsm_audio_decoder.cpp
         src/session_fuse/ltsm_fuse_client.cpp
         src/session_pcsc/ltsm_pcsc_client.cpp
-        src/session_pkcs11/ltsm_pkcs11_client.cpp
-        src/session_pkcs11/ltsm_pkcs11_wrapper.cpp
         src/librfb/librfb_decodings.cpp
         src/librfb/librfb_client.cpp
         src/librfb/ltsm_librfb.cpp)
@@ -422,6 +435,7 @@ if(LTSM_BUILD_CLIENT)
     find_library(GNUTLSXX_LIBRARY NAMES gnutlsxx libgnutlsxx REQUIRED)
     find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
     find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
+    find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 
     pkg_search_module(P11KIT REQUIRED p11-kit-1)
     pkg_search_module(PCSCLITE REQUIRED libpcsclite)
@@ -430,9 +444,12 @@ if(LTSM_BUILD_CLIENT)
     pkg_search_module(OPUS REQUIRED opus)
 
     if(LTSM_PKCS11_AUTH)
-        target_compile_options(LTSM_client PRIVATE -DLTSM_PKCS11_AUTH ${P11KIT_DEFINITIONS})
+        target_sources(LTSM_client PRIVATE
+            src/session_pkcs11/ltsm_pkcs11_client.cpp
+            src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
+
         target_include_directories(LTSM_client PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
-        target_link_libraries(LTSM_client ${P11KIT_LIBRARIES})
+        target_link_libraries(LTSM_client ${P11KIT_LIBRARIES} dl)
     endif()
 
     if(OPUS_FOUND)
@@ -441,9 +458,7 @@ if(LTSM_BUILD_CLIENT)
         target_link_libraries(LTSM_client ${OPUS_LIBRARIES})
     endif()
 
-    if(LTSM_BUILD_FB_FAST_CYCLE)
-        target_compile_options(LTSM_client PRIVATE -DFB_FAST_CYCLE)
-    endif()
+    target_compile_options(LTSM_client PRIVATE -DLTSM_DECODING)
 
     if(LTSM_FFMPEG)
         pkg_search_module(AVDEVICE REQUIRED libavdevice)
@@ -453,7 +468,7 @@ if(LTSM_BUILD_CLIENT)
         pkg_search_module(AVSWRESAMPLE REQUIRED libswresample)
         pkg_search_module(AVUTIL REQUIRED libavutil)
 
-        target_sources(LTSM_client PRIVATE src/librfb/librfb_ffmpeg.cpp)
+        target_sources(LTSM_client PRIVATE src/librfb/ffmpeg_tools.cpp src/librfb/librfb_ffmpeg.cpp)
         target_compile_options(LTSM_client PRIVATE ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS} ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS} -DLTSM_DECODING_FFMPEG)
         target_link_options(LTSM_client PRIVATE ${AVDEVICE_LDFLAGS} ${AVFORMAT_LDFLAGS} ${AVCODEC_LDFLAGS} ${AVSWSCALE_LDFLAGS} ${AVSWRESAMPLE_LDFLAGS} ${AVUTIL_LDFLAGS})
         target_link_libraries(LTSM_client ${AVDEVICE_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVCODEC_LIBRARIES} ${AVSWSCALE_LIBRARIES} ${AVSWRESAMPLE_LIBRARIES} ${AVUTIL_LIBRARIES})
@@ -471,7 +486,7 @@ if(LTSM_BUILD_CLIENT)
     target_compile_options(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_WITH_GNUTLS -DGNUTLS_GNUTLSXX_NO_HEADERONLY)
     target_compile_options(LTSM_client PRIVATE -DLTSM_WITH_PNG ${SDL2_CFLAGS} ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS} ${PULSEAUDIO_CFLAGS} ${PCSCLITE_CFLAGS})
     target_include_directories(LTSM_client PRIVATE src/common src/channels src/session_audio src/session_pcsc src/librfb src/sdl2x11 src/vnc2sdl src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR} ${PULSEAUDIO_INCLUDE_DIR} ${PCSCLITE_INCLUDE_DIR})
-    target_link_libraries(LTSM_client LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} ${PCSCLITE_LIBRARIES} z)
+    target_link_libraries(LTSM_client LTSM_common ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${SDL2_LIBRARIES} ${GNUTLSXX_LIBRARY} ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} ${PCSCLITE_LIBRARIES} ${LZ4_LIBRARY} z)
 
     set_target_properties(LTSM_client PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -533,7 +548,7 @@ if(LTSM_AUDIO2SESSION)
 
     find_package(sdbus-c++ REQUIRED)
     pkg_search_module(PULSEAUDIO REQUIRED libpulse)
-    pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
+    #pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
     pkg_search_module(OPUS REQUIRED opus)
 
     add_executable(LTSM_audio2session
@@ -554,7 +569,7 @@ if(LTSM_AUDIO2SESSION)
 
     target_compile_options(LTSM_audio2session PRIVATE ${PULSEAUDIO_CFLAGS})
     target_include_directories(LTSM_audio2session PRIVATE src/common src/dbus ${PULSEAUDIO_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
-    target_link_libraries(LTSM_audio2session LTSM_common SDBusCpp::sdbus-c++ ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES})
+    target_link_libraries(LTSM_audio2session LTSM_common SDBusCpp::sdbus-c++ ${PULSEAUDIO_LIBRARIES})
 
     set_target_properties(LTSM_audio2session PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

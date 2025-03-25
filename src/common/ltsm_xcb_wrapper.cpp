@@ -51,11 +51,6 @@ namespace LTSM
 {
     namespace XCB
     {
-        void XcbDeleter(void* ptr)
-        {
-            std::free(ptr);
-        }
-
         bool PointIterator::isBeginLine(void) const
         {
             return x == 0;
@@ -357,13 +352,13 @@ namespace LTSM
 
                 auto xcbReply = XCB::getReplyFunc2(xcb_get_atom_name, conn, atom);
 
-                if(auto err = xcbReply.error())
+                if(const auto & err = xcbReply.error())
                 {
                     error(conn, err.get(), __FUNCTION__, "xcb_get_atom_name");
                     return "NONE";
                 }
 
-                if(auto reply = xcbReply.reply())
+                if(const auto & reply = xcbReply.reply())
                 {
                     const char* name = xcb_get_atom_name_name(reply.get());
                     size_t len = xcb_get_atom_name_name_length(reply.get());
@@ -378,12 +373,12 @@ namespace LTSM
         {
             auto xcbReply = getReplyFunc2(xcb_get_property, conn, false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
-            if(auto err = xcbReply.error())
+            if(const auto & err = xcbReply.error())
             {
                 error(conn, err.get(), __FUNCTION__, "xcb_get_property");
             }
 
-            return xcbReply.reply();
+            return PropertyReply(std::move(xcbReply.first));
         }
     }
 
@@ -415,7 +410,11 @@ namespace LTSM
                     *opcode = err->minor_code;
                 }
 
-                error(conn.get(), err, __FUNCTION__, "");
+                if(auto ptr = conn.lock())
+                {
+                    error(ptr.get(), err, __FUNCTION__, "");
+                }
+
                 return true;
             }
         }
@@ -424,52 +423,70 @@ namespace LTSM
     }
 
     // XCB::ModuleDamage
+    XCB::WindowDamageId::~WindowDamageId()
+    {
+        if(auto ptr = conn.lock(); 0 < xid && ptr)
+        {
+             xcb_damage_destroy(ptr.get(), xid);
+        }
+    }
+
     bool XCB::WindowDamageId::addRegion(const xcb_xfixes_region_t & region)
     {
-        auto cookie = xcb_damage_add_checked(conn.get(), win, region);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_add");
-            return false;
+            auto cookie = xcb_damage_add_checked(ptr.get(), win, region);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_add");
+                return false;
+            }
+
+            Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
+            return true;
         }
 
-        Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
-        return true;
+        return false;
     }
 
     bool XCB::WindowDamageId::subtrackRegion(const xcb_xfixes_region_t & repair)
     {
-        auto cookie = xcb_damage_subtract_checked(conn.get(), xid, repair, XCB_XFIXES_REGION_NONE);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_subtract");
-            return false;
+            auto cookie = xcb_damage_subtract_checked(ptr.get(), xid, repair, XCB_XFIXES_REGION_NONE);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_subtract");
+                return false;
+            }
+
+            Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
+            return true;
         }
 
-        Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
-        return true;
+        return false;
     }
 
-    XCB::ModuleDamage::ModuleDamage(ConnectionShared ptr) : ModuleExtension(ptr, Module::DAMAGE)
+    XCB::ModuleDamage::ModuleDamage(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::DAMAGE)
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_damage_id);
+        ext = xcb_get_extension_data(ptr.get(), & xcb_damage_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_damage_query_version, conn.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
+        auto xcbReply = getReplyFunc2(xcb_damage_query_version, ptr.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "DAMAGE", reply->major_version, reply->minor_version);
         }
@@ -477,39 +494,52 @@ namespace LTSM
 
     XCB::WindowDamageIdPtr XCB::ModuleDamage::createDamage(xcb_drawable_t win, const xcb_damage_report_level_t & level) const
     {
-        xcb_damage_damage_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_damage_create_checked(conn.get(), res, win, level);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_damage_create");
-            res = 0;
+            xcb_damage_damage_t res = xcb_generate_id(ptr.get());
+
+            auto cookie = xcb_damage_create_checked(ptr.get(), res, win, level);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_create");
+                res = 0;
+            }
+
+            Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
+            return std::make_unique<WindowDamageId>(conn, win, res);
         }
 
-        Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
-        return std::make_unique<WindowDamageId>(conn, win, res);
+        return nullptr;
     }
 
     // XCB::ModuleFixes
-    XCB::ModuleFixes::ModuleFixes(ConnectionShared ptr) : ModuleExtension(ptr, Module::XFIXES)
+    XCB::FixesRegionId::~FixesRegionId()
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_xfixes_id);
+        if(auto ptr = conn.lock(); 0 < xid && ptr)
+        {
+            xcb_xfixes_destroy_region(ptr.get(), xid);
+        }
+    }
+
+    XCB::ModuleFixes::ModuleFixes(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::XFIXES)
+    {
+        ext = xcb_get_extension_data(ptr.get(), & xcb_xfixes_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, conn.get(), XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
+        auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, ptr.get(), XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_query_version");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_query_version");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "XFIXES", reply->major_version, reply->minor_version);
         }
@@ -517,146 +547,179 @@ namespace LTSM
 
     XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegion(const xcb_rectangle_t & rect) const
     {
-        xcb_xfixes_region_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_xfixes_create_region_checked(conn.get(), res, 1, & rect);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
-            res = 0;
-        }
+            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
 
-        Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
+            auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, 1, & rect);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
+                res = 0;
+            }
+
+            Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
                            __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
-        return std::make_unique<FixesRegionId>(conn, res);
+            return std::make_unique<FixesRegionId>(conn, res);
+        }
+
+        return nullptr;
     }
 
     XCB::FixesRegionIdPtr XCB::ModuleFixes::createRegions(const xcb_rectangle_t* rects, size_t counts) const
     {
-        xcb_xfixes_region_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_xfixes_create_region_checked(conn.get(), res, counts, rects);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
-            res = 0;
+            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
+
+            auto cookie = xcb_xfixes_create_region_checked(ptr.get(), res, counts, rects);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_create_region");
+                res = 0;
+            }
+
+            Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
+            return std::make_unique<FixesRegionId>(conn, res);
         }
 
-        Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
-        return std::make_unique<FixesRegionId>(conn, res);
+        return nullptr;
     }
 
     XCB::FixesRegionIdPtr XCB::ModuleFixes::intersectRegions(const xcb_xfixes_region_t & reg1, xcb_xfixes_region_t & reg2) const
     {
-        xcb_xfixes_region_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_xfixes_intersect_region_checked(conn.get(), reg1, reg2, res);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_intersect_region");
-            res = 0;
+            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
+
+            auto cookie = xcb_xfixes_intersect_region_checked(ptr.get(), reg1, reg2, res);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_intersect_region");
+                res = 0;
+            }
+
+            Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+            return std::make_unique<FixesRegionId>(conn, res);
         }
 
-        Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
-        return std::make_unique<FixesRegionId>(conn, res);
+        return nullptr;
     }
 
     XCB::FixesRegionIdPtr XCB::ModuleFixes::unionRegions(const xcb_xfixes_region_t & reg1, xcb_xfixes_region_t & reg2) const
     {
-        xcb_xfixes_region_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_xfixes_union_region_checked(conn.get(), reg1, reg2, res);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_union_region");
-            res = 0;
+            xcb_xfixes_region_t res = xcb_generate_id(ptr.get());
+
+            auto cookie = xcb_xfixes_union_region_checked(ptr.get(), reg1, reg2, res);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_union_region");
+                res = 0;
+            }
+
+            Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+            return std::make_unique<FixesRegionId>(conn, res);
         }
 
-        Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
-        return std::make_unique<FixesRegionId>(conn, res);
+        return nullptr;
     }
 
     xcb_rectangle_t XCB::ModuleFixes::fetchRegion(const xcb_xfixes_region_t & reg) const
     {
-        auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, conn.get(), reg);
-
-        if(auto err = xcbReply.error())
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
-        }
+            auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, ptr.get(), reg);
 
-        if(auto reply = xcbReply.reply())
-        {
-            auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
-            int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
-
-            if(rects && 0 < count)
+            if(const auto & err = xcbReply.error())
             {
-                return rects[0];
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
+            }
+
+            if(const auto & reply = xcbReply.reply())
+            {
+                auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
+                int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
+
+                if(rects && 0 < count)
+                {
+                    return rects[0];
+                }
             }
         }
 
-        return xcb_rectangle_t{ 0, 0, 0, 0};
+        return xcb_rectangle_t{0, 0, 0, 0};
     }
 
     std::vector<xcb_rectangle_t> XCB::ModuleFixes::fetchRegions(const xcb_xfixes_region_t & reg) const
     {
-        std::vector<xcb_rectangle_t> res;
-        auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, conn.get(), reg);
-
-        if(auto err = xcbReply.error())
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
-        }
+            auto xcbReply = getReplyFunc2(xcb_xfixes_fetch_region, ptr.get(), reg);
 
-        if(auto reply = xcbReply.reply())
-        {
-            auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
-            int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
-
-            if(rects && 0 < count)
+            if(const auto & err = xcbReply.error())
             {
-                res.assign(rects, rects + count);
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_fetch_region");
+            }
+
+            if(const auto & reply = xcbReply.reply())
+            {
+                auto rects = xcb_xfixes_fetch_region_rectangles(reply.get());
+                int count = xcb_xfixes_fetch_region_rectangles_length(reply.get());
+
+                if(rects && 0 < count)
+                {
+                    return std::vector<xcb_rectangle_t>(rects, rects + count);
+                }
             }
         }
 
-        return res;
+        return {};
     }
 
     XCB::CursorImage XCB::ModuleFixes::getCursorImage(void) const
     {
-        auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_image, conn.get());
-
-        if(auto err = xcbReply.error())
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_image");
+            auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_image, ptr.get());
+
+            if(const auto & err = xcbReply.error())
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_image");
+            }
+
+            return xcbReply;
         }
 
-        return xcbReply;
+        return ReplyCursor{nullptr, nullptr};
     }
 
     std::string XCB::ModuleFixes::getCursorName(const xcb_cursor_t & cur) const
     {
-        auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_name, conn.get(), cur);
-
-        if(auto err = xcbReply.error())
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_name");
-        }
+            auto xcbReply = getReplyFunc2(xcb_xfixes_get_cursor_name, ptr.get(), cur);
 
-        if(auto reply = xcbReply.reply())
-        {
-            auto ptr = xcb_xfixes_get_cursor_name_name(reply.get());
-            int len = xcb_xfixes_get_cursor_name_name_length(reply.get());
-
-            if(ptr && 0 < len)
+            if(const auto & err = xcbReply.error())
             {
-                return std::string(ptr, ptr + len);
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_get_cursor_name");
+            }
+
+            if(const auto & reply = xcbReply.reply())
+            {
+                auto ptr = xcb_xfixes_get_cursor_name_name(reply.get());
+                int len = xcb_xfixes_get_cursor_name_name_length(reply.get());
+
+                if(ptr && 0 < len)
+                {
+                    return std::string(ptr, ptr + len);
+                }
             }
         }
 
@@ -664,24 +727,24 @@ namespace LTSM
     }
 
     // XCB::ModuleTest
-    XCB::ModuleTest::ModuleTest(ConnectionShared ptr) : ModuleExtension(ptr, Module::TEST)
+    XCB::ModuleTest::ModuleTest(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::TEST)
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_test_id);
+        ext = xcb_get_extension_data(ptr.get(), & xcb_test_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_test_get_version, conn.get(), XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
+        auto xcbReply = getReplyFunc2(xcb_test_get_version, ptr.get(), XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_test_query_version");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_test_query_version");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "TEST", reply->major_version, reply->minor_version);
         }
@@ -691,44 +754,52 @@ namespace LTSM
     /// @param detail: keycode or left 1, middle 2, right 3, scrollup 4, scrolldw 5
     bool XCB::ModuleTest::fakeInputRaw(xcb_window_t win, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const
     {
-        auto cookie = xcb_test_fake_input_checked(conn.get(), type, detail, XCB_CURRENT_TIME, win, posx, posy, 0);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto ptr = conn.lock())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_test_fake_input");
-            return false;
+            auto cookie = xcb_test_fake_input_checked(ptr.get(), type, detail, XCB_CURRENT_TIME, win, posx, posy, 0);
+
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_test_fake_input");
+                return false;
+            }
+
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     void XCB::ModuleTest::fakeInputClickButton(xcb_window_t win, uint8_t button, const Point & pos) const
     {
-        xcb_test_fake_input(conn.get(), XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
-        xcb_test_fake_input(conn.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
+        if(auto ptr = conn.lock())
+        {
+            xcb_test_fake_input(ptr.get(), XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
+            xcb_test_fake_input(ptr.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
 
-        xcb_flush(conn.get());
+            xcb_flush(ptr.get());
+        }
     }
 
     // XCB::ModuleRandr
-    XCB::ModuleRandr::ModuleRandr(ConnectionShared ptr) : ModuleExtension(ptr, Module::RANDR)
+    XCB::ModuleRandr::ModuleRandr(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::RANDR)
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_randr_id);
+        ext = xcb_get_extension_data(ptr.get(), & xcb_randr_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_query_version, conn.get(), XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
+        auto xcbReply = getReplyFunc2(xcb_randr_query_version, ptr.get(), XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_query_version");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_query_version");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "RANDR", reply->major_version, reply->minor_version);
         }
@@ -736,15 +807,22 @@ namespace LTSM
 
     std::vector<xcb_randr_output_t> XCB::ModuleRandr::getOutputs(const xcb_screen_t & screen) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, conn.get(), screen.root);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             xcb_randr_output_t* ptr = xcb_randr_get_screen_resources_outputs(reply.get());
             int len = xcb_randr_get_screen_resources_outputs_length(reply.get());
@@ -756,15 +834,22 @@ namespace LTSM
 
     std::vector<xcb_randr_crtc_t> XCB::ModuleRandr::getCrtcs(const xcb_screen_t & screen) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, conn.get(), screen.root);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             xcb_randr_crtc_t* ptr = xcb_randr_get_screen_resources_crtcs(reply.get());
             int len = xcb_randr_get_screen_resources_crtcs_length(reply.get());
@@ -776,15 +861,22 @@ namespace LTSM
 
     std::unique_ptr<XCB::RandrCrtcInfo> XCB::ModuleRandr::getCrtcInfo(const xcb_randr_crtc_t & id) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, conn.get(), id, XCB_CURRENT_TIME);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return nullptr;
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, XCB_CURRENT_TIME);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            return nullptr;
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             auto res = std::make_unique<RandrCrtcInfo>();
 
@@ -805,15 +897,22 @@ namespace LTSM
 
     std::vector<xcb_randr_output_t> XCB::ModuleRandr::getCrtcOutputs(const xcb_randr_crtc_t & id, RandrCrtcInfo* info) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, conn.get(), id, XCB_CURRENT_TIME);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_crtc_info, ptr.get(), id, XCB_CURRENT_TIME);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_crtc_info");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             xcb_randr_output_t* ptr = xcb_randr_get_crtc_info_outputs(reply.get());
             int len = xcb_randr_get_crtc_info_outputs_length(reply.get());
@@ -838,15 +937,22 @@ namespace LTSM
 
     std::vector<xcb_randr_mode_info_t> XCB::ModuleRandr::getModesInfo(const xcb_screen_t & screen) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, conn.get(), screen.root);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_resources");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             xcb_randr_mode_info_t* ptr = xcb_randr_get_screen_resources_modes(reply.get());
             int len = xcb_randr_get_screen_resources_modes_length(reply.get());
@@ -858,15 +964,22 @@ namespace LTSM
 
     std::unique_ptr<XCB::RandrOutputInfo> XCB::ModuleRandr::getOutputInfo(const xcb_randr_output_t & id) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, conn.get(), id, XCB_CURRENT_TIME);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return nullptr;
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            return nullptr;
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             auto ptr = xcb_randr_get_output_info_name(reply.get());
             int len = xcb_randr_get_output_info_name_length(reply.get());
@@ -887,15 +1000,22 @@ namespace LTSM
 
     std::vector<xcb_randr_mode_t> XCB::ModuleRandr::getOutputModes(const xcb_randr_output_t & id, RandrOutputInfo* info) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, conn.get(), id, XCB_CURRENT_TIME);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             if(info)
             {
@@ -919,15 +1039,22 @@ namespace LTSM
 
     std::vector<xcb_randr_crtc_t> XCB::ModuleRandr::getOutputCrtcs(const xcb_randr_output_t & id, RandrOutputInfo* info) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, conn.get(), id, XCB_CURRENT_TIME);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_output_info, ptr.get(), id, XCB_CURRENT_TIME);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_output_info");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             if(info)
             {
@@ -951,15 +1078,22 @@ namespace LTSM
 
     std::unique_ptr<XCB::RandrScreenInfo> XCB::ModuleRandr::getScreenInfo(const xcb_screen_t & screen) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, conn.get(), screen.root);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return nullptr;
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen.root);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            return nullptr;
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             auto res = std::make_unique<XCB::RandrScreenInfo>();
 
@@ -976,15 +1110,22 @@ namespace LTSM
 
     std::vector<xcb_randr_screen_size_t> XCB::ModuleRandr::getScreenSizes(const xcb_screen_t & screen, RandrScreenInfo* info) const
     {
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, conn.get(), screen.root);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return {};
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen.root);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_get_screen_info");
+            return {};
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             xcb_randr_screen_size_t* ptr = xcb_randr_get_screen_info_sizes(reply.get());
             int len = xcb_randr_get_screen_info_sizes_length(reply.get());
@@ -1006,6 +1147,13 @@ namespace LTSM
 
     xcb_randr_mode_t XCB::ModuleRandr::cvtCreateMode(const xcb_screen_t & screen, const XCB::Size & sz, int vertRef) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return 0;
+        }
+
         auto cvt = "/usr/bin/cvt";
 
         std::error_code err;
@@ -1091,15 +1239,15 @@ namespace LTSM
 
         auto name = Tools::StringFormat("%1x%2_%3").arg(mode_info.width).arg(mode_info.height).arg(vertRef);
         mode_info.name_len = name.size();
-        auto xcbReply = getReplyFunc2(xcb_randr_create_mode, conn.get(), screen.root, mode_info, name.size(), name.data());
+        auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen.root, mode_info, name.size(), name.data());
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_create_mode");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_create_mode");
             return 0;
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("%s: id: %08" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
@@ -1110,11 +1258,18 @@ namespace LTSM
 
     bool XCB::ModuleRandr::destroyMode(const xcb_randr_mode_t & mode) const
     {
-        auto cookie = xcb_randr_destroy_mode_checked(conn.get(), mode);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_destroy_mode");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
+        auto cookie = xcb_randr_destroy_mode_checked(ptr.get(), mode);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_destroy_mode");
             return false;
         }
 
@@ -1124,6 +1279,13 @@ namespace LTSM
 
     bool XCB::ModuleRandr::addOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t & mode) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         auto modes = getOutputModes(output);
 
         // mode present
@@ -1132,11 +1294,11 @@ namespace LTSM
             return true;
         }
 
-        auto cookie = xcb_randr_add_output_mode_checked(conn.get(), output, mode);
+        auto cookie = xcb_randr_add_output_mode_checked(ptr.get(), output, mode);
 
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_add_output_mode");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_add_output_mode");
             return false;
         }
 
@@ -1146,6 +1308,13 @@ namespace LTSM
 
     bool XCB::ModuleRandr::deleteOutputMode(const xcb_randr_output_t & output, const xcb_randr_mode_t & mode) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         auto modes = getOutputModes(output);
 
         // mode not found
@@ -1154,11 +1323,11 @@ namespace LTSM
             return true;
         }
 
-        auto cookie = xcb_randr_delete_output_mode_checked(conn.get(), output, mode);
+        auto cookie = xcb_randr_delete_output_mode_checked(ptr.get(), output, mode);
 
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_delete_output_mode");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_delete_output_mode");
             return false;
         }
 
@@ -1168,6 +1337,13 @@ namespace LTSM
 
     bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_screen_t & screen, const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         if(auto info = getScreenInfo(screen))
         {
             // check output mode present
@@ -1182,12 +1358,12 @@ namespace LTSM
                 }
             }
 
-            auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, conn.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
+            auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
                                            posx, posy, mode, XCB_RANDR_ROTATION_ROTATE_0, outputs.size(), outputs.data() );
 
-            if( auto err = xcbReply.error() )
+            if( const auto & err = xcbReply.error() )
             {
-                error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
                 return false;
             }
         }
@@ -1197,14 +1373,21 @@ namespace LTSM
 
     bool XCB::ModuleRandr::crtcDisconnect(const xcb_screen_t & screen, const xcb_randr_crtc_t & crtc) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         if(auto info = getScreenInfo(screen))
         {
-            auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, conn.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
+            auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
                                            0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr );
 
-            if( auto err = xcbReply.error() )
+            if( const auto & err = xcbReply.error() )
             {
-                error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_crtc_config");
                 return false;
             }
 
@@ -1216,6 +1399,13 @@ namespace LTSM
 
     bool XCB::ModuleRandr::setScreenSize(const xcb_screen_t & screen, uint16_t width, uint16_t height, uint16_t dpi) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         // align size
         if( auto alignW = width % 8 )
         {
@@ -1227,11 +1417,11 @@ namespace LTSM
         uint32_t mm_width = width * 25.4 / dpi;
         uint32_t mm_height = height * 25.4 / dpi;
 
-        auto cookie = xcb_randr_set_screen_size_checked(conn.get(), screen.root, width, height, mm_width, mm_height);
+        auto cookie = xcb_randr_set_screen_size_checked(ptr.get(), screen.root, width, height, mm_width, mm_height);
 
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
-            error(conn.get(), err.get(), __FUNCTION__, " xcb_randr_set_screen_size");
+            error(ptr.get(), err.get(), __FUNCTION__, " xcb_randr_set_screen_size");
             return false;
         }
 
@@ -1240,6 +1430,13 @@ namespace LTSM
 
     bool XCB::ModuleRandr::setScreenSizeCompat(const xcb_screen_t & screen, XCB::Size sz, uint16_t* sequence) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         // align size
         if(auto alignW = sz.width % 8)
         {
@@ -1316,19 +1513,19 @@ namespace LTSM
 
         if(auto screenInfo = getScreenInfo(screen))
         {
-            auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, conn.get(), screen.root, screenInfo->timestamp,
+            auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, ptr.get(), screen.root, screenInfo->timestamp,
                                            screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
-            if(auto err = xcbReply2.error())
+            if(const auto & err = xcbReply2.error())
             {
                 Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
                                   __FUNCTION__, sz.width, sz.height, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
 
-                error(conn.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;
             }
 
-            if(auto reply = xcbReply2.reply())
+            if(const auto & reply = xcbReply2.reply())
             {
                 if(sequence)
                 {
@@ -1345,24 +1542,24 @@ namespace LTSM
     }
 
     // XCB::ModuleShm
-    XCB::ModuleShm::ModuleShm(ConnectionShared ptr) : ModuleExtension(ptr, Module::SHM)
+    XCB::ModuleShm::ModuleShm(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::SHM)
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_shm_id);
+        ext = xcb_get_extension_data(ptr.get(), & xcb_shm_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_shm_query_version, conn.get());
+        auto xcbReply = getReplyFunc2(xcb_shm_query_version, ptr.get());
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_shm_query_version");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_shm_query_version");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "SHM", reply->major_version, reply->minor_version);
         }
@@ -1375,9 +1572,10 @@ namespace LTSM
 
     void XCB::ShmId::reset(void)
     {
-        if(0 < id && conn)
+        if(0 < id)
         {
-            xcb_shm_detach(conn.get(), id);
+            if(auto ptr = conn.lock())
+                xcb_shm_detach(ptr.get(), id);
         }
 
         if(addr)
@@ -1443,13 +1641,20 @@ namespace LTSM
             }
         }
 
-        xcb_shm_seg_t res = xcb_generate_id(conn.get());
-
-        auto cookie = xcb_shm_attach_checked(conn.get(), res, shmId, 0);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_shm_attach");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return nullptr;
+        }
+
+        xcb_shm_seg_t res = xcb_generate_id(ptr.get());
+
+        auto cookie = xcb_shm_attach_checked(ptr.get(), res, shmId, 0);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_shm_attach");
             return nullptr;
         }
 
@@ -1458,30 +1663,30 @@ namespace LTSM
     }
 
     // XCB::ModuleXkb
-    XCB::ModuleXkb::ModuleXkb(ConnectionShared ptr) : ModuleExtension(ptr, Module::XKB),
+    XCB::ModuleXkb::ModuleXkb(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::XKB),
         ctx { nullptr, xkb_context_unref }, map { nullptr, xkb_keymap_unref }, state { nullptr, xkb_state_unref }
     {
-        ext = xcb_get_extension_data(conn.get(), & xcb_xkb_id);
+        ext = xcb_get_extension_data(ptr.get(), & xcb_xkb_id);
 
         if(! ext || ! ext->present)
         {
             throw xcb_error(NS_FuncName);
         }
 
-        auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
+        auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, ptr.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_use_extension");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_use_extension");
             throw xcb_error(NS_FuncName);
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "XKB", reply->serverMajor, reply->serverMinor);
         }
 
-        devid = xkb_x11_get_core_keyboard_device_id(conn.get());
+        devid = xkb_x11_get_core_keyboard_device_id(ptr.get());
 
         if(0 > devid)
         {
@@ -1509,12 +1714,19 @@ namespace LTSM
         state.reset();
         map.reset();
 
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         // set new
-        map.reset(xkb_x11_keymap_new_from_device(ctx.get(), conn.get(), devid, XKB_KEYMAP_COMPILE_NO_FLAGS));
+        map.reset(xkb_x11_keymap_new_from_device(ctx.get(), ptr.get(), devid, XKB_KEYMAP_COMPILE_NO_FLAGS));
 
         if(map)
         {
-            state.reset(xkb_x11_state_new_from_device(map.get(), conn.get(), devid));
+            state.reset(xkb_x11_state_new_from_device(map.get(), ptr.get(), devid));
 
             if(! state)
             {
@@ -1532,18 +1744,25 @@ namespace LTSM
 
     std::vector<std::string> XCB::ModuleXkb::getNames(void) const
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return {};
+        }
+
         std::vector<std::string> res;
         res.reserve(4);
 
-        auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
+        auto xcbReply = getReplyFunc2(xcb_xkb_get_names, ptr.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
             return res;
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             const void* buffer = xcb_xkb_get_names_value_list(reply.get());
             xcb_xkb_get_names_value_list_t list;
@@ -1555,7 +1774,7 @@ namespace LTSM
 
             for(int ii = 0; ii < groups; ++ii)
             {
-                res.emplace_back(Atom::getName(conn.get(), list.groups[ii]));
+                res.emplace_back(Atom::getName(ptr.get(), list.groups[ii]));
             }
         }
 
@@ -1564,15 +1783,22 @@ namespace LTSM
 
     int XCB::ModuleXkb::getLayoutGroup(void) const
     {
-        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return -1;
         }
 
-        if(auto reply = xcbReply.reply())
+        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, ptr.get(), XCB_XKB_ID_USE_CORE_KBD);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_get_names");
+            return -1;
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             return reply->group;
         }
@@ -1595,11 +1821,18 @@ namespace LTSM
             group = (getLayoutGroup() + 1) % names.size();
         }
 
-        auto cookie = xcb_xkb_latch_lock_state_checked(conn.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_xkb_latch_lock_state");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
+        auto cookie = xcb_xkb_latch_lock_state_checked(ptr.get(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, 1, group, 0, 0, 0);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_latch_lock_state");
             return false;
         }
 
@@ -1607,19 +1840,19 @@ namespace LTSM
     }
 
     // ModuleSelection
-    XCB::ModuleSelection::ModuleSelection(ConnectionShared ptr, const xcb_screen_t & screen, xcb_atom_t atom)
+    XCB::ModuleSelection::ModuleSelection(const ConnectionShared & ptr, const xcb_screen_t & screen, xcb_atom_t atom)
         : ModuleExtension(ptr, Module::SELECTION), atombuf(atom)
     {
         const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
         const uint32_t values[] = { screen.white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE };
 
-        win = xcb_generate_id(conn.get());
-        auto cookie = xcb_create_window_checked(conn.get(), 0, win, screen.root, -1, -1, 1, 1, 0,
+        win = xcb_generate_id(ptr.get());
+        auto cookie = xcb_create_window_checked(ptr.get(), 0, win, screen.root, -1, -1, 1, 1, 0,
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
 
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_create_window");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1627,15 +1860,15 @@ namespace LTSM
 
         // set _wm_name
         const std::string name("LTSM_WINSEL");
-        xcb_change_property(conn.get(), XCB_PROP_MODE_REPLACE, win,
+        xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, win,
                             Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
     }
 
     XCB::ModuleSelection::~ModuleSelection()
     {
-        if(win != XCB_WINDOW_NONE)
+        if(auto ptr = conn.lock(); win != XCB_WINDOW_NONE && ptr)
         {
-            xcb_destroy_window(conn.get(), win);
+            xcb_destroy_window(ptr.get(), win);
         }
     }
 
@@ -1653,47 +1886,61 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::ModuleSelection::setBuffer(const uint8_t* ptr, size_t len, std::initializer_list<xcb_atom_t> atoms)
+    bool XCB::ModuleSelection::setBuffer(const uint8_t* src, size_t len, std::initializer_list<xcb_atom_t> atoms)
     {
         const std::scoped_lock guard{ lock };
-        buf.assign(ptr, ptr + len);
+        buf.assign(src, src + len);
 
         if(buf.empty())
         {
             return false;
         }
 
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         for(auto atom: atoms)
         {
             // take owner
-            auto xcbReply = getReplyFunc2(xcb_get_selection_owner, conn.get(), atom);
+            auto xcbReply = getReplyFunc2(xcb_get_selection_owner, ptr.get(), atom);
 
-            if(auto err = xcbReply.error())
+            if(const auto & err = xcbReply.error())
             {
-                error(conn.get(), err.get(), __FUNCTION__, "xcb_get_selection_owner");
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_selection_owner");
             }
-            else if(auto reply = xcbReply.reply())
+            else if(const auto & reply = xcbReply.reply())
             {
                 if(reply->owner != win)
                 {
-                    xcb_set_selection_owner(conn.get(), win, atom, XCB_CURRENT_TIME);
+                    xcb_set_selection_owner(ptr.get(), win, atom, XCB_CURRENT_TIME);
                 }
             }
         }
 
-        xcb_flush(conn.get());
+        xcb_flush(ptr.get());
         return true;
     }
 
     bool XCB::ModuleSelection::sendNotifyTargets(const xcb_selection_request_event_t & ev)
     {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         // send list: Atom::targets, Atom::text, Atom::textPlain, Atom::utf8String
-        auto cookie = xcb_change_property_checked(conn.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
+        auto cookie = xcb_change_property_checked(ptr.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
                       XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & Atom::targets);
 
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_change_property");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_change_property");
             return false;
         }
 
@@ -1709,8 +1956,8 @@ namespace LTSM
             .property = ev.property
         };
 
-        xcb_send_event(conn.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-        xcb_flush(conn.get());
+        xcb_send_event(ptr.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(ptr.get());
 
         return true;
     }
@@ -1724,14 +1971,21 @@ namespace LTSM
             return false;
         }
 
-        size_t length = buf.size();
-        size_t maxreq = xcb_get_maximum_request_length(conn.get());
-        auto chunk = std::min(maxreq, length);
-        auto cookie = xcb_change_property_checked(conn.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, buf.data());
-
-        if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_change_property");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
+        size_t length = buf.size();
+        size_t maxreq = xcb_get_maximum_request_length(ptr.get());
+        auto chunk = std::min(maxreq, length);
+        auto cookie = xcb_change_property_checked(ptr.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, buf.data());
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_change_property");
             return false;
         }
 
@@ -1747,12 +2001,12 @@ namespace LTSM
             .property = ev.property
         };
 
-        xcb_send_event(conn.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-        xcb_flush(conn.get());
+        xcb_send_event(ptr.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(ptr.get());
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto prop = Atom::getName(conn.get(), ev.property);
+            auto prop = Atom::getName(ptr.get(), ev.property);
             std::string log(buf.begin(), buf.end());
             Application::debug("%s: put selection, size: %u, content: `%s', to window: 0x%08" PRIx32 ", property: `%s'",
                                __FUNCTION__, buf.size(), log.c_str(), ev.requestor, prop.c_str());
@@ -1765,6 +2019,13 @@ namespace LTSM
     {
         if(! ev)
         {
+            return false;
+        }
+
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return false;
         }
 
@@ -1794,14 +2055,14 @@ namespace LTSM
             .property = XCB_ATOM_NONE
         };
 
-        xcb_send_event(conn.get(), 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-        xcb_flush(conn.get());
+        xcb_send_event(ptr.get(), 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
+        xcb_flush(ptr.get());
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
-            auto sel = Atom::getName(conn.get(), ev->selection);
-            auto tgt = Atom::getName(conn.get(), ev->target);
-            auto prop = Atom::getName(conn.get(), ev->property);
+            auto sel = Atom::getName(ptr.get(), ev->selection);
+            auto tgt = Atom::getName(ptr.get(), ev->target);
+            auto prop = Atom::getName(ptr.get(), ev->property);
             Application::warning("%s: discard, selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), window: 0x%08" PRIx32,
                                  __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
         }
@@ -1816,11 +2077,18 @@ namespace LTSM
             return false;
         }
 
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         if(ev->owner != XCB_WINDOW_NONE && ev->owner != win)
         {
-            xcb_delete_property(conn.get(), win, atombuf);
-            xcb_convert_selection(conn.get(), win, Atom::primary, Atom::utf8String, atombuf, XCB_CURRENT_TIME);
-            xcb_flush(conn.get());
+            xcb_delete_property(ptr.get(), win, atombuf);
+            xcb_convert_selection(ptr.get(), win, Atom::primary, Atom::utf8String, atombuf, XCB_CURRENT_TIME);
+            xcb_flush(ptr.get());
 
             return true;
         }
@@ -1837,21 +2105,28 @@ namespace LTSM
             return;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, Atom::incr, XCB_ATOM_INTEGER, 0, 1);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, Atom::incr, XCB_ATOM_INTEGER, 0, 1);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
             return;
         }
 
         int selsize = 0;
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
             {
-                auto name = Atom::getName(conn.get(), reply->type);
+                auto name = Atom::getName(ptr.get(), reply->type);
                 Application::warning("%s: unknown type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, reply->type, name.c_str());
             }
             else if(reply->format != 32)
@@ -1877,7 +2152,7 @@ namespace LTSM
             buf.reserve(selsize);
 
             // start incremental
-            xcb_delete_property_checked(conn.get(), win, Atom::incr);
+            xcb_delete_property_checked(ptr.get(), win, Atom::incr);
         }
         else
         {
@@ -1892,16 +2167,23 @@ namespace LTSM
             return false;
         }
 
-        // get data
-        auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, atombuf, type, 0, ~0);
-
-        if(auto err = xcbReply.error())
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
             return false;
         }
 
-        if(auto reply = xcbReply.reply())
+        // get data
+        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, atombuf, type, 0, ~0);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            return false;
+        }
+
+        if(const auto & reply = xcbReply.reply())
         {
             bool ret = false;
             auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
@@ -1931,7 +2213,7 @@ namespace LTSM
             }
 
             // continue
-            xcb_delete_property_checked(conn.get(), win, atombuf);
+            xcb_delete_property_checked(ptr.get(), win, atombuf);
 
             return ret;
         }
@@ -1952,12 +2234,19 @@ namespace LTSM
             return false;
         }
 
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return false;
+        }
+
         bool allowAtom = ev->selection == Atom::primary ||
                          (ev->selection == Atom::clipboard && syncPrimaryClipboard);
 
         if(! allowAtom)
         {
-            auto name = Atom::getName(conn.get(), ev->selection);
+            auto name = Atom::getName(ptr.get(), ev->selection);
             Application::warning("%s: skip selection, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, ev->selection, name.c_str());
             return false;
         }
@@ -1968,8 +2257,8 @@ namespace LTSM
         }
 
         Application::debug("%s: requestor: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), timestamp: %" PRIu32,
-                           __FUNCTION__, ev->requestor, ev->selection, Atom::getName(conn.get(), ev->selection).c_str(),
-                           ev->target, Atom::getName(conn.get(), ev->target).c_str(), ev->property, Atom::getName(conn.get(), ev->property).c_str(), ev->time);
+                           __FUNCTION__, ev->requestor, ev->selection, Atom::getName(ptr.get(), ev->selection).c_str(),
+                           ev->target, Atom::getName(ptr.get(), ev->target).c_str(), ev->property, Atom::getName(ptr.get(), ev->property).c_str(), ev->time);
 
         // incr mode
         if(Atom::incr == buftype)
@@ -1980,7 +2269,7 @@ namespace LTSM
 
         if(buftype != Atom::utf8String && buftype != Atom::text && buftype != Atom::textPlain)
         {
-            auto name = Atom::getName(conn.get(), buftype);
+            auto name = Atom::getName(ptr.get(), buftype);
             Application::warning("%s: unsupported type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, buftype, name.c_str());
 
             if(incr)
@@ -1998,15 +2287,15 @@ namespace LTSM
         }
 
         // get data
-        auto xcbReply = getReplyFunc2(xcb_get_property, conn.get(), false, win, atombuf, buftype, 0, ~0);
+        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, atombuf, buftype, 0, ~0);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
-            error(conn.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
             return false;
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             bool ret = false;
             auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
@@ -2028,11 +2317,11 @@ namespace LTSM
                 }
             }
 
-            auto cookie = xcb_delete_property_checked(conn.get(), win, atombuf);
+            auto cookie = xcb_delete_property_checked(ptr.get(), win, atombuf);
 
-            if(auto err = GenericError(xcb_request_check(conn.get(), cookie)))
+            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
             {
-                error(conn.get(), err.get(), __FUNCTION__, "xcb_delete_property");
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_delete_property");
             }
 
             return ret;
@@ -2096,6 +2385,22 @@ namespace LTSM
         }
     }
 
+    const char* XCB::Connector::errorString(int err)
+    {
+        switch(err)
+        {
+            case XCB_CONN_ERROR: return "XCB_CONN_ERROR";
+            case XCB_CONN_CLOSED_EXT_NOTSUPPORTED: return "XCB_CONN_CLOSED_EXT_NOTSUPPORTED";
+            case XCB_CONN_CLOSED_MEM_INSUFFICIENT: return "XCB_CONN_CLOSED_MEM_INSUFFICIENT";
+            case XCB_CONN_CLOSED_REQ_LEN_EXCEED: return "XCB_CONN_CLOSED_REQ_LEN_EXCEED";
+            case XCB_CONN_CLOSED_PARSE_ERR: return "XCB_CONN_CLOSED_PARSE_ERR";
+            case XCB_CONN_CLOSED_INVALID_SCREEN: return "XCB_CONN_CLOSED_INVALID_SCREEN";
+            default: break;
+        }
+
+        return "XCB_CONN_UNKNOWN";
+    }
+
     bool XCB::Connector::displayConnect(int displayNum, const AuthCookie* cookie)
     {
         auto displayAddr = getLocalAddr(displayNum);
@@ -2109,16 +2414,19 @@ namespace LTSM
             auth.data = (char*) cookie->data();
             auth.datalen = cookie->size();
 
-            _conn = ConnectionShared(xcb_connect_to_display_with_auth_info(displayAddr.c_str(), & auth, nullptr));
+            auto ptr = xcb_connect_to_display_with_auth_info(displayAddr.c_str(), & auth, nullptr);
+            _conn.reset(ptr, xcb_disconnect);
         }
         else
         {
-            _conn = ConnectionShared(xcb_connect(displayAddr.c_str(), nullptr));
+            auto ptr = xcb_connect(displayAddr.c_str(), nullptr);
+            _conn.reset(ptr, xcb_disconnect);
         }
 
-        if(xcb_connection_has_error(_conn.get()))
+        if(int err = xcb_connection_has_error(_conn.get()))
         {
-            Application::error("%s: %s failed, addr: %s", __FUNCTION__, "xcb_connect", displayAddr.c_str());
+            Application::error("%s: %s failed, addr: `%s', error: `%s'",
+                __FUNCTION__, "xcb_connect", displayAddr.c_str(), Connector::errorString(err));
             return false;
         }
 
@@ -2197,7 +2505,7 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn.get(), create ? 0 : 1, name.size(), name.data());
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_intern_atom");
             return XCB_ATOM_NONE;
@@ -2254,11 +2562,11 @@ namespace LTSM
 
         auto xcbReply = getReplyFunc2(xcb_query_tree, _conn.get(), win);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_query_tree");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             xcb_window_t* ptr = xcb_query_tree_children(reply.get());
             int len = xcb_query_tree_children_length(reply.get());
@@ -2287,11 +2595,11 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_list_properties, _conn.get(), win);
         std::list<xcb_atom_t> res;
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_list_properties");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             auto beg = xcb_list_properties_atoms(reply.get());
             auto end = beg + xcb_list_properties_atoms_length(reply.get());
@@ -2309,12 +2617,12 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_GET_PROPERTY_TYPE_ANY, 0, 0);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
 
-        return xcbReply.reply();
+        return XCB::PropertyReply(std::move(xcbReply.first));
     }
 
     xcb_atom_t XCB::Connector::getPropertyType(xcb_window_t win, xcb_atom_t prop) const
@@ -2327,11 +2635,11 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_ATOM, offset, 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_ATOM)
             {
@@ -2353,11 +2661,11 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_ATOM, 0, ~0);
         std::list<xcb_atom_t> res;
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_ATOM)
             {
@@ -2384,11 +2692,11 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_WINDOW, offset, 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_WINDOW)
             {
@@ -2410,11 +2718,11 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_WINDOW, 0, ~0);
         std::list<xcb_window_t> res;
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_WINDOW)
             {
@@ -2441,11 +2749,11 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_CARDINAL, offset, 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_CARDINAL)
             {
@@ -2475,11 +2783,11 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_CARDINAL, 0, ~0);
         std::list<uint32_t> res;
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_CARDINAL)
             {
@@ -2511,11 +2819,11 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_INTEGER, offset, 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
             {
@@ -2566,11 +2874,11 @@ namespace LTSM
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, XCB_ATOM_INTEGER, 0, ~0);
         std::list<int> res;
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             if(reply->type != XCB_ATOM_INTEGER)
             {
@@ -2647,11 +2955,11 @@ namespace LTSM
 
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             auto ptr = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto len = xcb_get_property_value_length(reply.get());
@@ -2685,11 +2993,11 @@ namespace LTSM
 
         auto xcbReply = getReplyFunc2(xcb_get_property, _conn.get(), false, win, prop, type, 0, ~0);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_property");
         }
-        else if(auto reply = xcbReply.reply())
+        else if(const auto & reply = xcbReply.reply())
         {
             auto beg = static_cast<const char*>(xcb_get_property_value(reply.get()));
             auto end = beg + xcb_get_property_value_length(reply.get());
@@ -2836,7 +3144,7 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_geometry, _conn.get(), _screen->root);
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             std::unique_lock guard{ _lockGeometry };
             _screen->width_in_pixels = reply->width;
@@ -2860,6 +3168,11 @@ namespace LTSM
         }
 
         return false;
+    }
+
+    void XCB::RootDisplay::damageDisable(void)
+    {
+        _damage.reset();
     }
 
     const XCB::ModuleExtension* XCB::RootDisplay::getExtension(const Module & mod) const
@@ -3135,18 +3448,18 @@ namespace LTSM
                                           planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, shm->id, 0);
             PixmapInfoReply res;
 
-            if(auto reply = xcbReply.reply())
+            if(const auto & reply = xcbReply.reply())
             {
                 auto visptr = visual(reply->visual);
                 auto bpp = bppFromDepth(reply->depth);
 
                 if(visptr)
                 {
-                    return std::make_shared<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, std::move(shm), reply->size);
+                    return std::make_unique<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, std::move(shm), reply->size);
                 }
             }
 
-            if(auto err = xcbReply.error())
+            if(const auto & err = xcbReply.error())
             {
                 extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
             }
@@ -3178,13 +3491,13 @@ namespace LTSM
 
             auto xcbReply = getReplyFunc2(xcb_get_image, _conn.get(), XCB_IMAGE_FORMAT_Z_PIXMAP, _screen->root, reg.x, yy, reg.width, allowRows, planeMask);
 
-            if(auto err = xcbReply.error())
+            if(const auto & err = xcbReply.error())
             {
                 extendedError(err.get(), __FUNCTION__, "xcb_get_image");
                 break;
             }
 
-            if(auto reply = xcbReply.reply())
+            if(const auto & reply = xcbReply.reply())
             {
                 if(! res)
                 {
@@ -3197,7 +3510,7 @@ namespace LTSM
                         break;
                     }
 
-                    res.reset(new PixmapBuffer(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height* pitch));
+                    res = std::make_unique<PixmapBuffer>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height* pitch);
                 }
 
                 auto info = static_cast<PixmapBuffer*>(res.get());
@@ -3411,13 +3724,13 @@ namespace LTSM
         auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _minKeycode, _maxKeycode - _minKeycode + 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
             return empty;
         }
 
-        auto reply = xcbReply.reply();
+        const auto & reply = xcbReply.reply();
 
         if(! reply)
         {
@@ -3482,13 +3795,13 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _minKeycode, _maxKeycode - _minKeycode + 1);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
             return NULL_KEYCODE;
         }
 
-        auto reply = xcbReply.reply();
+        const auto & reply = xcbReply.reply();
 
         if(! reply)
         {
@@ -3726,7 +4039,7 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             const char* name = xcb_get_atom_name_name(reply.get());
             size_t len = xcb_get_atom_name_name_length(reply.get());
@@ -3740,12 +4053,12 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
 
-        if(auto err = xcbReply.error())
+        if(const auto & err = xcbReply.error())
         {
             throw xcb_error("xcb_xkb_get_names");
         }
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             return reply->group;
         }
@@ -3765,7 +4078,7 @@ namespace LTSM
         std::vector<std::string> res;
         res.reserve(4);
 
-        if(auto reply = xcbReply.reply())
+        if(const auto & reply = xcbReply.reply())
         {
             const void *buffer = xcb_xkb_get_names_value_list(reply.get());
             xcb_xkb_get_names_value_list_t list;
@@ -3787,7 +4100,7 @@ namespace LTSM
     {
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
 
-        auto reply = xcbReply.reply();
+        const auto & reply = xcbReply.reply();
 
         if(! reply)
         {
@@ -3830,7 +4143,7 @@ namespace LTSM
         auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
         auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
 
-        auto reply = xcbReply.reply();
+        const auto & reply = xcbReply.reply();
 
         if(! reply)
         {

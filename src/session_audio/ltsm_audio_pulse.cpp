@@ -86,6 +86,29 @@ namespace LTSM
             return 0;
         }
 
+        const char* sourceStateName(const pa_source_state_t & st)
+        {
+            switch(st)
+            {
+                case PA_SOURCE_INVALID_STATE:
+                    return "INVALID";
+
+                case PA_SOURCE_RUNNING:
+                    return "RUNNING";
+
+                case PA_SOURCE_IDLE:
+                    return "IDLE";
+
+                case PA_SOURCE_SUSPENDED:
+                    return "SUSPENDED";
+
+                default:
+                    break;
+            }
+
+            return "UNKNOWN";
+        }
+
         const char* streamStateName(const pa_stream_state_t & st)
         {
             switch(st)
@@ -174,6 +197,16 @@ namespace LTSM
             }
         }
 
+        void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData)
+        {
+            Application::debug("%s", __FUNCTION__);
+
+            if(auto pulseAudio = static_cast<BaseStream*>(userData))
+            {
+                pulseAudio->sourceInfoEvent(info, eol);
+            }
+        }
+
         // notify
         void PulseAudio::BaseStream::contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData)
         {
@@ -192,6 +225,26 @@ namespace LTSM
             if(auto pulseAudio = static_cast<BaseStream*>(userData))
             {
                 pulseAudio->contextDrainNotify();
+            }
+        }
+
+        void PulseAudio::BaseStream::contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData)
+        {
+            Application::debug("%s", __FUNCTION__);
+
+            if(auto pulseAudio = static_cast<BaseStream*>(userData))
+            {
+                pulseAudio->contextLoadModuleNotify(idx);
+            }
+        }
+
+        void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData)
+        {
+            Application::debug("%s", __FUNCTION__);
+
+            if(auto pulseAudio = static_cast<BaseStream*>(userData))
+            {
+                pulseAudio->contextSourceInfoNotify(info, eol);
             }
         }
 
@@ -410,6 +463,59 @@ namespace LTSM
         return true;
     }
 
+    void PulseAudio::BaseStream::contextLoadModuleNotify(uint32_t idx)
+    {
+        Application::debug("%s", __FUNCTION__);
+        waitNotify.notify(WaitOp::ContextLoadModule, reinterpret_cast<void*>(idx));
+    }
+
+    uint32_t PulseAudio::BaseStream::contextLoadModuleWait(std::string_view name, std::string_view args)
+    {
+        Application::debug("%s", __FUNCTION__);
+
+        if(auto op = pa_context_load_module(ctx.get(), name.data(), args.data(), & contextLoadModuleCallback, this))
+        {
+            auto ret = waitNotify.wait(WaitOp::ContextLoadModule);
+            pa_operation_unref(op);
+            return reinterpret_cast<uint64_t>(ret);
+        }
+
+        return PA_INVALID_INDEX;
+    }
+
+    void PulseAudio::BaseStream::contextSourceInfoNotify(const pa_source_info* info, int eol)
+    {
+        Application::debug("%s", __FUNCTION__);
+        waitNotify.notify(WaitOp::ContextSourceInfo, info);
+    }
+
+    bool PulseAudio::BaseStream::sourceInfo(std::string_view name)
+    {
+        Application::debug("%s", __FUNCTION__);
+
+        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.data(), & sourceInfoCallback, this))
+        {
+            pa_operation_unref(op);
+            return true;
+        }
+
+        return false;
+    }
+
+    const pa_source_info* PulseAudio::BaseStream::contextSourceInfoWait(std::string_view name)
+    {
+        Application::debug("%s", __FUNCTION__);
+
+        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.data(), & contextSourceInfoCallback, this))
+        {
+            auto ret = waitNotify.wait(WaitOp::ContextSourceInfo);
+            pa_operation_unref(op);
+            return (const pa_source_info*) ret;
+        }
+
+        return nullptr;
+    }
+
     void PulseAudio::BaseStream::contextServerInfoNotify(const pa_server_info* info)
     {
         Application::debug("%s", __FUNCTION__);
@@ -450,7 +556,7 @@ namespace LTSM
     void PulseAudio::BaseStream::streamCorkNotify(int success)
     {
         Application::debug("%s: success: %d", __FUNCTION__, success);
-        waitNotify.notify(WaitOp::StreamCork, success ? & success : nullptr);
+        waitNotify.notify(WaitOp::StreamCork, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamCorkWait(bool pause)
@@ -475,7 +581,7 @@ namespace LTSM
     void PulseAudio::BaseStream::streamTriggerNotify(int success)
     {
         Application::debug("%s: success: %d", __FUNCTION__, success);
-        waitNotify.notify(WaitOp::StreamTrigger, success ? & success : nullptr);
+        waitNotify.notify(WaitOp::StreamTrigger, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamTriggerWait(void)
@@ -495,7 +601,7 @@ namespace LTSM
     void PulseAudio::BaseStream::streamFlushNotify(int success)
     {
         Application::debug("%s: success: %d", __FUNCTION__, success);
-        waitNotify.notify(WaitOp::StreamFlush, success ? & success : nullptr);
+        waitNotify.notify(WaitOp::StreamFlush, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamFlushWait(void)
@@ -515,7 +621,7 @@ namespace LTSM
     void PulseAudio::BaseStream::streamDrainNotify(int success)
     {
         Application::debug("%s: success: %d", __FUNCTION__, success);
-        waitNotify.notify(WaitOp::StreamDrain, success ? & success : nullptr);
+        waitNotify.notify(WaitOp::StreamDrain, success ? this : nullptr);
     }
 
     bool PulseAudio::BaseStream::streamDrainWait(void)
@@ -544,6 +650,11 @@ namespace LTSM
         }
 
         contextState = state;
+    }
+
+    void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol)
+    {
+        // Application::info("%s: state: %s", __FUNCTION__, sourceStateName(state));
     }
 
     void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state)
@@ -917,6 +1028,7 @@ namespace LTSM
 
 #endif
 
+#ifdef LTSM_CLIENT
     // PulseAudio::Simple
     bool PulseAudio::Simple::streamFlush(void) const
     {
@@ -1034,4 +1146,5 @@ namespace LTSM
 
         return buf;
     }
+#endif
 }

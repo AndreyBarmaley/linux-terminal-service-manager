@@ -36,7 +36,7 @@
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_xcb_wrapper.h"
 
-#define LTSM_VNC2SDL_VERSION 20240304
+#define LTSM_VNC2SDL_VERSION 20250323
 
 namespace LTSM
 {
@@ -45,17 +45,6 @@ namespace LTSM
         std::vector<uint8_t> pixels;
         std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> surface { nullptr, SDL_FreeSurface };
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
-    };
-
-    struct SurfaceDeleter
-    {
-        void operator()(SDL_Surface* sf)
-        {
-            if(sf)
-            {
-                SDL_FreeSurface(sf);
-            }
-        }
     };
 
     class Vnc2SDL : public Application, public XCB::XkbClient,
@@ -75,17 +64,15 @@ namespace LTSM
         std::string passfile;
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<SDL_Surface, SurfaceDeleter> sfback;
+        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfback{nullptr, SDL_FreeSurface};
 
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
         XCB::Size windowSize;
         std::mutex renderLock;
 
-        std::chrono::time_point<std::chrono::steady_clock>
-        keyPress;
-        std::chrono::time_point<std::chrono::steady_clock>
-        dropStart;
+        std::chrono::time_point<std::chrono::steady_clock> keyPress;
+        std::chrono::time_point<std::chrono::steady_clock> dropStart;
 
         std::atomic<bool> focusLost{false};
         std::atomic<bool> needUpdate{false};
@@ -115,7 +102,7 @@ namespace LTSM
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) override;
+        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
         std::string clientEncoding(void) const override;

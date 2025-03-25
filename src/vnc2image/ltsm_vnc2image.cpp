@@ -119,7 +119,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         }
 
         return 0;
@@ -163,7 +163,7 @@ namespace LTSM
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &)
+    void Vnc2Image::updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &)
     {
         Application::warning("%s: not implemented", __FUNCTION__);
     }
@@ -185,7 +185,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

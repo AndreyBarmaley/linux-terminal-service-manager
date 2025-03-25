@@ -24,6 +24,9 @@
 #ifndef _LIBRFB_DECODINGS_
 #define _LIBRFB_DECODINGS_
 
+#include <list>
+#include <thread>
+
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
@@ -39,13 +42,14 @@ namespace LTSM
             int recvCPixel(void);
             size_t recvRunLength(void);
             size_t recvZlibData(ZLib::InflateStream*, bool uint16sz = false);
+            void recvRegionUpdatePixels(const XCB::Region &);
 
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
 
             virtual void setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
-            virtual void updateRawPixels(const void*, const XCB::Size &, uint16_t pitch, const PixelFormat &) = 0;
+            virtual void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual std::string clientEncoding(void) const
@@ -120,16 +124,16 @@ namespace LTSM
                 owner->fillPixel(rt, pixel);
             }
 
-            void updateRawPixels(const void* data, const XCB::Size & wsz, uint16_t pitch,
+            void updateRawPixels(const void* data, const XCB::Region & wrt, uint32_t pitch,
                                                     const PixelFormat & pf) override
             {
-                owner->updateRawPixels(data, wsz, pitch, pf);
+                owner->updateRawPixels(data, wrt, pitch, pf);
             }
 
             XCB::Size clientSize(void) const override
             {
                 return owner->clientSize();
-            };
+            }
 
             std::string clientEncoding(void) const override
             {
@@ -143,6 +147,7 @@ namespace LTSM
         protected:
             const int type = 0;
             int debug = 0;
+            int threads = 4;
 
         public:
             DecodingBase(int v);
@@ -150,9 +155,11 @@ namespace LTSM
 
             virtual void updateRegion(DecoderStream &, const XCB::Region &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
+            virtual void waitUpdateComplete(void) { /* empty */ }
 
             int getType(void) const;
             virtual void setDebug(int);
+            void setThreads(int);
         };
 
         /// DecodingRaw
@@ -227,6 +234,23 @@ namespace LTSM
 
             DecodingZlib();
         };
+
+#ifdef LTSM_DECODING
+
+        /// DecodingLZ4
+        class DecodingLZ4 : public DecodingBase
+        {
+            static const uint32_t fbBlockBytes = 64 * 1024;
+
+            std::list<std::thread> jobs;
+
+        public:
+            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void waitUpdateComplete(void) override;
+
+            DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
+        };
+#endif
     }
 }
 

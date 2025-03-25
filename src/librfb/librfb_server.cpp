@@ -66,7 +66,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -83,7 +83,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -100,7 +100,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -116,7 +116,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -134,7 +134,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -152,7 +152,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -355,6 +355,7 @@ namespace LTSM
             return false;
         }
 
+        socket->useStatistic(false);
         streamIn = streamOut = tls.get();
         return true;
     }
@@ -540,7 +541,7 @@ namespace LTSM
                     }
                     catch(const std::exception & err)
                     {
-                        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                     }
 
                     const std::string err("security kerberos failed");
@@ -664,12 +665,12 @@ namespace LTSM
                 }
                 catch(const std::runtime_error & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                     rfbMessagesShutdown();
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                 }
 
                 continue;
@@ -812,6 +813,7 @@ namespace LTSM
             switch(encoding)
             {
                 case RFB::ENCODING_LTSM:
+                case RFB::ENCODING_LTSM_LZ4:
                     clientLtsmSupported = true;
                     break;
 
@@ -1189,6 +1191,9 @@ namespace LTSM
             RFB::ENCODING_FFMPEG_AV1,
             RFB::ENCODING_FFMPEG_VP8,
 #endif
+#ifdef LTSM_ENCODING
+            RFB::ENCODING_LTSM_LZ4,
+#endif
             RFB::ENCODING_ZRLE, RFB::ENCODING_TRLE, RFB::ENCODING_ZLIB, RFB::ENCODING_HEXTILE,
             RFB::ENCODING_CORRE, RFB::ENCODING_RRE, RFB::ENCODING_RAW
         };
@@ -1264,6 +1269,12 @@ namespace LTSM
             case RFB::ENCODING_FFMPEG_VP8:
             case RFB::ENCODING_FFMPEG_AV1:
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
+                return true;
+#endif
+#ifdef LTSM_ENCODING
+
+            case RFB::ENCODING_LTSM_LZ4:
+                encoder = std::make_unique<EncodingLZ4>();
                 return true;
 #endif
 

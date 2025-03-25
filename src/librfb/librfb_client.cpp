@@ -60,7 +60,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -76,7 +76,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -92,7 +92,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -108,7 +108,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -126,7 +126,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -144,7 +144,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             const_cast<ClientDecoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -253,6 +253,7 @@ namespace LTSM
             return false;
         }
 
+        socket->useStatistic(false);
         streamIn = streamOut = tls.get();
         return true;
     }
@@ -290,7 +291,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         }
 
         const std::string err("security kerberos failed");
@@ -498,6 +499,9 @@ namespace LTSM
             ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
             ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
 
+#ifdef LTSM_DECODING
+            ENCODING_LTSM_LZ4,
+#endif
 #ifdef LTSM_DECODING_FFMPEG
             ENCODING_FFMPEG_H264,
             ENCODING_FFMPEG_AV1,
@@ -595,12 +599,12 @@ namespace LTSM
                 }
                 catch(const std::runtime_error & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                     rfbMessagesShutdown();
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
                 }
 
                 continue;
@@ -818,6 +822,12 @@ namespace LTSM
                 case ENCODING_ZLIB:
                     decoder = std::make_unique<DecodingZlib>();
                     break;
+#ifdef LTSM_DECODING
+
+                case ENCODING_LTSM_LZ4:
+                    decoder = std::make_unique<DecodingLZ4>();
+                    break;
+#endif
 #ifdef LTSM_DECODING_FFMPEG
 
                 case ENCODING_FFMPEG_H264:
@@ -886,6 +896,9 @@ namespace LTSM
                     break;
             }
         }
+
+        if(decoder)
+            decoder->waitUpdateComplete();
 
         auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
         Application::debug("%s: update time: %uus", __FUNCTION__, dt.count());

@@ -66,6 +66,7 @@ protected slots:
     void widgetTimezoneCallback(int, const QString &);
     void sessionChangedCallback(int);
     void shutdownConnectorCallback(int);
+    void pkcs11ListennerCallback(int, int);
     void setLabelError(const QString &);
     void setLabelInfo(const QString &);
     void reloadUsersList(void);
@@ -165,6 +166,7 @@ protected:
             const std::string & pass, const bool & autologin) override;
     void onHelperWidgetCentered(const int32_t & display) override;
     void onHelperWidgetTimezone(const int32_t & display, const std::string &) override;
+    void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override;
     void onSessionChanged(const int32_t & display) override;
     void onShutdownConnector(const int32_t & display) override;
 

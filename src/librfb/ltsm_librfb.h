@@ -122,6 +122,7 @@ namespace LTSM
         const int ENCODING_FFMPEG_H264 = 0x48464D50;
         const int ENCODING_FFMPEG_AV1 = 0x41563100;
         const int ENCODING_FFMPEG_VP8 = 0x56503800;
+        const int ENCODING_LTSM_LZ4 = 0x4C5A3400;
         const int PROTOCOL_LTSM = 119;
 
         struct ScreenInfo

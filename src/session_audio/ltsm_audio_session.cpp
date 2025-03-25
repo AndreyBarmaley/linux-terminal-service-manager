@@ -30,6 +30,7 @@
 #include <iostream>
 #include <filesystem>
 
+#include "ltsm_tools.h"
 #include "ltsm_audio.h"
 #include "ltsm_sockets.h"
 #include "ltsm_audio_session.h"
@@ -385,7 +386,7 @@ int main(int argc, char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
     }
 
     return EXIT_FAILURE;

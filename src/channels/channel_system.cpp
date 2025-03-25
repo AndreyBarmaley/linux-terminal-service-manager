@@ -266,7 +266,7 @@ LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
             error = true;
         }
 
@@ -297,7 +297,7 @@ LTSM::Channel::Connector::parseAddrPort(std::string_view addrPort)
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
     }
 
     return std::make_pair(addr, port);
@@ -775,7 +775,7 @@ bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesyst
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -793,7 +793,7 @@ bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const C
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -817,7 +817,7 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -836,7 +836,7 @@ bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::st
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -859,7 +859,7 @@ bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::s
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -882,7 +882,7 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -895,7 +895,7 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
 
 bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-#ifdef LTSM_CLIENT
+#if defined(LTSM_CLIENT) && defined(LTSM_PKCS11_AUTH)
     Application::debug("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
 
     try
@@ -905,7 +905,7 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -933,7 +933,7 @@ bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::strin
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -969,7 +969,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::st
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -987,7 +987,7 @@ bool LTSM::ChannelClient::createChannelSocketFd(uint8_t channel, int sock, const
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -1195,7 +1195,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -1448,7 +1448,7 @@ bool LTSM::Channel::Local2Remote::readData(void)
     catch(const std::exception & err)
     {
         error = errno;
-        Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         return false;
     }
 
@@ -2222,7 +2222,7 @@ void LTSM::Channel::Listener::loopAccept(Listener* st)
         {
             st->loopRunning = false;
 
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
         }
 
         if(input)

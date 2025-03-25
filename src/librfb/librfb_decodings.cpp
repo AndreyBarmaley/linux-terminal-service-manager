@@ -26,6 +26,10 @@
 #include "ltsm_application.h"
 #include "librfb_decodings.h"
 
+#ifdef LTSM_DECODING
+#include "lz4.h"
+#endif
+
 namespace LTSM
 {
     // DecoderStream
@@ -54,6 +58,13 @@ namespace LTSM
 
         Application::error("%s: %s", __FUNCTION__, "unknown format");
         throw rfb_error(NS_FuncName);
+    }
+
+    void RFB::DecoderStream::recvRegionUpdatePixels(const XCB::Region & reg)
+    {
+        uint32_t pitch = reg.width * clientFormat().bytePerPixel();
+        auto pixels = recvData(pitch * reg.height);
+        updateRawPixels(pixels.data(), reg, pitch, serverFormat());
     }
 
     int RFB::DecoderStream::recvCPixel(void)
@@ -126,6 +137,11 @@ namespace LTSM
         return type;
     }
 
+    void RFB::DecodingBase::setThreads(int v)
+    {
+        threads = v;
+    }
+
     void RFB::DecodingBase::setDebug(int v)
     {
         debug = v;
@@ -139,10 +155,7 @@ namespace LTSM
                                reg.y, reg.width, reg.height);
         }
 
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-        {
-            cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
-        }
+        cli.recvRegionUpdatePixels(reg);
     }
 
     void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg)
@@ -237,10 +250,7 @@ namespace LTSM
                 Application::debug("%s: type: %s", __FUNCTION__, "raw");
             }
 
-            for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-            {
-                cli.setPixel(reg.topLeft() + coord, cli.recvPixel());
-            }
+            cli.recvRegionUpdatePixels(reg);
         }
         else
         {
@@ -608,12 +618,64 @@ namespace LTSM
         }
 
         cli.recvZlibData(zlib.get(), false);
-        DecoderWrapper wrap(zlib.get(), & cli);
+        //DecoderWrapper wrap(zlib.get(), & cli)
 
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
+        uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
+        auto pixels = zlib->recvData(pitch * reg.height);
+        cli.updateRawPixels(pixels.data(), reg, pitch, cli.serverFormat());
+    }
+
+#ifdef LTSM_DECODING
+
+    void RFB::DecodingLZ4::updateRegion(DecoderStream & cli, const XCB::Region & reg)
+    {
+        if(debug)
         {
-            wrap.setPixel(reg.topLeft() + coord, wrap.recvPixel());
+            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                               reg.y, reg.width, reg.height);
+        }
+
+        auto rawsz = cli.recvIntBE32();
+        auto pitch = cli.recvIntBE32();
+        auto lz4sz = cli.recvIntBE32();
+        auto lz4buf = cli.recvData(lz4sz);
+
+        auto runJob = [](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli)
+        {
+            // thread buf
+            BinaryBuf bb(rawsz);
+
+            int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) bb.data(), buf.size(), bb.size());
+
+            if(ret <= 0)
+            {
+                Application::error("%s: %s failed, ret: %d", __FUNCTION__, "LZ4_decompress_safe_continue", ret);
+                throw rfb_error(NS_FuncName);
+            }
+
+            bb.resize(ret);
+            cli->updateRawPixels(bb.data(), reg, pitch, cli->serverFormat());
+        };
+
+        if(1 < threads)
+        {
+            jobs.emplace_back(runJob, rawsz, pitch, std::move(lz4buf), reg, & cli);
+        }
+        else
+        {
+            runJob(rawsz, pitch, std::move(lz4buf), reg, & cli);
         }
     }
-}
 
+    void RFB::DecodingLZ4::waitUpdateComplete(void)
+    {
+        for(auto & job: jobs)
+        {
+            if(job.joinable())
+                job.join();
+        }
+
+        jobs.clear();
+    }
+#endif
+}
