@@ -52,7 +52,7 @@ jobs:
           pip install gcovr==5.0 # 5.1 is not supported
 
       - name: Cache SonarCloud packages
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
