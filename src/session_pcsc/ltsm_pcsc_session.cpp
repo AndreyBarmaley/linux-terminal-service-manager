@@ -95,7 +95,7 @@ namespace LTSM
 
         bool readerLock(const PcscLite::ReaderState* st)
         {
-            Application::trace("%s: reader: %p wait", __FUNCTION__, st);
+            Application::trace(DebugType::Pcsc, "%s: reader: %p wait", __FUNCTION__, st);
             std::unique_lock<std::mutex> lk{ lock };
             cv.wait(lk, [&]
             {
@@ -103,7 +103,7 @@ namespace LTSM
                 std::none_of(readers.begin(), readers.end(), [&](auto & ptr) { return st == ptr; });
             });
             readers.push_front(st);
-            Application::trace("%s: reader: %p success", __FUNCTION__, st);
+            Application::trace(DebugType::Pcsc, "%s: reader: %p success", __FUNCTION__, st);
             return ! shutdown;
         }
     };
@@ -150,7 +150,7 @@ namespace LTSM
                 }
                 catch(const std::exception & ex)
                 {
-                    Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32, "ClientContextThread", this->sock.fd(),
+                    Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32, "ClientContextThread", this->sock.fd(),
                                        this->context);
                     Application::error("%s: exception: %s", "PcscClientThread", ex.what());
                 }
@@ -181,7 +181,7 @@ namespace LTSM
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_PCSC2SESSION_VERSION);
-        Application::debug("PCSCLITE_CSOCK_NAME found: `%s'", pcscSockName.data());
+        Application::debug(DebugType::Pcsc, "PCSCLITE_CSOCK_NAME found: `%s'", socketPath.c_str());
         registerAdaptor();
     }
 
@@ -214,7 +214,7 @@ namespace LTSM
             {
                 if(auto sock = UnixSocket::accept(socketFd); 0 < sock)
                 {
-                    Application::debug("%s: add client id: %" PRId32, __FUNCTION__, sock);
+                    Application::debug(DebugType::Pcsc, "%s: add client id: %" PRId32, __FUNCTION__, sock);
                     const std::scoped_lock guard{ clientsLock };
                     clients.remove_if([](auto & st)
                     {
@@ -236,7 +236,7 @@ namespace LTSM
 
     int32_t PcscSessionBus::getVersion(void)
     {
-        Application::debug("%s", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "%s", __FUNCTION__);
         return LTSM_PCSC2SESSION_VERSION;
     }
 
@@ -287,7 +287,7 @@ namespace LTSM
     {
         uint32_t len = st.sock.recvInt32();
         uint32_t cmd = st.sock.recvInt32();
-        Application::trace("%s: cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
+        Application::trace(DebugType::Pcsc, "%s: cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
 
         switch(cmd)
         {
@@ -385,7 +385,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", scope: %" PRIu32, __FUNCTION__, st.id(), scope);
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", scope: %" PRIu32, __FUNCTION__, st.id(), scope);
         // send
         ltsm->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EstablishContext);
         ltsm->sendIntLE32(scope);
@@ -407,7 +407,7 @@ namespace LTSM
             st.context = context;
             // init readers status
             syncReaders(st);
-            Application::debug("%s: client id: %" PRId32 ", remote context: 0x%016" PRIx64 ", local context: 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", remote context: 0x%016" PRIx64 ", local context: 0x%08" PRIx32,
                                __FUNCTION__, st.id(), remoteContext, context);
             return true;
         }
@@ -450,7 +450,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
         // send
         ltsm->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ReleaseContext);
         ltsm->sendIntLE64(st.remoteContext);
@@ -534,7 +534,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %"
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %"
                            PRIu32 ", reader: `%s'",
                            __FUNCTION__, st.id(), st.context, shareMode, prefferedProtocols, readerName.c_str());
         // send
@@ -568,7 +568,7 @@ namespace LTSM
             st.reader->share = shareMode;
             st.reader->protocol = activeProtocol;
             st.reader->event += 1;
-            Application::debug("%s: client id: %" PRId32 ", remote handle: 0x%016" PRIx64 ", local handle: 0x%08" PRIx32
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", remote handle: 0x%016" PRIx64 ", local handle: 0x%08" PRIx32
                                ", activeProtocol: %" PRIu32, __FUNCTION__, st.id(), remoteHandle, handle, activeProtocol);
             return true;
         }
@@ -615,7 +615,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", shareMode: %" PRIu32
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", shareMode: %" PRIu32
                            ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32,
                            __FUNCTION__, st.id(), st.context, st.handle, shareMode, prefferedProtocols, initialization);
         // send
@@ -641,7 +641,7 @@ namespace LTSM
             st.reader->share = shareMode;
             st.reader->protocol = activeProtocol;
             st.reader->event += 1;
-            Application::debug("%s: client id: %" PRId32 ", activeProtocol: %" PRIu32, __FUNCTION__, st.id(), activeProtocol);
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", activeProtocol: %" PRIu32, __FUNCTION__, st.id(), activeProtocol);
             return true;
         }
 
@@ -684,7 +684,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", disposition: %"
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", disposition: %"
                            PRIu32,
                            __FUNCTION__, st.id(), st.context, st.handle, disposition);
         // send
@@ -709,7 +709,7 @@ namespace LTSM
             st.reader->protocol = 0;
             st.reader->event += 1;
             st.reader = nullptr;
-            Application::debug("%s: client id: %" PRId32 ", disposition: %" PRIu32, __FUNCTION__, st.id(), disposition);
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", disposition: %" PRIu32, __FUNCTION__, st.id(), disposition);
             return true;
         }
 
@@ -751,7 +751,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32,
                            __FUNCTION__, st.id(), st.context, st.handle);
         assertm(st.reader, "reader not connected");
         waitTransaction.readerLock(st.reader);
@@ -812,7 +812,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", disposition: %"
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", disposition: %"
                            PRIu32,
                            __FUNCTION__, st.id(), st.context, st.handle, disposition);
         // send
@@ -887,14 +887,14 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", pciProtocol: 0x%08"
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", pciProtocol: 0x%08"
                            PRIx32 ", pciLength: %" PRIu32 ", send size: %" PRIu32,
                            __FUNCTION__, st.id(), st.context, st.handle, ioSendPciProtocol, ioSendPciLength, sendLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug("%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
         }
 
         // send
@@ -917,7 +917,7 @@ namespace LTSM
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug("%s: recv data: [ `%s' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: recv data: [ `%s' ]", __FUNCTION__, str.c_str());
         }
 
         // reply
@@ -981,7 +981,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32,
                            __FUNCTION__, st.id(), st.context, st.handle);
         // send
         ltsm->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Status);
@@ -1024,7 +1024,7 @@ namespace LTSM
                 if(Application::isDebugLevel(DebugLevel::Trace))
                 {
                     auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
-                    Application::debug("%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
+                    Application::debug(DebugType::Pcsc, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
                 }
             }
 
@@ -1164,14 +1164,14 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", controlCode: 0x%08"
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", handle: 0x%08" PRIx32 ", controlCode: 0x%08"
                            PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
                            __FUNCTION__, st.id(), st.context, st.handle, controlCode, sendLength, recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug("%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
         }
 
         // send
@@ -1200,7 +1200,7 @@ namespace LTSM
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug("%s: recvLength: %" PRIu32 ", recv data: [ `%s' ]", __FUNCTION__, bytesReturned, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: recvLength: %" PRIu32 ", recv data: [ `%s' ]", __FUNCTION__, bytesReturned, str.c_str());
         }
 
         // reply
@@ -1265,7 +1265,7 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", attrId: %" PRIu32, __FUNCTION__, st.id(),
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", attrId: %" PRIu32, __FUNCTION__, st.id(),
                            st.context, attrId);
         // send
         ltsm->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetAttrib);
@@ -1288,7 +1288,7 @@ namespace LTSM
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-            Application::debug("%s: attrLength: %" PRIu32 ", attr: [ `%s' ]", __FUNCTION__, attrLen, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: attrLength: %" PRIu32 ", attr: [ `%s' ]", __FUNCTION__, attrLen, str.c_str());
         }
 
         // reply
@@ -1352,13 +1352,13 @@ namespace LTSM
 
         // multiple client to one socket order
         const std::scoped_lock guard{ ltsmLock };
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLength %" PRIu32,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLength %" PRIu32,
                            __FUNCTION__, st.id(), st.context, attrId, attrLen);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-            Application::debug("%s: attr: [ `%s' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: attr: [ `%s' ]", __FUNCTION__, str.c_str());
         }
 
         // send
@@ -1403,7 +1403,7 @@ namespace LTSM
         uint32_t versionMajor = st.sock.recvInt32();
         uint32_t versionMinor = st.sock.recvInt32();
         uint32_t ret = st.sock.recvInt32();
-        Application::debug("%s: client id: %" PRId32 ", protocol version: %" PRIu32 ".%" PRIu32, __FUNCTION__, st.id(),
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", protocol version: %" PRIu32 ".%" PRIu32, __FUNCTION__, st.id(),
                            versionMajor, versionMinor);
         st.sock.
         sendInt32(versionMajor).
@@ -1417,7 +1417,7 @@ namespace LTSM
     bool PcscSessionBus::pcscGetReaderState(PcscClient & st, uint32_t len)
     {
         const uint32_t readersLength = readers.size() * sizeof(PcscLite::ReaderState);
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", readers length: %" PRIu32, __FUNCTION__,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", readers length: %" PRIu32, __FUNCTION__,
                            st.id(), st.context, readersLength);
         std::scoped_lock guard{ readersLock };
         st.sock.sendRaw(readers.data(), readersLength);
@@ -1427,7 +1427,7 @@ namespace LTSM
 
     uint32_t waitReadersStatusChanged(PcscSessionBus* owner, PcscClient* st, uint32_t timeout)
     {
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st->id(),
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st->id(),
                            st->context, timeout);
 
         if(0 == timeout)
@@ -1490,7 +1490,7 @@ namespace LTSM
             // old protocol: 4.2
             uint32_t timeout = st.sock.recvInt32();
             uint32_t ret = st.sock.recvInt32();
-            Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
                                st.context, timeout);
             st.waitStatusChanged.stop();
             st.waitStatusChanged.job = std::async(std::launch::async, waitReadersStatusChanged, this, & st, timeout);
@@ -1498,7 +1498,7 @@ namespace LTSM
         else if(st.versionMajor == 4 && st.versionMinor > 2)
         {
             // new protocol 4.4: empty params
-            Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
                                st.context);
             waitReadersStatusChanged(this, & st, 0);
             // send all readers
@@ -1513,7 +1513,7 @@ namespace LTSM
 
     bool PcscSessionBus::pcscReaderStateChangeStop(PcscClient & st, uint32_t len)
     {
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
 
         if(st.versionMajor == 4 && st.versionMinor < 3)
         {
@@ -1544,7 +1544,7 @@ namespace LTSM
 
         uint32_t context = st.sock.recvInt32();
         uint32_t ret = st.sock.recvInt32();
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
         const std::scoped_lock guard{ clientsLock };
         auto it = std::find_if(clients.begin(), clients.end(), [&](auto & cl)
         {
@@ -1553,7 +1553,7 @@ namespace LTSM
 
         if(it != clients.end())
         {
-            Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", cancelled", __FUNCTION__, it->id(), context);
+            Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", cancelled", __FUNCTION__, it->id(), context);
             it->waitStatusChanged.cancel();
             ret = SCARD_S_SUCCESS;
         }
@@ -1587,7 +1587,7 @@ namespace LTSM
         // wait
         uint32_t readersCount = ltsm->recvIntLE32();
 
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", readers count: %" PRIu32, __FUNCTION__,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", readers count: %" PRIu32, __FUNCTION__,
                            st.id(), st.context, readersCount);
 
         std::list<std::string> names;
@@ -1608,7 +1608,7 @@ namespace LTSM
 
     int64_t PcscSessionBus::syncReaders(PcscClient & st, bool* changed)
     {
-        Application::debug("%s", __FUNCTION__);
+        Application::debug(DebugType::Pcsc, "%s", __FUNCTION__);
 
         if(! ltsm)
         {
@@ -1680,7 +1680,7 @@ namespace LTSM
             // not found, add new
             if(it == readers.end())
             {
-                Application::debug("%s: added reader, name: `%s'", __FUNCTION__, name.c_str());
+                Application::debug(DebugType::Pcsc, "%s: added reader, name: `%s'", __FUNCTION__, name.c_str());
                 // find unused slot
                 auto rd = std::find_if(readers.begin(), readers.end(),
                                        [&](auto & rd)
@@ -1731,7 +1731,7 @@ namespace LTSM
         // wait
         uint32_t counts = ltsm->recvIntLE32();
         uint32_t ret = ltsm->recvIntLE32();
-        Application::debug("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32 ", states: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32 ", states: %" PRIu32,
                            __FUNCTION__, st.id(), st.context, timeout, counts);
         assertm(counts == statesCount, "count states invalid");
 
@@ -1768,13 +1768,13 @@ namespace LTSM
             return ret;
         }
 
-        Application::debug("%s: reader: `%s', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLength: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "%s: reader: `%s', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLength: %" PRIu32,
                            __FUNCTION__, readerName.c_str(), state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
-            Application::debug("%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
         }
 
         if(state.dwEventState & SCARD_STATE_CHANGED)
@@ -1852,7 +1852,7 @@ int main(int argc, char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

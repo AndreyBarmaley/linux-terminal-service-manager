@@ -35,9 +35,11 @@
 #include <forward_list>
 
 #ifdef LTSM_CLIENT
-#include "ltsm_audio.h"
-#include "ltsm_audio_pulse.h"
-#include "ltsm_audio_decoder.h"
+ #ifdef __LINUX__
+  #include "ltsm_audio.h"
+  #include "ltsm_audio_pulse.h"
+  #include "ltsm_audio_decoder.h"
+ #endif
 #endif
 
 #ifdef LTSM_PKCS11_AUTH
@@ -88,17 +90,19 @@ namespace LTSM
         ConnectorMode connectorMode(std::string_view);
         Speed connectorSpeed(std::string_view);
 
-        std::pair<ConnectorType, std::string> parseUrl(std::string_view);
+        std::pair<ConnectorType, std::string> parseUrl(const std::string &);
         std::string createUrl(const ConnectorType &, std::string_view);
 
-        struct TypeContent
+        struct TypeContent : std::pair<ConnectorType, std::string>
         {
-            ConnectorType type = ConnectorType::Unknown;
-            std::string content;
+            explicit TypeContent(const std::pair<ConnectorType, std::string> & pair) : std::pair<ConnectorType, std::string>(pair) {}
+            explicit TypeContent(std::pair<ConnectorType, std::string> && pair) noexcept : std::pair<ConnectorType, std::string>(std::move(pair)) {}
 
-            explicit TypeContent(const std::pair<ConnectorType, std::string> & pair) : type(pair.first), content(pair.second) {}
+            TypeContent() : std::pair<ConnectorType, std::string>{ConnectorType::Unknown, ""} {}
+            TypeContent(const ConnectorType & type, const std::string & cont) : std::pair<ConnectorType, std::string>{type, cont} {}
 
-            TypeContent(const ConnectorType & typ, const std::string & body) : type(typ), content(body) {}
+            const ConnectorType & type(void) const { return first; }
+            const std::string & content(void) const { return second; }
         };
 
         struct UrlMode : TypeContent
@@ -106,8 +110,7 @@ namespace LTSM
             ConnectorMode mode = ConnectorMode::Unknown;
             std::string url;
 
-            UrlMode(std::string_view str, std::string_view mod) : TypeContent(parseUrl(str)), mode(connectorMode(mod)), url(str) {}
-
+            UrlMode(const std::string & str, std::string_view mod) : TypeContent(parseUrl(str)), mode(connectorMode(mod)), url(str) {}
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
@@ -483,7 +486,7 @@ namespace LTSM
         ConnectorBasePtr createUnixConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
 
         ConnectorBasePtr createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createTcpConnector(uint8_t channel, std::string_view ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createTcpConnector(uint8_t channel, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
 
         ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
@@ -520,7 +523,7 @@ namespace LTSM
 
             const std::string & getServerUrl(void) const { return sopts.url; }
 
-            bool isUnix(void) const { return sopts.type == ConnectorType::Unix; }
+            bool isUnix(void) const { return sopts.type() == ConnectorType::Unix; }
         };
 
         std::unique_ptr<Listener> createUnixListener(const Channel::UrlMode & serverOpts, size_t listen,
@@ -543,8 +546,8 @@ namespace LTSM
         Channel::ConnectorBase* findChannel(uint8_t);
         Channel::Planned* findPlanned(uint8_t);
 
-        void recvLtsm(const NetworkStream &);
-        void sendLtsm(NetworkStream &, std::mutex &, uint8_t channel, const uint8_t*, size_t);
+        void recvLtsmProto(const NetworkStream &);
+        void sendLtsmProto(NetworkStream &, std::mutex &, uint8_t channel, const uint8_t*, size_t);
 
         virtual void recvChannelSystem(const std::vector<uint8_t> &) = 0;
         void recvChannelData(uint8_t channel, std::vector<uint8_t> &&);
@@ -589,8 +592,8 @@ namespace LTSM
         ChannelClient() = default;
         virtual ~ChannelClient() = default;
 
-        void sendLtsmEvent(uint8_t channel, std::string_view);
-        void sendLtsmEvent(uint8_t channel, const std::vector<uint8_t> &);
+        void sendLtsmChannelData(uint8_t channel, std::string_view);
+        void sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> &);
 
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
@@ -602,7 +605,7 @@ namespace LTSM
 
         void recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&);
 
-        virtual void sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) = 0;
+        virtual void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) = 0;
         virtual bool serverSide(void) const { return false; }
 
         virtual bool createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const { return false; }

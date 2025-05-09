@@ -101,16 +101,16 @@ namespace LTSM
         uint32_t r = col.r;
         uint32_t g = col.g;
         uint32_t b = col.b;
-        a = (a* alphaMax) >> 8;
-        r = (r* redMax) >> 8;
-        g = (g* greenMax) >> 8;
-        b = (b* blueMax) >> 8;
+        a = (a * alphaMax) >> 8;
+        r = (r * redMax) >> 8;
+        g = (g * greenMax) >> 8;
+        b = (b * blueMax) >> 8;
         return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
     uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
     {
-        return max1 ? (col1* max2) / max1 : 0;
+        return max1 ? (col1 * max2) / max1 : 0;
     }
 
     uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
@@ -168,7 +168,7 @@ namespace LTSM
 
     FrameBuffer FrameBuffer::copyRegion(const XCB::Region & reg) const
     {
-        FrameBuffer res(reg.toSize(), pixelFormat(), pitchSize());
+        FrameBuffer res(reg.toSize(), pixelFormat(), reg.width == width() ? pitchSize() : 0 /* auto */);
         res.blitRegion(*this, reg, XCB::Point(0, 0));
 
         return res;
@@ -176,77 +176,67 @@ namespace LTSM
 
     void FrameBuffer::setPixelRow(const XCB::Point & pos, uint32_t pixel, size_t length)
     {
-        if(pos.isValid() && pos.x < fbreg.width && pos.y < fbreg.height)
+        assertm(0 <= pos.x && 0 <= pos.y, "invalid position");
+        assertm(pos.x < fbreg.width && pos.y < fbreg.height, "position out of range");
+
+        void* offset = pitchData(pos.y) + (pos.x* bytePerPixel());
+        // fix out of range
+        length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
+
+        assertm(length <= static_cast<size_t>(fbreg.width) - pos.x, "position out of range");
+
+        switch(bitsPerPixel())
         {
-            void* offset = pitchData(pos.y) + (pos.x* bytePerPixel());
-            // fix out of range
-            length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
-            auto bpp = bitsPerPixel();
+            case 32:
+                if(auto ptr = static_cast<uint32_t*>(offset))
+                {
+                    std::fill(ptr, ptr + length, pixel);
+                }
 
-            if(length > static_cast<size_t>(fbreg.width) - pos.x)
-            {
-                Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "], length: %u", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height, length);
-                throw std::out_of_range(NS_FuncName);
-            }
+                break;
 
-            switch(bpp)
-            {
-                case 32:
-                    if(auto ptr = static_cast<uint32_t*>(offset))
-                    {
-                        std::fill(ptr, ptr + length, pixel);
-                    }
-
-                    break;
-
-                case 24:
-                    if(auto ptr = static_cast<uint8_t*>(offset))
-                    {
+            case 24:
+                if(auto ptr = static_cast<uint8_t*>(offset))
+                {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-                        uint8_t v1 = pixel;
-                        uint8_t v2 = pixel >> 8;
-                        uint8_t v3 = pixel >> 16;
+                    uint8_t v1 = pixel;
+                    uint8_t v2 = pixel >> 8;
+                    uint8_t v3 = pixel >> 16;
 #else
-                        uint8_t v1 = pixel >> 16;
-                        uint8_t v2 = pixel >> 8;
-                        uint8_t v3 = pixel;
+                    uint8_t v1 = pixel >> 16;
+                    uint8_t v2 = pixel >> 8;
+                    uint8_t v3 = pixel;
 #endif
 
-                        while(length--)
-                        {
-                            *ptr++ = v1;
-                            *ptr++ = v2;
-                            *ptr++ = v3;
-                        }
-                    }
-
-                    break;
-
-                case 16:
-                    if(auto ptr = static_cast<uint16_t*>(offset))
+                    while(length--)
                     {
-                        std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
+                        *ptr++ = v1;
+                        *ptr++ = v2;
+                        *ptr++ = v3;
                     }
+                }
 
-                    break;
+                break;
 
-                case 8:
-                    if(auto ptr = static_cast<uint8_t*>(offset))
-                    {
-                        std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
-                    }
+            case 16:
+                if(auto ptr = static_cast<uint16_t*>(offset))
+                {
+                    std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
+                }
 
-                    break;
+                break;
 
-                default:
-                    Application::error("%s: unknown bpp: %d", __FUNCTION__, bpp);
-                    throw std::invalid_argument(NS_FuncName);
-            }
-        }
-        else
-        {
-            Application::error("%s: out of range, pos [%" PRId16 ", %" PRId16 "], size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, pos.x, pos.y, fbreg.width, fbreg.height);
-            throw std::out_of_range(NS_FuncName);
+            case 8:
+                if(auto ptr = static_cast<uint8_t*>(offset))
+                {
+                    std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
+                }
+
+                break;
+
+            default:
+                Application::error("%s: unknown bpp: %" PRIu8, __FUNCTION__, bitsPerPixel());
+                throw std::invalid_argument(NS_FuncName);
         }
     }
 
@@ -691,7 +681,7 @@ namespace LTSM
 #include <png.h>
 namespace PNG
 {
-    bool save(const LTSM::FrameBuffer & fb, std::string_view file)
+    bool save(const LTSM::FrameBuffer & fb, const std::string & file)
     {
         if(fb.pixelFormat().amask() && fb.pixelFormat() != RGBA32)
         {
@@ -722,7 +712,7 @@ namespace PNG
         }
 
         setjmp(png_jmpbuf(png_ptr));
-        std::unique_ptr<FILE, int(*)(FILE*)> fp{fopen(file.data(), "wb"), fclose};
+        std::unique_ptr<FILE, int(*)(FILE*)> fp{fopen(file.c_str(), "wb"), fclose};
 
         png_init_io(png_ptr, fp.get());
         png_set_IHDR(png_ptr, info_ptr, fb.width(), fb.height(), 8,

@@ -49,10 +49,12 @@ namespace LTSM
 
             virtual void setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
+
             virtual void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) = 0;
+            virtual void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
-            virtual std::string clientEncoding(void) const
+            virtual std::string clientPrefferedEncoding(void) const
             {
                 return "";
             }
@@ -125,9 +127,15 @@ namespace LTSM
             }
 
             void updateRawPixels(const void* data, const XCB::Region & wrt, uint32_t pitch,
-                                                    const PixelFormat & pf) override
+                                 const PixelFormat & pf) override
             {
                 owner->updateRawPixels(data, wrt, pitch, pf);
+            }
+
+            void updateRawPixels2(const void* data, const XCB::Region & wrt, uint8_t depth,
+                                  uint32_t pitch, uint32_t sdlFormat) override
+            {
+                owner->updateRawPixels2(data, wrt, depth, pitch, sdlFormat);
             }
 
             XCB::Size clientSize(void) const override
@@ -135,9 +143,9 @@ namespace LTSM
                 return owner->clientSize();
             }
 
-            std::string clientEncoding(void) const override
+            std::string clientPrefferedEncoding(void) const override
             {
-                return owner->clientEncoding();
+                return owner->clientPrefferedEncoding();
             }
         };
 
@@ -146,7 +154,6 @@ namespace LTSM
         {
         protected:
             const int type = 0;
-            int debug = 0;
             int threads = 4;
 
         public:
@@ -155,10 +162,10 @@ namespace LTSM
 
             virtual void updateRegion(DecoderStream &, const XCB::Region &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
+
             virtual void waitUpdateComplete(void) { /* empty */ }
 
             int getType(void) const;
-            virtual void setDebug(int);
             void setThreads(int);
         };
 
@@ -237,11 +244,10 @@ namespace LTSM
 
 #ifdef LTSM_DECODING
 
+#ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
         class DecodingLZ4 : public DecodingBase
         {
-            static const uint32_t fbBlockBytes = 64 * 1024;
-
             std::list<std::thread> jobs;
 
         public:
@@ -250,6 +256,36 @@ namespace LTSM
 
             DecodingLZ4() : DecodingBase(ENCODING_LTSM_LZ4) {}
         };
+#endif
+#ifdef LTSM_DECODING_TJPG
+        /// DecodingTJPG
+        class DecodingTJPG : public DecodingBase
+        {
+            std::list<std::thread> jobs;
+
+        public:
+            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void waitUpdateComplete(void) override;
+
+            DecodingTJPG() : DecodingBase(ENCODING_LTSM_TJPG) {}
+        };
+#endif
+#ifdef LTSM_DECODING_QOI
+        /// DecodingQOI
+        class DecodingQOI : public DecodingBase
+        {
+            std::list<std::thread> jobs;
+
+        protected:
+            BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, uint32_t pitch) const;
+
+        public:
+            void updateRegion(DecoderStream &, const XCB::Region &) override;
+            void waitUpdateComplete(void) override;
+
+            DecodingQOI() : DecodingBase(ENCODING_LTSM_QOI) {}
+        };
+#endif
 #endif
     }
 }

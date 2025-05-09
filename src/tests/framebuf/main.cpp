@@ -1,4 +1,5 @@
 //#include <ctime>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -7,6 +8,7 @@
 #include <algorithm>
 
 #include "ltsm_framebuffer.h"
+#include "ltsm_xcb_wrapper.h"
 
 using namespace LTSM;
 

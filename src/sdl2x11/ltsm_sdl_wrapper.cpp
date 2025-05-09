@@ -96,7 +96,7 @@ namespace LTSM
         }
     }
 
-    SDL::Window::Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags, bool accel)
+    SDL::Window::Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags, bool accel)
     {
         if(winsz_w <= 0)
         {
@@ -109,7 +109,7 @@ namespace LTSM
         }
 
         // SDL part
-        _window.reset(SDL_CreateWindow(title.data(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags));
+        _window.reset(SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags));
 
         if(! _window)
         {
@@ -320,7 +320,7 @@ namespace LTSM
         return _window && _renderer && _display;
     }
 
-    SDL::GenericEvent SDL::Window::poolEvent(void)
+    SDL::GenericEvent SDL::Window::pollEvent(void)
     {
         return GenericEvent(SDL_PollEvent(& _event) ? & _event : nullptr);
     }

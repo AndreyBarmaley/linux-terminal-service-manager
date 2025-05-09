@@ -97,7 +97,7 @@ void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed)
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
 {
-    Application::trace("%s: data size: %u", __FUNCTION__, recv.size());
+    Application::trace(DebugType::Pcsc, "%s: data size: %u", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty())
@@ -106,7 +106,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
     }
     else
     {
-        last.insert(last.end(), recv.begin(), recv.end());
+        std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
         last.clear();
@@ -123,7 +123,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
         if(pcscInit == PcscOp::Init)
         {
             auto pcscCmd = sb.readIntLE16();
-            Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, pcscCmd);
+            Application::debug(DebugType::Pcsc, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pcscCmd);
 
             switch(pcscCmd)
             {
@@ -199,7 +199,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
 
     if(ret == SCARD_S_SUCCESS)
     {
-        Application::debug("%s: context: %" PRIx64, __FUNCTION__, hContext);
+        Application::debug(DebugType::Pcsc, "%s: context: %" PRIx64, __FUNCTION__, hContext);
     }
     else
     {
@@ -209,7 +209,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hContext).writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef & sb)
@@ -226,7 +226,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 std::list<std::string> getListReaders(SCARDCONTEXT hContext)
@@ -275,7 +275,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
         reply.writeIntLE32(reader.size()).write(reader);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
@@ -299,7 +299,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE64(hCard).writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
@@ -322,7 +322,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(activeProtocol).writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
@@ -341,7 +341,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef & sb)
@@ -359,7 +359,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef & sb)
@@ -378,7 +378,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
@@ -410,7 +410,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
         reply.write(recvBuffer.data(), recvLength);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
@@ -436,7 +436,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
     reply.writeIntLE32(state).writeIntLE32(protocol);
     reply.writeIntLE32(atrLen).write(atrBuf, atrLen);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef & sb)
@@ -486,7 +486,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         delete name;
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
@@ -517,7 +517,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
         reply.write(recvBuffer.data(), bytesReturned);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb)
@@ -534,7 +534,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb)
@@ -560,7 +560,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb)
         reply.write(attrBuf.data(), attrLen);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb)
@@ -581,5 +581,5 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb)
     // reply
     StreamBuf reply(16);
     reply.writeIntLE32(ret);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
 }

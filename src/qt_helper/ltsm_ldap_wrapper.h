@@ -44,7 +44,7 @@ namespace LTSM
         LdapWrapper();
         ~LdapWrapper();
 
-        std::string findLoginFromDn(std::string_view dn);
+        std::string findLoginFromDn(const std::string & dn);
         std::string findDnFromCertificate(const uint8_t*, size_t);
     };
 }

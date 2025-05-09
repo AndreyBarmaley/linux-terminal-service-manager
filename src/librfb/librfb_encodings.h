@@ -31,8 +31,9 @@
 #include "ltsm_sockets.h"
 
 #ifdef LTSM_ENCODING
-#include <lz4.h>
+#include "turbojpeg.h"
 #endif
+
 
 namespace LTSM
 {
@@ -45,12 +46,13 @@ namespace LTSM
             int sendHeader(int type, const XCB::Region &);
             int sendPixel(uint32_t pixel);
             int sendCPixel(uint32_t pixel);
-            int sendRunLength(size_t length);
+            int sendRunLength(uint32_t length);
             int sendZlibData(ZLib::DeflateStream*, bool uint16sz = false);
 
             virtual const PixelFormat & serverFormat(void) const = 0;
             virtual const PixelFormat & clientFormat(void) const = 0;
             virtual bool clientIsBigEndian(void) const = 0;
+            virtual XCB::Size displaySize(void) const = 0;
         };
 
         /// EncoderWrapper
@@ -87,6 +89,11 @@ namespace LTSM
             {
                 return owner->clientIsBigEndian();
             }
+
+            XCB::Size displaySize(void) const override
+            {
+                return owner->displaySize();
+            }
         };
 
         typedef std::pair<XCB::Region, BinaryBuf> EncodingRet;
@@ -98,7 +105,6 @@ namespace LTSM
             std::list< std::future<EncodingRet>> jobs;
 
             const int type = 0;
-            int debug = 0;
             int threads = 2;
 
             void sendRawRegionPixels(EncoderStream*, EncoderStream*, const XCB::Region &, const FrameBuffer &);
@@ -111,12 +117,10 @@ namespace LTSM
 
             virtual void sendFrameBuffer(EncoderStream*, const FrameBuffer &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
+            virtual bool setEncodingOptions(const std::forward_list<std::string> &) { return false; }
             virtual const char* getTypeName(void) const = 0;
 
             int getType(void) const;
-            bool jobsEmpty(void) const;
-
-            virtual void setDebug(int);
             void setThreads(int);
         };
 
@@ -131,7 +135,7 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return "Raw"; }
+            const char* getTypeName(void) const override { return "Raw"; }
 
             EncodingRaw() : EncodingBase(ENCODING_RAW) {}
         };
@@ -142,11 +146,11 @@ namespace LTSM
         protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRects(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
-                                          const std::list<XCB::RegionPixel> &);
+                           const std::list<XCB::RegionPixel> &);
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return getType() == ENCODING_CORRE ? "CoRRE": "RRE"; }
+            const char* getTypeName(void) const override { return getType() == ENCODING_CORRE ? "CoRRE": "RRE"; }
 
             EncodingRRE(bool co) : EncodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
@@ -162,14 +166,14 @@ namespace LTSM
         protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRegionForeground(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
-                    const std::list<XCB::RegionPixel> &);
+                                      const std::list<XCB::RegionPixel> &);
             void sendRegionColored(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
-                                                  const std::list<XCB::RegionPixel> &);
+                                   const std::list<XCB::RegionPixel> &);
             void sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId);
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return "HexTile"; }
+            const char* getTypeName(void) const override { return "HexTile"; }
 
             EncodingHexTile(void) : EncodingBase(ENCODING_HEXTILE) {}
         };
@@ -182,15 +186,15 @@ namespace LTSM
         protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, size_t field,
-                                                 const PixelMapPalette &);
+                                  const PixelMapPalette &);
             void sendRegionPlain(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelLengthList &);
             void sendRegionPalette(EncoderStream*, const XCB::Region &, const FrameBuffer &, const PixelMapPalette &,
-                                                  const PixelLengthList &);
+                                   const PixelLengthList &);
             void sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &);
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE"; }
+            const char* getTypeName(void) const override { return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE"; }
 
             EncodingTRLE(bool zlib);
 
@@ -205,15 +209,17 @@ namespace LTSM
         {
             std::unique_ptr<ZLib::DeflateStream> zlib;
             BinaryBuf buf;
+            int zlevel;
 
         protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return "ZLib"; }
+            const char* getTypeName(void) const override { return "ZLib"; }
 
-            EncodingZlib(int zlevel = Z_BEST_SPEED);
+            EncodingZlib(int lev = Z_BEST_SPEED);
+            bool setEncodingOptions(const std::forward_list<std::string> &) override;
         };
 
 #ifdef LTSM_ENCODING
@@ -226,9 +232,42 @@ namespace LTSM
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const { return "LZ4"; }
+            const char* getTypeName(void) const override { return "LZ4"; }
 
             EncodingLZ4() : EncodingBase(ENCODING_LTSM_LZ4) {}
+        };
+
+        /// EncodingTJPG
+        class EncodingTJPG : public EncodingBase
+        {
+            int jpegQuality = 85;
+            int jpegSamp = TJSAMP_420;
+
+        protected:
+            EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+
+        public:
+            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const override { return "TJPG"; }
+
+            EncodingTJPG() : EncodingBase(ENCODING_LTSM_TJPG) {}
+            EncodingTJPG(int qual, int samp) : EncodingBase(ENCODING_LTSM_TJPG), jpegQuality(qual), jpegSamp(samp) {}
+
+            bool setEncodingOptions(const std::forward_list<std::string> &) override;
+        };
+
+        /// EncodingQOI
+        class EncodingQOI : public EncodingBase
+        {
+        protected:
+            EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
+            BinaryBuf encodeBGRx(const uint8_t* ptr, const XCB::Size & rsz, uint32_t pitch) const;
+
+        public:
+            void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
+            const char* getTypeName(void) const override { return "QOI"; }
+
+            EncodingQOI() : EncodingBase(ENCODING_LTSM_QOI) {}
         };
 #endif
     }

@@ -110,7 +110,7 @@ namespace LTSM
         return _pf;
     }
 
-    std::list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const
+    std::forward_list<std::string> Connector::X11VNC::serverDisabledEncodings(void) const
     {
         return {};
     }
@@ -142,25 +142,24 @@ namespace LTSM
     {
         // FIXM XAUTH
         std::string xauthFile = _config->getString("authfile");
-        Application::debug("%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
+        Application::debug(DebugType::Conn, "%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         size_t screen = _config->getInteger("display", 0);
 
         try
         {
-            xcbDisplay()->reconnect(screen);
+            xcbDisplay()->displayReconnect(screen);
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             return false;
         }
 
-        xcbDisplay()->resetInputs();
         Application::info("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(),
                           xcbDisplay()->height(), xcbDisplay()->depth());
-        Application::debug("%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Conn, "%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual)

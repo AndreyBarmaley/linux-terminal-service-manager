@@ -23,6 +23,14 @@ public:
     {
     }
 
+    void fakeInputKeycode(xcb_keycode_t keycode, bool pressed) const
+    {
+        if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST)))
+        {
+            test->screenInputKeycode(keycode, pressed);
+        }
+    }
+
     bool test_extinfo(void)
     {
         for(auto iter = xcb_setup_pixmap_formats_iterator(_setup); iter.rem; xcb_format_next(& iter))
@@ -67,7 +75,7 @@ public:
         auto _randr = xcb_get_extension_data(_conn.get(), &xcb_randr_id);
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplay::poolEvent())
+            while(auto ev = XCB::RootDisplay::pollEvent())
             {
                 if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
                 {
@@ -115,7 +123,7 @@ public:
 
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplay::poolEvent())
+            while(auto ev = XCB::RootDisplay::pollEvent())
             {
 		if(isXkbKeyboardNotify(ev))
 		{
@@ -168,9 +176,9 @@ public:
 	for(auto & val : outputs)
 	{
 	    auto info = getRandrOutputInfo(val);
-    	    Application::info("output name: %s, connected: %s, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
+    	    Application::info("output name: %s, connected: %s, width: %d, height: %d", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
 
-	    if(info->connected)
+	    if(info.connected)
 		curout = val;
 	}
 
@@ -270,7 +278,7 @@ public:
 
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplay::poolEvent())
+            while(auto ev = XCB::RootDisplay::pollEvent())
             {
                 auto type = ev ? ev->response_type & ~0x80 : 0;
                 if(XCB_PROPERTY_NOTIFY == type)
@@ -340,7 +348,7 @@ public:
         Application::info("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
 
     	// _xcbDisplay->test_randr();
-    	// _xcbDisplay->test_extinfo();
+    	_xcbDisplay->test_extinfo();
     	// _xcbDisplay->test_getimage();
 
 	//XCB::Region reg{10, 10, 9, 9};
@@ -351,7 +359,7 @@ public:
 	//_xcbDisplay->setRandrScreenSize(XCB::Size(1201, 887));
 
     	//_xcbDisplay->test_xkbinfo();
-    	_xcbDisplay->test_xkblayout();
+    	//_xcbDisplay->test_xkblayout();
 
         return EXIT_SUCCESS;
     }

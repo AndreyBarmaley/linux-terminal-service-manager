@@ -28,7 +28,6 @@
 #include <functional>
 
 #include "ltsm_framebuffer.h"
-#include "ltsm_xcb_wrapper.h"
 
 namespace LTSM
 {
@@ -82,6 +81,7 @@ namespace LTSM
         const int SERVER_CONTINUOUS_UPDATES = 150;
 
         // RFB protocol constants
+        const int ENCODING_UNKNOWN = -1;
         const int ENCODING_RAW = 0;
         const int ENCODING_COPYRECT = 1;
         const int ENCODING_RRE = 2;
@@ -117,12 +117,15 @@ namespace LTSM
         const int ENCODING_COMPRESS3 = -253;
         const int ENCODING_COMPRESS2 = -254;
         const int ENCODING_COMPRESS1 = -255;
+        const int ENCODING_EXT_CLIPBOARD = 0xC0A1E5CE;
 
         const int ENCODING_LTSM = 0x4C54534D;
         const int ENCODING_FFMPEG_H264 = 0x48464D50;
         const int ENCODING_FFMPEG_AV1 = 0x41563100;
         const int ENCODING_FFMPEG_VP8 = 0x56503800;
         const int ENCODING_LTSM_LZ4 = 0x4C5A3400;
+        const int ENCODING_LTSM_TJPG = 0x544A5047;
+        const int ENCODING_LTSM_QOI = 0x514F4900;
         const int PROTOCOL_LTSM = 119;
 
         struct ScreenInfo
@@ -142,6 +145,8 @@ namespace LTSM
         int desktopResizeStatusCode(const DesktopResizeStatus &);
 
         const char* encodingName(int type);
+        int encodingType(std::string_view);
+        std::string encodingOpts(int type);
 
         /// SecurityInfo
         struct SecurityInfo

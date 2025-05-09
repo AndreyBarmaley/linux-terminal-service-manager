@@ -29,6 +29,18 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
+#ifdef __MINGW64__
+#define LOG_USER        (1<<3)  /* random user-level messages */
+#define LOG_LOCAL0      (16<<3) /* reserved for local use */
+#define LOG_LOCAL1      (17<<3) /* reserved for local use */
+#define LOG_LOCAL2      (18<<3) /* reserved for local use */
+#define LOG_LOCAL3      (19<<3) /* reserved for local use */
+#define LOG_LOCAL4      (20<<3) /* reserved for local use */
+#define LOG_LOCAL5      (21<<3) /* reserved for local use */
+#define LOG_LOCAL6      (22<<3) /* reserved for local use */
+#define LOG_LOCAL7      (23<<3) /* reserved for local use */
+#endif
+
 namespace LTSM
 {
     std::string ident{"application"};
@@ -38,6 +50,7 @@ namespace LTSM
     FILE* Application::fdlog = stderr;
     DebugTarget Application::target = DebugTarget::Console;
     DebugLevel Application::level = DebugLevel::Info;
+    uint32_t Application::types = DebugType::All;
     std::mutex Application::logging;
 
     void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
@@ -47,8 +60,14 @@ namespace LTSM
         level = lvl;
     }
 
+    void Application::setDebugTypes(uint32_t val)
+    {
+        types = val;
+    }
+
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
+#ifdef __LINUX__
         if(target != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
         {
             openlog(ident.c_str(), 0, facility);
@@ -57,7 +76,7 @@ namespace LTSM
         {
             closelog();
         }
-
+#endif
         target = tgt;
     }
 
@@ -72,10 +91,12 @@ namespace LTSM
         {
             setDebugTarget(DebugTarget::Console);
         }
+#ifdef __LINUX__
         else if(tgt == "syslog")
         {
             setDebugTarget(DebugTarget::Syslog);
         }
+#endif
         else
         {
             setDebugTarget(DebugTarget::Quiet);
@@ -119,16 +140,21 @@ namespace LTSM
 
     Application::~Application()
     {
+#ifdef __LINUX__
         if(isDebugTarget(DebugTarget::Syslog))
         {
             closelog();
         }
+#endif
     }
 
-    void Application::openChildSyslog(const char* file)
+    void Application::redirectSyslogFile(const char* file)
     {
+#ifdef __LINUX__
         if(isDebugTarget(DebugTarget::Syslog))
         {
+            closelog();
+
             if(file)
             {
                 fdlog = fopen(file, "a");
@@ -142,6 +168,7 @@ namespace LTSM
             // child: switch syslog to stderr
             Application::target = DebugTarget::Console;
         }
+#endif
     }
 
 #ifdef WITH_JSON
@@ -254,11 +281,13 @@ namespace LTSM
             }
         }
 
+#ifdef __LINUX__
         if(0 < facility)
         {
             closelog();
             ::openlog(ident.c_str(), 0, facility);
         }
+#endif
     }
 
     void ApplicationJsonConfig::configSetInteger(const std::string & key, int val)

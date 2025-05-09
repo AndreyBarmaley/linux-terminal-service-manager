@@ -556,8 +556,16 @@ namespace LTSM
         it = vec.begin();
     }
 
-    StreamBuf::StreamBuf(StreamBuf && sb) noexcept : it(std::move(sb.it)), vec(std::move(sb.vec))
+    StreamBuf::StreamBuf(std::vector<uint8_t> && v) noexcept
     {
+        vec.swap(v);
+        it = vec.begin();
+    }
+
+    StreamBuf::StreamBuf(StreamBuf && sb) noexcept
+    {
+        vec.swap(sb.vec);
+        std::swap(it, sb.it);
     }
 
     StreamBuf & StreamBuf::operator=(StreamBuf && sb) noexcept
@@ -666,6 +674,11 @@ namespace LTSM
         }
 
         return *it;
+    }
+
+    const uint8_t* StreamBuf::data(void) const
+    {
+        return std::addressof(*it);
     }
 
     BinaryBuf & StreamBuf::rawbuf(void)

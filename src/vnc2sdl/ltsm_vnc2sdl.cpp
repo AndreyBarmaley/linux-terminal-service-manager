@@ -53,20 +53,34 @@ namespace LTSM
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
                   "usage: " << prog <<
-                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug] [--syslog] "
+                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug [<types>]] [--trace] [--syslog] "
                   <<
                   "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
-                  "[--notls] [--noltsm]"
+                  "[--notls] [--noltsm]" <<
 #ifdef LTSM_WITH_GSSAPI
                   "[--kerberos <" << krb5def << ">] " <<
 #endif
 #ifdef LTSM_DECODING
+ #ifdef LTSM_DECODING_QOI
+                  "[--qoi]" <<
+ #endif
+ #ifdef LTSM_DECODING_LZ4
                   "[--lz4]" <<
+ #endif
+ #ifdef LTSM_DECODING_TJPG
+                  "[--tjpg]" <<
+ #endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
                   "[--h264]" <<
+ #endif
+ #ifdef LTSM_DECODING_AV1
                   "[--av1]" <<
+ #endif
+ #ifdef LTSM_DECODING_VP8
                   "[--vp8]" <<
+ #endif
 #endif
                   "[--encoding <string>] " <<
                   "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] [--share-folder <folder>] "
@@ -74,7 +88,8 @@ namespace LTSM
                   "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " << "[--pcsc11-auth [" << librtdef << "]] " <<
                   "[--pcsc] [--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
-                  "    --debug (debug mode)" << std::endl <<
+                  "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
+                  "    --trace (big more debug)" << std::endl <<
                   "    --syslog (to syslog)" << std::endl <<
                   "    --host <localhost> " << std::endl <<
                   "    --port <port> " << std::endl <<
@@ -86,6 +101,7 @@ namespace LTSM
                   "    --nodamage (skip X11 damage events)" << std::endl <<
                   "    --framerate <fps>" << std::endl <<
                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
+                  "    --extclip (extclip support)" << std::endl <<
                   "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
                   std::endl <<
@@ -94,12 +110,26 @@ namespace LTSM
                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING
-                  "    --lz4 (the same as --encoding ltsm_lz4)" << std::endl <<
+ #ifdef LTSM_DECODING_QOI
+                  "    --qoi (the same as --encoding ltsm_qoi)" << std::endl <<
+ #endif
+ #ifdef LTSM_DECODING_LZ4
+                   "    --lz4 (the same as --encoding ltsm_lz4)" << std::endl <<
+ #endif
+ #ifdef LTSM_DECODING_TJPG
+                  "    --tjpg (the same as --encoding ltsm_tjpg)" << std::endl <<
+ #endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
                   "    --h264 (the same as --encoding ffmpeg_h264)" << std::endl <<
+ #endif
+ #ifdef LTSM_DECODING_AV1
                   "    --av1 (the same as --encoding ffmpeg_av1)" << std::endl <<
+ #endif
+ #ifdef LTSM_DECODING_VP8
                   "    --vp8 (the same as --encoding ffmpeg_vp8)" << std::endl <<
+ #endif
 #endif
                   "    --encoding <string> (set preffered encoding)" << std::endl <<
                   "    --tls-priority <string> " << std::endl <<
@@ -124,17 +154,62 @@ namespace LTSM
 #ifdef LTSM_PKCS11_AUTH
                   "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
 #endif
-                  std::endl <<
                   std::endl;
         std::cout << std::endl << "supported encodings: " << std::endl <<
                   "    ";
 
-        for(auto enc : encodings)
+        for(auto enc: encodings)
         {
             std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
         }
 
-        std::cout << std::endl << std::endl;
+        std::cout << std::endl;
+        std::cout << std::endl << "encoding options: " << std::endl;
+
+        for(auto enc: encodings)
+        {
+            if(auto opts = RFB::encodingOpts(enc); ! opts.empty())
+            {
+                std::cout << "    " << opts << std::endl;
+            }
+        }
+        std::cout << std::endl;
+    }
+
+    std::list<int> Vnc2SDL::clientSupportedEncodings(void) const
+    {
+        std::list<int> encodings = { 
+            // first preffered
+#ifdef LTSM_DECODING
+ #ifdef LTSM_DECODING_QOI
+            RFB::ENCODING_LTSM_QOI,
+ #endif
+ #ifdef LTSM_DECODING_LZ4
+            RFB::ENCODING_LTSM_LZ4,
+ #endif
+ #ifdef LTSM_DECODING_TJPG
+            RFB::ENCODING_LTSM_TJPG,
+ #endif
+#endif
+#ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
+            RFB::ENCODING_FFMPEG_H264,
+ #endif
+ #ifdef LTSM_DECODING_AV1
+            RFB::ENCODING_FFMPEG_AV1,
+ #endif
+ #ifdef LTSM_DECODING_VP8
+            RFB::ENCODING_FFMPEG_VP8,
+ #endif
+#endif
+        };
+
+        if(extClipboardLocalCaps())
+        {
+            encodings.push_back( RFB::ENCODING_EXT_CLIPBOARD );
+        }
+
+        return encodings;
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -179,7 +254,7 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--noxkb"))
             {
-                usexkb = false;
+                useXkb = false;
             }
             else if(0 == std::strcmp(argv[it], "--loop"))
             {
@@ -197,37 +272,73 @@ namespace LTSM
             {
                 pcscEnable = true;
             }
+            else if(0 == std::strcmp(argv[it], "--extclip"))
+            {
+                setExtClipboardLocalCaps(ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml |
+                                ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
+            }
 
 #ifdef LTSM_DECODING
+            else if(0 == std::strcmp(argv[it], "--qoi"))
+            {
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                        RFB::ENCODING_LTSM_QOI)));
+            }
             else if(0 == std::strcmp(argv[it], "--lz4"))
             {
                 prefferedEncoding.assign(Tools::lower(RFB::encodingName(
                         RFB::ENCODING_LTSM_LZ4)));
             }
+            else if(0 == std::strcmp(argv[it], "--tjpg"))
+            {
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                        RFB::ENCODING_LTSM_TJPG)));
+            }
+            else if(0 == std::strncmp(argv[it], "--tjpg,", 7))
+            {
+                auto opts = Tools::split(argv[it], ',');
+
+                opts.pop_front();
+                encodingOptions.assign(opts.begin(), opts.end());
+
+                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                        RFB::ENCODING_LTSM_TJPG)));
+            }
 #endif
 #ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
             else if(0 == std::strcmp(argv[it], "--h264"))
             {
                 prefferedEncoding.assign(Tools::lower(RFB::encodingName(
                         RFB::ENCODING_FFMPEG_H264)));
             }
+ #endif
+ #ifdef LTSM_DECODING_AV1
             else if(0 == std::strcmp(argv[it], "--av1"))
             {
                 prefferedEncoding.assign(Tools::lower(RFB::encodingName(
                         RFB::ENCODING_FFMPEG_AV1)));
             }
+ #endif
+ #ifdef LTSM_DECODING_VP8
             else if(0 == std::strcmp(argv[it], "--vp8"))
             {
                 prefferedEncoding.assign(Tools::lower(RFB::encodingName(
                         RFB::ENCODING_FFMPEG_VP8)));
             }
-
+ #endif
 #endif
             else if(0 == std::strcmp(argv[it], "--encoding"))
             {
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
                 {
-                    prefferedEncoding.assign(Tools::lower(argv[it + 1]));
+                    auto opts = Tools::split(argv[it + 1], ',');
+
+                    prefferedEncoding.assign(Tools::lower(opts.front()));
+
+                    opts.pop_front();
+                    encodingOptions.assign(opts.begin(), opts.end());
+
                     it = it + 1;
                 }
 
@@ -326,9 +437,21 @@ namespace LTSM
                 }
             }
 #endif
+            else if(0 == std::strcmp(argv[it], "--trace"))
+            {
+                Application::setDebugLevel(DebugLevel::Trace);
+            }
             else if(0 == std::strcmp(argv[it], "--debug"))
             {
-                Application::setDebugLevel(DebugLevel::Debug);
+                if(! Application::isDebugLevel(DebugLevel::Trace))
+                    Application::setDebugLevel(DebugLevel::Debug);
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
+                {
+                    Application::setDebugTypes(Tools::debugTypes(Tools::split(argv[it + 1], ',')));
+                    it = it + 1;
+                }
+
             }
             else if(0 == std::strcmp(argv[it], "--syslog"))
             {
@@ -569,7 +692,7 @@ namespace LTSM
         }
 
         // rfb thread: process rfb messages
-        auto thrfb = std::thread([ = ]()
+        auto thrfb = std::thread([this]()
         {
             this->rfbMessagesLoop();
         });
@@ -579,32 +702,41 @@ namespace LTSM
         {
             while(this->rfbMessagesRunning())
             {
-                if(! xcbEventProcessing())
+                if(auto err = XCB::RootDisplay::hasError())
                 {
+                    this->rfbMessagesShutdown();
                     break;
                 }
 
-                std::this_thread::sleep_for(200ms);
+                if(auto ev = XCB::RootDisplay::pollEvent())
+                {
+                    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
+                    {
+                        uint16_t opcode = 0;
+
+                        if(extXkb->isEventError(ev, & opcode))
+                        {
+                            Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
+                        }
+                    }
+                }
+
+                std::this_thread::sleep_for(50ms);
             }
         });
-
-        // main thread: sdl processing
-        auto clipboardDelay = std::chrono::steady_clock::now();
-        std::thread thclip;
 
         if(isContinueUpdatesSupport())
         {
             sendContinuousUpdates(true, { XCB::Point(0, 0), windowSize });
         }
 
+        // main thread: sdl processing
+//        auto clipboardDelay = std::chrono::steady_clock::now();
+//        std::thread thclip;
+
         while(true)
         {
             if(! rfbMessagesRunning())
-            {
-                break;
-            }
-
-            if(xcbError())
             {
                 break;
             }
@@ -616,6 +748,7 @@ namespace LTSM
                 dropFiles.clear();
             }
 
+/*
             // send clipboard
             if(std::chrono::steady_clock::now() - clipboardDelay > 300ms &&
                     ! focusLost && SDL_HasClipboardText())
@@ -638,7 +771,7 @@ namespace LTSM
                                     clipboardBufLocal != clipboardBufSdl)
                             {
                                 clipboardBufLocal = clipboardBufSdl;
-                                this->sendCutTextEvent(ptr, SDL_strlen(ptr));
+                                this->sendCutTextEvent(clipboardBufSdl.data(), clipboardBufSdl.size(), false);
                             }
 
                             SDL_free(ptr);
@@ -648,7 +781,7 @@ namespace LTSM
 
                 clipboardDelay = std::chrono::steady_clock::now();
             }
-
+*/
             if(needUpdate && sfback)
             {
                 const std::scoped_lock guard{ renderLock };
@@ -684,11 +817,12 @@ namespace LTSM
 
         rfbMessagesShutdown();
 
+/*
         if(thclip.joinable())
         {
             thclip.join();
         }
-
+*/
         if(thrfb.joinable())
         {
             thrfb.join();
@@ -830,10 +964,10 @@ namespace LTSM
                         xksym = ev.key()->keysym.sym;
                     }
 
-                    if(usexkb)
+                    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
                     {
+                        int group = extXkb->getLayoutGroup();
                         auto keycodeGroup = keysymToKeycodeGroup(xksym);
-                        int group = xkbGroup();
 
                         if(group != keycodeGroup.second)
                         {
@@ -930,7 +1064,7 @@ namespace LTSM
         return true;
     }
 
-    void Vnc2SDL::decodingExtDesktopSizeEvent(int status, int err,
+    void Vnc2SDL::clientRecvDecodingDesktopSizeEvent(int status, int err,
             const XCB::Size & nsz, const std::vector<RFB::ScreenInfo> & screens)
     {
         needUpdate = false;
@@ -985,7 +1119,7 @@ namespace LTSM
             }
     }
 
-    void Vnc2SDL::fbUpdateEvent(void)
+    void Vnc2SDL::clientRecvFBUpdateEvent(void)
     {
         if(! needUpdate)
         {
@@ -993,7 +1127,7 @@ namespace LTSM
         }
     }
 
-    void Vnc2SDL::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
+    void Vnc2SDL::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
     {
         Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
                           wsz.width, wsz.height);
@@ -1060,19 +1194,30 @@ namespace LTSM
     void Vnc2SDL::updateRawPixels(const void* data, const XCB::Region & wrt,
                                   uint32_t pitch, const PixelFormat & pf)
     {
+        uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
+        if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_MasksToPixelFormatEnum",
+                               SDL_GetError());
+            throw sdl_error(NS_FuncName);
+        }
+        updateRawPixels2(data, wrt, pf.bitsPerPixel(), pitch, sdlFormat);
+    }
+
+    void Vnc2SDL::updateRawPixels2(const void* data, const XCB::Region & wrt, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
+    {
         // lock part
         const std::scoped_lock guard{ renderLock };
 
         std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
-            SDL_CreateRGBSurfaceFrom((void*) data, wrt.width, wrt.height,
-                                                   pf.bitsPerPixel(), pitch,
-                                                   pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()),
+            SDL_CreateRGBSurfaceWithFormatFrom((void*) data, wrt.width, wrt.height,
+                                                   depth, pitch, sdlFormat),
             SDL_FreeSurface};
 
         if(! sfframe)
         {
             Application::error("%s: %s failed, error: %s", __FUNCTION__,
-                                   "SDL_CreateSurfaceFrom", SDL_GetError());
+                                   "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
 
@@ -1109,12 +1254,13 @@ namespace LTSM
         return windowSize;
     }
 
-    std::string Vnc2SDL::clientEncoding(void) const
+    std::string Vnc2SDL::clientPrefferedEncoding(void) const
     {
         return prefferedEncoding;
     }
 
-    void Vnc2SDL::cutTextEvent(std::vector<uint8_t> && buf)
+/*
+    void Vnc2SDL::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
     {
         bool zeroInserted = false;
 
@@ -1139,8 +1285,8 @@ namespace LTSM
             clipboardBufRemote.pop_back();
         }
     }
-
-    void Vnc2SDL::richCursorEvent(const XCB::Region & reg,
+*/
+    void Vnc2SDL::clientRecvRichCursorEvent(const XCB::Region & reg,
                                   std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask)
     {
         uint32_t key = Tools::crc32b(pixels.data(), pixels.size());
@@ -1158,7 +1304,7 @@ namespace LTSM
                 return;
             }
 
-            Application::debug("%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
+            Application::debug(DebugType::App, "%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
                                ", %" PRIu16 "], sdl format: %s",
                                __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
@@ -1179,8 +1325,13 @@ namespace LTSM
 
             if(! curs)
             {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                auto & pixels = (*it).second.pixels;
+                auto tmp1 = Tools::buffer2hexstring(pixels.begin(), pixels.end(), 2, ",", false);
+                auto tmp2 = Tools::buffer2hexstring(mask.begin(), mask.end(), 2, ",", false);
+
+                Application::warning("%s: %s failed, error: %s", __FUNCTION__,
                                    "SDL_CreateColorCursor", SDL_GetError());
+                Application::warning("%s: pixels: [%s], mask: [%s]", __FUNCTION__, tmp1.c_str(), tmp2.c_str());
                 return;
             }
 
@@ -1190,23 +1341,27 @@ namespace LTSM
         SDL_SetCursor((*it).second.cursor.get());
     }
 
-    void Vnc2SDL::ltsmHandshakeEvent(int flags)
+    void Vnc2SDL::clientRecvLtsmHandshakeEvent(int flags)
     {
         if(! sendOptions)
         {
-            auto names = xkbNames();
-            auto group = xkbGroup();
-            sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
+            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
+            {
+                auto names = extXkb->getNames();
+                int group = extXkb->getLayoutGroup();
+
+                sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
                                       (0 <= group && group < names.size() ? names[group] : ""));
-            sendOptions = true;
+                sendOptions = true;
+            }
         }
     }
 
-    void Vnc2SDL::xkbStateChangeEvent(int group)
+    void Vnc2SDL::xcbXkbGroupChangedEvent(int group)
     {
-        if(usexkb)
+        if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
         {
-            sendSystemKeyboardChange(xkbNames(), group);
+            sendSystemKeyboardChange(extXkb->getNames(), group);
         }
     }
 
@@ -1249,6 +1404,7 @@ namespace LTSM
         jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
         jo.push("x11:nodamage", nodamage);
         jo.push("frame:rate", frameRate);
+        jo.push("enc:opts", JsonArrayStream(encodingOptions.begin(), encodingOptions.end()).flush());
 
         if(username.empty())
         {
@@ -1291,14 +1447,7 @@ namespace LTSM
 
         if(! shareFolders.empty())
         {
-            JsonArrayStream ja;
-
-            for(auto & dir : shareFolders)
-            {
-                ja.push(dir);
-            }
-
-            jo.push("redirect:fuse", ja.flush());
+            jo.push("redirect:fuse", JsonArrayStream(shareFolders.begin(), shareFolders.end()).flush());
         }
 
         if(pcscEnable)
@@ -1346,7 +1495,7 @@ namespace LTSM
         }
     }
 
-    void Vnc2SDL::bellEvent(void)
+    void Vnc2SDL::clientRecvBellEvent(void)
     {
         bell(75);
     }
@@ -1402,7 +1551,7 @@ int main(int argc, const char** argv)
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             LTSM::Application::info("program: %s", "terminate...");
         }
     }

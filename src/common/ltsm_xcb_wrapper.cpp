@@ -44,6 +44,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_framebuffer.h"
 
 using namespace std::chrono_literals;
 
@@ -51,253 +52,26 @@ namespace LTSM
 {
     namespace XCB
     {
-        bool PointIterator::isBeginLine(void) const
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+        const PixelFormat pfx30 = RGB30;
+        const PixelFormat pf888 = RGBX32;
+        const PixelFormat pf565 = RGB565;
+        const PixelFormat pf555 = RGB555;
+#else
+        const PixelFormat pfx30 = BGR30;
+        const PixelFormat pf888 = BGRX32;
+        const PixelFormat pf565 = BGR565;
+        const PixelFormat pf555 = BGR555;
+#endif
+
+        inline xcb_rectangle_t regionToXcb(const Region & reg)
         {
-            return x == 0;
-        }
-
-        bool PointIterator::isEndLine(void) const
-        {
-            return x == limit.width - 1;
-        }
-
-        PointIterator & PointIterator::operator++(void)
-        {
-            assertm(isValid(), "invalid iterator");
-
-            x++;
-
-            if(x < limit.width)
-            {
-                return *this;
-            }
-
-            if(y < limit.height)
-            {
-                y++;
-
-                if(limit.height <= y)
-                {
-                    x = -1;
-                    y = -1;
-                    return *this;
-                }
-
-                x = 0;
-                lineChanged();
-            }
-
-            return *this;
-        }
-
-        PointIterator & PointIterator::operator--(void)
-        {
-            assertm(isValid(), "invalid iterator");
-
-            x--;
-
-            if(0 <= x)
-            {
-                return *this;
-            }
-
-            if(y > 0)
-            {
-                y--;
-
-                if(y < 0)
-                {
-                    x = -1;
-                    y = -1;
-                    return *this;
-                }
-
-                x = limit.width - 1;
-                lineChanged();
-            }
-
-            return *this;
-        }
-
-        Region operator- (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x - pt.x, reg.y - pt.y, reg.width, reg.height);
-        }
-
-        Region operator+ (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x + pt.x, reg.y + pt.y, reg.width, reg.height);
-        }
-
-        void Region::reset(void)
-        {
-            x = -1;
-            y = -1;
-            width = 0;
-            height = 0;
-        }
-
-        void Region::assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-        {
-            x = rx;
-            y = ry;
-            width = rw;
-            height = rh;
-        }
-
-        void Region::assign(const Region & reg)
-        {
-            *this = reg;
-        }
-
-        Region Region::align(size_t val) const
-        {
-            Region res(x, y, width, height);
-
-            if(auto alignX = x % val)
-            {
-                res.x -= alignX;
-                res.width += alignX;
-            }
-
-            if(auto alignY = y % val)
-            {
-                res.y -= alignY;
-                res.height += alignY;
-            }
-
-            if(auto alignW = res.width % val)
-            {
-                res.width += val - alignW;
-            }
-
-            if(auto alignH = res.height % val)
-            {
-                res.height += val - alignH;
-            }
-
-            return res;
-        }
-
-        void Region::join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh)
-        {
-            join({rx, ry, rw, rh});
-        }
-
-        void Region::join(const Region & reg)
-        {
-            if(invalid())
-            {
-                x = reg.x;
-                y = reg.y;
-                width = reg.width;
-                height = reg.height;
-            }
-            else if(! reg.empty() && *this != reg)
-            {
-                /* Horizontal union */
-                auto xm = std::min(x, reg.x);
-                width = std::max(x + width, reg.x + reg.width) - xm;
-                x = xm;
-                /* Vertical union */
-                auto ym = std::min(y, reg.y);
-                height = std::max(y + height, reg.y + reg.height) - ym;
-                y = ym;
-            }
-        }
-
-        bool Region::empty(void) const
-        {
-            return width == 0 || height == 0;
-        }
-
-        bool Region::invalid(void) const
-        {
-            return x == -1 && y == -1 && empty();
-        }
-
-        Region Region::intersected(const Region & reg) const
-        {
-            Region res;
-            intersection(*this, reg, & res);
-            return res;
-        }
-
-        bool Region::intersects(const Region & reg1, const Region & reg2)
-        {
-            // check reg1.empty || reg2.empty
-            if(reg1.empty() || reg2.empty())
-            {
-                return false;
-            }
-
-            // horizontal intersection
-            if(std::min(reg1.x + reg1.width, reg2.x + reg2.width) <= std::max(reg1.x, reg2.x))
-            {
-                return false;
-            }
-
-            // vertical intersection
-            if(std::min(reg1.y + reg1.height, reg2.y + reg2.height) <= std::max(reg1.y, reg2.y))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        bool Region::intersection(const Region & reg1, const Region & reg2, Region* res)
-        {
-            bool intersects = Region::intersects(reg1, reg2);
-
-            if(! intersects)
-            {
-                return false;
-            }
-
-            if(! res)
-            {
-                return intersects;
-            }
-
-            // horizontal intersection
-            res->x = std::max(reg1.x, reg2.x);
-            res->width = std::min(reg1.x + reg1.width, reg2.x + reg2.width) - res->x;
-            // vertical intersection
-            res->y = std::max(reg1.y, reg2.y);
-            res->height = std::min(reg1.y + reg1.height, reg2.y + reg2.height) - res->y;
-            return ! res->empty();
-        }
-
-        std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const
-        {
-            uint16_t bw = width <= cols ? 1 : width / cols;
-            uint16_t bh = height <= rows ? 1 : height / rows;
-            return divideBlocks(Size(bw, bh));
-        }
-
-        std::list<Region> Region::divideBlocks(const Size & sz) const
-        {
-            std::list<Region> res;
-            int cw = sz.width > width ? width : sz.width;
-            int ch = sz.height > height ? height : sz.height;
-
-            for(uint16_t yy = 0; yy < height; yy += ch)
-            {
-                for(uint16_t xx = 0; xx < width; xx += cw)
-                {
-                    uint16_t fixedw = std::min(width - xx, cw);
-                    uint16_t fixedh = std::min(height - yy, ch);
-                    res.emplace_back(x + xx, y + yy, fixedw, fixedh);
-                }
-            }
-
-            return res;
+            return xcb_rectangle_t{reg.x, reg.y, reg.width, reg.height};
         }
 
         void error(const xcb_generic_error_t* err, const char* func, const char* xcbname)
         {
-            Application::error("%s: %s failed, error code: %" PRIu8 ", major: 0x%02" PRIx8 ", minor: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16,
+            Application::error("%s: %s failed, error code: %" PRIu8 ", major: 0x%02" PRIx8 ", minor: 0x%04" PRIx16 ", sequence: %" PRIu16,
                                func, xcbname, err->error_code, err->major_code, err->minor_code, err->sequence);
         }
 
@@ -309,29 +83,11 @@ namespace LTSM
 #endif
                 error(err, func, xcbname);
         }
-    }
 
-    /* XCB::CursorImage */
-    uint32_t* XCB::CursorImage::data(void)
-    {
-        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
-    }
-
-    const uint32_t* XCB::CursorImage::data(void) const
-    {
-        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
-    }
-
-    size_t XCB::CursorImage::size(void) const
-    {
-        return reply() ? xcb_xfixes_get_cursor_image_cursor_image_length(reply().get()) : 0;
-    }
-
-    namespace XCB
-    {
         /* Atom */
         namespace Atom
         {
+            xcb_atom_t timestamp = XCB_ATOM_NONE;
             xcb_atom_t wmName = XCB_ATOM_NONE;
             xcb_atom_t utf8String = XCB_ATOM_NONE;
 
@@ -340,8 +96,24 @@ namespace LTSM
             xcb_atom_t primary = XCB_ATOM_NONE;
             xcb_atom_t clipboard = XCB_ATOM_NONE;
             xcb_atom_t targets = XCB_ATOM_NONE;
-            xcb_atom_t text = XCB_ATOM_NONE;
-            xcb_atom_t textPlain = XCB_ATOM_NONE;
+
+            xcb_atom_t getAtom(xcb_connection_t* conn, std::string_view name, bool create)
+            {
+                auto xcbReply = XCB::getReplyFunc2(xcb_intern_atom, conn, create ? 0 : 1, name.size(), name.data());
+
+                if(const auto & err = xcbReply.error())
+                {
+                    error(conn, err.get(), __FUNCTION__, "xcb_intern_atom");
+                    return XCB_ATOM_NONE;
+                }
+
+                if(const auto & reply = xcbReply.reply())
+                {
+                    return reply->atom;
+                }
+
+                return XCB_ATOM_NONE;
+            }
 
             std::string getName(xcb_connection_t* conn, xcb_atom_t atom)
             {
@@ -380,6 +152,22 @@ namespace LTSM
 
             return PropertyReply(std::move(xcbReply.first));
         }
+    }
+
+    /* XCB::CursorImage */
+    uint32_t* XCB::CursorImage::data(void)
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
+    }
+
+    const uint32_t* XCB::CursorImage::data(void) const
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image(reply().get()) : nullptr;
+    }
+
+    size_t XCB::CursorImage::size(void) const
+    {
+        return reply() ? xcb_xfixes_get_cursor_image_cursor_image_length(reply().get()) : 0;
     }
 
     /* ModuleExtension */
@@ -422,97 +210,6 @@ namespace LTSM
         return false;
     }
 
-    // XCB::ModuleDamage
-    XCB::WindowDamageId::~WindowDamageId()
-    {
-        if(auto ptr = conn.lock(); 0 < xid && ptr)
-        {
-             xcb_damage_destroy(ptr.get(), xid);
-        }
-    }
-
-    bool XCB::WindowDamageId::addRegion(const xcb_xfixes_region_t & region)
-    {
-        if(auto ptr = conn.lock())
-        {
-            auto cookie = xcb_damage_add_checked(ptr.get(), win, region);
-
-            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
-            {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_add");
-                return false;
-            }
-
-            Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, region);
-            return true;
-        }
-
-        return false;
-    }
-
-    bool XCB::WindowDamageId::subtrackRegion(const xcb_xfixes_region_t & repair)
-    {
-        if(auto ptr = conn.lock())
-        {
-            auto cookie = xcb_damage_subtract_checked(ptr.get(), xid, repair, XCB_XFIXES_REGION_NONE);
-
-            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
-            {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_subtract");
-                return false;
-            }
-
-            Application::debug("%s: resource id: 0x%08" PRIx32, __FUNCTION__, repair);
-            return true;
-        }
-
-        return false;
-    }
-
-    XCB::ModuleDamage::ModuleDamage(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::DAMAGE)
-    {
-        ext = xcb_get_extension_data(ptr.get(), & xcb_damage_id);
-
-        if(! ext || ! ext->present)
-        {
-            throw xcb_error(NS_FuncName);
-        }
-
-        auto xcbReply = getReplyFunc2(xcb_damage_query_version, ptr.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
-
-        if(const auto & err = xcbReply.error())
-        {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
-            throw xcb_error(NS_FuncName);
-        }
-
-        if(const auto & reply = xcbReply.reply())
-        {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "DAMAGE", reply->major_version, reply->minor_version);
-        }
-    }
-
-    XCB::WindowDamageIdPtr XCB::ModuleDamage::createDamage(xcb_drawable_t win, const xcb_damage_report_level_t & level) const
-    {
-        if(auto ptr = conn.lock())
-        {
-            xcb_damage_damage_t res = xcb_generate_id(ptr.get());
-
-            auto cookie = xcb_damage_create_checked(ptr.get(), res, win, level);
-
-            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
-            {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_create");
-                res = 0;
-            }
-
-            Application::info("%s: level: %d, resource id: 0x%08" PRIx32, __FUNCTION__, level, res);
-            return std::make_unique<WindowDamageId>(conn, win, res);
-        }
-
-        return nullptr;
-    }
-
     // XCB::ModuleFixes
     XCB::FixesRegionId::~FixesRegionId()
     {
@@ -528,6 +225,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
+            Application::error("extension not found: %s", "XFIXES");
             throw xcb_error(NS_FuncName);
         }
 
@@ -541,7 +239,7 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "XFIXES", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "XFIXES", reply->major_version, reply->minor_version);
         }
     }
 
@@ -559,7 +257,7 @@ namespace LTSM
                 res = 0;
             }
 
-            Application::debug("%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
+            Application::debug(DebugType::Xcb, "%s: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
                            __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
             return std::make_unique<FixesRegionId>(conn, res);
@@ -582,7 +280,7 @@ namespace LTSM
                 res = 0;
             }
 
-            Application::debug("%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
+            Application::debug(DebugType::Xcb, "%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -603,7 +301,7 @@ namespace LTSM
                 res = 0;
             }
 
-            Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+            Application::debug(DebugType::Xcb, "%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -624,7 +322,7 @@ namespace LTSM
                 res = 0;
             }
 
-            Application::debug("%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
+            Application::debug(DebugType::Xcb, "%s: reg1 id: 0x%08" PRIx32 ", reg2 id: 0x%08" PRIx32 ", resource id: 0x%08" PRIx32, __FUNCTION__, reg1, reg2, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -683,7 +381,22 @@ namespace LTSM
         return {};
     }
 
-    XCB::CursorImage XCB::ModuleFixes::getCursorImage(void) const
+    // XCB::ModuleWindowFixes
+    XCB::ModuleWindowFixes::ModuleWindowFixes(const ConnectionShared & ptr, xcb_window_t wid) : ModuleFixes(ptr), win(wid)
+    {
+        type = Module::WINFIXES;
+        xcb_xfixes_select_cursor_input(ptr.get(), win, XCB_XFIXES_CURSOR_NOTIFY_MASK_DISPLAY_CURSOR);
+    }
+        
+    XCB::ModuleWindowFixes::~ModuleWindowFixes()
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_xfixes_select_cursor_input(ptr.get(), win, 0);
+        }
+    }
+
+    XCB::CursorImage XCB::ModuleWindowFixes::getCursorImage(void) const
     {
         if(auto ptr = conn.lock())
         {
@@ -700,7 +413,7 @@ namespace LTSM
         return ReplyCursor{nullptr, nullptr};
     }
 
-    std::string XCB::ModuleFixes::getCursorName(const xcb_cursor_t & cur) const
+    std::string XCB::ModuleWindowFixes::getCursorName(const xcb_cursor_t & cur) const
     {
         if(auto ptr = conn.lock())
         {
@@ -726,13 +439,126 @@ namespace LTSM
         return "";
     }
 
+    // XCB::ModuleDamage
+    XCB::ModuleDamage::ModuleDamage(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::DAMAGE)
+    {
+        ext = xcb_get_extension_data(ptr.get(), & xcb_damage_id);
+
+        if(! ext || ! ext->present)
+        {
+            Application::error("extension not found: %s", "DAMAGE");
+            throw xcb_error(NS_FuncName);
+        }
+
+        auto xcbReply = getReplyFunc2(xcb_damage_query_version, ptr.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
+
+        if(const auto & err = xcbReply.error())
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
+            throw xcb_error(NS_FuncName);
+        }
+
+        if(const auto & reply = xcbReply.reply())
+        {
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "DAMAGE", reply->major_version, reply->minor_version);
+        }
+    }
+
+    // XCB::ModuleWindowDamage
+    XCB::ModuleWindowDamage::ModuleWindowDamage(const ConnectionShared & ptr, xcb_drawable_t draw)
+        : ModuleDamage(ptr), win(draw)
+    {
+        type = Module::WINDAMAGE;
+        xid = xcb_generate_id(ptr.get());
+
+        auto cookie = xcb_damage_create_checked(ptr.get(), xid, win, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_create");
+            throw xcb_error(NS_FuncName);
+        }
+
+        Application::debug(DebugType::Xcb, "%s: resource id: 0x%08" PRIx32, __FUNCTION__, xid);
+    }
+
+    XCB::ModuleWindowDamage::~ModuleWindowDamage()
+    {
+        if(auto ptr = conn.lock(); 0 < xid && ptr)
+        {
+            xcb_damage_destroy(ptr.get(), xid);
+        }
+    }
+
+    bool XCB::ModuleWindowDamage::addRegion(const Region & reg) const
+    {
+        return addRegion(regionToXcb(reg));
+    }
+
+    bool XCB::ModuleWindowDamage::addRegion(const xcb_rectangle_t & reg) const
+    {
+        if(addRegions(& reg, 1))
+        {
+            Application::debug(DebugType::Xcb, "%s: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
+                    __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool XCB::ModuleWindowDamage::addRegions(const xcb_rectangle_t* rects, size_t counts) const
+    {
+        if(! rects || 0 == counts)
+            return false;
+
+        if(auto ptr = conn.lock())
+        {
+            xcb_xfixes_region_t regid = xcb_generate_id(ptr.get());
+
+            xcb_xfixes_create_region(ptr.get(), regid, counts, rects);
+            xcb_damage_add_checked(ptr.get(), win, regid);
+            xcb_xfixes_destroy_region(ptr.get(), regid);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool XCB::ModuleWindowDamage::subtrackRegion(const Region & reg) const
+    {
+        return subtrackRegion(regionToXcb(reg));
+    }
+
+    bool XCB::ModuleWindowDamage::subtrackRegion(const xcb_rectangle_t & reg) const
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_xfixes_region_t regid = xcb_generate_id(ptr.get());
+
+            xcb_xfixes_create_region_checked(ptr.get(), regid, 1, & reg);
+            xcb_damage_subtract_checked(ptr.get(), xid, regid, XCB_XFIXES_REGION_NONE);
+            xcb_xfixes_destroy_region(ptr.get(), regid);
+
+            Application::debug(DebugType::Xcb, "%s: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
+                    __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
+
+            return true;
+        }
+
+        return false;
+    }
+
     // XCB::ModuleTest
-    XCB::ModuleTest::ModuleTest(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::TEST)
+    XCB::ModuleTest::ModuleTest(const ConnectionShared & ptr, xcb_window_t root) : ModuleExtension(ptr, Module::TEST), screen(root)
     {
         ext = xcb_get_extension_data(ptr.get(), & xcb_test_id);
 
         if(! ext || ! ext->present)
         {
+            Application::error("extension not found: %s", "XTEST");
             throw xcb_error(NS_FuncName);
         }
 
@@ -746,8 +572,15 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "TEST", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "TEST", reply->major_version, reply->minor_version);
         }
+
+        std::fill(keycodes.begin(), keycodes.end(), NULL_KEYCODE);
+    }
+
+    XCB::ModuleTest::~ModuleTest()
+    {
+        screenInputReset();
     }
 
     /// @param type: XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_MOTION_NOTIFY
@@ -770,24 +603,94 @@ namespace LTSM
         return false;
     }
 
-    void XCB::ModuleTest::fakeInputClickButton(xcb_window_t win, uint8_t button, const Point & pos) const
+    void XCB::ModuleTest::screenInputKeycode(xcb_keycode_t keycode, bool pressed) const
     {
         if(auto ptr = conn.lock())
         {
-            xcb_test_fake_input(ptr.get(), XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
-            xcb_test_fake_input(ptr.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, win, pos.x, pos.y, 0);
+            xcb_test_fake_input(ptr.get(), pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, XCB_CURRENT_TIME, screen, 0, 0, 0);
+            xcb_flush(ptr.get());
+
+            auto it = std::find(keycodes.begin(), keycodes.end(), keycode);
+
+            if(pressed)
+            {
+                if(it != keycodes.end())
+                    return;
+
+                it = std::find(keycodes.begin(), keycodes.end(), NULL_KEYCODE);
+
+                if(it != keycodes.end())
+                    *it = keycode;
+            }
+            else
+            if(it != keycodes.end())
+            {
+                *it = NULL_KEYCODE;
+            }
+        }
+    }
+
+    void XCB::ModuleTest::screenInputButton(uint8_t button, const Point & pos, bool pressed) const
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_test_fake_input(ptr.get(), pressed ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, screen, pos.x, pos.y, 0);
+            xcb_flush(ptr.get());
+        }
+    }
+
+    void XCB::ModuleTest::screenInputMove(const Point & pos) const
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_test_fake_input(ptr.get(), XCB_MOTION_NOTIFY, 0, XCB_CURRENT_TIME, screen, pos.x, pos.y, 0);
+            xcb_flush(ptr.get());
+        }
+    }
+
+    void XCB::ModuleTest::screenInputButtonClick(uint8_t button, const Point & pos) const
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_test_fake_input(ptr.get(), XCB_BUTTON_PRESS, button, XCB_CURRENT_TIME, screen, pos.x, pos.y, 0);
+            xcb_test_fake_input(ptr.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, screen, pos.x, pos.y, 0);
+
+            xcb_flush(ptr.get());
+        }
+    }
+
+    void XCB::ModuleTest::screenInputReset(void) const
+    {
+        if(auto ptr = conn.lock())
+        {
+            // release all buttons
+            for(uint8_t button = 1; button <= 5; button++)
+            {
+                xcb_test_fake_input(ptr.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, screen, 0, 0, 0);
+            }
+
+            // release pressed keys
+            for(auto & code: keycodes)
+            {
+                if(code != NULL_KEYCODE)
+                {
+                    xcb_test_fake_input(ptr.get(), XCB_KEY_RELEASE, code, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
+                    code = NULL_KEYCODE;
+                }
+            }
 
             xcb_flush(ptr.get());
         }
     }
 
     // XCB::ModuleRandr
-    XCB::ModuleRandr::ModuleRandr(const ConnectionShared & ptr) : ModuleExtension(ptr, Module::RANDR)
+    XCB::ModuleRandr::ModuleRandr(const ConnectionShared & ptr, xcb_window_t root) : ModuleExtension(ptr, Module::RANDR), screen(root)
     {
         ext = xcb_get_extension_data(ptr.get(), & xcb_randr_id);
 
         if(! ext || ! ext->present)
         {
+            Application::error("extension not found: %s", "RANDR");
             throw xcb_error(NS_FuncName);
         }
 
@@ -801,11 +704,23 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "RANDR", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "RANDR", reply->major_version, reply->minor_version);
+        }
+        
+        // create randr notify
+        xcb_randr_select_input(ptr.get(), screen,
+                               XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+    }
+
+    XCB::ModuleRandr::~ModuleRandr()
+    {
+        if(auto ptr = conn.lock())
+        {
+            xcb_randr_select_input(ptr.get(), screen, 0);
         }
     }
 
-    std::vector<xcb_randr_output_t> XCB::ModuleRandr::getOutputs(const xcb_screen_t & screen) const
+    std::vector<xcb_randr_output_t> XCB::ModuleRandr::getOutputs(void) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -814,7 +729,7 @@ namespace LTSM
             return {};
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error())
         {
@@ -832,7 +747,7 @@ namespace LTSM
         return {};
     }
 
-    std::vector<xcb_randr_crtc_t> XCB::ModuleRandr::getCrtcs(const xcb_screen_t & screen) const
+    std::vector<xcb_randr_crtc_t> XCB::ModuleRandr::getCrtcs(void) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -841,7 +756,7 @@ namespace LTSM
             return {};
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error())
         {
@@ -935,7 +850,7 @@ namespace LTSM
         return {};
     }
 
-    std::vector<xcb_randr_mode_info_t> XCB::ModuleRandr::getModesInfo(const xcb_screen_t & screen) const
+    std::vector<xcb_randr_mode_info_t> XCB::ModuleRandr::getModesInfo(void) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -944,7 +859,7 @@ namespace LTSM
             return {};
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen.root);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_resources, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error())
         {
@@ -1076,7 +991,7 @@ namespace LTSM
         return {};
     }
 
-    std::unique_ptr<XCB::RandrScreenInfo> XCB::ModuleRandr::getScreenInfo(const xcb_screen_t & screen) const
+    std::unique_ptr<XCB::RandrScreenInfo> XCB::ModuleRandr::getScreenInfo(void) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1085,7 +1000,7 @@ namespace LTSM
             return nullptr;
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen.root);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error())
         {
@@ -1108,7 +1023,7 @@ namespace LTSM
         return nullptr;
     }
 
-    std::vector<xcb_randr_screen_size_t> XCB::ModuleRandr::getScreenSizes(const xcb_screen_t & screen, RandrScreenInfo* info) const
+    std::vector<xcb_randr_screen_size_t> XCB::ModuleRandr::getScreenSizes(RandrScreenInfo* info) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1117,7 +1032,7 @@ namespace LTSM
             return {};
         }
 
-        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen.root);
+        auto xcbReply = getReplyFunc2(xcb_randr_get_screen_info, ptr.get(), screen);
 
         if(const auto & err = xcbReply.error())
         {
@@ -1145,7 +1060,7 @@ namespace LTSM
         return {};
     }
 
-    xcb_randr_mode_t XCB::ModuleRandr::cvtCreateMode(const xcb_screen_t & screen, const XCB::Size & sz, int vertRef) const
+    xcb_randr_mode_t XCB::ModuleRandr::cvtCreateMode(const XCB::Size & sz, int vertRef) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1189,7 +1104,7 @@ namespace LTSM
             // dummy drv limited 300
             if(clock > 300)
             {
-                return cvtCreateMode(screen, sz, vertRef < 10 ? vertRef - 1 : vertRef - 5);
+                return cvtCreateMode(sz, vertRef < 10 ? vertRef - 1 : vertRef - 5);
             }
 
             mode_info.dot_clock = clock * 1000000;
@@ -1239,7 +1154,7 @@ namespace LTSM
 
         auto name = Tools::StringFormat("%1x%2_%3").arg(mode_info.width).arg(mode_info.height).arg(vertRef);
         mode_info.name_len = name.size();
-        auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen.root, mode_info, name.size(), name.data());
+        auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen, mode_info, name.size(), name.data());
 
         if(const auto & err = xcbReply.error())
         {
@@ -1249,7 +1164,7 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("%s: id: %08" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
+            Application::debug(DebugType::Xcb, "%s: id: %08" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
@@ -1273,7 +1188,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %08" PRIx32, __FUNCTION__, mode);
+        Application::debug(DebugType::Xcb, "%s: id: %08" PRIx32, __FUNCTION__, mode);
         return true;
     }
 
@@ -1302,7 +1217,7 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
+        Application::debug(DebugType::Xcb, "%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
         return true;
     }
 
@@ -1331,11 +1246,11 @@ namespace LTSM
             return false;
         }
 
-        Application::debug("%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
+        Application::debug(DebugType::Xcb, "%s: id: %08" PRIx32 ", output: %08" PRIx32, __FUNCTION__, mode, output);
         return true;
     }
 
-    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_screen_t & screen, const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode) const
+    bool XCB::ModuleRandr::crtcConnectOutputsMode(const xcb_randr_crtc_t & crtc, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> & outputs, const xcb_randr_mode_t & mode) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1344,7 +1259,7 @@ namespace LTSM
             return false;
         }
 
-        if(auto info = getScreenInfo(screen))
+        if(auto info = getScreenInfo())
         {
             // check output mode present
             for(auto & output: outputs)
@@ -1371,7 +1286,7 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::ModuleRandr::crtcDisconnect(const xcb_screen_t & screen, const xcb_randr_crtc_t & crtc) const
+    bool XCB::ModuleRandr::crtcDisconnect(const xcb_randr_crtc_t & crtc) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1380,7 +1295,7 @@ namespace LTSM
             return false;
         }
 
-        if(auto info = getScreenInfo(screen))
+        if(auto info = getScreenInfo())
         {
             auto xcbReply = getReplyFunc2( xcb_randr_set_crtc_config, ptr.get(), crtc, XCB_CURRENT_TIME, info->config_timestamp,
                                            0, 0, 0, XCB_RANDR_ROTATION_ROTATE_0, 0, nullptr );
@@ -1397,7 +1312,7 @@ namespace LTSM
         return false;
     }
 
-    bool XCB::ModuleRandr::setScreenSize(const xcb_screen_t & screen, uint16_t width, uint16_t height, uint16_t dpi) const
+    bool XCB::ModuleRandr::setScreenSize(uint16_t width, uint16_t height, uint16_t dpi) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1412,12 +1327,12 @@ namespace LTSM
             width += 8 - alignW;
         }
 
-        Application::debug( "%s: size: [%" PRIu16 ", %" PRIu16 "], dpi: %" PRIu16, __FUNCTION__, width, height, dpi );
+        Application::debug(DebugType::Xcb,  "%s: size: [%" PRIu16 ", %" PRIu16 "], dpi: %" PRIu16, __FUNCTION__, width, height, dpi );
 
         uint32_t mm_width = width * 25.4 / dpi;
         uint32_t mm_height = height * 25.4 / dpi;
 
-        auto cookie = xcb_randr_set_screen_size_checked(ptr.get(), screen.root, width, height, mm_width, mm_height);
+        auto cookie = xcb_randr_set_screen_size_checked(ptr.get(), screen, width, height, mm_width, mm_height);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
         {
@@ -1428,7 +1343,7 @@ namespace LTSM
         return true;
     }
 
-    bool XCB::ModuleRandr::setScreenSizeCompat(const xcb_screen_t & screen, XCB::Size sz, uint16_t* sequence) const
+    bool XCB::ModuleRandr::setScreenSizeCompat(uint16_t szw, uint16_t szh, uint16_t* sequence) const
     {
         auto ptr = conn.lock();
         if(! ptr)
@@ -1438,14 +1353,14 @@ namespace LTSM
         }
 
         // align size
-        if(auto alignW = sz.width % 8)
+        if(auto alignW = szw % 8)
         {
-            sz.width += 8 - alignW;
+            szw += 8 - alignW;
         }
 
-        auto screenSizes = getScreenSizes(screen);
+        auto screenSizes = getScreenSizes();
         auto its = std::find_if(screenSizes.begin(), screenSizes.end(),
-        [&](auto & ss) { return ss.width == sz.width && ss.height == sz.height; });
+                        [&](auto & ss) { return ss.width == szw && ss.height == szh; });
 
         xcb_randr_mode_t mode = 0;
         xcb_randr_output_t output = 0;
@@ -1454,9 +1369,9 @@ namespace LTSM
         if(its == screenSizes.end())
         {
             // add new mode
-            auto outputs = getOutputs(screen);
+            auto outputs = getOutputs();
             auto ito = std::find_if(outputs.begin(), outputs.end(),
-            [this](auto & id) { auto info = this->getOutputInfo(id); return info && info->connected; });
+                        [this](auto & id) { auto info = this->getOutputInfo(id); return info && info->connected; });
 
             if(ito == outputs.end())
             {
@@ -1465,7 +1380,7 @@ namespace LTSM
             }
 
             output = *ito;
-            mode = cvtCreateMode(screen, sz);
+            mode = cvtCreateMode({szw, szh});
 
             if(0 == mode)
             {
@@ -1474,35 +1389,35 @@ namespace LTSM
 
             if(! addOutputMode(output, mode))
             {
-                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "addOutputMode", sz.width, sz.height);
+                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "addOutputMode", szw, szh);
                 destroyMode(mode);
                 return false;
             }
 
             // fixed size
-            auto modes = getModesInfo(screen);
+            auto modes = getModesInfo();
             auto itm = std::find_if(modes.begin(), modes.end(),
             [=](auto & val) { return val.id == mode; });
 
             if(itm == modes.end())
             {
-                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getModesInfo", sz.width, sz.height);
+                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getModesInfo", szw, szh);
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
             }
 
-            sz.width = (*itm).width;
-            sz.height = (*itm).height;
+            szw = (*itm).width;
+            szh = (*itm).height;
 
             // rescan info
-            screenSizes = getScreenSizes(screen);
+            screenSizes = getScreenSizes();
             its = std::find_if(screenSizes.begin(), screenSizes.end(),
-            [&](auto & ss) {return ss.width == sz.width && ss.height == sz.height; });
+                        [&](auto & ss) {return ss.width == szw && ss.height == szh; });
 
             if(its == screenSizes.end())
             {
-                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getScreenSizes", sz.width, sz.height);
+                Application::error("%s: %s failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getScreenSizes", szw, szh);
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
@@ -1511,15 +1426,15 @@ namespace LTSM
 
         auto sizeID = std::distance(screenSizes.begin(), its);
 
-        if(auto screenInfo = getScreenInfo(screen))
+        if(auto screenInfo = getScreenInfo())
         {
-            auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, ptr.get(), screen.root, screenInfo->timestamp,
+            auto xcbReply2 = getReplyFunc2(xcb_randr_set_screen_config, ptr.get(), screen, screenInfo->timestamp,
                                            screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
             if(const auto & err = xcbReply2.error())
             {
-                Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
-                                  __FUNCTION__, sz.width, sz.height, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
+                Application::debug(DebugType::Xcb, "%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
+                                  __FUNCTION__, szw, szh, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
 
                 error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;
@@ -1532,7 +1447,7 @@ namespace LTSM
                     *sequence = reply->sequence;
                 }
 
-                Application::info("%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: 0x%04" PRIx16, __FUNCTION__, sz.width, sz.height, sizeID, reply->sequence);
+                Application::debug(DebugType::Xcb, "%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: %" PRIu16, __FUNCTION__, szw, szh, sizeID, reply->sequence);
             }
 
             return true;
@@ -1548,6 +1463,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
+            Application::error("extension not found: %s", "SHM");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1561,7 +1477,7 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "SHM", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "SHM", reply->major_version, reply->minor_version);
         }
     }
 
@@ -1595,7 +1511,7 @@ namespace LTSM
 
     XCB::ShmIdShared XCB::ModuleShm::createShm(size_t shmsz, int mode, bool readOnly, uid_t owner) const
     {
-        Application::info("%s: size: %u, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
+        Application::debug(DebugType::Xcb, "%s: size: %u, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
 
         const size_t pagesz = 4096;
 
@@ -1658,7 +1574,7 @@ namespace LTSM
             return nullptr;
         }
 
-        Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, res);
+        Application::debug(DebugType::Xcb, "%s: resource id: 0x%08" PRIx32, __FUNCTION__, res);
         return std::make_shared<ShmId>(conn, shmId, shmAddr, res);
     }
 
@@ -1670,6 +1586,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
+            Application::error("extension not found: %s", "XKB");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1683,7 +1600,7 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug("used %s extension, version: %" PRIu32 ".%" PRIu32, "XKB", reply->serverMajor, reply->serverMinor);
+            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "XKB", reply->serverMajor, reply->serverMinor);
         }
 
         devid = xkb_x11_get_core_keyboard_device_id(ptr.get());
@@ -1705,6 +1622,22 @@ namespace LTSM
         if(! resetMapState())
         {
             throw xcb_error(NS_FuncName);
+        }
+
+        // notify xkb filter
+        const uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
+                                       XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
+        const uint16_t required_events = (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+
+        xcb_xkb_select_events(ptr.get(), devid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
+    }
+
+    XCB::ModuleXkb::~ModuleXkb()
+    {
+        if(auto ptr = conn.lock())
+        {
+            const uint16_t clear = (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+            xcb_xkb_select_events(ptr.get(), devid, 0, clear, 0, 0, 0, nullptr);
         }
     }
 
@@ -1734,7 +1667,7 @@ namespace LTSM
                 return false;
             }
 
-            Application::debug("%s: keyboard updated, device id: %" PRId32, __FUNCTION__, devid);
+            Application::debug(DebugType::Xcb, "%s: keyboard updated, device id: %" PRId32, __FUNCTION__, devid);
             return true;
         }
 
@@ -1839,15 +1772,15 @@ namespace LTSM
         return true;
     }
 
-    // ModuleSelection
-    XCB::ModuleSelection::ModuleSelection(const ConnectionShared & ptr, const xcb_screen_t & screen, xcb_atom_t atom)
-        : ModuleExtension(ptr, Module::SELECTION), atombuf(atom)
+    // ModulePasteSelection
+    XCB::ModulePasteSelection::ModulePasteSelection(const ConnectionShared & ptr, const xcb_screen_t & screen, xcb_atom_t atom)
+        : ModuleExtension(ptr, Module::SELECTION_PASTE)
     {
         const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
         const uint32_t values[] = { screen.white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE };
 
-        win = xcb_generate_id(ptr.get());
-        auto cookie = xcb_create_window_checked(ptr.get(), 0, win, screen.root, -1, -1, 1, 1, 0,
+        selectionWin = xcb_generate_id(ptr.get());
+        auto cookie = xcb_create_window_checked(ptr.get(), 0, selectionWin, screen.root, -1, -1, 1, 1, 0,
                                                 XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
@@ -1856,194 +1789,31 @@ namespace LTSM
             throw xcb_error(NS_FuncName);
         }
 
-        Application::info("%s: resource id: 0x%08" PRIx32, __FUNCTION__, win);
-
         // set _wm_name
-        const std::string name("LTSM_WINSEL");
-        xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, win,
+        const std::string name("LTSM_SELECTION_PASTE");
+
+        xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, selectionWin,
                             Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
+
+        selectionType = atom != XCB_ATOM_NONE ? atom : Atom::clipboard;
+        selectionName = Atom::getName(ptr.get(), selectionType);
+
+        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
     }
 
-    XCB::ModuleSelection::~ModuleSelection()
+    XCB::ModulePasteSelection::~ModulePasteSelection()
     {
-        if(auto ptr = conn.lock(); win != XCB_WINDOW_NONE && ptr)
+        removeRequestors(XCB_WINDOW_NONE);
+
+        if(auto ptr = conn.lock(); selectionWin != XCB_WINDOW_NONE && ptr)
         {
-            xcb_destroy_window(ptr.get(), win);
+            xcb_destroy_window(ptr.get(), selectionWin);
         }
     }
 
-    bool XCB::ModuleSelection::clearAction(const xcb_selection_clear_event_t* ev)
+    void XCB::ModulePasteSelection::sendNotifyEvent(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev, xcb_atom_t atom) const
     {
-        if(ev && ev->owner == win)
-        {
-            const std::scoped_lock guard{ lock };
-            buf.clear();
-
-            Application::debug("%s: %s", __FUNCTION__, "event");
-            return true;
-        }
-
-        return false;
-    }
-
-    bool XCB::ModuleSelection::setBuffer(const uint8_t* src, size_t len, std::initializer_list<xcb_atom_t> atoms)
-    {
-        const std::scoped_lock guard{ lock };
-        buf.assign(src, src + len);
-
-        if(buf.empty())
-        {
-            return false;
-        }
-
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        for(auto atom: atoms)
-        {
-            // take owner
-            auto xcbReply = getReplyFunc2(xcb_get_selection_owner, ptr.get(), atom);
-
-            if(const auto & err = xcbReply.error())
-            {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_selection_owner");
-            }
-            else if(const auto & reply = xcbReply.reply())
-            {
-                if(reply->owner != win)
-                {
-                    xcb_set_selection_owner(ptr.get(), win, atom, XCB_CURRENT_TIME);
-                }
-            }
-        }
-
-        xcb_flush(ptr.get());
-        return true;
-    }
-
-    bool XCB::ModuleSelection::sendNotifyTargets(const xcb_selection_request_event_t & ev)
-    {
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        // send list: Atom::targets, Atom::text, Atom::textPlain, Atom::utf8String
-        auto cookie = xcb_change_property_checked(ptr.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property,
-                      XCB_ATOM, 8 * sizeof(xcb_atom_t), 4, & Atom::targets);
-
-        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
-        {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_change_property");
-            return false;
-        }
-
-        xcb_selection_notify_event_t notify =
-        {
-            .response_type = XCB_SELECTION_NOTIFY,
-            .pad0 = 0,
-            .sequence = 0,
-            .time = ev.time,
-            .requestor = ev.requestor,
-            .selection = ev.selection,
-            .target = ev.target,
-            .property = ev.property
-        };
-
-        xcb_send_event(ptr.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-        xcb_flush(ptr.get());
-
-        return true;
-    }
-
-    bool XCB::ModuleSelection::sendNotifySelData(const xcb_selection_request_event_t & ev)
-    {
-        const std::scoped_lock guard{ lock };
-
-        if(buf.empty())
-        {
-            return false;
-        }
-
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        size_t length = buf.size();
-        size_t maxreq = xcb_get_maximum_request_length(ptr.get());
-        auto chunk = std::min(maxreq, length);
-        auto cookie = xcb_change_property_checked(ptr.get(), XCB_PROP_MODE_REPLACE, ev.requestor, ev.property, ev.target, 8, chunk, buf.data());
-
-        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
-        {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_change_property");
-            return false;
-        }
-
-        xcb_selection_notify_event_t notify =
-        {
-            .response_type = XCB_SELECTION_NOTIFY,
-            .pad0 = 0,
-            .sequence = 0,
-            .time = ev.time,
-            .requestor = ev.requestor,
-            .selection = ev.selection,
-            .target = ev.target,
-            .property = ev.property
-        };
-
-        xcb_send_event(ptr.get(), 0, ev.requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
-        xcb_flush(ptr.get());
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto prop = Atom::getName(ptr.get(), ev.property);
-            std::string log(buf.begin(), buf.end());
-            Application::debug("%s: put selection, size: %u, content: `%s', to window: 0x%08" PRIx32 ", property: `%s'",
-                               __FUNCTION__, buf.size(), log.c_str(), ev.requestor, prop.c_str());
-        }
-
-        return true;
-    }
-
-    bool XCB::ModuleSelection::requestAction(const xcb_selection_request_event_t* ev)
-    {
-        if(! ev)
-        {
-            return false;
-        }
-
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        if(ev->selection == Atom::clipboard || ev->selection == Atom::primary)
-        {
-            if(ev->target == Atom::targets)
-            {
-                return sendNotifyTargets(*ev);
-            }
-            else if(ev->property != XCB_ATOM_NONE &&
-                    (ev->target == Atom::text || ev->target == Atom::textPlain || ev->target == Atom::utf8String))
-            {
-                return sendNotifySelData(*ev);
-            }
-        }
-
-        // other variants: discard request
-        xcb_selection_notify_event_t notify =
+        const xcb_selection_notify_event_t notify =
         {
             .response_type = XCB_SELECTION_NOTIFY,
             .pad0 = 0,
@@ -2052,121 +1822,50 @@ namespace LTSM
             .requestor = ev->requestor,
             .selection = ev->selection,
             .target = ev->target,
-            .property = XCB_ATOM_NONE
+            .property = atom
         };
 
         xcb_send_event(ptr.get(), 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (const char*) & notify);
         xcb_flush(ptr.get());
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto sel = Atom::getName(ptr.get(), ev->selection);
-            auto tgt = Atom::getName(ptr.get(), ev->target);
-            auto prop = Atom::getName(ptr.get(), ev->property);
-            Application::warning("%s: discard, selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), window: 0x%08" PRIx32,
-                                 __FUNCTION__, ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str(), ev->requestor);
-        }
-
-        return false;
     }
 
-    bool XCB::ModuleSelection::fixesAction(const xcb_xfixes_selection_notify_event_t* ev)
+    void XCB::ModulePasteSelection::eventRequestDebug(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev, bool warn) const
     {
-        if(! ev)
+        auto sel = Atom::getName(ptr.get(), ev->selection);
+        auto tgt = Atom::getName(ptr.get(), ev->target);
+        auto prop = Atom::getName(ptr.get(), ev->property);
+
+        if(warn)
         {
-            return false;
-        }
-
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
-        }
-
-        if(ev->owner != XCB_WINDOW_NONE && ev->owner != win)
-        {
-            xcb_delete_property(ptr.get(), win, atombuf);
-            xcb_convert_selection(ptr.get(), win, Atom::primary, Atom::utf8String, atombuf, XCB_CURRENT_TIME);
-            xcb_flush(ptr.get());
-
-            return true;
-        }
-
-        return false;
-    }
-
-    void XCB::ModuleSelection::notifyIncrStart(const xcb_selection_notify_event_t & ev)
-    {
-        // fixme: maybe need check time
-        if(incr && incr->requestor != ev.requestor && incr->sequence > ev.sequence)
-        {
-            Application::warning("%s: %s, win: 0x%08" PRIx32 ", sequence: 0x%04" PRIx16, __FUNCTION__, "incremental request skip", ev.requestor, ev.sequence);
-            return;
-        }
-
-        auto ptr = conn.lock();
-        if(! ptr)
-        {
-            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return;
-        }
-
-        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, Atom::incr, XCB_ATOM_INTEGER, 0, 1);
-
-        if(const auto & err = xcbReply.error())
-        {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
-            return;
-        }
-
-        int selsize = 0;
-
-        if(const auto & reply = xcbReply.reply())
-        {
-            if(reply->type != XCB_ATOM_INTEGER)
-            {
-                auto name = Atom::getName(ptr.get(), reply->type);
-                Application::warning("%s: unknown type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, reply->type, name.c_str());
-            }
-            else if(reply->format != 32)
-            {
-                Application::warning("%s: unknown format: %" PRIu8, __FUNCTION__, reply->format);
-            }
-            else
-            {
-                if(auto res = static_cast<int32_t*>(xcb_get_property_value(reply.get())))
-                {
-                    selsize = *res;
-                }
-            }
-        }
-
-        if(0 < selsize)
-        {
-            Application::notice("%s: selection size: %d, requestor win: 0x%08" PRIx32 ", timestamp: %" PRIu32, __FUNCTION__, selsize, ev.requestor, ev.time);
-
-            incr = std::make_unique<SelectionIncrMode>(ev.requestor, selsize, ev.sequence);
-
-            const std::scoped_lock guard{ lock };
-            buf.reserve(selsize);
-
-            // start incremental
-            xcb_delete_property_checked(ptr.get(), win, Atom::incr);
+            Application::warning("%s: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32 
+                ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s') ]",
+                __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
+                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
         }
         else
         {
-            Application::warning("%s: %s, win: 0x%08" PRIx32 ", sequence: 0x%04" PRIx16, __FUNCTION__, "incremental request empty", ev.requestor, ev.sequence);
+            Application::debug(DebugType::Xcb, "%s: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32 
+                ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s') ]",
+                __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
+                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
         }
     }
 
-    bool XCB::ModuleSelection::notifyIncrContinue(xcb_atom_t type)
+    void XCB::ModulePasteSelection::discardRequestor(const ConnectionShared & ptr, const xcb_selection_request_event_t & ev)
     {
-        if(! incr)
-        {
-            return false;
-        }
+        sendNotifyDiscard(ptr, & ev);
+        eventRequestWarning(ptr, & ev);
 
+        if(source)
+            source->selectionSourceUnlock(ev.target);
+
+        // reset events filter
+        const uint32_t values[] = { XCB_EVENT_MASK_NO_EVENT };
+        xcb_change_window_attributes(ptr.get(), ev.requestor, XCB_CW_EVENT_MASK, values);
+    }
+
+    bool XCB::ModulePasteSelection::removeRequestors(xcb_window_t win)
+    {
         auto ptr = conn.lock();
         if(! ptr)
         {
@@ -2174,160 +1873,689 @@ namespace LTSM
             return false;
         }
 
-        // get data
-        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, atombuf, type, 0, ~0);
-
-        if(const auto & err = xcbReply.error())
+        bool removed = false;
+        for(auto & req: requestsIncr)
         {
-            error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
-            return false;
+            if(0 == win || req.ev.requestor == win)
+            {
+                discardRequestor(ptr, req.ev);
+                removed = true;
+            }
         }
 
-        if(const auto & reply = xcbReply.reply())
+        if(XCB_WINDOW_NONE == win)
         {
-            bool ret = false;
-            auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
-            int length = xcb_get_property_value_length(reply.get());
+            requestsIncr.clear();
+        }
+        else
+        {
+            requestsIncr.remove_if([=](auto & req) { return req.ev.requestor == win; });
+        }
 
-            // incremental ended
-            if(0 == length)
+        xcb_flush(ptr.get());
+        return removed;
+    }
+
+    void XCB::ModulePasteSelection::destroyNotifyEvent(const xcb_destroy_notify_event_t* ev)
+    {
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s', EVENT[ sequence: %" PRIu16 ", event: 0x%08" PRIx32 ", window: 0x%08" PRIx32 "]",
+            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->event, ev->window);
+
+        if(ev->window)
+        {
+            if(removeRequestors(ev->window))
             {
-                const std::scoped_lock guard{ lock };
+                Application::warning("%s: destroy requestor: 0x%08" PRIx32, __FUNCTION__, ev->window);
+            }
+        }
+    }
 
-                if(buf.size() == incr->size)
+    void XCB::ModulePasteSelection::selectionClearEvent(const xcb_selection_clear_event_t* ev)
+    {
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s' EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", selection: 0x%08" PRIx32 " ]",
+            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->time, ev->owner, ev->selection);
+
+        if(ev->owner == selectionWin && ev->selection == selectionType && requestsIncr.size())
+        {
+            if(removeRequestors(XCB_WINDOW_NONE))
+            {
+                Application::warning("%s: clear all requestsIncr", __FUNCTION__);
+            }
+        }
+    }
+
+    void XCB::ModulePasteSelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev)
+    {
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s', EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: %" PRIu32 ", state: 0x%02" PRIx8 " ]",
+            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+
+        if(ev->state != XCB_PROPERTY_DELETE)
+        {
+            return;
+        }
+
+        if(! source)
+        {
+            return;
+        }
+
+        auto it = std::find_if(requestsIncr.begin(), requestsIncr.end(),
+            [=](auto & req) { return req.ev.requestor == ev->window && req.ev.property == ev->atom && req.ev.time < ev->time; });
+
+        if(it == requestsIncr.end())
+        {
+            return;
+        }
+
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        // calculate incremental blocksz
+        const size_t datasz = source->selectionSourceSize(it->ev.target);
+        const size_t maxreq = xcb_get_maximum_request_length(ptr.get());
+
+        auto blocksz = std::min(maxreq, datasz);
+        blocksz = std::min(datasz - it->offset, blocksz);            
+        bool remove = false;
+
+        if(blocksz)
+        {
+            // incremental put data
+            if(auto buf = source->selectionSourceData(it->ev.target, it->offset, blocksz); buf.size())
+            {
+                auto cookie = xcb_change_property_checked(ptr.get(), XCB_PROP_MODE_REPLACE, it->ev.requestor,
+                            it->ev.property, it->ev.target, 8, buf.size(), buf.data());
+
+                if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
                 {
-                    ret = true;
+                    discardRequestor(ptr, it->ev);
+                    Application::error("%s: invalid request, failed %s", __FUNCTION__, "xcb_change_property");
+                    remove = true;
                 }
                 else
                 {
-                    Application::warning("%s: failed, requestor size: %" PRIu32 ", receive size: %u", __FUNCTION__, incr->size, buf.size());
-                    // reset stream node
-                    incr.reset();
+                    // incremental continue
+                    it->offset += blocksz;
                 }
             }
-            else if(0 < length)
+            else
             {
-                const std::scoped_lock guard{ lock };
-                // append mode
-                buf.insert(buf.end(), ptrbuf, ptrbuf + length);
+                discardRequestor(ptr, it->ev);
+                Application::error("%s: invalid buffer, failed %s", __FUNCTION__, "selectionSourceData");
+                remove = true;
             }
+        }
+        else
+        {
+            // end data marker: length is zero
+            xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, it->ev.requestor, it->ev.property,
+                it->ev.target, 8, 0, nullptr);
 
-            // continue
-            xcb_delete_property_checked(ptr.get(), win, atombuf);
+            // reset events filter
+            const uint32_t values[] = { XCB_EVENT_MASK_NO_EVENT };
+            xcb_change_window_attributes(ptr.get(), it->ev.requestor, XCB_CW_EVENT_MASK, values);
 
-            return ret;
+            remove = true;
         }
 
-        // stream not ended
-        return false;
+        if(remove)
+        {
+            source->selectionSourceUnlock(it->ev.target);
+            requestsIncr.erase(it);
+        }
+
+        xcb_flush(ptr.get());
     }
 
-    bool XCB::ModuleSelection::notifyAction(const xcb_selection_notify_event_t* ev, xcb_atom_t buftype, bool syncPrimaryClipboard)
+    void XCB::ModulePasteSelection::selectionRequestEvent(const xcb_selection_request_event_t* ev)
     {
-        if(! ev)
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s'", __FUNCTION__, selectionWin, selectionName.c_str());
+
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            return false;
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        if(! source)
+        {
+            sendNotifyDiscard(ptr, ev);
+            Application::error("%s: source empty");
+            return;
+        }
+
+        if(ev->selection != selectionType)
+        {
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::warning("%s: invalid request, unknown %s", __FUNCTION__, "selection");
+            return;
+        }
+
+        if(ev->owner != selectionWin)
+        {
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::warning("%s: invalid request, unknown %s", __FUNCTION__, "owner");
+            return;
+        }
+
+        if(ev->requestor == XCB_WINDOW_NONE)
+        {
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::warning("%s: invalid request, unknown %s", __FUNCTION__, "requestor");
+            return;
+        }
+
+        if(ev->requestor == skipRequestorWin)
+        {
+            sendNotifyDiscard(ptr, ev);
+            return;
         }
 
         if(ev->property == XCB_ATOM_NONE)
         {
-            return false;
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::warning("%s: invalid request, unknown %s", __FUNCTION__, "property");
+            return;
+        }
+
+        if(! source)
+        {
+            sendNotifyDiscard(ptr, ev);
+            Application::error("%s: invalid request, unknown %s", __FUNCTION__, "source");
+            return;
+        }
+
+        if(0 == selectionTime)
+            selectionTime = ev->time;
+
+        auto targets = source->selectionSourceTargets();
+        targets.push_back(Atom::timestamp);
+
+        // send targets
+        if(ev->target == Atom::targets)
+        {
+            xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+                     XCB_ATOM_ATOM, 32, targets.size(), targets.data());
+
+            sendNotifyEvent(ptr, ev, ev->property);
+            return;
+        }
+
+        if(ev->target == Atom::timestamp)
+        {
+            eventRequestDebug(ptr, ev);
+
+            auto tmp = std::to_string(selectionTime);
+            tmp.append(1, 0x0a);
+
+            xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+                      Atom::timestamp, 8, tmp.size(), tmp.data());
+
+            sendNotifyEvent(ptr, ev, ev->property);
+            return;
+        }
+
+        // target not found
+        if(std::none_of(targets.begin(), targets.end(), [&](auto & atom){ return atom == ev->target; }))
+        {
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::warning("%s: invalid request, unknown %s atom", __FUNCTION__, "target");
+            return;
+        }
+
+        if(! source->selectionSourceReady(ev->target))
+        {
+            sendNotifyDiscard(ptr, ev);
+            eventRequestWarning(ptr, ev);
+            Application::error("%s: target not ready", __FUNCTION__);
+            return;
+        }
+
+        eventRequestDebug(ptr, ev);
+
+        auto it = std::find_if(requestsIncr.begin(), requestsIncr.end(),
+            [=](auto & req){ return req.ev.requestor == ev->requestor && req.ev.selection == ev->selection &&
+                                req.ev.target == ev->target && req.ev.property == ev->property; });
+        // found requestor
+        if(it != requestsIncr.end())
+        {
+            source->selectionSourceUnlock(it->ev.target);
+            // remove old req and continue
+            requestsIncr.erase(it);
+        }
+
+        const size_t datasz = source->selectionSourceSize(ev->target);
+        const size_t maxreq = xcb_get_maximum_request_length(ptr.get());
+
+        if(datasz > maxreq)
+        {
+            eventRequestWarning(ptr, ev);
+
+            // incremental mode: add job
+            source->selectionSourceLock(ev->target);
+
+            // add event filter: or XCB_EVENT_MASK_NO_EVENT for disable
+            const uint32_t values[] = { XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE };
+            xcb_change_window_attributes(ptr.get(), ev->requestor, XCB_CW_EVENT_MASK, values);
+
+            xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+                    Atom::incr, 32, 1, & datasz);
+
+            requestsIncr.push_back(*ev);
+            sendNotifyEvent(ptr, ev, ev->property);
+        }
+        else
+        {
+            source->selectionSourceLock(ev->target);
+
+            // normal mode: put data
+            auto buf = source->selectionSourceData(ev->target, 0, datasz);
+            xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,
+                    ev->target, 8, buf.size(), buf.data());
+            sendNotifyEvent(ptr, ev, ev->property);
+
+            source->selectionSourceUnlock(ev->target);
+        }
+    }
+
+    void XCB::ModulePasteSelection::setSelectionOwner(const SelectionSource & src)
+    {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, selectionWin, type, selectionName.c_str());
+
+        source = std::addressof(src);
+        selectionTime = 0;
+
+        xcb_set_selection_owner(ptr.get(), selectionWin, selectionType, XCB_CURRENT_TIME);
+        xcb_flush(ptr.get());
+    }
+
+    // ModuleCopySelection
+    XCB::ModuleCopySelection::ModuleCopySelection(const ConnectionShared & ptr, const xcb_screen_t & screen, xcb_atom_t atom)
+        : ModuleExtension(ptr, Module::SELECTION_COPY)
+    {
+        const uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+        const uint32_t values[] = { screen.white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_PROPERTY_CHANGE };
+
+        selectionWin = xcb_generate_id(ptr.get());
+        auto cookie = xcb_create_window_checked(ptr.get(), 0, selectionWin, screen.root, -1, -1, 1, 1, 0,
+                                                XCB_WINDOW_CLASS_INPUT_OUTPUT, screen.root_visual, mask, values);
+
+        if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+        {
+            error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
+            throw xcb_error(NS_FuncName);
+        }
+
+        // set _wm_name
+        const std::string name("LTSM_SELECTION_COPY");
+
+        xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, selectionWin,
+                            Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
+
+        selectionProp = Atom::getAtom(ptr.get(), "XSEL_DATA", true);
+        selectionType = atom != XCB_ATOM_NONE ? atom : Atom::clipboard;
+        selectionName = Atom::getName(ptr.get(), selectionType);
+
+        xcb_xfixes_select_selection_input(ptr.get(), screen.root, selectionType, 
+            XCB_XFIXES_SELECTION_EVENT_MASK_SET_SELECTION_OWNER |
+            XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_WINDOW_DESTROY |
+            XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_CLIENT_CLOSE);
+
+        xfixesWin = screen.root;
+
+        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
+    }
+
+    XCB::ModuleCopySelection::~ModuleCopySelection()
+    {
+        if(auto ptr = conn.lock(); selectionWin != XCB_WINDOW_NONE && ptr)
+        {
+            xcb_xfixes_select_selection_input(ptr.get(), xfixesWin, selectionType, 0);
+            xcb_destroy_window(ptr.get(), selectionWin);
+        }
+    }
+
+    void XCB::ModuleCopySelection::eventNotifyDebug(const ConnectionShared & ptr, const xcb_selection_notify_event_t* ev, bool warn) const
+    {
+        auto sel = Atom::getName(ptr.get(), ev->selection);
+        auto tgt = Atom::getName(ptr.get(), ev->target);
+        auto prop = Atom::getName(ptr.get(), ev->property);
+
+        if(warn)
+        {
+            Application::warning("%s: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", requestor: 0x%08" PRIx32 
+                ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s') ]",
+                __FUNCTION__, ev->sequence, ev->time, ev->requestor,
+                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+        }
+        else
+        {
+            Application::debug(DebugType::Xcb, "%s: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", requestor: 0x%08" PRIx32 
+                ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s') ]",
+                __FUNCTION__, ev->sequence, ev->time, ev->requestor,
+                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+        }
+    }
+
+    void XCB::ModuleCopySelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev)
+    {
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s', EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: %" PRIu32 ", state: 0x%02" PRIx8 " ]",
+            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+
+        if(ev->state != XCB_PROPERTY_NEW_VALUE)
+        {
+            return;
+        }
+
+        if(ev->window != selectionWin || ev->atom != selectionProp)
+        {
+            return;
+        }
+
+        if(! sourceIncr)
+        {
+            return;
         }
 
         auto ptr = conn.lock();
         if(! ptr)
         {
             Application::warning("%s: weak_ptr invalid", __FUNCTION__);
-            return false;
+            return;
         }
 
-        bool allowAtom = ev->selection == Atom::primary ||
-                         (ev->selection == Atom::clipboard && syncPrimaryClipboard);
-
-        if(! allowAtom)
-        {
-            auto name = Atom::getName(ptr.get(), ev->selection);
-            Application::warning("%s: skip selection, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, ev->selection, name.c_str());
-            return false;
-        }
-
-        if(XCB_ATOM_NONE == buftype)
-        {
-            return false;
-        }
-
-        Application::debug("%s: requestor: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), target atom(0x%08" PRIx32 ", `%s'), property atom(0x%08" PRIx32 ", `%s'), timestamp: %" PRIu32,
-                           __FUNCTION__, ev->requestor, ev->selection, Atom::getName(ptr.get(), ev->selection).c_str(),
-                           ev->target, Atom::getName(ptr.get(), ev->target).c_str(), ev->property, Atom::getName(ptr.get(), ev->property).c_str(), ev->time);
-
-        // incr mode
-        if(Atom::incr == buftype)
-        {
-            notifyIncrStart(*ev);
-            return false;
-        }
-
-        if(buftype != Atom::utf8String && buftype != Atom::text && buftype != Atom::textPlain)
-        {
-            auto name = Atom::getName(ptr.get(), buftype);
-            Application::warning("%s: unsupported type, atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, buftype, name.c_str());
-
-            if(incr)
-            {
-                incr.reset();
-            }
-
-            return false;
-        }
-
-        // continue incremental
-        if(incr)
-        {
-            return notifyIncrContinue(buftype);
-        }
-
-        // get data
-        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, win, atombuf, buftype, 0, ~0);
+        auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, XCB_GET_PROPERTY_TYPE_ANY, 0, ~0);
 
         if(const auto & err = xcbReply.error())
         {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
-            return false;
+        }
+        else if(const auto & reply = xcbReply.reply())
+        {
+            auto ptr = static_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
+            auto len = xcb_get_property_value_length(reply.get());
+
+            if(ptr && len)
+            {
+                sourceIncr->buf.insert(sourceIncr->buf.end(), ptr, ptr + len);
+            }
+            else
+            {
+                recipient->selectionReceiveData(reply->type, sourceIncr->buf.data(), sourceIncr->buf.size());
+            }
         }
 
-        if(const auto & reply = xcbReply.reply())
+        xcb_delete_property(ptr.get(), selectionWin, selectionProp);
+        xcb_flush(ptr.get());
+    }
+
+    void XCB::ModuleCopySelection::selectionNotifyEvent(const xcb_selection_notify_event_t* ev)
+    {
+        Application::debug(DebugType::Xcb, "%s: owner: 0x%08" PRIx32 ", selection: `%s'", __FUNCTION__, selectionWin, selectionName.c_str());
+
+        auto ptr = conn.lock();
+        if(! ptr)
         {
-            bool ret = false;
-            auto ptrbuf = reinterpret_cast<const uint8_t*>(xcb_get_property_value(reply.get()));
-            int length = xcb_get_property_value_length(reply.get());
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
 
-            if(ptrbuf && 0 < length)
+        if(ev->selection != selectionType)
+        {
+            eventNotifyWarning(ptr, ev);
+            Application::warning("%s: invalid notify, unknown %s", __FUNCTION__, "selection");
+            return;
+        }
+
+        if(ev->property != selectionProp)
+        {
+            if(ev->property != XCB_ATOM_NONE)
             {
-                const std::scoped_lock guard{ lock };
+                eventNotifyWarning(ptr, ev);
+                Application::warning("%s: invalid notify, unknown %s", __FUNCTION__, "property");
+            }
+            return;
+        }
 
-                // check equal
-                if(length == buf.size() && std::equal(buf.begin(), buf.end(), ptrbuf))
+        if(ev->requestor != selectionWin)
+        {
+            eventNotifyWarning(ptr, ev);
+            Application::warning("%s: invalid notify, unknown %s", __FUNCTION__, "requestor");
+            return;
+        }
+
+        if(! recipient)
+        {
+            Application::error("%s: invalid notify, unknown %s", __FUNCTION__, "recipient");
+            return;
+        }
+
+        if(Atom::targets == ev->target)
+        {
+            eventNotifyDebug(ptr, ev);
+
+            auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, XCB_ATOM_ATOM, 0, ~0);
+
+            if(const auto & err = xcbReply.error())
+            {
+                error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+            }
+            else if(const auto & reply = xcbReply.reply())
+            {
+                auto ptr = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()));
+                auto len = xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
+
+                if(ptr)
                 {
-                    ret = false;
+                    recipient->selectionReceiveTargets(ptr, ptr + len);
                 }
                 else
                 {
-                    buf.assign(ptrbuf, ptrbuf + length);
-                    ret = true;
+                    Application::warning("%s: property empty", __FUNCTION__);
                 }
             }
+        }
+        else
+        if(selectionTrgt == ev->target)
+        {
+            eventNotifyDebug(ptr, ev);
 
-            auto cookie = xcb_delete_property_checked(ptr.get(), win, atombuf);
-
-            if(auto err = GenericError(xcb_request_check(ptr.get(), cookie)))
+            if(auto info = XCB::getPropertyInfo(ptr.get(), selectionWin, selectionProp))
             {
-                error(ptr.get(), err.get(), __FUNCTION__, "xcb_delete_property");
-            }
+                auto xcbReply = getReplyFunc2(xcb_get_property, ptr.get(), false, selectionWin, selectionProp, info->type, 0, ~0);
 
-            return ret;
+                if(const auto & err = xcbReply.error())
+                {
+                    error(ptr.get(), err.get(), __FUNCTION__, "xcb_get_property");
+                }
+                else if(const auto & reply = xcbReply.reply())
+                {
+                    auto buf = xcb_get_property_value(reply.get());
+                    auto len = xcb_get_property_value_length(reply.get());
+
+                    if(buf && len)
+                    {
+                        if(Atom::incr == reply->type)
+                        {
+                            auto psize = static_cast<const uint32_t*>(buf);
+                            Application::debug(DebugType::Xcb, "%s: incr size: %" PRIu32, __FUNCTION__, *psize);
+                            sourceIncr = std::make_unique<WindowSource>(*ev, *psize);
+                        }
+                        else
+                        {
+                            if(selectionTrgt != reply->type)
+                            {
+                                eventNotifyWarning(ptr, ev);
+
+                                auto name = Atom::getName(ptr.get(), reply->type);
+                                Application::warning("%s: reply not correct, type atom(0x%08" PRIx32 ", `%s'), format: %" PRIu8, __FUNCTION__, reply->type, name.c_str(), reply->format);
+                            }
+
+                            recipient->selectionReceiveData(reply->type, static_cast<const uint8_t*>(buf), len);
+                        }
+                    }
+                    else
+                    {
+                        eventNotifyWarning(ptr, ev);
+
+                        auto name = Atom::getName(ptr.get(), reply->type);
+                        Application::warning("%s: reply empty, type atom(0x%08" PRIx32 ", `%s'), format: %" PRIu8, __FUNCTION__, reply->type, name.c_str(), reply->format);
+                    }
+                }
+            }
+            else
+            {
+                eventNotifyWarning(ptr, ev);
+                Application::warning("%s: %s failed", __FUNCTION__, "getPropertyInfo");
+            }
+        }
+        else
+        {
+            eventNotifyWarning(ptr, ev);
+            Application::warning("%s: invalid notify, unknown %s", __FUNCTION__, "target");
         }
 
-        return false;
+        xcb_delete_property(ptr.get(), selectionWin, selectionProp);
+        xcb_flush(ptr.get());
+    }
+
+    void XCB::ModuleCopySelection::xfixesSelectionNotifyEvent(const xcb_xfixes_selection_notify_event_t* ev)
+    {
+        switch(ev->subtype)
+        {
+            case XCB_XFIXES_SELECTION_EVENT_SET_SELECTION_OWNER:
+                xfixesSetSelectionOwnerEvent(ev);
+                break;
+
+            case XCB_XFIXES_SELECTION_EVENT_SELECTION_WINDOW_DESTROY:
+                xfixesSelectionWindowDestroyEvent(ev);
+                break;
+
+            case XCB_XFIXES_SELECTION_EVENT_SELECTION_CLIENT_CLOSE:
+                xfixesSelectionClientCloseEvent(ev);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    void XCB::ModuleCopySelection::xfixesSelectionClientCloseEvent(const xcb_xfixes_selection_notify_event_t* ev)
+    {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        auto name = Atom::getName(ptr.get(), ev->selection);
+
+        Application::debug(DebugType::Xcb, "%s: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+            ", selection atom(0x%08" PRIx32 ", `%s'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+            __FUNCTION__, ev->sequence, ev->window, ev->owner,
+            ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+    }
+
+    void XCB::ModuleCopySelection::xfixesSelectionWindowDestroyEvent(const xcb_xfixes_selection_notify_event_t* ev)
+    {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        auto name = Atom::getName(ptr.get(), ev->selection);
+    
+        Application::debug(DebugType::Xcb, "%s: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+            ", selection atom(0x%08" PRIx32 ", `%s'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+            __FUNCTION__, ev->sequence, ev->window, ev->owner,
+            ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+    }
+
+    void XCB::ModuleCopySelection::xfixesSetSelectionOwnerEvent(const xcb_xfixes_selection_notify_event_t* ev)
+    {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        if(ev->selection == selectionType)
+        {
+            auto name = Atom::getName(ptr.get(), ev->selection);
+    
+            Application::debug(DebugType::Xcb, "%s: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+                ", selection atom(0x%08" PRIx32 ", `%s'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+                __FUNCTION__, ev->sequence, ev->window, ev->owner,
+                ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+
+            if(sourceIncr)
+            {
+                sourceIncr.reset();
+            }
+
+            if(recipient)
+            {
+                recipient->selectionChangedEvent();
+            }
+        }
+    }
+
+    void XCB::ModuleCopySelection::convertSelection(xcb_atom_t target, const SelectionRecipient & rcpt)
+    {
+        auto ptr = conn.lock();
+        if(! ptr)
+        {
+            Application::warning("%s: weak_ptr invalid", __FUNCTION__);
+            return;
+        }
+
+        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), target: 0x%08" PRIx32, __FUNCTION__, selectionWin, selectionType, selectionName.c_str(), target);
+
+        selectionTrgt = target;
+        recipient = std::addressof(rcpt);
+
+        if(sourceIncr)
+        {
+            // data cached
+            if(target == sourceIncr->ev.target)
+            {
+                std::thread([this, target = sourceIncr->ev.target, buf = sourceIncr->buf]()
+                {
+                    std::this_thread::sleep_for(10ms);
+                    recipient->selectionReceiveData(target, buf.data(), buf.size());
+                }).detach();
+                return;
+            }
+            else
+            if(target != Atom::targets)
+            {
+                sourceIncr.reset();
+            }
+        }
+
+        xcb_convert_selection(ptr.get(), selectionWin, selectionType, selectionTrgt, selectionProp, XCB_CURRENT_TIME);
+        xcb_flush(ptr.get());
     }
 
 #ifdef LTSM_BUILD_XCB_ERRORS
@@ -2356,7 +2584,7 @@ namespace LTSM
         const char* minor = xcb_errors_get_name_for_minor_code(ctx, err->major_code, err->minor_code);
         const char* error = xcb_errors_get_name_for_error(ctx, err->error_code, & extension);
 
-        Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%08" PRIx32 ", sequence: 0x%08" PRIx32,
+        Application::error("%s: %s failed, error: %s, extension: %s, major: %s, minor: %s, resource: 0x%08" PRIx32 ", sequence: %" PRIu16,
                            func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
                            err->resource_id, err->sequence);
 
@@ -2379,7 +2607,7 @@ namespace LTSM
     /* XCB::Connector */
     XCB::Connector::Connector(int displayNum, const AuthCookie* cookie)
     {
-        if(! XCB::Connector::displayConnect(displayNum, cookie) )
+        if(! connectorDisplayConnect(displayNum, cookie) )
         {
             throw xcb_error(NS_FuncName);
         }
@@ -2401,16 +2629,16 @@ namespace LTSM
         return "XCB_CONN_UNKNOWN";
     }
 
-    bool XCB::Connector::displayConnect(int displayNum, const AuthCookie* cookie)
+    bool XCB::Connector::connectorDisplayConnect(int displayNum, const AuthCookie* cookie)
     {
         auto displayAddr = getLocalAddr(displayNum);
 
         if(cookie)
         {
-            std::string_view magic{"MIT-MAGIC-COOKIE-1"};
+            const char* magic = "MIT-MAGIC-COOKIE-1";
             xcb_auth_info_t auth;
-            auth.name = (char*) magic.data();
-            auth.namelen = magic.size();
+            auth.name = (char*) magic;
+            auth.namelen = std::strlen(magic);
             auth.data = (char*) cookie->data();
             auth.datalen = cookie->size();
 
@@ -2442,15 +2670,13 @@ namespace LTSM
         _error = std::make_unique<ErrorContext>(_conn.get());
 #endif
 
+        Atom::timestamp = getAtom("TIMESTAMP");
         Atom::wmName = getAtom("_NET_WM_NAME");
         Atom::utf8String = getAtom("UTF8_STRING");
 
         Atom::primary = getAtom("PRIMARY");
         Atom::clipboard = getAtom("CLIPBOARD");
         Atom::targets = getAtom("TARGETS");
-        Atom::text = getAtom("TEXT");
-        Atom::textPlain = getAtom("text/plain;charset=utf-8");
-        Atom::incr = getAtom("INCR");
 
         return true;
     }
@@ -2503,15 +2729,7 @@ namespace LTSM
 
     xcb_atom_t XCB::Connector::getAtom(std::string_view name, bool create) const
     {
-        auto xcbReply = getReplyFunc2(xcb_intern_atom, _conn.get(), create ? 0 : 1, name.size(), name.data());
-
-        if(const auto & err = xcbReply.error())
-        {
-            extendedError(err.get(), __FUNCTION__, "xcb_intern_atom");
-            return XCB_ATOM_NONE;
-        }
-
-        return xcbReply.reply() ? xcbReply.reply()->atom : XCB_ATOM_NONE;
+        return Atom::getAtom(_conn.get(), name, create);
     }
 
     std::string XCB::Connector::getAtomName(xcb_atom_t atom) const
@@ -3012,33 +3230,26 @@ namespace LTSM
         return res;
     }
 
+    void XCB::Connector::bell(uint8_t percent) const
+    {
+        xcb_bell(_conn.get(), percent);
+    }
+
     /* XCB::RootDisplay */
     XCB::RootDisplay::RootDisplay(int displayNum, const AuthCookie* auth)
     {
-        if(! XCB::RootDisplay::displayConnect(displayNum, auth) )
+        if(! displayConnect(displayNum, InitModules::All, auth) )
         {
             throw xcb_error(NS_FuncName);
         }
     }
 
-    XCB::RootDisplay::~RootDisplay()
+    bool XCB::RootDisplay::displayConnect(int displayNum, int modules, const AuthCookie* auth)
     {
-        if(_conn)
-        {
-            resetInputs();
-            xcb_flush(_conn.get());
-        }
-    }
-
-    bool XCB::RootDisplay::displayConnect(int displayNum, const AuthCookie* auth)
-    {
-        if(! Connector::displayConnect(displayNum, auth))
+        if(! connectorDisplayConnect(displayNum, auth))
         {
             return false;
         }
-
-        _minKeycode = _setup->min_keycode;
-        _maxKeycode = _setup->max_keycode;
 
         _screen = xcb_setup_roots_iterator(_setup).data;
 
@@ -3083,61 +3294,125 @@ namespace LTSM
             return false;
         }
 
-        _modShm = std::make_unique<ModuleShm>(_conn);
-        _modDamage = std::make_unique<ModuleDamage>(_conn);
-        _modFixes = std::make_unique<ModuleFixes>(_conn);
-        _modTest = std::make_unique<ModuleTest>(_conn);
-        _modRandr = std::make_unique<ModuleRandr>(_conn);
-        _modXkb = std::make_unique<ModuleXkb>(_conn);
-        _modSelection = std::make_unique<ModuleSelection>(_conn, *_screen, getAtom("XSEL_DATA"));
+        // required
+        _modWinFixes = std::make_unique<ModuleWindowFixes>(_conn, _screen->root);
 
-        // notify xfixes filter
-        xcb_xfixes_select_cursor_input(_conn.get(), _screen->root, XCB_XFIXES_CURSOR_NOTIFY_MASK_DISPLAY_CURSOR);
-        xcb_xfixes_select_selection_input(_conn.get(), _screen->root, Atom::primary, XCB_XFIXES_SELECTION_EVENT_MASK_SET_SELECTION_OWNER);
-
-        // notify xkb filter
-        uint16_t required_map_parts = (XCB_XKB_MAP_PART_KEY_TYPES | XCB_XKB_MAP_PART_KEY_SYMS | XCB_XKB_MAP_PART_MODIFIER_MAP |
-                                       XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | XCB_XKB_MAP_PART_KEY_ACTIONS | XCB_XKB_MAP_PART_VIRTUAL_MODS | XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
-        uint16_t required_events = (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
-
-        auto cookie = xcb_xkb_select_events_checked(_conn.get(), _modXkb->devid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
-
-        if(auto err = checkRequest(cookie))
+        // safe init modules
+        if(modules & InitModules::Test)
         {
-            extendedError(err.get(), __FUNCTION__, "xcb_xkb_select_events");
+            try
+            {
+                _modTest = std::make_unique<ModuleTest>(_conn, _screen->root);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleTest");
+            }
         }
 
-        // create randr notify
-        xcb_randr_select_input(_conn.get(), _screen->root,
-                               XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE);
+        if(modules & InitModules::Shm)
+        {
+            try
+            {
+                _modShm = std::make_unique<ModuleShm>(_conn);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleShm");
+            }
+        }
+
+        if(modules & InitModules::Damage)
+        {
+            try
+            {
+                _modWinDamage = std::make_unique<ModuleWindowDamage>(_conn, _screen->root);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleWindowDamage");
+            }
+        }
+
+        if(modules & InitModules::RandR)
+        {
+            try
+            {
+                _modRandr = std::make_unique<ModuleRandr>(_conn, _screen->root);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleRandr");
+            }
+        }
+
+        if(modules & InitModules::Xkb)
+        {
+            try
+            {
+                _modXkb = std::make_unique<ModuleXkb>(_conn);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleXkb");
+            }
+        }
+
+        if(modules & InitModules::SelPaste)
+        {
+            try
+            {
+                _modSelectionPaste = std::make_unique<ModulePasteSelection>(_conn, *_screen);
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModulePasteSelection");
+            }
+        }
+
+        if(modules & InitModules::SelCopy)
+        {
+            try
+            {
+                _modSelectionCopy = std::make_unique<ModuleCopySelection>(_conn, *_screen);
+
+                if(_modSelectionPaste)
+                    _modSelectionPaste->setSkipRequestor(_modSelectionCopy->selectionWindow());
+            }
+            catch(const std::exception & err)
+            {
+                Application::warning("%s: %s failed", __FUNCTION__, "ModuleCopySelection");
+            }
+        }
 
         updateGeometrySize();
 
         // create damage notify
         createFullScreenDamage();
-
         xcb_flush(_conn.get());
 
-        displayConnectedEvent();
+        xcbDisplayConnectedEvent();
         return true;
     }
 
-    void XCB::RootDisplay::reconnect(int displayNum, const AuthCookie* auth)
+    void XCB::RootDisplay::displayReconnect(int displayNum, int modules, const AuthCookie* auth)
     {
-        _damage.reset();
-        _modShm.reset();
-        _modDamage.reset();
-        _modFixes.reset();
+        _modSelectionPaste.reset();
+        _modSelectionCopy.reset();
+        _modWinDamage.reset();
         _modTest.reset();
         _modRandr.reset();
+        _modShm.reset();
         _modXkb.reset();
-        _modSelection.reset();
+        _modWinFixes.reset();
+
+        //auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtensionConst(XCB::Module::TEST));
 
         _screen = nullptr;
         _format = nullptr;
         _visual = nullptr;
 
-        XCB::RootDisplay::displayConnect(displayNum, auth);
+        displayConnect(displayNum, modules, auth);
     }
 
     XCB::Size XCB::RootDisplay::updateGeometrySize(void) const
@@ -3156,26 +3431,26 @@ namespace LTSM
 
     bool XCB::RootDisplay::createFullScreenDamage(void)
     {
-        if(_modDamage && _modFixes)
+        if(_modWinDamage)
         {
-            _damage = _modDamage->createDamage(_screen->root, XCB_DAMAGE_REPORT_LEVEL_RAW_RECTANGLES);
-
-            if(auto regid = _modFixes->createRegion(region().toXcbRect()))
-            {
-                _damage->addRegion(regid->id());
-                return true;
-            }
+            _modWinDamage->addRegion(regionToXcb(region()));
+            return true;
         }
 
         return false;
     }
 
-    void XCB::RootDisplay::damageDisable(void)
+    XCB::ModuleExtension* XCB::RootDisplay::getExtension(const Module & mod)
     {
-        _damage.reset();
+        return const_cast<XCB::ModuleExtension*>(getExtensionConst(mod));
     }
 
     const XCB::ModuleExtension* XCB::RootDisplay::getExtension(const Module & mod) const
+    {
+        return getExtensionConst(mod);
+    }
+
+    const XCB::ModuleExtension* XCB::RootDisplay::getExtensionConst(const Module & mod) const
     {
         switch(mod)
         {
@@ -3183,10 +3458,12 @@ namespace LTSM
                 return _modShm.get();
 
             case Module::DAMAGE:
-                return _modDamage.get();
+            case Module::WINDAMAGE:
+                return _modWinDamage.get();
 
             case Module::XFIXES:
-                return _modFixes.get();
+            case Module::WINFIXES:
+                return _modWinFixes.get();
 
             case Module::RANDR:
                 return _modRandr.get();
@@ -3197,26 +3474,91 @@ namespace LTSM
             case Module::XKB:
                 return _modXkb.get();
 
-            case Module::SELECTION:
-                return _modSelection.get();
+            case Module::SELECTION_PASTE:
+                return _modSelectionPaste.get();
+
+            case Module::SELECTION_COPY:
+                return _modSelectionCopy.get();
         }
 
         return nullptr;
     }
 
+    void XCB::RootDisplay::extensionDisable(const Module & mod)
+    {
+        switch(mod)
+        {
+            case Module::DAMAGE:
+            case Module::WINDAMAGE:
+                if(_modWinDamage)
+                {
+                    _modWinDamage.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+
+            case Module::SELECTION_PASTE:
+                if(_modSelectionPaste)
+                {
+                    _modSelectionPaste.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+
+            case Module::SELECTION_COPY:
+                if(_modSelectionCopy)
+                {
+                    _modSelectionCopy.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+
+            case Module::XFIXES:
+            case Module::WINFIXES:
+                break;
+
+            case Module::XKB:
+                break;
+
+            case Module::RANDR:
+                if(_modRandr)
+                {
+                    _modRandr.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+
+            case Module::TEST:
+                if(_modTest)
+                {
+                    _modTest.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+
+            case Module::SHM:
+                if(_modShm)
+                {
+                    _modShm.reset();
+                    xcb_flush(_conn.get());
+                }
+                break;
+        }
+    }
+
     bool XCB::RootDisplay::isDamageNotify(const GenericEvent & ev) const
     {
-        return _modDamage ? _modDamage->isEventType(ev, XCB_DAMAGE_NOTIFY) : false;
+        return _modWinDamage ? _modWinDamage->isEventType(ev, XCB_DAMAGE_NOTIFY) : false;
     }
 
     bool XCB::RootDisplay::isXFixesSelectionNotify(const GenericEvent & ev) const
     {
-        return _modFixes ? _modFixes->isEventType(ev, XCB_XFIXES_SELECTION_NOTIFY) : false;
+        return _modWinFixes ? _modWinFixes->isEventType(ev, XCB_XFIXES_SELECTION_NOTIFY) : false;
     }
 
     bool XCB::RootDisplay::isXFixesCursorNotify(const GenericEvent & ev) const
     {
-        return _modFixes ? _modFixes->isEventType(ev, XCB_XFIXES_CURSOR_NOTIFY) : false;
+        return _modWinFixes ? _modWinFixes->isEventType(ev, XCB_XFIXES_CURSOR_NOTIFY) : false;
     }
 
     bool XCB::RootDisplay::isRandrScreenNotify(const GenericEvent & ev) const
@@ -3255,12 +3597,12 @@ namespace LTSM
         }
 
         // disconnected current CRTCs
-        for(auto & outputId: _modRandr->getOutputs(*_screen))
+        for(auto & outputId: _modRandr->getOutputs())
         {
             if(auto info = _modRandr->getOutputInfo(outputId);
                     info && info->connected == XCB_RANDR_CONNECTION_CONNECTED)
             {
-                _modRandr->crtcDisconnect(*_screen, info->crtc);
+                _modRandr->crtcDisconnect(info->crtc);
             }
         }
 
@@ -3288,15 +3630,15 @@ namespace LTSM
             screenArea.width += 8 - alignW;
         }
 
-        if(! _modRandr->setScreenSize(*_screen, screenArea.width, screenArea.height))
+        if(! _modRandr->setScreenSize(screenArea.width, screenArea.height))
         {
             return false;
         }
 
-        Application::debug("%s: screen area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
+        Application::debug(DebugType::Xcb, "%s: screen area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
 
-        auto outputs = _modRandr->getOutputs(*_screen);
-        auto crtcs = _modRandr->getCrtcs(*_screen);
+        auto outputs = _modRandr->getOutputs();
+        auto crtcs = _modRandr->getCrtcs();
 
         size_t maxmonitors = std::min(outputs.size(), monitors.size());
         maxmonitors = std::min(maxmonitors, crtcs.size());
@@ -3304,17 +3646,15 @@ namespace LTSM
         for(size_t it = 0; it < maxmonitors; ++it)
         {
             auto & monitor = monitors[it];
-            auto modes = _modRandr->getModesInfo(*_screen);
+            auto modes = _modRandr->getModesInfo();
 
             auto itm = std::find_if(modes.begin(), modes.end(), [&](auto & info) { return info.width == monitor.width && info.height == monitor.height; });
 
-            const xcb_randr_mode_t mode = itm != modes.end() ? itm->id : _modRandr->cvtCreateMode(*_screen, monitor.toSize());
+            const xcb_randr_mode_t mode = itm != modes.end() ? itm->id : _modRandr->cvtCreateMode(monitor.toSize());
 
             if(_modRandr->addOutputMode(outputs[it], mode))
-                _modRandr->crtcConnectOutputsMode(*_screen, crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode);
+                _modRandr->crtcConnectOutputsMode(crtcs[it], monitor.x, monitor.y, { outputs[it] }, mode);
         }
-
-        damageAdd(screenArea);
 
         //
         return true;
@@ -3331,16 +3671,18 @@ namespace LTSM
                 return true;
             }
 
-            randrScreenSetSizeEvent(sz);
+            xcbRandrScreenSetSizeEvent(sz);
 
             // clear all damages
-            damageSubtrack(area);
+            rootDamageSubtrack(area);
 
-            auto res = _modRandr->setScreenSizeCompat(*_screen, sz, sequence);
+            bool res = _modRandr->setScreenSizeCompat(sz.width, sz.height, sequence);
 
             if(! res)
             {
-                damageAdd(area);
+                // failed changes - update all screen
+                if(createFullScreenDamage())
+                    xcb_flush(_conn.get());
             }
 
             updateGeometrySize();
@@ -3350,26 +3692,6 @@ namespace LTSM
         }
 
         return false;
-    }
-
-    void XCB::RootDisplay::resetInputs(void)
-    {
-        if(_modTest)
-        {
-            // release all buttons
-            for(uint8_t button = 1; button <= 5; button++)
-            {
-                xcb_test_fake_input(_conn.get(), XCB_BUTTON_RELEASE, button, XCB_CURRENT_TIME, _screen->root, 0, 0, 0);
-            }
-
-            // release all keys
-            for(int key = _minKeycode; key <= _maxKeycode; key++)
-            {
-                xcb_test_fake_input(_conn.get(), XCB_KEY_RELEASE, key, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
-            }
-
-            xcb_flush(_conn.get());
-        }
     }
 
     size_t XCB::RootDisplay::bitsPerPixel(void) const
@@ -3439,7 +3761,7 @@ namespace LTSM
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, ShmIdShared shm) const
     {
-        Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Xcb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
         const uint32_t planeMask = 0xFFFFFFFF;
 
         if(shm && 0 < shm->id)
@@ -3479,7 +3801,7 @@ namespace LTSM
         uint32_t maxReqLength = xcb_get_maximum_request_length(_conn.get());
         uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
 
-        Application::debug("%s: max request size: %" PRIu32 ", allow rows: %" PRIu16, __FUNCTION__, maxReqLength, allowRows);
+        Application::debug(DebugType::Xcb, "%s: max request size: %" PRIu32 ", allow rows: %" PRIu16, __FUNCTION__, maxReqLength, allowRows);
 
         for(int16_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
         {
@@ -3517,7 +3839,7 @@ namespace LTSM
 
                 auto data = xcb_get_image_data(reply.get());
                 auto length = xcb_get_image_data_length(reply.get());
-                Application::debug("%s: receive length: %d", __FUNCTION__, length);
+                Application::debug(DebugType::Xcb, "%s: receive length: %d", __FUNCTION__, length);
 
                 info->pixels.insert(info->pixels.end(), data, data + length);
             }
@@ -3526,54 +3848,40 @@ namespace LTSM
         return res;
     }
 
-    bool XCB::RootDisplay::damageAdd(const xcb_rectangle_t* rects, size_t counts)
+    bool XCB::RootDisplay::rootDamageAddRegions(const xcb_rectangle_t* rects, size_t counts)
     {
-        if(_damage && _modFixes && rects && counts)
+        if(_modWinDamage && _modWinDamage->addRegions(rects, counts))
         {
-            if(auto regid = _modFixes->createRegions(rects, counts))
-            {
-                _damage->addRegion(regid->id());
-                return true;
-            }
+            xcb_flush(_conn.get());
+            return true;
         }
 
         return false;
     }
 
-    bool XCB::RootDisplay::damageAdd(const Region & region)
+    bool XCB::RootDisplay::rootDamageAddRegion(const Region & reg)
     {
-        if(_damage && _modFixes)
+        if(_modWinDamage && _modWinDamage->addRegion(reg))
         {
-            if(auto regid = _modFixes->createRegion(region.toXcbRect()))
-            {
-                _damage->addRegion(regid->id());
-                return true;
-            }
+            xcb_flush(_conn.get());
+            return true;
         }
 
         return false;
     }
 
-    bool XCB::RootDisplay::damageSubtrack(const Region & region)
+    bool XCB::RootDisplay::rootDamageSubtrack(const Region & reg)
     {
-        if(_damage && _modFixes)
+        if(_modWinDamage && _modWinDamage->subtrackRegion(reg))
         {
-            if(auto regid = _modFixes->createRegion(region.toXcbRect()))
-            {
-                _damage->subtrackRegion(regid->id());
-                return true;
-            }
+            xcb_flush(_conn.get());
+            return true;
         }
 
         return false;
     }
 
-    bool XCB::RootDisplay::setClipboard(const uint8_t* buf, size_t len)
-    {
-        return _modSelection && _modSelection->setBuffer(buf, len, { Atom::primary, Atom::clipboard });
-    }
-
-    XCB::GenericEvent XCB::RootDisplay::poolEvent(void)
+    XCB::GenericEvent XCB::RootDisplay::pollEvent(void)
     {
         auto ev = GenericEvent(xcb_poll_for_event(_conn.get()));
 
@@ -3584,38 +3892,35 @@ namespace LTSM
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height)
             {
-                Application::warning("%s: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                Application::warning("%s: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                      __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-            Application::debug("%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "%s: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
-            damageRegionEvent(Region(dn->area));
+
+            xcbDamageNotifyEvent(dn->area);
         }
         else if(isXFixesSelectionNotify(ev))
         {
             auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
 
-            Application::debug("%s: selection notify, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
-                               __FUNCTION__, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
+            Application::debug(DebugType::Xcb, "%s: selection notify, subtype: %" PRIu8 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s'), time1: %" PRIu32 ", time2: %" PRIu32,
+                               __FUNCTION__, sn->subtype, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
 
-            if(_modSelection)
-            {
-                _modSelection->fixesAction(sn);
-            }
-
-            xfixesSelectionChangedEvent();
+            if(_modSelectionCopy)
+                _modSelectionCopy->xfixesSelectionNotifyEvent(sn);
         }
         else if(isXFixesCursorNotify(ev))
         {
             auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
 
-            Application::debug("%s: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `%s'), sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "%s: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `%s'), sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
 
-            xfixesCursorChangedEvent();
+            xcbFixesCursorChangedEvent();
         }
         else if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
         {
@@ -3628,49 +3933,59 @@ namespace LTSM
 
                 if(cc.width != wsz.width || cc.height != wsz.height)
                 {
-                    Application::warning("%s: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                    Application::warning("%s: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                          __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
-                Application::info("%s: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                Application::debug(DebugType::Xcb, "%s: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                   __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
-                createFullScreenDamage();
-                randrScreenChangedEvent(wsz, *rn);
+                if(createFullScreenDamage())
+                    xcb_flush(_conn.get());
+
+                xcbRandrScreenChangedEvent(wsz, *rn);
             }
         }
         else if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY))
         {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "%s: xkb notify: %s, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
 
-            _minKeycode = mn->minKeyCode;
-            _maxKeycode = mn->maxKeyCode;
-
+/*
+            if(auto setup = const_cast<xcb_setup_t*>(xcb_get_setup(_conn.get())))
+            {
+                setup->min_keycode = mn->minKeyCode;
+                setup->max_keycode = mn->maxKeyCode;
+            }
+*/
             _modXkb->resetMapState();
         }
         else if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY))
         {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "%s: xkb notify: %s, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
 
             if(kn->deviceID == _modXkb->devid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
             {
-                _minKeycode = kn->minKeyCode;
-                _maxKeycode = kn->maxKeyCode;
-
-                Application::info("%s: reset map, devid: %" PRIu8, __FUNCTION__, kn->deviceID);
+/*
+                if(auto setup = const_cast<xcb_setup_t*>(xcb_get_setup(_conn.get())))
+                {
+                    setup->min_keycode = kn->minKeyCode;
+                    setup->max_keycode = kn->maxKeyCode;
+                }
+*/
+                Application::debug(DebugType::Xcb, "%s: reset map, devid: %" PRIu8, __FUNCTION__, kn->deviceID);
                 _modXkb->resetMapState();
             }
         }
         else if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY))
         {
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-            Application::debug("%s: xkb notify: %s, xkb type: 0x%02" PRIx8 ", devid: %" PRIu8 ", mods: 0x%02" PRIx8 ", group: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "%s: xkb notify: %s, xkb type: 0x%02" PRIx8 ", devid: %" PRIu8 ", mods: 0x%02" PRIx8 ", group: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
 
             xkb_state_update_mask(_modXkb->state.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
@@ -3679,36 +3994,56 @@ namespace LTSM
             if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
             {
                 // changed layout group
-                xkbGroupChangedEvent(sn->group);
+                xcbXkbGroupChangedEvent(sn->group);
             }
         }
 
         auto response_type = ev ? ev->response_type & ~0x80 : 0;
 
-        if(_modSelection)
+        switch(response_type)
         {
-            switch(response_type)
-            {
-                case XCB_SELECTION_CLEAR:
-                    _modSelection->clearAction(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
-                    break;
+            case XCB_DESTROY_NOTIFY:
+                if(_modSelectionPaste)
+                {
+                    _modSelectionPaste->destroyNotifyEvent(reinterpret_cast<xcb_destroy_notify_event_t*>(ev.get()));
+                }
+                break;
 
-                case XCB_SELECTION_REQUEST:
-                    _modSelection->requestAction(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
-                    break;
+            case XCB_PROPERTY_NOTIFY:
+                if(_modSelectionPaste)
+                {
+                    _modSelectionPaste->propertyNotifyEvent(reinterpret_cast<xcb_property_notify_event_t*>(ev.get()));
+                }
+                if(_modSelectionCopy)
+                {
+                    _modSelectionCopy->propertyNotifyEvent(reinterpret_cast<xcb_property_notify_event_t*>(ev.get()));
+                }
+                break;
 
-                case XCB_SELECTION_NOTIFY:
-                    if(_modSelection->notifyAction(reinterpret_cast<xcb_selection_notify_event_t*>(ev.get()), getPropertyType(_modSelection->win, _modSelection->atombuf), false))
-                    {
-                        const std::scoped_lock guard{ _modSelection->lock };
-                        clipboardChangedEvent(_modSelection->buf);
-                    }
+            case XCB_SELECTION_CLEAR:
+                if(_modSelectionPaste)
+                {
+                    _modSelectionPaste->selectionClearEvent(reinterpret_cast<xcb_selection_clear_event_t*>(ev.get()));
+                }
+                break;
 
-                    break;
+            case XCB_SELECTION_REQUEST:
+                if(_modSelectionPaste)
+                {
+                    _modSelectionPaste->selectionRequestEvent(reinterpret_cast<xcb_selection_request_event_t*>(ev.get()));
+                }
+                break;
 
-                default:
-                    break;
-            }
+            case XCB_SELECTION_NOTIFY:
+                if(_modSelectionCopy)
+                {
+                    _modSelectionCopy->selectionNotifyEvent(reinterpret_cast<xcb_selection_notify_event_t*>(ev.get()));
+                }
+
+                break;
+
+            default:
+                break;
         }
 
         return ev;
@@ -3722,7 +4057,7 @@ namespace LTSM
     std::pair<xcb_keycode_t, int> XCB::RootDisplay::keysymToKeycodeGroup(xcb_keysym_t keysym) const
     {
         auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
-        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _minKeycode, _maxKeycode - _minKeycode + 1);
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
         if(const auto & err = xcbReply.error())
         {
@@ -3756,8 +4091,10 @@ namespace LTSM
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+
+        Application::trace(DebugType::Xcb, "%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
+
         // shifted/unshifted
         int groupsCount = keysymsPerKeycode >> 1;
 
@@ -3765,7 +4102,7 @@ namespace LTSM
         {
             for(int ii = 0; ii < keycodesCount; ++ii)
             {
-                auto keycode = _minKeycode + ii;
+                auto keycode = _setup->min_keycode + ii;
                 int index = ii * keysymsPerKeycode + group * 2;
 
                 if(index + 1 >= keysymsLength)
@@ -3793,7 +4130,7 @@ namespace LTSM
 
     xcb_keycode_t XCB::RootDisplay::keysymGroupToKeycode(xcb_keysym_t keysym, int group) const
     {
-        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _minKeycode, _maxKeycode - _minKeycode + 1);
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
 
         if(const auto & err = xcbReply.error())
         {
@@ -3837,12 +4174,12 @@ namespace LTSM
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug("%s: keysym: 0x%08" PRIx32 ", current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug(DebugType::Xcb, "%s: keysym: 0x%08" PRIx32 ", current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
                            __FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         for(int ii = 0; ii < keycodesCount; ++ii)
         {
-            auto keycode = _minKeycode + ii;
+            auto keycode = _setup->min_keycode + ii;
             int index = ii * keysymsPerKeycode + group * 2;
 
             if(index + 1 >= keysymsLength)
@@ -3869,6 +4206,80 @@ namespace LTSM
         return NULL_KEYCODE;
     }
 
+    xcb_keysym_t XCB::RootDisplay::keycodeGroupToKeysym(xcb_keycode_t keycode, int group, bool shifted) const
+    {
+        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, _conn.get(), _setup->min_keycode, _setup->max_keycode - _setup->min_keycode + 1);
+
+        if(const auto & err = xcbReply.error())
+        {
+            extendedError(err.get(), __FUNCTION__, "xcb_get_keyboard_mapping");
+            return 0;
+        }
+
+        const auto & reply = xcbReply.reply();
+
+        if(! reply)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping");
+            return 0;
+        }
+
+        const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
+
+        if(! keysyms)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_keyboard_mapping_keysyms");
+            return 0;
+        }
+
+        int keysymsPerKeycode = reply->keysyms_per_keycode;
+
+        if(1 > keysymsPerKeycode)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "keysyms_per_keycode");
+            return 0;
+        }
+
+        int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
+        int keycodesCount = keysymsLength / keysymsPerKeycode;
+
+        Application::debug(DebugType::Xcb, "%s: keycode: 0x%02" PRIx8 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                           __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
+
+        int index = (keycode - _setup->min_keycode) * keysymsPerKeycode + group * 2;
+
+        if(index + 1 >= keysymsLength)
+        {
+            Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                               __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
+            return 0;
+        }
+
+        return shifted ? keysyms[index + 1] : keysyms[index];
+    }
+
+    xcb_keycode_t XCB::RootDisplay::keysymToKeycodeAuto(xcb_keysym_t keysym) const
+    {
+        auto keycode = keysymToKeycode(keysym);
+
+        if(keycode == NULL_KEYCODE)
+        {
+            auto [keysymKeycode, keysymGroup] = keysymToKeycodeGroup(keysym);
+
+            if(keysymKeycode != NULL_KEYCODE)
+            {
+                if(_modXkb)
+                {
+                    _modXkb->switchLayoutGroup(keysymGroup);
+                }
+
+                keycode = keysymKeycode;
+            }
+        }
+
+        return keycode;
+    }
+/*
     void XCB::RootDisplay::fakeInputKeycode(xcb_keycode_t keycode, bool pressed) const
     {
         if(_modTest)
@@ -3889,7 +4300,7 @@ namespace LTSM
             {
                 if(pressed)
                 {
-                    Application::debug("%s: keysym 0x%08" PRIx32 " was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
+                    Application::debug(DebugType::Xcb, "%s: keysym 0x%08" PRIx32 " was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
                 }
 
                 if(_modXkb)
@@ -3906,31 +4317,26 @@ namespace LTSM
             fakeInputKeycode(keycode, pressed);
         }
     }
-
-    void XCB::RootDisplay::fakeInputButton(int button, const Point & pos) const
-    {
-        if(_modTest)
-        {
-            _modTest->fakeInputClickButton(_screen->root, button, pos);
-        }
-    }
-
-    void XCB::RootDisplay::fillBackground(int r, int g, int b)
+*/
+    void XCB::RootDisplay::fillBackground(uint8_t r, uint8_t g, uint8_t b)
     {
         fillRegion(r, g, b, region());
     }
 
-    void XCB::RootDisplay::fillRegion(int r, int g, int b, const Region & reg)
+    void XCB::RootDisplay::fillRegion(uint8_t r, uint8_t g, uint8_t b, const Region & reg)
     {
-        uint32_t color = (r << 16) | (g << 8) | b;
+        uint32_t color = 0;
 
-        if(depth() < 24 && color > 0x0000FFFF)
+        switch(depth())
         {
-            // convert RGB888 to RGB565
-            r = ((color >> 24) & 0xFF) * 0x1F / 0xFF;
-            g = ((color >> 16) & 0xFF) * 0x3F / 0xFF;
-            b = (color & 0xFF) * 0x1F / 0xFF;
-            color = (r << 11) | (g << 5) | b;
+            case 30: color = pfx30.pixel({r,g,b,0}); break;
+            case 24: color = pf888.pixel({r,g,b,0}); break;
+            case 16: color = pf565.pixel({r,g,b,0}); break;
+            case 15: color = pf555.pixel({r,g,b,0}); break;
+
+            default:
+                Application::error("%s: unknown depth: %u", __FUNCTION__, depth());
+                throw xcb_error(NS_FuncName);
         }
 
         uint32_t colors[] = { color };
@@ -3949,338 +4355,5 @@ namespace LTSM
                 extendedError(err.get(), __FUNCTION__, "xcb_clear_area");
             }
         }
-    }
-
-    /// XkbClient
-    XCB::XkbClient::XkbClient()
-    {
-        conn.reset(xcb_connect(nullptr, nullptr));
-
-        if(xcb_connection_has_error(conn.get()))
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_connect");
-            throw xcb_error("xcb_connect");
-        }
-
-        auto setup = xcb_get_setup(conn.get());
-
-        if(! setup)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_setup");
-            throw xcb_error("xcb_get_setup");
-        }
-
-        minKeycode = setup->min_keycode;
-        maxKeycode = setup->max_keycode;
-
-        xkbext = xcb_get_extension_data(conn.get(), &xcb_xkb_id);
-
-        if(! xkbext)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_get_extension_data");
-            throw xcb_error("xkb_get_extension_data");
-        }
-
-        auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, conn.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
-
-        if(xcbReply.error())
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_xkb_use_extension");
-            throw xcb_error("xcb_xkb_use_extension");
-        }
-
-        xkbdevid = xkb_x11_get_core_keyboard_device_id(conn.get());
-
-        if(xkbdevid < 0)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
-            throw xcb_error("xkb_x11_get_core_keyboard_device_id");
-        }
-
-        xkbctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
-
-        if(! xkbctx)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xkb_context_new");
-            throw xcb_error("xkb_context_new");
-        }
-
-        xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-
-        if(!xkbmap)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_keymap_new_from_device");
-            throw xcb_error("xkb_x11_keymap_new_from_device");
-        }
-
-        xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
-
-        if(!xkbstate)
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xkb_x11_state_new_from_device");
-            throw xcb_error("xkb_x11_state_new_from_device");
-        }
-
-        // XCB_XKB_MAP_PART_KEY_TYPES, XCB_XKB_MAP_PART_KEY_SYMS, XCB_XKB_MAP_PART_MODIFIER_MAP, XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS
-        // XCB_XKB_MAP_PART_KEY_ACTIONS, XCB_XKB_MAP_PART_VIRTUAL_MODS, XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP
-        uint16_t required_map_parts = 0;
-        uint16_t required_events = XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | XCB_XKB_EVENT_TYPE_MAP_NOTIFY | XCB_XKB_EVENT_TYPE_STATE_NOTIFY;
-
-        auto cookie = xcb_xkb_select_events_checked(conn.get(), xkbdevid, required_events, 0, required_events, required_map_parts, required_map_parts, nullptr);
-
-        if(GenericError(xcb_request_check(conn.get(), cookie)))
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_xkb_select_events");
-            throw xcb_error("xcb_xkb_select_events");
-        }
-    }
-
-    std::string XCB::XkbClient::atomName(xcb_atom_t atom) const
-    {
-        auto xcbReply = getReplyFunc2(xcb_get_atom_name, conn.get(), atom);
-
-        if(const auto & reply = xcbReply.reply())
-        {
-            const char* name = xcb_get_atom_name_name(reply.get());
-            size_t len = xcb_get_atom_name_name_length(reply.get());
-            return std::string(name, name + len);
-        }
-
-        return "NONE";
-    }
-
-    int XCB::XkbClient::xkbGroup(void) const
-    {
-        auto xcbReply = getReplyFunc2(xcb_xkb_get_state, conn.get(), XCB_XKB_ID_USE_CORE_KBD);
-
-        if(const auto & err = xcbReply.error())
-        {
-            throw xcb_error("xcb_xkb_get_names");
-        }
-
-        if(const auto & reply = xcbReply.reply())
-        {
-            return reply->group;
-        }
-
-        return -1;
-    }
-
-    std::vector<std::string> XCB::XkbClient::xkbNames(void) const
-    {
-        auto xcbReply = getReplyFunc2(xcb_xkb_get_names, conn.get(), XCB_XKB_ID_USE_CORE_KBD, XCB_XKB_NAME_DETAIL_GROUP_NAMES | XCB_XKB_NAME_DETAIL_SYMBOLS);
-
-        if(xcbReply.error())
-        {
-            throw xcb_error("xcb_xkb_get_names");
-        }
-
-        std::vector<std::string> res;
-        res.reserve(4);
-
-        if(const auto & reply = xcbReply.reply())
-        {
-            const void *buffer = xcb_xkb_get_names_value_list(reply.get());
-            xcb_xkb_get_names_value_list_t list;
-
-            xcb_xkb_get_names_value_list_unpack(buffer, reply->nTypes, reply->indicators, reply->virtualMods,
-                                                reply->groupNames, reply->nKeys, reply->nKeyAliases, reply->nRadioGroups, reply->which, & list);
-            int groups = xcb_xkb_get_names_value_list_groups_length(reply.get(), & list);
-
-            for(int ii = 0; ii < groups; ++ii)
-            {
-                res.emplace_back(atomName(list.groups[ii]));
-            }
-        }
-
-        return res;
-    }
-
-    xcb_keysym_t XCB::XkbClient::keycodeGroupToKeysym(xcb_keycode_t keycode, int group, bool shifted) const
-    {
-        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
-
-        const auto & reply = xcbReply.reply();
-
-        if(! reply)
-        {
-            throw xcb_error("xcb_get_keyboard_mapping");
-        }
-
-        const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
-
-        if(! keysyms)
-        {
-            throw xcb_error("xcb_get_keyboard_mapping_keysyms");
-        }
-
-        int keysymsPerKeycode = reply->keysyms_per_keycode;
-
-        if(1 > keysymsPerKeycode)
-        {
-            throw xcb_error("keysyms_per_keycode");
-        }
-
-        int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
-        int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keycode: 0x%02" PRIx8 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                           __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
-
-        int index = (keycode - minKeycode) * keysymsPerKeycode + group * 2;
-
-        if(index + 1 >= keysymsLength)
-        {
-            Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                               __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
-            return 0;
-        }
-
-        return shifted ? keysyms[index + 1] : keysyms[index];
-    }
-
-    std::pair<xcb_keycode_t, int> XCB::XkbClient::keysymToKeycodeGroup(xcb_keysym_t keysym) const
-    {
-        auto empty = std::make_pair<xcb_keycode_t, int>(NULL_KEYCODE, -1);
-        auto xcbReply = getReplyFunc2(xcb_get_keyboard_mapping, conn.get(), minKeycode, maxKeycode - minKeycode + 1);
-
-        const auto & reply = xcbReply.reply();
-
-        if(! reply)
-        {
-            throw xcb_error("xcb_get_keyboard_mapping");
-        }
-
-        const xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply.get());
-
-        if(! keysyms)
-        {
-            throw xcb_error("xcb_get_keyboard_mapping_keysyms");
-        }
-
-        int keysymsPerKeycode = reply->keysyms_per_keycode;
-
-        if(1 > keysymsPerKeycode)
-        {
-            throw xcb_error("keysyms_per_keycode");
-        }
-
-        int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
-        int keycodesCount = keysymsLength / keysymsPerKeycode;
-        Application::debug("%s: keysym: 0x%08" PRIx32 ", keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                           __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
-        // shifted/unshifted
-        int groupsCount = keysymsPerKeycode >> 1;
-
-        for(int group = 0; group < groupsCount; ++group)
-        {
-            for(int ii = 0; ii < keycodesCount; ++ii)
-            {
-                auto keycode = minKeycode + ii;
-                int index = ii * keysymsPerKeycode + group * 2;
-
-                if(index + 1 >= keysymsLength)
-                {
-                    Application::error("%s: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
-                                       __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
-                    return empty;
-                }
-
-                // check normal/shifted keysyms
-                if(keysym == keysyms[index] || keysym == keysyms[index + 1])
-                {
-                    return std::make_pair(keycode, group);
-                }
-            }
-        }
-
-        Application::warning("%s: keysym not found 0x%08" PRIx32 ", group names: [%s]", __FUNCTION__, keysym, Tools::join(xkbNames(), ",").c_str());
-        return empty;
-    }
-
-    bool XCB::XkbClient::xcbError(void) const
-    {
-        return error;
-    }
-
-    void XCB::XkbClient::bell(uint8_t percent) const
-    {
-        auto cookie = xcb_bell_checked(conn.get(), percent);
-
-        if(GenericError(xcb_request_check(conn.get(), cookie)))
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "xcb_bell");
-            throw xcb_error("xcb_bell");
-        }
-    }
-
-    bool XCB::XkbClient::xcbEventProcessing(void)
-    {
-        if(int err = xcb_connection_has_error(conn.get()))
-        {
-            Application::error("%s: xcb error: code: %d", __FUNCTION__, err);
-            error = true;
-            return false;
-        }
-
-        auto ev = GenericEvent(xcb_poll_for_event(conn.get()));
-        auto type = ev ? ev->response_type & ~0x80 : 0;
-
-        if(type != 0)
-        {
-            bool resetMapState = false;
-
-            if(xkbext->first_event == type)
-            {
-                auto xkbev = ev->pad0;
-
-                if(XCB_XKB_MAP_NOTIFY == xkbev)
-                {
-                    auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-                    resetMapState = true;
-                    minKeycode = mn->minKeyCode;
-                    maxKeycode = mn->maxKeyCode;
-                }
-                else if(XCB_XKB_NEW_KEYBOARD_NOTIFY == xkbev)
-                {
-                    if(auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get()))
-                    {
-                        if(kn->deviceID == xkbdevid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES))
-                        {
-                            resetMapState = true;
-                            minKeycode = kn->minKeyCode;
-                            maxKeycode = kn->maxKeyCode;
-                        }
-                    }
-                }
-                else if(xkbev == XCB_XKB_STATE_NOTIFY)
-                {
-                    if(auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get()))
-                    {
-                        xkb_state_update_mask(xkbstate.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,
-                                              sn->baseGroup, sn->latchedGroup, sn->lockedGroup);
-
-                        if(sn->changed & XCB_XKB_STATE_PART_GROUP_STATE)
-                        {
-                            xkbStateChangeEvent(sn->group);
-                        }
-                    }
-                }
-            }
-
-            if(resetMapState)
-            {
-                // free state first
-                xkbstate.reset();
-                xkbmap.reset();
-
-                // set new
-                xkbmap.reset(xkb_x11_keymap_new_from_device(xkbctx.get(), conn.get(), xkbdevid, XKB_KEYMAP_COMPILE_NO_FLAGS));
-                xkbstate.reset(xkb_x11_state_new_from_device(xkbmap.get(), conn.get(), xkbdevid));
-
-                xkbStateResetEvent();
-            }
-        }
-
-        return true;
     }
 }

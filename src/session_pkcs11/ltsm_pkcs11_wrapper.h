@@ -314,7 +314,7 @@ namespace LTSM
                 return day;
             }
 
-            std::string toString(std::string_view format = "%Y%m%d" /*strftime format*/) const;
+            std::string toString(const std::string & format = "%Y%m%d" /*strftime format*/) const;
         };
 
         /// BaseObject
@@ -468,7 +468,7 @@ namespace LTSM
         };
 
         // API
-        LibraryPtr loadLibrary(std::string_view);
+        LibraryPtr loadLibrary(const std::string &);
         SessionPtr createSession(const SlotId &, bool rwmode, const LibraryPtr &);
         SlotList getSlots(bool tokenPresentOnly, const LibraryPtr &);
 
@@ -491,7 +491,7 @@ namespace LTSM
 
         public:
             Library();
-            Library(std::string_view);
+            Library(const std::string &);
 
             Library(Library &&) noexcept;
             Library & operator=(Library &&) noexcept;

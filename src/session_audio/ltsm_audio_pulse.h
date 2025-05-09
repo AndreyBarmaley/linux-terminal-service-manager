@@ -133,10 +133,10 @@ namespace LTSM
             const pa_server_info* contextServerInfoWait(void);
 
             void contextLoadModuleNotify(uint32_t idx);
-            uint32_t contextLoadModuleWait(std::string_view name, std::string_view args);
+            uint32_t contextLoadModuleWait(const std::string & name, const std::string & args);
 
             void contextSourceInfoNotify(const pa_source_info* info, int eol);
-            const pa_source_info* contextSourceInfoWait(std::string_view name);
+            const pa_source_info* contextSourceInfoWait(const std::string & name);
 
             void streamCorkNotify(int success);
             bool streamCorkWait(bool);
@@ -161,7 +161,7 @@ namespace LTSM
             BaseStream() = default;
             virtual ~BaseStream();
 
-            BaseStream(std::string_view, const pa_sample_format_t &, uint32_t rate, uint8_t channels);
+            BaseStream(const std::string &, const pa_sample_format_t &, uint32_t rate, uint8_t channels);
 
             bool initContext(void);
             void contextDisconnect(void);
@@ -171,7 +171,7 @@ namespace LTSM
 
             void streamDisconnect(void);
 
-            bool sourceInfo(std::string_view name);
+            bool sourceInfo(const std::string & name);
 
             bool streamPaused(void) const;
             bool streamSuspended(void) const;
@@ -276,7 +276,7 @@ namespace LTSM
         class Playback : public Simple
         {
         public:
-            Playback(std::string_view appName, std::string_view streamName, const pa_sample_format_t &,
+            Playback(const std::string & appName, const std::string & streamName, const pa_sample_format_t &,
                      uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
 
             bool streamWrite(const uint8_t*, size_t) const;
@@ -286,7 +286,7 @@ namespace LTSM
         class Record : public Simple
         {
         public:
-            Record(std::string_view appName, std::string_view streamName, const pa_sample_format_t &,
+            Record(const std::string & appName, const std::string & streamName, const pa_sample_format_t &,
                    uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
 
             std::vector<uint8_t> streamRead(size_t) const;

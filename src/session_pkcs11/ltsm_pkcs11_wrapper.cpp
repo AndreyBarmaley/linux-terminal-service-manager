@@ -155,7 +155,7 @@ namespace LTSM
     {
     }
 
-    PKCS11::Library::Library(std::string_view name) :
+    PKCS11::Library::Library(const std::string & name) :
         dll{ nullptr, dlclose }
     {
         if(name.empty())
@@ -164,11 +164,11 @@ namespace LTSM
             throw pkcs11_error(NS_FuncName);
         }
 
-        dll.reset(dlopen(name.data(), RTLD_LAZY));
+        dll.reset(dlopen(name.c_str(), RTLD_LAZY));
 
         if(! dll)
         {
-            Application::error("%s: %s failed, name: %s", __FUNCTION__, "dlopen", name.data());
+            Application::error("%s: %s failed, name: %s", __FUNCTION__, "dlopen", name.c_str());
             throw pkcs11_error(NS_FuncName);
         }
 
@@ -260,11 +260,11 @@ namespace LTSM
 
         if(0 == pulCount)
         {
-            Application::debug("%s: empty %s", __FUNCTION__, "slots");
+            Application::debug(DebugType::Pkcs11, "%s: empty %s", __FUNCTION__, "slots");
             return {};
         }
 
-        Application::debug("%s: connected slots: %" PRIu64, __FUNCTION__, pulCount);
+        Application::debug(DebugType::Pkcs11, "%s: connected slots: %" PRIu64, __FUNCTION__, pulCount);
         std::vector<SlotId> slots(pulCount);
 
         if(auto ret = lib->func()->C_GetSlotList(tokenPresentOnly, slots.data(), & pulCount); ret != CKR_OK)
@@ -286,7 +286,7 @@ namespace LTSM
 
     void PKCS11::Library::sessionClose(CK_SESSION_HANDLE sid)
     {
-        Application::debug("%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
         auto ret = pFunctionList->C_CloseSession(sid);
 
         if(ret != CKR_OK)
@@ -300,7 +300,7 @@ namespace LTSM
 
     CK_SESSION_HANDLE PKCS11::Library::sessionOpen(const SlotId & id, bool rwmode)
     {
-        Application::debug("%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
         CK_FLAGS flags = CKF_SERIAL_SESSION;
 
         if(rwmode)
@@ -318,7 +318,7 @@ namespace LTSM
             return CK_INVALID_HANDLE;
         }
 
-        Application::debug("%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
         sessions.push_front(sid);
         return sid;
     }
@@ -340,7 +340,7 @@ namespace LTSM
 
     bool PKCS11::Slot::getSlotInfo(SlotInfo & info) const
     {
-        Application::debug("%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib)
@@ -374,7 +374,7 @@ namespace LTSM
 
     bool PKCS11::Slot::getTokenInfo(TokenInfo & info) const
     {
-        Application::debug("%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib)
@@ -408,7 +408,7 @@ namespace LTSM
 
     PKCS11::MechList PKCS11::Slot::getMechanisms(void) const
     {
-        Application::debug("%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib)
@@ -425,7 +425,7 @@ namespace LTSM
 
         if(0 == pulCount)
         {
-            Application::debug("%s: empty %s", __FUNCTION__, "mechanisms");
+            Application::debug(DebugType::Pkcs11, "%s: empty %s", __FUNCTION__, "mechanisms");
             return {};
         }
 
@@ -443,7 +443,7 @@ namespace LTSM
 
     PKCS11::MechInfoPtr PKCS11::Slot::getMechInfo(const MechType & mech) const
     {
-        Application::debug("%s: slot: %" PRIu64 ", mech: %s", __FUNCTION__, id, mechString(mech));
+        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64 ", mech: %s", __FUNCTION__, id, mechString(mech));
         auto lib = weak.lock();
 
         if(! lib)
@@ -514,7 +514,7 @@ namespace LTSM
         }
     }
 
-    std::string PKCS11::Date::toString(std::string_view format) const
+    std::string PKCS11::Date::toString(const std::string & format) const
     {
         std::tm tm{};
         tm.tm_year = year - 1900;
@@ -522,7 +522,7 @@ namespace LTSM
         tm.tm_mday = day;
         auto in_time = std::mktime(& tm);
         std::stringstream ss;
-        ss << std::put_time(std::localtime(&in_time), format.data());
+        ss << std::put_time(std::localtime(&in_time), format.c_str());
         return ss.str();
     }
 
@@ -549,7 +549,7 @@ namespace LTSM
 
     PKCS11::SessionInfoPtr PKCS11::Session::getInfo(void) const
     {
-        Application::debug("%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
 
         if(auto lib = weak.lock())
         {
@@ -570,7 +570,7 @@ namespace LTSM
 
     PKCS11::RawData PKCS11::Session::generateRandom(size_t len) const
     {
-        Application::debug("%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
 
         if(auto lib = weak.lock())
         {
@@ -605,7 +605,7 @@ namespace LTSM
 
         if(! info->flagLoginRequired())
         {
-            Application::debug("%s: not login required, session: %" PRIu64, __FUNCTION__, sid);
+            Application::debug(DebugType::Pkcs11, "%s: not login required, session: %" PRIu64, __FUNCTION__, sid);
             return true;
         }
 
@@ -667,7 +667,7 @@ namespace LTSM
                                    __FUNCTION__, "C_FindObjects", sid, ret, rvString(ret));
             }
 
-            Application::debug("%s: objects count: %" PRIu64, __FUNCTION__, objectCount);
+            Application::debug(DebugType::Pkcs11, "%s: objects count: %" PRIu64, __FUNCTION__, objectCount);
 
             if(auto ret = lib->func()->C_FindObjectsFinal(sid); ret != CKR_OK)
             {
@@ -898,7 +898,7 @@ namespace LTSM
 
     PKCS11::RawData PKCS11::Session::digestData(const void* ptr, size_t len, const MechType & type) const
     {
-        Application::debug("%s: session: %" PRIu64 ", mech: %s", __FUNCTION__, sid, mechString(type));
+        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64 ", mech: %s", __FUNCTION__, sid, mechString(type));
 
         if(! ptr || len == 0)
         {
@@ -1228,13 +1228,13 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return nullptr;
     }
 
-    PKCS11::LibraryPtr PKCS11::loadLibrary(std::string_view name)
+    PKCS11::LibraryPtr PKCS11::loadLibrary(const std::string & name)
     {
         return std::make_shared<Library>(name);
     }

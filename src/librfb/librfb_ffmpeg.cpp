@@ -25,6 +25,7 @@
 #include <algorithm>
 
 #include "ltsm_application.h"
+#include "ltsm_tools.h"
 #include "librfb_ffmpeg.h"
 #include "ffmpeg_tools.h"
 
@@ -129,9 +130,15 @@ namespace LTSM
     {
         switch(getType())
         {
-            case RFB::ENCODING_FFMPEG_H264: return "FFMPEG_H264";
-            case RFB::ENCODING_FFMPEG_VP8: return "FFMPEG_VP8";
-            case RFB::ENCODING_FFMPEG_AV1: return "FFMPEG_AV1";
+            case RFB::ENCODING_FFMPEG_H264:
+                return "FFMPEG_H264";
+
+            case RFB::ENCODING_FFMPEG_VP8:
+                return "FFMPEG_VP8";
+
+            case RFB::ENCODING_FFMPEG_AV1:
+                return "FFMPEG_AV1";
+
             default:
                 break;
         }
@@ -139,6 +146,7 @@ namespace LTSM
         return "FFMPEG_UNKNOWN";
     }
 
+/*
     void RFB::EncodingFFmpeg::setDebug(int val)
     {
         // encoding:debug
@@ -172,9 +180,8 @@ namespace LTSM
                 av_log_set_level(AV_LOG_TRACE);
                 break;
         }
-
-        EncodingBase::setDebug(val);
     }
+*/
 
     void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz)
     {
@@ -243,10 +250,10 @@ namespace LTSM
         avcctx->codec_type = AVMEDIA_TYPE_VIDEO;
         avcctx->flags |= AV_CODEC_FLAG_LOOP_FILTER;
 
-//        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
-//        {
-//            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
-//        }
+        // if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+        // {
+        // avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+        // }
 
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
@@ -338,7 +345,7 @@ namespace LTSM
         if(ret == 0)
         {
             st->sendIntBE32(packet->size);
-            Application::trace("%s: packet size: %d", __FUNCTION__, packet->size);
+            Application::trace(DebugType::Enc, "%s: packet size: %d", __FUNCTION__, packet->size);
             st->sendRaw(packet->data, packet->size);
         }
         else
@@ -363,18 +370,21 @@ namespace LTSM
 
         switch(type)
         {
+#ifdef LTSM_DECODING_H264
             case RFB::ENCODING_FFMPEG_H264:
                 codec = avcodec_find_decoder(AV_CODEC_ID_H264);
                 break;
-
+#endif
+#ifdef LTSM_DECODING_VP8
             case RFB::ENCODING_FFMPEG_VP8:
                 codec = avcodec_find_decoder(AV_CODEC_ID_VP8);
                 break;
-
+#endif
+#ifdef LTSM_DECODING_AV1
             case RFB::ENCODING_FFMPEG_AV1:
                 codec = avcodec_find_decoder(AV_CODEC_ID_AV1);
                 break;
-
+#endif
             default:
                 break;
         }
@@ -386,6 +396,7 @@ namespace LTSM
         }
     }
 
+/*
     void RFB::DecodingFFmpeg::setDebug(int val)
     {
         // encoding:debug
@@ -419,10 +430,8 @@ namespace LTSM
                 av_log_set_level(AV_LOG_TRACE);
                 break;
         }
-
-        DecodingBase::setDebug(val);
     }
-
+*/
     void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz)
     {
         std::scoped_lock guard{ lockUpdate };
@@ -449,10 +458,10 @@ namespace LTSM
             throw ffmpeg_error(NS_FuncName);
         }
 
-//        if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
-//        {
-//            avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
-//        }
+        // if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
+        // {
+        // avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
+        // }
 
         avcctx->time_base = (AVRational)
         {
@@ -547,11 +556,8 @@ namespace LTSM
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg)
     {
-        if(debug)
-        {
-            Application::debug("%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Enc, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                                reg.y, reg.width, reg.height);
-        }
 
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);

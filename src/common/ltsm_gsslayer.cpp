@@ -23,12 +23,44 @@
 #include <iostream>
 
 #include "ltsm_gsslayer.h"
+#include "ltsm_application.h"
+
+using namespace LTSM;
 
 namespace Gss
 {
     int apiVersion(void)
     {
-        return 20210328;
+        return 20250507;
+    }
+
+    const char* nameTypeName(const NameType & type)
+    {
+        switch(type)
+        {
+            case NameType::NoName: return "NoName";
+            case NameType::NoOid: return "NoOid";
+            case NameType::NtAnonymous: return "NtAnonymous";
+            case NameType::NtExportName: return "NtExportName";
+            case NameType::NtHostService: return "NtHostService";
+            case NameType::NtMachineUid: return "NtMachineUid";
+            case NameType::NtStringUid: return "NtStringUid";
+            case NameType::NtUserName: return "NtUserName";
+        }
+        
+        return "unknown";
+    }
+    
+    const char* credUsageName(const CredentialUsage & usage)
+    {
+        switch(usage)
+        {
+            case CredentialUsage::Initiate: return "initiate";
+            case CredentialUsage::Accept:   return "accept";
+            case CredentialUsage::Both:     return "both";
+        }
+
+        return "unknown";
     }
 
     std::string error2str(OM_uint32 code1, OM_uint32 code2)
@@ -352,6 +384,9 @@ namespace Gss
 
     CredentialPtr acquireCredential(std::string_view service, const NameType & type, const CredentialUsage & usage, ErrorCodes* err)
     {
+        Application::debug(DebugType::Gss, "%s: service: `%.*s', type: `%s', usage: `%s'",
+                __FUNCTION__, service.size(),service.data(), nameTypeName(type), credUsageName(usage));
+
         auto name = importName(service, type, err);
 
         if(! name)
@@ -382,7 +417,9 @@ namespace Gss
 
     CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view password, ErrorCodes* err)
     {
-        auto name = importName(username.data(), Gss::NameType::NtUserName, err);
+        Application::debug(DebugType::Gss, "%s: username: `%.*s'", __FUNCTION__, username.size(), username.data());
+
+        auto name = importName(username, Gss::NameType::NtUserName, err);
 
         if(! name)
         {
@@ -433,6 +470,8 @@ namespace Gss
         OM_uint32 stat;
         auto buf = recvToken();
 
+        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, buf.size());
+
         gss_buffer_desc in_buf{ buf.size(), (void*) buf.data() };
         gss_buffer_desc out_buf{ 0, nullptr, };
 
@@ -459,6 +498,8 @@ namespace Gss
         {
             throw std::invalid_argument("context is null");
         }
+
+        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, len);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ len, (void*) buf };
@@ -491,6 +532,8 @@ namespace Gss
         // recv token
         auto buf = recvToken();
 
+        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, buf.size());
+
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
         gss_buffer_desc out_buf{ buf.size(), (void*) buf.data() };
@@ -512,6 +555,8 @@ namespace Gss
         {
             throw std::invalid_argument("context is null");
         }
+
+        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, msgsz);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
@@ -537,6 +582,8 @@ namespace Gss
     // ServiceContext
     bool ServiceContext::acceptClient(CredentialPtr ptr)
     {
+        Application::debug(DebugType::Gss, "%s", __FUNCTION__);
+
         ctx = std::make_unique<Security>();
 
         OM_uint32 stat;
@@ -579,6 +626,8 @@ namespace Gss
     // ClientContext
     bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr)
     {
+        Application::debug(DebugType::Gss, "%s: service: `%.*s', mutual: %d", __FUNCTION__, service.size(), service.data(), static_cast<int>(mutual));
+
         ErrorCodes err;
         auto name = importName(service, NameType::NtHostService, & err);
 

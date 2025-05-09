@@ -107,6 +107,9 @@ namespace Gss
     std::string oidName(const gss_OID &, ErrorCodes* = nullptr);
 
     std::list<ContextFlag> exportFlags(int);
+
+    const char* nameTypeName(const NameType &);
+    const char* credUsageName(const CredentialUsage &);
     const char* flagName(const ContextFlag &);
 
     std::string error2str(OM_uint32 code1, OM_uint32 code2);

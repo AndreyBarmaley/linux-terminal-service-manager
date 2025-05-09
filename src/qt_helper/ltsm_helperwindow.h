@@ -44,7 +44,7 @@ namespace Ui
 class Pkcs11Client;
 struct Pkcs11Token;
 
-class LTSM_HelperWindow : public QMainWindow, public LTSM::XCB::XkbClient
+class LTSM_HelperWindow : public QMainWindow, protected LTSM::XCB::RootDisplay
 {
     Q_OBJECT
 
@@ -92,7 +92,7 @@ protected:
     virtual QStringList getUsersList(int displayNum) = 0;
 
     // xkb client interface
-    void xkbStateChangeEvent(int group) override;
+    void xcbXkbGroupChangedEvent(int group) override;
 
     void switchLoginMode(void);
 

@@ -1,6 +1,10 @@
 {
-    "service:debug": "debug",
-    "connector:debug": "info",
+    "service:debug:level": "debug",
+    "#service:debug:types": [ "all" ],
+
+    "connector:debug:level": "info",
+    "#connector:debug:types": [ "all" ],
+
     "logging:facility": "local6",
 
     "vnc:encoding:debug": 0,

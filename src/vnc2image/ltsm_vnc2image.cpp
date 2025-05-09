@@ -61,7 +61,7 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc)
             {
-                filename.assign("image", argv[it + 1]);
+                filename.assign(argv[it + 1]);
                 it = it + 1;
             }
             else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
@@ -119,13 +119,13 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
     }
 
-    void Vnc2Image::fbUpdateEvent(void)
+    void Vnc2Image::clientRecvFBUpdateEvent(void)
     {
         if(0 < timeout &&
                 std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
@@ -146,7 +146,7 @@ namespace LTSM
         return fbPtr->region().toSize();
     }
 
-    void Vnc2Image::pixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
+    void Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
     {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
@@ -168,9 +168,36 @@ namespace LTSM
         Application::warning("%s: not implemented", __FUNCTION__);
     }
 
+    void Vnc2Image::updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
+    {
+        Application::warning("%s: not implemented", __FUNCTION__);
+    }
+
     const PixelFormat & Vnc2Image::clientFormat(void) const
     {
         return fbPtr->pixelFormat();
+    }
+
+    uint16_t Vnc2Image::extClipboardLocalTypes(void) const
+    {
+        return 0;
+    }
+
+    std::vector<uint8_t> Vnc2Image::extClipboardLocalData(uint16_t type) const
+    {
+        return {};
+    }
+
+    void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type)
+    {
+    }
+
+    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf)
+    {
+    }
+
+    void Vnc2Image::extClipboardSendEvent(const std::vector<uint8_t> & buf)
+    {
     }
 }
 
@@ -185,7 +212,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

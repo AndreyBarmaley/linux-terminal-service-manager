@@ -178,6 +178,11 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     ui(new Ui::LTSM_HelperWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer300ms(0),
     timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
 {
+    if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr))
+    {
+        throw xcb_error(NS_FuncName);
+    }
+        
     Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
     ui->setupUi(this);
     ui->labelDomain->hide();
@@ -202,12 +207,16 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
     timerOneSec = startTimer(std::chrono::seconds(1));
     timer300ms = startTimer(std::chrono::milliseconds(300));
     timerReloadUsers = startTimer(std::chrono::minutes(3));
-    auto group = xkbGroup();
-    auto names = xkbNames();
 
-    if(0 <= group && group < names.size())
+    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
     {
-        ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+        auto names = extXkb->getNames();
+        int group = extXkb->getLayoutGroup();
+
+        if(0 <= group && group < names.size())
+        {
+            ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+        }
     }
 }
 
@@ -557,7 +566,7 @@ void LTSM_HelperWindow::showEvent(QShowEvent*)
 {
     widgetStartedAction(displayNum);
     auto screen = QGuiApplication::primaryScreen();
-    auto pos = (screen->size() - size()) / 2;
+    auto pos = (screen->size() - QMainWindow::size()) / 2;
     move(pos.width(), pos.height());
 
     if(! initArguments)
@@ -601,7 +610,23 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
     }
     else if(ev->timerId() == timer300ms)
     {
-        xcbEventProcessing();
+        if(auto err = XCB::RootDisplay::hasError())
+        {
+            return;
+        }
+
+        if(auto ev = XCB::RootDisplay::pollEvent())
+        {
+            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
+            {
+                uint16_t opcode = 0;
+
+                if(extXkb->isEventError(ev, & opcode))
+                {
+                    Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
+                }
+            }
+        }
     }
     else if(ev->timerId() == timerReloadUsers && loginAutoComplete)
     {
@@ -681,8 +706,8 @@ void LTSM_HelperWindow::widgetCenteredCallback(int display)
         if(auto primary = QGuiApplication::primaryScreen())
         {
             auto screenGeometry = primary->geometry();
-            int nx = (screenGeometry.width() - width()) / 2;
-            int ny = (screenGeometry.height() - height()) / 2;
+            int nx = (screenGeometry.width() - QMainWindow::width()) / 2;
+            int ny = (screenGeometry.height() - QMainWindow::height()) / 2;
             move(nx, ny);
         }
     }
@@ -760,13 +785,16 @@ void LTSM_HelperWindow::setLoginPasswordCallback(int display, const QString & lo
     }
 }
 
-void LTSM_HelperWindow::xkbStateChangeEvent(int group)
+void LTSM_HelperWindow::xcbXkbGroupChangedEvent(int group)
 {
-    auto names = xkbNames();
-
-    if(0 <= group && group < names.size())
+    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
     {
-        ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+        auto names = extXkb->getNames();
+
+        if(0 <= group && group < names.size())
+        {
+            ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
+        }
     }
 }
 

@@ -27,6 +27,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
+#include "ltsm_xcb_wrapper.h"
 #include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
@@ -124,7 +125,7 @@ namespace LTSM
                 // full update
                 if(! x11NoDamage)
                 {
-                    xcbDisplay()->damageAdd(XCB::Region(0, 0, clientRegion.width, clientRegion.height));
+                    X11Server::serverScreenUpdateRequest();
                 }
             }
 
@@ -136,7 +137,7 @@ namespace LTSM
                 JsonObjectStream jos;
                 jos.push("cmd", SystemCommand::LoginSuccess);
                 jos.push("action", true);
-                static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+                static_cast<ChannelClient*>(this)->sendLtsmChannelData(Channel::System, jos.flush());
             }).detach();
         }
     }
@@ -175,7 +176,7 @@ namespace LTSM
         return serverPf;
     }
 
-    void Connector::VNC::xcbFrameBufferModify(FrameBuffer & fb) const
+    void Connector::VNC::serverFrameBufferModifyEvent(FrameBuffer & fb) const
     {
         renderPrimitivesToFB(fb);
     }
@@ -207,7 +208,7 @@ namespace LTSM
             throw vnc_error(NS_FuncName);
         }
 
-        Application::debug("%s: xcb max request: %u", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Conn, "%s: xcb max request: %u", __FUNCTION__, xcbDisplay()->getMaxRequest());
         // init server format
         serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
@@ -237,12 +238,12 @@ namespace LTSM
         }
     }
 
-    std::list<std::string> Connector::VNC::serverDisabledEncodings(void) const
+    std::forward_list<std::string> Connector::VNC::serverDisabledEncodings(void) const
     {
-        return _config->getStdList<std::string>("vnc:encoding:blacklist");
+        return _config->getStdListForward<std::string>("vnc:encoding:blacklist");
     }
 
-    void Connector::VNC::serverSelectEncodingsEvent(void)
+    void Connector::VNC::serverEncodingSelectedEvent(void)
     {
         setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
         setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
@@ -373,11 +374,11 @@ namespace LTSM
         return SignalProxy::xcbAllowMessages();
     }
 
-    void Connector::VNC::xcbAddDamage(const XCB::Region & reg)
+    void Connector::VNC::serverScreenUpdateRequest(const XCB::Region & reg)
     {
         if(xcbAllowMessages() && ! x11NoDamage)
         {
-            xcbDisplay()->damageAdd(reg);
+            X11Server::serverScreenUpdateRequest(reg);
         }
     }
 
@@ -388,12 +389,8 @@ namespace LTSM
 
     bool Connector::VNC::xcbNoDamageOption(void) const
     {
-        if(isClientLtsmSupported())
-        {
-            return x11NoDamage;
-        }
-
-        return false;
+        return isClientLtsmSupported() ?
+            static_cast<bool>(x11NoDamage) : false;
     }
 
     void Connector::VNC::xcbDisableMessages(bool f)
@@ -407,15 +404,15 @@ namespace LTSM
         return it != keymap.end() ? it->second : 0;
     }
 
-    void Connector::VNC::recvKeyEvent(bool pressed, uint32_t keysym)
+    void Connector::VNC::serverRecvKeyEvent(bool pressed, uint32_t keysym)
     {
-        X11Server::recvKeyEvent(pressed, keysym);
+        X11Server::serverRecvKeyEvent(pressed, keysym);
         idleSession = std::chrono::steady_clock::now();
     }
 
-    void Connector::VNC::recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
+    void Connector::VNC::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
     {
-        X11Server::recvPointerEvent(mask, posx, posy);
+        X11Server::serverRecvPointerEvent(mask, posx, posy);
         idleSession = std::chrono::steady_clock::now();
     }
 
@@ -426,7 +423,7 @@ namespace LTSM
 
     void Connector::VNC::systemClientVariables(const JsonObject & jo)
     {
-        Application::debug("%s: count: %u", __FUNCTION__, jo.size());
+        Application::debug(DebugType::Conn, "%s: count: %u", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments"))
         {
@@ -459,6 +456,13 @@ namespace LTSM
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
             x11NoDamage = opts->getBoolean("x11:nodamage", x11NoDamage);
             frameRate = opts->getInteger("frame:rate", frameRate);
+
+            setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"));
+
+            if( x11NoDamage && ! XCB::RootDisplay::hasError())
+            {
+                XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
+            }
         }
     }
 
@@ -470,7 +474,7 @@ namespace LTSM
         {
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB)))
             {
-                Application::debug("%s: layout: %s", __FUNCTION__, layout.c_str());
+                Application::debug(DebugType::Conn, "%s: layout: %s", __FUNCTION__, layout.c_str());
                 auto names = xkb->getNames();
                 auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
                 {
@@ -500,7 +504,7 @@ namespace LTSM
                 return;
             }
 
-            Application::debug("%s: files count: %s", __FUNCTION__, fa->size());
+            Application::debug(DebugType::Conn, "%s: files count: %s", __FUNCTION__, fa->size());
 
             // check transfer disabled
             if(_config->getBoolean("transfer:file:disabled", false))
@@ -587,7 +591,7 @@ namespace LTSM
         // filepath - client file path
         // tmpfile - server tmpfile
         // dstdir - server target directory
-        Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
 
         if(display == displayNum())
         {
@@ -670,7 +674,7 @@ namespace LTSM
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", false);
         jos.push("error", msg);
-        static_cast<ChannelClient*>(this)->sendLtsmEvent(Channel::System, jos.flush());
+        static_cast<ChannelClient*>(this)->sendLtsmChannelData(Channel::System, jos.flush());
     }
 
     void Connector::VNC::systemChannelError(const JsonObject & jo)

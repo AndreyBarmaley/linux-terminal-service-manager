@@ -217,7 +217,9 @@ namespace LTSM
         ~ProxySocket();
 
         int proxyClientSocket(void) const;
+#ifdef __LINUX__
         bool proxyInitUnixSockets(const std::filesystem::path &);
+#endif
         bool proxyRunning(void) const;
 
         void proxyStartEventLoop(void);
@@ -227,21 +229,25 @@ namespace LTSM
 
     namespace TCPSocket
     {
-        std::string resolvAddress(std::string_view ipaddr);
-        std::string resolvHostname(std::string_view hostname);
-        std::list<std::string> resolvHostname2(std::string_view hostname);
-        int connect(std::string_view ipaddr, uint16_t port);
+        int connect(const std::string & ipaddr, uint16_t port);
+#ifdef __LINUX__
+        std::string resolvAddress(const std::string & ipaddr);
+        std::string resolvHostname(const std::string & hostname);
+        std::list<std::string> resolvHostname2(const std::string & hostname);
         int listen(uint16_t port, int conn = 5);
-        int listen(std::string_view ipaddr, uint16_t port, int conn = 5);
+        int listen(const std::string & ipaddr, uint16_t port, int conn = 5);
         int accept(int fd);
+#endif
     }
 
+#ifdef __LINUX__
     namespace UnixSocket
     {
         int connect(const std::filesystem::path &);
         int listen(const std::filesystem::path &, int conn = 5);
         int accept(int fd);
     }
+#endif
 
 #ifdef LTSM_WITH_GNUTLS
     struct gnutls_error : public std::runtime_error
@@ -302,22 +308,22 @@ namespace LTSM
 
             std::string sessionDescription(void) const;
 
-            bool initAnonHandshake(std::string_view priority, bool srvmode, int debug);
-            bool initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile,
+            bool initAnonHandshake(std::string priority, bool srvmode, int debug);
+            bool initX509Handshake(std::string priority, bool srvmode, const std::string & caFile, const std::string & certFile,
                                    const std::string & keyFile, const std::string & crlFile, int debug);
         };
 
         class AnonSession : public Stream
         {
         public:
-            AnonSession(const NetworkStream*, std::string_view priority, bool serverMode = true, int debug = 3);
+            AnonSession(const NetworkStream*, const std::string & priority, bool serverMode = true, int debug = 3);
         };
 
         class X509Session : public Stream
         {
         public:
             X509Session(const NetworkStream*, const std::string & cafile, const std::string & cert, const std::string & key,
-                        const std::string & crl, std::string_view priority, bool serverMode = true, int debug = 3);
+                        const std::string & crl, const std::string & priority, bool serverMode = true, int debug = 3);
         };
     } // TLS
 

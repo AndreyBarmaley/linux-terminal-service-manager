@@ -28,6 +28,7 @@
 #include <atomic>
 
 #include "ltsm_channels.h"
+#include "librfb_extclip.h"
 #include "librfb_decodings.h"
 
 namespace LTSM
@@ -35,7 +36,7 @@ namespace LTSM
     namespace RFB
     {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, protected DecoderStream
+        class ClientDecoder : public ChannelClient, protected DecoderStream, public ExtClip
         {
             PixelFormat serverPf;
 
@@ -54,7 +55,7 @@ namespace LTSM
             bool serverBigEndian = false;
             bool continueUpdatesSupport = false;
             bool continueUpdatesProcessed = false;
-            bool ltsmServer = false;
+            bool serverLtsmSupported = false;
 
         protected:
             friend class DecodingRaw;
@@ -121,34 +122,32 @@ namespace LTSM
 
             void sendKeyEvent(bool pressed, uint32_t keysym);
             void sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy);
-            void sendCutTextEvent(const char*, size_t);
-            void sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+            void sendCutTextEvent(const uint8_t*, uint32_t, bool ext);
+            void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override;
 
             std::list<int> supportedEncodings(void) const;
 
-            virtual void ltsmHandshakeEvent(int flags) { /* empty */ }
+            // client decoder events
+            virtual void clientRecvLtsmHandshakeEvent(int flags) { /* empty */ }
+            virtual void clientRecvLtsmDataEvent(const std::vector<uint8_t> &) { /* empty */ }
 
-            virtual void decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz,
-                    const std::vector<RFB::ScreenInfo> &) { /* empty */ }
+            virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
+                                                            const std::vector<RFB::ScreenInfo> &) { /* empty */ }
 
-            virtual void pixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
-
-            virtual void fbUpdateEvent(void) { /* empty */ }
-
-            virtual void setColorMapEvent(const std::vector<Color> &) { /* empty */ }
-
-            virtual void bellEvent(void) { /* empty */ }
-
-            virtual void cutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
-
-            virtual void richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
-
+            virtual void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
+            virtual void clientRecvFBUpdateEvent(void) { /* empty */ }
+            virtual void clientRecvSetColorMapEvent(const std::vector<Color> &) { /* empty */ }
+            virtual void clientRecvBellEvent(void) { /* empty */ }
+            virtual void clientRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
+            virtual void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
             virtual void displayResizeEvent(const XCB::Size &);
             //
             virtual bool ltsmSupported(void) const
             {
                 return false;
             }
+
+            virtual std::list<int> clientSupportedEncodings(void) const { return { /* empty */ }; }
         };
 
         class ClientDecoderSocket : public ClientDecoder

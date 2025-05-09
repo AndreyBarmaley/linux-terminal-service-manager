@@ -34,9 +34,14 @@
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 #include "ltsm_sdl_wrapper.h"
-#include "ltsm_xcb_wrapper.h"
 
-#define LTSM_VNC2SDL_VERSION 20250323
+#ifdef LTSM_X11
+ #include "librfb_x11client.h"
+#else
+ #include "ltsm_xcb_types.h"
+#endif
+
+#define LTSM_VNC2SDL_VERSION 20250509
 
 namespace LTSM
 {
@@ -47,14 +52,19 @@ namespace LTSM
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
     };
 
-    class Vnc2SDL : public Application, public XCB::XkbClient,
+    class Vnc2SDL : public Application,
+#ifdef LTSM_X11
+        public RFB::X11Client
+#else
         protected RFB::ClientDecoder
+#endif
     {
         PixelFormat clientPf;
         RFB::SecurityInfo rfbsec;
 
         std::forward_list<std::string> dropFiles;
         std::forward_list<std::string> shareFolders;
+        std::forward_list<std::string> encodingOptions;
 
         std::string host{"localhost"};
         std::string username, seamless, pkcs11Auth;
@@ -80,9 +90,9 @@ namespace LTSM
         int port = 5900;
         int frameRate = 16;
 
-        BinaryBuf clipboardBufRemote;
-        BinaryBuf clipboardBufLocal;
-        std::mutex clipboardLock;
+//        BinaryBuf clipboardBufRemote;
+//        BinaryBuf clipboardBufLocal;
+//        std::mutex clipboardLock;
 
         XCB::Size setGeometry;
         SDL_Event sdlEvent;
@@ -91,21 +101,24 @@ namespace LTSM
         bool accelerated = true;
         bool nodamage = false;
         bool fullscreen = false;
-        bool usexkb = true;
+        bool useXkb = true;
         bool capslock = true;
         bool sendOptions = false;
         bool alwaysRunning = false;
         bool serverExtDesktopSizeSupported = false;
         bool audioEnable = false;
         bool pcscEnable = false;
+        bool extclip = false;
 
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
+        void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
-        std::string clientEncoding(void) const override;
+
+        std::string clientPrefferedEncoding(void) const override;
 
         bool sdlEventProcessing(void);
         bool pushEventWindowResize(const XCB::Size &);
@@ -119,17 +132,17 @@ namespace LTSM
     public:
         Vnc2SDL(int argc, const char** argv);
 
-        void decodingExtDesktopSizeEvent(int status, int err, const XCB::Size & sz,
+        void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
                                          const std::vector<RFB::ScreenInfo> &) override;
-        void pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
-        void fbUpdateEvent(void) override;
-        void cutTextEvent(std::vector<uint8_t> &&) override;
-        void richCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
+        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void clientRecvFBUpdateEvent(void) override;
+        //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
+        void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
                              std::vector<uint8_t> && mask) override;
-        void bellEvent(void) override;
+        void clientRecvBellEvent(void) override;
 
-        void xkbStateChangeEvent(int) override;
-        void ltsmHandshakeEvent(int flags) override;
+        void xcbXkbGroupChangedEvent(int) override;
+        void clientRecvLtsmHandshakeEvent(int flags) override;
         void systemLoginSuccess(const JsonObject &) override;
 
         const char* pkcs11Library(void) const override;
@@ -139,6 +152,8 @@ namespace LTSM
         {
             return ltsmSupport;
         }
+
+        std::list<int> clientSupportedEncodings(void) const override;
 
         int start(void) override;
         bool isAlwaysRunning(void) const;

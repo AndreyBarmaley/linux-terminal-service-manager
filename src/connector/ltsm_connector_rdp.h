@@ -28,7 +28,6 @@
 
 #include "ltsm_sockets.h"
 #include "ltsm_connector.h"
-#include "ltsm_xcb_wrapper.h"
 
 #include "freerdp/freerdp.h"
 #include "freerdp/listener.h"
@@ -63,15 +62,12 @@ namespace LTSM
             void onHelperWidgetStarted(const int32_t & display) override;
 
             // connector
-            void xcbAddDamage(const XCB::Region &) override;
+            void serverScreenUpdateRequest(const XCB::Region &) override;
 
             // root display
-            void xfixesSelectionChangedEvent(void) override;
-            void xfixesCursorChangedEvent(void) override;
-            void damageRegionEvent(const XCB::Region &) override;
-            void randrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
-            void xkbGroupChangedEvent(int) override;
-            void clipboardChangedEvent(const std::vector<uint8_t> &) override;
+            void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
+            void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+            void xcbXkbGroupChangedEvent(int) override;
 
             bool updateEvent(const XCB::Region &);
             bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);

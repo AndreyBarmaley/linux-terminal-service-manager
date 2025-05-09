@@ -77,7 +77,7 @@ void Pkcs11Client::run(void)
         fd = UnixSocket::connect(socketPath);
     }
 
-    Application::debug("%s: connected, socket fd: %" PRId32, __FUNCTION__, fd);
+    Application::debug(DebugType::Pkcs11, "%s: connected, socket fd: %" PRId32, __FUNCTION__, fd);
     sock.setSocket(fd);
 
     uint16_t cmd = 0;
@@ -97,7 +97,7 @@ void Pkcs11Client::run(void)
     }
     catch(const std::exception & exp)
     {
-        Application::error("%s: exception: %s", NS_FuncName.data(), "PKCS11 initialization failed");
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), "PKCS11 initialization failed");
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;
@@ -105,7 +105,7 @@ void Pkcs11Client::run(void)
 
     if(cmd != Pkcs11Op::Init)
     {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, NS_FuncName.data(), "id", cmd);
+        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, NS_FuncName.c_str(), "id", cmd);
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;

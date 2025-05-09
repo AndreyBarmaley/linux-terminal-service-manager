@@ -100,6 +100,7 @@ namespace LTSM
             std::string localPath(const FuseSession*) const;
             std::string remotePath(const FuseSession*) const;
             std::string joinPath(std::string_view) const;
+
             const std::string & relativePath(void) const
             {
                 return first;
@@ -271,7 +272,7 @@ namespace LTSM
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path)
     {
-        Application::debug("%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -305,11 +306,11 @@ namespace LTSM
 
     void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -342,7 +343,7 @@ namespace LTSM
 
     void ll_readlink(fuse_req_t req, fuse_ino_t ino)
     {
-        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -389,11 +390,11 @@ namespace LTSM
 
     void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi)
     {
-        Application::debug("%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
 
         if(fi)
         {
-            Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -444,11 +445,11 @@ namespace LTSM
 
     void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -530,11 +531,11 @@ namespace LTSM
 
     void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -610,11 +611,11 @@ namespace LTSM
 
     void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info* fi)
     {
-        Application::debug("%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug("%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -705,7 +706,7 @@ namespace LTSM
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask)
     {
-        Application::debug("%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
+        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -785,7 +786,7 @@ namespace LTSM
             throw fuse_error(NS_FuncName);
         }
 
-        Application::debug("%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
+        Application::debug(DebugType::Fuse, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
         auto pair = inodes.emplace(1, PathStat{"/", std::move(st)});
         pathes.emplace("/", pair.first->second.statPtr());
         // fuse init
@@ -914,7 +915,7 @@ namespace LTSM
                     path.substr(0, remotePoint.size()) == remotePoint)
             {
                 path = path.substr(remotePoint.size());
-                Application::debug("%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
+                Application::debug(DebugType::Fuse, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
                 // added relative path
                 auto pair = inodes.emplace(ino, PathStat{path, std::move(st)});
                 pathes.emplace(std::move(path), pair.first->second.statPtr());
@@ -1032,13 +1033,13 @@ namespace LTSM
 
     int32_t FuseSessionBus::getVersion(void)
     {
-        Application::debug("%s", __FUNCTION__);
+        Application::debug(DebugType::Fuse, "%s", __FUNCTION__);
         return LTSM_FUSE2SESSION_VERSION;
     }
 
     void FuseSessionBus::serviceShutdown(void)
     {
-        Application::debug("%s, pid: %d", __FUNCTION__, getpid());
+        Application::debug(DebugType::Fuse, "%s, pid: %d", __FUNCTION__, getpid());
         shutdownDbus = true;
     }
 
@@ -1062,7 +1063,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             return false;
         }
 
@@ -1129,7 +1130,7 @@ int main(int argc, char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

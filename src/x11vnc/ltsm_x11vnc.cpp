@@ -225,7 +225,11 @@ namespace LTSM
             // child
             if(0 == fork())
             {
-                openChildSyslog();
+                if(configGetBoolean("syslog"))
+                {
+                    Application::setDebugTarget(DebugTarget::Quiet);
+                }
+
                 close(fd);
                 int res = EXIT_FAILURE;
 
@@ -236,7 +240,7 @@ namespace LTSM
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
                 }
 
                 close(sock);
@@ -262,7 +266,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return res;
@@ -293,7 +297,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
     }
     catch(int val)

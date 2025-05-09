@@ -21,18 +21,25 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#ifdef __LINUX__
 #include <sys/un.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
 #include <poll.h>
+#endif
+
+#ifdef __MINGW64__
+#include <winsock2.h>
+#include <winsock.h>
+#endif
+
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -59,6 +66,7 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
+#ifdef __LINUX__
     /* NetworkStream */
     bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
@@ -113,6 +121,7 @@ namespace LTSM
 
         return count < 0 ? 0 : count;
     }
+#endif // __LINUX__
 
     NetworkStream::NetworkStream()
     {
@@ -264,7 +273,6 @@ namespace LTSM
         while(true)
         {
             ssize_t real = recv(fd, ptr, len, 0);
-
             if(len == real)
             {
                 break;
@@ -299,7 +307,11 @@ namespace LTSM
     {
         while(true)
         {
+#ifdef __MINGW64__
+            ssize_t real = send(fd, ptr, len, 0);
+#else
             ssize_t real = send(fd, ptr, len, MSG_NOSIGNAL);
+#endif
 
             if(len == real)
             {
@@ -551,15 +563,12 @@ namespace LTSM
 
             auto buf = recvData(dataSz);
             sendTo(bridgeSock, buf.data(), buf.size());
-#ifdef LTSM_DEBUG
 
             if(Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                Application::debug("from remote: [%s]", str.c_str());
+                Application::trace(DebugType::Socket, "from remote: [%s]", str.c_str());
             }
-
-#endif
         }
 
         if(0 > fdout)
@@ -575,15 +584,12 @@ namespace LTSM
             recvFrom(bridgeSock, buf.data(), buf.size());
             sendRaw(buf.data(), buf.size());
             sendFlush();
-#ifdef LTSM_DEBUG
 
             if(Application::isDebugLevel(DebugLevel::Trace))
             {
                 std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                Application::debug("from local: [%s]", str.c_str());
+                Application::trace(DebugType::Socket, "from local: [%s]", str.c_str());
             }
-
-#endif
         }
 
         // no action
@@ -595,18 +601,19 @@ namespace LTSM
         return true;
     }
 
+#ifdef __LINUX__
     int TCPSocket::listen(uint16_t port, int conn)
     {
         return listen("any", port, conn);
     }
 
-    int TCPSocket::listen(std::string_view ipaddr, uint16_t port, int conn)
+    int TCPSocket::listen(const std::string & ipaddr, uint16_t port, int conn)
     {
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
         if(0 > fd)
         {
-            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.data(), port);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
             return -1;
         }
 
@@ -615,7 +622,7 @@ namespace LTSM
 
         if(0 > err)
         {
-            Application::warning("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.data(), port);
+            Application::warning("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.c_str(), port);
         }
 
         struct sockaddr_in sockaddr;
@@ -624,21 +631,21 @@ namespace LTSM
 
         sockaddr.sin_family = AF_INET;
         sockaddr.sin_port = htons(port);
-        sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.data());
+        sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.c_str());
 
-        Application::debug("%s: bind addr: %s, port: %" PRIu16, __FUNCTION__, ipaddr.data(), port);
+        Application::debug(DebugType::Socket, "%s: bind addr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
-            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "bind", strerror(errno), errno, ipaddr.data(), port);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "bind", strerror(errno), errno, ipaddr.c_str(), port);
             return -1;
         }
 
-        Application::debug("%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Socket, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn))
         {
-            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "listen", strerror(errno), errno, ipaddr.data(), port);
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "listen", strerror(errno), errno, ipaddr.c_str(), port);
             close(fd);
             return -1;
         }
@@ -656,52 +663,19 @@ namespace LTSM
         }
         else
         {
-            Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Socket, "%s: conected client, fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
     }
 
-    int TCPSocket::connect(std::string_view ipaddr, uint16_t port)
-    {
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-
-        if(0 > sock)
-        {
-            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.data(), port);
-            return -1;
-        }
-
-        struct sockaddr_in sockaddr;
-
-        memset(& sockaddr, 0, sizeof(struct sockaddr_in));
-        sockaddr.sin_family = AF_INET;
-        sockaddr.sin_addr.s_addr = inet_addr(ipaddr.data());
-        sockaddr.sin_port = htons(port);
-
-        Application::debug("%s: ipaddr: %s, port: %" PRIu16, __FUNCTION__, ipaddr.data(), port);
-
-        if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
-        {
-            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "connect", strerror(errno), errno, ipaddr.data(), port);
-            close(sock);
-            sock = -1;
-        }
-        else
-        {
-            Application::debug("%s: fd: %d", __FUNCTION__, sock);
-        }
-
-        return sock;
-    }
-
-    std::string TCPSocket::resolvAddress(std::string_view ipaddr)
+    std::string TCPSocket::resolvAddress(const std::string & ipaddr)
     {
         struct in_addr in;
 
-        if(0 == inet_aton(ipaddr.data(), &in))
+        if(0 == inet_aton(ipaddr.c_str(), &in))
         {
-            Application::error("%s: invalid ip address: %s", __FUNCTION__, ipaddr.data());
+            Application::error("%s: invalid ip address: `%s'", __FUNCTION__, ipaddr.c_str());
         }
         else
         {
@@ -719,14 +693,14 @@ namespace LTSM
             }
             else
             {
-                Application::error("%s: error: %s, ipaddr: %s", __FUNCTION__, hstrerror(h_errno), ipaddr.data());
+                Application::error("%s: error: %s, ipaddr: `%s'", __FUNCTION__, hstrerror(h_errno), ipaddr.c_str());
             }
         }
 
         return "";
     }
 
-    std::list<std::string> TCPSocket::resolvHostname2(std::string_view hostname)
+    std::list<std::string> TCPSocket::resolvHostname2(const std::string & hostname)
     {
         std::list<std::string> list;
         std::vector<char> strbuf(1024, 0);
@@ -735,7 +709,7 @@ namespace LTSM
         struct hostent* res = nullptr;
         int h_errnop = 0;
 
-        if(0 == gethostbyname_r(hostname.data(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
+        if(0 == gethostbyname_r(hostname.c_str(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
         {
             if(res)
             {
@@ -751,13 +725,13 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+            Application::error("%s: error: %s, hostname: `%s'", __FUNCTION__, hstrerror(h_errno), hostname.c_str());
         }
 
         return list;
     }
 
-    std::string TCPSocket::resolvHostname(std::string_view hostname)
+    std::string TCPSocket::resolvHostname(const std::string & hostname)
     {
         std::vector<char> strbuf(1024, 0);
 
@@ -765,7 +739,7 @@ namespace LTSM
         struct hostent* res = nullptr;
         int h_errnop = 0;
 
-        if(0 == gethostbyname_r(hostname.data(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
+        if(0 == gethostbyname_r(hostname.c_str(), & st, strbuf.data(), strbuf.size(), & res, & h_errnop))
         {
             if(res)
             {
@@ -780,12 +754,47 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: error: %s, hostname: %s", __FUNCTION__, hstrerror(h_errno), hostname.data());
+            Application::error("%s: error: %s, hostname: `%s'", __FUNCTION__, hstrerror(h_errno), hostname.c_str());
         }
 
         return "";
     }
+#endif // __LINUX__
 
+    int TCPSocket::connect(const std::string & ipaddr, uint16_t port)
+    {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+        if(0 > sock)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
+            return -1;
+        }
+
+        struct sockaddr_in sockaddr;
+
+        memset(& sockaddr, 0, sizeof(struct sockaddr_in));
+        sockaddr.sin_family = AF_INET;
+        sockaddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
+        sockaddr.sin_port = htons(port);
+
+        Application::debug(DebugType::Socket, "%s: ipaddr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
+
+        if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, addr `%s', port: %" PRIu16, __FUNCTION__, "connect", strerror(errno), errno, ipaddr.c_str(), port);
+            close(sock);
+            sock = -1;
+        }
+        else
+        {
+            Application::debug(DebugType::Socket, "%s: fd: %d", __FUNCTION__, sock);
+        }
+
+        return sock;
+    }
+
+#ifdef __LINUX__
     int UnixSocket::connect(const std::filesystem::path & path)
     {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -810,7 +819,7 @@ namespace LTSM
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug("%s: path: %s", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Socket, "%s: path: %s", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
@@ -820,7 +829,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug("%s: fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Socket, "%s: fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
@@ -857,7 +866,7 @@ namespace LTSM
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug("%s: bind path: %s", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Socket, "%s: bind path: %s", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
@@ -866,7 +875,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::debug("%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Socket, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn))
         {
@@ -888,7 +897,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug("%s: conected client, fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Socket, "%s: conected client, fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
@@ -937,6 +946,7 @@ namespace LTSM
         fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
         return true;
     }
+#endif // __LINUX__
 
 #ifdef LTSM_WITH_GNUTLS
     namespace TLS
@@ -985,7 +995,7 @@ namespace LTSM
             return true;
         }
 
-        bool Stream::initAnonHandshake(std::string_view priority, bool srvmode, int debug)
+        bool Stream::initAnonHandshake(std::string priority, bool srvmode, int debug)
         {
             Application::info("gnutls version usage: %s", GNUTLS_VERSION);
 
@@ -999,7 +1009,7 @@ namespace LTSM
 
             if(srvmode)
             {
-                Application::debug("%s: tls server mode, priority: %s", __FUNCTION__, priority.data());
+                Application::debug(DebugType::Tls, "%s: tls server mode, priority: `%s'", __FUNCTION__, priority.c_str());
                 dhparams.generate(1024);
                 auto ptr = new gnutls::anon_server_credentials();
                 ptr->set_dh_params(dhparams);
@@ -1009,18 +1019,18 @@ namespace LTSM
             }
             else
             {
-                Application::debug("%s: tls client mode, priority: %s", __FUNCTION__, priority.data());
+                Application::debug(DebugType::Tls, "%s: tls client mode, priority: `%s'", __FUNCTION__, priority.c_str());
                 cred = std::make_unique<gnutls::anon_client_credentials>();
                 session = std::make_unique<gnutls::client_session>();
             }
 
             session->set_credentials(*cred.get());
-            session->set_priority(priority.data(), nullptr);
+            session->set_priority(priority.c_str(), nullptr);
 
             return startHandshake();
         }
 
-        bool Stream::initX509Handshake(std::string_view priority, bool srvmode, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
+        bool Stream::initX509Handshake(std::string priority, bool srvmode, const std::string & caFile, const std::string & certFile, const std::string & keyFile, const std::string & crlFile, int debug)
         {
             Application::info("gnutls version usage: %s", GNUTLS_VERSION);
 
@@ -1103,7 +1113,7 @@ namespace LTSM
             }
 
             session->set_credentials(*cred.get());
-            session->set_priority(priority.data(), nullptr);
+            session->set_priority(priority.c_str(), nullptr);
 
             return startHandshake();
         }
@@ -1240,13 +1250,13 @@ namespace LTSM
             gnutls_record_cork(Session::ptr(session.get()));
         }
 
-        AnonSession::AnonSession(const NetworkStream* st, std::string_view priority, bool serverMode, int debug) : Stream(st)
+        AnonSession::AnonSession(const NetworkStream* st, const std::string & priority, bool serverMode, int debug) : Stream(st)
         {
             initAnonHandshake(priority, serverMode, debug);
         }
 
         X509Session::X509Session(const NetworkStream* st, const std::string & cafile, const std::string & cert, const std::string & key,
-                                 const std::string & crl, std::string_view priority, bool serverMode, int debug) : Stream(st)
+                                 const std::string & crl, const std::string & priority, bool serverMode, int debug) : Stream(st)
         {
             initX509Handshake(priority, serverMode, cafile, cert, key, crl, debug);
         }
@@ -1339,7 +1349,7 @@ namespace LTSM
             zs.avail_in = len;
 
             std::vector<uint8_t> res;
-            res.reserve(std::max(deflateBound(& zs, len), tmp.size()));
+            res.reserve(std::max(static_cast<size_t>(deflateBound(& zs, len)), tmp.size()));
 
             do
             {

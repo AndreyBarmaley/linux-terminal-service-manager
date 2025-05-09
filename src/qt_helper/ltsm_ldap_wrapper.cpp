@@ -54,6 +54,8 @@ namespace LTSM
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncName);
         }
+
+        Application::debug(DebugType::Ldap, "%s: bind success", __FUNCTION__);
     }
 
     LdapWrapper::~LdapWrapper()
@@ -64,17 +66,17 @@ namespace LTSM
         }
     }
 
-    std::string LdapWrapper::findLoginFromDn(std::string_view dn)
+    std::string LdapWrapper::findLoginFromDn(const std::string & dn)
     {
         std::string res;
         const char* attrs[] = { "uid", nullptr };
         LDAPMessage* msg = NULL;
-        int ret = ldap_search_ext_s(ldap, dn.data(), LDAP_SCOPE_BASE,
+        int ret = ldap_search_ext_s(ldap, dn.c_str(), LDAP_SCOPE_BASE,
                                     nullptr, (char**) attrs, 0, nullptr, nullptr, nullptr, 0, & msg);
 
         if(ret == LDAP_SUCCESS)
         {
-            Application::debug("%s: found entries: %d", __FUNCTION__, ldap_count_entries(ldap, msg));
+            Application::debug(DebugType::Ldap, "%s: dn: `%s', found entries: %d", __FUNCTION__, dn.c_str(), ldap_count_entries(ldap, msg));
 
             if(LDAPMessage* entry = ldap_first_entry(ldap, msg))
             {
@@ -82,6 +84,8 @@ namespace LTSM
 
                 if(char* attr = ldap_first_attribute(ldap, entry, & ber))
                 {
+                    Application::trace(DebugType::Ldap, "%s: found attribute: `%s'", __FUNCTION__, attr);
+
                     if(berval** vals = ldap_get_values_len(ldap, entry, attr))
                     {
                         if(0 < ldap_count_values_len(vals))
@@ -124,7 +128,7 @@ namespace LTSM
 
         if(ret == LDAP_SUCCESS)
         {
-            Application::debug("%s: found entries: %d", __FUNCTION__, ldap_count_entries(ldap, msg));
+            Application::debug(DebugType::Ldap, "%s: found entries: %d", __FUNCTION__, ldap_count_entries(ldap, msg));
 
             for(LDAPMessage* entry = ldap_first_entry(ldap, msg);
                     entry && res.empty(); entry = ldap_next_entry(ldap, entry))
@@ -135,6 +139,8 @@ namespace LTSM
                 for(char* attr = ldap_first_attribute(ldap, entry, & ber);
                         attr && res.empty(); attr = ldap_next_attribute(ldap, entry, ber))
                 {
+                    Application::trace(DebugType::Ldap, "%s: found attribute: `%s'", __FUNCTION__, attr);
+
                     if(berval** vals = ldap_get_values_len(ldap, entry, attr))
                     {
                         if(size_t count = ldap_count_values_len(vals))

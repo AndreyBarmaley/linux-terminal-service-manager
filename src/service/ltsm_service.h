@@ -51,19 +51,19 @@ namespace LTSM
     class PamService
     {
     protected:
-        std::string_view service;
+        std::string service;
         pam_handle_t* pamh = nullptr;
         int status = PAM_SUCCESS;
 
         virtual struct pam_conv* pamConv(void) = 0;
 
     public:
-        PamService(std::string_view name) : service(name) {}
+        PamService(const std::string & name) : service(name) {}
 
         virtual ~PamService();
 
         bool pamStart(const std::string & username);
-        void setItem(int type, std::string_view str);
+        void setItem(int type, const std::string & item);
 
         std::string error(void) const;
         pam_handle_t* get(void);
@@ -91,7 +91,7 @@ namespace LTSM
         }
 
     public:
-        PamAuthenticate(std::string_view service, const std::string & user, const std::string & pass)
+        PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
             : PamService(service), login(user), password(pass) {}
 
         bool authenticate(void);
@@ -115,7 +115,7 @@ namespace LTSM
     protected:
 
     public:
-        PamSession(std::string_view service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
+        PamSession(const std::string & service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
                     user, pass) {}
 
         ~PamSession();
@@ -254,7 +254,7 @@ namespace LTSM
     namespace Manager
     {
         std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &);
-        void redirectStdoutStderrTo(bool out, bool err, std::string_view);
+        void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path &);
         void closefds(std::initializer_list<int> exclude);
         bool checkFileReadable(const std::filesystem::path &);
         void setFileOwner(const std::filesystem::path & file, uid_t uid, gid_t gid);

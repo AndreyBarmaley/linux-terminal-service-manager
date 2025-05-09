@@ -295,7 +295,7 @@ namespace LTSM
 
     int32_t AudioSessionBus::getVersion(void)
     {
-        Application::debug("%s", __FUNCTION__);
+        Application::debug(DebugType::Audio, "%s", __FUNCTION__);
         return LTSM_AUDIO2SESSION_VERSION;
     }
 
@@ -386,7 +386,7 @@ int main(int argc, char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

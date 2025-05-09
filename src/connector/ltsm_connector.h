@@ -28,6 +28,7 @@
 #include "ltsm_service_proxy.h"
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
+#include "ltsm_xcb_wrapper.h"
 
 namespace LTSM
 {
@@ -142,7 +143,7 @@ namespace LTSM
 
             void renderPrimitivesToFB(FrameBuffer &) const;
 
-            virtual void xcbAddDamage(const XCB::Region &) = 0;
+            virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
             int displayNum(void) const;
             bool xcbConnect(int screen, XCB::RootDisplay &);

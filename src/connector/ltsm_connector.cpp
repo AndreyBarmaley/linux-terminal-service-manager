@@ -141,20 +141,33 @@ namespace LTSM
 
     int Connector::Service::start(void)
     {
-        Application::setDebugLevel(configGetString("connector:debug"));
+        // deprecated
+        if(auto str = configGetString("connector:debug"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto str = configGetString("connector:debug:level", "info"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto arr = config().getArray("connector:debug:types"))
+        {
+            Application::setDebugTypes(Tools::debugTypes(arr->toStdList<std::string>()));
+        }
+
         // signals
         signal(SIGPIPE, SIG_IGN);
-        auto uid = getuid();
-        Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
-        //if(0 < uid)
-        {
-            auto home = Connector::homeRuntime();
-            Application::debug("%s: uid: %d, gid: %d, working dir: %s", __FUNCTION__, uid, getgid(), home.c_str());
 
-            if(0 != chdir(home.c_str()))
-            {
-                Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
-            }
+        Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
+
+        auto home = Connector::homeRuntime();
+        Application::debug(DebugType::Conn, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
+
+        if(0 != chdir(home.c_str()))
+        {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
 
         // protocol up
@@ -217,7 +230,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
         }
@@ -269,20 +282,19 @@ namespace LTSM
 
         try
         {
-            xcbDisplay.reconnect(screen);
+            xcbDisplay.displayReconnect(screen);
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             return false;
         }
 
-        xcbDisplay.resetInputs();
         auto defaultSz = XCB::Size(_config->getInteger("default:width", 0),
                                    _config->getInteger("default:height", 0));
         auto displaySz = xcbDisplay.size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
-        Application::debug("%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %u", __FUNCTION__, screen, displaySz.width,
+        Application::debug(DebugType::Conn, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %u", __FUNCTION__, screen, displaySz.width,
                            displaySz.height, xcbDisplay.depth());
 
         if(0 != color)
@@ -333,7 +345,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
 
             for(auto & ptr : _renderPrimitives)
             {
@@ -341,14 +353,14 @@ namespace LTSM
                 {
                     if(auto prim = static_cast<RenderRect*>(ptr.get()))
                     {
-                        xcbAddDamage(prim->toRegion());
+                        serverScreenUpdateRequest(prim->toRegion());
                     }
                 }
                 else if(ptr->type == RenderType::RenderText)
                 {
                     if(auto prim = static_cast<RenderText*>(ptr.get()))
                     {
-                        xcbAddDamage(prim->toRegion());
+                        serverScreenUpdateRequest(prim->toRegion());
                     }
                 }
             }
@@ -363,13 +375,13 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             const int16_t rx = std::get<0>(rect);
             const int16_t ry = std::get<1>(rect);
             const uint16_t rw = std::get<2>(rect);
             const uint16_t rh = std::get<3>(rect);
-            xcbAddDamage({rx, ry, rw, rh});
+            serverScreenUpdateRequest({rx, ry, rw, rh});
         }
     }
 
@@ -378,14 +390,14 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            Application::debug("%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
             const int16_t rx = std::get<0>(pos);
             const int16_t ry = std::get<1>(pos);
             const uint16_t rw = _systemfont.width * text.size();
             const uint16_t rh = _systemfont.height;
             const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> rt{rx, ry, rw, rh};
             _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rt, color));
-            xcbAddDamage({rx, ry, rw, rh});
+            serverScreenUpdateRequest({rx, ry, rw, rh});
         }
     }
 
@@ -471,7 +483,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
     catch(int val)
     {

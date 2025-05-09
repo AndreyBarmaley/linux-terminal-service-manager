@@ -1,4 +1,5 @@
 #include <list>
+#include <mutex>
 #include <chrono>
 #include <cstdio>
 #include <atomic>
@@ -67,6 +68,7 @@ public:
     const PixelFormat & serverFormat(void) const override { return pf; }
     const PixelFormat & clientFormat(void) const override { return pf; }
     bool clientIsBigEndian(void) const override { return false; }
+    XCB::Size displaySize(void) const override { return {0,0}; }
 
     // NetworkStream interface
     void sendRaw(const void* ptr, size_t len) override { write += len; }
@@ -81,6 +83,7 @@ private:
 
 struct EncodingTime
 {
+    std::string_view id;
     std::unique_ptr<RFB::EncodingBase> enc;
     std::unique_ptr<FakeStream> stream;
 
@@ -112,9 +115,33 @@ struct EncodingTime
             default: break;
         }
 
-        std::cout << enc->getTypeName() << ": - iteration: " << iteration << ", time: " << workms / iteration << "ms" << ", bandwith: " << stream->writeBytes() / iteration << "bytes" << std::endl;
+        std::cout << enc->getTypeName();
+        if(id.size())
+            std::cout << "(" << id << ")";
+        std::cout << ": - iteration: " << iteration << ", time: " << workms / iteration << " ms" << ", bandwith: " << stream->writeBytes() / iteration << " bytes" << std::endl;
     }
 };
+
+namespace LTSM::RFB
+{
+    std::list<int> supportedEncodings(void)
+    {
+        return
+        {       
+            ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
+            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
+    
+            ENCODING_LTSM_LZ4,
+            ENCODING_LTSM_QOI,
+            ENCODING_LTSM_TJPG,
+
+            ENCODING_FFMPEG_H264,
+            ENCODING_FFMPEG_AV1,
+            ENCODING_FFMPEG_VP8,
+
+            ENCODING_RAW };
+    }
+}
 
 class EncodingTest : public Application
 {
@@ -123,9 +150,11 @@ class EncodingTest : public Application
     const int frameRate;
     const int countLoop;
     const int threadsCount;
+    const std::list<std::string> encodings;
 
 public:
-    EncodingTest(int fps, int loop, int threads) : Application("x11enc"), frameRate(fps), countLoop(loop), threadsCount(threads)
+    EncodingTest(int fps, int loop, int threads, const std::list<std::string> & list)
+        : Application("x11enc"), frameRate(fps), countLoop(loop), threadsCount(threads), encodings(list)
     {
         xcb = std::make_unique<XCB::RootDisplay>(-1);
 
@@ -135,45 +164,116 @@ public:
             throw std::runtime_error(NS_FuncName);
         }
 
-        xcb->damageDisable();
-        Application::info("%s: xcb max request: %u", __FUNCTION__, xcb->getMaxRequest());
+        xcb->extensionDisable(XCB::Module::DAMAGE);
     }
 
     int start(void)
     {
         auto tp = std::chrono::steady_clock::now();
+
         auto win = xcb->root();
         auto dsz = xcb->size();
         auto reg = XCB::Region{{0,0}, dsz};
         auto bpp = xcb->bitsPerPixel() >> 3;
+        auto pitch = dsz.width * bpp;
+
+        if(auto align8 = pitch % 8)
+            pitch += 8 - align8;
+
+        Application::info("%s: settings - fps: %d, threads: %d, iterations: %d", __FUNCTION__, frameRate, threadsCount, countLoop);
+        Application::info("%s: xcb - width: %u, height: %u, bpp: %u, pitch: %u, max request: %u", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
-        auto shmId = shm ? shm->createShm(dsz.width * dsz.height * bpp, 0600, false) : nullptr;
+        auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
 
         auto stream = std::make_unique<FakeStream>(xcb.get());
 
         const int frameDelayMs = 1000 / frameRate;
         std::list<EncodingTime> pool;
 
-/*
-        // RFB::ENCODING_RRE
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_CORRE
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_HEXTILE
-        // pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingHexTile>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_TRLE
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_ZRLE
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_LTSM_LZ4
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-        // RFB::ENCODING_FFMPEG_H264
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_FFMPEG_H264), .stream = std::make_unique<FakeStream>(xcb.get()) } );
-*/
-        // RFB::ENCODING_LTSM_LZ4
-        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+        // test all encodings
+        if(encodings.empty())
+        {
+            // RFB::ENCODING_RRE
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_CORRE
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_HEXTILE
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingHexTile>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_TRLE
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_ZRLE
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_FFMPEG_H264
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_FFMPEG_H264), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_LTSM_LZ4
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_LTSM_TJPG
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTJPG>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+            // RFB::ENCODING_LTSM_QOI
+            pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+        }
+        else
+        {
+            for(auto & name: encodings)
+            {
+                // test preffered encodings
+                switch(RFB::encodingType(name))
+                {
+                    case RFB::ENCODING_RRE:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+            
+                    case RFB::ENCODING_CORRE:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_HEXTILE:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingHexTile>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
     
+                    case RFB::ENCODING_TRLE:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_ZRLE:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_FFMPEG_H264:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_FFMPEG_H264), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_LTSM_LZ4:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_LTSM_QOI:
+                        pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingQOI>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    case RFB::ENCODING_LTSM_TJPG:
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_444", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_444), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_422", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_422), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_420", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_420), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_GRAY", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_GRAY), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_440", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_440), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        pool.emplace_back( EncodingTime{ .id = "SAMP_411", .enc = std::make_unique<RFB::EncodingTJPG>(85, TJSAMP_411), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+                        break;
+
+                    default:
+                        Application::error("encoding not found: %s", name.data());
+                        break;;
+                }
+            }
+        }
+
+        if(pool.empty())
+        {
+            Application::error("test skipped, pool empty");
+            return -1;
+        }
+
         for(auto & enc: pool)
         {
             enc.setThreads(threadsCount);
@@ -185,7 +285,6 @@ public:
         {
             if(! loopIter--)
             {
-                Application::warning("limit iteration: %d, fps: %d", countLoop, frameRate);
                 break;
             }
 
@@ -196,8 +295,11 @@ public:
             }
 
             tp = std::chrono::steady_clock::now();
+
             if(auto pixmapReply = xcb->copyRootImageRegion(reg, shmId))
             {
+                auto dtCopy = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
+
                 for(auto & enc: pool)
                 {
                     enc.encodeTime(pixmapReply->data(), reg);
@@ -209,10 +311,10 @@ public:
                 throw std::runtime_error(NS_FuncName);
             }
 
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-            if(dt.count() < frameDelayMs)
+            auto dtFrame = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
+            if(dtFrame.count() < frameDelayMs)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(frameDelayMs - dt.count()));
+                std::this_thread::sleep_for(std::chrono::milliseconds(frameDelayMs - dtFrame.count()));
             }
         }
 
@@ -229,8 +331,9 @@ int main(int argc, char** argv)
 {
     Run::process = true;
     int frameRate = 16;
-    int countLoop = 0;
+    int countLoop = 100;
     int useThreads = 4;
+    std::list<std::string> encodings;
 
     signal(SIGTERM, signalHandler);
     signal(SIGINT, signalHandler);
@@ -276,17 +379,50 @@ int main(int argc, char** argv)
             it = it + 1;
         }
         else
+        if(0 == std::strcmp(argv[it], "--encoding") && it + 1 < argc)
         {
-            std::cout << "usage: " << argv[0] << " --fps <num> --count <num> --threads <num>" << std::endl;
+            encodings.push_back(argv[it + 1]);
+            it = it + 1;
+        }
+        else
+        if(0 == std::strcmp(argv[it], "--encodings") && it + 1 < argc)
+        {
+            while(it + 1 < argc)
+            {
+                if(0 == std::strncmp(argv[it + 1], "--", 2))
+                    break;
+
+                encodings.push_back(argv[it + 1]);
+                it = it + 1;
+            }
+        }
+        else
+        {
+            std::cout << "usage: " << argv[0] << " [--fps 16] [--count 100] [--threads 4] [--encoding xxx] [--encodings xxx yyy zzz]" << std::endl;
+            std::cout << std::endl << "supported encodings: " << std::endl <<
+                  "    ";
+      
+            for(auto enc : RFB::supportedEncodings())
+            {
+                std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
+            }
+
+            std::cout << std::endl;
             return 0;
         }
+    }
+
+    if(0 >= frameRate || 0 >= countLoop || 0 >= useThreads)
+    {
+        std::cerr << "invalid params" << std::endl;
+        return 1;
     }
 
     int res = 0;
 
     try
     {
-        res = EncodingTest(frameRate, countLoop, useThreads).start();
+        res = EncodingTest(frameRate, countLoop, useThreads, encodings).start();
     }
     catch(const std::exception & err)
     {

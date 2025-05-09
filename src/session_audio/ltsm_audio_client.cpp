@@ -93,7 +93,7 @@ void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed)
 
 void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
 {
-    Application::debug("%s: size: %u", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Audio, "%s: size: %u", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty())
@@ -102,7 +102,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
     }
     else
     {
-        last.insert(last.end(), recv.begin(), recv.end());
+        std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
         last.clear();
@@ -121,7 +121,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto audioCmd = sb.readIntLE16();
-            Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, audioCmd);
+            Application::debug(DebugType::Audio, "%s: cmd: 0x%" PRIx16, __FUNCTION__, audioCmd);
 
             if(AudioOp::Init == audioCmd)
             {
@@ -249,7 +249,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmEvent(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, reply.rawbuf());
         return false;
     }
 
@@ -287,7 +287,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     {
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmEvent(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, reply.rawbuf());
         return false;
     }
 
@@ -297,7 +297,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     reply.writeIntLE16(1);
     // encoding type
     reply.writeIntLE16(format->type);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -309,7 +309,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     }
 
     auto len = sb.readIntLE32();
-    Application::debug("%s: data size: %u", __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "%s: data size: %u", __FUNCTION__, len);
     std::vector<uint8_t> buf(len, 0);
     pulse->streamWrite(buf.data(), buf.size());
 }
@@ -322,7 +322,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
     }
 
     auto len = sb.readIntLE32();
-    Application::debug("%s: data size: %u", __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "%s: data size: %u", __FUNCTION__, len);
 
     if(len > sb.last())
     {

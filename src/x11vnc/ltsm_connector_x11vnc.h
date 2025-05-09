@@ -50,7 +50,7 @@ namespace LTSM
         protected:
             // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
-            std::list<std::string> serverDisabledEncodings(void) const override;
+            std::forward_list<std::string> serverDisabledEncodings(void) const override;
 
             bool xcbNoDamageOption(void) const override;
             bool xcbAllowMessages(void) const override;

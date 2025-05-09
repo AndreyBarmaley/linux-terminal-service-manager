@@ -755,6 +755,11 @@ namespace LTSM
         addValue<int>(key, val);
     }
 
+    void JsonObject::addString(const std::string & key, const std::wstring & val)
+    {
+        addValue<std::string_view>(key, Tools::wstring2string(val));
+    }
+
     void JsonObject::addString(const std::string & key, std::string_view val)
     {
         addValue<std::string_view>(key, val);
@@ -967,6 +972,11 @@ namespace LTSM
         content.emplace_back(val);
     }
 
+    void JsonArray::addString(const std::wstring & val)
+    {
+        content.emplace_back(Tools::wstring2string(val));
+    }
+
     void JsonArray::addString(std::string_view val)
     {
         content.emplace_back(val);
@@ -1175,7 +1185,7 @@ namespace LTSM
             if(!(*itkey).isKey())
             {
                 auto str = stringToken(*itkey);
-                Application::error("not key, index: %d, `%s'", std::distance(begin(), itkey), str.data());
+                Application::error("not key, index: %d, `%.*s'", std::distance(begin(), itkey), str.size(), str.data());
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
@@ -1212,11 +1222,12 @@ namespace LTSM
     std::pair<JsonValuePtr, int>
     JsonContent::getValuePrimitive(const const_iterator & it, JsonContainer* cont) const
     {
-        auto val = std::string(stringToken(*it));
+        //auto val = std::string(stringToken(*it));
+        auto val = stringToken(*it);
 
         if(! (*it).isValue())
         {
-            Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.c_str());
+            Application::error("not value, index: %d, value: `%.*s'", std::distance(begin(), it), val.size(), val.data());
         }
 
         size_t dotpos = val.find(".");
@@ -1225,12 +1236,12 @@ namespace LTSM
         {
             if(std::string::npos != dotpos)
             {
-                double vald = std::stod(val);
+                double vald = std::stod(std::string(val));
                 return std::make_pair(JsonValuePtr(vald), 1);
             }
             else
             {
-                int vali = std::stoi(val, nullptr, 0);
+                int vali = std::stoi(std::string(val), nullptr, 0);
                 return std::make_pair(JsonValuePtr(vali), 1);
             }
         }
@@ -1274,7 +1285,7 @@ namespace LTSM
 
         if(! tok.isValue())
         {
-            Application::error("not value, index: %d, value: `%s'", std::distance(begin(), it), val.data());
+            Application::error("not value, index: %d, value: `%.*s'", std::distance(begin(), it), val.size(), val.data());
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);

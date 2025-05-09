@@ -56,7 +56,6 @@
 #include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
-#include "ltsm_xcb_wrapper.h"
 
 using namespace std::chrono_literals;
 
@@ -109,17 +108,17 @@ namespace LTSM
         return pamh;
     }
 
-    void PamService::setItem(int type, std::string_view str)
+    void PamService::setItem(int type, const std::string & str)
     {
         if(pamh)
         {
-            pam_set_item(pamh, type, str.data());
+            pam_set_item(pamh, type, str.c_str());
         }
     }
 
     bool PamService::pamStart(const std::string & username)
     {
-        status = pam_start(service.data(), username.data(), pamConv(), & pamh);
+        status = pam_start(service.c_str(), username.c_str(), pamConv(), & pamh);
 
         if(PAM_SUCCESS != status)
         {
@@ -352,7 +351,7 @@ namespace LTSM
         {
             int status;
             // kill session
-            Application::debug("%s: kill %s, pid: %d", "destroySession", "helper", pid2);
+            Application::debug(DebugType::Mgr, "%s: kill %s, pid: %d", "destroySession", "helper", pid2);
             kill(pid2, SIGTERM);
         }
 
@@ -360,7 +359,7 @@ namespace LTSM
         {
             int status;
             // kill xvfb
-            Application::debug("%s: kill %s, pid: %d", "destroySession", "xvfb", pid1);
+            Application::debug(DebugType::Mgr, "%s: kill %s, pid: %d", "destroySession", "xvfb", pid1);
             kill(pid1, SIGTERM);
         }
 
@@ -599,9 +598,9 @@ namespace LTSM
         return dbusAddresses;
     }
 
-    void Manager::redirectStdoutStderrTo(bool out, bool err, std::string_view file)
+    void Manager::redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path & file)
     {
-        auto dir = std::filesystem::path(file).parent_path();
+        auto dir = file.parent_path();
         std::error_code fserr;
 
         if(! std::filesystem::is_directory(dir, fserr))
@@ -609,7 +608,7 @@ namespace LTSM
             std::filesystem::create_directories(dir, fserr);
         }
 
-        int fd = open(file.data(), O_RDWR | O_CREAT, 0640);
+        int fd = open(file.c_str(), O_RDWR | O_CREAT, 0640);
 
         if(0 <= fd)
         {
@@ -628,9 +627,9 @@ namespace LTSM
         else
         {
             const char* devnull = "/dev/null";
-            Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file.data(), getuid());
+            Application::warning("%s: %s, path: `%s', uid: %d", __FUNCTION__, "open failed", file.c_str(), getuid());
 
-            if(0 != std::strcmp(devnull, file.data()))
+            if(0 != file.compare(devnull))
             {
                 redirectStdoutStderrTo(out, err, devnull);
             }
@@ -678,13 +677,13 @@ namespace LTSM
 
     bool Manager::checkFileReadable(const std::filesystem::path & path)
     {
-        // Application::trace("%s: path: `%s'", __FUNCTION__, path.c_str());
+        // Application::trace(DebugType::Mgr, "%s: path: `%s'", __FUNCTION__, path.c_str());
         return 0 == access(path.c_str(), R_OK);
     }
 
     void Manager::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid)
     {
-        // Application::trace("%s: path: `%s', uid: %d, gid: %d", __FUNCTION__, path.c_str(), uid, gid);
+        // Application::trace(DebugType::Mgr, "%s: path: `%s', uid: %d, gid: %d", __FUNCTION__, path.c_str(), uid, gid);
 
         if(0 != chown(path.c_str(), uid, gid))
         {
@@ -713,7 +712,7 @@ namespace LTSM
         std::thread([ptr = std::move(xvfb), str]()
         {
             int ret = std::system(str.c_str());
-            Application::debug("%s: command: `%s', return code: %d, display: %d", "runSystemScript", str.c_str(), ret,
+            Application::debug(DebugType::Mgr, "%s: command: `%s', return code: %d, display: %d", "runSystemScript", str.c_str(), ret,
                                ptr->displayNum);
         }).detach();
 
@@ -730,7 +729,7 @@ namespace LTSM
 
     bool Manager::switchToUser(const UserInfo & userInfo)
     {
-        Application::debug("%s: pid: %d, uid: %d, gid: %d, home:`%s', shell: `%s'", __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(),
+        Application::debug(DebugType::Mgr, "%s: pid: %d, uid: %d, gid: %d, home:`%s', shell: `%s'", __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(),
                            userInfo.home(), userInfo.shell());
         auto xdgRuntimeDir = std::filesystem::path("/run/user") / std::to_string(userInfo.uid());
         std::error_code err;
@@ -785,7 +784,7 @@ namespace LTSM
         {
             auto cwd = std::filesystem::current_path();
             auto sgroups = Tools::join(gids.begin(), gids.end(), ",");
-            Application::debug("%s: groups: (%s), current dir: `%s'", __FUNCTION__, sgroups.c_str(), cwd.c_str());
+            Application::debug(DebugType::Mgr, "%s: groups: (%s), current dir: `%s'", __FUNCTION__, sgroups.c_str(), cwd.c_str());
         }
 
         return true;
@@ -797,7 +796,7 @@ namespace LTSM
     public:
         static int waitPid(pid_t pid)
         {
-            Application::debug("%s: pid: %d", __FUNCTION__, pid);
+            Application::debug(DebugType::Mgr, "%s: pid: %d", __FUNCTION__, pid);
             // waitpid
             int status;
             int ret = waitpid(pid, &status, 0);
@@ -814,7 +813,7 @@ namespace LTSM
                 }
                 else
                 {
-                    Application::debug("%s: process ended, pid: %d, status: %d", __FUNCTION__, pid, status);
+                    Application::debug(DebugType::Mgr, "%s: process ended, pid: %d, status: %d", __FUNCTION__, pid, status);
                 }
             }
 
@@ -829,7 +828,12 @@ namespace LTSM
             signal(SIGCHLD, SIG_DFL);
             signal(SIGINT, SIG_IGN);
             signal(SIGHUP, SIG_IGN);
-            Application::openChildSyslog();
+
+            if(Application::isDebugTarget(DebugTarget::Syslog))
+            {
+                Application::setDebugTarget(DebugTarget::Quiet);
+            }
+
             Application::info("%s: pid: %d, cmd: `%s %s'", __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params.begin(),
                               params.end(), " ").c_str());
 
@@ -1064,7 +1068,7 @@ namespace LTSM
             // main thread processed
             auto future = std::async(std::launch::async, [pid]
             {
-                Application::debug("%s: pid: %d", "AsyncWaitPid", pid);
+                Application::debug(DebugType::Mgr, "%s: pid: %d", "AsyncWaitPid", pid);
 
                 int status;
                 // waitpid
@@ -1117,7 +1121,22 @@ namespace LTSM
 
     void Manager::Object::configReloadedEvent(void)
     {
-        Application::setDebugLevel(_config->getString("service:debug"));
+        // deprecated
+        if(auto str = _config->getString("service:debug"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto str = _config->getString("service:debug:level", "info"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto arr = _config->getArray("service:debug:types"))
+        {
+            Application::setDebugTypes(Tools::debugTypes(arr->toStdList<std::string>()));
+        }
+
         int min = _config->getInteger("display:min", 55);
         int max = _config->getInteger("display:max", 99);
         size_t poolsz = std::abs(max - min);
@@ -1298,7 +1317,7 @@ namespace LTSM
             this->removeDisplaySession(displayNum);
             this->removeXvfbSocket(displayNum);
             this->emitDisplayRemoved(displayNum);
-            Application::debug("%s: shutdown display: %d %s", "displayShutdown", displayNum, "complete");
+            Application::debug(DebugType::Mgr, "%s: shutdown display: %d %s", "displayShutdown", displayNum, "complete");
         }).detach();
 
         return true;
@@ -1333,7 +1352,7 @@ namespace LTSM
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{pid}", getpid());
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", displayNum);
         std::filesystem::path xauthFilePath(xauthFileTemplate);
-        Application::debug("%s: path: `%s'", __FUNCTION__, xauthFilePath.c_str());
+        Application::debug(DebugType::Mgr, "%s: path: `%s'", __FUNCTION__, xauthFilePath.c_str());
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
         if(ofs)
@@ -1449,7 +1468,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
@@ -1565,7 +1584,7 @@ namespace LTSM
         xvfbArgs = Tools::replace(xvfbArgs, "%{height}", sess->height);
         xvfbArgs = Tools::replace(xvfbArgs, "%{authfile}", sess->xauthfile.native());
 
-        Application::debug("%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), xvfbArgs.c_str());
+        Application::debug(DebugType::Mgr, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), xvfbArgs.c_str());
 
         sess->pid1 = fork();
 
@@ -1583,7 +1602,10 @@ namespace LTSM
             signal(SIGHUP, SIG_IGN);
 
             // child mode
-            Application::openChildSyslog();
+            if(Application::isDebugTarget(DebugTarget::Syslog))
+            {
+                Application::setDebugTarget(DebugTarget::Quiet);
+            }
 
             if(switchToUser(*sess->userInfo))
             {
@@ -1639,7 +1661,7 @@ namespace LTSM
         }
 
         // main thread
-        Application::debug("%s: xvfb started, pid: %d, display: %d", __FUNCTION__, sess->pid1, sess->displayNum);
+        Application::debug(DebugType::Mgr, "%s: xvfb started, pid: %d, display: %d", __FUNCTION__, sess->pid1, sess->displayNum);
         (*its) = std::move(sess);
         return *its;
     }
@@ -1667,8 +1689,13 @@ namespace LTSM
         signal(SIGINT, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
         // child mode
-        Application::openChildSyslog();
+        if(Application::isDebugTarget(DebugTarget::Syslog))
+        {
+            Application::setDebugTarget(DebugTarget::Quiet);
+        }
+
         Application::info("%s: pid: %d", __FUNCTION__, getpid());
+
         auto childExit = []()
         {
             execl("/bin/true", "/bin/true", nullptr);
@@ -1704,7 +1731,7 @@ namespace LTSM
             childExit();
         }
 
-        Application::debug("%s: child mode, type: %s, uid: %d", __FUNCTION__, "session", getuid());
+        Application::debug(DebugType::Mgr, "%s: child mode, type: %s, uid: %d", __FUNCTION__, "session", getuid());
 
         // assign groups
         if(switchToUser(*xvfb->userInfo))
@@ -1724,7 +1751,7 @@ namespace LTSM
             // putenv: valid string
             for(auto & env : environments)
             {
-                Application::debug("%s: pam put environment: %s", __FUNCTION__, env.c_str());
+                Application::debug(DebugType::Mgr, "%s: pam put environment: %s", __FUNCTION__, env.c_str());
 
                 if(0 > putenv(const_cast<char*>(env.c_str())))
                 {
@@ -1920,7 +1947,7 @@ namespace LTSM
 
             // update conn info
             createSessionConnInfo(oldSess);
-            Application::debug("%s: user session connected, display: %d", __FUNCTION__, oldSess->displayNum);
+            Application::debug(DebugType::Mgr, "%s: user session connected, display: %d", __FUNCTION__, oldSess->displayNum);
             emitSessionReconnect(remoteAddr, connType);
             emitSessionChanged(oldSess->displayNum);
 
@@ -1928,7 +1955,7 @@ namespace LTSM
             {
                 auto cmd = std::string("/usr/bin/killall -s SIGCONT -u ").append(oldSess->userInfo->user());
                 int ret = std::system(cmd.c_str());
-                Application::debug("%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret,
+                Application::debug(DebugType::Mgr, "%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret,
                                    oldSess->displayNum);
             }
 
@@ -2049,7 +2076,7 @@ namespace LTSM
         // registered session job
         waitPidBackgroundSafe(newSess->pid2);
         // parent continue
-        Application::debug("%s: user session started, pid: %d, display: %d", __FUNCTION__, newSess->pid2, newSess->displayNum);
+        Application::debug(DebugType::Mgr, "%s: user session started, pid: %d, display: %d", __FUNCTION__, newSess->pid2, newSess->displayNum);
         sessionRunSetxkbmapLayout(newSess);
         runSystemScript(newSess, _config->getString("system:logon"));
         runSystemScript(newSess, _config->getString("system:connect"));
@@ -2199,7 +2226,7 @@ namespace LTSM
                 }
                 catch(const std::exception & err)
                 {
-                    Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
                 }
 
                 return true;
@@ -2252,7 +2279,7 @@ namespace LTSM
                 {
                     auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(xvfb->userInfo->user());
                     int ret = std::system(cmd.c_str());
-                    Application::debug("%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret, xvfb->displayNum);
+                    Application::debug(DebugType::Mgr, "%s: command: `%s', return code: %d, display: %d", __FUNCTION__, cmd.c_str(), ret, xvfb->displayNum);
                 }
 
                 stopSessionChannels(std::move(xvfb));
@@ -2333,7 +2360,7 @@ namespace LTSM
         {
             auto tmpname = std::filesystem::path(xvfbHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
-            Application::debug("%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity",
+            Application::debug(DebugType::Mgr, "%s: transfer file request, display: %d, select dir: `%s', tmp name: `%s'", "RunZenity",
                                xvfb->displayNum, dstdir.c_str(), tmpname.c_str());
             auto filepath = std::filesystem::path(std::get<0>(info));
             auto filesize = std::get<1>(info);
@@ -2486,7 +2513,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             emitTransferReject(display, files);
             return false;
         }
@@ -2500,7 +2527,7 @@ namespace LTSM
     bool Manager::Object::busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
             const uint32_t & filesz, const std::string & dstfile)
     {
-        Application::debug("%s: display: %" PRId32 ", tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(),
+        Application::debug(DebugType::Mgr, "%s: display: %" PRId32 ", tmp file: `%s', dst file: `%s'", __FUNCTION__, display, tmpfile.c_str(),
                            dstfile.c_str());
 
         if(auto xvfb = findDisplaySession(display))
@@ -3220,7 +3247,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -3332,7 +3359,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -3460,7 +3487,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -3569,7 +3596,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -3692,7 +3719,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -3818,7 +3845,7 @@ namespace LTSM
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
 #else
@@ -4205,7 +4232,23 @@ namespace LTSM
         serviceAdaptor.reset(new Manager::Object(*conn, config(), std::abs(max - min), *this));
         Manager::serviceRunning = true;
         inotifyWatchConfigStart();
-        Application::setDebugLevel(configGetString("service:debug"));
+
+        // deprecated
+        if(auto str = config().getString("service:debug"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto str = config().getString("service:debug:level", "info"); !str.empty())
+        {
+            Application::setDebugLevel(str);
+        }
+
+        if(auto arr = config().getArray("service:debug:types"))
+        {
+            Application::setDebugTypes(Tools::debugTypes(arr->toStdList<std::string>()));
+        }
+
         Application::notice("%s: runtime version: %d", "ServiceStart", LTSM::service_version);
 #ifdef WITH_SYSTEMD
         sd_notify(0, "READY=1");
@@ -4272,7 +4315,7 @@ int main(int argc, const char** argv)
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
     catch(int val)
     {

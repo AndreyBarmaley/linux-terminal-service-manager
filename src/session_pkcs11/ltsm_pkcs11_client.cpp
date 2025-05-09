@@ -94,7 +94,7 @@ void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed
 
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv)
 {
-    Application::debug("%s: size: %u", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Pkcs11, "%s: size: %u", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty())
@@ -103,7 +103,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
     }
     else
     {
-        last.insert(last.end(), recv.begin(), recv.end());
+        std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
         last.clear();
@@ -122,7 +122,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto pkcs11Cmd = sb.readIntLE16();
-            Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
+            Application::debug(DebugType::Pkcs11, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
 
             if(Pkcs11Op::Init == pkcs11Cmd)
             {
@@ -199,11 +199,11 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
-        owner->sendLtsmEvent(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, reply.rawbuf());
         return false;
     }
 
@@ -220,7 +220,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     reply.write(info->libraryDescription, 32);
     reply.writeInt8(info->libraryVersion.major);
     reply.writeInt8(info->libraryVersion.minor);
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -297,7 +297,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
         }
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -341,7 +341,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
         }
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -366,7 +366,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE16(0);
         return false;
@@ -392,7 +392,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
         reply.write(rawValue.data(), rawValue.size());
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -444,7 +444,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
@@ -456,7 +456,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     auto sign = sess->signData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -508,7 +508,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     }
     catch(const std::exception & err)
     {
-        Application::error("%s: exception: %s", NS_FuncName.data(), err.what());
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
@@ -520,6 +520,6 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     auto sign = sess->decryptData(certId, values.data(), values.size(), mechType);
     reply.writeIntLE32(sign.size());
     reply.write(sign.data(), sign.size());
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }

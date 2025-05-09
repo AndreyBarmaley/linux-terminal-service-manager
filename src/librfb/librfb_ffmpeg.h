@@ -134,12 +134,11 @@ namespace LTSM
         public:
             void resizedEvent(const XCB::Size &) override;
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            void setDebug(int) override;
 
             EncodingFFmpeg(int type);
             ~EncodingFFmpeg() = default;
 
-            const char* getTypeName(void) const;
+            const char* getTypeName(void) const override;
         };
 
 #endif // ENCODING_FFMPEG
@@ -171,7 +170,6 @@ namespace LTSM
         public:
             void resizedEvent(const XCB::Size &) override;
             void updateRegion(DecoderStream &, const XCB::Region &) override;
-            void setDebug(int) override;
 
             DecodingFFmpeg(int type);
             ~DecodingFFmpeg() = default;

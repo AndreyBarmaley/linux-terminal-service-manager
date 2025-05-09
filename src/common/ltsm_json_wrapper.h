@@ -291,6 +291,7 @@ namespace LTSM
         bool isValid(size_t index) const;
 
         void addInteger(const int &);
+        void addString(const std::wstring &);
         void addString(std::string_view);
         void addDouble(const double &);
         void addBoolean(const bool &);
@@ -443,6 +444,7 @@ namespace LTSM
 
         void addNull(const std::string &);
         void addInteger(const std::string &, const int &);
+        void addString(const std::string &, const std::wstring &);
         void addString(const std::string &, std::string_view);
         void addDouble(const std::string &, const double &);
         void addBoolean(const std::string &, const bool &);

@@ -24,11 +24,18 @@
 #include <cmath>
 #include <chrono>
 #include <numeric>
+#include <cstring>
+#include <utility>
 
 #include "ltsm_tools.h"
 #include "librfb_server.h"
 #include "ltsm_application.h"
 #include "librfb_encodings.h"
+
+#ifdef LTSM_ENCODING
+#include "lz4.h"
+#include "turbojpeg.h"
+#endif
 
 using namespace std::chrono_literals;
 
@@ -105,7 +112,7 @@ namespace LTSM
         return sendPixel(pixel);
     }
 
-    int RFB::EncoderStream::sendRunLength(size_t length)
+    int RFB::EncoderStream::sendRunLength(uint32_t length)
     {
         if(0 == length)
         {
@@ -188,19 +195,9 @@ namespace LTSM
         Application::info("%s: init encoding: %s", __FUNCTION__, encodingName(type));
     }
 
-    bool RFB::EncodingBase::jobsEmpty(void) const
-    {
-        return jobs.empty();
-    }
-
     int RFB::EncodingBase::getType(void) const
     {
         return type;
-    }
-
-    void RFB::EncodingBase::setDebug(int v)
-    {
-        debug = v;
     }
 
     void RFB::EncodingBase::setThreads(int v)
@@ -293,11 +290,8 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
-        {
-            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y,
-                               reg0.width, reg0.height);
-        }
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
         // regions counts
@@ -314,11 +308,8 @@ namespace LTSM
     RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId)
     {
-        if(debug)
-        {
-            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, reg.x,
+        Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId, reg.x,
                                reg.y, reg.width, reg.height);
-        }
 
         buf.clear();
         EncoderWrapper wrap(& buf, st);
@@ -331,11 +322,8 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
-        {
-            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
-                               (isCoRRE() ? "CoRRE" : "RRE"), reg0.x, reg0.y, reg0.width, reg0.height);
-        }
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz = isCoRRE() ? XCB::Size(64, 64) : XCB::Size(128, 128);
@@ -408,8 +396,7 @@ namespace LTSM
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
-            if(debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
                                    "], back pixel 0x%08x, sub rects: %u",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
 
@@ -420,8 +407,7 @@ namespace LTSM
         {
             int back = fb.pixel(reg.topLeft());
 
-            if(debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x, %s",
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x, %s",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // num sub rects
@@ -449,7 +435,7 @@ namespace LTSM
             }
         }
 
-        return std::make_pair(reg + top, bb);
+        return std::make_pair(reg + top, std::move(bb));
     }
 
     void RFB::EncodingRRE::sendRects(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
@@ -482,8 +468,7 @@ namespace LTSM
                 st->sendIntBE16(region.height);
             }
 
-            if(1 < debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x",
+            Application::trace(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel 0x%08x",
                                    __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -493,11 +478,8 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
-        {
-            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y,
-                               reg0.width, reg0.height);
-        }
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz(16, 16);
@@ -567,11 +549,8 @@ namespace LTSM
         {
             int back = fb.pixel(reg.topLeft());
 
-            if(debug)
-            {
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
-            }
 
             // hextile flags
             wrap.sendInt8(RFB::HEXTILE_BACKGROUND);
@@ -598,22 +577,16 @@ namespace LTSM
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength)
                 {
-                    if(debug)
-                    {
-                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
+                    Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
-                    }
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 }
                 else
                 {
-                    if(debug)
-                    {
-                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                    Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
                                            "], back pixel: 0x%08x, sub rects: %u, %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
-                    }
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -625,29 +598,23 @@ namespace LTSM
                 // compare with raw
                 if(hextileRawLength < hextileColoredLength)
                 {
-                    if(debug)
-                    {
-                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
+                    Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
-                    }
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 }
                 else
                 {
-                    if(debug)
-                    {
-                        Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                    Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
                                            "], back pixel: 0x%08x, sub rects: %u, %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
-                    }
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
                 }
             }
         }
 
-        return std::make_pair(reg + top, bb);
+        return std::make_pair(reg + top, std::move(bb));
     }
 
     void RFB::EncodingHexTile::sendRegionColored(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb,
@@ -667,8 +634,7 @@ namespace LTSM
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            if(1 < debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x",
+            Application::trace(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x",
                                    __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -691,8 +657,7 @@ namespace LTSM
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            if(1 < debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
+            Application::trace(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
                                    __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height);
         }
     }
@@ -717,11 +682,8 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
-        {
-            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
-                               (isZRLE() ? "ZRLE" : "TRLE"), reg0.x, reg0.y, reg0.width, reg0.height);
-        }
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Size bsz(64, 64);
         const XCB::Point top(reg0.x, reg0.y);
@@ -787,15 +749,14 @@ namespace LTSM
         auto map = fb.pixelMapPalette(reg);
         // thread buffer
         BinaryBuf bb;
-        bb.reserve(reg.width * reg.height * fb.bytePerPixel());
+        bb.reserve(reg.width* reg.height* fb.bytePerPixel());
         EncoderWrapper wrap(& bb, st);
 
         if(map.size() == 1)
         {
             int back = fb.pixel(reg.topLeft());
 
-            if(debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], back pixel: 0x%08x, %s",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // subencoding type: solid tile
@@ -815,8 +776,7 @@ namespace LTSM
                 fieldWidth = 2;
             }
 
-            if(debug)
-                Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], palsz: %u, packed: %u",
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], palsz: %u, packed: %u",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), fieldWidth);
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
@@ -844,16 +804,14 @@ namespace LTSM
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength)
             {
-                if(debug)
-                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], length: %u, rle plain",
+                Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], length: %u, rle plain",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
             }
             else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength)
             {
-                if(debug)
-                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+                Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
                                        "], pal size: %u, length: %u, rle palette",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
 
@@ -861,15 +819,14 @@ namespace LTSM
             }
             else
             {
-                if(debug)
-                    Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], raw",
+                Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], raw",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
                 sendRegionRaw(& wrap, reg, fb);
             }
         }
 
-        return std::make_pair(reg + top, bb);
+        return std::make_pair(reg + top, std::move(bb));
     }
 
     void RFB::EncodingTRLE::sendRegionPacked(EncoderStream* st, const XCB::Region & reg, const FrameBuffer & fb, int jobId,
@@ -884,7 +841,7 @@ namespace LTSM
             st->sendCPixel(pair.first);
         }
 
-        const size_t rez = (reg.width * reg.height) >> 2;
+        const size_t rez = (reg.width* reg.height) >> 2;
         Tools::StreamBitsPack sb(rez ? rez : 32);
         // send packed rows
 #ifdef FB_FAST_CYCLE
@@ -923,11 +880,11 @@ namespace LTSM
 #endif
         st->sendData(sb.toVector());
 
-        if(1 < debug)
+        if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto & vec = sb.toVector();
             std::string str = Tools::buffer2hexstring(vec.begin(), vec.end(), 2);
-            Application::debug("%s: job id: %d, packed stream: %s", __FUNCTION__, jobId, str.c_str());
+            Application::debug(DebugType::Enc, "%s: job id: %d, packed stream: %s", __FUNCTION__, jobId, str.c_str());
         }
     }
 
@@ -1005,13 +962,10 @@ namespace LTSM
     }
 
     // EncodingZlib
-    RFB::EncodingZlib::EncodingZlib(int zlevel) : EncodingBase(ENCODING_ZLIB)
+    RFB::EncodingZlib::EncodingZlib(int lev) : EncodingBase(ENCODING_ZLIB), zlevel(lev)
     {
         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION)
-        {
-            Application::debug("%s: incorrect value, zlevel: %d", __FUNCTION__, zlevel);
             zlevel = Z_BEST_SPEED;
-        }
 
         zlib.reset(new ZLib::DeflateStream(zlevel));
         buf.reserve(64 * 1024);
@@ -1021,11 +975,8 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
-        {
-            Application::debug("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg0.x, reg0.y,
-                               reg0.width, reg0.height);
-        }
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
 
         const XCB::Point top(reg0.x, reg0.y);
         // regions counts
@@ -1036,22 +987,51 @@ namespace LTSM
         st->sendHeader(getType(), job.first);
         st->sendZlibData(zlib.get());
         st->sendFlush();
+        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId)
     {
-        if(debug)
-        {
-            Application::debug("%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, jobId,
-                               top.x + reg.x, top.y + reg.y, reg.width, reg.height);
-        }
-
         buf.clear();
         EncoderWrapper wrap(& buf, st);
         sendRawRegionPixels(& wrap, st, reg, fb);
         zlib->sendData(buf);
         return std::make_pair(reg + top, BinaryBuf{});
+    }
+
+    bool RFB::EncodingZlib::setEncodingOptions(const std::forward_list<std::string> & encopts)
+    {
+        bool fullscreenUpdate = false;
+
+        for(auto & str: encopts)
+        {
+            // parce zlevel
+            if(0 == std::strncmp(str.c_str(), "zlev", 4))
+            {
+                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                {
+                    try
+                    {
+                        zlevel = std::stoi(str.substr(it));
+
+                        if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION)
+                        {
+                            Application::warning("%s: incorrect value, zlevel: %d", __FUNCTION__, zlevel);
+                            zlevel = Z_BEST_SPEED;
+                        }
+                    }
+                    catch(...)
+                    {
+                    }
+
+                    Application::info("%s: set zlevel: %d", __FUNCTION__, zlevel);
+                    zlib.reset(new ZLib::DeflateStream(zlevel));
+                }
+            }
+        }
+
+        return fullscreenUpdate;
     }
 
 #ifdef LTSM_ENCODING
@@ -1060,14 +1040,30 @@ namespace LTSM
     {
         const XCB::Region & reg0 = fb.region();
 
-        if(debug)
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+
+        // calculate block size
+        XCB::Size bsz;
+        const size_t blocksz = 256 * 256;
+
+        if(st->displaySize() == fb.region().toSize())
         {
-            Application::debug("%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
-                               "LZ4", reg0.x, reg0.y, reg0.width, reg0.height);
+            bsz = 1 < threads ?
+                XCB::Size(fb.width(), fb.height() / threads) :
+                fb.region().toSize();
+        }
+        else if(fb.width() * fb.height() < blocksz)
+        {
+            // one rect
+            bsz = fb.region().toSize();
+        }
+        else
+        {
+            bsz = XCB::Size(fb.width(), blocksz / fb.height());
         }
 
-        const XCB::Size bsz(fb.width(), fb.height() / 4);
-        const size_t fbBlockBytes = fb.pitchSize() * bsz.height;
+        assertm(! bsz.isEmpty(), "block size empty");
 
         const XCB::Point top(reg0.x, reg0.y);
         auto regions = reg0.divideBlocks(bsz);
@@ -1111,8 +1107,6 @@ namespace LTSM
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             // ltsm lz4 format
-            st->sendIntBE32(fbBlockBytes);
-            st->sendIntBE32(fb.pitchSize());
             st->sendIntBE32(ret.second.size());
             st->sendData(ret.second);
         }
@@ -1124,25 +1118,478 @@ namespace LTSM
     RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId)
     {
-        assertm(fb.width() == reg.width, "continues data required");
-
         // thread buffer
-        const size_t fbBlockBytes = fb.pitchSize() * reg.height;
-        BinaryBuf bb(LZ4_compressBound(fbBlockBytes));
+        BinaryBuf bb;
+        int ret = 0;
 
-        auto inbuf = fb.pitchData(reg.y);
-        auto inlen = fb.pitchSize() * reg.height;
+        if(fb.width() == reg.width)
+        {
+            auto inbuf = fb.pitchData(reg.y);
+            auto inlen = fb.pitchSize() * reg.height;
+            bb.resize(LZ4_compressBound(inlen));
 
-        int ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
+            ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
+        }
+        else
+        {
+            auto fb2 = fb.copyRegion(reg);
+            auto inbuf = fb2.pitchData(0);
+            auto inlen = fb2.pitchSize() * reg.height;
+            bb.resize(LZ4_compressBound(inlen));
 
-        if(ret <= 0)
+            ret = LZ4_compress_fast((const char*) inbuf, (char*) bb.data(), inlen, bb.size(), 1);
+        }
+
+        if(ret < 0)
         {
             Application::error("%s: %s failed, ret: %d", __FUNCTION__, "LZ4_compress_fast_continue", ret);
             throw rfb_error(NS_FuncName);
         }
 
         bb.resize(ret);
-        return std::make_pair(reg + top, bb);
+        return std::make_pair(reg + top, std::move(bb));
+    }
+
+    /// EncodingTJPG
+    bool RFB::EncodingTJPG::setEncodingOptions(const std::forward_list<std::string> & encopts)
+    {
+        bool fullscreenUpdate = false;
+
+        for(auto & str: encopts)
+        {
+            // parce quality
+            if(0 == std::strncmp(str.c_str(), "qual", 4))
+            {
+                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                {
+                    try
+                    {
+                        jpegQuality = std::stoi(str.substr(it));
+
+                        if(10 > jpegQuality || 100 < jpegQuality)
+                        {
+                            Application::warning("%s: incorrect value, quality: %d", __FUNCTION__, jpegQuality);
+                            jpegQuality = 85;
+                        }
+                        else
+                        {
+                            fullscreenUpdate = true;
+                        }
+                    }
+                    catch(...)
+                    {
+                    }
+
+                    Application::info("%s: set quality: %d", __FUNCTION__, jpegQuality);
+                }
+            }
+            else
+            // parce sample
+            if(0 == std::strncmp(str.c_str(), "samp", 4))
+            {
+                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                {
+                    if(0 == str.compare(it, -1, "420"))
+                    {
+                        jpegSamp = TJSAMP_420;
+                        fullscreenUpdate = true;
+                    }
+                    else
+                    if(0 == str.compare(it, -1, "422"))
+                    {
+                        jpegSamp = TJSAMP_422;
+                        fullscreenUpdate = true;
+                    }
+                    else
+                    if(0 == str.compare(it, -1, "440"))
+                    {
+                        jpegSamp = TJSAMP_440;
+                        fullscreenUpdate = true;
+                    }
+                    else
+                    if(0 == str.compare(it, -1, "444"))
+                    {
+                        jpegSamp = TJSAMP_444;
+                        fullscreenUpdate = true;
+                    }
+                    else
+                    if(0 == str.compare(it, -1, "411"))
+                    {
+                        jpegSamp = TJSAMP_411;
+                        fullscreenUpdate = true;
+                    }
+                    else
+                    if(0 == str.compare(it, -1, "gray"))
+                    {
+                        jpegSamp = TJSAMP_GRAY;
+                        fullscreenUpdate = true;
+                    }
+
+                    Application::info("%s: set sample: %s", __FUNCTION__, str.substr(it).c_str());
+                }
+            }
+        }
+
+        return fullscreenUpdate;
+    }
+    
+    void RFB::EncodingTJPG::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
+    {
+        const XCB::Region & reg0 = fb.region();
+
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+
+        // calculate block size
+        XCB::Size bsz;
+        const size_t blocksz = 256 * 256;
+
+        if(st->displaySize() == fb.region().toSize())
+        {
+            bsz = 1 < threads ?
+                XCB::Size(fb.width(), fb.height() / threads) :
+                fb.region().toSize();
+        }
+        else if(fb.width() * fb.height() < blocksz)
+        {
+            // one rect
+            bsz = fb.region().toSize();
+        }
+        else
+        {
+            bsz = XCB::Size(fb.width(), blocksz / fb.height());
+        }
+
+        assertm(! bsz.isEmpty(), "block size empty");
+
+        const XCB::Point top(reg0.x, reg0.y);
+        auto regions = reg0.divideBlocks(bsz);
+        // regions counts
+        st->sendIntBE16(regions.size());
+        int jobId = 1;
+
+        // make pool jobs
+        while(jobId <= threads && ! regions.empty())
+        {
+            jobs.emplace_back(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, regions.front() - top, fb,
+                                         jobId));
+            regions.pop_front();
+            jobId++;
+        }
+
+        // renew completed job
+        while(! regions.empty())
+        {
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
+            {
+                return job.wait_for(1us) != std::future_status::ready;
+            });
+
+            if(busy < threads)
+            {
+                jobs.emplace_back(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, regions.front() - top, fb,
+                                             jobId));
+                regions.pop_front();
+                jobId++;
+            }
+
+            std::this_thread::sleep_for(100us);
+        }
+
+        // wait jobs
+        for(auto & job : jobs)
+        {
+            job.wait();
+            auto ret = job.get();
+            st->sendHeader(getType(), ret.first);
+            // pixels
+            st->sendIntBE32(ret.second.size());
+            st->sendData(ret.second);
+        }
+
+        st->sendFlush();
+        jobs.clear();
+    }
+
+    RFB::EncodingRet RFB::EncodingTJPG::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
+            const FrameBuffer & fb, int jobId)
+    {
+        std::unique_ptr<void, int(*)(void*)> jpeg{ tjInitCompress(), tjDestroy };
+
+        if(! jpeg)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "tjInitCompress");
+            throw rfb_error(NS_FuncName);
+        }
+
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+        const int pixFmt = TJPF_RGBX;
+#else
+        const int pixFmt = TJPF_BGRX;
+#endif
+
+        long unsigned int jpegSize = tjBufSize(reg.width, reg.height, jpegSamp);
+        // thread buffer
+        auto bb = BinaryBuf(jpegSize);
+        unsigned char* jpegBuf = bb.data();
+        int ret = 0;
+
+        if(fb.width() == reg.width)
+        {
+            ret = tjCompress2(jpeg.get(), fb.pitchData(reg.y), reg.width, fb.pitchSize(), reg.height, pixFmt,
+                              & jpegBuf, & jpegSize, jpegSamp, jpegQuality, TJFLAG_FASTDCT|TJFLAG_NOREALLOC);
+        }
+        else
+        {
+            auto fb2 = fb.copyRegion(reg);
+            ret = tjCompress2(jpeg.get(), fb2.pitchData(0), reg.width, fb2.pitchSize(), reg.height, pixFmt,
+                              & jpegBuf, & jpegSize, jpegSamp, jpegQuality, TJFLAG_FASTDCT|TJFLAG_NOREALLOC);
+        }
+
+        if(0 > ret)
+        {
+            int err = tjGetErrorCode(jpeg.get());
+            const char* str = tjGetErrorStr2(jpeg.get());
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "tjCompress", str, err);
+            throw rfb_error(NS_FuncName);
+        }
+
+        bb.resize(jpegSize);
+        return std::make_pair(reg + top, std::move(bb));
+    }
+
+    /// EncodingQOI
+    void RFB::EncodingQOI::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
+    {
+        const XCB::Region & reg0 = fb.region();
+
+        Application::debug(DebugType::Enc, "%s: type: %s, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+                               getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+
+        // calculate block size
+        XCB::Size bsz;
+        const size_t blocksz = 256 * 256;
+
+        if(st->displaySize() == fb.region().toSize())
+        {
+            bsz = 1 < threads ?
+                XCB::Size(fb.width(), fb.height() / threads) :
+                fb.region().toSize();
+        }
+        else if(fb.width() * fb.height() < blocksz)
+        {
+            // one rect
+            bsz = fb.region().toSize();
+        }
+        else
+        {
+            bsz = XCB::Size(fb.width(), blocksz / fb.height());
+        }
+
+        assertm(! bsz.isEmpty(), "block size empty");
+
+        const XCB::Point top(reg0.x, reg0.y);
+        auto regions = reg0.divideBlocks(bsz);
+        // regions counts
+        st->sendIntBE16(regions.size());
+        int jobId = 1;
+
+        // make pool jobs
+        while(jobId <= threads && ! regions.empty())
+        {
+            jobs.emplace_back(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, regions.front() - top, fb,
+                                         jobId));
+            regions.pop_front();
+            jobId++;
+        }
+
+        // renew completed job
+        while(! regions.empty())
+        {
+            // busy
+            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
+            {
+                return job.wait_for(1us) != std::future_status::ready;
+            });
+
+            if(busy < threads)
+            {
+                jobs.emplace_back(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, regions.front() - top, fb,
+                                             jobId));
+                regions.pop_front();
+                jobId++;
+            }
+
+            std::this_thread::sleep_for(100us);
+        }
+
+        // wait jobs
+        for(auto & job : jobs)
+        {
+            job.wait();
+            auto ret = job.get();
+            st->sendHeader(getType(), ret.first);
+            // encode buf
+            st->sendIntBE32(ret.second.size());
+            st->sendData(ret.second);
+        }
+
+        st->sendFlush();
+        jobs.clear();
+    }
+
+    RFB::EncodingRet RFB::EncodingQOI::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
+            const FrameBuffer & fb, int jobId)
+    {
+        BinaryBuf bb = encodeBGRx(fb.pitchData(reg.y) + reg.x * fb.bytePerPixel(), reg.toSize(), fb.pitchSize());
+        return std::make_pair(reg + top, std::move(bb));
+    }
+
+    namespace QOI
+    {
+        enum Tag
+        {
+            INDEX = 0x00,
+            DIFF = 0x40,
+            LUMA = 0x80,
+            RUN = 0xC0,
+            RGB = 0xFE,
+            RGBA = 0xFF
+        };
+
+        // return [b, g, r]
+        std::tuple<uint8_t, uint8_t, uint8_t> unpackBGRx(const uint32_t & px)
+        {
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+            return std::make_tuple( static_cast<uint8_t>((px >> 24) & 0xFF), 
+                static_cast<uint8_t>((px >> 16) & 0xFF), static_cast<uint8_t>((px >> 8) & 0xFF) );
+#else
+            return std::make_tuple( static_cast<uint8_t>(px & 0xFF),
+                static_cast<uint8_t>((px >> 8) & 0xFF), static_cast<uint8_t>((px >> 16) & 0xFF) );
+#endif
+        }
+
+        inline uint8_t hashIndex64RGB(const uint8_t & pr, const uint8_t & pg, const uint8_t & pb)
+        {
+            return (pr * 3 + pg * 5 + pb * 7) % 64;
+        }
+    }
+
+    BinaryBuf RFB::EncodingQOI::encodeBGRx(const uint8_t* ptr, const XCB::Size & rsz, uint32_t pitch) const
+    {
+        StreamBuf sb(rsz.height * rsz.width * 8 / 3);
+
+        std::array<int64_t, 64> hashes;
+        hashes.fill(-1);
+
+        int64_t prevPixel = -1;
+        std::uint8_t run = 0;
+
+        const uint8_t* ppixelLast = ptr + (rsz.height - 1) * pitch + (rsz.width - 1) * 4;
+
+        for(int py = 0; py < rsz.height; ++py)
+        {
+            const uint8_t* row = ptr + py * pitch;
+
+            for(int px = 0; px < rsz.width; ++px)
+            {
+                const uint8_t* ppixel = row + px * 4;
+                const uint32_t & pixel = *reinterpret_cast<const uint32_t*>(ppixel);
+
+                // QOI::Tag::RUN
+                if(pixel == prevPixel)
+                {
+                    run++;
+                    
+                    if(run == 62 || ppixel == ppixelLast)
+                    {
+                        sb.writeInt8(QOI::Tag::RUN | (run - 1));
+                        run = 0;
+                    }
+
+                    continue;
+                }
+
+                if(run)
+                {
+                    sb.writeInt8(QOI::Tag::RUN | (run - 1));
+                    run = 0;
+                }
+
+                auto [ pb, pg, pr ] = QOI::unpackBGRx(pixel);
+
+                // QOI::Tag::INDEX
+                const uint8_t index = QOI::hashIndex64RGB(pr, pg, pb);
+
+                if(hashes[index] == pixel)
+                {
+                    sb.writeInt8(QOI::Tag::INDEX | index);
+                    prevPixel = pixel;
+                    continue;
+                }
+
+                hashes[index] = pixel;
+
+                if(prevPixel < 0)
+                {
+                    sb.writeInt8(QOI::Tag::RGB);
+                    sb.writeInt8(pr);
+                    sb.writeInt8(pg);
+                    sb.writeInt8(pb);
+                    prevPixel = pixel;
+                    continue;
+                }
+
+                auto [ ppb, ppg, ppr ] = QOI::unpackBGRx(prevPixel);
+
+                const int8_t vr = pr - ppr;
+                const int8_t vg = pg - ppg;
+                const int8_t vb = pb - ppb;
+
+                // QOI::Tag::DIFF
+                if(vr > static_cast<int8_t>(-3) && vr < static_cast<int8_t>(2) &&
+                        vg > static_cast<int8_t>(-3) && vg < static_cast<int8_t>(2) &&
+                        vb > static_cast<int8_t>(-3) && vb < static_cast<int8_t>(2))
+                {
+                    sb.writeInt8(QOI::Tag::DIFF | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2));
+                    prevPixel = pixel;
+                    continue;
+                }
+
+                const int8_t vg_r = vr - vg;
+                const int8_t vg_b = vb - vg;
+
+                // QOI::Tag::LUMA
+                if(vg_r > static_cast<int8_t>(-9) && vg_r < static_cast<int8_t>(8) &&
+                        vg > static_cast<int8_t>(-33) && vg < static_cast<int8_t>(32) &&
+                        vg_b > static_cast<int8_t>(-9) && vg_b < static_cast<int8_t>(8))
+                {
+                    sb.writeInt8(QOI::Tag::LUMA | (vg + 32));
+                    sb.writeInt8((vg_r + 8) << 4 | (vg_b + 8));
+                    prevPixel = pixel;
+                    continue;
+                }
+
+                // QOI::Tag::RGB
+                sb.writeInt8(QOI::Tag::RGB);
+                sb.writeInt8(pr);
+                sb.writeInt8(pg);
+                sb.writeInt8(pb);
+
+                prevPixel = pixel;
+            }
+        }
+
+        // padding
+        const uint8_t qoiPadding[] = {0,0,0,0,0,0,0,1};
+
+        for(auto & pad: qoiPadding)
+        {
+            sb.writeInt8(pad);
+        }
+
+        return sb.rawbuf();
     }
 #endif
 }

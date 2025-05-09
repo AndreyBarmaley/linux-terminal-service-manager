@@ -1,4 +1,4 @@
-foreach(DIR IN ITEMS json streambuf unixsocket framebuf xrandr)
+foreach(DIR IN ITEMS json streambuf unixsocket framebuf xrandr x11clip)
     add_executable(LTSM_test_${DIR})
 
     file(GLOB_RECURSE SOURCELIST "${DIR}/*.cpp")
@@ -9,7 +9,7 @@ foreach(DIR IN ITEMS json streambuf unixsocket framebuf xrandr)
     target_link_libraries(LTSM_test_${DIR} ${SDL2_LIBRARIES})
     target_link_libraries(LTSM_test_${DIR} ${SDL2_IMAGE_LIBRARIES})
     target_compile_options(LTSM_test_${DIR} PRIVATE ${EXTRA_CFLAGS})
-    target_compile_options(LTSM_test_${DIR} PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB)
+    target_compile_definitions(LTSM_test_${DIR} PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB)
 
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/common)
 
@@ -30,15 +30,16 @@ foreach(DIR IN ITEMS encodings x11enc)
         ${CMAKE_SOURCE_DIR}/src/channels/channel_system.cpp)
 
     find_package(GnuTLS REQUIRED)
-    find_library(LZ4_LIBRARY NAMES lz4 REQUIRED)
 
     pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
     pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
+    pkg_search_module(LZ4 REQUIRED lz4)
+    pkg_search_module(TURBOJPEG REQUIRED turbojpeg)
 
     target_link_libraries(LTSM_test_${DIR} ${SDL2_LIBRARIES})
-    target_link_libraries(LTSM_test_${DIR} ${SDL2_IMAGE_LIBRARIES} ${LZ4_LIBRARY})
+    target_link_libraries(LTSM_test_${DIR} ${SDL2_IMAGE_LIBRARIES} ${LZ4_LIBRARIES} ${TURBOJPEG_LIBRARIES})
     target_compile_options(LTSM_test_${DIR} PRIVATE ${EXTRA_CFLAGS})
-    target_compile_options(LTSM_test_${DIR} PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_ENCODING)
+    target_compile_definitions(LTSM_test_${DIR} PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_SOCKET_ZLIB -DLTSM_ENCODING -DLTSM_ENCODING_FFMPEG)
 
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/librfb)
     target_include_directories(LTSM_test_${DIR} PRIVATE ${CMAKE_SOURCE_DIR}/src/common)
@@ -56,8 +57,7 @@ foreach(DIR IN ITEMS encodings x11enc)
     
         target_compile_options(LTSM_test_${DIR} PRIVATE
                 ${AVDEVICE_CFLAGS} ${AVFORMAT_CFLAGS} ${AVCODEC_CFLAGS}
-                ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS}
-                -DLTSM_ENCODING_FFMPEG)
+                ${AVSWSCALE_CFLAGS} ${AVSWRESAMPLE_CFLAGS} ${AVUTIL_CFLAGS})
 
         target_link_options(LTSM_test_${DIR} PRIVATE
                 ${AVDEVICE_LDFLAGS} ${AVFORMAT_LDFLAGS} ${AVCODEC_LDFLAGS}

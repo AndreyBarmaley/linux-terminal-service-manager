@@ -35,11 +35,11 @@
 
 namespace LTSM
 {
-    class SDL2X11 : protected XCB::RootDisplay, protected SDL::Window
+    class SDL2X11 : protected XCB::RootDisplay, protected SDL::Window, public XCB::SelectionSource, public XCB::SelectionRecipient
     {
         XCB::Region damage;
         XCB::ShmIdShared shm;
-        std::unique_ptr<char, void(*)(void*)> clipboard{ nullptr, SDL_free };
+        std::unique_ptr<char, void(*)(void*)> clientClipboard{ nullptr, SDL_free };
 
     public:
         SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
@@ -60,49 +60,100 @@ namespace LTSM
                 }
         */
 
-        bool sdlFakeInputTest(int type, const SDL_Keysym & keysym)
+        void xcbDamageNotifyEvent(const xcb_rectangle_t & rt) override
         {
-            if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
-            {
-                int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
-                auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
-                return keycode != XCB_NO_SYMBOL ? test->fakeInputRaw(root(), type, keycode, 0, 0) : false;
-            }
-
-            return false;
+            damage.join(rt.x, rt.y, rt.width, rt.height);
         }
 
-        void xfixesSelectionChangedEvent(void) override
-        {
-        }
-
-        void xfixesCursorChangedEvent(void) override
-        {
-        }
-
-        void damageRegionEvent(const XCB::Region & area) override
-        {
-            damage.join(area);
-        }
-
-        void randrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne) override
+        void xcbRandrScreenChangedEvent(const XCB::Size & dsz, const xcb_randr_notify_event_t & ne) override
         {
             SDL::Window::resize(dsz.width, dsz.height);
             damage.assign(0, 0, dsz.width, dsz.height);
         }
 
-        void xkbGroupChangedEvent(int group) override
+        void xcbXkbGroupChangedEvent(int group) override
         {
         }
 
-        void clipboardChangedEvent(const std::vector<uint8_t> & buf) override
+        void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override
         {
-            SDL_SetClipboardText(std::string(buf.begin(), buf.end()).c_str());
+            SDL_SetClipboardText(std::string(ptr, ptr + len).c_str());
+        }
+
+        void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override
+        {
+            auto targets = selectionSourceTargets();
+    
+            auto ptr = const_cast<SDL2X11*>(this);
+            if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
+            {
+                std::for_each(beg, end, [&](auto & atom)
+                {
+                    if(std::any_of(targets.begin(), targets.end(), [&](auto & trgt){ return atom == trgt; }))
+                    {
+                        return copy->convertSelection(atom, *this);
+                    }
+                });
+            }
+        }
+
+        void selectionChangedEvent(void) const override
+        {
+            auto ptr = const_cast<SDL2X11*>(this);
+            if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
+            {
+                auto targets = getAtom("TARGETS");
+                copy->convertSelection(targets, *this);
+            }
+        }
+
+        std::vector<xcb_atom_t> selectionSourceTargets(void) const override
+        {
+            auto utf8String = getAtom("UTF8_STRING");
+            auto text = getAtom("TEXT");
+            auto textPlain = getAtom("text/plain;charset=utf-8");
+    
+            return { XCB_ATOM_STRING, utf8String, text, textPlain };
+        }
+
+        size_t selectionSourceSize(xcb_atom_t atom) const override
+        {
+            auto targets = selectionSourceTargets();
+
+            if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt){ return atom == trgt; }))
+                return 0;
+
+            return clientClipboard ? SDL_strlen(clientClipboard.get()) : 0;
+        }
+
+        std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override
+        {
+            auto targets = selectionSourceTargets();
+
+            if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt){ return atom == trgt; }))
+                return {};
+
+            if(clientClipboard)
+            {
+                auto len = SDL_strlen(clientClipboard.get());
+
+                if(offset + length <= len)
+                {
+                    auto beg = clientClipboard.get() + offset;
+                    return std::vector<uint8_t>(beg, beg + length);
+                }
+                else
+                {
+                    Application::error("%s: invalid length: %u, offset: %" PRIu32, __FUNCTION__, length, offset);
+                }
+            }
+
+            return {};
         }
 
         bool sdlEventProcessing(bool & quit)
         {
-            auto ev = SDL::Window::poolEvent();
+            auto ev = SDL::Window::pollEvent();
 
             if(! ev.isValid())
             {
@@ -115,6 +166,7 @@ namespace LTSM
                     // handleTextInput: ev.text
                     break;
 
+                case SDL_KEYUP:
                 case SDL_KEYDOWN:
 
                     // fast close
@@ -124,27 +176,21 @@ namespace LTSM
                         break;
                     }
 
-                    sdlFakeInputTest(XCB_KEY_PRESS, ev.key()->keysym);
+                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
+                    {
+                        const SDL_Keysym & keysym = ev.key()->keysym;
+                        int xksym = SDL::Window::convertScanCodeToKeySym(keysym.scancode);
+                        auto keycode = XCB::RootDisplay::keysymToKeycode(0 != xksym ? xksym : keysym.sym);
+                        test->screenInputKeycode(keycode, ev.type() == SDL_KEYDOWN /* presed */);
+                    }
                     break;
 
-                case SDL_KEYUP:
-                    sdlFakeInputTest(XCB_KEY_RELEASE, ev.key()->keysym);
-                    break;
-
+                case SDL_MOUSEBUTTONUP:
                 case SDL_MOUSEBUTTONDOWN:
                     if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
                     {
                         auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                        test->fakeInputRaw(root(), XCB_BUTTON_PRESS, ev.button()->button, coordX, coordY);
-                    }
-
-                    break;
-
-                case SDL_MOUSEBUTTONUP:
-                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
-                    {
-                        auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                        test->fakeInputRaw(root(), XCB_BUTTON_RELEASE, ev.button()->button, coordX, coordY);
+                        test->screenInputButton(ev.button()->button, XCB::Point(coordX, coordY), ev.type() == SDL_MOUSEBUTTONDOWN /* presed */);
                     }
 
                     break;
@@ -153,23 +199,26 @@ namespace LTSM
                     if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
                     {
                         auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-                        test->fakeInputRaw(root(), XCB_MOTION_NOTIFY, 0, coordX, coordY);
+                        test->screenInputMove(XCB::Point(coordX, coordY));
                     }
 
                     break;
 
                 case SDL_MOUSEWHEEL:
-                    if(ev.wheel()->y > 0)
+                    if(auto test = static_cast<const XCB::ModuleTest*>(XCB::RootDisplay::getExtension(XCB::Module::TEST)))
                     {
-                        int posx, posy;
-                        SDL_GetMouseState(& posx, &posy);
-                        fakeInputButton(4, XCB::Point(posx, posy));
-                    }
-                    else if(ev.wheel()->y < 0)
-                    {
-                        int posx, posy;
-                        SDL_GetMouseState(& posx, &posy);
-                        fakeInputButton(5, XCB::Point(posx, posy));
+                        if(ev.wheel()->y > 0)
+                        {
+                            int coordX, coordY;
+                            SDL_GetMouseState(& coordX, & coordY);
+                            test->screenInputButtonClick(4, XCB::Point(coordX, coordY));
+                        }
+                        else if(ev.wheel()->y < 0)
+                        {
+                            int coordX, coordY;
+                            SDL_GetMouseState(& coordX, & coordY);
+                            test->screenInputButtonClick(5, XCB::Point(coordX, coordY));
+                        }
                     }
 
                     break;
@@ -177,12 +226,12 @@ namespace LTSM
                 case SDL_CLIPBOARDUPDATE:
                     if(SDL_HasClipboardText())
                     {
-                        clipboard.reset(SDL_GetClipboardText());
+                        clientClipboard.reset(SDL_GetClipboardText());
 
-                        if(clipboard)
+                        if(clientClipboard)
                         {
-                            auto len = SDL_strlen(clipboard.get());
-                            XCB::RootDisplay::setClipboard((const uint8_t*) clipboard.get(), len);
+                            if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
+                                paste->setSelectionOwner(*this);
                         }
                     }
 
@@ -204,12 +253,14 @@ namespace LTSM
             const size_t bytePerPixel = bitsPerPixel() >> 3;
             bool quit = false;
 
+            selectionChangedEvent();
+
             while(! quit)
             {
                 bool delay = ! sdlEventProcessing(quit);
 
                 // processing xcb events
-                while(auto ev = XCB::RootDisplay::poolEvent())
+                while(auto ev = XCB::RootDisplay::pollEvent())
                 {
                     if(auto err = XCB::RootDisplay::hasError())
                     {
@@ -238,7 +289,8 @@ namespace LTSM
                         tx.updateRect(nullptr, reply->data(), damage.width* bytePerPixel + alignRowBytes);
                         renderTexture(tx.get(), nullptr, nullptr, & dstrt);
                         renderPresent();
-                        XCB::RootDisplay::damageSubtrack(damage);
+
+                        XCB::RootDisplay::rootDamageSubtrack(damage);
                     }
 
                     damage.reset();

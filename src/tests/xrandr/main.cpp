@@ -46,12 +46,12 @@ public:
 
         std::thread([=]{
             std::this_thread::sleep_for(1s);
-    	    randr->setScreenSize(*_screen, 1024, 768);
+    	    randr->setScreenSize(1024, 768);
 	}).detach();
 
         std::thread([=]{
             std::this_thread::sleep_for(5s);
-    	    randr->setScreenSize(*_screen, nsz.width, nsz.height);
+    	    randr->setScreenSize(nsz.width, nsz.height);
 	}).detach();
 
         auto start = std::chrono::steady_clock::now();
@@ -59,7 +59,7 @@ public:
         auto _randr = xcb_get_extension_data(_conn.get(), &xcb_randr_id);
         while(! hasError())
         {
-            while(auto ev = XCB::RootDisplay::poolEvent())
+            while(auto ev = XCB::RootDisplay::pollEvent())
             {
                 if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE))
                 {
@@ -108,7 +108,7 @@ public:
     {
         auto randr = static_cast<const XCB::ModuleRandr*>( getExtension(XCB::Module::RANDR) );
 
-	auto outputs = randr->getOutputs(*_screen);
+	auto outputs = randr->getOutputs();
 	xcb_randr_output_t curout;
 
         Application::info("outputs: %d", outputs.size());
@@ -122,7 +122,7 @@ public:
 		curout = val;
 	}
 
-	auto modes = randr->getModesInfo(*_screen);
+	auto modes = randr->getModesInfo();
         Application::info("modes: %d", modes.size());
 
 	auto modes2 = randr->getOutputModes(curout);
@@ -134,7 +134,7 @@ public:
 	    }
 	}
 
-	for(auto & size : randr->getScreenSizes(*_screen))
+	for(auto & size : randr->getScreenSizes())
 	{
     	    Application::info("screen size: %d, %d", size.width, size.height);
 	}
@@ -145,7 +145,7 @@ public:
     bool test_randr_create_mode(const XCB::Size & nsz)
     {
         auto randr = static_cast<const XCB::ModuleRandr*>( getExtension(XCB::Module::RANDR) );
-        auto sizes = randr->getScreenSizes(*_screen);
+        auto sizes = randr->getScreenSizes();
 
 	if(std::any_of(sizes.begin(), sizes.end(), [&](auto & st){ return st.width == nsz.width && st.height == nsz.height; }))
         {
@@ -157,12 +157,12 @@ public:
     }
 };
 
-class App : public Application
+class TestApp : public Application
 {
     int screen;
 
 public:
-    App(int argc, const char** argv) : Application("test"), screen(0)
+    TestApp(int argc, const char** argv) : Application("test"), screen(0)
     {
         if(auto env = getenv("DISPLAY"))
         {
@@ -222,7 +222,7 @@ int main(int argc, const char** argv)
 {
     try
     {
-	App app(argc, argv);
+	TestApp app(argc, argv);
 	return app.start();
     }
     catch(const std::exception & e)

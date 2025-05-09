@@ -28,7 +28,9 @@
 #include <mutex>
 
 #include "ltsm_channels.h"
+#include "librfb_extclip.h"
 #include "librfb_encodings.h"
+#include "ltsm_xcb_wrapper.h"
 
 namespace LTSM
 {
@@ -38,14 +40,27 @@ namespace LTSM
         FrameBuffer fb;
     };
 
+    class ClientEncodings
+    {
+        std::list<int> encs = { RFB::ENCODING_RAW };
+
+    public:
+        ClientEncodings() = default;
+        ~ClientEncodings() = default;
+        
+        void setPriority(const std::vector<int> &);
+        bool isPresent(int) const;
+        int findPriorityFrom(std::initializer_list<int>) const;
+    };
+
     namespace RFB
     {
-        int serverSelectCompatibleEncoding(const std::vector<int> & clientEncodings);
+        int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
 
         /// ServerEncoder
-        class ServerEncoder : public ChannelListener, protected EncoderStream
+        class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip
         {
-            std::vector<int> clientEncodings;
+            ClientEncodings clientEncodings;
             std::string clientAuthName;
             std::string clientAuthDomain;
 
@@ -88,8 +103,11 @@ namespace LTSM
             }
 
             // ServerEncoder
-            virtual XcbFrameBuffer xcbFrameBuffer(const XCB::Region &) const = 0;
-            virtual std::list<std::string> serverDisabledEncodings(void) const = 0;
+            virtual XcbFrameBuffer serverFrameBuffer(const XCB::Region &) const = 0;
+            virtual std::forward_list<std::string> serverDisabledEncodings(void) const = 0;
+
+            virtual void serverScreenUpdateRequest(void /* full update */) = 0;
+            virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
             // network stream interface
             void sendFlush(void) override;
@@ -99,15 +117,19 @@ namespace LTSM
             size_t hasData(void) const override;
             uint8_t peekInt8(void) const override;
 
+            // channel listenner interface
+            void recvChannelSystem(const std::vector<uint8_t> &) override;
+
+            //
             std::string serverEncryptionInfo(void) const;
-            virtual void serverSelectEncodingsEvent(void) {}
 
             void setEncodingDebug(int v);
             void setEncodingThreads(int v);
+            void setEncodingOptions(const std::forward_list<std::string> &);
+
             bool isClientLtsmSupported(void) const;
             bool isClientVideoSupported(void) const;
             bool isClientSupportedEncoding(int) const;
-            bool isClientEncoding(int) const;
             bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;
 
@@ -123,15 +145,11 @@ namespace LTSM
             void sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
             void sendColourMap(int first);
             void sendBellEvent(void);
-            void sendCutTextEvent(const std::vector<uint8_t> &);
+            void sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext);
             void sendContinuousUpdates(bool enable);
             bool sendUpdateSafe(const XCB::Region &);
             void sendEncodingLtsmSupported(void);
-            void recvChannelSystem(const std::vector<uint8_t> &) override;
-            bool serverSide(void) const override
-            {
-                return true;
-            }
+            bool serverSide(void) const override { return true; }
 
             void recvPixelFormat(void);
             void recvSetEncodings(void);
@@ -161,35 +179,25 @@ namespace LTSM
             void sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
             void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
+            void sendEncodingLtsmData(const uint8_t*, size_t);
+            void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override final;
+
             void clientDisconnectedEvent(int display);
             void displayResizeEvent(const XCB::Size &);
 
-            int sendPixel(uint32_t pixel);
-            int sendCPixel(uint32_t pixel);
-            int sendRunLength(size_t length);
-
             std::pair<std::string, std::string> authInfo(void) const;
 
-            // ServerEncoder
-            virtual void recvPixelFormatEvent(const PixelFormat &, bool bigEndian) {}
-
-            virtual void recvSetEncodingsEvent(const std::vector<int> &) {}
-
-            virtual void recvKeyEvent(bool pressed, uint32_t keysym) {}
-
-            virtual void recvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {}
-
-            virtual void recvCutTextEvent(const std::vector<uint8_t> &) {}
-
-            virtual void recvFramebufferUpdateEvent(bool full, const XCB::Region &) {}
-
-            virtual void recvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) {}
-
-            virtual void recvSetDesktopSizeEvent(const std::vector<ScreenInfo> &) {}
-
-            virtual void sendFrameBufferUpdateEvent(const XCB::Region &) {}
-
-            virtual void sendLtsmEvent(uint8_t channel, const uint8_t*, size_t) override;
+            // server encoder events
+            virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }
+            virtual void serverRecvSetEncodingsEvent(const std::vector<int> &) { /* empty */ }
+            virtual void serverRecvKeyEvent(bool pressed, uint32_t keysym) { /* empty */ }
+            virtual void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) { /* empty */ }
+            virtual void serverRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
+            virtual void serverRecvFBUpdateEvent(bool full, const XCB::Region &) { /* empty */ }
+            virtual void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) { /* empty */ }
+            virtual void serverRecvDesktopSizeEvent(const std::vector<ScreenInfo> &) { /* empty */ }
+            virtual void serverSendFBUpdateEvent(const XCB::Region &) { /* empty */ }
+            virtual void serverEncodingSelectedEvent(void) { /* empty */ }
         };
     }
 }

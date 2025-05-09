@@ -21,6 +21,9 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <algorithm>
+
+#include "ltsm_tools.h"
 #include "ltsm_librfb.h"
 
 namespace LTSM
@@ -135,6 +138,9 @@ namespace LTSM
             case ENCODING_COMPRESS1:
                 return "ExtendedCompress1";
 
+            case ENCODING_EXT_CLIPBOARD:
+                return "ExtendedClipboard";
+
             case ENCODING_CONTINUOUS_UPDATES:
                 return "ExtendedContinuousUpdates";
 
@@ -153,10 +159,69 @@ namespace LTSM
             case ENCODING_LTSM_LZ4:
                 return "LTSM_LZ4";
 
+            case ENCODING_LTSM_TJPG:
+                return "LTSM_TJPG";
+
+            case ENCODING_LTSM_QOI:
+                return "LTSM_QOI";
+
             default:
                 break;
         }
 
         return "unknown";
+    }
+
+/*
+    bool RFB::isVideoEncoding(int type)
+    {
+        auto types = {
+            ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI,
+            ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4,
+
+            ENCODING_ZLIB, ENCODING_TIGHT, ENCODING_ZLIBHEX, ENCODING_TRLE, ENCODING_ZRLE,
+            ENCODING_RAW, ENCODING_COPYRECT, ENCODING_RRE, ENCODING_CORRE, ENCODING_HEXTILE
+        };
+
+        return std::any_of(types.begin(), types.end(), [=](auto & enc){ return enc == type; });
+    }
+*/
+    int RFB::encodingType(std::string_view name)
+    {
+        auto types = {
+                ENCODING_RAW, ENCODING_COPYRECT, ENCODING_RRE, ENCODING_CORRE, ENCODING_HEXTILE,
+                ENCODING_ZLIB, ENCODING_TIGHT, ENCODING_ZLIBHEX, ENCODING_TRLE, ENCODING_ZRLE,
+                ENCODING_DESKTOP_SIZE, ENCODING_EXT_DESKTOP_SIZE, ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
+                ENCODING_COMPRESS9, ENCODING_COMPRESS8, ENCODING_COMPRESS7, ENCODING_COMPRESS6, ENCODING_COMPRESS5, ENCODING_COMPRESS4, ENCODING_COMPRESS3, ENCODING_COMPRESS2, ENCODING_COMPRESS1,
+                ENCODING_EXT_CLIPBOARD, ENCODING_CONTINUOUS_UPDATES,
+                ENCODING_LTSM, ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI
+        };
+
+        for(auto & type: types)
+        {
+            if(Tools::lower(name) == Tools::lower(encodingName(type)))
+            {
+                return type;
+            }
+        }
+
+        return ENCODING_UNKNOWN;
+    }
+
+    std::string RFB::encodingOpts(int type)
+    {
+        switch(type)
+        {
+            case ENCODING_ZLIB:
+                return Tools::joinToString("--encoding ", Tools::lower(encodingName(type)), ",zlev:<[1],2,3,4,5,6,7,8,9>");
+
+            case ENCODING_LTSM_TJPG:
+                return Tools::joinToString("--encoding ", Tools::lower(encodingName(type)), ",qual:85,samp:<[420],422,440,444,gray,411>");
+
+            default:
+                break;
+        }
+
+        return "";
     }
 }

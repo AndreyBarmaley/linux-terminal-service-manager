@@ -19,9 +19,9 @@ struct Image
 {
     std::unique_ptr<FrameBuffer> fb;
 
-    Image(std::string_view file)
+    Image(std::filesystem::path file)
     {
-        std::unique_ptr<SDL_Surface, decltype(SDL_FreeSurface)*> sf{IMG_Load(file.data()), SDL_FreeSurface};
+        std::unique_ptr<SDL_Surface, decltype(SDL_FreeSurface)*> sf{IMG_Load(file.c_str()), SDL_FreeSurface};
 
         if(sf)
         {
@@ -31,7 +31,7 @@ struct Image
             fb->blitRegion(fb24, XCB::Region(0, 0, fb->width(), fb->height()), XCB::Point(0, 0));
         }
 
-        Application::info("%s: loading: %s", __FUNCTION__, file.data());
+        Application::info("%s: loading: %s", __FUNCTION__, file.c_str());
     }
 };
 
@@ -55,9 +55,9 @@ public:
         {
             for(auto const & dirEntry : std::filesystem::directory_iterator{imagesPath})
             {
-                jobs.emplace_back(std::thread([this, file = dirEntry.path().native()]()
+                jobs.emplace_back(std::thread([this, file = dirEntry.path()]()
                 {
-                    images.emplace_back(file);
+                    images.emplace_back(std::move(file));
                 }));
             }
         }

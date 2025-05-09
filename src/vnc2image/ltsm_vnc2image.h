@@ -49,18 +49,24 @@ namespace LTSM
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch,
-                                                const PixelFormat & pf) override;
+        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat & pf) override;
+        void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
+
+        uint16_t extClipboardLocalTypes(void) const override;
+        std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
+        void extClipboardRemoteTypesEvent(uint16_t type) override;
+        void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+        void extClipboardSendEvent(const std::vector<uint8_t> &) override;
 
         int startSocket(std::string_view host, int port) const;
 
     public:
         Vnc2Image(int argc, const char** argv);
 
-        void pixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
-        void fbUpdateEvent(void) override;
+        void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
+        void clientRecvFBUpdateEvent(void) override;
 
         int start(void) override;
     };

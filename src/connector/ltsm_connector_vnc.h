@@ -48,8 +48,7 @@ namespace LTSM
         {
             PixelFormat serverPf;
 
-            std::unordered_map<uint32_t, int>
-            keymap;
+            std::unordered_map<uint32_t, int>keymap;
 
             std::list<std::pair<std::string, size_t>> transfer;
             std::mutex lockTransfer;
@@ -67,8 +66,8 @@ namespace LTSM
         protected:
             // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
-            void xcbFrameBufferModify(FrameBuffer &) const override;
-            std::list<std::string> serverDisabledEncodings(void) const override;
+            void serverFrameBufferModifyEvent(FrameBuffer &) const override;
+            std::forward_list<std::string> serverDisabledEncodings(void) const override;
 
             // x11server
             bool xcbNoDamageOption(void) const override;
@@ -81,8 +80,8 @@ namespace LTSM
             RFB::SecurityInfo rfbSecurityInfo(void) const override;
             int rfbUserKeycode(uint32_t) const override;
 
-            void recvKeyEvent(bool pressed, uint32_t keysym) override;
-            void recvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
+            void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
+            void serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy) override;
 
             // dbus virtual signals
             void onLoginSuccess(const int32_t & display, const std::string & userName,
@@ -92,7 +91,7 @@ namespace LTSM
             void onSendBellSignal(const int32_t & display) override;
 
             // connector
-            void xcbAddDamage(const XCB::Region &) override;
+            void serverScreenUpdateRequest(const XCB::Region &) override;
 
             void onLoginFailure(const int32_t & display, const std::string & msg) override;
             void onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
@@ -108,7 +107,7 @@ namespace LTSM
             void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override;
 
             void serverHandshakeVersionEvent(void) override;
-            void serverSelectEncodingsEvent(void) override;
+            void serverEncodingSelectedEvent(void) override;
             void serverSecurityInitEvent(void) override;
             void serverConnectedEvent(void) override;
             void serverMainLoopEvent(void) override;

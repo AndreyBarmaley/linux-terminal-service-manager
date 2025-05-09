@@ -29,6 +29,7 @@
 #include <algorithm>
 
 #include "ltsm_application.h"
+#include "ltsm_tools.h"
 #include "librfb_server2.h"
 
 using namespace std::chrono_literals;
@@ -52,7 +53,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
@@ -65,7 +66,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
@@ -78,7 +79,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
@@ -90,7 +91,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return false;
@@ -104,7 +105,7 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
@@ -118,10 +119,15 @@ namespace LTSM
         }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
+    }
+
+    XCB::Size RFB::ServerEncoderBuf::displaySize(void) const
+    {
+        return socket->displaySize();
     }
 
     const std::vector<uint8_t> & RFB::ServerEncoderBuf::getBuffer(void) const
@@ -134,9 +140,10 @@ namespace LTSM
         bufData.clear();
     }
 
+/*
     bool RFB::ServerEncoderBuf::isUpdateProcessed(void) const
     {
-        return encoder && ! encoder->jobsEmpty();
+        return encoder;
     }
 
     void RFB::ServerEncoderBuf::waitUpdateProcess(void)
@@ -144,12 +151,13 @@ namespace LTSM
         while(isUpdateProcessed())
             std::this_thread::sleep_for(5ms);
     }
+*/
 
     void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb)
     {
         auto & reg = fb.region();
 
-        Application::debug("%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::App, "%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         std::scoped_lock guard{ sendLock };
 
@@ -166,8 +174,8 @@ namespace LTSM
 
     void RFB::ServerEncoderBuf::setEncodingDebug(int v)
     {
-        if(encoder)
-            encoder->setDebug(v);
+        //if(encoder)
+        //    encoder->setDebug(v);
     }
 
     void RFB::ServerEncoderBuf::setEncodingThreads(int threads)

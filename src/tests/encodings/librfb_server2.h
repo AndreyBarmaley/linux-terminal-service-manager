@@ -72,8 +72,10 @@ namespace LTSM
             size_t              hasData(void) const override;
             uint8_t             peekInt8(void) const override;
 
-            bool                isUpdateProcessed(void) const;
-            void                waitUpdateProcess(void);
+            XCB::Size           displaySize(void) const override;
+
+            //bool                isUpdateProcessed(void) const;
+            //void                waitUpdateProcess(void);
 
             void                recvPixelFormat(void);
             void                recvSetEncodings(void);

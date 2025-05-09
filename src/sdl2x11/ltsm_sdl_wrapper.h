@@ -129,7 +129,7 @@ namespace LTSM
         protected:
 
         public:
-            Window(std::string_view title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0,
+            Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0,
                    bool accel = true);
             ~Window();
 
@@ -164,7 +164,7 @@ namespace LTSM
 
             Texture createTexture(int width, int height, uint32_t format = TEXTURE_FMT) const;
 
-            GenericEvent poolEvent(void);
+            GenericEvent pollEvent(void);
             static int convertScanCodeToKeySym(SDL_Scancode);
 
             std::pair<int, int> scaleCoord(int posx, int posy) const;

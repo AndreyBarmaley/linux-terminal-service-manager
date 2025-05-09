@@ -31,6 +31,7 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
 #endif
 
 namespace LTSM

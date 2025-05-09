@@ -221,7 +221,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
     }
     else
     {
-        last.insert(last.end(), recv.begin(), recv.end());
+        std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
         last.clear();
@@ -240,7 +240,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto fuseCmd = sb.readIntLE16();
-            Application::debug("%s: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
+            Application::debug(DebugType::Fuse, "%s: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
 
             if(! fuseInit && fuseCmd != FuseOp::Init)
             {
@@ -348,7 +348,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb)
         replyWriteShareRootInfo(reply, shareRoot);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -392,13 +392,13 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
     }
     else
     {
-        Application::debug("%s: fd: %d", __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "%s: fd: %d", __FUNCTION__, fdh);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -423,13 +423,13 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
     }
     else
     {
-        Application::debug("%s: path: `%s'", __FUNCTION__, path);
+        Application::debug(DebugType::Fuse, "%s: path: `%s'", __FUNCTION__, path);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 */
@@ -475,13 +475,13 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb)
     }
     else
     {
-        Application::debug("%s: path: `%s', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
+        Application::debug(DebugType::Fuse, "%s: path: `%s', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -511,11 +511,11 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb)
     }
     else
     {
-        Application::debug("%s: fd: %" PRId32, __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "%s: fd: %" PRId32, __FUNCTION__, fdh);
         opens.remove(fdh);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }
 
@@ -546,7 +546,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
         reply.writeIntLE32(error);
         Application::error("%s: %s failed, error: %s, code: %d, offset: %u",
                            __FUNCTION__, "lseek", strerror(error), error, offset);
-        owner->sendLtsmEvent(cid, reply.rawbuf());
+        owner->sendLtsmChannelData(cid, reply.rawbuf());
         return true;
     }
 
@@ -566,7 +566,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     }
     else
     {
-        Application::debug("%s: request block size: %u, send block size: %u, offset: %u", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "%s: request block size: %u, send block size: %u, offset: %u", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size())
         {
@@ -579,6 +579,6 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
         reply.write(buf);
     }
 
-    owner->sendLtsmEvent(cid, reply.rawbuf());
+    owner->sendLtsmChannelData(cid, reply.rawbuf());
     return true;
 }

@@ -23,9 +23,13 @@
 #ifndef _LTSM_TOOLS_
 #define _LTSM_TOOLS_
 
+
 #include <sys/types.h>
+
+#ifdef __LINUX__
 #include <grp.h>
 #include <pwd.h>
+#endif
 
 #include <list>
 #include <chrono>
@@ -55,17 +59,24 @@
 #include "gnutls/gnutls.h"
 #endif
 
+#ifdef __MINGW64__
+    int getuid(void);
+    int getgid(void);
+    int getpid(void);
+#endif
+
 namespace LTSM
 {
     class ByteArray;
 
+#ifdef __LINUX__
     class UserInfo
     {
         struct passwd st = {};
         std::unique_ptr<char[]> buf;
 
     public:
-        explicit UserInfo(std::string_view name);
+        explicit UserInfo(const std::string & name);
         explicit UserInfo(uid_t uid);
 
         std::vector<gid_t> groups(void) const;
@@ -91,7 +102,7 @@ namespace LTSM
         std::unique_ptr<char[]> buf;
 
     public:
-        explicit GroupInfo(std::string_view name);
+        explicit GroupInfo(const std::string & name);
         explicit GroupInfo(gid_t gid);
 
         std::forward_list<std::string> members(void) const;
@@ -106,10 +117,33 @@ namespace LTSM
 
     namespace Tools
     {
-        bool binaryToFile(const void*, size_t len, std::string_view);
+        UserInfoPtr getUidInfo(uid_t uid);
+        UserInfoPtr getUserInfo(const std::string & user);
+
+        std::string getUserLogin(uid_t);
+        uid_t getUserUid(const std::string & user);
+
+        std::string getUserHome(const std::string & user);
+        std::forward_list<std::string> getSystemUsers(uid_t uidMin, uid_t uidMax);
+
+        GroupInfoPtr getGidInfo(gid_t gid);
+        GroupInfoPtr getGroupInfo(const std::string & group);
+        gid_t getGroupGid(const std::string & group);
+
+        std::string getHostname(void);
+        bool checkUnixSocket(const std::filesystem::path &);
+    }
+
+#endif
+
+    namespace Tools
+    {
+        uint32_t debugTypes(const std::list<std::string> &);
+
+        bool binaryToFile(const void*, size_t len, const std::filesystem::path &);
         std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
-        std::list<std::string> readDir(const std::string & path, bool recurse);
+        std::list<std::string> readDir(const std::filesystem::path &, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
         std::string prettyFuncName(const std::string &);
@@ -119,19 +153,6 @@ namespace LTSM
         std::vector<uint8_t> randomBytes(size_t bytesCount);
 
         std::string getTimeZone(void);
-
-        UserInfoPtr getUidInfo(uid_t uid);
-        UserInfoPtr getUserInfo(std::string_view user);
-        std::string getUserLogin(uid_t);
-        uid_t getUserUid(std::string_view user);
-        std::string getUserHome(std::string_view user);
-        std::forward_list<std::string> getSystemUsers(uid_t uidMin, uid_t uidMax);
-
-        GroupInfoPtr getGidInfo(gid_t gid);
-        GroupInfoPtr getGroupInfo(std::string_view group);
-        gid_t getGroupGid(std::string_view group);
-
-        std::string getHostname(void);
 
         std::vector<uint8_t> zlibCompress(const ByteArray &);
         std::vector<uint8_t> zlibUncompress(const ByteArray &, size_t real = 0);
@@ -235,8 +256,8 @@ namespace LTSM
         std::string join(const std::list<std::string> &, std::string_view sep = "");
         std::string join(const std::vector<std::string> &, std::string_view sep = "");
 
-        std::string lower(std::string);
-        std::string runcmd(std::string_view);
+        std::string lower(std::string_view);
+        std::string runcmd(const std::string &);
 
         std::string escaped(std::string_view, bool quote);
         std::string unescaped(std::string_view);
@@ -250,10 +271,13 @@ namespace LTSM
         uint32_t crc32b(const uint8_t* ptr, size_t size);
         uint32_t crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
-        bool checkUnixSocket(const std::filesystem::path &);
+        int maskShifted(uint32_t mask);
+        int maskCountBits(uint32_t mask);
+        uint32_t maskMaxValue(uint32_t mask);
+        std::vector<uint32_t> maskUnpackBits(uint32_t mask);
 
-        size_t maskShifted(size_t mask);
-        size_t maskMaxValue(uint32_t mask);
+        std::wstring string2wstring(std::string_view);
+        std::string wstring2string(const std::wstring &);
 
         template<typename Iterator>
         std::string buffer2hexstring(Iterator it1, Iterator it2, size_t width = 8, std::string_view sep = ",", bool prefix = true)

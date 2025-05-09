@@ -49,141 +49,12 @@
 #endif
 
 #include "ltsm_tools.h"
+#include "ltsm_xcb_types.h"
 
 namespace LTSM
 {
-    struct xcb_error : public std::runtime_error
-    {
-        explicit xcb_error(std::string_view what) : std::runtime_error(what.data()) {}
-    };
-
     namespace XCB
     {
-        struct Point
-        {
-            int16_t x, y;
-
-            Point() : x(-1), y(-1) {}
-
-            explicit Point(const xcb_point_t & pt) : x(pt.x), y(pt.y) {}
-
-            Point(int16_t px, int16_t py) : x(px), y(py) {}
-
-            virtual ~Point() = default;
-
-            virtual bool isValid(void) const { return 0 <= x && 0 <= y; }
-
-            xcb_point_t toXcbPoint(void) const { return xcb_point_t{x, y}; }
-
-            Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
-
-            Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
-
-            bool operator==(const Point & pt) const { return pt.x == x && pt.y == y; }
-
-            bool operator!=(const Point & pt) const { return pt.x != x || pt.y != y; }
-        };
-
-        struct Size
-        {
-            uint16_t width, height;
-
-            Size() : width(0), height(0) {}
-
-            Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
-
-            virtual ~Size() = default;
-
-            bool isEmpty(void) const { return width == 0 || height == 0; }
-
-            void reset(void) { width = 0; height = 0; }
-
-            bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
-
-            bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
-        };
-
-        struct PointIterator : Point
-        {
-            const Size limit;
-            PointIterator(int16_t px, int16_t py, const Size & sz) : Point(px, py), limit(sz) {}
-
-            PointIterator & operator++(void);
-            PointIterator & operator--(void);
-
-            bool isValid(void) const override { return Point::isValid() && x < limit.width && y < limit.height; }
-
-            bool isBeginLine(void) const;
-            bool isEndLine(void) const;
-            virtual void lineChanged(void) { /* default empty */ }
-        };
-
-        struct Region : public Point, public Size
-        {
-            Region() = default;
-
-            Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
-
-            explicit Region(const xcb_rectangle_t & rt) : Point(rt.x, rt.y), Size(rt.width, rt.height) {}
-
-            Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
-
-            const Point & topLeft(void) const { return *this; }
-
-            const Size & toSize(void) const { return *this; }
-
-            xcb_rectangle_t toXcbRect(void) const { return xcb_rectangle_t{x, y, width, height}; }
-
-            PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
-
-            bool operator== (const Region & rt) const { return rt.x == x && rt.y == y && rt.width == width && rt.height == height; }
-
-            bool operator!= (const Region & rt) const { return rt.x != x || rt.y != y || rt.width != width || rt.height != height; }
-
-            void reset(void);
-
-            void assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
-            void assign(const Region &);
-
-            void join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
-            void join(const Region &);
-
-            bool empty(void) const;
-            bool invalid(void) const;
-
-            Region intersected(const Region &) const;
-            Region align(size_t) const;
-
-            static bool intersects(const Region &, const Region &);
-            static bool intersection(const Region &, const Region &, Region* res);
-
-            std::list<Region> divideBlocks(const Size &) const;
-            std::list<Region> divideCounts(uint16_t cols, uint16_t rows) const;
-        };
-
-        Region operator- (const Region &, const Point &);
-        Region operator+ (const Region &, const Point &);
-
-        struct HasherRegion
-        {
-            size_t operator()(const Region & reg) const
-            {
-                return std::hash<uint64_t>()((static_cast<uint64_t>(reg.x) << 48) | (static_cast<uint64_t>(reg.y) << 32) |
-                                             (static_cast<uint64_t>(reg.width) << 16) | static_cast<uint64_t>(reg.height));
-            }
-        };
-
-        struct RegionPixel : std::pair<Region, uint32_t>
-        {
-            RegionPixel(const Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
-
-            RegionPixel() = default;
-
-            const uint32_t & pixel(void) const { return second; }
-
-            const Region & region(void) const { return first; }
-        };
-
         typedef std::shared_ptr<xcb_connection_t> ConnectionShared;
 
         struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
@@ -309,7 +180,7 @@ namespace LTSM
             size_t size(void) const override { return len; }
 
             PixmapSHM() = default;
-            PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, ShmIdShared sh, size_t sz)
+            PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, const ShmIdShared & sh, size_t sz)
                 : PixmapBase(rmask, gmask, bmask, bpp), shm(sh), len(sz) {}
         };
 
@@ -338,8 +209,6 @@ namespace LTSM
 
             CursorImage(ReplyCursor && rc) : ReplyCursor(std::move(rc)) {}
         };
-
-        enum class Module { SHM, DAMAGE, XFIXES, RANDR, TEST, XKB, SELECTION };
 
         union xkb_notify_event_t
         {
@@ -405,6 +274,9 @@ namespace LTSM
             SelectionIncrMode(xcb_window_t win, uint32_t sz, uint16_t seq) : requestor(win), size(sz), sequence(seq) {}
         };
 
+        // Module
+        enum class Module { SHM, DAMAGE, WINDAMAGE, XFIXES, WINFIXES, RANDR, TEST, XKB, SELECTION_COPY, SELECTION_PASTE };
+
         struct ModuleExtension
         {
             std::weak_ptr<xcb_connection_t> conn;
@@ -421,32 +293,6 @@ namespace LTSM
             bool isEventError(const GenericEvent &, uint16_t* opcode = nullptr) const;
         };
 
-        struct WindowDamageId
-        {
-            std::weak_ptr<xcb_connection_t> conn;
-            xcb_drawable_t win = 0;
-            xcb_damage_damage_t xid = 0;
-
-            WindowDamageId(const std::weak_ptr<xcb_connection_t> & ptr, const xcb_drawable_t & w, const xcb_damage_damage_t & v) : conn(ptr), win(w), xid(v) {}
-            ~WindowDamageId();
-
-            bool valid(void) const { return ! conn.expired() && 0 < xid; };
-
-            const xcb_damage_damage_t & id(void) const { return xid; };
-
-            bool addRegion(const xcb_xfixes_region_t &);
-            bool subtrackRegion(const xcb_xfixes_region_t &);
-        };
-
-        typedef std::unique_ptr<WindowDamageId> WindowDamageIdPtr;
-
-        struct ModuleDamage : ModuleExtension
-        {
-            explicit ModuleDamage(const ConnectionShared &);
-
-            WindowDamageIdPtr createDamage(xcb_drawable_t win, const xcb_damage_report_level_t &) const;
-        };
-
         struct FixesRegionId
         {
             std::weak_ptr<xcb_connection_t> conn;
@@ -454,10 +300,6 @@ namespace LTSM
 
             FixesRegionId(const std::weak_ptr<xcb_connection_t> & ptr, const xcb_xfixes_region_t & v) : conn(ptr), xid(v) {}
             ~FixesRegionId();
-
-            bool valid(void) const { return ! conn.expired() && 0 < xid; };
-
-            const xcb_xfixes_region_t & id(void) const { return xid; };
         };
 
         typedef std::unique_ptr<FixesRegionId> FixesRegionIdPtr;
@@ -474,71 +316,221 @@ namespace LTSM
 
             xcb_rectangle_t fetchRegion(const xcb_xfixes_region_t &) const;
             std::vector<xcb_rectangle_t> fetchRegions(const xcb_xfixes_region_t &) const;
+        };
+
+        struct ModuleWindowFixes : public ModuleFixes
+        {
+            xcb_window_t win = 0;
+
+            explicit ModuleWindowFixes(const ConnectionShared &, xcb_drawable_t win);
+            ~ModuleWindowFixes();
 
             CursorImage getCursorImage(void) const;
             std::string getCursorName(const xcb_cursor_t &) const;
         };
 
+        struct ModuleDamage : ModuleExtension
+        {
+            explicit ModuleDamage(const ConnectionShared &);
+        };
+
+        struct ModuleWindowDamage : public ModuleDamage
+        {
+            xcb_drawable_t win = 0;
+            xcb_damage_damage_t xid = 0;
+
+            explicit ModuleWindowDamage(const ConnectionShared &, xcb_drawable_t win);
+            ~ModuleWindowDamage();
+
+            bool addRegion(const xcb_rectangle_t &) const;
+            bool addRegion(const Region &) const;
+            bool addRegions(const xcb_rectangle_t* rects, size_t counts) const;
+
+            bool subtrackRegion(const xcb_rectangle_t &) const;
+            bool subtrackRegion(const Region &) const;
+        };
+
         struct ModuleTest : ModuleExtension
         {
-            explicit ModuleTest(const ConnectionShared &);
+            xcb_window_t screen = 0;
+            mutable std::array<xcb_keycode_t, 16> keycodes;
+
+            explicit ModuleTest(const ConnectionShared &, xcb_window_t win);
+            ~ModuleTest();
 
             bool fakeInputRaw(xcb_window_t, uint8_t type, uint8_t detail, int16_t posx, int16_t posy) const;
-            void fakeInputClickButton(xcb_window_t win, uint8_t button, const Point &) const;
+
+            void screenInputReset(void) const;
+            void screenInputKeycode(xcb_keycode_t, bool pressed) const;
+            void screenInputButton(uint8_t button, const Point &, bool pressed) const;
+            void screenInputButtonClick(uint8_t button, const Point &) const;
+            void screenInputMove(const Point &) const;
         };
 
-        struct ModuleSelection : ModuleExtension
+        /// SelectionSource interface
+        class SelectionSource
         {
-            xcb_window_t win = XCB_WINDOW_NONE;
+        public:
+            virtual std::vector<xcb_atom_t> selectionSourceTargets(void) const = 0;
 
-            std::vector<uint8_t> buf;
-            std::mutex lock;
+            virtual size_t selectionSourceSize(xcb_atom_t) const = 0;
+            virtual std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const = 0;
+            virtual bool selectionSourceReady(xcb_atom_t) const { return true; }
 
-            std::unique_ptr<SelectionIncrMode> incr;
-            xcb_atom_t atombuf = XCB_ATOM_NONE;
+            virtual void selectionSourceLock(xcb_atom_t) const {}
+            virtual void selectionSourceUnlock(xcb_atom_t) const {}
 
-            ModuleSelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t);
-            ~ModuleSelection();
-
-            bool sendNotifyTargets(const xcb_selection_request_event_t &);
-            bool sendNotifySelData(const xcb_selection_request_event_t &);
-
-            bool clearAction(const xcb_selection_clear_event_t*);
-            bool requestAction(const xcb_selection_request_event_t*);
-            bool fixesAction(const xcb_xfixes_selection_notify_event_t*);
-
-            void notifyIncrStart(const xcb_selection_notify_event_t &);
-            bool notifyIncrContinue(xcb_atom_t type);
-            bool notifyAction(const xcb_selection_notify_event_t*, xcb_atom_t, bool syncPrimaryClipboard);
-
-            bool setBuffer(const uint8_t* buf, size_t len, std::initializer_list<xcb_atom_t> atoms);
+            SelectionSource() = default;
+            virtual ~SelectionSource() = default;
         };
 
+        struct WindowRequest
+        {
+            xcb_selection_request_event_t ev;
+            size_t offset;
+
+            WindowRequest(const xcb_selection_request_event_t & r) : ev(r), offset(0) {}
+        };
+
+        class ModulePasteSelection : public ModuleExtension
+        {
+            const SelectionSource* source = nullptr;
+
+            // destinations
+            std::list<WindowRequest> requestsIncr;
+
+            std::string selectionName;
+
+            // selection type: clipboard, primary, etc
+            xcb_atom_t selectionType = XCB_ATOM_NONE;
+
+            // selection fake win source
+            xcb_window_t selectionWin = XCB_WINDOW_NONE;
+
+            // skip requestor win
+            xcb_window_t skipRequestorWin = XCB_WINDOW_NONE;
+
+            xcb_timestamp_t selectionTime = 0;
+
+        protected:
+            void discardRequestor(const ConnectionShared &, const xcb_selection_request_event_t &);
+            bool removeRequestors(xcb_window_t win);
+
+            void eventRequestDebug(const ConnectionShared &, const xcb_selection_request_event_t*, bool warn = false) const;
+            void sendNotifyEvent(const ConnectionShared &, const xcb_selection_request_event_t*, xcb_atom_t) const;
+
+            inline void sendNotifyDiscard(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const { sendNotifyEvent(ptr, ev, XCB_ATOM_NONE); }
+            inline void eventRequestWarning(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const { eventRequestDebug(ptr, ev, true); }
+
+        public:
+            ModulePasteSelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t = XCB_ATOM_NONE /* default: CLIPBOARD */);
+            ~ModulePasteSelection();
+
+            void setSelectionOwner(const SelectionSource &);
+
+            void destroyNotifyEvent(const xcb_destroy_notify_event_t*);
+            void propertyNotifyEvent(const xcb_property_notify_event_t*);
+            void selectionClearEvent(const xcb_selection_clear_event_t*);
+            void selectionRequestEvent(const xcb_selection_request_event_t*);
+
+            void setSkipRequestor(xcb_window_t win) { skipRequestorWin = win; }
+        };
+
+        /// SelectionRecipient interface
+        class SelectionRecipient
+        {
+        public:
+            virtual void selectionReceiveData(xcb_atom_t, const uint8_t* ptr, uint32_t len) const = 0;
+            virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const = 0;
+            virtual void selectionChangedEvent(void) const = 0;
+
+            SelectionRecipient() = default;
+            virtual ~SelectionRecipient() = default;
+        };
+
+        struct WindowSource
+        {
+            xcb_selection_notify_event_t ev;
+            std::vector<uint8_t> buf;
+
+            WindowSource(const xcb_selection_notify_event_t & r, size_t sz) : ev(r)
+            {
+                buf.reserve(sz);
+            }
+        };
+
+        class ModuleCopySelection : public ModuleExtension
+        {
+            const SelectionRecipient* recipient = nullptr;
+
+            // incr source
+            std::unique_ptr<WindowSource> sourceIncr;
+
+            std::string selectionName;
+
+            // selection type: clipboard, primary, etc
+            xcb_atom_t selectionType = XCB_ATOM_NONE;
+
+            xcb_atom_t selectionProp = XCB_ATOM_NONE;
+            xcb_atom_t selectionTrgt = XCB_ATOM_NONE;
+
+            // selection fake win source
+            xcb_window_t selectionWin = XCB_WINDOW_NONE;
+
+            // xfixes input win
+            xcb_window_t xfixesWin = XCB_WINDOW_NONE;
+
+        protected:
+            void eventNotifyDebug(const ConnectionShared &, const xcb_selection_notify_event_t*, bool warn = false) const;
+            inline void eventNotifyWarning(const ConnectionShared & ptr, const xcb_selection_notify_event_t* ev) const { eventNotifyDebug(ptr, ev, true); }
+
+            void xfixesSetSelectionOwnerEvent(const xcb_xfixes_selection_notify_event_t*);
+            void xfixesSelectionWindowDestroyEvent(const xcb_xfixes_selection_notify_event_t*);
+            void xfixesSelectionClientCloseEvent(const xcb_xfixes_selection_notify_event_t*);
+
+        public:
+            ModuleCopySelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t = XCB_ATOM_NONE /* default: CLIPBOARD */);
+            ~ModuleCopySelection();
+
+            void convertSelection(xcb_atom_t target, const SelectionRecipient &);
+
+            void propertyNotifyEvent(const xcb_property_notify_event_t*);
+
+            void selectionNotifyEvent(const xcb_selection_notify_event_t*);
+            void xfixesSelectionNotifyEvent(const xcb_xfixes_selection_notify_event_t*);
+
+            const xcb_window_t & selectionWindow(void) const { return selectionWin; }
+        };
+
+        /// ModuleRandr
         struct ModuleRandr : ModuleExtension
         {
-            explicit ModuleRandr(const ConnectionShared &);
+            xcb_window_t screen;
 
-            std::vector<xcb_randr_output_t> getOutputs(const xcb_screen_t &) const;
-            std::vector<xcb_randr_crtc_t> getCrtcs(const xcb_screen_t &) const;
+            explicit ModuleRandr(const ConnectionShared &, xcb_window_t);
+            ~ModuleRandr();
+
+            std::vector<xcb_randr_output_t> getOutputs(void) const;
+            std::vector<xcb_randr_crtc_t> getCrtcs(void) const;
             std::vector<xcb_randr_output_t> getCrtcOutputs(const xcb_randr_crtc_t &, RandrCrtcInfo* = nullptr) const;
-            std::vector<xcb_randr_mode_info_t> getModesInfo(const xcb_screen_t &) const;
+            std::vector<xcb_randr_mode_info_t> getModesInfo(void) const;
             std::vector<xcb_randr_mode_t> getOutputModes(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
             std::vector<xcb_randr_crtc_t> getOutputCrtcs(const xcb_randr_output_t &, RandrOutputInfo* = nullptr) const;
-            std::vector<xcb_randr_screen_size_t> getScreenSizes(const xcb_screen_t &, RandrScreenInfo* = nullptr) const;
+            std::vector<xcb_randr_screen_size_t> getScreenSizes(RandrScreenInfo* = nullptr) const;
 
             std::unique_ptr<RandrCrtcInfo> getCrtcInfo(const xcb_randr_crtc_t &) const;
             std::unique_ptr<RandrOutputInfo> getOutputInfo(const xcb_randr_output_t &) const;
-            std::unique_ptr<RandrScreenInfo> getScreenInfo(const xcb_screen_t &) const;
+            std::unique_ptr<RandrScreenInfo> getScreenInfo(void) const;
 
-            bool setScreenSizeCompat(const xcb_screen_t &, Size, uint16_t* sequence = nullptr) const;
+            bool setScreenSizeCompat(uint16_t width, uint16_t height, uint16_t* sequence = nullptr) const;
+            bool setScreenSize(uint16_t width, uint16_t height, uint16_t dpi = 96) const;
 
-            bool setScreenSize(const xcb_screen_t &, uint16_t width, uint16_t height, uint16_t dpi = 96) const;
-            xcb_randr_mode_t cvtCreateMode(const xcb_screen_t &, const Size &, int vertRef = 60) const;
+            xcb_randr_mode_t cvtCreateMode(const Size &, int vertRef = 60) const;
             bool destroyMode(const xcb_randr_mode_t &) const;
             bool addOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
             bool deleteOutputMode(const xcb_randr_output_t &, const xcb_randr_mode_t &) const;
-            bool crtcConnectOutputsMode(const xcb_screen_t &, const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &) const;
-            bool crtcDisconnect(const xcb_screen_t &, const xcb_randr_crtc_t &) const;
+            bool crtcConnectOutputsMode(const xcb_randr_crtc_t &, int16_t posx, int16_t posy, const std::vector<xcb_randr_output_t> &, const xcb_randr_mode_t &) const;
+            bool crtcDisconnect(const xcb_randr_crtc_t &) const;
         };
 
         struct ModuleShm : ModuleExtension
@@ -557,6 +549,7 @@ namespace LTSM
             int32_t devid = -1;
 
             explicit ModuleXkb(const ConnectionShared &);
+            ~ModuleXkb();
 
             bool resetMapState(void);
 
@@ -597,8 +590,7 @@ namespace LTSM
             /// exception: xcb_error
             Connector(int displayNum, const AuthCookie* = nullptr);
 
-            virtual bool displayConnect(int displayNum, const AuthCookie* = nullptr);
-
+            bool connectorDisplayConnect(int displayNum, const AuthCookie* = nullptr);
 
             size_t depthFromBpp(size_t bitsPerPixel) const;
             size_t bppFromDepth(size_t depth) const;
@@ -618,6 +610,7 @@ namespace LTSM
             std::string getAtomName(xcb_atom_t) const;
 
             size_t getMaxRequest(void) const;
+            void bell(uint8_t percent) const;
 
             bool setWindowGeometry(xcb_window_t win, const Region &);
             std::list<xcb_window_t> getWindowChilds(xcb_window_t win) const;
@@ -641,29 +634,29 @@ namespace LTSM
             std::list<std::string> getPropertyStringList(xcb_window_t win, xcb_atom_t prop) const;
         };
 
+        enum InitModules { All = 0xFFFF, Shm = 0x0001, Damage = 0x0002, XFixes = 0x0004, RandR = 0x0008, Test = 0x0010, Xkb = 0x0020, SelCopy = 0x0040, SelPaste = 0x0080 };
+
         class RootDisplay : public Connector
         {
         protected:
             std::unique_ptr<ModuleShm> _modShm;
-            std::unique_ptr<ModuleDamage> _modDamage;
-            std::unique_ptr<ModuleFixes> _modFixes;
+            std::unique_ptr<ModuleWindowFixes> _modWinFixes;
+            std::unique_ptr<ModuleWindowDamage> _modWinDamage;
             std::unique_ptr<ModuleTest> _modTest;
             std::unique_ptr<ModuleRandr> _modRandr;
             std::unique_ptr<ModuleXkb> _modXkb;
-            std::unique_ptr<ModuleSelection> _modSelection;
+            std::unique_ptr<ModulePasteSelection> _modSelectionPaste;
+            std::unique_ptr<ModuleCopySelection> _modSelectionCopy;
 
             xcb_screen_t* _screen = nullptr;
             xcb_format_t* _format = nullptr;
             xcb_visualtype_t* _visual = nullptr;
 
             mutable std::shared_mutex _lockGeometry;
-            std::unique_ptr<WindowDamageId> _damage;
-
-            xcb_keycode_t _minKeycode = 0;
-            xcb_keycode_t _maxKeycode = 0;
 
         protected:
 
+            const ModuleExtension* getExtensionConst(const Module &) const;
             bool createFullScreenDamage(void);
 
             bool isDamageNotify(const GenericEvent &) const;
@@ -673,19 +666,11 @@ namespace LTSM
             bool isRandrNotify(const GenericEvent &, const xcb_randr_notify_t &) const;
             bool isXkbNotify(const GenericEvent & ev, int notify) const;
 
-            bool selectionFixesAction(xcb_xfixes_selection_notify_event_t*);
-            bool selectionClearAction(xcb_selection_clear_event_t*);
-            bool selectionRequestAction(xcb_selection_request_event_t*);
-            bool selectionNotifyAction(xcb_selection_notify_event_t*, bool syncPrimaryClipboard = false);
-
-
         public:
             RootDisplay() = default;
-            ~RootDisplay();
-
             RootDisplay(int displayNum, const AuthCookie* = nullptr);
 
-            bool displayConnect(int displayNum, const AuthCookie* = nullptr) override;
+            bool displayConnect(int displayNum, int modules = InitModules::All, const AuthCookie* = nullptr);
 
             uint16_t width(void) const;
             uint16_t height(void) const;
@@ -697,88 +682,42 @@ namespace LTSM
             const xcb_visualtype_t* visual(void) const;
             xcb_window_t root(void) const;
 
-            void reconnect(int displayNum, const AuthCookie* = nullptr);
+            void displayReconnect(int displayNum, int modules = InitModules::All, const AuthCookie* = nullptr);
+
+            ModuleExtension* getExtension(const Module &);
             const ModuleExtension* getExtension(const Module &) const;
+            void extensionDisable(const Module &);
 
             bool setRandrScreenSize(const Size &, uint16_t* sequence = nullptr);
             bool setRandrMonitors(const std::vector<Region> & monitors);
 
-            virtual void displayConnectedEvent(void) { /*default empty */ }
-
-            virtual void xfixesSelectionChangedEvent(void) { /*default empty */ }
-
-            virtual void xfixesCursorChangedEvent(void) { /*default empty */ }
-
-            virtual void damageRegionEvent(const Region &) { /*default empty */ }
-
-            virtual void randrScreenSetSizeEvent(const Size &) { /*default empty */ }
-
-            virtual void randrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) { /*default empty */ }
-
-            virtual void xkbGroupChangedEvent(int) { /*default empty */ }
-
-            virtual void clipboardChangedEvent(const std::vector<uint8_t> &) { /*default empty */ }
+            // root display events
+            virtual void xcbDisplayConnectedEvent(void) { /*default empty */ }
+            virtual void xcbFixesCursorChangedEvent(void) { /*default empty */ }
+            virtual void xcbDamageNotifyEvent(const xcb_rectangle_t &) { /*default empty */ }
+            virtual void xcbRandrScreenSetSizeEvent(const Size &) { /*default empty */ }
+            virtual void xcbRandrScreenChangedEvent(const Size &, const xcb_randr_notify_event_t &) { /*default empty */ }
+            virtual void xcbXkbGroupChangedEvent(int) { /*default empty */ }
 
             const xcb_visualtype_t* visual(xcb_visualid_t) const;
 
-            void fillRegion(int r, int g, int b, const Region &);
-            void fillBackground(int r, int g, int b);
-
-            bool setClipboard(const uint8_t*, size_t);
+            void fillRegion(uint8_t r, uint8_t g, uint8_t b, const Region &);
+            void fillBackground(uint8_t r, uint8_t g, uint8_t b);
 
             PixmapInfoReply copyRootImageRegion(const Region &, ShmIdShared = nullptr) const;
 
-            void resetInputs(void);
-            void fakeInputKeycode(xcb_keycode_t, bool pressed) const;
-            void fakeInputKeysym(xcb_keysym_t, bool pressed);
-            void fakeInputButton(int button, const Point &) const;
-
             xcb_keycode_t keysymToKeycode(xcb_keysym_t) const;
+            xcb_keycode_t keysymToKeycodeAuto(xcb_keysym_t) const;
             xcb_keycode_t keysymGroupToKeycode(xcb_keysym_t, int group) const;
-            std::pair<xcb_keycode_t, int>
-            keysymToKeycodeGroup(xcb_keysym_t keysym) const;
-
-            bool damageAdd(const xcb_rectangle_t*, size_t);
-            bool damageAdd(const Region &);
-            bool damageSubtrack(const Region &);
-            void damageDisable(void);
-
-            GenericEvent poolEvent(void);
-            Size updateGeometrySize(void) const;
-        };
-
-        class XkbClient
-        {
-            std::unique_ptr<xcb_connection_t, decltype(xcb_disconnect)*> conn{ nullptr, xcb_disconnect };
-            std::unique_ptr<xkb_context, decltype(xkb_context_unref)*> xkbctx{ nullptr, xkb_context_unref };
-            std::unique_ptr<xkb_keymap, decltype(xkb_keymap_unref)*> xkbmap{ nullptr, xkb_keymap_unref };
-            std::unique_ptr<xkb_state, decltype(xkb_state_unref)*> xkbstate{ nullptr, xkb_state_unref };
-
-            const xcb_query_extension_reply_t* xkbext = nullptr;
-            int32_t xkbdevid = -1;
-            xcb_keycode_t minKeycode = 0;
-            xcb_keycode_t maxKeycode = 0;
-            std::atomic<bool> error{false};
-
-        public:
-            XkbClient();
-
-            int xkbGroup(void) const;
-            std::vector<std::string> xkbNames(void) const;
-            std::string atomName(xcb_atom_t) const;
-
-            bool xcbEventProcessing(void);
-            bool xcbError(void) const;
-
-            std::pair<xcb_keycode_t, int>
-            keysymToKeycodeGroup(xcb_keysym_t) const;
+            std::pair<xcb_keycode_t, int> keysymToKeycodeGroup(xcb_keysym_t keysym) const;
             xcb_keysym_t keycodeGroupToKeysym(xcb_keycode_t, int group, bool shifted = false) const;
 
-            void bell(uint8_t percent) const;
+            bool rootDamageAddRegion(const Region &);
+            bool rootDamageAddRegions(const xcb_rectangle_t*, size_t);
+            bool rootDamageSubtrack(const Region &);
 
-            virtual void xkbStateChangeEvent(int) { /*default empty */ }
-
-            virtual void xkbStateResetEvent(void) { /*default empty */ }
+            GenericEvent pollEvent(void);
+            Size updateGeometrySize(void) const;
         };
     }
 }

@@ -323,6 +323,7 @@ namespace LTSM
 
         explicit StreamBuf(size_t reserve = 256);
         explicit StreamBuf(const std::vector<uint8_t> &);
+        explicit StreamBuf(std::vector<uint8_t> &&) noexcept;
 
         StreamBuf(const StreamBuf &);
         StreamBuf & operator=(const StreamBuf &);
@@ -341,6 +342,7 @@ namespace LTSM
         void skip(size_t) const override;
 
         size_t tell(void) const;
+        const uint8_t* data(void) const;
 
         const BinaryBuf & rawbuf(void) const;
         BinaryBuf & rawbuf(void);
