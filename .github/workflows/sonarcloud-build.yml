@@ -33,7 +33,7 @@ jobs:
            libxcb-xfixes0-dev libxcb-shm0-dev libxcb-randr0-dev libxcb-damage0-dev libxcb-keysyms1-dev \
            libxcb-xkb-dev libxkbcommon-x11-dev libsdl2-image-dev qtbase5-dev libsdbus-c++-bin libsdbus-c++-dev \
            libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
-           liblz4-dev libxkbfile-dev \
+           liblz4-dev libturbojpeg-dev libxkbfile-dev \
            libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev
 
       - name: Set up JDK 11
