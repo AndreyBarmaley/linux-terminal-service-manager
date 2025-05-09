@@ -67,7 +67,15 @@ public:
 
         if(! images.empty())
         {
-            auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE, RFB::ENCODING_ZLIB, RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+            auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE,
+#ifdef LTSM_ENCODING_FFMPEG
+                RFB::ENCODING_FFMPEG_H264,
+#endif
+#ifdef LTSM_ENCODING
+                RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG,
+#endif
+                RFB::ENCODING_ZLIB, RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+
             auto & pf = images.front().fb->pixelFormat();
 
             srv = std::make_unique<RFB::ServerEncoderBuf>(pf);

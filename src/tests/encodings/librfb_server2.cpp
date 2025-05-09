@@ -31,6 +31,9 @@
 #include "ltsm_application.h"
 #include "ltsm_tools.h"
 #include "librfb_server2.h"
+#ifdef LTSM_ENCODING_FFMPEG
+#include "librfb_ffmpeg.h"
+#endif
 
 using namespace std::chrono_literals;
 
@@ -224,6 +227,28 @@ namespace LTSM
                 encoder = std::make_unique<EncodingTRLE>(true);
                 return true;
 
+#ifdef LTSM_ENCODING_FFMPEG
+        
+            case RFB::ENCODING_FFMPEG_H264:
+            case RFB::ENCODING_FFMPEG_VP8:
+            case RFB::ENCODING_FFMPEG_AV1:
+                encoder = std::make_unique<EncodingFFmpeg>(type);
+                return true;
+#endif
+#ifdef LTSM_ENCODING
+
+            case RFB::ENCODING_LTSM_QOI:
+                encoder = std::make_unique<EncodingQOI>();
+                return true;
+
+            case RFB::ENCODING_LTSM_LZ4:
+                encoder = std::make_unique<EncodingLZ4>();
+                return true;
+
+            case RFB::ENCODING_LTSM_TJPG:
+                encoder = std::make_unique<EncodingTJPG>();
+                return true;
+#endif
             default:
                 break;
         }

@@ -27,6 +27,7 @@ foreach(DIR IN ITEMS encodings x11enc)
     target_sources(LTSM_test_${DIR} PRIVATE ${SOURCELIST}
         ${CMAKE_SOURCE_DIR}/src/librfb/ltsm_librfb.cpp
         ${CMAKE_SOURCE_DIR}/src/librfb/librfb_encodings.cpp
+        ${CMAKE_SOURCE_DIR}/src/librfb/librfb_ffmpeg.cpp
         ${CMAKE_SOURCE_DIR}/src/channels/channel_system.cpp)
 
     find_package(GnuTLS REQUIRED)
