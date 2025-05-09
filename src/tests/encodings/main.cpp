@@ -67,6 +67,7 @@ public:
 
         if(! images.empty())
         {
+/*
             auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE,
 #ifdef LTSM_ENCODING_FFMPEG
                 RFB::ENCODING_FFMPEG_H264,
@@ -75,10 +76,13 @@ public:
                 RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG,
 #endif
                 RFB::ENCODING_ZLIB, RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+*/
+            auto encodings = {
+                RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG };
 
             auto & pf = images.front().fb->pixelFormat();
 
-            srv = std::make_unique<RFB::ServerEncoderBuf>(pf);
+            srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
             Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
                 __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());

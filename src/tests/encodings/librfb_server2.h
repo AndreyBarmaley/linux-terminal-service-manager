@@ -44,6 +44,7 @@ namespace LTSM
             std::unique_ptr<EncoderWrapper> socket;
             std::unique_ptr<EncodingBase> encoder;
 
+            XCB::Size           dsz;
             PixelFormat         clientPf, serverPf;
             std::mutex          sendLock;
 
@@ -87,7 +88,7 @@ namespace LTSM
             void                recvSetDesktopSize(void);
 
         public:
-            ServerEncoderBuf(const PixelFormat &);
+            ServerEncoderBuf(const FrameBuffer*);
 
             const PixelFormat & clientFormat(void) const override { return clientPf; }
             const PixelFormat & serverFormat(void) const override { return serverPf; }

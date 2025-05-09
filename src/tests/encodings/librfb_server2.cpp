@@ -40,8 +40,10 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     // ServerEncoder
-    RFB::ServerEncoderBuf::ServerEncoderBuf(const PixelFormat & pf) : clientPf(pf), serverPf(pf)
+    RFB::ServerEncoderBuf::ServerEncoderBuf(const FrameBuffer* fb)
+        : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat())
     {
+        LTSM::Application::info("%s: dsz: %u, %u", NS_FuncName.c_str(), dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
         socket.reset(new EncoderWrapper(&bufData, this));
 
@@ -130,7 +132,7 @@ namespace LTSM
 
     XCB::Size RFB::ServerEncoderBuf::displaySize(void) const
     {
-        return socket->displaySize();
+        return dsz;
     }
 
     const std::vector<uint8_t> & RFB::ServerEncoderBuf::getBuffer(void) const
