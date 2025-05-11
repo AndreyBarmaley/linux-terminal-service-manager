@@ -47,11 +47,11 @@ namespace LTSM
     int facility = LOG_USER;
 
     // Application
+    std::mutex Application::logging;
     FILE* Application::fdlog = stderr;
     DebugTarget Application::target = DebugTarget::Console;
     DebugLevel Application::level = DebugLevel::Info;
     uint32_t Application::types = DebugType::All;
-    std::mutex Application::logging;
 
     void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
     {

@@ -152,7 +152,9 @@ namespace LTSM
 
         Color color(int pixel) const;
         uint32_t pixel(const Color & col) const;
+
         uint32_t convertFrom(const PixelFormat & pf, uint32_t pixel) const;
+        uint32_t convertTo(uint32_t pixel, const PixelFormat & pf) const;
 
         const uint8_t & bitsPerPixel(void) const { return bitsPixel; }
 

@@ -44,6 +44,7 @@ namespace LTSM
         {
         public:
             int sendHeader(int type, const XCB::Region &);
+            int sendPixelRaw(uint32_t pixel, uint8_t bpp, bool be);
             int sendPixel(uint32_t pixel);
             int sendCPixel(uint32_t pixel);
             int sendRunLength(uint32_t length);
@@ -261,7 +262,7 @@ namespace LTSM
         {
         protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
-            BinaryBuf encodeBGRx(const uint8_t* ptr, const XCB::Size & rsz, uint32_t pitch) const;
+            BinaryBuf encodeBGRx(const FrameBuffer &, const XCB::Region &, const PixelFormat &) const;
 
         public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;

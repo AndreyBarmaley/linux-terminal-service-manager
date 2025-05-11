@@ -129,9 +129,10 @@ namespace LTSM
             void serverRecvKeyEvent(bool pressed, uint32_t keysym) override;
             void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) override;
             void serverRecvCutTextEvent(std::vector<uint8_t> &&) override;
-            void serverRecvFBUpdateEvent(bool full, const XCB::Region &) override;
+            void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) override;
             void serverSendFBUpdateEvent(const XCB::Region &) override;
             void serverRecvDesktopSizeEvent(const std::vector<RFB::ScreenInfo> &) override;
+            void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region & reg) override;
         };
     }
 }

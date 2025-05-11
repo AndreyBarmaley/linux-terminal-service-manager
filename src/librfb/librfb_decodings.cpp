@@ -664,12 +664,12 @@ namespace LTSM
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
 
-        auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
+        auto pitch = cli.clientFormat().bytePerPixel() * reg.width;
         auto rawsz = pitch * reg.height;
 
         auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli)
         {
-            auto bb = this->decodeBGRx(buf, reg.toSize(), pitch);
+            auto bb = this->decodeBGRx(buf, reg.toSize(), cli->serverFormat(), pitch);
             cli->updateRawPixels(bb.data(), reg, pitch, cli->serverFormat());
         };
 
@@ -709,34 +709,28 @@ namespace LTSM
             MASK2 = 0xC0
         };
 
-        // return [b, g, r]
-        std::tuple<uint8_t, uint8_t, uint8_t> unpackBGRx(const uint32_t & px)
+        inline uint32_t packBGRx(const Color & col, const PixelFormat & pf)
         {
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            return std::make_tuple( static_cast<uint8_t>((px >> 24) & 0xFF),
-                static_cast<uint8_t>((px >> 16) & 0xFF), static_cast<uint8_t>((px >> 8) & 0xFF) );
-#else
-            return std::make_tuple( static_cast<uint8_t>(px & 0xFF),
-                static_cast<uint8_t>((px >> 8) & 0xFF), static_cast<uint8_t>((px >> 16) & 0xFF) );
-#endif
+            return (static_cast<uint32_t>(col.b) << pf.bshift()) |
+                    (static_cast<uint32_t>(col.g) << pf.gshift()) | (static_cast<uint32_t>(col.r) << pf.rshift());
         }
 
-        uint32_t packBGRx(uint8_t b, uint8_t g, uint8_t r)
+        inline Color unpackBGRx(uint32_t pixel, const PixelFormat & pf)
         {
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            return (static_cast<uint32_t>(b) << 24) | (static_cast<uint32_t>(g) << 16) | (static_cast<uint32_t>(r) << 8);
-#else
-            return (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) | static_cast<uint32_t>(b);
-#endif
+            Color col;
+            col.r = (pixel & pf.rmask()) >> pf.rshift();
+            col.g = (pixel & pf.gmask()) >> pf.gshift();
+            col.b = (pixel & pf.bmask()) >> pf.bshift();
+            return col;
         }
 
-        inline uint8_t hashIndex64RGB(const uint8_t & pr, const uint8_t & pg, const uint8_t & pb)
+        inline uint8_t hashIndex64RGB(const Color & col)
         {
-            return (pr * 3 + pg * 5 + pb * 7) % 64;
+            return (col.r * 3 + col.g * 5 + col.b * 7) % 64;
         }
     }
 
-    BinaryBuf RFB::DecodingQOI::decodeBGRx(const std::vector<uint8_t> & buf, const XCB::Size & rsz, uint32_t pitch) const
+    BinaryBuf RFB::DecodingQOI::decodeBGRx(const std::vector<uint8_t> & buf, const XCB::Size & rsz, const PixelFormat & clientPf, uint32_t pitch) const
     {
         std::array<int64_t, 64> hashes;
         hashes.fill(-1);
@@ -746,20 +740,16 @@ namespace LTSM
 
         StreamBufRef sb(buf.data(), buf.size());
         BinaryBuf res(rsz.height * pitch, 0);
+        FrameBuffer fb(res.data(), XCB::Region{0,0,rsz.width,rsz.height}, clientPf, pitch);
 
-        for(int py = 0; py < rsz.height; ++py)
+        for(int16_t py = 0; py < rsz.height; ++py)
         {
-            uint8_t* row = res.data() + py * pitch;
-
-            for(int px = 0; px < rsz.width; ++px)
+            for(int16_t px = 0; px < rsz.width; ++px)
             {
-                uint8_t* ppixel = row + px * 4;
-                uint32_t & pixel = *reinterpret_cast<uint32_t*>(ppixel);
-
                 if(run)
                 {
                     run--;
-                    pixel = prevPixel;
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
                     continue;
                 }
 
@@ -773,12 +763,14 @@ namespace LTSM
 
                 if(type == QOI::Tag::RGB)
                 {
-                    auto pr = sb.readInt8();
-                    auto pg = sb.readInt8();
-                    auto pb = sb.readInt8();
+                    Color col;
+                    col.r = sb.readInt8();
+                    col.g = sb.readInt8();
+                    col.b = sb.readInt8();
 
-                    prevPixel = pixel = QOI::packBGRx(pb, pg, pr);
-                    hashes[QOI::hashIndex64RGB(pr, pg, pb)] = prevPixel;
+                    prevPixel = QOI::packBGRx(col, clientPf);
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
+                    hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;
                 }
 
@@ -796,20 +788,22 @@ namespace LTSM
                         throw rfb_error(NS_FuncName);
                     }
 
-                    prevPixel = pixel = hashes[type];
+                    prevPixel = hashes[type];
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
                     continue;
                 }
 
                 if((type & QOI::Tag::MASK2) == QOI::Tag::DIFF)
                 {
-                    auto [pb, pg, pr] = QOI::unpackBGRx(prevPixel);
+                    auto col = QOI::unpackBGRx(prevPixel, clientPf);
 
-                    pr += ((type >> 4) & 0x03) - 2;
-                    pg += ((type >> 2) & 0x03) - 2;
-                    pb += ( type & 0x03) - 2;
+                    col.r += ((type >> 4) & 0x03) - 2;
+                    col.g += ((type >> 2) & 0x03) - 2;
+                    col.b += ( type & 0x03) - 2;
 
-                    prevPixel = pixel = QOI::packBGRx(pb, pg, pr);
-                    hashes[QOI::hashIndex64RGB(pr, pg, pb)] = prevPixel;
+                    prevPixel = QOI::packBGRx(col, clientPf);
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
+                    hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;
                 }
 
@@ -818,21 +812,22 @@ namespace LTSM
                     auto lm = sb.readInt8();
                     int8_t vg = (type & 0x3f) - 32;
 
-                    auto [pb, pg, pr] = QOI::unpackBGRx(prevPixel);
+                    auto col = QOI::unpackBGRx(prevPixel, clientPf);
 
-                    pr += vg - 8 + ((lm >> 4) & 0x0f);
-                    pg += vg;
-                    pb += vg - 8 + (lm & 0x0f);
+                    col.r += vg - 8 + ((lm >> 4) & 0x0f);
+                    col.g += vg;
+                    col.b += vg - 8 + (lm & 0x0f);
 
-                    prevPixel = pixel = QOI::packBGRx(pb, pg, pr);
-                    hashes[QOI::hashIndex64RGB(pr, pg, pb)] = prevPixel;
+                    prevPixel = QOI::packBGRx(col, clientPf);
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
+                    hashes[QOI::hashIndex64RGB(col)] = prevPixel;
                     continue;
                 }
 
                 if((type & QOI::Tag::MASK2) == QOI::Tag::RUN)
                 {
                     run = type & 0x3f;
-                    pixel = prevPixel;
+                    fb.setPixel(XCB::Point{px,py}, prevPixel);
                     continue;
                 }
                 else

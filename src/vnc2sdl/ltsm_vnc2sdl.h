@@ -109,12 +109,14 @@ namespace LTSM
         bool audioEnable = false;
         bool pcscEnable = false;
         bool extclip = false;
+        bool fixedWindow = false;
 
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
         void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
+        void updateRawPixels3(SDL_Surface* sfframe, const XCB::Region & wrt);
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
@@ -125,6 +127,7 @@ namespace LTSM
         int startSocket(std::string_view host, int port) const;
         void sendMouseState(void);
         void exitEvent(void);
+        void windowSizeChangedEvent(int, int);
 
         json_plain clientOptions(void) const;
         json_plain clientEnvironments(void) const;

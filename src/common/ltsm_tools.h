@@ -198,7 +198,7 @@ namespace LTSM
 
         struct StreamBitsUnpack : StreamBits
         {
-            StreamBitsUnpack(const std::vector<uint8_t> &, size_t counts, size_t field);
+            StreamBitsUnpack(std::vector<uint8_t> &&, size_t counts, size_t field);
 
             bool popBit(void);
             int popValue(size_t field);

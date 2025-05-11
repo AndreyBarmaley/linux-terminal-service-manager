@@ -277,7 +277,7 @@ namespace LTSM
             std::list<std::thread> jobs;
 
         protected:
-            BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, uint32_t pitch) const;
+            BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, const PixelFormat &, uint32_t pitch) const;
 
         public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;

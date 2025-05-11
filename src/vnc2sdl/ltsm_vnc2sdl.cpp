@@ -55,7 +55,7 @@ namespace LTSM
                   "usage: " << prog <<
                   ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug [<types>]] [--trace] [--syslog] "
                   <<
-                  "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>]" <<
+                  "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--fixed]" <<
                   "[--notls] [--noltsm]" <<
 #ifdef LTSM_WITH_GSSAPI
                   "[--kerberos <" << krb5def << ">] " <<
@@ -101,6 +101,7 @@ namespace LTSM
                   "    --nodamage (skip X11 damage events)" << std::endl <<
                   "    --framerate <fps>" << std::endl <<
                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
+                  "    --fixed (not resizable window)" << std::endl <<
                   "    --extclip (extclip support)" << std::endl <<
                   "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
@@ -263,6 +264,10 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--fullscreen"))
             {
                 fullscreen = true;
+            }
+            else if(0 == std::strcmp(argv[it], "--fixed"))
+            {
+                fixedWindow = true;
             }
             else if(0 == std::strcmp(argv[it], "--nodamage"))
             {
@@ -899,14 +904,26 @@ namespace LTSM
                 {
                     window->renderPresent();
                 }
-
-                if(SDL_WINDOWEVENT_FOCUS_GAINED == ev.window()->event)
+                else if(SDL_WINDOWEVENT_FOCUS_GAINED == ev.window()->event)
                 {
                     focusLost = false;
                 }
                 else if(SDL_WINDOWEVENT_FOCUS_LOST == ev.window()->event)
                 {
                     focusLost = true;
+                }
+                else if(SDL_WINDOWEVENT_RESIZED == ev.window()->event)
+                {
+                    Application::info("%s: event resized: [%" PRId32 "x%" PRId32 "]",
+                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
+//                    Application::debug(DebugType::Sdl, "%s: resized window: [%" PRId32 "x%" PRId32 "]",
+//                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
+                }
+                else if(SDL_WINDOWEVENT_SIZE_CHANGED == ev.window()->event)
+                {
+                    Application::info("%s: size changed: [%" PRId32 "x%" PRId32 "]",
+                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
+                    windowSizeChangedEvent(ev.window()->data1, ev.window()->data2);
                 }
 
                 break;
@@ -1001,8 +1018,12 @@ namespace LTSM
 
                     if(fullscreen)
                     {
-                        window.reset(new SDL::Window("LTSM_client", width, height,
-                                                     0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP, accelerated));
+                        int flags = SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+                        if(! fixedWindow)
+                            flags |= SDL_WINDOW_RESIZABLE;
+
+                        window.reset(new SDL::Window("LTSM_client", width, height, 0, 0, flags, accelerated));
                     }
                     else
                     {
@@ -1195,13 +1216,28 @@ namespace LTSM
                                   uint32_t pitch, const PixelFormat & pf)
     {
         uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
-        if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
+
+        if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN)
         {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_MasksToPixelFormatEnum",
-                               SDL_GetError());
+            return updateRawPixels2(data, wrt, pf.bitsPerPixel(), pitch, sdlFormat);
+        }
+
+        // lock part
+        const std::scoped_lock guard{ renderLock };
+
+        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfframe{
+            SDL_CreateRGBSurfaceFrom((void*) data, wrt.width, wrt.height,
+                                                   pf.bitsPerPixel(), pitch, pf.rmask(), pf.gmask(), pf.bmask(), pf.amask()),
+            SDL_FreeSurface};
+
+        if(! sfframe)
+        {
+            Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                                   "SDL_CreateRGBSurfaceFrom", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
-        updateRawPixels2(data, wrt, pf.bitsPerPixel(), pitch, sdlFormat);
+
+        updateRawPixels3(sfframe.get(), wrt);
     }
 
     void Vnc2SDL::updateRawPixels2(const void* data, const XCB::Region & wrt, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
@@ -1221,6 +1257,11 @@ namespace LTSM
             throw sdl_error(NS_FuncName);
         }
 
+        updateRawPixels3(sfframe.get(), wrt);
+    }
+
+    void Vnc2SDL::updateRawPixels3(SDL_Surface* sfframe, const XCB::Region & wrt)
+    {
         if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
         {
             sfback.reset(SDL_CreateRGBSurface(0, windowSize.width, windowSize.height,
@@ -1236,7 +1277,7 @@ namespace LTSM
 
         SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
 
-        if(0 > SDL_BlitSurface(sfframe.get(), nullptr, sfback.get(), & dstrt))
+        if(0 > SDL_BlitSurface(sfframe, nullptr, sfback.get(), & dstrt))
         {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_BlitSurface",
                                    SDL_GetError());
@@ -1304,11 +1345,13 @@ namespace LTSM
                 return;
             }
 
+            // pixels data as client format
             Application::debug(DebugType::App, "%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
                                ", %" PRIu16 "], sdl format: %s",
                                __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
-                      reg.height, clientPf.bitsPerPixel(), reg.width* clientPf.bytePerPixel(),
+                      reg.height, clientPf.bitsPerPixel(), reg.width * clientPf.bytePerPixel(),
                       sdlFormat);
 
             if(! sf)
@@ -1513,6 +1556,14 @@ namespace LTSM
         }
 
         return true;
+    }
+
+    void Vnc2SDL::windowSizeChangedEvent(int width, int height)
+    {
+        if(0 < width && 0 < height)
+        {
+            sendSetDesktopSize(XCB::Size(width, height));
+        }
     }
 }
 

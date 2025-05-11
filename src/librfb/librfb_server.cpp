@@ -604,7 +604,7 @@ namespace LTSM
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::info("%s: bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
+        Application::notice("%s: server pf - bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
                           PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
                           __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) BigEndian,
                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
@@ -772,7 +772,7 @@ namespace LTSM
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("%s: bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
+        Application::notice("%s: client pf - bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
                             ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
                             __FUNCTION__, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
@@ -923,8 +923,7 @@ namespace LTSM
         clientRegion.height = recvIntBE16();
         Application::debug(DebugType::Rfb, "%s: request update, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
-        bool fullUpdate = incremental == 0;
-        serverRecvFBUpdateEvent(fullUpdate, clientRegion);
+        serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
 
     void RFB::ServerEncoder::recvKeyCode(void)
@@ -988,7 +987,6 @@ namespace LTSM
         uint16_t regh = recvIntBE16();
         Application::info("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
                           regy, regw, regh, enable);
-        continueUpdatesSupport = true;
         continueUpdatesProcessed = enable;
         serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
     }
@@ -1141,14 +1139,9 @@ namespace LTSM
         return tls ? tls->sessionDescription() : "none";
     }
 
-    bool RFB::ServerEncoder::isContinueUpdatesSupport(void) const
-    {
-        return continueUpdatesSupport;
-    }
-
     bool RFB::ServerEncoder::isContinueUpdatesProcessed(void) const
     {
-        return continueUpdatesSupport && continueUpdatesProcessed;
+        return continueUpdatesProcessed;
     }
 
     bool RFB::ServerEncoder::isClientSupportedEncoding(int enc) const
@@ -1344,6 +1337,13 @@ namespace LTSM
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+
+        Tools::StreamBitsPack bitmask;
+
+        const uint32_t clientAMask = ~(clientFormat().rmask() | clientFormat().gmask() | clientFormat().bmask());
+        const PixelFormat clientFormatAlpha(clientFormat().bitsPerPixel(),
+            clientFormat().rmask(), clientFormat().gmask(), clientFormat().bmask(), clientAMask);
+
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.1
         sendInt8(RFB::SERVER_FB_UPDATE);
@@ -1358,22 +1358,26 @@ namespace LTSM
         sendIntBE16(reg.height);
         // region type
         sendIntBE32(RFB::ENCODING_RICH_CURSOR);
-        Tools::StreamBitsPack bitmask;
 
         for(int oy = 0; oy < reg.height; ++oy)
         {
             for(int ox = 0; ox < reg.width; ++ox)
             {
                 auto pixel = fb.pixel(XCB::Point(ox, oy));
-                sendPixel(pixel);
-                bitmask.pushBit(fb.pixelFormat().alpha(pixel));
+                auto pixel2 = fb.pixelFormat().convertTo(pixel, clientFormatAlpha);
+                // part1: send pixels buf
+                sendPixelRaw(pixel2, clientFormat().bytePerPixel(), clientIsBigEndian());
+                bitmask.pushBit(fb.pixelFormat().alpha(pixel) == fb.pixelFormat().amax());
             }
 
             bitmask.pushAlign();
         }
 
-        const std::vector<uint8_t> & bitmaskBuf = bitmask.toVector();
+        // The bitmask consists of left-to-right, top-to-bottom scanlines,
+        // where each scanline is padded to a whole number of bytes floor((width + 7) / 8
+        // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#cursor-pseudo-encoding
         size_t bitmaskSize = std::floor((reg.width + 7) / 8) * reg.height;
+        const std::vector<uint8_t> & bitmaskBuf = bitmask.toVector();
 
         if(bitmaskSize != bitmaskBuf.size())
         {
@@ -1382,6 +1386,7 @@ namespace LTSM
             throw rfb_error(NS_FuncName);
         }
 
+        // part2: send bitmask buf
         sendData(bitmaskBuf);
         sendFlush();
     }

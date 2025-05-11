@@ -54,36 +54,36 @@ namespace LTSM
         return 12;
     }
 
-    int RFB::EncoderStream::sendPixel(uint32_t pixel)
+    int RFB::EncoderStream::sendPixelRaw(uint32_t pixel, uint8_t bpp, bool be)
     {
-        switch(clientFormat().bytePerPixel())
+        switch(bpp)
         {
             case 4:
-                if(clientIsBigEndian())
+                if(be)
                 {
-                    sendIntBE32(clientFormat().convertFrom(serverFormat(), pixel));
+                    sendIntBE32(pixel);
                 }
                 else
                 {
-                    sendIntLE32(clientFormat().convertFrom(serverFormat(), pixel));
+                    sendIntLE32(pixel);
                 }
 
                 return 4;
 
             case 2:
-                if(clientIsBigEndian())
+                if(be)
                 {
-                    sendIntBE16(clientFormat().convertFrom(serverFormat(), pixel));
+                    sendIntBE16(pixel);
                 }
                 else
                 {
-                    sendIntLE16(clientFormat().convertFrom(serverFormat(), pixel));
+                    sendIntLE16(pixel);
                 }
 
                 return 2;
 
             case 1:
-                sendInt8(clientFormat().convertFrom(serverFormat(), pixel));
+                sendInt8(pixel);
                 return 1;
 
             default:
@@ -92,6 +92,11 @@ namespace LTSM
         }
 
         throw rfb_error(NS_FuncName);
+    }
+
+    int RFB::EncoderStream::sendPixel(uint32_t pixel)
+    {
+        return sendPixelRaw(clientFormat().convertFrom(serverFormat(), pixel), clientFormat().bytePerPixel(), clientIsBigEndian());
     }
 
     int RFB::EncoderStream::sendCPixel(uint32_t pixel)
@@ -1442,7 +1447,7 @@ namespace LTSM
     RFB::EncodingRet RFB::EncodingQOI::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId)
     {
-        BinaryBuf bb = encodeBGRx(fb.pitchData(reg.y) + reg.x * fb.bytePerPixel(), reg.toSize(), fb.pitchSize());
+        BinaryBuf bb = encodeBGRx(fb, reg, st->clientFormat());
         return std::make_pair(reg + top, std::move(bb));
     }
 
@@ -1458,27 +1463,15 @@ namespace LTSM
             RGBA = 0xFF
         };
 
-        // return [b, g, r]
-        std::tuple<uint8_t, uint8_t, uint8_t> unpackBGRx(const uint32_t & px)
+        inline uint8_t hashIndex64RGB(const Color & col)
         {
-#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-            return std::make_tuple( static_cast<uint8_t>((px >> 24) & 0xFF), 
-                static_cast<uint8_t>((px >> 16) & 0xFF), static_cast<uint8_t>((px >> 8) & 0xFF) );
-#else
-            return std::make_tuple( static_cast<uint8_t>(px & 0xFF),
-                static_cast<uint8_t>((px >> 8) & 0xFF), static_cast<uint8_t>((px >> 16) & 0xFF) );
-#endif
-        }
-
-        inline uint8_t hashIndex64RGB(const uint8_t & pr, const uint8_t & pg, const uint8_t & pb)
-        {
-            return (pr * 3 + pg * 5 + pb * 7) % 64;
+            return (col.r * 3 + col.g * 5 + col.b * 7) % 64;
         }
     }
 
-    BinaryBuf RFB::EncodingQOI::encodeBGRx(const uint8_t* ptr, const XCB::Size & rsz, uint32_t pitch) const
+    BinaryBuf RFB::EncodingQOI::encodeBGRx(const FrameBuffer & fb, const XCB::Region & reg, const PixelFormat & clientPf) const
     {
-        StreamBuf sb(rsz.height * rsz.width * 8 / 3);
+        StreamBuf sb(reg.height * reg.width * 8 / 3);
 
         std::array<int64_t, 64> hashes;
         hashes.fill(-1);
@@ -1486,23 +1479,19 @@ namespace LTSM
         int64_t prevPixel = -1;
         std::uint8_t run = 0;
 
-        const uint8_t* ppixelLast = ptr + (rsz.height - 1) * pitch + (rsz.width - 1) * 4;
-
-        for(int py = 0; py < rsz.height; ++py)
+        for(int16_t py = 0; py < reg.height; ++py)
         {
-            const uint8_t* row = ptr + py * pitch;
-
-            for(int px = 0; px < rsz.width; ++px)
+            for(int16_t px = 0; px < reg.width; ++px)
             {
-                const uint8_t* ppixel = row + px * 4;
-                const uint32_t & pixel = *reinterpret_cast<const uint32_t*>(ppixel);
+                const bool pixelLast = (py == reg.height - 1) && (px == reg.width - 1);
+                const uint32_t pixel = clientPf.pixel(fb.color(reg.topLeft() + XCB::Point{px, py}));
 
                 // QOI::Tag::RUN
                 if(pixel == prevPixel)
                 {
                     run++;
-                    
-                    if(run == 62 || ppixel == ppixelLast)
+
+                    if(run == 62 || pixelLast)
                     {
                         sb.writeInt8(QOI::Tag::RUN | (run - 1));
                         run = 0;
@@ -1517,10 +1506,10 @@ namespace LTSM
                     run = 0;
                 }
 
-                auto [ pb, pg, pr ] = QOI::unpackBGRx(pixel);
+                auto col = clientPf.color(pixel);
 
                 // QOI::Tag::INDEX
-                const uint8_t index = QOI::hashIndex64RGB(pr, pg, pb);
+                const uint8_t index = QOI::hashIndex64RGB(col);
 
                 if(hashes[index] == pixel)
                 {
@@ -1534,18 +1523,18 @@ namespace LTSM
                 if(prevPixel < 0)
                 {
                     sb.writeInt8(QOI::Tag::RGB);
-                    sb.writeInt8(pr);
-                    sb.writeInt8(pg);
-                    sb.writeInt8(pb);
+                    sb.writeInt8(col.r);
+                    sb.writeInt8(col.g);
+                    sb.writeInt8(col.b);
                     prevPixel = pixel;
                     continue;
                 }
 
-                auto [ ppb, ppg, ppr ] = QOI::unpackBGRx(prevPixel);
+                auto pcol = clientPf.color(prevPixel);
 
-                const int8_t vr = pr - ppr;
-                const int8_t vg = pg - ppg;
-                const int8_t vb = pb - ppb;
+                const int8_t vr = col.r - pcol.r;
+                const int8_t vg = col.g - pcol.g;
+                const int8_t vb = col.b - pcol.b;
 
                 // QOI::Tag::DIFF
                 if(vr > static_cast<int8_t>(-3) && vr < static_cast<int8_t>(2) &&
@@ -1573,9 +1562,9 @@ namespace LTSM
 
                 // QOI::Tag::RGB
                 sb.writeInt8(QOI::Tag::RGB);
-                sb.writeInt8(pr);
-                sb.writeInt8(pg);
-                sb.writeInt8(pb);
+                sb.writeInt8(col.r);
+                sb.writeInt8(col.g);
+                sb.writeInt8(col.b);
 
                 prevPixel = pixel;
             }
@@ -1591,5 +1580,6 @@ namespace LTSM
 
         return sb.rawbuf();
     }
+
 #endif
 }

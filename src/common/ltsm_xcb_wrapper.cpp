@@ -2055,6 +2055,7 @@ namespace LTSM
 
         if(ev->requestor == skipRequestorWin)
         {
+            Application::debug(DebugType::Xcb, "%s: skip requestor: 0x%08" PRIx32, __FUNCTION__, skipRequestorWin);
             sendNotifyDiscard(ptr, ev);
             return;
         }

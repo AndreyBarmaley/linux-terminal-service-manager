@@ -348,7 +348,7 @@ namespace LTSM
 
     void RFB::X11Server::serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian)
     {
-        if(serverFormat() != clientFormat())
+        if(! clientFormat().compare(serverFormat(), true))
         {
             Application::warning("%s: client/server format not optimal", __FUNCTION__);
         }
@@ -655,7 +655,7 @@ namespace LTSM
         }
     }
 
-    void RFB::X11Server::serverRecvFBUpdateEvent(bool fullUpdateReq, const XCB::Region & region)
+    void RFB::X11Server::serverRecvFBUpdateEvent(bool incremental, const XCB::Region & region)
     {
         if(! xcbAllowMessages())
         {
@@ -663,15 +663,18 @@ namespace LTSM
             return;
         }
 
-        if(fullUpdateReq)
+        const std::scoped_lock guard{ serverLock };
+        clientRegion = region;
+
+        if(! incremental)
         {
             fullscreenUpdateReq = true;
         }
-
-        if(region != clientRegion)
+        else if(isContinueUpdatesProcessed())
         {
-            fullscreenUpdateReq = true;
-            clientRegion = region;
+            // skipped FramebufferUpdateRequest
+            // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#enablecontinuousupdates
+            clientRegion.reset();
         }
     }
 
@@ -722,6 +725,7 @@ namespace LTSM
                     sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::OutOfResources,
                                               XCB::RootDisplay::size());
                     displayResizeNegotiation = false;
+                    displayResizeProcessed = false;
                     randrSequence = 0;
                 }
             }).detach();
@@ -740,10 +744,16 @@ namespace LTSM
                 size_t argbSize = reply->width * reply->height;
                 size_t dataSize = replyCursor.size();
 
+                Application::debug(X11Srv, "%s: data lenth: %u", __FUNCTION__, dataSize);
+
                 if(dataSize == argbSize)
                 {
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+                    auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, BGRA32);
+#else
                     auto cursorFB = FrameBuffer(reinterpret_cast<uint8_t*>(ptr), cursorRegion, ARGB32);
+#endif
                     sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 }
             }
@@ -798,5 +808,11 @@ namespace LTSM
         serverFrameBufferModifyEvent(fb);
 
         return XcbFrameBuffer{std::move(pixmapReply), std::move(fb)};
+    }
+
+    void RFB::X11Server::serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region & reg)
+    {
+        const std::scoped_lock guard{ serverLock };
+        clientRegion = reg;
     }
 }

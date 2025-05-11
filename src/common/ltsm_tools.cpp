@@ -1165,7 +1165,7 @@ namespace LTSM
     }
 
     // StreamBitsUnpack
-    Tools::StreamBitsUnpack::StreamBitsUnpack(const std::vector<uint8_t> & v, size_t counts, size_t field)
+    Tools::StreamBitsUnpack::StreamBitsUnpack(std::vector<uint8_t> && v, size_t counts, size_t field)
     {
         // check size
         size_t bits = field * counts;
@@ -1179,7 +1179,7 @@ namespace LTSM
             throw std::out_of_range(NS_FuncName);
         }
 
-        vecbuf.assign(v.begin(), v.end());
+        vecbuf.swap(v);
         bitpos = (len << 3) - bits;
     }
 

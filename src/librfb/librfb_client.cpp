@@ -440,7 +440,7 @@ namespace LTSM
                            serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
 
         // check server format
-        switch(serverPf.bitsPerPixel())
+        switch(bpp)
         {
             case 32:
             case 16:
@@ -448,7 +448,7 @@ namespace LTSM
                 break;
 
             default:
-                Application::error("%s: unknown pixel format, bpp: %" PRIu8, __FUNCTION__, serverPf.bitsPerPixel());
+                Application::error("%s: unknown pixel format, bpp: %d, depth: %d", __FUNCTION__, bpp, depth);
                 return false;
         }
 
@@ -1013,8 +1013,10 @@ namespace LTSM
     {
         Application::debug(DebugType::Rfb, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
-        auto buf = recvData(reg.width* reg.height* serverPf.bytePerPixel());
+        auto buf = recvData(reg.width * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
+
+        Application::trace(DebugType::Rfb, "%s: bufsz: %u, masksz: %u", __FUNCTION__, buf.size(), mask.size());
         clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
     }
 

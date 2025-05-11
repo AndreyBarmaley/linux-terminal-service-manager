@@ -85,7 +85,6 @@ namespace LTSM
             bool clientVideoSupported = false;
             bool clientTrueColor = true;
             bool clientBigEndian = false;
-            bool continueUpdatesSupport = false;
             bool continueUpdatesProcessed = false;
 
         protected:
@@ -130,7 +129,6 @@ namespace LTSM
             bool isClientLtsmSupported(void) const;
             bool isClientVideoSupported(void) const;
             bool isClientSupportedEncoding(int) const;
-            bool isContinueUpdatesSupport(void) const;
             bool isContinueUpdatesProcessed(void) const;
 
             bool isUpdateProcessed(void) const;
@@ -193,7 +191,7 @@ namespace LTSM
             virtual void serverRecvKeyEvent(bool pressed, uint32_t keysym) { /* empty */ }
             virtual void serverRecvPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) { /* empty */ }
             virtual void serverRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
-            virtual void serverRecvFBUpdateEvent(bool full, const XCB::Region &) { /* empty */ }
+            virtual void serverRecvFBUpdateEvent(bool incremental, const XCB::Region &) { /* empty */ }
             virtual void serverRecvSetContinuousUpdatesEvent(bool enable, const XCB::Region &) { /* empty */ }
             virtual void serverRecvDesktopSizeEvent(const std::vector<ScreenInfo> &) { /* empty */ }
             virtual void serverSendFBUpdateEvent(const XCB::Region &) { /* empty */ }

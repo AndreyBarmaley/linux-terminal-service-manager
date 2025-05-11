@@ -101,11 +101,18 @@ namespace LTSM
         uint32_t r = col.r;
         uint32_t g = col.g;
         uint32_t b = col.b;
-        a = (a * alphaMax) >> 8;
+
         r = (r * redMax) >> 8;
         g = (g * greenMax) >> 8;
         b = (b * blueMax) >> 8;
-        return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
+
+        if(alphaMax)
+        {
+            a = (a * alphaMax) >> 8;
+            return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
+        }
+
+        return (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
     uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
@@ -113,18 +120,41 @@ namespace LTSM
         return max1 ? (col1 * max2) / max1 : 0;
     }
 
-    uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
+    uint32_t convertPixelFromTo(uint32_t pixel, const PixelFormat & pf1, const PixelFormat & pf2)
     {
-        if(pf != *this)
+        if(pf2.compare(pf1, true))
         {
-            int r = pf.redMax == redMax ? pf.red(pixel) : convertMax(pf.red(pixel), pf.redMax, redMax);
-            int g = pf.greenMax == greenMax ? pf.green(pixel) : convertMax(pf.green(pixel), pf.greenMax, greenMax);
-            int b = pf.blueMax == blueMax ? pf.blue(pixel) : convertMax(pf.blue(pixel), pf.blueMax, blueMax);
-            int a = pf.alphaMax == alphaMax ? pf.alpha(pixel) : convertMax(pf.alpha(pixel), pf.alphaMax, alphaMax);
-            return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
+            if(pf2.amax() == pf1.amax() && pf2.ashift() == pf1.ashift())
+                return pixel;
+
+            if(0 == pf2.amax() && 0 != pf1.amax())
+            {
+                uint32_t amask = static_cast<uint32_t>(pf1.amax()) << pf1.ashift();
+                return ~amask & pixel;
+            }
+
+            if(0 != pf2.amax() && 0 == pf1.amax())
+            {
+                uint32_t amask = static_cast<uint32_t>(pf2.amax()) << pf2.ashift();
+                return amask | pixel;
+            }
         }
 
-        return pixel;
+        uint32_t r = pf1.rmax() == pf2.rmax() ? pf1.red(pixel) : convertMax(pf1.red(pixel), pf1.rmax(), pf2.rmax());
+        uint32_t g = pf1.gmax() == pf2.gmax() ? pf1.green(pixel) : convertMax(pf1.green(pixel), pf1.gmax(), pf2.gmax());
+        uint32_t b = pf1.bmax() == pf2.bmax() ? pf1.blue(pixel) : convertMax(pf1.blue(pixel), pf1.bmax(), pf2.bmax());
+        uint32_t a = pf1.amax() == pf2.amax() ? pf1.alpha(pixel) : convertMax(pf1.alpha(pixel), pf1.amax(), pf2.amax());
+        return (a << pf2.ashift()) | (r << pf2.rshift()) | (g << pf2.gshift()) | (b << pf2.bshift());
+    }
+
+    uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
+    {
+        return convertPixelFromTo(pixel, pf, *this);
+    }
+
+    uint32_t PixelFormat::convertTo(uint32_t pixel, const PixelFormat & pf) const
+    {
+        return convertPixelFromTo(pixel, *this, pf);
     }
 
     fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1)
