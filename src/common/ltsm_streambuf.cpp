@@ -225,7 +225,7 @@ namespace LTSM
     /* MemoryStream */
     bool MemoryStream::bigendian(void) const
     {
-        return BigEndian;
+        return platformBigEndian();
     }
 
     uint16_t MemoryStream::readInt16(void) const

@@ -680,7 +680,7 @@ namespace LTSM
         auto & pf = clientFormat();
         Application::debug(DebugType::Rfb, "%s: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
                            ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                           __FUNCTION__, pf.bitsPerPixel(), (int) BigEndian,
+                           __FUNCTION__, pf.bitsPerPixel(), (int) platformBigEndian(),
                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         std::scoped_lock guard{ sendLock };
         // send pixel format
@@ -688,7 +688,7 @@ namespace LTSM
         sendZero(3); // padding
         sendInt8(pf.bitsPerPixel());
         sendInt8(24); // depth
-        sendInt8(BigEndian);
+        sendInt8(platformBigEndian());
         sendInt8(1); // trueColor
         sendIntBE16(pf.rmax());
         sendIntBE16(pf.gmax());
@@ -844,18 +844,23 @@ namespace LTSM
                     decoder = std::make_unique<DecodingZlib>();
                     break;
 #ifdef LTSM_DECODING
-
+ #ifdef LTSM_DECODING_QOI
                 case ENCODING_LTSM_QOI:
                     decoder = std::make_unique<DecodingQOI>();
                     break;
+ #endif
 
+ #ifdef LTSM_DECODING_LZ4
                 case ENCODING_LTSM_LZ4:
                     decoder = std::make_unique<DecodingLZ4>();
                     break;
+ #endif
 
+ #ifdef LTSM_DECODING_TJPG
                 case ENCODING_LTSM_TJPG:
                     decoder = std::make_unique<DecodingTJPG>();
                     break;
+ #endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 
@@ -907,6 +912,10 @@ namespace LTSM
                 case ENCODING_LAST_RECT:
                     recvDecodingLastRect(reg);
                     numRects = 0;
+                    break;
+
+                case ENCODING_LTSM_CURSOR:
+                    recvDecodingLtsmCursor(reg);
                     break;
 
                 case ENCODING_RICH_CURSOR:
@@ -1007,6 +1016,33 @@ namespace LTSM
     {
         Application::debug(DebugType::Rfb, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
+    }
+
+    void RFB::ClientDecoder::recvDecodingLtsmCursor(const XCB::Region & reg)
+    {
+        Application::debug(DebugType::Rfb, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+                           reg.y, reg.width, reg.height);
+
+        auto cursorId = recvIntBE32();
+        if(auto rawsz = recvIntBE32())
+        {
+            auto zipsz = recvIntBE32();
+            if(zipsz)
+            {
+                const BinaryBuf zip(recvData(zipsz));
+                auto buf = Tools::zlibUncompress(zip, rawsz);
+                clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
+            }
+            else
+            {
+                auto buf = recvData(rawsz);
+                clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
+            }
+        }
+        else
+        {
+            clientRecvLtsmCursorEvent(reg, cursorId, {});
+        }
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg)

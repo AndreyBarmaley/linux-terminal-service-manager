@@ -222,7 +222,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
-                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
                 ns->sendPixel(pix);
             }
         }
@@ -858,7 +858,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
-                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
                 auto index = pal.findColorIndex(pix);
                 assertm(0 <= index, "palette color not found");
                 sb.pushValue(index, field);
@@ -951,7 +951,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * fb.bytePerPixel());
-                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+                auto pix = FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
                 st->sendCPixel(pix);
             }
         }
@@ -1340,7 +1340,17 @@ namespace LTSM
         unsigned char* jpegBuf = bb.data();
         int ret = 0;
 
-        if(fb.width() == reg.width)
+        if(fb.pixelFormat().bitsPerPixel() != 24)
+        {
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+            auto fb2 = fb.copyRegionFormat(reg, BGRX32);
+#else
+            auto fb2 = fb.copyRegionFormat(reg, RGBX32);
+#endif
+            ret = tjCompress2(jpeg.get(), fb2.pitchData(0), reg.width, fb2.pitchSize(), reg.height, pixFmt,
+                              & jpegBuf, & jpegSize, jpegSamp, jpegQuality, TJFLAG_FASTDCT|TJFLAG_NOREALLOC);
+        }
+        else if(fb.width() == reg.width)
         {
             ret = tjCompress2(jpeg.get(), fb.pitchData(reg.y), reg.width, fb.pitchSize(), reg.height, pixFmt,
                               & jpegBuf, & jpegSize, jpegSamp, jpegQuality, TJFLAG_FASTDCT|TJFLAG_NOREALLOC);

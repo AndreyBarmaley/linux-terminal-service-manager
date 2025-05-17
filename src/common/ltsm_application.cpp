@@ -29,7 +29,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(__MINGW32__)
 #define LOG_USER        (1<<3)  /* random user-level messages */
 #define LOG_LOCAL0      (16<<3) /* reserved for local use */
 #define LOG_LOCAL1      (17<<3) /* reserved for local use */

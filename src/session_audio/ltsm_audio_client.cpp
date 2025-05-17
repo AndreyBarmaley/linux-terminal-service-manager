@@ -31,6 +31,14 @@
 #include "ltsm_channels.h"
 #include "ltsm_application.h"
 
+#ifdef LTSM_WITH_PAYBACK_OPENAL
+ #include "ltsm_audio_openal.h"
+#endif
+
+#ifdef LTSM_WITH_PAYBACK_PULSE
+ #include "ltsm_audio_pulse.h"
+#endif
+
 namespace LTSM
 {
     namespace Channel
@@ -189,7 +197,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     {
         auto type = sb.readIntLE16();
         auto channels = sb.readIntLE16();
-        auto samplePerSec = sb.readIntLE32();
+        auto samplePerSec = sb.readIntLE32(); // 44100, 22050, other
         auto bitsPerSample = sb.readIntLE16();
         formats.emplace_front(AudioFormat{ .type = type, .channels = channels, .samplePerSec = samplePerSec, .bitsPerSample = bitsPerSample });
         numEnc--;
@@ -253,37 +261,29 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
         return false;
     }
 
+#ifdef LTSM_WITH_PAYBACK_OPENAL
     try
     {
-        pa_sample_format fmt = PA_SAMPLE_INVALID;
+        player = std::make_unique<OpenAL::Playback>(*format, 3 /* buffer sec, and autoplay */);
+    }
+    catch(const std::exception &)
+    {
+        error.assign("openal failed");
+    }
+#endif
 
-        switch(format->bitsPerSample)
-        {
-            case 16:
-                fmt = PA_SAMPLE_S16LE;
-                break;
-
-            case 24:
-                fmt = PA_SAMPLE_S24LE;
-                break;
-
-            case 32:
-                fmt = PA_SAMPLE_S32LE;
-                break;
-
-            default:
-                break;
-        }
-
-        pulse = std::make_unique<PulseAudio::Playback>("LTSM_client", "LTSM Audio Input", fmt, format->samplePerSec,
-                format->channels);
+#ifdef LTSM_WITH_PAYBACK_PULSE
+    try
+    {
+        player = std::make_unique<PulseAudio::Playback>("LTSM_client", "LTSM Audio Input", *format);
     }
     catch(const std::exception &)
     {
         error.assign("pulseaudio failed");
     }
+#endif
 
-    if(! pulse)
+    if(! player)
     {
         reply.writeIntLE16(error.size());
         reply.write(error);
@@ -311,7 +311,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "%s: data size: %u", __FUNCTION__, len);
     std::vector<uint8_t> buf(len, 0);
-    pulse->streamWrite(buf.data(), buf.size());
+    player->streamWrite(buf.data(), buf.size());
 }
 
 void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
@@ -333,12 +333,12 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
     {
         if(decoder->decode(sb.data(), len))
         {
-            pulse->streamWrite(decoder->data(), decoder->size());
+            player->streamWrite(decoder->data(), decoder->size());
         }
     }
     else
     {
-        pulse->streamWrite(sb.data(), len);
+        player->streamWrite(sb.data(), len);
     }
 
     sb.skip(len);

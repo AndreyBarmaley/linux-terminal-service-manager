@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2025 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -21,57 +21,48 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_AUDIO_
-#define _LTSM_AUDIO_
+#ifndef _LTSM_AUDIO_OPENAL_
+#define _LTSM_AUDIO_OPENAL_
 
-#define LTSM_AUDIO2SESSION_VERSION 20240304
+#include <memory>
 
-#include <cstdint>
-#include <stdexcept>
+#include <AL/al.h>
+#include <AL/alc.h>
 
 namespace LTSM
 {
-    namespace AudioOp
+    namespace OpenAL
     {
-        enum
+        const char* alcErrorName(ALCenum);
+
+        class Playback : public AudioPlayer
         {
-            Init = 0xFE01,
-            Data = 0xFE02,
-            Silent = 0xFE03
+            std::unique_ptr<ALCdevice, ALCboolean(*)(ALCdevice*)> dev{ nullptr, alcCloseDevice };
+            std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, alcDestroyContext };
+
+            ALuint sourceId = 0;
+            mutable ALuint playAfterBytes = 0;
+
+            ALenum fmtFormat = 0;
+            ALsizei fmtFrequency = 0;
+
+        protected:
+            ALint getBuffersProcessed(void) const;
+            ALint getBuffersQueued(void) const;
+            ALuint findFreeBufferId(void) const;
+
+        public:
+            Playback(const AudioFormat &, ALuint autoPlayAfterSec = 0);
+            ~Playback();
+
+            bool streamWrite(const uint8_t*, size_t) const override;
+
+            bool playStart(void) const;
+            bool playStop(void) const;
+            bool playPause(void) const;
+            bool stateIsPlaying(void) const;
         };
     }
-
-    namespace AudioEncoding
-    {
-        enum
-        {
-            PCM = 0,
-            OPUS = 1,
-            AAC = 2
-        };
-    }
-
-    struct AudioFormat
-    {
-        uint16_t type = 0;
-        uint16_t channels = 0;
-        uint32_t samplePerSec = 0;
-        uint16_t bitsPerSample = 0;
-    };
-
-    class AudioPlayer
-    {
-    public:
-        AudioPlayer() = default;
-        virtual ~AudioPlayer() = default;
-
-        virtual bool streamWrite(const uint8_t*, size_t) const = 0;
-    };
-
-    struct audio_error : public std::runtime_error
-    {
-        explicit audio_error(std::string_view what) : std::runtime_error(what.data()) {}
-    };
 }
 
-#endif // _LTSM_AUDIO_
+#endif // _LTSM_AUDIO_OPENAL_

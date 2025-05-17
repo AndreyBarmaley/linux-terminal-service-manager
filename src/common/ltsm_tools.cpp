@@ -57,6 +57,18 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
+#if defined(__MINGW64__) || defined(__MINGW32__)
+int getuid(void)
+{
+    return 0;
+}
+
+int getgid(void)
+{
+    return 0;
+}
+#endif
+
 namespace LTSM
 {
 #ifdef __LINUX__
@@ -427,7 +439,7 @@ namespace LTSM
                 res.splice(res.end(), readDir(entry.path(), true));
             }
 
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(__MINGW32__)
             res.emplace_back(wstring2string(entry.path().native()));
 #else
             res.emplace_back(entry.path().native());

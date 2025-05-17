@@ -273,13 +273,13 @@ namespace LTSM
             pa_usec_t getLatency(void) const;
         };
 
-        class Playback : public Simple
+        class Playback : public Simple, public AudioPlayer
         {
         public:
-            Playback(const std::string & appName, const std::string & streamName, const pa_sample_format_t &,
-                     uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
+            Playback(const std::string & appName, const std::string & streamName,
+                     const AudioFormat &, const pa_buffer_attr* attr = nullptr);
 
-            bool streamWrite(const uint8_t*, size_t) const;
+            bool streamWrite(const uint8_t*, size_t) const override;
             bool streamDrain(void) const;
         };
 

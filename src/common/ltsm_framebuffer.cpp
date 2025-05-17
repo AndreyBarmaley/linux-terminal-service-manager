@@ -196,6 +196,14 @@ namespace LTSM
         return it != end() ? (*it).first : 0;
     }
 
+    FrameBuffer FrameBuffer::copyRegionFormat(const XCB::Region & reg, const PixelFormat & pf) const
+    {
+        FrameBuffer res(reg.toSize(), pf, 0 /* pitch auto */);
+        res.blitRegion(*this, reg, XCB::Point(0, 0));
+
+        return res;
+    }
+
     FrameBuffer FrameBuffer::copyRegion(const XCB::Region & reg) const
     {
         FrameBuffer res(reg.toSize(), pixelFormat(), reg.width == width() ? pitchSize() : 0 /* auto */);
@@ -382,7 +390,7 @@ namespace LTSM
         assertm(pos.x < fbreg.width && pos.y < fbreg.height, "position out of range");
 
         void* ptr = pitchData(pos.y) + (static_cast<ptrdiff_t>(pos.x) * bytePerPixel());
-        return rawPixel(ptr, bitsPerPixel(), BigEndian);
+        return rawPixel(ptr, bitsPerPixel(), platformBigEndian());
     }
 
     struct PixelIterator : XCB::PointIterator
@@ -404,7 +412,7 @@ namespace LTSM
         uint32_t pixel(void) const
         {
             auto ptr = pitch + ((topLeft.x + x) * fb.bytePerPixel());
-            return FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), BigEndian);
+            return FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
         }
     };
 
@@ -422,7 +430,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+                auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
 
                 if(res.size() && res.back().pixel() == pix)
                 {
@@ -493,7 +501,7 @@ namespace LTSM
             }
 
             auto ptr = pitch + ((fbreg.x + coord.x) * bytePerPixel());
-            auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+            auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
 
             map.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
         }
@@ -523,7 +531,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                map.emplace(rawPixel(ptr, bitsPerPixel(), BigEndian), 0);
+                map.emplace(rawPixel(ptr, bitsPerPixel(), platformBigEndian()), 0);
             }
         }
 
@@ -558,7 +566,7 @@ namespace LTSM
             for(uint16_t px = 0; px < reg.width; ++px)
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                auto pix = rawPixel(ptr, bitsPerPixel(), BigEndian);
+                auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
                 auto ret = map.emplace(pix, 1);
                 if(! ret.second)
                 {
@@ -595,7 +603,7 @@ namespace LTSM
             {
                 auto ptr = pitch + ((reg.x + px) * bytePerPixel());
 
-                if(pixel != rawPixel(ptr, bitsPerPixel(), BigEndian)) { return false; }
+                if(pixel != rawPixel(ptr, bitsPerPixel(), platformBigEndian())) { return false; }
             }
         }
 
@@ -704,6 +712,11 @@ namespace LTSM
     size_t FrameBuffer::pitchSize(void) const
     {
         return owner ? fbptr->pitch : bytePerPixel() * fbreg.width;
+    }
+
+    RawPtr<uint8_t> FrameBuffer::rawPtr(void) const
+    {
+        return RawPtr<uint8_t>(pitchData(0), pitchSize() * height());
     }
 } // LTSM
 

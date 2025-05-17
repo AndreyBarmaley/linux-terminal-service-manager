@@ -30,6 +30,7 @@
 
 #include "ltsm_global.h"
 #include "ltsm_xcb_types.h"
+#include "ltsm_streambuf.h"
 
 #ifdef LTSM_WITH_SDBUS
 #include "sdbus-c++/sdbus-c++.h"
@@ -224,6 +225,7 @@ namespace LTSM
         uint32_t pixel(const XCB::Point &) const;
 
         FrameBuffer copyRegion(const XCB::Region &) const;
+        FrameBuffer copyRegionFormat(const XCB::Region &, const PixelFormat &) const;
         ColorMap colourMap(void) const;
         PixelMapPalette pixelMapPalette(const XCB::Region &) const;
         PixelMapWeight pixelMapWeight(const XCB::Region &) const;
@@ -232,8 +234,11 @@ namespace LTSM
 
         const uint16_t & width(void) const;
         const uint16_t & height(void) const;
+
         size_t pitchSize(void) const;
         uint8_t* pitchData(size_t row) const;
+
+        RawPtr<uint8_t> rawPtr(void)const;
 
         const XCB::Region & region(void) const { return fbreg; }
 
@@ -248,14 +253,19 @@ namespace LTSM
 }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+// RGBA LITTLE ENDIAN <- ABGR
 #define RGB555  LTSM::PixelFormat(15, 0x0000001F, 0x000003E0, 0x00007C00, 0)
 #define BGR555  LTSM::PixelFormat(15, 0x00007C00, 0x000003E0, 0x0000001F, 0)
 #define RGB565  LTSM::PixelFormat(16, 0x0000001F, 0x000007E0, 0x0000F800, 0)
 #define BGR565  LTSM::PixelFormat(16, 0x0000F800, 0x000007E0, 0x0000001F, 0)
+
 #define RGB24   LTSM::PixelFormat(24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0)
 #define BGR24   LTSM::PixelFormat(24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)
 #define RGB30   LTSM::PixelFormat(30, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
 #define BGR30   LTSM::PixelFormat(30, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
+
+#define RGBA1010102 LTSM::PixelFormat(32, 0x000003FF, 0x000FFC00, 0x3FF00000, 0xC0000000)
+#define BGRA1010102 LTSM::PixelFormat(32, 0x3FF00000, 0x000FFC00,0x000003FF, 0xC0000000)
 
 #define RGBA32  LTSM::PixelFormat(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000)
 #define BGRA32  LTSM::PixelFormat(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)
@@ -267,14 +277,19 @@ namespace LTSM
 #define XRGB32  LTSM::PixelFormat(32, 0x0000FF00, 0x00FF0000, 0xFF000000, 0)
 #define XBGR32  LTSM::PixelFormat(32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0)
 #else
+// RGBA BIG ENDIAN -> RGBA
 #define RGB555  LTSM::PixelFormat(15, 0x00007C00, 0x000003E0, 0x0000001F, 0)
 #define BGR555  LTSM::PixelFormat(15, 0x0000001F, 0x000003E0, 0x00007C00, 0)
 #define RGB565  LTSM::PixelFormat(16, 0x0000F800, 0x000007E0, 0x0000001F, 0)
 #define BGR565  LTSM::PixelFormat(16, 0x0000001F, 0x000007E0, 0x0000F800, 0)
+
 #define RGB24   LTSM::PixelFormat(24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)
 #define BGR24   LTSM::PixelFormat(24, 0x000000FF, 0x0000FF00, 0x00FF0000, 0)
 #define RGB30   LTSM::PixelFormat(30, 0x3FF00000, 0x000FFC00, 0x000003FF, 0)
 #define BGR30   LTSM::PixelFormat(30, 0x000003FF, 0x000FFC00, 0x3FF00000, 0)
+
+#define RGBA1010102 LTSM::PixelFormat(32, 0xFFC00000, 0x003FF000, 0x00000FFC, 0x00000003)
+#define BGRA1010102 LTSM::PixelFormat(32, 0x00000FFC, 0x003FF000,0xFFC00000, 0x00000003)
 
 #define RGBA32  LTSM::PixelFormat(32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF)
 #define BGRA32  LTSM::PixelFormat(32, 0x0000FF00, 0x00FF0000, 0xFF000000, 0x000000FF)

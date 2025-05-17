@@ -756,6 +756,10 @@ namespace LTSM
 #endif
                     sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 }
+                else
+                {
+                    Application::warning("%s: size mismatch, data: %u, argb: %u", __FUNCTION__, dataSize, argbSize);
+                }
             }
         }
     }

@@ -20,6 +20,10 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  **************************************************************************/
 
+#if defined(__MINGW64__) || defined(__MINGW32__)
+#include <winsock2.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -204,6 +208,8 @@ namespace LTSM
  #endif
 #endif
         };
+
+        encodings.push_back(RFB::ENCODING_LTSM_CURSOR);
 
         if(extClipboardLocalCaps())
         {
@@ -707,6 +713,7 @@ namespace LTSM
         {
             while(this->rfbMessagesRunning())
             {
+#ifdef __LINUX__
                 if(auto err = XCB::RootDisplay::hasError())
                 {
                     this->rfbMessagesShutdown();
@@ -725,6 +732,7 @@ namespace LTSM
                         }
                     }
                 }
+#endif
 
                 std::this_thread::sleep_for(50ms);
             }
@@ -974,6 +982,7 @@ namespace LTSM
                 }
                 else
                 {
+#ifdef __LINUX__
                     int xksym = SDL::Window::convertScanCodeToKeySym(ev.key()->keysym.scancode);
 
                     if(xksym == 0)
@@ -991,7 +1000,9 @@ namespace LTSM
                             xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
                         }
                     }
-
+#else
+                    int xksym = ev.key()->keysym.sym;
+#endif
                     sendKeyEvent(ev.type() == SDL_KEYDOWN, xksym);
                 }
 
@@ -1384,22 +1395,82 @@ namespace LTSM
         SDL_SetCursor((*it).second.cursor.get());
     }
 
+    void Vnc2SDL::clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels)
+    {
+        auto it = cursors.find(cursorId);
+
+        if(cursors.end() == it)
+        {
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+            auto cursorFmt = BGRA32;
+#else
+            auto cursorFmt = ARGB32;
+#endif
+            auto sdlFormat = SDL_MasksToPixelFormatEnum(cursorFmt.bitsPerPixel(),
+                             cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
+
+            if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                                   "SDL_MasksToPixelFormatEnum", SDL_GetError());
+                return;
+            }
+
+            // pixels data as client format
+            Application::debug(DebugType::App, "%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
+                               ", %" PRIu16 "], sdl format: %s",
+                               __FUNCTION__, cursorId, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+
+            auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
+                      reg.height, clientPf.bitsPerPixel(), reg.width * cursorFmt.bytePerPixel(),
+                      sdlFormat);
+
+            if(! sf)
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                                   "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
+                return;
+            }
+
+            auto pair = cursors.emplace(cursorId, ColorCursor{ .pixels = std::move(pixels) });
+            it = pair.first;
+            (*it).second.surface.reset(sf);
+            auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
+
+            if(! curs)
+            {
+                Application::warning("%s: %s failed, error: %s", __FUNCTION__,
+                                   "SDL_CreateColorCursor", SDL_GetError());
+                return;
+            }
+
+            (*it).second.cursor.reset(curs);
+        }
+
+        SDL_SetCursor((*it).second.cursor.get());
+    }
+
     void Vnc2SDL::clientRecvLtsmHandshakeEvent(int flags)
     {
         if(! sendOptions)
         {
+            std::vector<std::string> names;
+            int group = 0;
+
+#ifdef __LINUX__
             if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
             {
-                auto names = extXkb->getNames();
-                int group = extXkb->getLayoutGroup();
-
-                sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
-                                      (0 <= group && group < names.size() ? names[group] : ""));
-                sendOptions = true;
+                names = extXkb->getNames();
+                group = extXkb->getLayoutGroup();
             }
+#endif
+            sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
+                                      (0 <= group && group < names.size() ? names[group] : ""));
+            sendOptions = true;
         }
     }
 
+#ifdef __LINUX__
     void Vnc2SDL::xcbXkbGroupChangedEvent(int group)
     {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
@@ -1407,21 +1478,23 @@ namespace LTSM
             sendSystemKeyboardChange(extXkb->getNames(), group);
         }
     }
+#endif
 
     json_plain Vnc2SDL::clientEnvironments(void) const
     {
+        JsonObjectStream jo;
+#ifdef __LINUX__
         // locale
         std::initializer_list<std::pair<int, std::string>> lcall = { { LC_CTYPE, "LC_TYPE" }, { LC_NUMERIC, "LC_NUMERIC" }, { LC_TIME, "LC_TIME" },
             { LC_COLLATE, "LC_COLLATE" }, { LC_MONETARY, "LC_MONETARY" }, { LC_MESSAGES, "LC_MESSAGES" }
         };
-        JsonObjectStream jo;
 
         for(auto & lc : lcall)
         {
             auto ptr = std::setlocale(lc.first, "");
             jo.push(lc.second, ptr ? ptr : "C");
         }
-
+#endif
         // lang
         auto lang = std::getenv("LANG");
         jo.push("LANG", lang ? lang : "C");
@@ -1441,6 +1514,15 @@ namespace LTSM
     {
         // other
         JsonObjectStream jo;
+#ifdef __LINUX__
+        jo.push("build", "linix");
+#else
+ #if defined(__MINGW64__) || defined(__MINGW32__)
+        jo.push("build", "mingw");
+ #else
+        jo.push("build", "other");
+ #endif
+#endif
         jo.push("hostname", "localhost");
         jo.push("ipaddr", "127.0.0.1");
         jo.push("platform", SDL_GetPlatform());
@@ -1540,7 +1622,9 @@ namespace LTSM
 
     void Vnc2SDL::clientRecvBellEvent(void)
     {
+#ifdef __LINUX__
         bell(75);
+#endif
     }
 
     bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
@@ -1567,8 +1651,23 @@ namespace LTSM
     }
 }
 
+#if defined(__MINGW64__) || defined(__MINGW32__)
+int main(int argc, char** argv)
+#else
 int main(int argc, const char** argv)
+#endif
 {
+    // init network
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    WSADATA wsaData;
+
+    if(int ret = WSAStartup(MAKEWORD(2, 2), & wsaData); ret != 0)
+    {
+        std::cerr << "WSAStartup failed: %d" << std::endl;
+        return 1;
+    }
+#endif
+
     if(0 > SDL_Init(SDL_INIT_VIDEO))
     {
         std::cerr << "sdl init video failed" << std::endl;

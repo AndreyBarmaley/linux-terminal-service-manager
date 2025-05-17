@@ -60,6 +60,7 @@ namespace LTSM
         Enc = 1 << 24,
         X11Srv = 1 << 23,
         X11Cli = 1 << 22,
+        WinCli = X11Cli,
         Audio = 1 << 21,
         Fuse = 1 << 20,
         Pcsc = 1 << 19,

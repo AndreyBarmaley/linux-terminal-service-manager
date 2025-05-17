@@ -120,6 +120,7 @@ namespace LTSM
         const int ENCODING_EXT_CLIPBOARD = 0xC0A1E5CE;
 
         const int ENCODING_LTSM = 0x4C54534D;
+        const int ENCODING_LTSM_CURSOR = 0x4C54534E;
         const int ENCODING_FFMPEG_H264 = 0x48464D50;
         const int ENCODING_FFMPEG_AV1 = 0x41563100;
         const int ENCODING_FFMPEG_VP8 = 0x56503800;

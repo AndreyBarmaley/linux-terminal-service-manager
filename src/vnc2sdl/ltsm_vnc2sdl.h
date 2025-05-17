@@ -31,6 +31,7 @@
 #include <forward_list>
 
 #include "ltsm_global.h"
+#include "ltsm_xcb_types.h"
 #include "ltsm_application.h"
 #include "ltsm_framebuffer.h"
 #include "ltsm_sdl_wrapper.h"
@@ -38,7 +39,7 @@
 #ifdef LTSM_X11
  #include "librfb_x11client.h"
 #else
- #include "ltsm_xcb_types.h"
+ #include "librfb_winclient.h"
 #endif
 
 #define LTSM_VNC2SDL_VERSION 20250509
@@ -56,7 +57,7 @@ namespace LTSM
 #ifdef LTSM_X11
         public RFB::X11Client
 #else
-        protected RFB::ClientDecoder
+        public RFB::WinClient
 #endif
     {
         PixelFormat clientPf;
@@ -74,7 +75,7 @@ namespace LTSM
         std::string passfile;
 
         std::unique_ptr<SDL::Window> window;
-        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfback{nullptr, SDL_FreeSurface};
+        std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfback { nullptr, SDL_FreeSurface };
 
         std::unordered_map<uint32_t, ColorCursor> cursors;
 
@@ -142,9 +143,12 @@ namespace LTSM
         //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
         void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
                              std::vector<uint8_t> && mask) override;
+        void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
         void clientRecvBellEvent(void) override;
 
+#ifdef __LINUX__
         void xcbXkbGroupChangedEvent(int) override;
+#endif
         void clientRecvLtsmHandshakeEvent(int flags) override;
         void systemLoginSuccess(const JsonObject &) override;
 

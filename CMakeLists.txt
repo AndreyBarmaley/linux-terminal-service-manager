@@ -123,7 +123,6 @@ if(MINGW)
 endif()
 
 pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
-pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image>=2.0.1)
 pkg_search_module(P11KIT REQUIRED p11-kit-1)
 
 if(LTSM_WITH_SYSTEMD)
@@ -467,26 +466,30 @@ if(LTSM_BUILD_CLIENT)
         src/channels/channel_system.cpp
         src/librfb/librfb_decodings.cpp
         src/librfb/librfb_client.cpp
-        src/librfb/ltsm_librfb.cpp)
+        src/librfb/ltsm_librfb.cpp
+        src/session_audio/ltsm_audio_client.cpp
+        src/session_audio/ltsm_audio_decoder.cpp
+        src/session_fuse/ltsm_fuse_client.cpp
+        src/session_pcsc/ltsm_pcsc_client.cpp)
 
     if(UNIX)
         target_sources(LTSM_client PRIVATE src/librfb/librfb_extclip.cpp)
         target_sources(LTSM_client PRIVATE src/librfb/librfb_x11client.cpp)
-        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_pulse.cpp)
-        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_client.cpp)
-        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_decoder.cpp)
-        target_sources(LTSM_client PRIVATE src/session_fuse/ltsm_fuse_client.cpp)
-        target_sources(LTSM_client PRIVATE src/session_pcsc/ltsm_pcsc_client.cpp)
+    endif()
+
+    if(MINGW)
+        unset(LTSM_CLIENT_DECODING_LZ4 CACHE)
+        unset(LTSM_PKCS11_AUTH CACHE)
+        target_include_directories(LTSM_client PRIVATE src/common/mingw)
+        target_sources(LTSM_client PRIVATE src/librfb/librfb_extclip.cpp)
+        target_sources(LTSM_client PRIVATE src/librfb/librfb_winclient.cpp)
+        target_link_libraries(LTSM_client wsock32 winscard)
     endif()
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
 
     target_compile_definitions(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_DECODING)
-
-    if(MINGW)
-        unset(LTSM_CLIENT_DECODING_LZ4 CACHE)
-    endif()
 
     if(LTSM_CLIENT_DECODING_LZ4)
         pkg_search_module(LZ4 REQUIRED liblz4)
@@ -510,6 +513,7 @@ if(LTSM_BUILD_CLIENT)
 
     pkg_search_module(P11KIT REQUIRED p11-kit-1)
     pkg_search_module(OPUS REQUIRED opus)
+    pkg_search_module(OPENAL REQUIRED openal)
 
     if(LTSM_PKCS11_AUTH)
         target_sources(LTSM_client PRIVATE
@@ -523,6 +527,30 @@ if(LTSM_BUILD_CLIENT)
         target_compile_options(LTSM_client PRIVATE -DLTSM_WITH_OPUS ${OPUS_CFLAGS})
         target_include_directories(LTSM_client PRIVATE ${OPUS_INCLUDE_DIR})
         target_link_libraries(LTSM_client ${OPUS_LIBRARIES})
+    endif()
+
+    # OpenAL playback preffered
+    if(OPENAL_FOUND)
+        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_openal.cpp)
+        target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PAYBACK_OPENAL)
+
+        # maybe linker error: incorrect size
+        target_compile_options(LTSM_client PRIVATE -fPIC)
+
+        target_compile_options(LTSM_client PRIVATE ${OPENAL_CFLAGS})
+        target_include_directories(LTSM_client PRIVATE ${OPENAL_INCLUDE_DIR})
+        target_link_libraries(LTSM_client ${OPENAL_LIBRARIES})
+    else()
+        # PulseAudio maybe use
+        pkg_search_module(PULSEAUDIO REQUIRED libpulse)
+        pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
+
+        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_pulse.cpp)
+        target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PAYBACK_PULSE)
+
+        target_compile_options(LTSM_client PRIVATE ${PULSEAUDIO_CFLAGS})
+        target_include_directories(LTSM_client PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
+        target_link_libraries(LTSM_client ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES})
     endif()
 
     if(LTSM_FFMPEG)
@@ -564,15 +592,12 @@ if(LTSM_BUILD_CLIENT)
         find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
         find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
 
-
         pkg_search_module(PCSCLITE REQUIRED libpcsclite)
-        pkg_search_module(PULSEAUDIO REQUIRED libpulse)
-        pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
 
         target_compile_definitions(LTSM_client PRIVATE -DLTSM_X11)
-        target_compile_options(LTSM_client PRIVATE ${PULSEAUDIO_CFLAGS} ${PCSCLITE_CFLAGS})
-        target_include_directories(LTSM_client PRIVATE ${PULSEAUDIO_INCLUDE_DIR} ${PCSCLITE_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES} ${PCSCLITE_LIBRARIES})
+        target_compile_options(LTSM_client PRIVATE ${PCSCLITE_CFLAGS})
+        target_include_directories(LTSM_client PRIVATE ${PCSCLITE_INCLUDE_DIR})
+        target_link_libraries(LTSM_client ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${PCSCLITE_LIBRARIES})
     endif()
 
     target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG
@@ -647,7 +672,6 @@ if(LTSM_AUDIO2SESSION)
 
     find_package(sdbus-c++ REQUIRED)
     pkg_search_module(PULSEAUDIO REQUIRED libpulse)
-    #pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
     pkg_search_module(OPUS REQUIRED opus)
 
     add_executable(LTSM_audio2session

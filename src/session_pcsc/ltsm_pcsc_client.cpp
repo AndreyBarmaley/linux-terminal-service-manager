@@ -26,7 +26,17 @@
 #include <cstring>
 #include <filesystem>
 
-#include "pcsclite.h"
+#ifdef __LINUX__
+ #include "pcsclite.h"
+#endif
+
+#if defined(__MINGW64__) || defined(__MINGW32__)
+ #define MAX_ATR_SIZE    33
+ #define MAX_READERNAME  128
+ #define MAX_BUFFER_SIZE 264
+ #define MAX_BUFFER_SIZE_EXTENDED (4 + 3 + (1<<16) + 3 + 2)
+#endif
+
 #include "winscard.h"
 
 #include "ltsm_pcsc.h"
@@ -232,7 +242,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
 std::list<std::string> getListReaders(SCARDCONTEXT hContext)
 {
     DWORD readersLength = 0;
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    LONG ret = SCardListReadersA(hContext, nullptr, nullptr, & readersLength);
+#else
     LONG ret = SCardListReaders(hContext, nullptr, nullptr, & readersLength);
+#endif
 
     if(ret == SCARD_E_NO_READERS_AVAILABLE)
         return {};
@@ -245,7 +259,11 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext)
 
     std::list<std::string> readers;
     auto readersBuf = std::make_unique<char[]>(readersLength);
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    ret = SCardListReadersA(hContext, nullptr, readersBuf.get(), & readersLength);
+#else
     ret = SCardListReaders(hContext, nullptr, readersBuf.get(), & readersLength);
+#endif
 
     if(ret == SCARD_S_SUCCESS)
     {
@@ -254,7 +272,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext)
         while(*it)
         {
             readers.emplace_back(it);
-            it += strnlen(it, std::min((size_t)MAX_READERNAME, readersLength)) + 1;
+            it += strnlen(it, std::min((DWORD)MAX_READERNAME, readersLength)) + 1;
         }
     }
 
@@ -289,7 +307,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
                       __FUNCTION__, hContext, readerName.c_str(), shareMode, prefferedProtocols);
     SCARDHANDLE hCard = 0;
     DWORD activeProtocol = 0;
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    LONG ret = SCardConnectA(hContext, readerName.c_str(), shareMode, prefferedProtocols, & hCard, & activeProtocol);
+#else
     LONG ret = SCardConnect(hContext, readerName.c_str(), shareMode, prefferedProtocols, & hCard, & activeProtocol);
+#endif
 
     if(ret != SCARD_S_SUCCESS)
     {
@@ -423,7 +445,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
     DWORD readerNameLen = sizeof(readerName);
     BYTE atrBuf[MAX_ATR_SIZE];
     DWORD atrLen = sizeof(atrBuf);
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    LONG ret = SCardStatusA(hCard, readerName, & readerNameLen, & state, & protocol, atrBuf, & atrLen);
+#else
     LONG ret = SCardStatus(hCard, readerName, & readerNameLen, & state, & protocol, atrBuf, & atrLen);
+#endif
 
     if(ret != SCARD_S_SUCCESS)
     {
@@ -465,7 +491,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
     }
 
     Application::info("%s: context: %" PRIx64 ", timeout: %" PRIu32, __FUNCTION__, hContext, timeout);
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    LONG ret = SCardGetStatusChangeA(hContext, timeout, states.data(), states.size());
+#else
     LONG ret = SCardGetStatusChange(hContext, timeout, states.data(), states.size());
+#endif
 
     if(ret != SCARD_S_SUCCESS)
     {

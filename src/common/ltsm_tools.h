@@ -59,10 +59,9 @@
 #include "gnutls/gnutls.h"
 #endif
 
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(__MINGW32__)
     int getuid(void);
     int getgid(void);
-    int getpid(void);
 #endif
 
 namespace LTSM

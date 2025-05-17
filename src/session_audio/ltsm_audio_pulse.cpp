@@ -1058,11 +1058,30 @@ namespace LTSM
     }
 
     PulseAudio::Playback::Playback(const std::string & appName, const std::string & streamName,
-                                   const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, const pa_buffer_attr* attr)
+                                   const AudioFormat & fmt, const pa_buffer_attr* attr)
     {
-        audioSpec.format = fmt;
-        audioSpec.rate = rate;
-        audioSpec.channels = channels;
+        switch(fmt.bitsPerSample)
+        {
+            case 16:
+                audioSpec.format = PA_SAMPLE_S16LE;
+                break;
+
+            case 24:
+                audioSpec.format = PA_SAMPLE_S24LE;
+                break;
+
+            case 32:
+                audioSpec.format = PA_SAMPLE_S32LE;
+                break;
+
+            default:
+                Application::error("%s: %s failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
+                               __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
+                throw audio_error(NS_FuncName);
+        }
+
+        audioSpec.rate = fmt.samplePerSec;
+        audioSpec.channels = fmt.channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec))
         {

@@ -27,8 +27,13 @@
 
 #include "ltsm_application.h"
 #include "ltsm_streambuf.h"
+#include "ltsm_tools.h"
+#include "ltsm_librfb.h"
 #include "librfb_extclip.h"
+
+#ifdef __LINUX__
 #include "librfb_server.h"
+#endif
 
 namespace LTSM
 {
@@ -155,10 +160,6 @@ namespace LTSM
 
         Application::warning("%s: empty types", __FUNCTION__);
         return 0;
-    }
-#else
-    void RFB::ExtClip::x11AtomsUpdate(const XCB::Connector & x11)
-    {
     }
 #endif
 

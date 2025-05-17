@@ -32,7 +32,7 @@
 #include <poll.h>
 #endif
 
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(__MINGW32__)
 #include <winsock2.h>
 #include <winsock.h>
 #endif
@@ -66,10 +66,40 @@ using namespace std::chrono_literals;
 
 namespace LTSM
 {
-#ifdef __LINUX__
     /* NetworkStream */
     bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
+#if defined(__MINGW64__) || defined(__MINGW32__)
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(0, &fds);
+
+        timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = timeoutMS;
+
+        int ret = select(1, & fds, nullptr, nullptr, & tv);
+
+        if(0 > ret)
+        {
+            // interrupted system call
+            if(errno == EINTR)
+            {
+                return hasInput(fd, timeoutMS);
+            }
+
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "poll", strerror(errno), errno);
+            throw network_error(NS_FuncName);
+        }
+
+        // A value of 0 indicates that the call timed out and no file descriptors were ready
+        if(0 == ret)
+        {
+            return false;
+        }
+        
+        return true;
+#else // pool verson
         if(0 > fd)
         {
             return false;
@@ -102,6 +132,7 @@ namespace LTSM
         }
 
         return (fds.revents & POLLIN);
+#endif
     }
 
     size_t NetworkStream::hasData(int fd)
@@ -111,6 +142,15 @@ namespace LTSM
             return 0;
         }
 
+#if defined(__MINGW64__) || defined(__MINGW32__)
+        long unsigned int count = 0;
+
+        if(0 > ioctlsocket(fd, FIONREAD, & count))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "ioctlsocket", strerror(errno), errno);
+            throw network_error(NS_FuncName);
+        }
+#else
         int count;
 
         if(0 > ioctl(fd, FIONREAD, & count))
@@ -119,9 +159,9 @@ namespace LTSM
             throw network_error(NS_FuncName);
         }
 
+#endif
         return count < 0 ? 0 : count;
     }
-#endif // __LINUX__
 
     NetworkStream::NetworkStream()
     {
@@ -307,7 +347,7 @@ namespace LTSM
     {
         while(true)
         {
-#ifdef __MINGW64__
+#if defined(__MINGW64__) || defined(__MINGW32__)
             ssize_t real = send(fd, ptr, len, 0);
 #else
             ssize_t real = send(fd, ptr, len, MSG_NOSIGNAL);
@@ -760,6 +800,28 @@ namespace LTSM
         return "";
     }
 #endif // __LINUX__
+
+#if defined(__MINGW64__) || defined(__MINGW32__)
+    std::string TCPSocket::resolvHostname(const std::string & hostname)
+    {
+        if(auto res = gethostbyname(hostname.c_str()))
+        {
+            struct in_addr in;
+
+            if(res->h_addr_list && *res->h_addr_list)
+            {
+                std::copy_n(*res->h_addr_list, sizeof(in_addr), (char*) & in);
+                return std::string(inet_ntoa(in));
+            }
+        }
+        else
+        {
+            Application::error("%s: error: %s, hostname: `%s'", __FUNCTION__, "gethostbyname", hostname.c_str());
+        }
+
+        return "";
+    }
+#endif // MINGW
 
     int TCPSocket::connect(const std::string & ipaddr, uint16_t port)
     {

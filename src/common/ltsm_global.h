@@ -37,13 +37,16 @@ namespace LTSM
     inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
     inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
 
-    inline static const int service_version = 20250510;
+    inline static const int service_version = 20250517;
 
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-    inline static const bool BigEndian = false;
+    inline bool platformBigEndian(void)
+    {
+#if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
+        return true;
 #else
-    inline static const bool BigEndian = true;
+        return false;
 #endif
+    }
 
     namespace NotifyParams
     {

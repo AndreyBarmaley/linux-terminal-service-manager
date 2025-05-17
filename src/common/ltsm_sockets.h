@@ -230,9 +230,9 @@ namespace LTSM
     namespace TCPSocket
     {
         int connect(const std::string & ipaddr, uint16_t port);
+        std::string resolvHostname(const std::string & hostname);
 #ifdef __LINUX__
         std::string resolvAddress(const std::string & ipaddr);
-        std::string resolvHostname(const std::string & hostname);
         std::list<std::string> resolvHostname2(const std::string & hostname);
         int listen(uint16_t port, int conn = 5);
         int listen(const std::string & ipaddr, uint16_t port, int conn = 5);

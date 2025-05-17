@@ -58,13 +58,19 @@ namespace LTSM
         reply.writeIntLE32(st.st_gid);
         reply.writeIntLE64(st.st_rdev);
         reply.writeIntLE64(st.st_size);
+#ifdef __LINUX__
         reply.writeIntLE64(st.st_blksize);
         reply.writeIntLE64(st.st_blocks);
+#else
+        reply.writeIntLE64(0);
+        reply.writeIntLE64(0);
+#endif
         reply.writeIntLE64(st.st_atime);
         reply.writeIntLE64(st.st_mtime);
         reply.writeIntLE64(st.st_ctime);
     }
 
+#ifdef __LINUX__
     std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir)
     {
         std::vector<char> linkto(dir.size() + 1024, 0);
@@ -101,6 +107,7 @@ namespace LTSM
 
         return std::make_pair(st1.st_ino, st2.st_ino);
     }
+#endif
 
     void replyWriteShareRootInfo(StreamBuf & reply, const std::string & dir)
     {
@@ -119,13 +126,18 @@ namespace LTSM
                 continue;
             }
 
+#ifdef __LINUX__
             if(0 == (st.st_mode & (S_IFREG | S_IFLNK | S_IFDIR)))
+#else
+            if(0 == (st.st_mode & (S_IFREG | S_IFDIR)))
+#endif
             {
                 Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
                                      __FUNCTION__, "special skipped", st.st_mode, path.c_str());
                 continue;
             }
 
+#ifdef __LINUX__
             // check link
             if(st.st_mode & S_IFLNK)
             {
@@ -138,7 +150,7 @@ namespace LTSM
                     continue;
                 }
             }
-
+#endif
             inodes.emplace(st.st_ino, std::make_pair(path, std::move(st)));
         }
 

@@ -26,6 +26,7 @@
 
 #include <list>
 #include <mutex>
+#include <forward_list>
 
 #include "ltsm_channels.h"
 #include "librfb_extclip.h"
@@ -60,6 +61,7 @@ namespace LTSM
         /// ServerEncoder
         class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip
         {
+            std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
             std::string clientAuthName;
             std::string clientAuthDomain;
@@ -140,7 +142,6 @@ namespace LTSM
             bool authVenCryptInit(const SecurityInfo &);
 
             bool sendFrameBufferUpdate(const FrameBuffer &);
-            void sendFrameBufferUpdateRichCursor(const FrameBuffer &, uint16_t xhot, uint16_t yhot);
             void sendColourMap(int first);
             void sendBellEvent(void);
             void sendCutTextEvent(const uint8_t* buf, uint32_t len, bool ext);
@@ -176,6 +177,7 @@ namespace LTSM
 
             void sendEncodingDesktopResize(const DesktopResizeStatus &, const DesktopResizeError &, const XCB::Size &);
             void sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
+            void sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot);
 
             void sendEncodingLtsmData(const uint8_t*, size_t);
             void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override final;

@@ -105,6 +105,7 @@ namespace LTSM
             void recvDecodingLastRect(const XCB::Region &);
             void recvDecodingExtDesktopSize(int status, int err, const XCB::Size &);
             void recvDecodingRichCursor(const XCB::Region &);
+            void recvDecodingLtsmCursor(const XCB::Region &);
 
             void setSocketStreamMode(int sockd);
             void setInetStreamMode(void);
@@ -140,6 +141,7 @@ namespace LTSM
             virtual void clientRecvBellEvent(void) { /* empty */ }
             virtual void clientRecvCutTextEvent(std::vector<uint8_t> &&) { /* empty */ }
             virtual void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) { /* empty */ }
+            virtual void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) { /* empty */ }
             virtual void displayResizeEvent(const XCB::Size &);
             //
             virtual bool ltsmSupported(void) const

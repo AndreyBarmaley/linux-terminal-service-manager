@@ -1,5 +1,5 @@
 /***********************************************************************
- *   Copyright © 2024 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
+ *   Copyright © 2025 by Andrey Afletdinov <public.irkutsk@gmail.com>  *
  *                                                                     *
  *   Part of the LTSM: Linux Terminal Service Manager:                 *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager  *
@@ -21,57 +21,42 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_AUDIO_
-#define _LTSM_AUDIO_
+#ifndef _LIBRFB_WINCLI_
+#define _LIBRFB_WINCLI_
 
-#define LTSM_AUDIO2SESSION_VERSION 20240304
+#include <mutex>
+#include <vector>
 
-#include <cstdint>
-#include <stdexcept>
+#include "librfb_client.h"
 
 namespace LTSM
 {
-    namespace AudioOp
+    namespace RFB
     {
-        enum
+        class WinClient : public ClientDecoder
         {
-            Init = 0xFE01,
-            Data = 0xFE02,
-            Silent = 0xFE03
+            std::vector<uint8_t> clientClipboard;
+
+            mutable std::mutex clientLock;
+
+            mutable uint16_t clipLocalTypes = 0;
+            uint16_t clipRemoteTypes = 0;
+
+        protected:
+
+            // ext clipboard
+            uint16_t extClipboardLocalTypes(void) const override;
+            std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
+            void extClipboardRemoteTypesEvent(uint16_t type) override;
+            void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+            void extClipboardSendEvent(const std::vector<uint8_t> &) override;
+
+            void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
+
+        public:
+            WinClient();
         };
     }
-
-    namespace AudioEncoding
-    {
-        enum
-        {
-            PCM = 0,
-            OPUS = 1,
-            AAC = 2
-        };
-    }
-
-    struct AudioFormat
-    {
-        uint16_t type = 0;
-        uint16_t channels = 0;
-        uint32_t samplePerSec = 0;
-        uint16_t bitsPerSample = 0;
-    };
-
-    class AudioPlayer
-    {
-    public:
-        AudioPlayer() = default;
-        virtual ~AudioPlayer() = default;
-
-        virtual bool streamWrite(const uint8_t*, size_t) const = 0;
-    };
-
-    struct audio_error : public std::runtime_error
-    {
-        explicit audio_error(std::string_view what) : std::runtime_error(what.data()) {}
-    };
 }
 
-#endif // _LTSM_AUDIO_
+#endif // _LIBRFB_WINCLI_

@@ -35,15 +35,12 @@
 #include <forward_list>
 
 #ifdef LTSM_CLIENT
- #ifdef __LINUX__
-  #include "ltsm_audio.h"
-  #include "ltsm_audio_pulse.h"
-  #include "ltsm_audio_decoder.h"
- #endif
+ #include "ltsm_audio.h"
+ #include "ltsm_audio_decoder.h"
 #endif
 
 #ifdef LTSM_PKCS11_AUTH
-#include "ltsm_pkcs11_wrapper.h"
+ #include "ltsm_pkcs11_wrapper.h"
 #endif
 
 #include "ltsm_sockets.h"
@@ -388,7 +385,7 @@ namespace LTSM
             uint16_t audioVer = 0;
             uint8_t cid = 255;
 
-            std::unique_ptr<PulseAudio::Playback> pulse;
+            std::unique_ptr<AudioPlayer> player;
             std::unique_ptr<AudioDecoder::BaseDecoder> decoder;
             std::vector<uint8_t> last;
 
@@ -442,6 +439,7 @@ namespace LTSM
             void pushData(std::vector<uint8_t> &&) override;
         };
 
+#ifdef __LINUX__
         /// ConnectorClientPkcs11
         class ConnectorClientPkcs11 : public ConnectorBase
         {
@@ -472,8 +470,9 @@ namespace LTSM
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
+#endif // LINUX
 
-#endif
+#endif // LTSM_CLIENT
 
         namespace Connector
         {
@@ -482,20 +481,22 @@ namespace LTSM
             const char* speedString(const Speed &);
         }
 
+#ifdef __LINUX__
         ConnectorBasePtr createUnixConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createUnixConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
 
         ConnectorBasePtr createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createTcpConnector(uint8_t channel, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
 
+        ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+#endif
+        ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+        ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 
-        ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
-        ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
-
+#ifdef __LINUX__
         /// Listener
         class Listener
         {
@@ -530,6 +531,7 @@ namespace LTSM
                 const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
         std::unique_ptr<Listener> createTcpListener(const Channel::UrlMode & serverOpts, size_t listen,
                 const Channel::UrlMode & clientOpts, const Channel::Opts &, ChannelListener &);
+#endif
     }
 
     class ChannelClient
@@ -572,11 +574,14 @@ namespace LTSM
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         void destroyChannel(uint8_t channel);
 
+#ifdef __LINUX__
         bool createChannelUnix(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelUnixFd(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Opts &);
-        bool createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
+
         bool createChannelSocket(uint8_t channel, std::pair<std::string, int>, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelSocketFd(uint8_t channel, int, const Channel::ConnectorMode &, const Channel::Opts &);
+#endif
+        bool createChannelFile(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelCommand(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelClientFuse(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
         bool createChannelClientAudio(uint8_t channel, const std::string &, const Channel::ConnectorMode &, const Channel::Opts &);
@@ -613,6 +618,7 @@ namespace LTSM
         virtual const char* pkcs11Library(void) const { return nullptr; }
     };
 
+#ifdef __LINUX__
     class ChannelListener : public ChannelClient
     {
         std::list<std::unique_ptr<Channel::Listener>> listeners;
@@ -628,6 +634,7 @@ namespace LTSM
 
         bool createChannelAcceptFd(const Channel::UrlMode & clientOpts, int sock, const Channel::UrlMode & serverOpts, const Channel::Opts &);
     };
+#endif
 }
 
 #endif

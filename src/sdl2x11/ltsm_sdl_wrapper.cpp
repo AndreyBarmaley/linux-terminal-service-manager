@@ -347,6 +347,7 @@ namespace LTSM
         return res;
     }
 
+#ifdef __LINUX__
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
@@ -424,4 +425,5 @@ namespace LTSM
 
         return it != sdlKeyMap.end() ? (*it).xksym : 0;
     }
+#endif // __LINUX__
 }

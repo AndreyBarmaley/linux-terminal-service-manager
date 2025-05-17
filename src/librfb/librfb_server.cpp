@@ -606,13 +606,13 @@ namespace LTSM
         sendIntBE16(displaySize.height);
         Application::notice("%s: server pf - bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
                           PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
-                          __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) BigEndian,
+                          __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
                           pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         clientPf = serverFormat();
         // send pixel format
         sendInt8(pf.bitsPerPixel());
         sendInt8(displayDepth);
-        sendInt8(BigEndian ? 1 : 0);
+        sendInt8(platformBigEndian() ? 1 : 0);
         // true color
         sendInt8(1);
         sendIntBE16(pf.rmax());
@@ -1334,6 +1334,10 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendEncodingRichCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot)
     {
+        // priority LTSM cursors
+        if(isClientSupportedEncoding(RFB::ENCODING_LTSM_CURSOR))
+            return sendEncodingLtsmCursor(fb, xhot, yhot);
+
         auto & reg = fb.region();
         Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
@@ -1388,6 +1392,45 @@ namespace LTSM
 
         // part2: send bitmask buf
         sendData(bitmaskBuf);
+        sendFlush();
+    }
+
+    void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot)
+    {
+        auto & reg = fb.region();
+        Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+                           __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+
+        std::scoped_lock guard{ sendLock };
+        sendInt8(RFB::SERVER_FB_UPDATE);
+        // padding
+        sendInt8(0);
+        // rects
+        sendIntBE16(1);
+        sendIntBE16(xhot);
+        sendIntBE16(yhot);
+        sendIntBE16(reg.width);
+        sendIntBE16(reg.height);
+        sendIntBE32(ENCODING_LTSM_CURSOR);
+        // cursor id
+        auto rawPtr = fb.rawPtr();
+        auto cursorId = rawPtr.crc32b();
+        sendIntBE32(cursorId);
+        // cursor rgba data
+        if(std::none_of(cursorSended.begin(), cursorSended.end(), [&](auto & curid){ return curid == cursorId; }))
+        {
+            auto zlib = Tools::zlibCompress(rawPtr);
+            // raw size
+            sendIntBE32(rawPtr.size());
+            // compress size
+            sendIntBE32(zlib.size());
+            sendData(zlib);
+            cursorSended.push_front(cursorId);
+        }
+        else
+        {
+            sendIntBE32(0);
+        }
         sendFlush();
     }
 

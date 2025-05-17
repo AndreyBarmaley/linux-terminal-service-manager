@@ -131,8 +131,8 @@ namespace LTSM
 #ifdef __LINUX__
             static std::vector<xcb_atom_t> typesToX11Atoms(uint16_t types, const XCB::Connector &);
             static uint16_t x11AtomToType(xcb_atom_t);
-#endif
             static void x11AtomsUpdate(const XCB::Connector &);
+#endif
         };
     }
 }
