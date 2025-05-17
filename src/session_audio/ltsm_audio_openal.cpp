@@ -54,14 +54,14 @@ namespace LTSM
         {
             if(fmt.channels == 2)
                 fmtFormat = AL_FORMAT_STEREO8;
-            else if(fmt.channels == 2)
+            else if(fmt.channels == 1)
                 fmtFormat = AL_FORMAT_MONO8;
         }
         else if(16 == fmt.bitsPerSample)
         {
             if(fmt.channels == 2)
                 fmtFormat = AL_FORMAT_STEREO16;
-            else if(fmt.channels == 2)
+            else if(fmt.channels == 1)
                 fmtFormat = AL_FORMAT_MONO16;
         }
 
