@@ -15,4 +15,3 @@ if(UNIX)
         target_sources(LTSM_common PUBLIC libxcb-errors/xcb_errors.c libxcb-errors/extensions.c)
     endif()
 endif()
-

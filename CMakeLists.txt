@@ -478,7 +478,6 @@ if(LTSM_BUILD_CLIENT)
     endif()
 
     if(MINGW)
-        unset(LTSM_CLIENT_DECODING_LZ4 CACHE)
         unset(LTSM_PKCS11_AUTH CACHE)
         target_include_directories(LTSM_client PRIVATE src/common/mingw)
         target_sources(LTSM_client PRIVATE src/librfb/librfb_extclip.cpp)

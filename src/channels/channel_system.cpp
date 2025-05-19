@@ -690,7 +690,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
 
         if(auto fsize = std::filesystem::file_size(fname, err))
         {
-            ja.push(JsonObjectStream().push("file", fname).push("size", fsize).flush());
+            ja.push(JsonObjectStream().push("file", fname).push("size", static_cast<size_t>(fsize)).flush());
         }
     }
 

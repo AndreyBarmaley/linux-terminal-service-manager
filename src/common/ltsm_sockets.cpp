@@ -72,13 +72,13 @@ namespace LTSM
 #if defined(__MINGW64__) || defined(__MINGW32__)
         fd_set fds;
         FD_ZERO(&fds);
-        FD_SET(0, &fds);
+        FD_SET(fd, &fds);
 
         timeval tv;
         tv.tv_sec = 0;
         tv.tv_usec = timeoutMS;
 
-        int ret = select(1, & fds, nullptr, nullptr, & tv);
+        int ret = select(fd + 1 /* max fd + 1 */, & fds /* in */, nullptr /* out */, nullptr, & tv);
 
         if(0 > ret)
         {
@@ -98,7 +98,8 @@ namespace LTSM
             return false;
         }
         
-        return true;
+        return FD_ISSET(fd, &fds);
+
 #else // pool verson
         if(0 > fd)
         {
