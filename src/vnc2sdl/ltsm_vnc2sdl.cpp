@@ -50,6 +50,7 @@ namespace LTSM
     const auto librtdef = "/usr/lib64/librtpkcs11ecp.so";
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto krb5def = "TERMSRV@remotehost.name";
+    const auto windowTitle = "LTSM_client";
 
     void printHelp(const char* prog, const std::list<int> & encodings)
     {
@@ -57,7 +58,7 @@ namespace LTSM
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
                   "usage: " << prog <<
-                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug [<types>]] [--trace] [--syslog] "
+                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] "
                   <<
                   "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--fixed]" <<
                   "[--notls] [--noltsm]" <<
@@ -94,7 +95,7 @@ namespace LTSM
         std::cout << std::endl << "arguments:" << std::endl <<
                   "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
                   "    --trace (big more debug)" << std::endl <<
-                  "    --syslog (to syslog)" << std::endl <<
+                  "    --syslog (to syslog or <file>)" << std::endl <<
                   "    --host <localhost> " << std::endl <<
                   "    --port <port> " << std::endl <<
                   "    --username <user> " << std::endl <<
@@ -163,7 +164,7 @@ namespace LTSM
         std::cout << std::endl << "supported encodings: " << std::endl <<
                   "    ";
 
-        for(auto enc: encodings)
+        for(const auto & enc: encodings)
         {
             std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
         }
@@ -171,7 +172,7 @@ namespace LTSM
         std::cout << std::endl;
         std::cout << std::endl << "encoding options: " << std::endl;
 
-        for(auto enc: encodings)
+        for(const auto & enc: encodings)
         {
             if(auto opts = RFB::encodingOpts(enc); ! opts.empty())
             {
@@ -253,7 +254,7 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--noaccel"))
             {
-                accelerated = false;
+                windowAccel = false;
             }
             else if(0 == std::strcmp(argv[it], "--notls"))
             {
@@ -269,11 +270,11 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--fullscreen"))
             {
-                fullscreen = true;
+                windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
             }
             else if(0 == std::strcmp(argv[it], "--fixed"))
             {
-                fixedWindow = true;
+                windowFlags &= ~SDL_WINDOW_RESIZABLE;
             }
             else if(0 == std::strcmp(argv[it], "--nodamage"))
             {
@@ -467,6 +468,12 @@ namespace LTSM
             else if(0 == std::strcmp(argv[it], "--syslog"))
             {
                 Application::setDebugTarget(DebugTarget::Syslog);
+
+                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
+                {
+                    Application::setDebugTargetFile(argv[it + 1]);
+                    it = it + 1;
+                }
             }
             else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
             {
@@ -591,7 +598,8 @@ namespace LTSM
             pkcs11Auth.clear();
         }
 
-        if(fullscreen)
+        // fullscreen
+        if(windowFullScreen())
         {
             SDL_DisplayMode mode;
 
@@ -607,6 +615,16 @@ namespace LTSM
         }
     }
 
+    bool Vnc2SDL::windowFullScreen(void) const
+    {
+        return windowFlags & SDL_WINDOW_FULLSCREEN_DESKTOP;
+    }
+
+    bool Vnc2SDL::windowResizable(void) const
+    {
+        return windowFlags & SDL_WINDOW_RESIZABLE;
+    }
+    
     bool Vnc2SDL::isAlwaysRunning(void) const
     {
         return alwaysRunning;
@@ -920,18 +938,18 @@ namespace LTSM
                 {
                     focusLost = true;
                 }
+                else if(SDL_WINDOWEVENT_SIZE_CHANGED == ev.window()->event)
+                {
+                    Application::info("%s: size changed: [%" PRId32 "x%" PRId32 "]",
+                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
+                }
                 else if(SDL_WINDOWEVENT_RESIZED == ev.window()->event)
                 {
                     Application::info("%s: event resized: [%" PRId32 "x%" PRId32 "]",
                             __FUNCTION__, ev.window()->data1, ev.window()->data2);
 //                    Application::debug(DebugType::Sdl, "%s: resized window: [%" PRId32 "x%" PRId32 "]",
 //                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
-                }
-                else if(SDL_WINDOWEVENT_SIZE_CHANGED == ev.window()->event)
-                {
-                    Application::info("%s: size changed: [%" PRId32 "x%" PRId32 "]",
-                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
-                    windowSizeChangedEvent(ev.window()->data1, ev.window()->data2);
+                    windowResizedEvent(ev.window()->data1, ev.window()->data2);
                 }
 
                 break;
@@ -950,15 +968,15 @@ namespace LTSM
                 if(ev.key()->keysym.sym == SDLK_F11 &&
                         (KMOD_CTRL & SDL_GetModState()))
                 {
-                    if(fullscreen)
+                    if(windowFullScreen())
                     {
                         SDL_SetWindowFullscreen(window->get(), 0);
-                        fullscreen = false;
+                        windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
                     }
                     else
                     {
                         SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
-                        fullscreen = true;
+                        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
                     }
 
                     return true;
@@ -1027,14 +1045,9 @@ namespace LTSM
                     bool contUpdateResume = ev.user()->code == LocalEvent::ResizeCont;
                     cursors.clear();
 
-                    if(fullscreen)
+                    if(windowFullScreen())
                     {
-                        int flags = SDL_WINDOW_FULLSCREEN_DESKTOP;
-
-                        if(! fixedWindow)
-                            flags |= SDL_WINDOW_RESIZABLE;
-
-                        window.reset(new SDL::Window("LTSM_client", width, height, 0, 0, flags, accelerated));
+                        window.reset(new SDL::Window(windowTitle, width, height, 0, 0, windowFlags, windowAccel));
                     }
                     else
                     {
@@ -1117,7 +1130,7 @@ namespace LTSM
             // server runtime
             else
             {
-                if(fullscreen && setGeometry != nsz)
+                if(windowFullScreen() && setGeometry != nsz)
                 {
                     Application::warning("%s: fullscreen mode: [%" PRIu16 ", %" PRIu16
                                          "], server request resize desktop: [%" PRIu16 ", %" PRIu16 "]",
@@ -1164,15 +1177,14 @@ namespace LTSM
         Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
                           wsz.width, wsz.height);
         const std::scoped_lock guard{ renderLock };
+        bool eventResize = false;
 
         if(! window)
         {
-            window.reset(new SDL::Window("VNC2SDL", wsz.width, wsz.height, 0, 0, 0,
-                                         accelerated));
+            window.reset(new SDL::Window(windowTitle, wsz.width, wsz.height, 0, 0, windowFlags, windowAccel));
+            eventResize = true;
         }
 
-        auto pair = window->geometry();
-        windowSize = XCB::Size(pair.first, pair.second);
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
@@ -1185,7 +1197,13 @@ namespace LTSM
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        displayResizeEvent(windowSize);
+
+        if(eventResize)
+        {
+            auto pair = window->geometry();
+            windowSize = XCB::Size(pair.first, pair.second);
+            displayResizeEvent(windowSize);
+        }
     }
 
     void Vnc2SDL::setPixel(const XCB::Point & dst, uint32_t pixel)
@@ -1489,7 +1507,7 @@ namespace LTSM
             { LC_COLLATE, "LC_COLLATE" }, { LC_MONETARY, "LC_MONETARY" }, { LC_MESSAGES, "LC_MESSAGES" }
         };
 
-        for(auto & lc : lcall)
+        for(const auto & lc : lcall)
         {
             auto ptr = std::setlocale(lc.first, "");
             jo.push(lc.second, ptr ? ptr : "C");
@@ -1642,12 +1660,11 @@ namespace LTSM
         return true;
     }
 
-    void Vnc2SDL::windowSizeChangedEvent(int width, int height)
+    void Vnc2SDL::windowResizedEvent(int width, int height)
     {
-        if(0 < width && 0 < height)
-        {
-            sendSetDesktopSize(XCB::Size(width, height));
-        }
+        windowSize = XCB::Size(width, height);
+        sendSetDesktopSize(windowSize);
+        sendFrameBufferUpdate(false);
     }
 }
 

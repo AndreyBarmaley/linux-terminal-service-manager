@@ -59,7 +59,7 @@ namespace LTSM
 
     int ClientEncodings::findPriorityFrom(std::initializer_list<int> priorities) const
     {
-        for(auto & enc: encs)
+        for(const auto & enc: encs)
         {
             if(std::any_of(priorities.begin(), priorities.end(),
                         [&](auto & val){ return val == enc; }))
@@ -863,9 +863,9 @@ namespace LTSM
                     continueUpdates = true;
                     break;
 
-                case RFB::ENCODING_EXT_CLIPBOARD:
-                    extendedClipboard = true;
-                    break;
+//                case RFB::ENCODING_EXT_CLIPBOARD:
+//                    extendedClipboard = true;
+//                    break;
 
                 default:
                     break;
@@ -1050,7 +1050,7 @@ namespace LTSM
         sendIntBE16(first); // first color
         sendIntBE16(colourMap.size());
 
-        for(auto & col : colourMap)
+        for(const auto & col : colourMap)
         {
             sendIntBE16(col.r);
             sendIntBE16(col.g);

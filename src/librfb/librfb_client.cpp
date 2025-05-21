@@ -703,7 +703,7 @@ namespace LTSM
 
     void RFB::ClientDecoder::sendEncodings(const std::list<int> & encodings)
     {
-        for(auto type : encodings)
+        for(const auto & type : encodings)
         {
             Application::debug(DebugType::Rfb, "%s: %s", __FUNCTION__, encodingName(type));
         }
@@ -713,7 +713,7 @@ namespace LTSM
         sendZero(1); // padding
         sendIntBE16(encodings.size());
 
-        for(auto val : encodings)
+        for(const auto & val : encodings)
         {
             sendIntBE32(val);
         }

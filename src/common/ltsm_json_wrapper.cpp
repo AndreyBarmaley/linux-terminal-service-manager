@@ -614,7 +614,7 @@ namespace LTSM
     {
         std::list<std::string> res;
 
-        for(auto & [key, value] : content)
+        for(const auto & [key, value] : content)
         {
             res.push_back(key);
         }
@@ -802,7 +802,7 @@ namespace LTSM
 
     void JsonObject::join(const JsonObject & jo)
     {
-        for(auto & [key, valptr] : jo.content)
+        for(const auto & [key, valptr] : jo.content)
         {
             if(valptr->isArray())
             {

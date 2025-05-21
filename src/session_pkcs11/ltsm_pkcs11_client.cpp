@@ -247,7 +247,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
     PKCS11::SlotInfo slotInfo;
     PKCS11::TokenInfo tokenInfo;
 
-    for(auto & slot : slots)
+    for(const auto & slot : slots)
     {
         reply.writeIntLE64(slot.slotId());
 
@@ -323,7 +323,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     auto mechs = slot.getMechanisms();
     reply.writeIntLE16(mechs.size());
 
-    for(auto & mech : mechs)
+    for(const auto & mech : mechs)
     {
         if(auto mechInfo = slot.getMechInfo(mech))
         {
@@ -381,7 +381,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     auto certs = sess->getCertificates(true /* havePulicPrivateKeys */);
     reply.writeIntLE16(certs.size());
 
-    for(auto & handle : certs)
+    for(const auto & handle : certs)
     {
         auto objInfo = sess->getObjectInfo(handle, { CKA_VALUE });
         auto rawId = objInfo.getId();

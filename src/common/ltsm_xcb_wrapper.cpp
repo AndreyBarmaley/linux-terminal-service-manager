@@ -1262,7 +1262,7 @@ namespace LTSM
         if(auto info = getScreenInfo())
         {
             // check output mode present
-            for(auto & output: outputs)
+            for(const auto & output: outputs)
             {
                 auto modes = getOutputModes(output);
 
@@ -1874,7 +1874,7 @@ namespace LTSM
         }
 
         bool removed = false;
-        for(auto & req: requestsIncr)
+        for(const auto & req: requestsIncr)
         {
             if(0 == win || req.ev.requestor == win)
             {
@@ -2636,10 +2636,10 @@ namespace LTSM
 
         if(cookie)
         {
-            const char* magic = "MIT-MAGIC-COOKIE-1";
+            std::string_view magic{"MIT-MAGIC-COOKIE-1"};
             xcb_auth_info_t auth;
-            auth.name = (char*) magic;
-            auth.namelen = std::strlen(magic);
+            auth.name = (char*) magic.data();
+            auth.namelen = magic.size();
             auth.data = (char*) cookie->data();
             auth.datalen = cookie->size();
 
@@ -3598,7 +3598,7 @@ namespace LTSM
         }
 
         // disconnected current CRTCs
-        for(auto & outputId: _modRandr->getOutputs())
+        for(const auto & outputId: _modRandr->getOutputs())
         {
             if(auto info = _modRandr->getOutputInfo(outputId);
                     info && info->connected == XCB_RANDR_CONNECTION_CONNECTED)
@@ -3609,7 +3609,7 @@ namespace LTSM
 
         Region screenArea;
 
-        for(auto & monitor: monitors)
+        for(const auto & monitor: monitors)
         {
             screenArea.join(monitor);
         }

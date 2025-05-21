@@ -215,7 +215,7 @@ public:
         }
         else
         {
-            for(auto & name: encodings)
+            for(const auto & name: encodings)
             {
                 // test preffered encodings
                 switch(RFB::encodingType(name))

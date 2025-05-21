@@ -43,15 +43,16 @@
 
 namespace LTSM
 {
-    std::string ident{"application"};
-    int facility = LOG_USER;
-
-    // Application
-    std::mutex Application::logging;
+    // static application
     FILE* Application::fdlog = stderr;
     DebugTarget Application::target = DebugTarget::Console;
     DebugLevel Application::level = DebugLevel::Info;
     uint32_t Application::types = DebugType::All;
+    std::mutex Application::logging;
+
+    // local application
+    std::string ident{"application"};
+    int facility = LOG_USER;
 
     void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
     {
@@ -80,11 +81,6 @@ namespace LTSM
         target = tgt;
     }
 
-    bool Application::isDebugTarget(const DebugTarget & tgt)
-    {
-        return target == tgt;
-    }
-
     void Application::setDebugTarget(std::string_view tgt)
     {
         if(tgt == "console")
@@ -103,8 +99,27 @@ namespace LTSM
         }
     }
 
+    void Application::setDebugTargetFile(const std::filesystem::path & file)
+    {
+        if(! file.empty())
+        {
+            fdlog = fopen(file.c_str(), "a");
+
+            if(! fdlog)
+            {
+                fdlog = stderr;
+            }
+        }
+    }
+
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {
+        if(level == DebugLevel::Trace)
+            return true;
+
+        if(level == DebugLevel::Debug && lvl == DebugLevel::Info)
+            return true;
+
         return level == lvl;
     }
 
@@ -193,7 +208,7 @@ namespace LTSM
             files.emplace_back(std::filesystem::current_path() / "config.json");
             files.emplace_back("/etc/ltsm/config.json");
 
-            for(auto & path : files)
+            for(const auto & path : files)
             {
                 auto st = std::filesystem::status(path);
 

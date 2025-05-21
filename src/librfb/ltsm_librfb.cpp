@@ -197,7 +197,7 @@ namespace LTSM
                 ENCODING_LTSM, ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI
         };
 
-        for(auto & type: types)
+        for(const auto & type: types)
         {
             if(Tools::lower(name) == Tools::lower(encodingName(type)))
             {

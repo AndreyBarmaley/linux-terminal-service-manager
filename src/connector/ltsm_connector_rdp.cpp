@@ -774,7 +774,7 @@ namespace LTSM
         std::vector<BITMAP_DATA> vec;
         vec.reserve(blocks.size());
 
-        for(auto & subreg : blocks)
+        for(const auto & subreg : blocks)
         {
             const int16_t localX = subreg.x - reg.x;
             const int16_t localY = subreg.y - reg.y;
@@ -835,7 +835,7 @@ namespace LTSM
             it1 = it2;
         }
 
-        for(auto & st : vec)
+        for(const auto & st : vec)
         {
             std::free(st.bitmapDataStream);
         }
@@ -914,7 +914,7 @@ namespace LTSM
         // full size reserved
         auto data = std::make_unique<uint8_t[]>(tileSize* tileSize * 4);
 
-        for(auto & subreg : blocks)
+        for(const auto & subreg : blocks)
         {
             const int16_t localX = subreg.x - reg.x;
             const int16_t localY = subreg.y - reg.y;
@@ -1205,7 +1205,7 @@ namespace LTSM
                 {
                     auto ja = static_cast<const JsonArray*>(value);
 
-                    for(auto & val : ja->toStdVector<int>())
+                    for(const auto & val : ja->toStdVector<int>())
                     {
                         test->screenInputKeycode(val, flags & KBD_FLAGS_DOWN);
                     }

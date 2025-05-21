@@ -288,7 +288,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     StreamBuf reply(256);
     reply.writeIntLE32(readers.size());
 
-    for(auto & reader : readers)
+    for(const auto & reader : readers)
     {
         reply.writeIntLE32(reader.size()).write(reader);
     }
@@ -506,7 +506,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
     StreamBuf reply(1024);
     reply.writeIntLE32(statesCount).writeIntLE32(ret);
 
-    for(auto & state : states)
+    for(const auto & state : states)
     {
         reply.writeIntLE32(state.dwCurrentState);
         reply.writeIntLE32(state.dwEventState);

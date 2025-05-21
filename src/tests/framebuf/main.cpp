@@ -65,7 +65,7 @@ int main(int argc, char** argv)
     FrameBuffer back(XCB::Size(640, 480), RGB24);
     int index = 0;
 
-    for(auto & pf : formats)
+    for(const auto & pf : formats)
     {
         std::cout << "test framebuffer: " << index++ << std::endl;
         auto tmp = generate(pf);

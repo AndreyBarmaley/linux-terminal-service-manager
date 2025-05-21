@@ -278,7 +278,7 @@ void LTSM_Sessions::tableReload(void)
 
         if(! jsonDoc.isEmpty() && jsonDoc.isArray())
         {
-            for(auto val : jsonDoc.array())
+            for(const auto & val : jsonDoc.array())
             {
                 auto obj = val.toObject();
                 XvfbInfo info;

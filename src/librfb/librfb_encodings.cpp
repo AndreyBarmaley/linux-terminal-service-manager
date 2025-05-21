@@ -248,7 +248,7 @@ namespace LTSM
         {
             while(! bads1.empty())
             {
-                for(auto & subreg : bads1.front().divideCounts(2, 2))
+                for(const auto & subreg : bads1.front().divideCounts(2, 2))
                 {
                     auto pixel = fb.pixel(subreg.topLeft());
 
@@ -451,7 +451,7 @@ namespace LTSM
         // back pixel
         st->sendPixel(back);
 
-        for(auto & pair : rreList)
+        for(const auto & pair : rreList)
         {
             // subrect pixel
             st->sendPixel(pair.pixel());
@@ -632,7 +632,7 @@ namespace LTSM
         // hextile subrects
         st->sendInt8(rreList.size());
 
-        for(auto & pair : rreList)
+        for(const auto & pair : rreList)
         {
             auto & region = pair.region();
             st->sendPixel(pair.pixel());
@@ -656,7 +656,7 @@ namespace LTSM
         // hextile subrects
         st->sendInt8(rreList.size());
 
-        for(auto & pair : rreList)
+        for(const auto & pair : rreList)
         {
             auto & region = pair.region();
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
@@ -841,7 +841,7 @@ namespace LTSM
         st->sendInt8(pal.size());
 
         // send palette
-        for(auto & pair : pal)
+        for(const auto & pair : pal)
         {
             st->sendCPixel(pair.first);
         }
@@ -900,7 +900,7 @@ namespace LTSM
         st->sendInt8(128);
 
         // send rle content
-        for(auto & pair : rle)
+        for(const auto & pair : rle)
         {
             st->sendCPixel(pair.pixel());
             st->sendRunLength(pair.length());
@@ -914,13 +914,13 @@ namespace LTSM
         st->sendInt8(pal.size() + 128);
 
         // send palette
-        for(auto & pair : pal)
+        for(const auto & pair : pal)
         {
             st->sendCPixel(pair.first);
         }
 
         // send rle indexes
-        for(auto & pair : rle)
+        for(const auto & pair : rle)
         {
             int index = pal.findColorIndex(pair.pixel());
             assertm(0 <= index, "palette color not found");
@@ -1009,7 +1009,7 @@ namespace LTSM
     {
         bool fullscreenUpdate = false;
 
-        for(auto & str: encopts)
+        for(const auto & str: encopts)
         {
             // parce zlevel
             if(0 == std::strncmp(str.c_str(), "zlev", 4))
@@ -1160,7 +1160,7 @@ namespace LTSM
     {
         bool fullscreenUpdate = false;
 
-        for(auto & str: encopts)
+        for(const auto & str: encopts)
         {
             // parce quality
             if(0 == std::strncmp(str.c_str(), "qual", 4))
@@ -1581,12 +1581,8 @@ namespace LTSM
         }
 
         // padding
-        const uint8_t qoiPadding[] = {0,0,0,0,0,0,0,1};
-
-        for(auto & pad: qoiPadding)
-        {
-            sb.writeInt8(pad);
-        }
+        const std::array<uint8_t, 8> qoiPadding{0,0,0,0,0,0,0,1};
+        sb.write(qoiPadding.data(), qoiPadding.size());
 
         return sb.rawbuf();
     }

@@ -113,7 +113,7 @@ public:
 
         Application::info("outputs: %d", outputs.size());
     
-	for(auto & val : outputs)
+	for(const auto & val : outputs)
 	{
 	    auto info = randr->getOutputInfo(val);
     	    Application::info("output name: %s, connected: %s, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
@@ -134,7 +134,7 @@ public:
 	    }
 	}
 
-	for(auto & size : randr->getScreenSizes())
+	for(const auto & size : randr->getScreenSizes())
 	{
     	    Application::info("screen size: %d, %d", size.width, size.height);
 	}

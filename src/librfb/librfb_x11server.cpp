@@ -449,7 +449,7 @@ namespace LTSM
         auto ptr = const_cast<RFB::X11Server*>(this);
         if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
         {
-            for(auto atom: ExtClip::typesToX11Atoms(type, *this))
+            for(const auto & atom: ExtClip::typesToX11Atoms(type, *this))
             {
                 ptr->clientClipboard.clear();
                 copy->convertSelection(atom, *this);
@@ -541,7 +541,7 @@ namespace LTSM
             auto ptr = const_cast<RFB::X11Server*>(this);
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
             {
-                for(auto atom: selectionSourceTargets())
+                for(const auto & atom: selectionSourceTargets())
                 {
                     if(std::any_of(beg, end, [&](auto & trgt){ return atom == trgt; }))
                     {
@@ -682,7 +682,7 @@ namespace LTSM
     {
         XCB::Region desktop(0, 0, 0, 0);
 
-        for(auto & info : screens)
+        for(const auto & info : screens)
         {
             Application::info("%s: screen id: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
                               "], flags: 0x%08" PRIx32,

@@ -357,7 +357,7 @@ namespace LTSM
     {
         uint32_t types = 0;
                     
-        for(auto & val: typesList)
+        for(const auto & val: typesList)
         {
             auto slower = lower(val);
         
@@ -970,7 +970,7 @@ namespace LTSM
         }
 
         // variants: \\, \", \/, \t, \n, \r, \f, \b
-        for(auto & ch : str)
+        for(const auto & ch : str)
         {
             switch(ch)
             {

@@ -115,7 +115,7 @@ namespace LTSM
         auto items = Tools::readDir(dir, true);
         std::list<std::pair<ino_t, ino_t>> symlinks;
 
-        for(auto & path : items)
+        for(const auto & path : items)
         {
             struct stat st = {};
 
@@ -156,7 +156,7 @@ namespace LTSM
 
         reply.writeIntLE32(inodes.size());
 
-        for(auto & st : inodes)
+        for(const auto & st : inodes)
         {
             reply.writeIntLE16(std::min(size_t(UINT16_MAX), st.second.first.size()));
             reply.write(st.second.first);
@@ -165,7 +165,7 @@ namespace LTSM
 
         reply.writeIntLE32(symlinks.size());
 
-        for(auto & st : symlinks)
+        for(const auto & st : symlinks)
         {
             reply.writeIntLE64(st.first);
             reply.writeIntLE64(st.second);
@@ -203,7 +203,7 @@ LTSM::Channel::ConnectorClientFuse::~ConnectorClientFuse()
 {
     setRunning(false);
 
-    for(auto & fd : opens)
+    for(const auto & fd : opens)
     {
         ::close(fd);
     }

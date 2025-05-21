@@ -225,7 +225,7 @@ namespace LTSM
                 {
                     auto jo = jc.toObject();
 
-                    for(auto & skey : jo.keys())
+                    for(const auto & skey : jo.keys())
                     {
                         try
                         {

@@ -242,6 +242,7 @@ if(LTSM_BUILD_CONNECTOR)
 
     find_package(sdbus-c++ REQUIRED)
     find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX gnutlsxx)
 
     pkg_search_module(SDBUS_CPP REQUIRED sdbus-c++)
     pkg_search_module(LZ4 REQUIRED liblz4)
@@ -317,7 +318,7 @@ if(LTSM_BUILD_CONNECTOR)
         ${GNUTLS_INCLUDE_DIR} ${LZ4_INCLUDE_DIR} ${TURBOJPEG_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
 
     target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++
-        ${GNUTLS_LIBRARIES} ${LZ4_LIBRARIES} ${TURBOJPEG_LIBRARIES} z)
+        ${GNUTLS_LIBRARIES} ${GNUTLSXX} ${LZ4_LIBRARIES} ${TURBOJPEG_LIBRARIES} z)
 
     set_target_properties(LTSM_connector PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -348,6 +349,7 @@ if(LTSM_BUILD_HELPER)
 
     find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
     find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX gnutlsxx)
 
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
@@ -381,7 +383,7 @@ if(LTSM_BUILD_HELPER)
 
     target_link_libraries(LTSM_helper LTSM_common
         Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
-        SDBusCpp::sdbus-c++ ${GNUTLS_LIBRARIES})
+        SDBusCpp::sdbus-c++ ${GNUTLS_LIBRARIES} ${GNUTLSXX})
 
     set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -421,10 +423,11 @@ if(LTSM_BUILD_X11VNC)
         src/librfb/ltsm_librfb.cpp)
 
     find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX gnutlsxx)
 
     target_compile_options(LTSM_x11vnc PRIVATE -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
-    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} z)
+    target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} ${GNUTLSXX} z)
 
     set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -443,11 +446,12 @@ if(LTSM_BUILD_VNC2IMAGE)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX gnutlsxx)
 
     target_compile_definitions(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_compile_options(LTSM_vnc2image PRIVATE ${SDL2_CFLAGS})
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
-    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} ${SDL2_LIBRARIES} ${PNG_LIBRARIES} z)
+    target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} ${GNUTLSXX} ${SDL2_LIBRARIES} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -487,6 +491,7 @@ if(LTSM_BUILD_CLIENT)
 
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
+    find_library(GNUTLSXX gnutlsxx)
 
     target_compile_definitions(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_DECODING)
 
@@ -609,7 +614,7 @@ if(LTSM_BUILD_CLIENT)
         ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
 
     target_link_libraries(LTSM_client LTSM_common ${SDL2_LIBRARIES}
-        ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
+        ${GNUTLS_LIBRARIES} ${GNUTLSXX} ${PNG_LIBRARIES} z)
 
     set_target_properties(LTSM_client PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

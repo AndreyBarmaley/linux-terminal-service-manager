@@ -347,7 +347,7 @@ namespace LTSM
         {
             Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
 
-            for(auto & ptr : _renderPrimitives)
+            for(const auto & ptr : _renderPrimitives)
             {
                 if(ptr->type == RenderType::RenderRect)
                 {
@@ -423,7 +423,7 @@ namespace LTSM
 
     void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb) const
     {
-        for(auto & ptr : _renderPrimitives)
+        for(const auto & ptr : _renderPrimitives)
         {
             switch(ptr->type)
             {

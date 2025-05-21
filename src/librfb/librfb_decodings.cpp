@@ -310,14 +310,14 @@ namespace LTSM
             cli.recvZlibData(zlib.get(), false);
             DecoderWrapper wrap(zlib.get(), & cli);
 
-            for(auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
+            for(const auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
             {
                 updateSubRegion(wrap, reg0);
             }
         }
         else
         {
-            for(auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
+            for(const auto & reg0 : reg.XCB::Region::divideBlocks(bsz))
             {
                 updateSubRegion(cli, reg0);
             }

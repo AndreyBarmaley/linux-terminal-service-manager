@@ -1669,7 +1669,7 @@ namespace LTSM
             }
         }
 
-        for(auto & name : names)
+        for(const auto & name : names)
         {
             auto it = std::find_if(readers.begin(), readers.end(),
                                    [&](auto & rd)

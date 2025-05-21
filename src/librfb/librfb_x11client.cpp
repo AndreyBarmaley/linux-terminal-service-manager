@@ -67,7 +67,7 @@ namespace LTSM
         auto ptr = const_cast<RFB::X11Client*>(this);
         if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
         {
-            for(auto atom: ExtClip::typesToX11Atoms(type, *this))
+            for(const auto & atom: ExtClip::typesToX11Atoms(type, *this))
             {
                 ptr->clientClipboard.clear();
                 copy->convertSelection(atom, *this);
@@ -163,7 +163,7 @@ namespace LTSM
             auto ptr = const_cast<RFB::X11Client*>(this);
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY)))
             {
-                for(auto atom: selectionSourceTargets())
+                for(const auto & atom: selectionSourceTargets())
                 {
                     if(std::any_of(beg, end, [&](auto & trgt){ return atom == trgt; }))
                     {

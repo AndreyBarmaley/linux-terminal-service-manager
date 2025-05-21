@@ -337,7 +337,7 @@ namespace LTSM
                 zlib->appendData(sb.read(len));
 
                 // The header is followed by a Zlib stream which contains a pair of size and data for each format
-                for(auto & type: Tools::maskUnpackBits(localProvideTypes))
+                for(const auto & type: Tools::maskUnpackBits(localProvideTypes))
                 {
                     auto len = zlib->recvIntBE32();
                     auto raw = zlib->recvData(len);
@@ -462,7 +462,7 @@ namespace LTSM
 
         auto zlib = std::make_unique<ZLib::DeflateStream>();
 
-        for(auto type: { ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml | ExtClipCaps::TypeDib |  ExtClipCaps::TypeFiles })
+        for(const auto & type: { ExtClipCaps::TypeText, ExtClipCaps::TypeRtf, ExtClipCaps::TypeHtml, ExtClipCaps::TypeDib, ExtClipCaps::TypeFiles })
         {
             if(types & type)
             {

@@ -337,11 +337,13 @@ namespace LTSM
     {
         Application::info("%s: fragment size: %" PRIu32, __FUNCTION__, fragsz);
 
-        for(auto & cl : clients)
+        for(const auto & cl : clients)
+        {
             if(cl.pulse)
             {
                 cl.pulse->setFragSize(fragsz);
             }
+        }
     }
 }
 

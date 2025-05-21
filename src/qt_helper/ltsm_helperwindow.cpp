@@ -164,7 +164,7 @@ QStringList LTSM_HelperSDBus::getUsersList(int displayNum)
 {
     QStringList res;
 
-    for(auto & user : helperGetUsersList(displayNum))
+    for(const auto & user : helperGetUsersList(displayNum))
     {
         res << QString::fromStdString(user);
     }
@@ -289,7 +289,7 @@ void LTSM_HelperWindow::tokensChanged(void)
     ui->lineEditPassword->clear();
     int rowIndex = 0;
 
-    for(auto & st : tokens)
+    for(const auto & st : tokens)
     {
         auto model = QString(QByteArray((char*) st.tokenInfo.model, sizeof(st.tokenInfo.model)).trimmed());
         auto serialNumber = QString(QByteArray((char*) st.tokenInfo.serialNumber, sizeof(st.tokenInfo.serialNumber)).trimmed());
@@ -336,7 +336,7 @@ void LTSM_HelperWindow::domainIndexChanged(int index)
             return;
         }
 
-        for(auto & cert : certs)
+        for(const auto & cert : certs)
         {
             auto ssl = QSslCertificate(QByteArray((const char*) cert.objectValue.data(), cert.objectValue.size()), QSsl::Der);
 

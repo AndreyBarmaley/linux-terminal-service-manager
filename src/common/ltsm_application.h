@@ -26,6 +26,7 @@
 #include <mutex>
 #include <string>
 #include <cstdarg>
+#include <filesystem>
 #include <string_view>
 
 #ifdef WITH_SYSTEMD
@@ -75,11 +76,11 @@ namespace LTSM
     class Application
     {
     protected:
-        static std::mutex logging;
         static FILE* fdlog;
         static DebugTarget target;
         static DebugLevel level;
         static uint32_t types;
+        static std::mutex logging;
 
     public:
         explicit Application(std::string_view ident);
@@ -280,12 +281,23 @@ namespace LTSM
 
         static void setDebugTarget(const DebugTarget &);
         static void setDebugTarget(std::string_view target);
-        static bool isDebugTarget(const DebugTarget &);
+        static void setDebugTargetFile(const std::filesystem::path & file);
 
         static void setDebugLevel(const DebugLevel &);
         static void setDebugLevel(std::string_view level);
         static bool isDebugLevel(const DebugLevel &);
+
         static void setDebugTypes(uint32_t);
+
+        inline static bool isDebugTarget(const DebugTarget & tgt)
+        {
+            return target == tgt;
+        }
+
+        inline static bool isDebugTypes(uint32_t vals)
+        {
+            return types & vals;
+        }
 
         virtual int start(void) = 0;
     };

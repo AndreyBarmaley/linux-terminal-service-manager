@@ -664,7 +664,7 @@ namespace LTSM
     {
         int offset = 0;
 
-        for(auto & ch : str)
+        for(const auto & ch : str)
         {
             renderChar(ch, col, XCB::Point(pos.x + offset, pos.y));
             offset += _systemfont.width;

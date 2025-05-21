@@ -684,7 +684,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
 
     JsonArrayStream ja;
 
-    for(auto & fname : files)
+    for(const auto & fname : files)
     {
         std::error_code err;
 
@@ -1179,7 +1179,7 @@ void LTSM::ChannelClient::channelsShutdown(void)
 {
     const std::scoped_lock guard{lockch};
 
-    for(auto & ptr : channels)
+    for(const auto & ptr : channels)
     {
         ptr->setRunning(false);
     }

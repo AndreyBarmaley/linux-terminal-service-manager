@@ -96,7 +96,7 @@ public:
 
                 auto tp = std::chrono::steady_clock::now();
 
-                for(auto & img: images)
+                for(const auto & img: images)
                     srv->sendFrameBufferUpdate(*img.fb);
 
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);

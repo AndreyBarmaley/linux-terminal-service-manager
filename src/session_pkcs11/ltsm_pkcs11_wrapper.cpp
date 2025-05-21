@@ -224,7 +224,7 @@ namespace LTSM
     {
         if(pFunctionList)
         {
-            for(auto & sid : sessions)
+            for(const auto & sid : sessions)
             {
                 pFunctionList->C_CloseSession(sid);
             }
@@ -276,7 +276,7 @@ namespace LTSM
 
         SlotList res;
 
-        for(auto & id : slots)
+        for(const auto & id : slots)
         {
             res.emplace_front(id, lib);
         }
@@ -734,10 +734,10 @@ namespace LTSM
         ObjectInfo info;
         info.attrs.reserve(defaults.size() + types.size());
 
-        for(auto & type : defaults)
+        for(const auto & type : defaults)
             info.attrs.emplace_back(CK_ATTRIBUTE{ type, nullptr, 0 });
 
-        for(auto & type : types)
+        for(const auto & type : types)
             info.attrs.emplace_back(CK_ATTRIBUTE{ type, nullptr, 0 });
 
         // get size

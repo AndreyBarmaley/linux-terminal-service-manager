@@ -251,7 +251,7 @@ namespace LTSM
         {
             content.reserve(list.size());
 
-            for(auto & val : list) { content.emplace_back(val); }
+            for(const auto & val : list) { content.emplace_back(val); }
         }
 
         template<typename T>
@@ -259,7 +259,7 @@ namespace LTSM
         {
             content.reserve(list.size());
 
-            for(auto & val : list) { content.emplace_back(val); }
+            for(const auto & val : list) { content.emplace_back(val); }
         }
 
         template<typename InputIterator>
@@ -310,7 +310,7 @@ namespace LTSM
             std::vector<T> res;
             res.reserve(content.size());
 
-            for(auto & ptr : content)
+            for(const auto & ptr : content)
             {
                 res.emplace_back(ptr->template get<T>());
             }
@@ -323,7 +323,7 @@ namespace LTSM
         {
             std::list<T> res;
 
-            for(auto & ptr : content)
+            for(const auto & ptr : content)
             {
                 res.emplace_back(ptr->template get<T>());
             }
@@ -336,7 +336,7 @@ namespace LTSM
         {
             std::forward_list<T> res;
 
-            for(auto & ptr : content)
+            for(const auto & ptr : content)
             {
                 res.emplace_front(ptr->template get<T>());
             }
@@ -347,7 +347,7 @@ namespace LTSM
         template<typename T>
         const JsonArray & operator>> (std::vector<T> & v) const
         {
-            for(auto & ptr : content)
+            for(const auto & ptr : content)
             {
                 v.emplace_back(ptr->template get<T>());
             }
@@ -358,7 +358,7 @@ namespace LTSM
         template<typename T>
         const JsonArray & operator>> (std::list<T> & v) const
         {
-            for(auto & ptr : content)
+            for(const auto & ptr : content)
             {
                 v.emplace_back(ptr->template get<T>());
             }
@@ -463,7 +463,7 @@ namespace LTSM
         {
             std::map<std::string, T> res;
 
-            for(auto & [key, ptr] : content)
+            for(const auto & [key, ptr] : content)
             {
                 res.emplace(key, ptr->template get<T>());
             }
@@ -476,7 +476,7 @@ namespace LTSM
         {
             std::unordered_map<std::string, T> res;
 
-            for(auto & [key, ptr] : content)
+            for(const auto & [key, ptr] : content)
             {
                 res.emplace(key, ptr->template get<T>());
             }

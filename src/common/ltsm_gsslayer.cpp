@@ -274,7 +274,7 @@ namespace Gss
 
         std::list<ContextFlag> res;
 
-        for(auto & v : all)
+        for(const auto & v : all)
             if(flags & v) { res.push_front(v); }
 
         return res;

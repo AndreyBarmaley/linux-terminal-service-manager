@@ -90,6 +90,7 @@ namespace LTSM
 
         int port = 5900;
         int frameRate = 16;
+        int windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 
 //        BinaryBuf clipboardBufRemote;
 //        BinaryBuf clipboardBufLocal;
@@ -99,9 +100,8 @@ namespace LTSM
         SDL_Event sdlEvent;
 
         bool ltsmSupport = true;
-        bool accelerated = true;
+        bool windowAccel = true;
         bool nodamage = false;
-        bool fullscreen = false;
         bool useXkb = true;
         bool capslock = true;
         bool sendOptions = false;
@@ -110,7 +110,6 @@ namespace LTSM
         bool audioEnable = false;
         bool pcscEnable = false;
         bool extclip = false;
-        bool fixedWindow = false;
 
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
@@ -128,10 +127,13 @@ namespace LTSM
         int startSocket(std::string_view host, int port) const;
         void sendMouseState(void);
         void exitEvent(void);
-        void windowSizeChangedEvent(int, int);
+        void windowResizedEvent(int, int);
 
         json_plain clientOptions(void) const;
         json_plain clientEnvironments(void) const;
+
+        bool windowFullScreen(void) const;
+        bool windowResizable(void) const;
 
     public:
         Vnc2SDL(int argc, const char** argv);

@@ -460,7 +460,7 @@ namespace LTSM
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard{ lockSessions };
 
-        for(auto & ptr : sessions)
+        for(const auto & ptr : sessions)
         {
             if(ptr && 0 < ptr->durationLimit)
             {
@@ -476,7 +476,7 @@ namespace LTSM
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard{ lockSessions };
 
-        for(auto & ptr : sessions)
+        for(const auto & ptr : sessions)
         {
             if(ptr && ptr->mode == XvfbMode::SessionOnline)
             {
@@ -544,7 +544,7 @@ namespace LTSM
         JsonArrayStream jas;
         std::scoped_lock guard{ lockSessions };
 
-        for(auto & ptr : sessions)
+        for(const auto & ptr : sessions)
             if(ptr)
             {
                 jas.push(ptr->toJsonString());
@@ -839,7 +839,7 @@ namespace LTSM
 
             if(Manager::switchToUser(*xvfb->userInfo))
             {
-                for(auto & [key, val] : xvfb->environments)
+                for(const auto & [key, val] : xvfb->environments)
                 {
                     setenv(key.c_str(), val.c_str(), 1);
                 }
@@ -853,7 +853,7 @@ namespace LTSM
                 // create argv[]
                 argv.push_back(cmd.c_str());
 
-                for(auto & val : params)
+                for(const auto & val : params)
                     if(! val.empty())
                     {
                         argv.push_back(val.c_str());
@@ -1150,7 +1150,7 @@ namespace LTSM
 
     void Manager::Object::sessionsTimeLimitAction(void)
     {
-        for(auto & ptr : findTimepointLimitSessions())
+        for(const auto & ptr : findTimepointLimitSessions())
         {
             // task background
             auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() -
@@ -1233,7 +1233,7 @@ namespace LTSM
 
     void Manager::Object::sessionsCheckAliveAction(void)
     {
-        for(auto & ptr : getOnlineSessions())
+        for(const auto & ptr : getOnlineSessions())
         {
             // check alive connectors
             if(! ptr->checkStatus(Flags::SessionStatus::CheckConnection))
@@ -1628,7 +1628,7 @@ namespace LTSM
                 argv.reserve(list.size() + 2);
                 argv.push_back(xvfbBin.c_str());
 
-                for(auto & str : list)
+                for(const auto & str : list)
                 {
                     argv.push_back(str.c_str());
                 }
@@ -1736,7 +1736,7 @@ namespace LTSM
         // assign groups
         if(switchToUser(*xvfb->userInfo))
         {
-            for(auto & [key, val] : xvfb->environments)
+            for(const auto & [key, val] : xvfb->environments)
             {
                 setenv(key.c_str(), val.c_str(), 1);
             }
@@ -1749,7 +1749,7 @@ namespace LTSM
             auto environments = pam->getEnvList();
 
             // putenv: valid string
-            for(auto & env : environments)
+            for(const auto & env : environments)
             {
                 Application::debug(DebugType::Mgr, "%s: pam put environment: %s", __FUNCTION__, env.c_str());
 
@@ -2123,7 +2123,7 @@ namespace LTSM
         Application::info("%s: shutdown pid: %d %s", __FUNCTION__, getpid(), "starting");
 
         // terminate connectors
-        for(auto & ptr : sessions)
+        for(const auto & ptr : sessions)
             if(ptr)
             {
                 displayShutdown(ptr, true);
@@ -2153,14 +2153,14 @@ namespace LTSM
 
             Application::error("%s: running childs: %u, killed process", __FUNCTION__, childsCount);
 
-            for(auto & [pid, futureStatus] : childsRunning)
+            for(const auto & [pid, futureStatus] : childsRunning)
             {
                 kill(pid, SIGTERM);
             }
 
             std::this_thread::sleep_for(100ms);
 
-            for(auto & [pid, futureStatus] : childsRunning)
+            for(const auto & [pid, futureStatus] : childsRunning)
             {
                 futureStatus.wait();
             }
@@ -2356,7 +2356,7 @@ namespace LTSM
             return;
         }
 
-        for(auto & info : files)
+        for(const auto & info : files)
         {
             auto tmpname = std::filesystem::path(xvfbHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
@@ -2494,7 +2494,7 @@ namespace LTSM
         std::shared_future<int> zenityQuestionResult;
         auto emitTransferReject = [this](int display, const std::vector<sdbus::Struct<std::string, uint32_t>> & files)
         {
-            for(auto & info : files)
+            for(const auto & info : files)
             {
                 this->emitTransferAllow(display, std::get<0>(info), "", "");
             }
@@ -2660,7 +2660,7 @@ namespace LTSM
         auto accessUsersNames = _config->getStdListForward<std::string>("access:users");
 
         // append list: "access:groups"
-        for(auto & group : _config->getStdListForward<std::string>("access:groups"))
+        for(const auto & group : _config->getStdListForward<std::string>("access:groups"))
         {
             try
             {
@@ -2902,7 +2902,7 @@ namespace LTSM
         {
             xvfb->environments.clear();
 
-            for(auto & [key, val] : map)
+            for(const auto & [key, val] : map)
             {
                 Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), val.c_str());
                 xvfb->environments.emplace(key, val);
@@ -2926,7 +2926,7 @@ namespace LTSM
             xvfb->options.clear();
             std::string login, pass;
 
-            for(auto & [key, val] : map)
+            for(const auto & [key, val] : map)
             {
                 Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), (key != "password" ? val.c_str() : "HIDDEN"));
 
@@ -3073,7 +3073,7 @@ namespace LTSM
 
         if(xvfb->options.end() != fuse)
         {
-            for(auto & share : JsonContentString(fuse->second).toArray().toStdList<std::string>())
+            for(const auto & share : JsonContentString(fuse->second).toArray().toStdList<std::string>())
             {
                 startFuseListener(xvfb, share);
             }
@@ -3088,7 +3088,7 @@ namespace LTSM
 
             if(xvfb->options.end() != fuse)
             {
-                for(auto & share : Tools::split(fuse->second, '|'))
+                for(const auto & share : Tools::split(fuse->second, '|'))
                 {
                     stopFuseListener(xvfb, share);
                 }

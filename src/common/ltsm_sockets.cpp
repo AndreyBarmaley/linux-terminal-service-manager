@@ -1016,10 +1016,14 @@ namespace LTSM
     {
         void gnutls_log(int level, const char* str)
         {
-            // remove end line
-            if(size_t len = strlen(str))
+            if(Application::isDebugTypes(DebugType::Tls) &&
+                Application::isDebugLevel(DebugLevel::Debug))
             {
-                Application::info("gnutls debug: %.*s", len-1, str);
+                // remove end line
+                if(size_t len = strnlen(str, 1024))
+                {
+                    Application::debug(DebugType::Tls, "%s: %.*s", __FUNCTION__, len-1, str);
+                }
             }
         }
 
