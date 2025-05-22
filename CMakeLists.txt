@@ -320,7 +320,7 @@ if(LTSM_BUILD_CONNECTOR)
     target_link_libraries(LTSM_connector LTSM_common SDBusCpp::sdbus-c++
         ${GNUTLS_LIBRARIES} ${LZ4_LIBRARIES} ${TURBOJPEG_LIBRARIES} z)
 
-    if(${GNUTLSXX})
+    if(GNUTLSXX)
         target_link_libraries(LTSM_connector ${GNUTLSXX})
     endif()
 
@@ -389,8 +389,8 @@ if(LTSM_BUILD_HELPER)
         Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network
         SDBusCpp::sdbus-c++ ${GNUTLS_LIBRARIES})
 
-    if(${GNUTLSXX})
-        target_link_libraries(LTSM_connector ${GNUTLSXX})
+    if(GNUTLSXX)
+        target_link_libraries(LTSM_helper ${GNUTLSXX})
     endif()
 
     set_target_properties(LTSM_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -437,8 +437,8 @@ if(LTSM_BUILD_X11VNC)
     target_include_directories(LTSM_x11vnc PRIVATE src/common src/channels src/librfb src/x11vnc src/connector ${GNUTLS_INCLUDE_DIR})
     target_link_libraries(LTSM_x11vnc LTSM_common ${GNUTLS_LIBRARIES} z)
 
-    if(${GNUTLSXX})
-        target_link_libraries(LTSM_connector ${GNUTLSXX})
+    if(GNUTLSXX)
+        target_link_libraries(LTSM_x11vnc ${GNUTLSXX})
     endif()
 
     set_target_properties(LTSM_x11vnc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -465,8 +465,8 @@ if(LTSM_BUILD_VNC2IMAGE)
     target_include_directories(LTSM_vnc2image PRIVATE src/common src/channels src/librfb src/vnc2image src/connector ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
     target_link_libraries(LTSM_vnc2image LTSM_common ${GNUTLS_LIBRARIES} ${SDL2_LIBRARIES} ${PNG_LIBRARIES} z)
 
-    if(${GNUTLSXX})
-        target_link_libraries(LTSM_connector ${GNUTLSXX})
+    if(GNUTLSXX)
+        target_link_libraries(LTSM_vnc2image ${GNUTLSXX})
     endif()
 
     set_target_properties(LTSM_vnc2image PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -632,8 +632,8 @@ if(LTSM_BUILD_CLIENT)
     target_link_libraries(LTSM_client LTSM_common ${SDL2_LIBRARIES}
         ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 
-    if(${GNUTLSXX})
-        target_link_libraries(LTSM_connector ${GNUTLSXX})
+    if(GNUTLSXX)
+        target_link_libraries(LTSM_client ${GNUTLSXX})
     endif()
 
     set_target_properties(LTSM_client PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
