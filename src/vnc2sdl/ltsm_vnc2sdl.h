@@ -90,26 +90,25 @@ namespace LTSM
 
         int port = 5900;
         int frameRate = 16;
-        int windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+        int windowFlags = SDL_WINDOW_SHOWN; // | SDL_WINDOW_RESIZABLE;
 
 //        BinaryBuf clipboardBufRemote;
 //        BinaryBuf clipboardBufLocal;
 //        std::mutex clipboardLock;
 
-        XCB::Size setGeometry;
+        XCB::Size primarySize;
         SDL_Event sdlEvent;
 
         bool ltsmSupport = true;
         bool windowAccel = true;
-        bool nodamage = false;
+        bool xcbNoDamage = false;
         bool useXkb = true;
-        bool capslock = true;
         bool sendOptions = false;
         bool alwaysRunning = false;
-        bool serverExtDesktopSizeSupported = false;
+        bool serverExtDesktopSizeNego = false;
+        bool capslockEnable = true;
         bool audioEnable = false;
         bool pcscEnable = false;
-        bool extclip = false;
 
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;

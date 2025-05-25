@@ -165,6 +165,9 @@ namespace LTSM
             case ENCODING_LTSM_QOI:
                 return "LTSM_QOI";
 
+            case ENCODING_LTSM_CURSOR:
+                return "LTSM_CURSOR";
+
             default:
                 break;
         }

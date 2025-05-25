@@ -246,7 +246,7 @@ namespace LTSM
         {
             if(0 == std::strcmp(argv[it], "--nocaps"))
             {
-                capslock = false;
+                capslockEnable = false;
             }
             else if(0 == std::strcmp(argv[it], "--noltsm"))
             {
@@ -278,7 +278,7 @@ namespace LTSM
             }
             else if(0 == std::strcmp(argv[it], "--nodamage"))
             {
-                nodamage = true;
+                xcbNoDamage = true;
             }
             else if(0 == std::strcmp(argv[it], "--pcsc"))
             {
@@ -563,7 +563,7 @@ namespace LTSM
                 {
                     auto width = std::stoi(argv[it + 1], & idx, 0);
                     auto height = std::stoi(argv[it + 1] + idx + 1, nullptr, 0);
-                    setGeometry = XCB::Size(width, height);
+                    primarySize = XCB::Size(width, height);
                 }
                 catch(const std::invalid_argument &)
                 {
@@ -605,11 +605,11 @@ namespace LTSM
 
             if(0 == SDL_GetDisplayMode(0, 0, & mode))
             {
-                setGeometry = XCB::Size(mode.w, mode.h);
+                primarySize = XCB::Size(mode.w, mode.h);
 
-                if(setGeometry.width < setGeometry.height)
+                if(primarySize.width < primarySize.height)
                 {
-                    std::swap(setGeometry.width, setGeometry.height);
+                    std::swap(primarySize.width, primarySize.height);
                 }
             }
         }
@@ -991,7 +991,7 @@ namespace LTSM
 
             // continue
             case SDL_KEYUP:
-                if(ev.key()->keysym.sym == 0x40000000 && ! capslock)
+                if(ev.key()->keysym.sym == 0x40000000 && ! capslockEnable)
                 {
                     auto mod = SDL_GetModState();
                     SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
@@ -1118,23 +1118,23 @@ namespace LTSM
         if(status == 0 && err == 0)
         {
             // negotiate part
-            if(! serverExtDesktopSizeSupported)
+            if(! serverExtDesktopSizeNego)
             {
-                serverExtDesktopSizeSupported = true;
+                serverExtDesktopSizeNego = true;
 
-                if(! setGeometry.isEmpty() && setGeometry != windowSize)
+                if(! primarySize.isEmpty() && primarySize != windowSize)
                 {
-                    sendSetDesktopSize(setGeometry);
+                    sendSetDesktopSize(primarySize);
                 }
             }
             // server runtime
             else
             {
-                if(windowFullScreen() && setGeometry != nsz)
+                if(windowFullScreen() && primarySize != nsz)
                 {
                     Application::warning("%s: fullscreen mode: [%" PRIu16 ", %" PRIu16
                                          "], server request resize desktop: [%" PRIu16 ", %" PRIu16 "]",
-                                         __FUNCTION__, setGeometry.width, setGeometry.height, nsz.width, nsz.height);
+                                         __FUNCTION__, primarySize.width, primarySize.height, nsz.width, nsz.height);
                 }
 
                 pushEventWindowResize(nsz);
@@ -1159,7 +1159,7 @@ namespace LTSM
                     }
 
                     pushEventWindowResize(nsz);
-                    setGeometry.reset();
+                    primarySize.reset();
                 }
             }
     }
@@ -1427,6 +1427,12 @@ namespace LTSM
             auto sdlFormat = SDL_MasksToPixelFormatEnum(cursorFmt.bitsPerPixel(),
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
+            if(pixels.size() < reg.width * reg.height * 4)
+            {
+                Application::error("%s: invalid pixels, length: %u", __FUNCTION__, pixels.size());
+                return;
+            }
+
             if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN)
             {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__,
@@ -1545,7 +1551,7 @@ namespace LTSM
         jo.push("ipaddr", "127.0.0.1");
         jo.push("platform", SDL_GetPlatform());
         jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
-        jo.push("x11:nodamage", nodamage);
+        jo.push("x11:nodamage", xcbNoDamage);
         jo.push("frame:rate", frameRate);
         jo.push("enc:opts", JsonArrayStream(encodingOptions.begin(), encodingOptions.end()).flush());
 

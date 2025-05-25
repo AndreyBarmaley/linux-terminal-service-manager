@@ -26,6 +26,16 @@
 #include <iostream>
 #include <filesystem>
 
+#ifdef WITH_SYSTEMD
+#include <systemd/sd-journal.h>
+#endif
+
+#ifdef __LINUX__
+#include <syslog.h>
+#endif
+
+#include <cstdio>
+
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
@@ -43,42 +53,52 @@
 
 namespace LTSM
 {
-    // static application
-    FILE* Application::fdlog = stderr;
-    DebugTarget Application::target = DebugTarget::Console;
-    DebugLevel Application::level = DebugLevel::Info;
-    uint32_t Application::types = DebugType::All;
-    std::mutex Application::logging;
-
     // local application
+    FILE* appLoggingFd = stderr;
+    DebugTarget appDebugTarget = DebugTarget::Console;
+    DebugLevel appDebugLevel = DebugLevel::Info;
+    uint32_t appDebugTypes = DebugType::All;
+
+    std::mutex appLoggingLock;
+
     std::string ident{"application"};
     int facility = LOG_USER;
+
+    bool Application::isDebugTarget(const DebugTarget & tgt)
+    {
+        return appDebugTarget == tgt;
+    }
+
+    bool Application::isDebugTypes(uint32_t vals)
+    {
+        return appDebugTypes & vals;
+    }
 
     void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl)
     {
         setDebugTarget(tgt);
 
-        level = lvl;
+        appDebugLevel = lvl;
     }
 
     void Application::setDebugTypes(uint32_t val)
     {
-        types = val;
+        appDebugTypes = val;
     }
 
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
 #ifdef __LINUX__
-        if(target != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
+        if(appDebugTarget != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
         {
             openlog(ident.c_str(), 0, facility);
         }
-        else if(target == DebugTarget::Syslog && tgt != DebugTarget::Syslog)
+        else if(appDebugTarget == DebugTarget::Syslog && tgt != DebugTarget::Syslog)
         {
             closelog();
         }
 #endif
-        target = tgt;
+        appDebugTarget = tgt;
     }
 
     void Application::setDebugTarget(std::string_view tgt)
@@ -103,29 +123,29 @@ namespace LTSM
     {
         if(! file.empty())
         {
-            fdlog = fopen(file.c_str(), "a");
+            appLoggingFd = fopen(file.c_str(), "a");
 
-            if(! fdlog)
+            if(! appLoggingFd)
             {
-                fdlog = stderr;
+                appLoggingFd = stderr;
             }
         }
     }
 
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {
-        if(level == DebugLevel::Trace)
+        if(appDebugLevel == DebugLevel::Trace)
             return true;
 
-        if(level == DebugLevel::Debug && lvl == DebugLevel::Info)
+        if(appDebugLevel == DebugLevel::Debug && lvl == DebugLevel::Info)
             return true;
 
-        return level == lvl;
+        return appDebugLevel == lvl;
     }
 
     void Application::setDebugLevel(const DebugLevel & lvl)
     {
-        level = lvl;
+        appDebugLevel = lvl;
     }
 
     void Application::setDebugLevel(std::string_view lvl)
@@ -172,20 +192,208 @@ namespace LTSM
 
             if(file)
             {
-                fdlog = fopen(file, "a");
+                appLoggingFd = fopen(file, "a");
 
-                if(! fdlog)
+                if(! appLoggingFd)
                 {
-                    fdlog = stderr;
+                    appLoggingFd = stderr;
                 }
             }
 
             // child: switch syslog to stderr
-            Application::target = DebugTarget::Console;
+            appDebugTarget = DebugTarget::Console;
         }
 #endif
     }
 
+    void Application::info(const char* format, ...)
+    {
+        if(appDebugLevel != DebugLevel::None)
+        {
+            va_list args;
+            va_start(args, format);
+
+            if(appDebugTarget == DebugTarget::Console)
+            {
+                const std::scoped_lock guard{ appLoggingLock };
+
+                fprintf(appLoggingFd, "[info] ");
+                vfprintf(appLoggingFd, format, args);
+                fprintf(appLoggingFd, "\n");
+            }
+            else if(appDebugTarget == DebugTarget::Syslog)
+            {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+                sd_journal_printv(LOG_INFO, format, args);
+ #else
+                vsyslog(LOG_INFO, format, args);
+ #endif
+#endif
+            }
+
+            va_end(args);
+        }
+    }
+
+    void Application::notice(const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+
+        if(appDebugTarget == DebugTarget::Console)
+        {
+            const std::scoped_lock guard{ appLoggingLock };
+
+            fprintf(appLoggingFd, "[notice] ");
+            vfprintf(appLoggingFd, format, args);
+            fprintf(appLoggingFd, "\n");
+        }
+        else if(appDebugTarget == DebugTarget::Syslog)
+        {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+            sd_journal_printv(LOG_NOTICE, format, args);
+ #else
+            vsyslog(LOG_NOTICE, format, args);
+ #endif
+#endif
+        }
+
+        va_end(args);
+    }
+
+    void Application::warning(const char* format, ...)
+    {
+        if(appDebugLevel != DebugLevel::None)
+        {
+            va_list args;
+            va_start(args, format);
+
+            if(appDebugTarget == DebugTarget::Console)
+            {
+                const std::scoped_lock guard{ appLoggingLock };
+
+                fprintf(appLoggingFd, "[warning] ");
+                vfprintf(appLoggingFd, format, args);
+                fprintf(appLoggingFd, "\n");
+            }
+            else if(appDebugTarget == DebugTarget::Syslog)
+            {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+                sd_journal_printv(LOG_WARNING, format, args);
+ #else
+                vsyslog(LOG_WARNING, format, args);
+ #endif
+#endif
+            }
+
+            va_end(args);
+        }
+    }
+
+    void Application::error(const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+
+        if(appDebugTarget == DebugTarget::Console)
+        {
+            const std::scoped_lock guard{ appLoggingLock };
+
+            fprintf(appLoggingFd, "[error] ");
+            vfprintf(appLoggingFd, format, args);
+            fprintf(appLoggingFd, "\n");
+        }
+        else if(appDebugTarget == DebugTarget::Syslog)
+        {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+            sd_journal_printv(LOG_ERR, format, args);
+ #else
+            vsyslog(LOG_ERR, format, args);
+ #endif
+#endif
+        }
+
+        va_end(args);
+    }
+
+    void Application::vdebug(uint32_t subsys, const char* format, va_list args)
+    {
+        if(appDebugTarget == DebugTarget::Console)
+        {
+            const std::scoped_lock guard{ appLoggingLock };
+
+            fprintf(appLoggingFd, "[debug] ");
+            vfprintf(appLoggingFd, format, args);
+            fprintf(appLoggingFd, "\n");
+        }
+        else if(appDebugTarget == DebugTarget::Syslog)
+        {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+            sd_journal_printv(LOG_DEBUG, format, args);
+ #else
+            vsyslog(LOG_DEBUG, format, args);
+ #endif
+#endif
+        }
+    }
+
+    void Application::debug(uint32_t subsys, const char* format, ...)
+    {
+        if((subsys & appDebugTypes) &&
+            (appDebugLevel == DebugLevel::Debug || appDebugLevel == DebugLevel::Trace))
+        {
+            va_list args;
+            va_start(args, format);
+
+            vdebug(subsys, format, args);
+
+            va_end(args);
+        }
+    }
+
+    void Application::vtrace(uint32_t subsys, const char* format, va_list args)
+    {
+        if(appDebugTarget == DebugTarget::Console)
+        {
+            const std::scoped_lock guard{ appLoggingLock };
+
+            fprintf(appLoggingFd, "[trace] ");
+            vfprintf(appLoggingFd, format, args);
+            fprintf(appLoggingFd, "\n");
+        }
+        else if(appDebugTarget == DebugTarget::Syslog)
+        {
+#ifdef __LINUX__
+ #ifdef WITH_SYSTEMD
+            sd_journal_printv(LOG_DEBUG, format, args);
+ #else
+            vsyslog(LOG_DEBUG, format, args);
+ #endif
+#endif
+        }
+    }
+
+    void Application::trace(uint32_t subsys, const char* format, ...)
+    {
+        if((subsys & appDebugTypes) &&
+            (appDebugLevel == DebugLevel::Trace))
+        {
+            va_list args;
+            va_start(args, format);
+
+            vtrace(subsys, format, args);
+
+            va_end(args);
+        }
+    }
+
+
+    // ApplicationJsonConfig
 #ifdef WITH_JSON
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
         : Application(ident)

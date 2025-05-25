@@ -29,16 +29,6 @@
 #include <filesystem>
 #include <string_view>
 
-#ifdef WITH_SYSTEMD
-#include <systemd/sd-journal.h>
-#endif
-
-#ifdef __LINUX__
-#include <syslog.h>
-#endif
-
-#include <stdio.h>
-
 #ifdef WITH_JSON
 #include "ltsm_json_wrapper.h"
 #endif
@@ -75,13 +65,6 @@ namespace LTSM
 
     class Application
     {
-    protected:
-        static FILE* fdlog;
-        static DebugTarget target;
-        static DebugLevel level;
-        static uint32_t types;
-        static std::mutex logging;
-
     public:
         explicit Application(std::string_view ident);
         virtual ~Application();
@@ -89,215 +72,29 @@ namespace LTSM
         Application(Application &) = delete;
         Application & operator= (const Application &) = delete;
 
-        static void info(const char* format, ...)
-        {
-            if(level != DebugLevel::None)
-            {
-                va_list args;
-                va_start(args, format);
-
-                if(target == DebugTarget::Console)
-                {
-                    const std::scoped_lock guard{ logging };
-
-                    fprintf(fdlog, "[info] ");
-                    vfprintf(fdlog, format, args);
-                    fprintf(fdlog, "\n");
-                }
-                else if(target == DebugTarget::Syslog)
-                {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                    sd_journal_printv(LOG_INFO, format, args);
- #else
-                    vsyslog(LOG_INFO, format, args);
- #endif
-#endif
-                }
-
-                va_end(args);
-            }
-        }
-
-        static void notice(const char* format, ...)
-        {
-            va_list args;
-            va_start(args, format);
-
-            if(target == DebugTarget::Console)
-            {
-                const std::scoped_lock guard{ logging };
-
-                fprintf(fdlog, "[notice] ");
-                vfprintf(fdlog, format, args);
-                fprintf(fdlog, "\n");
-            }
-            else if(target == DebugTarget::Syslog)
-            {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                sd_journal_printv(LOG_NOTICE, format, args);
- #else
-                vsyslog(LOG_NOTICE, format, args);
- #endif
-#endif
-            }
-
-            va_end(args);
-        }
-
-        static void warning(const char* format, ...)
-        {
-            if(level != DebugLevel::None)
-            {
-                va_list args;
-                va_start(args, format);
-
-                if(target == DebugTarget::Console)
-                {
-                    const std::scoped_lock guard{ logging };
-
-                    fprintf(fdlog, "[warning] ");
-                    vfprintf(fdlog, format, args);
-                    fprintf(fdlog, "\n");
-                }
-                else if(target == DebugTarget::Syslog)
-                {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                    sd_journal_printv(LOG_WARNING, format, args);
- #else
-                    vsyslog(LOG_WARNING, format, args);
- #endif
-#endif
-                }
-
-                va_end(args);
-            }
-        }
-
-        static void error(const char* format, ...)
-        {
-            va_list args;
-            va_start(args, format);
-
-            if(target == DebugTarget::Console)
-            {
-                const std::scoped_lock guard{ logging };
-
-                fprintf(fdlog, "[error] ");
-                vfprintf(fdlog, format, args);
-                fprintf(fdlog, "\n");
-            }
-            else if(target == DebugTarget::Syslog)
-            {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                sd_journal_printv(LOG_ERR, format, args);
- #else
-                vsyslog(LOG_ERR, format, args);
- #endif
-#endif
-            }
-
-            va_end(args);
-        }
-
-        static void vdebug(uint32_t subsys, const char* format, va_list args)
-        {
-                if(target == DebugTarget::Console)
-                {
-                    const std::scoped_lock guard{ logging };
-
-                    fprintf(fdlog, "[debug] ");
-                    vfprintf(fdlog, format, args);
-                    fprintf(fdlog, "\n");
-                }
-                else if(target == DebugTarget::Syslog)
-                {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                    sd_journal_printv(LOG_DEBUG, format, args);
- #else
-                    vsyslog(LOG_DEBUG, format, args);
- #endif
-#endif
-                }
-        }
-
-        static void debug(uint32_t subsys, const char* format, ...)
-        {
-            if((subsys & types) &&
-                (level == DebugLevel::Debug || level == DebugLevel::Trace))
-            {
-                va_list args;
-                va_start(args, format);
-
-                vdebug(subsys, format, args);
-
-                va_end(args);
-            }
-        }
-
-        static void vtrace(uint32_t subsys, const char* format, va_list args)
-        {
-                if(target == DebugTarget::Console)
-                {
-                    const std::scoped_lock guard{ logging };
-
-                    fprintf(fdlog, "[trace] ");
-                    vfprintf(fdlog, format, args);
-                    fprintf(fdlog, "\n");
-                }
-                else if(target == DebugTarget::Syslog)
-                {
-#ifdef __LINUX__
- #ifdef WITH_SYSTEMD
-                    sd_journal_printv(LOG_DEBUG, format, args);
- #else
-                    vsyslog(LOG_DEBUG, format, args);
- #endif
-#endif
-                }
-        }
-
-        static void trace(uint32_t subsys, const char* format, ...)
-        {
-            if((subsys & types) &&
-                (level == DebugLevel::Trace))
-            {
-                va_list args;
-                va_start(args, format);
-
-                vtrace(subsys, format, args);
-
-                va_end(args);
-            }
-        }
+        static void info(const char* format, ...);
+        static void notice(const char* format, ...);
+        static void warning(const char* format, ...);
+        static void error(const char* format, ...);
+        static void vdebug(uint32_t subsys, const char* format, va_list args);
+        static void debug(uint32_t subsys, const char* format, ...);
+        static void vtrace(uint32_t subsys, const char* format, va_list args);
+        static void trace(uint32_t subsys, const char* format, ...);
 
         static void redirectSyslogFile(const char* file = nullptr);
-
         static void setDebug(const DebugTarget &, const DebugLevel &);
 
         static void setDebugTarget(const DebugTarget &);
         static void setDebugTarget(std::string_view target);
         static void setDebugTargetFile(const std::filesystem::path & file);
+        static bool isDebugTarget(const DebugTarget &);
 
         static void setDebugLevel(const DebugLevel &);
         static void setDebugLevel(std::string_view level);
         static bool isDebugLevel(const DebugLevel &);
 
         static void setDebugTypes(uint32_t);
-
-        inline static bool isDebugTarget(const DebugTarget & tgt)
-        {
-            return target == tgt;
-        }
-
-        inline static bool isDebugTypes(uint32_t vals)
-        {
-            return types & vals;
-        }
+        static bool isDebugTypes(uint32_t vals);
 
         virtual int start(void) = 0;
     };
