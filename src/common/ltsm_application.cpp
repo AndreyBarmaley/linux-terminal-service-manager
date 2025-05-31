@@ -54,7 +54,7 @@
 namespace LTSM
 {
     // local application
-    FILE* appLoggingFd = stderr;
+    FILE* appLoggingFd = nullptr;
     DebugTarget appDebugTarget = DebugTarget::Console;
     DebugLevel appDebugLevel = DebugLevel::Info;
     uint32_t appDebugTypes = DebugType::All;
@@ -221,6 +221,11 @@ namespace LTSM
             {
                 const std::scoped_lock guard{ appLoggingLock };
 
+                if(! appLoggingFd)
+                {
+                    appLoggingFd = stderr;
+                }
+
                 fprintf(appLoggingFd, "[info] ");
                 vfprintf(appLoggingFd, format, args);
                 fprintf(appLoggingFd, "\n");
@@ -248,6 +253,11 @@ namespace LTSM
         if(appDebugTarget == DebugTarget::Console)
         {
             const std::scoped_lock guard{ appLoggingLock };
+
+            if(! appLoggingFd)
+            {
+                appLoggingFd = stderr;
+            }
 
             fprintf(appLoggingFd, "[notice] ");
             vfprintf(appLoggingFd, format, args);
@@ -278,6 +288,11 @@ namespace LTSM
             {
                 const std::scoped_lock guard{ appLoggingLock };
 
+                if(! appLoggingFd)
+                {
+                    appLoggingFd = stderr;
+                }
+
                 fprintf(appLoggingFd, "[warning] ");
                 vfprintf(appLoggingFd, format, args);
                 fprintf(appLoggingFd, "\n");
@@ -306,6 +321,11 @@ namespace LTSM
         {
             const std::scoped_lock guard{ appLoggingLock };
 
+            if(! appLoggingFd)
+            {
+                appLoggingFd = stderr;
+            }
+
             fprintf(appLoggingFd, "[error] ");
             vfprintf(appLoggingFd, format, args);
             fprintf(appLoggingFd, "\n");
@@ -329,6 +349,11 @@ namespace LTSM
         if(appDebugTarget == DebugTarget::Console)
         {
             const std::scoped_lock guard{ appLoggingLock };
+
+            if(! appLoggingFd)
+            {
+                appLoggingFd = stderr;
+            }
 
             fprintf(appLoggingFd, "[debug] ");
             vfprintf(appLoggingFd, format, args);
@@ -365,6 +390,11 @@ namespace LTSM
         if(appDebugTarget == DebugTarget::Console)
         {
             const std::scoped_lock guard{ appLoggingLock };
+
+            if(! appLoggingFd)
+            {
+                appLoggingFd = stderr;
+            }
 
             fprintf(appLoggingFd, "[trace] ");
             vfprintf(appLoggingFd, format, args);
