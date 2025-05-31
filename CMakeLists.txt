@@ -114,11 +114,12 @@ set(CMAKE_FIND_FRAMEWORK LAST)
 # LTSM common lib
 project(LTSM_common)
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    add_definitions(-D__LINUX__)
+if(UNIX)
+    add_definitions(-D__UNIX__)
 endif()
 
 if(MINGW)
+    add_definitions(-D__MINGW__)
     set(CMAKE_CXX_FLAGS "-fpermissive")
 endif()
 
