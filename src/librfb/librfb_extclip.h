@@ -31,7 +31,7 @@
 
 #include "ltsm_sockets.h"
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include "ltsm_xcb_wrapper.h"
 #endif
 
@@ -128,7 +128,7 @@ namespace LTSM
             void setExtClipboardLocalCaps(int);
             int extClipboardLocalCaps(void) const;
 
-#ifdef __LINUX__
+#ifdef __UNIX__
             static std::vector<xcb_atom_t> typesToX11Atoms(uint16_t types, const XCB::Connector &);
             static uint16_t x11AtomToType(xcb_atom_t);
             static void x11AtomsUpdate(const XCB::Connector &);

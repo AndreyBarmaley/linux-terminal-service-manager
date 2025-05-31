@@ -58,7 +58,7 @@ namespace LTSM
         reply.writeIntLE32(st.st_gid);
         reply.writeIntLE64(st.st_rdev);
         reply.writeIntLE64(st.st_size);
-#ifdef __LINUX__
+#ifdef __UNIX__
         reply.writeIntLE64(st.st_blksize);
         reply.writeIntLE64(st.st_blocks);
 #else
@@ -70,7 +70,7 @@ namespace LTSM
         reply.writeIntLE64(st.st_ctime);
     }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     std::pair<ino_t, ino_t> readSymLink(const std::string & path, const struct stat & st1, const std::string & dir)
     {
         std::vector<char> linkto(dir.size() + 1024, 0);
@@ -126,7 +126,7 @@ namespace LTSM
                 continue;
             }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
             if(0 == (st.st_mode & (S_IFREG | S_IFLNK | S_IFDIR)))
 #else
             if(0 == (st.st_mode & (S_IFREG | S_IFDIR)))
@@ -137,7 +137,7 @@ namespace LTSM
                 continue;
             }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
             // check link
             if(st.st_mode & S_IFLNK)
             {

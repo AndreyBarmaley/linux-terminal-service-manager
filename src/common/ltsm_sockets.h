@@ -217,7 +217,7 @@ namespace LTSM
         ~ProxySocket();
 
         int proxyClientSocket(void) const;
-#ifdef __LINUX__
+#ifdef __UNIX__
         bool proxyInitUnixSockets(const std::filesystem::path &);
 #endif
         bool proxyRunning(void) const;
@@ -231,7 +231,7 @@ namespace LTSM
     {
         int connect(const std::string & ipaddr, uint16_t port);
         std::string resolvHostname(const std::string & hostname);
-#ifdef __LINUX__
+#ifdef __UNIX__
         std::string resolvAddress(const std::string & ipaddr);
         std::list<std::string> resolvHostname2(const std::string & hostname);
         int listen(uint16_t port, int conn = 5);
@@ -240,7 +240,7 @@ namespace LTSM
 #endif
     }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     namespace UnixSocket
     {
         int connect(const std::filesystem::path &);

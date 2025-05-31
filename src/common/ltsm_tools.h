@@ -26,7 +26,7 @@
 
 #include <sys/types.h>
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include <grp.h>
 #include <pwd.h>
 #endif
@@ -59,7 +59,7 @@
 #include "gnutls/gnutls.h"
 #endif
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
     int getuid(void);
     int getgid(void);
 #endif
@@ -68,7 +68,7 @@ namespace LTSM
 {
     class ByteArray;
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     class UserInfo
     {
         struct passwd st = {};

@@ -223,9 +223,8 @@ namespace LTSM
             context->config = & config;
             context->rdp2 = connector;
             context->clipboard = false;
-            const std::string keymapFile = config.getString("rdp:keymap:file");
 
-            if(! keymapFile.empty())
+            if(auto keymapFile = config.getString("rdp:keymap:file"); ! keymapFile.empty())
             {
                 JsonContentFile jc(keymapFile);
 

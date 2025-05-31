@@ -863,9 +863,9 @@ namespace LTSM
                     continueUpdates = true;
                     break;
 
-//                case RFB::ENCODING_EXT_CLIPBOARD:
-//                    extendedClipboard = true;
-//                    break;
+                case RFB::ENCODING_EXT_CLIPBOARD:
+                    extendedClipboard = true;
+                    break;
 
                 default:
                     break;

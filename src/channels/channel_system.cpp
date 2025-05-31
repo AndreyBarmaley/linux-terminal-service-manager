@@ -21,7 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include <sys/socket.h>
 #endif
 
@@ -463,7 +463,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
         {
             replyError = ! createChannelClientPcsc(channel, jo.getString("pcsc"), mode, chopts);
         }
-#ifdef __LINUX__
+#ifdef __UNIX__
         else if(type == Channel::ConnectorType::Unix)
         {
             replyError = ! createChannelUnix(channel, jo.getString("path"), mode, chopts);
@@ -556,7 +556,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
             switch(job.serverOpts.type())
             {
-#ifdef __LINUX__
+#ifdef __UNIX__
                 case Channel::ConnectorType::Unix:
                     createChannelUnixFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
                     break;
@@ -577,7 +577,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
 
             switch(job.serverOpts.type())
             {
-#ifdef __LINUX__
+#ifdef __UNIX__
                 case Channel::ConnectorType::Unix:
                     createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
                     break;
@@ -836,7 +836,7 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
 #endif
 }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
     if(! createChannelAllow(Channel::ConnectorType::Unix, path.native(), mode))
@@ -902,11 +902,11 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
 #endif
 }
 
-#endif // __LINUX__
+#endif // __UNIX__
 
 bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
     if(! createChannelAllow(Channel::ConnectorType::File, Tools::wstring2string(path.native()), mode))
 #else
     if(! createChannelAllow(Channel::ConnectorType::File, path.native(), mode))
@@ -956,7 +956,7 @@ bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::strin
     return true;
 }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
     if(! createChannelAllow(Channel::ConnectorType::Socket, ipAddrPort.first, mode))
@@ -1185,7 +1185,7 @@ void LTSM::ChannelClient::channelsShutdown(void)
     }
 }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 // ChannelListener
 bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, const Channel::UrlMode & serverOpts, size_t listen, const Channel::Opts & chOpts)
 {
@@ -1912,7 +1912,7 @@ LTSM::Channel::ConnectorCMD_R::~ConnectorCMD_R()
     }
 }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 /// createUnixConnector
 LTSM::Channel::ConnectorBasePtr
 LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
@@ -2073,7 +2073,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(mode == ConnectorMode::ReadOnly)
     {
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
         auto cpath = Tools::wstring2string(path);
         fd = open(cpath.c_str(), O_RDONLY);
 #else
@@ -2094,7 +2094,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
             flags |= O_CREAT | O_EXCL;
         }
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
         auto cpath = Tools::wstring2string(path);
         fd = open(cpath.c_str(), flags, S_IRUSR|S_IWUSR|S_IRGRP);
 #else
@@ -2161,7 +2161,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
     {
         auto cmd = Tools::resolveSymLink(list.front());
         list.pop_front();
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
         list.push_front(Tools::wstring2string(cmd.native()));
 #else
         list.push_front(cmd.native());
@@ -2195,7 +2195,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
     throw channel_error(NS_FuncName);
 }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 /// Listener
 LTSM::Channel::Listener::Listener(int fd, const UrlMode & serverOpts, const UrlMode & clientOpts, const Channel::Opts & ch, ChannelListener & sender)
     : sopts(serverOpts), copts(clientOpts), owner(& sender), chopts(ch), srvfd(fd)

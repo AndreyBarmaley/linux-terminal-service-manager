@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include <sys/un.h>
 #include <sys/socket.h>
 #endif
@@ -57,7 +57,7 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
 int getuid(void)
 {
     return 0;
@@ -71,7 +71,7 @@ int getgid(void)
 
 namespace LTSM
 {
-#ifdef __LINUX__
+#ifdef __UNIX__
     //// UserInfo
     UserInfo::UserInfo(const std::string & name)
     {
@@ -351,7 +351,7 @@ namespace LTSM
         return false;
     }
 
-#endif // __LINUX__
+#endif // __UNIX__
 
     uint32_t Tools::debugTypes(const std::list<std::string> & typesList)
     {
@@ -439,7 +439,7 @@ namespace LTSM
                 res.splice(res.end(), readDir(entry.path(), true));
             }
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
             res.emplace_back(wstring2string(entry.path().native()));
 #else
             res.emplace_back(entry.path().native());
@@ -740,7 +740,7 @@ namespace LTSM
         {
             str.assign(env);
         }
-#ifdef __LINUX__
+#ifdef __UNIX__
         else if(std::filesystem::is_symlink(localtime, err))
         {
             auto path = std::filesystem::read_symlink(localtime, err);

@@ -20,7 +20,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  **************************************************************************/
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
 #include <winsock2.h>
 #endif
 
@@ -731,7 +731,7 @@ namespace LTSM
         {
             while(this->rfbMessagesRunning())
             {
-#ifdef __LINUX__
+#ifdef __UNIX__
                 if(auto err = XCB::RootDisplay::hasError())
                 {
                     this->rfbMessagesShutdown();
@@ -1000,7 +1000,7 @@ namespace LTSM
                 }
                 else
                 {
-#ifdef __LINUX__
+#ifdef __UNIX__
                     int xksym = SDL::Window::convertScanCodeToKeySym(ev.key()->keysym.scancode);
 
                     if(xksym == 0)
@@ -1481,7 +1481,7 @@ namespace LTSM
             std::vector<std::string> names;
             int group = 0;
 
-#ifdef __LINUX__
+#ifdef __UNIX__
             if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
             {
                 names = extXkb->getNames();
@@ -1494,7 +1494,7 @@ namespace LTSM
         }
     }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     void Vnc2SDL::xcbXkbGroupChangedEvent(int group)
     {
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
@@ -1507,7 +1507,7 @@ namespace LTSM
     json_plain Vnc2SDL::clientEnvironments(void) const
     {
         JsonObjectStream jo;
-#ifdef __LINUX__
+#ifdef __UNIX__
         // locale
         std::initializer_list<std::pair<int, std::string>> lcall = { { LC_CTYPE, "LC_TYPE" }, { LC_NUMERIC, "LC_NUMERIC" }, { LC_TIME, "LC_TIME" },
             { LC_COLLATE, "LC_COLLATE" }, { LC_MONETARY, "LC_MONETARY" }, { LC_MESSAGES, "LC_MESSAGES" }
@@ -1538,10 +1538,10 @@ namespace LTSM
     {
         // other
         JsonObjectStream jo;
-#ifdef __LINUX__
+#ifdef __UNIX__
         jo.push("build", "linix");
 #else
- #if defined(__MINGW64__) || defined(__MINGW32__)
+ #ifdef __WIN32__
         jo.push("build", "mingw");
  #else
         jo.push("build", "other");
@@ -1646,7 +1646,7 @@ namespace LTSM
 
     void Vnc2SDL::clientRecvBellEvent(void)
     {
-#ifdef __LINUX__
+#ifdef __UNIX__
         bell(75);
 #endif
     }
@@ -1674,14 +1674,14 @@ namespace LTSM
     }
 }
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
 int main(int argc, char** argv)
 #else
 int main(int argc, const char** argv)
 #endif
 {
     // init network
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
     WSADATA wsaData;
 
     if(int ret = WSAStartup(MAKEWORD(2, 2), & wsaData); ret != 0)

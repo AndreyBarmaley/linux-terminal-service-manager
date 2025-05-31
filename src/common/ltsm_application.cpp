@@ -30,7 +30,7 @@
 #include <systemd/sd-journal.h>
 #endif
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include <syslog.h>
 #endif
 
@@ -39,7 +39,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
 #define LOG_USER        (1<<3)  /* random user-level messages */
 #define LOG_LOCAL0      (16<<3) /* reserved for local use */
 #define LOG_LOCAL1      (17<<3) /* reserved for local use */
@@ -88,7 +88,7 @@ namespace LTSM
 
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
-#ifdef __LINUX__
+#ifdef __UNIX__
         if(appDebugTarget != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
         {
             openlog(ident.c_str(), 0, facility);
@@ -107,7 +107,7 @@ namespace LTSM
         {
             setDebugTarget(DebugTarget::Console);
         }
-#ifdef __LINUX__
+#ifdef __UNIX__
         else if(tgt == "syslog")
         {
             setDebugTarget(DebugTarget::Syslog);
@@ -123,8 +123,12 @@ namespace LTSM
     {
         if(! file.empty())
         {
+#ifdef __WIN32__
+            auto tmp = Tools::wstring2string(file.native());
+            appLoggingFd = fopen(tmp.c_str(), "a");
+#else
             appLoggingFd = fopen(file.c_str(), "a");
-
+#endif
             if(! appLoggingFd)
             {
                 appLoggingFd = stderr;
@@ -175,7 +179,7 @@ namespace LTSM
 
     Application::~Application()
     {
-#ifdef __LINUX__
+#ifdef __UNIX__
         if(isDebugTarget(DebugTarget::Syslog))
         {
             closelog();
@@ -185,7 +189,7 @@ namespace LTSM
 
     void Application::redirectSyslogFile(const char* file)
     {
-#ifdef __LINUX__
+#ifdef __UNIX__
         if(isDebugTarget(DebugTarget::Syslog))
         {
             closelog();
@@ -223,7 +227,7 @@ namespace LTSM
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_INFO, format, args);
  #else
@@ -251,7 +255,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
             sd_journal_printv(LOG_NOTICE, format, args);
  #else
@@ -280,7 +284,7 @@ namespace LTSM
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
                 sd_journal_printv(LOG_WARNING, format, args);
  #else
@@ -308,7 +312,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
             sd_journal_printv(LOG_ERR, format, args);
  #else
@@ -332,7 +336,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
             sd_journal_printv(LOG_DEBUG, format, args);
  #else
@@ -368,7 +372,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __LINUX__
+#ifdef __UNIX__
  #ifdef WITH_SYSTEMD
             sd_journal_printv(LOG_DEBUG, format, args);
  #else
@@ -504,7 +508,7 @@ namespace LTSM
             }
         }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
         if(0 < facility)
         {
             closelog();

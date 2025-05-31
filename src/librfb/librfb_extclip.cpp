@@ -31,13 +31,13 @@
 #include "ltsm_librfb.h"
 #include "librfb_extclip.h"
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include "librfb_server.h"
 #endif
 
 namespace LTSM
 {
-#ifdef __LINUX__
+#ifdef __UNIX__
     xcb_atom_t atomUtf8String = XCB_ATOM_NONE;
     xcb_atom_t atomText = XCB_ATOM_NONE;
     xcb_atom_t atomString = XCB_ATOM_NONE;

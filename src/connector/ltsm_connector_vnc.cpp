@@ -215,9 +215,7 @@ namespace LTSM
         // load keymap
         if(_config->hasKey("vnc:keymap:file"))
         {
-            auto file = _config->getString("vnc:keymap:file");
-
-            if(! file.empty())
+            if(auto file = _config->getString("vnc:keymap:file"); ! file.empty())
             {
                 JsonContentFile jc(file);
 
@@ -227,6 +225,11 @@ namespace LTSM
 
                     for(const auto & skey : jo.keys())
                     {
+                        if(3 < skey.size() && skey.substr(0, 3) == "key")
+                        {
+                            continue;
+                        }
+
                         try
                         {
                             keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
@@ -323,7 +326,7 @@ namespace LTSM
         secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
         secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
 #ifdef LTSM_WITH_GSSAPI
-        secInfo.authKrb5 = true;
+        secInfo.authKrb5 = ! _config->getBoolean("vnc:kerberos:disable", false);
         secInfo.krb5Service = _config->getString("vnc:kerberos:service", "TERMSRV");
 #endif
 
@@ -331,12 +334,16 @@ namespace LTSM
         {
             auto keytab = _config->getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
 
-            if(! keytab.empty())
+            if(keytab.empty())
+            {
+                secInfo.authKrb5 = false;
+            }
+            else
             {
                 std::filesystem::path file(keytab);
                 std::error_code err;
 
-                if(std::filesystem::exists(keytab, err))
+                if(std::filesystem::is_regular_file(keytab, err))
                 {
                     Application::info("%s: set KRB5_KTNAME=`%s'", __FUNCTION__, keytab.c_str());
                     setenv("KRB5_KTNAME", keytab.c_str(), 1);
@@ -352,6 +359,7 @@ namespace LTSM
                 {
                     Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                        keytab.c_str(), getuid());
+                    secInfo.authKrb5 = false;
                 }
             }
         }

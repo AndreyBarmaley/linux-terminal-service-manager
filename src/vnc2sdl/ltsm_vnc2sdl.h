@@ -147,7 +147,7 @@ namespace LTSM
         void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
         void clientRecvBellEvent(void) override;
 
-#ifdef __LINUX__
+#ifdef __UNIX__
         void xcbXkbGroupChangedEvent(int) override;
 #endif
         void clientRecvLtsmHandshakeEvent(int flags) override;

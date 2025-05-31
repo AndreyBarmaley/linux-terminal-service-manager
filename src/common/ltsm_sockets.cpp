@@ -21,7 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifdef __LINUX__
+#ifdef __UNIX__
 #include <sys/un.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -32,7 +32,7 @@
 #include <poll.h>
 #endif
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
 #include <winsock2.h>
 #include <winsock.h>
 #endif
@@ -69,7 +69,7 @@ namespace LTSM
     /* NetworkStream */
     bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
@@ -143,7 +143,7 @@ namespace LTSM
             return 0;
         }
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
         long unsigned int count = 0;
 
         if(0 > ioctlsocket(fd, FIONREAD, & count))
@@ -348,7 +348,7 @@ namespace LTSM
     {
         while(true)
         {
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
             ssize_t real = send(fd, ptr, len, 0);
 #else
             ssize_t real = send(fd, ptr, len, MSG_NOSIGNAL);
@@ -642,7 +642,7 @@ namespace LTSM
         return true;
     }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     int TCPSocket::listen(uint16_t port, int conn)
     {
         return listen("any", port, conn);
@@ -800,9 +800,9 @@ namespace LTSM
 
         return "";
     }
-#endif // __LINUX__
+#endif // __UNIX__
 
-#if defined(__MINGW64__) || defined(__MINGW32__)
+#ifdef __WIN32__
     std::string TCPSocket::resolvHostname(const std::string & hostname)
     {
         if(auto res = gethostbyname(hostname.c_str()))
@@ -822,7 +822,7 @@ namespace LTSM
 
         return "";
     }
-#endif // MINGW
+#endif // __WIN32__
 
     int TCPSocket::connect(const std::string & ipaddr, uint16_t port)
     {
@@ -857,7 +857,7 @@ namespace LTSM
         return sock;
     }
 
-#ifdef __LINUX__
+#ifdef __UNIX__
     int UnixSocket::connect(const std::filesystem::path & path)
     {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -1009,7 +1009,7 @@ namespace LTSM
         fcntl(bridgeSock, F_SETFL, fcntl(bridgeSock, F_GETFL, 0) | O_NONBLOCK);
         return true;
     }
-#endif // __LINUX__
+#endif // __UNIX__
 
 #ifdef LTSM_WITH_GNUTLS
     namespace TLS
