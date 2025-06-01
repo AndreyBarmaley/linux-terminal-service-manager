@@ -618,46 +618,46 @@ namespace LTSM
 
     bool FrameBuffer::renderChar(int ch, const Color & col, const XCB::Point & pos)
     {
-        if(std::isprint(ch))
+        if(! std::isprint(ch))
         {
-            size_t offsetx = ch * _systemfont.width * _systemfont.height >> 3;
-
-            if(offsetx >= sizeof(_systemfont.data))
-            {
-                return false;
-            }
-
-            bool res = false;
-
-            for(int yy = 0; yy < _systemfont.height; ++yy)
-            {
-                if(pos.y + yy < 0) { continue; }
-
-                size_t offsety = yy * _systemfont.width >> 3;
-
-                if(offsetx + offsety >= sizeof(_systemfont.data))
-                {
-                    continue;
-                }
-
-                int line = *(_systemfont.data + offsetx + offsety);
-
-                for(int xx = 0; xx < _systemfont.width; ++xx)
-                {
-                    if(pos.x + xx < 0) { continue; }
-
-                    if(0x80 & (line << xx))
-                    {
-                        setColor(pos + XCB::Point(xx, yy), col);
-                        res = true;
-                    }
-                }
-            }
-
-            return res;
+            return false;
         }
 
-        return false;
+        size_t offsetx = ch * _systemfont.width * _systemfont.height >> 3;
+
+        if(offsetx >= sizeof(_systemfont.data))
+        {
+            return false;
+        }
+
+        bool res = false;
+
+        for(int yy = 0; yy < _systemfont.height; ++yy)
+        {
+            if(pos.y + yy < 0) { continue; }
+
+            size_t offsety = yy * _systemfont.width >> 3;
+
+            if(offsetx + offsety >= sizeof(_systemfont.data))
+            {
+                continue;
+            }
+
+            int line = *(_systemfont.data + offsetx + offsety);
+
+            for(int xx = 0; xx < _systemfont.width; ++xx)
+            {
+                if(pos.x + xx < 0) { continue; }
+
+                if(0x80 & (line << xx))
+                {
+                    setColor(pos + XCB::Point(xx, yy), col);
+                    res = true;
+                }
+            }
+        }
+
+        return res;
     }
 
     void FrameBuffer::renderText(const std::string & str, const Color & col, const XCB::Point & pos)

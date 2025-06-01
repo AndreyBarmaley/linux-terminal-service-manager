@@ -518,7 +518,7 @@ namespace LTSM
         std::pair<JsonValuePtr, int> getValueArray(const const_iterator &, JsonContainer* cont) const;
         std::pair<JsonValuePtr, int> getValueObject(const const_iterator &, JsonContainer* cont) const;
         std::pair<JsonValuePtr, int> getValuePrimitive(const const_iterator &, JsonContainer* cont) const;
-        std::pair<JsonValuePtr, int> getValue(const const_iterator &, JsonContainer* cont) const;
+        std::pair<JsonValuePtr, int> getValueFromIter(const const_iterator &, JsonContainer* cont) const;
 
     public:
         JsonContent() = default;

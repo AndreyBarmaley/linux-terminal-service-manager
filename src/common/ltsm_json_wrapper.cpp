@@ -1019,40 +1019,39 @@ namespace LTSM
 
     void JsonArray::join(const JsonArray & ja)
     {
-        if(content.size() > ja.content.size())
-        {
-            for(int pos = 0; pos < ja.content.size(); ++pos)
-            {
-                auto & ptr1 = content[pos];
-                auto & ptr2 = ja.content[pos];
-
-                if(ptr2->isArray())
-                {
-                    if(ptr1->isArray())
-                    {
-                        static_cast<JsonArray*>(ptr1.get())->join(static_cast<const JsonArray &>(*ptr2.get()));
-                    }
-                    else
-                    {
-                        ptr1.assign(ptr2);
-                    }
-                }
-                else if(ptr2->isObject())
-                {
-                    if(ptr1->isObject())
-                    {
-                        static_cast<JsonObject*>(ptr1.get())->join(static_cast<const JsonObject &>(*ptr2.get()));
-                    }
-                    else
-                    {
-                        ptr1.assign(ptr2);
-                    }
-                }
-            }
-        }
-        else
+        if(content.size() <= ja.content.size())
         {
             content = ja.content;
+            return;
+        }
+
+        for(int pos = 0; pos < ja.content.size(); ++pos)
+        {
+            auto & ptr1 = content[pos];
+            auto & ptr2 = ja.content[pos];
+
+            if(ptr2->isArray())
+            {
+                if(ptr1->isArray())
+                {
+                    static_cast<JsonArray*>(ptr1.get())->join(static_cast<const JsonArray &>(*ptr2.get()));
+                }
+                else
+                {
+                    ptr1.assign(ptr2);
+                }
+            }
+            else if(ptr2->isObject())
+            {
+                if(ptr1->isObject())
+                {
+                    static_cast<JsonObject*>(ptr1.get())->join(static_cast<const JsonObject &>(*ptr2.get()));
+                }
+                else
+                {
+                    ptr1.assign(ptr2);
+                }
+            }
         }
     }
 
@@ -1151,7 +1150,7 @@ namespace LTSM
 
         while(counts-- && itval != end())
         {
-            auto [ptr, count] = getValue(itval, nullptr);
+            auto [ptr, count] = getValueFromIter(itval, nullptr);
 
             if(ptr)
             {
@@ -1189,7 +1188,7 @@ namespace LTSM
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
-            auto [ptr, count] = getValue(itval, nullptr);
+            auto [ptr, count] = getValueFromIter(itval, nullptr);
 
             if(ptr)
             {
@@ -1262,7 +1261,7 @@ namespace LTSM
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValue(const const_iterator & it, JsonContainer* cont) const
+    JsonContent::getValueFromIter(const const_iterator & it, JsonContainer* cont) const
     {
         const JsmnToken & tok = *it;
 
@@ -1297,7 +1296,7 @@ namespace LTSM
 
         if(isObject())
         {
-            getValue(begin(), & res);
+            getValueFromIter(begin(), & res);
         }
 
         return res;
@@ -1309,7 +1308,7 @@ namespace LTSM
 
         if(isArray())
         {
-            getValue(begin(), & res);
+            getValueFromIter(begin(), & res);
         }
 
         return res;
