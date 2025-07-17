@@ -119,7 +119,8 @@ namespace LTSM
     GroupInfo::GroupInfo(gid_t gid)
     {
         auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-        buf = std::make_unique<char[]>(buflen < 4096 ? 4096 : buflen);
+        if(buflen < 4096) buflen = 4096;
+        buf = std::make_unique<char[]>(buflen);
         struct group* res = nullptr;
 
         if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0)
@@ -132,7 +133,8 @@ namespace LTSM
     GroupInfo::GroupInfo(const std::string & name)
     {
         auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-        buf = std::make_unique<char[]>(buflen < 4096 ? 4096 : buflen);
+        if(buflen < 4096) buflen = 4096;
+        buf = std::make_unique<char[]>(buflen);
         struct group* res = nullptr;
 
         if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0)
