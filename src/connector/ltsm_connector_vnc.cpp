@@ -137,7 +137,7 @@ namespace LTSM
                 JsonObjectStream jos;
                 jos.push("cmd", SystemCommand::LoginSuccess);
                 jos.push("action", true);
-                static_cast<ChannelClient*>(this)->sendLtsmChannelData(Channel::System, jos.flush());
+                static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
             }).detach();
         }
     }
@@ -682,7 +682,7 @@ namespace LTSM
         jos.push("cmd", SystemCommand::LoginSuccess);
         jos.push("action", false);
         jos.push("error", msg);
-        static_cast<ChannelClient*>(this)->sendLtsmChannelData(Channel::System, jos.flush());
+        static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
     }
 
     void Connector::VNC::systemChannelError(const JsonObject & jo)

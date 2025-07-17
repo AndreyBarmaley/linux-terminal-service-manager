@@ -1,7 +1,7 @@
 {
     "keyname_hex8": "value integer or [array]",
 
-    "keysym:left": 0,
+    "key:left": 0,
     "0x4100004b": 100,
     "0x8100004b": 100,
     "key:right":  0,

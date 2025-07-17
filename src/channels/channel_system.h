@@ -73,10 +73,10 @@ namespace LTSM
         explicit channel_error(std::string_view what) : std::runtime_error(what.data()) {}
     };
 
+    enum class ChannelType : uint8_t { System = 0, Reserved = 0xFF };
+
     namespace Channel
     {
-        enum { System = 0, Reserved = 0xFF };
-
         enum class ConnectorType { Unknown, Unix, Socket, File, Command, Fuse, Audio, Pcsc, Pkcs11 };
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
 
@@ -111,7 +111,7 @@ namespace LTSM
             UrlMode(const ConnectorType & typ, const std::string & body, const ConnectorMode & mod) : TypeContent(typ, body), mode(mod), url(createUrl(typ, body)) {}
         };
 
-        enum OptsFlags { ZLibCompression = 1, AllowLoginSession = 2 };
+        enum class OptsFlags : uint32_t { ZLibCompression = 1, AllowLoginSession = 2 };
 
         struct Opts
         {

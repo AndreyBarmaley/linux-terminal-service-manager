@@ -39,7 +39,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__APPLE__)
 #define LOG_USER        (1<<3)  /* random user-level messages */
 #define LOG_LOCAL0      (16<<3) /* reserved for local use */
 #define LOG_LOCAL1      (17<<3) /* reserved for local use */

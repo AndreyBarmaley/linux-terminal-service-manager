@@ -457,12 +457,12 @@ namespace LTSM
 
     JsonValuePtr::JsonValuePtr(JsonArray && v)
     {
-        reset(new JsonArray(v));
+        reset(new JsonArray(std::move(v)));
     }
 
     JsonValuePtr::JsonValuePtr(JsonObject && v)
     {
-        reset(new JsonObject(v));
+        reset(new JsonObject(std::move(v)));
     }
 
     JsonValuePtr::JsonValuePtr(const JsonArray & v)

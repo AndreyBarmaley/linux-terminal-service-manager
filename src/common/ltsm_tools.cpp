@@ -1101,7 +1101,7 @@ namespace LTSM
 
     uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic)
     {
-        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [=](uint32_t crc, int val)
+        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [=](uint64_t crc, auto val)
         {
             crc ^= val;
 

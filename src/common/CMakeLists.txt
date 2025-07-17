@@ -8,7 +8,7 @@ target_sources(LTSM_common PUBLIC ltsm_sockets.cpp)
 target_sources(LTSM_common PUBLIC ltsm_framebuffer.cpp)
 target_sources(LTSM_common PUBLIC ltsm_xcb_types.cpp)
 
-if(UNIX)
+if(UNIX AND NOT APPLE)
     target_sources(LTSM_common PUBLIC ltsm_xcb_wrapper.cpp)
 
     if(LTSM_BUILD_XCB_ERRORS)

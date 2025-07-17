@@ -76,19 +76,12 @@ namespace LTSM
 
         std::string login;
         std::string password;
-
-        struct pam_conv pamc
-        {
-            pam_conv_func, this
-        };
-
+        struct pam_conv pamc { pam_conv_func, this };
         bool authenticateSuccess = false;
 
     protected:
-        struct pam_conv* pamConv(void) override
-        {
-            return & pamc;
-        }
+        struct pam_conv* pamConv(void) override;
+        virtual char* onPamPrompt(int, const char*) const;
 
     public:
         PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
@@ -96,15 +89,8 @@ namespace LTSM
 
         bool authenticate(void);
 
-        bool isAuthenticated(void) const
-        {
-            return authenticateSuccess;
-        }
-
-        bool isLogin(std::string_view name) const
-        {
-            return login == name;
-        }
+        bool isAuthenticated(void) const;
+        bool isLogin(std::string_view name) const;
     };
 
     /// PamSession

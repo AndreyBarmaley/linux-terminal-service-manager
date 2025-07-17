@@ -126,12 +126,8 @@ namespace LTSM
         std::any value;
 
     public:
-        explicit JsonPrimitive(const bool & v) : value(v) {}
-
-        explicit JsonPrimitive(const int & v) : value(v) {}
-
-        explicit JsonPrimitive(const double & v) : value(v) {}
-
+        template<typename T>
+        explicit JsonPrimitive(const T & v) : value(v) {}
         explicit JsonPrimitive(std::string_view v) : value(std::make_any<std::string>(v)) {}
 
         std::string toString(void) const override;

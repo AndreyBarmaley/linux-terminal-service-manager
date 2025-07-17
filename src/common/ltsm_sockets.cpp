@@ -32,6 +32,17 @@
 #include <poll.h>
 #endif
 
+#ifdef __APPLE__
+#include <sys/un.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <poll.h>
+#endif
+
 #ifdef __WIN32__
 #include <winsock2.h>
 #include <winsock.h>
@@ -69,7 +80,7 @@ namespace LTSM
     /* NetworkStream */
     bool NetworkStream::hasInput(int fd, int timeoutMS /* 1ms */)
     {
-#ifdef __WIN32__
+#if defined(__WIN32__)
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
@@ -143,7 +154,7 @@ namespace LTSM
             return 0;
         }
 
-#ifdef __WIN32__
+#if defined(__WIN32__)
         long unsigned int count = 0;
 
         if(0 > ioctlsocket(fd, FIONREAD, & count))

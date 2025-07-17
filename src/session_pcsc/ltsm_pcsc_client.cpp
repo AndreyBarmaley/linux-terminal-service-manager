@@ -37,7 +37,13 @@
  #define MAX_BUFFER_SIZE_EXTENDED (4 + 3 + (1<<16) + 3 + 2)
 #endif
 
-#include "winscard.h"
+#ifdef __APPLE__
+ #include "PCSC/wintypes.h"
+ #include "PCSC/pcsclite.h"
+ #include "PCSC/winscard.h"
+#else
+ #include "winscard.h"
+#endif
 
 #include "ltsm_pcsc.h"
 #include "ltsm_tools.h"

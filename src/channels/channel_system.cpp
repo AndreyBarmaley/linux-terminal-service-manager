@@ -351,13 +351,13 @@ void LTSM::ChannelClient::sendLtsmChannelData(uint8_t channel, const std::vector
 
 void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> && buf)
 {
-    if(channel == Channel::Reserved)
+    if(channel == static_cast<uint8_t>(ChannelType::Reserved))
     {
         Application::error("%s: reserved channel blocked", __FUNCTION__);
         throw std::invalid_argument(NS_FuncName);
     }
 
-    if(channel == Channel::System)
+    if(channel == static_cast<uint8_t>(ChannelType::System))
     {
         recvChannelSystem(buf);
     }
@@ -422,7 +422,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
         replyError = true;
     }
 
-    if(channel <= Channel::System || channel >= Channel::Reserved)
+    if(channel <= static_cast<uint8_t>(ChannelType::System) || channel >= static_cast<uint8_t>(ChannelType::Reserved))
     {
         Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", channel);
         replyError = true;
@@ -524,7 +524,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo)
             return false;
         }
 
-        if(job.channel <= Channel::System || job.channel >= Channel::Reserved)
+        if(job.channel <= static_cast<uint8_t>(ChannelType::System) || job.channel >= static_cast<uint8_t>(ChannelType::Reserved))
         {
             Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", job.channel);
 
@@ -633,7 +633,7 @@ void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, con
 
     jo.push("keyboard", jo2.flush());
 
-    sendLtsmChannelData(Channel::System, jo.flush());
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
 }
 
 void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string> & names, int group)
@@ -646,7 +646,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
         jo.push("group", group);
         jo.push("names", JsonArrayStream(names.begin(), names.end()).flush());
 
-        sendLtsmChannelData(Channel::System, jo.flush());
+        sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
     }
 }
 
@@ -696,7 +696,7 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
 
     jo.push("files", ja.flush());
 
-    sendLtsmChannelData(Channel::System, jo.flush());
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
     return true;
 }
 
@@ -738,7 +738,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
     // find free channel
     uint8_t channel = 1;
 
-    for(; channel < Channel::Reserved; ++channel)
+    for(; channel < static_cast<uint8_t>(ChannelType::Reserved); ++channel)
     {
         if(! findChannel(channel) && ! findPlanned(channel))
         {
@@ -746,7 +746,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
         }
     }
 
-    if(channel == Channel::Reserved)
+    if(channel == static_cast<uint8_t>(ChannelType::Reserved))
     {
         Application::error("%s: all channels busy", __FUNCTION__);
         return false;
@@ -1077,22 +1077,22 @@ void LTSM::ChannelClient::sendSystemChannelOpen(uint8_t channel, const Channel::
         jo.push("path", clientOpts.content());
     }
 
-    sendLtsmChannelData(Channel::System, jo.flush());
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
 }
 
 void LTSM::ChannelClient::sendSystemChannelError(uint8_t channel, int code, const std::string & err)
 {
-    sendLtsmChannelData(Channel::System, JsonObjectStream().push("cmd", SystemCommand::ChannelError).push("id", channel).push("code", code).push("error", err).flush());
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), JsonObjectStream().push("cmd", SystemCommand::ChannelError).push("id", channel).push("code", code).push("error", err).flush());
 }
 
 void LTSM::ChannelClient::sendSystemChannelClose(uint8_t channel)
 {
-    sendLtsmChannelData(Channel::System, JsonObjectStream().push("cmd", SystemCommand::ChannelClose).push("id", channel).flush());
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), JsonObjectStream().push("cmd", SystemCommand::ChannelClose).push("id", channel).flush());
 }
 
 void LTSM::ChannelClient::sendSystemChannelConnected(uint8_t channel, int flags, bool noerror)
 {
-    sendLtsmChannelData(Channel::System, JsonObjectStream().
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), JsonObjectStream().
                   push("cmd", SystemCommand::ChannelConnected).
                   push("flags", flags).
                   push("error", ! noerror).
@@ -1270,7 +1270,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
     // find free channel
     uint8_t channel = 1;
 
-    for(; channel < Channel::Reserved; ++channel)
+    for(; channel < static_cast<uint8_t>(ChannelType::Reserved); ++channel)
     {
         if(! findChannel(channel) && ! findPlanned(channel))
         {
@@ -1278,7 +1278,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
         }
     }
 
-    if(channel == Channel::Reserved)
+    if(channel == static_cast<uint8_t>(ChannelType::Reserved))
     {
         Application::error("%s: all channels busy", __FUNCTION__);
         return false;
@@ -1303,7 +1303,7 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
 // Remote2Local
 LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid)
 {
-    if(Channel::OptsFlags::ZLibCompression & flags)
+    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags)
     {
         zlib = std::make_unique<ZLib::InflateBase>();
     }
@@ -1440,7 +1440,7 @@ ssize_t LTSM::Channel::Remote2Local_FD::writeDataFrom(const void* buf, size_t le
 // Local2Remote
 LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid)
 {
-    if(Channel::OptsFlags::ZLibCompression & flags)
+    if(static_cast<uint32_t>(OptsFlags::ZLibCompression) & flags)
     {
         zlib = std::make_unique<ZLib::DeflateBase>(Z_BEST_SPEED + 2);
     }
@@ -1590,7 +1590,7 @@ LTSM::Channel::ConnectorBase::ConnectorBase(uint8_t ch, const ConnectorMode & mo
 
 bool LTSM::Channel::ConnectorBase::isAllowSessionFor(bool user) const
 {
-    return (flags & OptsFlags::AllowLoginSession) ? ! user : user;
+    return (flags & static_cast<uint32_t>(OptsFlags::AllowLoginSession)) ? ! user : user;
 }
 
 bool LTSM::Channel::ConnectorBase::isRunning(void) const

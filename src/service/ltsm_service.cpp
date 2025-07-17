@@ -166,60 +166,70 @@ namespace LTSM
         }
 
         auto pamAuthenticate = static_cast<const PamAuthenticate*>(appdata);
-        auto & login = pamAuthenticate->login;
-        auto & pass = pamAuthenticate->password;
 
         for(int ii = 0 ; ii < num_msg; ++ii)
         {
             auto pm = msg[ii];
             auto pr = resp[ii];
 
-            switch(pm->msg_style)
-            {
-                case PAM_ERROR_MSG:
-                    Application::error("%s: pam error: %s", __FUNCTION__, pm->msg);
-                    pr->resp = strdup("");
-                    pr->resp_retcode = PAM_SUCCESS;
-                    break;
+            if(pr->resp)
+                free(pr->resp);
 
-                case PAM_TEXT_INFO:
-                    Application::info("%s: pam info: %s", __FUNCTION__, pm->msg);
-                    pr->resp = strdup("");
-                    pr->resp_retcode = PAM_SUCCESS;
-                    break;
-
-                case PAM_PROMPT_ECHO_ON:
-                    pr->resp = strdup(login.c_str());
-
-                    if(! pr->resp)
-                    {
-                        Application::error("%s: pam error: %s", __FUNCTION__, "buf error");
-                        pr->resp_retcode = PAM_BUF_ERR;
-                        return PAM_BUF_ERR;
-                    }
-
-                    pr->resp_retcode = PAM_SUCCESS;
-                    break;
-
-                case PAM_PROMPT_ECHO_OFF:
-                    pr->resp = strdup(pass.c_str());
-
-                    if(! pr->resp)
-                    {
-                        Application::error("%s: pam error: %s", __FUNCTION__, "buf error");
-                        pr->resp_retcode = PAM_BUF_ERR;
-                        return PAM_BUF_ERR;
-                    }
-
-                    pr->resp_retcode = PAM_SUCCESS;
-                    break;
-
-                default:
-                    break;
-            }
+            pr->resp = pamAuthenticate->onPamPrompt(pm->msg_style, pm->msg);
+            pr->resp_retcode = PAM_SUCCESS;
         }
 
         return PAM_SUCCESS;
+    }
+
+    char* PamAuthenticate::onPamPrompt(int style, const char* msg) const
+    {
+        switch(style)
+        {
+            case PAM_ERROR_MSG:
+                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_ERROR_MSG", msg);
+                break;
+
+            case PAM_TEXT_INFO:
+                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_TEXT_INFO", msg);
+                break;
+
+            case PAM_PROMPT_ECHO_ON:
+                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_ON", msg);
+
+                if(0 == strncasecmp(msg, "login:", 6))
+                    return strdup(login.c_str());
+
+                break;
+
+            case PAM_PROMPT_ECHO_OFF:
+                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_OFF", msg);
+
+                if(0 == strncasecmp(msg, "password:", 9))
+                    return strdup(password.c_str());
+
+                break;
+
+            default:
+                break;
+        }
+
+        return nullptr;
+    }
+
+    bool PamAuthenticate::isAuthenticated(void) const
+    {
+        return authenticateSuccess;
+    }
+
+    bool PamAuthenticate::isLogin(std::string_view name) const
+    {
+        return login == name;
+    }
+
+    struct pam_conv* PamAuthenticate::pamConv(void)
+    {
+        return & pamc;
     }
 
     bool PamAuthenticate::authenticate(void)
@@ -3184,7 +3194,7 @@ namespace LTSM
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, printerSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::WriteOnly),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
-                           Channel::OptsFlags::ZLibCompression);
+                           static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
         std::thread(fixPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
         return true;
@@ -3423,7 +3433,7 @@ namespace LTSM
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, saneSocket);
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
-                           Channel::OptsFlags::ZLibCompression);
+                           static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
         std::thread(fixPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
                     S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
@@ -3650,7 +3660,7 @@ namespace LTSM
         auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pkcs11Socket.native());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
-                           Channel::OptsFlags::AllowLoginSession);
+                           static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
         std::thread(fixPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
         return true;
