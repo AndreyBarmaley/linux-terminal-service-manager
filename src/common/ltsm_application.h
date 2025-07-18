@@ -60,7 +60,8 @@ namespace LTSM
         App = 1 << 16,
         Mgr = 1 << 15,
         Ldap = 1 << 14,
-        Gss = 1 << 13
+        Gss = 1 << 13,
+        Helper = 1 << 14
     };
 
     class Application

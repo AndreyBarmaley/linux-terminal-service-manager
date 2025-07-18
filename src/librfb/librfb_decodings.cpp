@@ -610,16 +610,25 @@ namespace LTSM
                 if(0 > tjDecompress2(jpeg.get(), buf.data(), buf.size(),
                                      jpegData, reg.width, 0, reg.height, TJPF_BGRX, TJFLAG_FASTDCT))
                 {
+#ifdef tjGetErrorCode
                     int err = tjGetErrorCode(jpeg.get());
                     const char* str = tjGetErrorStr2(jpeg.get());
                     Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "tjDecompress", str, err);
+#else
+                    Application::error("%s: %s failed, error: `%s'", __FUNCTION__, "tjDecompress", tjGetErrorStr());
+#endif
                 }
                 else
                 {
+#ifndef SDL_PIXELFORMAT_XBGR8888
+ #define SDL_PIXELFORMAT_XBGR8888 SDL_PIXELFORMAT_ABGR8888
+#endif
+
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
                     cli->updateRawPixels2(jpegData, reg, 32, pitch, SDL_PIXELFORMAT_RGBX8888);
 #else
-                    cli->updateRawPixels2(jpegData, reg, 32, pitch, SDL_PIXELFORMAT_XRGB8888);
+		    // deb10, turbojpeg-1.5.2
+                    cli->updateRawPixels2(jpegData, reg, 32, pitch, SDL_PIXELFORMAT_XBGR8888);
 #endif
                     tjFree(jpegData);
                 }

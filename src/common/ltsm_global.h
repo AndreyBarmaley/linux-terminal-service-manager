@@ -37,7 +37,7 @@ namespace LTSM
     inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
     inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
 
-    inline static const int service_version = 20250717;
+    inline static const int service_version = 20250718;
 
     inline bool platformBigEndian(void)
     {

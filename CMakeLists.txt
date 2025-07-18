@@ -114,6 +114,10 @@ set(CMAKE_FIND_FRAMEWORK LAST)
 # LTSM common lib
 project(LTSM_common)
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(LTSM_WITH_STD_MAP ON CACHE BOOL "usage std::unordered_map")
+endif()
+
 if(APPLE)
     add_definitions(-D__APPLE__)
 elseif(UNIX)

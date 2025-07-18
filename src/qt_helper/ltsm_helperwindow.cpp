@@ -218,6 +218,8 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
             ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
         }
     }
+
+    Application::debug(DebugType::Helper, "%s: started", __FUNCTION__);
 }
 
 LTSM_HelperWindow::~LTSM_HelperWindow()
@@ -227,6 +229,8 @@ LTSM_HelperWindow::~LTSM_HelperWindow()
 
 void LTSM_HelperWindow::switchLoginMode(void)
 {
+    Application::debug(DebugType::Helper, "%s: login mode", __FUNCTION__);
+
     tokenAuthMode = false;
     ui->labelDomain->setText(tr("domain:"));
     ui->labelUsername->setText(tr("username:"));
@@ -271,6 +275,8 @@ void LTSM_HelperWindow::tokensChanged(void)
 {
 #ifdef LTSM_PKCS11_AUTH
     auto & tokens = pkcs11->getTokens();
+
+    Application::debug(DebugType::Helper, "%s: tokens count: %u", __FUNCTION__, tokens.size());
 
     if(tokens.empty())
     {
@@ -612,6 +618,7 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
     {
         if(auto err = XCB::RootDisplay::hasError())
         {
+            Application::error("%s: x11 has error", __FUNCTION__);
             return;
         }
 
@@ -717,6 +724,7 @@ void LTSM_HelperWindow::loginFailureCallback(int display, const QString & error)
 {
     if(display == displayNum)
     {
+        Application::error("%s: login failure", __FUNCTION__);
         ui->pushButtonLogin->setDisabled(false);
         ui->comboBoxUsername->setDisabled(false);
         ui->lineEditPassword->setDisabled(false);

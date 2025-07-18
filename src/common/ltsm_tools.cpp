@@ -422,6 +422,9 @@ namespace LTSM
             if(slower == "gss")
                 types |= DebugType::Gss;
             else
+            if(slower == "helper")
+                types |= DebugType::Helper;
+            else
             if(slower == "all")
                 types |= DebugType::All;
             else
