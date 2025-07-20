@@ -240,7 +240,11 @@ namespace LTSM
 
     /* Connector::SignalProxy */
     Connector::SignalProxy::SignalProxy(const JsonObject & jo, const char* type)
+#ifdef SDBUS_2_0_API
+        : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName{LTSM::dbus_manager_service_name}, sdbus::ObjectPath{LTSM::dbus_manager_service_path}),
+#else
         : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
+#endif
           _conntype(type), _config(& jo)
     {
         _remoteaddr.assign("local");

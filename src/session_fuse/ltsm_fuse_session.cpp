@@ -999,7 +999,12 @@ namespace LTSM
 
     /// FuseSessionBus
     FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn)
-        : AdaptorInterfaces(conn, dbus_session_fuse_path), Application("ltsm_fuse2session")
+#ifdef SDBUS_2_0_API
+        : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_fuse_path}),
+#else
+        : AdaptorInterfaces(conn, dbus_session_fuse_path),
+#endif
+         Application("ltsm_fuse2session")
     {
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
@@ -1113,7 +1118,11 @@ int main(int argc, char** argv)
 
     try
     {
+#ifdef SDBUS_2_0_API
+        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName{LTSM::dbus_session_fuse_name});
+#else
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
+#endif
 
         if(! LTSM::conn)
         {

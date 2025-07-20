@@ -225,6 +225,10 @@ if(LTSM_BUILD_SERVICE)
         target_compile_definitions(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_service PRIVATE -DSDBUS_2_0_API)
+    endif()
+
     target_include_directories(LTSM_service PRIVATE
             src/common src/channels src/session_fuse src/session_audio src/session_pcsc src/librfb
             ${PAM_INCLUDE_PATH} ${CMAKE_BINARY_DIR})
@@ -316,6 +320,10 @@ if(LTSM_BUILD_CONNECTOR)
         target_compile_options(LTSM_connector PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_connector PRIVATE -DSDBUS_2_0_API)
+    endif()
+
     target_compile_definitions(LTSM_connector PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_SDBUS
         ${GNUTLS_DEFINITIONS} ${sdbus-c++_DEFINITIONS})
 
@@ -388,6 +396,14 @@ if(LTSM_BUILD_HELPER)
     endif()
 
     target_compile_definitions(LTSM_helper PRIVATE -DLTSM_WITH_GNUTLS ${GNUTLS_DEFINITIONS})
+
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
+        target_compile_options(LTSM_helper PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+    endif()
+
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_helper PRIVATE -DSDBUS_2_0_API)
+    endif()
 
     target_include_directories(LTSM_helper PRIVATE src/common src/dbus src/session_pkcs11
          ${GNUTLS_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
@@ -687,6 +703,10 @@ if(LTSM_FUSE2SESSION)
         target_compile_options(LTSM_fuse2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
     endif()
 
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_fuse2session PRIVATE -DSDBUS_2_0_API)
+    endif()
+
     target_compile_options(LTSM_fuse2session PRIVATE ${FUSE3_CFLAGS})
     target_include_directories(LTSM_fuse2session PRIVATE src/common src/dbus ${FUSE3_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
     target_link_libraries(LTSM_fuse2session LTSM_common SDBusCpp::sdbus-c++ ${FUSE3_LIBRARIES})
@@ -721,9 +741,13 @@ if(LTSM_AUDIO2SESSION)
         target_link_libraries(LTSM_audio2session ${OPUS_LIBRARIES})
     endif()
 
-#    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
-#        target_compile_options(LTSM_audio2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
-#    endif()
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
+        target_compile_options(LTSM_audio2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+    endif()
+
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_audio2session PRIVATE -DSDBUS_2_0_API)
+    endif()
 
     target_compile_options(LTSM_audio2session PRIVATE ${PULSEAUDIO_CFLAGS})
     target_include_directories(LTSM_audio2session PRIVATE src/common src/dbus ${PULSEAUDIO_INCLUDE_DIR} ${CMAKE_BINARY_DIR})
@@ -750,9 +774,13 @@ if(LTSM_PCSC2SESSION)
         ltsm_pcsc_adaptor.h
         src/session_pcsc/ltsm_pcsc_session.cpp)
 
-#    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
-#        target_compile_options(LTSM_pcsc2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
-#    endif()
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
+        target_compile_options(LTSM_pcsc2session PRIVATE -DSDBUS_ADDRESS_SUPPORT)
+    endif()
+
+    if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "2.0.0")
+        target_compile_definitions(LTSM_pcsc2session PRIVATE -DSDBUS_2_0_API)
+    endif()
 
     target_compile_options(LTSM_pcsc2session PRIVATE ${PCSCLITE_CFLAGS})
     target_include_directories(LTSM_pcsc2session PRIVATE src/common src/dbus ${PCSCLITE_INCLUDE_DIR} ${CMAKE_BINARY_DIR})

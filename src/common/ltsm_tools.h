@@ -275,7 +275,7 @@ namespace LTSM
         uint32_t maskMaxValue(uint32_t mask);
         std::vector<uint32_t> maskUnpackBits(uint32_t mask);
 
-        std::wstring string2wstring(std::string_view);
+        std::wstring string2wstring(const std::string &);
         std::string wstring2string(const std::wstring &);
 
         template<typename Iterator>

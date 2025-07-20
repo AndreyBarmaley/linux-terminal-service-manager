@@ -176,7 +176,12 @@ namespace LTSM
 
     /// PcscSessionBus
     PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, std::string_view pcscSockName)
-        : AdaptorInterfaces(conn, dbus_session_pcsc_path), Application("ltsm_pcsc2session"), socketPath(pcscSockName)
+#ifdef SDBUS_2_0_API
+        : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_pcsc_path}),
+#else
+        : AdaptorInterfaces(conn, dbus_session_pcsc_path),
+#endif
+         Application("ltsm_pcsc2session"), socketPath(pcscSockName)
     {
         //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
@@ -1835,7 +1840,11 @@ int main(int argc, char** argv)
 
     try
     {
+#ifdef SDBUS_2_0_API
+        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName{LTSM::dbus_session_pcsc_name});
+#else
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_pcsc_name);
+#endif
 
         if(! LTSM::conn)
         {

@@ -1096,7 +1096,12 @@ namespace LTSM
 
     /* Manager::Object */
     Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, size_t displays, const Application & app)
-        : AdaptorInterfaces(conn, LTSM::dbus_manager_service_path), XvfbSessions(displays), _app(& app), _config(& jo)
+#ifdef SDBUS_2_0_API
+        : AdaptorInterfaces(conn, sdbus::ObjectPath{LTSM::dbus_manager_service_path})
+#else
+        : AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
+#endif
+        , XvfbSessions(displays), _app(& app), _config(& jo)
     {
         // registry
         registerAdaptor();
@@ -2614,7 +2619,11 @@ namespace LTSM
                 try
                 {
                     auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+                    auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+#else
                     auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+#endif
                     concatenatorProxy->callMethod("Notify").onInterface("org.freedesktop.Notifications").withArguments(applicationName,
                             replacesID, notificationIcon,
                             summary2, body2, actions, hints, expirationTimeout).dontExpectReply();
@@ -3227,8 +3236,13 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
             auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+#endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
             concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
@@ -3358,7 +3372,11 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+#endif
             concatenatorProxy->callMethod("disconnectChannel").onInterface(interfaceName).withArguments(
                 audioSocket.native()).dontExpectReply();
         }
@@ -3467,8 +3485,13 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
             auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+#endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
             concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
@@ -3595,7 +3618,11 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+#endif
             concatenatorProxy->callMethod("disconnectChannel").onInterface(interfaceName).withArguments(
                 pcscSocket.native()).dontExpectReply();
         }
@@ -3699,8 +3726,13 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
             auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+#endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
             concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
@@ -3845,7 +3877,11 @@ namespace LTSM
             }
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+#else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+#endif
             concatenatorProxy->callMethod("umountPoint").onInterface(interfaceName).withArguments(localPoint).dontExpectReply();
         }
         catch(const sdbus::Error & err)
@@ -4197,7 +4233,7 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
+        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName{LTSM::dbus_manager_service_name});
 
         if(! conn)
         {

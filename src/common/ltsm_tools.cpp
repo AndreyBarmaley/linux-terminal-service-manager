@@ -463,18 +463,38 @@ namespace LTSM
                resolveSymLink(std::filesystem::read_symlink(path, err)) : path;
     }
 
-    std::wstring Tools::string2wstring(std::string_view str)
+    std::wstring Tools::string2wstring(const std::string & str)
     {
+/*
         using convert_type = std::codecvt_utf8<wchar_t>;
         std::wstring_convert<convert_type, wchar_t> converter;
         return converter.from_bytes(str.begin(), str.end());
+*/
+        if(auto len = std::mbstowcs(nullptr, str.c_str(), 0))
+        {
+            std::wstring res(len, L'\0');
+            std::mbstowcs(res.data(), str.c_str(), len);
+            return res;
+        }
+
+        return {};
     }
 
     std::string Tools::wstring2string(const std::wstring & wstr)
     {
+/*
         using convert_type = std::codecvt_utf8<wchar_t>;
         std::wstring_convert<convert_type, wchar_t> converter;
         return converter.to_bytes(wstr);
+*/
+        if(auto len = std::wcstombs(nullptr, wstr.c_str(), 0))
+        {
+            std::string res(len, '\0');
+            std::wcstombs(res.data(), wstr.c_str(), len);
+            return res;
+        }
+        
+        return {};
     }
 
     std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)

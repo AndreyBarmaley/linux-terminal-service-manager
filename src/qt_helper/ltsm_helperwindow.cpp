@@ -57,8 +57,12 @@ using namespace std::chrono_literals;
 using namespace LTSM;
 
 /// LTSM_HelperSDBus
-LTSM_HelperSDBus::LTSM_HelperSDBus() : ProxyInterfaces(sdbus::createSystemBusConnection(),
-            LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+LTSM_HelperSDBus::LTSM_HelperSDBus()
+#ifdef SDBUS_2_0_API
+    : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName{LTSM::dbus_manager_service_name}, sdbus::ObjectPath{LTSM::dbus_manager_service_path})
+#else
+    : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+#endif
 {
     registerProxy();
 }
@@ -618,7 +622,7 @@ void LTSM_HelperWindow::timerEvent(QTimerEvent* ev)
     {
         if(auto err = XCB::RootDisplay::hasError())
         {
-            Application::error("%s: x11 has error", __FUNCTION__);
+            Application::error("%s: x11 has error: %d", __FUNCTION__, err);
             return;
         }
 

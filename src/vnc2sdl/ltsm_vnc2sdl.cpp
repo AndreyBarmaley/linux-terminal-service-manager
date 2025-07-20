@@ -734,6 +734,7 @@ namespace LTSM
 #ifdef __UNIX__
                 if(auto err = XCB::RootDisplay::hasError())
                 {
+                    Application::warning("%s: x11 error: %d", __FUNCTION__, err);
                     this->rfbMessagesShutdown();
                     break;
                 }
