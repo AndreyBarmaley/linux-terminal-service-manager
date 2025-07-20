@@ -4233,7 +4233,11 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
+#ifdef SDBUS_2_0_API
         auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName{LTSM::dbus_manager_service_name});
+#else
+        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
+#endif
 
         if(! conn)
         {
