@@ -881,6 +881,8 @@ bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const C
     return true;
 }
 
+#endif // __UNIX__
+
 bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
 #if defined(LTSM_CLIENT) && defined(LTSM_PKCS11_AUTH)
@@ -903,8 +905,6 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
     return false;
 #endif
 }
-
-#endif // __UNIX__
 
 bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
