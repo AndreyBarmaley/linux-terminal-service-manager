@@ -184,10 +184,10 @@ LTSM_HelperWindow::LTSM_HelperWindow(QWidget* parent) :
 {
     if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr))
     {
+        Application::error("%s: xcb connect failed", __FUNCTION__);
         throw xcb_error(NS_FuncName);
     }
         
-    Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
     ui->setupUi(this);
     ui->labelDomain->hide();
     ui->comboBoxDomain->hide();

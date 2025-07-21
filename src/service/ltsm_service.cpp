@@ -56,6 +56,7 @@
 #include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
+#include "ltsm_xcb_wrapper.h"
 
 using namespace std::chrono_literals;
 
@@ -1348,16 +1349,30 @@ namespace LTSM
         runSystemScript(std::move(xvfb), _config->getString("system:disconnect"));
     }
 
-    bool Manager::Object::waitXvfbStarting(int display, uint32_t ms) const
+    bool Manager::Object::waitXvfbStarting(int display, const std::vector<uint8_t> & cookie, uint32_t ms) const
     {
         if(0 >= display)
         {
             return false;
         }
 
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 50, [ = ]()
+        return Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [ this, display, auth = std::addressof(cookie) ]()
         {
-            return ! checkXvfbSocket(display);
+            if(this->checkXvfbSocket(display))
+            {
+                try
+                {
+                    if(auto xcb = std::make_unique<XCB::Connector>(display, auth))
+                    {
+                        return 0 == xcb->hasError();
+                    }
+                }
+                catch(const std::exception &)
+                {
+                }
+            }
+
+            return false;
         });
     }
 
@@ -1580,9 +1595,9 @@ namespace LTSM
         sess->tpstart = std::chrono::system_clock::now();
         sess->durationLimit = _config->getInteger("idle:timeout:xvfb", 10);
         // generate session key
-        auto mcookie = Tools::randomBytes(128);
+        sess->mcookie = Tools::randomBytes(128);
         // session xauthfile
-        sess->xauthfile = createXauthFile(sess->displayNum, mcookie);
+        sess->xauthfile = createXauthFile(sess->displayNum, sess->mcookie);
 
         if(sess->xauthfile.empty())
         {
@@ -1823,7 +1838,7 @@ namespace LTSM
         waitPidBackgroundSafe(xvfb->pid1);
 
         // wait Xvfb display starting
-        if(! waitXvfbStarting(xvfb->displayNum, 5000 /* 5 sec */))
+        if(! waitXvfbStarting(xvfb->displayNum, xvfb->mcookie, 5000 /* 5 sec */))
         {
             Application::error("%s: %s failed, display: %d", __FUNCTION__, "waitXvfbStarting", xvfb->displayNum);
             return -1;
@@ -2036,7 +2051,7 @@ namespace LTSM
         waitPidBackgroundSafe(newSess->pid1);
 
         // wait Xvfb display starting
-        if(! waitXvfbStarting(newSess->displayNum, 5000 /* 5 sec */))
+        if(! waitXvfbStarting(newSess->displayNum, newSess->mcookie, 5000 /* 5 sec */))
         {
             Application::error("%s: %s failed, display: %d", __FUNCTION__, "waitXvfbStarting", newSess->displayNum);
             return -1;
@@ -2855,7 +2870,7 @@ namespace LTSM
                 // wait session
                 Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [ = ]()
                 {
-                    return userSess->mode != XvfbMode::SessionSleep;
+                    return userSess->mode == XvfbMode::SessionSleep;
                 });
             }
         }

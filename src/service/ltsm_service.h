@@ -162,6 +162,7 @@ namespace LTSM
         std::string conntype;
         std::string encryption;
         std::string layout;
+        std::vector<uint8_t> mcookie;
 
         std::chrono::system_clock::time_point tpstart;
 
@@ -283,7 +284,7 @@ namespace LTSM
                     UserInfoPtr userInfo);
             int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
             void runSessionScript(XvfbSessionPtr, const std::string & cmd);
-            bool waitXvfbStarting(int display, uint32_t waitms) const;
+            bool waitXvfbStarting(int display, const std::vector<uint8_t> &, uint32_t waitms) const;
             bool checkXvfbSocket(int display) const;
             void removeXvfbSocket(int display) const;
             bool displayShutdown(XvfbSessionPtr, bool emitSignal);

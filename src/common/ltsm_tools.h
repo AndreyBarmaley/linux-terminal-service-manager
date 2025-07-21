@@ -470,17 +470,22 @@ namespace LTSM
         {
             auto now = std::chrono::steady_clock::now();
 
-            while(call())
+            while(true)
             {
+                if(call())
+                {
+                    return true;
+                }
+
                 if(TimeType(delay) <= std::chrono::steady_clock::now() - now)
                 {
-                    return false;
+                    break;
                 }
 
                 std::this_thread::sleep_for(TimeType(pause));
             }
 
-            return true;
+            return false;
         }
 
         template<typename TimeType = std::chrono::milliseconds>

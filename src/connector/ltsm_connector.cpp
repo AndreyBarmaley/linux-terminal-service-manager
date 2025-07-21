@@ -275,7 +275,7 @@ namespace LTSM
         // wait display starting
         bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&]()
         {
-            return ! Tools::checkUnixSocket(socketPath);
+            return Tools::checkUnixSocket(socketPath);
         });
 
         if(! waitSocket)

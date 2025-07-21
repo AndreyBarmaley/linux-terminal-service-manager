@@ -296,6 +296,7 @@ namespace LTSM
                 fprintf(appLoggingFd, "[warning] ");
                 vfprintf(appLoggingFd, format, args);
                 fprintf(appLoggingFd, "\n");
+                fflush(appLoggingFd);
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
@@ -329,6 +330,7 @@ namespace LTSM
             fprintf(appLoggingFd, "[error] ");
             vfprintf(appLoggingFd, format, args);
             fprintf(appLoggingFd, "\n");
+            fflush(appLoggingFd);
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {

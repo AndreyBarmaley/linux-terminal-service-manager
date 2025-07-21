@@ -278,15 +278,15 @@ namespace LTSM
 
     void Connector::VNC::serverConnectedEvent(void)
     {
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 10, [=]()
+        // wait widget started signal(onHelperWidgetStarted), 3000ms, 100 ms pause
+        bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [=]()
         {
-            return ! this->loginWidgetStarted;
+            return !! this->loginWidgetStarted;
         });
 
         if(! waitWidgetStarted)
         {
-            Application::info("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
+            Application::warning("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
             throw vnc_error(NS_FuncName);
         }
 
