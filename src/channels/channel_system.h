@@ -439,15 +439,13 @@ namespace LTSM
             void pushData(std::vector<uint8_t> &&) override;
         };
 
-#ifdef __UNIX__
+#ifdef LTSM_PKCS11_AUTH
         /// ConnectorClientPkcs11
         class ConnectorClientPkcs11 : public ConnectorBase
         {
             StreamBuf reply;
 
-#ifdef LTSM_PKCS11_AUTH
             PKCS11::LibraryPtr pkcs11;
-#endif
             std::vector<uint8_t> last;
 
             uint16_t protoVer = 0;
@@ -470,8 +468,7 @@ namespace LTSM
             void setSpeed(const Channel::Speed &) override;
             void pushData(std::vector<uint8_t> &&) override;
         };
-#endif // LINUX
-
+#endif // LTSM_PKCS11_AUTH
 #endif // LTSM_CLIENT
 
         namespace Connector
@@ -487,7 +484,8 @@ namespace LTSM
 
         ConnectorBasePtr createTcpConnector(uint8_t channel, int fd, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createTcpConnector(uint8_t channel, const std::string & ipaddr, int port, const ConnectorMode &, const Opts &, ChannelClient &);
-
+#endif
+#ifdef LTSM_PKCS11_AUTH
         ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 #endif
         ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);

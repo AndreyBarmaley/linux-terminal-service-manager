@@ -31,11 +31,11 @@
 #include "ltsm_channels.h"
 #include "ltsm_application.h"
 
-#ifdef LTSM_WITH_PAYBACK_OPENAL
+#ifdef LTSM_WITH_PLAYBACK_OPENAL
  #include "ltsm_audio_openal.h"
 #endif
 
-#ifdef LTSM_WITH_PAYBACK_PULSE
+#ifdef LTSM_WITH_PLAYBACK_PULSE
  #include "ltsm_audio_pulse.h"
 #endif
 
@@ -261,7 +261,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
         return false;
     }
 
-#ifdef LTSM_WITH_PAYBACK_OPENAL
+#ifdef LTSM_WITH_PLAYBACK_OPENAL
     try
     {
         player = std::make_unique<OpenAL::Playback>(*format, 3 /* buffer sec, and autoplay */);
@@ -272,7 +272,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     }
 #endif
 
-#ifdef LTSM_WITH_PAYBACK_PULSE
+#ifdef LTSM_WITH_PLAYBACK_PULSE
     try
     {
         player = std::make_unique<PulseAudio::Playback>("LTSM_client", "LTSM Audio Input", *format);

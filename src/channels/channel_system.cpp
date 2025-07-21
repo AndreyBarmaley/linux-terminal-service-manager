@@ -472,6 +472,8 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo)
         {
             replyError = ! createChannelSocket(channel, std::make_pair(jo.getString("ipaddr"), jo.getInteger("port")), mode, chopts);
         }
+#endif
+#ifdef LTSM_PKCS11_AUTH
         else if(type == Channel::ConnectorType::Pkcs11)
         {
             replyError = ! createChannelClientPkcs11(channel, jo.getString("pkcs11"), mode, chopts);

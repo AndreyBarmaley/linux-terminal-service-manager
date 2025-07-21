@@ -127,17 +127,9 @@ elseif(MINGW)
     set(CMAKE_CXX_FLAGS "-fpermissive")
 endif()
 
-pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
-pkg_search_module(P11KIT REQUIRED p11-kit-1)
-
 if(LTSM_WITH_SYSTEMD)
     pkg_search_module(SYSTEMD REQUIRED libsystemd)
     add_compile_options(-DWITH_SYSTEMD)
-endif()
-
-if(LTSM_PKCS11_AUTH)
-    add_compile_options(-DLTSM_PKCS11_AUTH)
-    include_directories(src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
 endif()
 
 add_compile_options(-DWITH_JSON -DJSMN_STATIC)
@@ -220,6 +212,10 @@ if(LTSM_BUILD_SERVICE)
         ltsm_service_adaptor.h
         src/service/ltsm_service.cpp
         src/channels/channel_system.cpp)
+
+    if(LTSM_PKCS11_AUTH)
+        target_include_directories(LTSM_service PRIVATE src/session_pkcs11)
+    endif()
 
     if(${sdbus-c++_VERSION} VERSION_GREATER_EQUAL "1.2.0")
         target_compile_definitions(LTSM_service PRIVATE -DSDBUS_ADDRESS_SUPPORT)
@@ -347,6 +343,7 @@ if(LTSM_BUILD_SDL2X11)
     project(LTSM_sdl2x11)
 
     add_executable(LTSM_sdl2x11 src/sdl2x11/ltsm_sdl2x11.cpp src/sdl2x11/ltsm_sdl_wrapper.cpp)
+    pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 
     target_compile_options(LTSM_sdl2x11 PRIVATE ${SDL2_CFLAGS})
     target_include_directories(LTSM_sdl2x11 PRIVATE src/common)
@@ -368,6 +365,8 @@ if(LTSM_BUILD_HELPER)
 
     find_package(Qt5 COMPONENTS Core Gui Widgets Network REQUIRED)
     find_package(GnuTLS REQUIRED)
+
+    pkg_search_module(P11KIT REQUIRED p11-kit-1)
     find_library(GNUTLSXX gnutlsxx)
 
     set(CMAKE_AUTOMOC ON)
@@ -388,6 +387,10 @@ if(LTSM_BUILD_HELPER)
         target_sources(LTSM_helper PRIVATE
             src/session_pkcs11/ltsm_pkcs11_session.cpp
             src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
+
+        target_compile_options(LTSM_helper PRIVATE ${P11KIT_CFLAGS})
+        target_compile_definitions(LTSM_helper PRIVATE -DLTSM_PKCS11_AUTH)
+        target_include_directories(LTSM_helper PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
 
         find_library(LDAP_LIBRARY ldap REQUIRED)
         find_library(LBER_LIBRARY lber REQUIRED)
@@ -482,6 +485,7 @@ if(LTSM_BUILD_VNC2IMAGE)
     find_package(PNG REQUIRED)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX gnutlsxx)
+    pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 
     target_compile_definitions(LTSM_vnc2image PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG ${GNUTLS_DEFINITIONS} ${PNG_DEFINITIONS})
     target_compile_options(LTSM_vnc2image PRIVATE ${SDL2_CFLAGS})
@@ -516,7 +520,6 @@ if(LTSM_BUILD_CLIENT)
         src/session_pcsc/ltsm_pcsc_client.cpp)
 
     if(APPLE)
-        unset(LTSM_PKCS11_AUTH CACHE)
         target_include_directories(LTSM_client PRIVATE src/common/mingw)
         target_sources(LTSM_client PRIVATE src/librfb/librfb_extclip.cpp)
         target_sources(LTSM_client PRIVATE src/librfb/librfb_winclient.cpp)
@@ -536,14 +539,31 @@ if(LTSM_BUILD_CLIENT)
     find_package(GnuTLS REQUIRED)
     find_library(GNUTLSXX gnutlsxx)
 
+    # required
+    pkg_search_module(PCSCLITE REQUIRED libpcsclite)
+    pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
+
+    pkg_search_module(P11KIT p11-kit-1)
+    pkg_search_module(OPUS opus)
+    pkg_search_module(LZ4 liblz4)
+
+    if(NOT P11KIT_FOUND)
+        unset(LTSM_PKCS11_AUTH CACHE)
+    endif()
+
     target_compile_definitions(LTSM_client PRIVATE -DLTSM_CLIENT -DLTSM_DECODING)
 
     if(LTSM_CLIENT_DECODING_LZ4)
-        pkg_search_module(LZ4 REQUIRED liblz4)
-        target_compile_options(LTSM_client PRIVATE ${LZ4_CFLAGS})
-	target_compile_definitions(LTSM_client PRIVATE -DLTSM_DECODING_LZ4)
-        target_include_directories(LTSM_client PRIVATE ${LZ4_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${LZ4_LIBRARIES})
+        if(LZ4_FOUND)
+            target_compile_options(LTSM_client PRIVATE ${LZ4_CFLAGS})
+	    target_compile_definitions(LTSM_client PRIVATE -DLTSM_DECODING_LZ4)
+            target_include_directories(LTSM_client PRIVATE ${LZ4_INCLUDE_DIR})
+            target_link_directories(LTSM_client PRIVATE ${LZ4_LIBRARY_DIRS})
+            target_link_libraries(LTSM_client ${LZ4_LIBRARIES})
+        else()
+            unset(LTSM_CLIENT_DECODING_LZ4 CACHE)
+            message("Decoder LZ4 not found")
+        endif()
     endif()
 
     if(LTSM_CLIENT_DECODING_QOI)
@@ -552,52 +572,81 @@ if(LTSM_BUILD_CLIENT)
 
     if(LTSM_CLIENT_DECODING_TJPG)
         pkg_search_module(TURBOJPEG REQUIRED libturbojpeg)
-        target_compile_options(LTSM_client PRIVATE ${TURBOJPEG_CFLAGS})
-	target_compile_definitions(LTSM_client PRIVATE -DLTSM_DECODING_TJPG)
-        target_include_directories(LTSM_client PRIVATE ${TURBOJPEG_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${TURBOJPEG_LIBRARIES})
+        if(TURBOJPEG_FOUND)
+            target_compile_options(LTSM_client PRIVATE ${TURBOJPEG_CFLAGS})
+	    target_compile_definitions(LTSM_client PRIVATE -DLTSM_DECODING_TJPG)
+            target_include_directories(LTSM_client PRIVATE ${TURBOJPEG_INCLUDE_DIR})
+            target_link_directories(LTSM_client PRIVATE ${TURBOJPEG_LIBRARY_DIRS})
+            target_link_libraries(LTSM_client ${TURBOJPEG_LIBRARIES})
+        else()
+            unset(LTSM_CLIENT_DECODING_TJPG CACHE)
+            message("Decoder TurboJPEG not found")
+        endif()
     endif()
 
-    pkg_search_module(P11KIT REQUIRED p11-kit-1)
-    pkg_search_module(OPUS REQUIRED opus)
-    pkg_search_module(OPENAL REQUIRED openal)
+    if(PCSCLITE_FOUND)
+        target_compile_options(LTSM_client PRIVATE ${PCSCLITE_CFLAGS})
+        target_include_directories(LTSM_client PRIVATE ${PCSCLITE_INCLUDE_DIR})
+        target_link_directories(LTSM_client PRIVATE ${PCSCLITE_LIBRARY_DIRS})
+        target_link_libraries(LTSM_client ${PCSCLITE_LIBRARIES})
+        if(APPLE)
+            target_link_libraries(LTSM_client "-framework PCSC")
+        endif()
+    else()
+        message("PCSC-LITE not found")
+    endif()
 
     if(LTSM_PKCS11_AUTH)
-        target_sources(LTSM_client PRIVATE
-            src/session_pkcs11/ltsm_pkcs11_client.cpp
-            src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
+        target_sources(LTSM_client PRIVATE src/session_pkcs11/ltsm_pkcs11_client.cpp)
+        target_sources(LTSM_client PRIVATE src/session_pkcs11/ltsm_pkcs11_wrapper.cpp)
 
-        target_link_libraries(LTSM_client ${P11KIT_LIBRARIES} dl)
+        target_compile_options(LTSM_client PRIVATE ${P11KIT_CFLAGS})
+        target_compile_definitions(LTSM_client PRIVATE -DLTSM_PKCS11_AUTH)
+        target_include_directories(LTSM_client PRIVATE src/session_pkcs11 ${P11KIT_INCLUDE_DIRS})
+        target_link_directories(LTSM_client PRIVATE ${P11KIT_LIBRARY_DIRS})
+        target_link_libraries(LTSM_client ${P11KIT_LIBRARIES})
+
+        if(UNIX)
+            target_link_libraries(LTSM_client dl)
+        endif()
+    else()
+        message("P11KIT not found")
     endif()
 
     if(OPUS_FOUND)
         target_compile_options(LTSM_client PRIVATE -DLTSM_WITH_OPUS ${OPUS_CFLAGS})
         target_include_directories(LTSM_client PRIVATE ${OPUS_INCLUDE_DIR})
+        target_link_directories(LTSM_client PRIVATE ${OPUS_LIBRARY_DIRS})
         target_link_libraries(LTSM_client ${OPUS_LIBRARIES})
+    else()
+        message("Decoder OPUS not found")
     endif()
 
     # OpenAL playback preffered
     if(OPENAL_FOUND)
         target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_openal.cpp)
-        target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PAYBACK_OPENAL)
+        target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PLAYBACK_OPENAL)
 
         # maybe linker error: incorrect size
         target_compile_options(LTSM_client PRIVATE -fPIC)
 
         target_compile_options(LTSM_client PRIVATE ${OPENAL_CFLAGS})
         target_include_directories(LTSM_client PRIVATE ${OPENAL_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${OPENAL_LIBRARIES})
+        target_link_directories(LTSM_client PRIVATE ${OPENAL_LIBRARY_DIRS})
+        target_link_libraries(LTSM_client ${OPENAL_LIBRARY})
     else()
         # PulseAudio maybe use
-        pkg_search_module(PULSEAUDIO REQUIRED libpulse)
-        pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
+        if(UNIX AND NOT APPLE)
+            pkg_search_module(PULSEAUDIO REQUIRED libpulse)
+            pkg_search_module(PULSESIMPLE REQUIRED libpulse-simple)
 
-        target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_pulse.cpp)
-        target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PAYBACK_PULSE)
+            target_sources(LTSM_client PRIVATE src/session_audio/ltsm_audio_pulse.cpp)
+            target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_PLAYBACK_PULSE)
 
-        target_compile_options(LTSM_client PRIVATE ${PULSEAUDIO_CFLAGS})
-        target_include_directories(LTSM_client PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES})
+            target_compile_options(LTSM_client PRIVATE ${PULSEAUDIO_CFLAGS})
+            target_include_directories(LTSM_client PRIVATE ${PULSEAUDIO_INCLUDE_DIR})
+            target_link_libraries(LTSM_client ${PULSEAUDIO_LIBRARIES} ${PULSESIMPLE_LIBRARIES})
+        endif()
     endif()
 
     if(LTSM_FFMPEG)
@@ -639,12 +688,8 @@ if(LTSM_BUILD_CLIENT)
         find_library(XKBFILE_LIBRARY NAMES xkbfile libxkbfile REQUIRED)
         find_library(X11_LIBRARY NAMES X11 libX11 REQUIRED)
 
-        pkg_search_module(PCSCLITE REQUIRED libpcsclite)
-
         target_compile_definitions(LTSM_client PRIVATE -DLTSM_X11)
-        target_compile_options(LTSM_client PRIVATE ${PCSCLITE_CFLAGS})
-        target_include_directories(LTSM_client PRIVATE ${PCSCLITE_INCLUDE_DIR})
-        target_link_libraries(LTSM_client ${XKBFILE_LIBRARY} ${X11_LIBRARY} ${PCSCLITE_LIBRARIES})
+        target_link_libraries(LTSM_client ${XKBFILE_LIBRARY} ${X11_LIBRARY})
     endif()
 
     target_compile_definitions(LTSM_client PRIVATE -DLTSM_WITH_GNUTLS -DLTSM_WITH_PNG
@@ -656,6 +701,7 @@ if(LTSM_BUILD_CLIENT)
         src/session_pcsc src/librfb src/sdl2x11 src/vnc2sdl src/connector 
         ${GNUTLS_INCLUDE_DIR} ${PNG_INCLUDE_DIR})
 
+    target_link_directories(LTSM_client PRIVATE ${SDL2_LIBRARY_DIRS})
     target_link_libraries(LTSM_client LTSM_common ${SDL2_LIBRARIES}
         ${GNUTLS_LIBRARIES} ${PNG_LIBRARIES} z)
 

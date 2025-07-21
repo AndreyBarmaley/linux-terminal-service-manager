@@ -813,7 +813,7 @@ namespace LTSM
     }
 #endif // __UNIX__
 
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__APPLE__)
     std::string TCPSocket::resolvHostname(const std::string & hostname)
     {
         if(auto res = gethostbyname(hostname.c_str()))
