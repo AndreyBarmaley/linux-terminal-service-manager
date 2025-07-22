@@ -540,7 +540,9 @@ if(LTSM_BUILD_CLIENT)
     find_library(GNUTLSXX gnutlsxx)
 
     # required
-    pkg_search_module(PCSCLITE REQUIRED libpcsclite)
+    if(NOT MINGW)
+        pkg_search_module(PCSCLITE REQUIRED libpcsclite)
+    endif()
     pkg_search_module(SDL2 REQUIRED sdl2>=2.0.1)
 
     pkg_search_module(P11KIT p11-kit-1)
