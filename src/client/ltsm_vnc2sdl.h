@@ -36,7 +36,7 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_sdl_wrapper.h"
 
-#ifdef LTSM_X11
+#ifdef LTSM_WITH_X11
  #include "librfb_x11client.h"
 #else
  #include "librfb_winclient.h"
@@ -54,7 +54,7 @@ namespace LTSM
     };
 
     class Vnc2SDL : public Application,
-#ifdef LTSM_X11
+#ifdef LTSM_WITH_X11
         public RFB::X11Client
 #else
         public RFB::WinClient

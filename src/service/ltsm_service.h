@@ -238,6 +238,8 @@ namespace LTSM
         std::string toJsonString(void) const;
     };
 
+    using FileNameSize = sdbus::Struct<std::string, uint32_t>;
+
     namespace Manager
     {
         std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &);
@@ -273,8 +275,8 @@ namespace LTSM
             static void transferFileStartBackground(Object* owner, XvfbSessionPtr,
                     std::string tmpfile, std::string dstfile, uint32_t filesz);
             static void transferFilesRequestCommunication(Object* owner, XvfbSessionPtr,
-                    std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
-                    std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject,
+                    std::filesystem::path zenity, std::vector<FileNameSize> files,
+                    std::function<void(int, const std::vector<FileNameSize> &)> emitTransferReject,
                     std::shared_future<int>);
         protected:
             void closeSystemSession(XvfbSessionPtr);
@@ -342,7 +344,7 @@ namespace LTSM
                     const std::string & cmode, const std::string & server, const std::string & smode, const std::string & speed) override;
             bool busDestroyChannel(const int32_t & display, const uint8_t & channel) override;
             bool busTransferFilesRequest(const int32_t & display,
-                    const std::vector<sdbus::Struct<std::string, uint32_t>> & files) override;
+                    const std::vector<FileNameSize> & files) override;
             bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
                     const uint32_t & filesz, const std::string & dstfile) override;
 

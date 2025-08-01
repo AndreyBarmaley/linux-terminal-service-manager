@@ -213,8 +213,6 @@ namespace LTSM
     void RFB::EncodingBase::sendRawRegionPixels(EncoderStream* ns, EncoderStream* st, const XCB::Region & reg,
             const FrameBuffer & fb)
     {
-#ifdef FB_FAST_CYCLE
-
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = fb.pitchData(reg.y + py);
@@ -226,15 +224,6 @@ namespace LTSM
                 ns->sendPixel(pix);
             }
         }
-
-#else
-
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-        {
-            ns->sendPixel(fb.pixel(reg.topLeft() + coord));
-        }
-
-#endif
     }
 
     std::list<XCB::RegionPixel> RFB::EncodingBase::rreProcessing(const XCB::Region & badreg, const FrameBuffer & fb,
@@ -307,7 +296,6 @@ namespace LTSM
         st->sendHeader(getType(), job.first);
         st->sendData(buf);
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -337,46 +325,21 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb,
-                                         jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, regions.front() - top, fb,
-                                             jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingRRE::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             st->sendData(ret.second);
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingRRE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -493,46 +456,21 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top,
-                                         fb, jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, regions.front() - top,
-                                             fb, jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingHexTile::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             st->sendData(ret.second);
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingHexTile::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -697,42 +635,17 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb,
-                                         jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, regions.front() - top, fb,
-                                             jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingTRLE::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
-
             if(zlib)
             {
                 zlib->sendData(ret.second);
@@ -745,7 +658,6 @@ namespace LTSM
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingTRLE::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -848,9 +760,8 @@ namespace LTSM
 
         const size_t rez = (reg.width* reg.height) >> 2;
         Tools::StreamBitsPack sb(rez ? rez : 32);
-        // send packed rows
-#ifdef FB_FAST_CYCLE
 
+        // send packed rows
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = fb.pitchData(reg.y + py);
@@ -867,22 +778,6 @@ namespace LTSM
             sb.pushAlign();
         }
 
-#else
-
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-        {
-            auto pix = fb.pixel(reg.topLeft() + coord);
-            auto index = pal.findColorIndex(pix);
-            assertm(0 <= index, "palette color not found");
-            sb.pushValue(index, field);
-
-            if(coord.isEndLine())
-            {
-                sb.pushAlign();
-            }
-        }
-
-#endif
         st->sendData(sb.toVector());
 
         if(Application::isDebugLevel(DebugLevel::Trace))
@@ -941,9 +836,8 @@ namespace LTSM
     {
         // subencoding type: raw
         st->sendInt8(0);
-        // send pixels
-#ifdef FB_FAST_CYCLE
 
+        // send pixels
         for(uint16_t py = 0; py < reg.height; ++py)
         {
             const uint8_t* pitch = fb.pitchData(reg.y + py);
@@ -955,15 +849,6 @@ namespace LTSM
                 st->sendCPixel(pix);
             }
         }
-
-#else
-
-        for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-        {
-            st->sendCPixel(fb.pixel(reg.topLeft() + coord));
-        }
-
-#endif
     }
 
     // EncodingZlib
@@ -992,7 +877,6 @@ namespace LTSM
         st->sendHeader(getType(), job.first);
         st->sendZlibData(zlib.get());
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingZlib::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -1076,39 +960,15 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, regions.front() - top, fb,
-                                         jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, regions.front() - top, fb,
-                                             jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingLZ4::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             // ltsm lz4 format
@@ -1117,7 +977,6 @@ namespace LTSM
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingLZ4::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -1273,39 +1132,15 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, regions.front() - top, fb,
-                                         jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, regions.front() - top, fb,
-                                             jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingTJPG::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             // pixels
@@ -1314,7 +1149,6 @@ namespace LTSM
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingTJPG::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
@@ -1410,39 +1244,15 @@ namespace LTSM
         st->sendIntBE16(regions.size());
         int jobId = 1;
 
-        // make pool jobs
-        while(jobId <= threads && ! regions.empty())
+        ParallelsJobs<EncodingRet> jobs(threads);
+        for(auto & reg: regions)
         {
-            jobs.emplace_back(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, regions.front() - top, fb,
-                                         jobId));
-            regions.pop_front();
-            jobId++;
-        }
-
-        // renew completed job
-        while(! regions.empty())
-        {
-            // busy
-            auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-            {
-                return job.wait_for(1us) != std::future_status::ready;
-            });
-
-            if(busy < threads)
-            {
-                jobs.emplace_back(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, regions.front() - top, fb,
-                                             jobId));
-                regions.pop_front();
-                jobId++;
-            }
-
-            std::this_thread::sleep_for(100us);
+            jobs.addJob(std::async(std::launch::async, & EncodingQOI::sendRegion, this, st, top, reg - top, fb, jobId++));
         }
 
         // wait jobs
-        for(auto & job : jobs)
+        for(auto & job : jobs.jobList())
         {
-            job.wait();
             auto ret = job.get();
             st->sendHeader(getType(), ret.first);
             // encode buf
@@ -1451,7 +1261,6 @@ namespace LTSM
         }
 
         st->sendFlush();
-        jobs.clear();
     }
 
     RFB::EncodingRet RFB::EncodingQOI::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,

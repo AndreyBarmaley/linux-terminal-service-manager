@@ -29,7 +29,7 @@
 #include <filesystem>
 #include <string_view>
 
-#ifdef WITH_JSON
+#ifdef LTSM_WITH_JSON
 #include "ltsm_json_wrapper.h"
 #endif
 
@@ -100,7 +100,7 @@ namespace LTSM
         virtual int start(void) = 0;
     };
 
-#ifdef WITH_JSON
+#ifdef LTSM_WITH_JSON
     class ApplicationJsonConfig : public Application
     {
         JsonObject json;

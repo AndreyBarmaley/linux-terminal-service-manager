@@ -34,10 +34,10 @@
 #include <filesystem>
 #include <forward_list>
 
-#ifdef LTSM_CLIENT
- #include "ltsm_audio.h"
- #include "ltsm_audio_decoder.h"
-#endif
+//#ifdef LTSM_CLIENT
+// #include "ltsm_audio.h"
+// #include "ltsm_audio_decoder.h"
+//#endif
 
 #ifdef LTSM_PKCS11_AUTH
  #include "ltsm_pkcs11_wrapper.h"
@@ -50,6 +50,14 @@
 namespace LTSM
 {
     static const int LtsmProtocolVersion = 0x03;
+
+    struct AudioFormat;
+    class AudioPlayer;
+
+    namespace AudioDecoder
+    {
+        class BaseDecoder;
+    }
 
     namespace SystemCommand
     {
@@ -488,8 +496,12 @@ namespace LTSM
 #ifdef LTSM_PKCS11_AUTH
         ConnectorBasePtr createClientPkcs11Connector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 #endif
+#ifdef LTSM_WITH_PCSC
         ConnectorBasePtr createClientPcscConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+#endif
+#ifdef LTSM_WITH_FUSE
         ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+#endif
         ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);

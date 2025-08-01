@@ -41,7 +41,9 @@ namespace LTSM
             PixelFormat serverPf;
 
             std::unique_ptr<NetworkStream> socket; /// socket layer
+#ifdef LTSM_WITH_GNUTLS
             std::unique_ptr<TLS::Stream> tls; /// tls layer
+#endif
             std::unique_ptr<ZLib::InflateStream> zlib; /// zlib layer
             std::unique_ptr<DecodingBase> decoder;
 
@@ -76,8 +78,10 @@ namespace LTSM
             // decoder stream interface
             const PixelFormat & serverFormat(void) const override;
 
+#ifdef LTSM_WITH_GNUTLS
             bool authVncInit(std::string_view pass);
             bool authVenCryptInit(const SecurityInfo &);
+#endif
 #ifdef LTSM_WITH_GSSAPI
             bool authGssApiInit(const SecurityInfo &);
 #endif

@@ -34,6 +34,7 @@
 #include "pcsclite.h"
 
 #include "ltsm_tools.h"
+#include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_pcsc_session.h"
 
@@ -1498,7 +1499,7 @@ namespace LTSM
             Application::debug(DebugType::Pcsc, "%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
                                st.context, timeout);
             st.waitStatusChanged.stop();
-            st.waitStatusChanged.job = std::async(std::launch::async, waitReadersStatusChanged, this, & st, timeout);
+            st.waitStatusChanged.job = std::async(std::launch::async, & waitReadersStatusChanged, this, & st, timeout);
         }
         else if(st.versionMajor == 4 && st.versionMinor > 2)
         {

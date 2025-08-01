@@ -153,6 +153,7 @@ namespace LTSM
         return 0;
     }
 
+#ifdef LTSM_WITH_GNUTLS
     bool RFB::ClientDecoder::authVncInit(std::string_view password)
     {
         // recv challenge 16 bytes
@@ -259,6 +260,7 @@ namespace LTSM
         streamIn = streamOut = tls.get();
         return true;
     }
+#endif
 
 #ifdef LTSM_WITH_GSSAPI
     bool RFB::ClientDecoder::authGssApiInit(const SecurityInfo & sec)
@@ -285,7 +287,12 @@ namespace LTSM
                 // continue tls
                 if(sec.authVenCrypt)
                 {
+#ifdef LTSM_WITH_GNUTLS
                     return authVenCryptInit(sec);
+#else
+                    Application::error("%s: vencrypt security: not supported", __FUNCTION__);
+                    return false;
+#endif
                 }
 
                 return true;
@@ -370,7 +377,8 @@ namespace LTSM
         }
         else
 #endif
-            if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; }))
+#ifdef LTSM_WITH_GNUTLS
+        if(sec.authVenCrypt && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; }))
         {
             Application::debug(DebugType::Rfb, "%s: security: %s selected", __FUNCTION__, "vencrypt");
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
@@ -400,6 +408,7 @@ namespace LTSM
             authVncInit(password);
         }
         else
+#endif
         {
             Application::error("%s: security vnc: not supported", __FUNCTION__);
             return false;

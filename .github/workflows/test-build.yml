@@ -42,15 +42,7 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
         -DLTSM_BUILD_SERVER=on \
-        -DLTSM_BUILD_CLIENT=on \
-        -DLTSM_FFMPEG=on \
-        -DLTSM_WITH_RDP=on \
-        -DLTSM_FUSE2SESSION=on \
-        -DLTSM_AUDIO2SESSION=on \
-        -DLTSM_PCSC2SESSION=on \
-        -DLTSM_PKCS11_AUTH=on \
-        -DLTSM_BUILD_X11VNC=on -DLTSM_BUILD_VNC2IMAGE=on \
-        -DLTSM_CUPS_BACKEND=on
+        -DLTSM_BUILD_CLIENT=on
 
     - name: Build
       # Build your program with the given configuration

@@ -81,14 +81,8 @@ jobs:
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
                 -DLTSM_BUILD_SERVER=on \
                 -DLTSM_BUILD_CLIENT=on \
-                -DLTSM_FFMPEG=on \
-                -DLTSM_WITH_RDP=on \
-                -DLTSM_FUSE2SESSION=on \
-                -DLTSM_AUDIO2SESSION=on \
-                -DLTSM_PCSC2SESSION=on \
-                -DLTSM_PKCS11_AUTH=on \
-                -DLTSM_BUILD_X11VNC=on -DLTSM_BUILD_VNC2IMAGE=on \
-                -DLTSM_CUPS_BACKEND=on \
+                -DLTSM_BUILD_TESTS=on \
+                -DLTSM_BUILD_TOOLS=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
@@ -117,10 +111,12 @@ jobs:
       - name: Run tests to generate coverage statistics
         env:
           SOCAT_DEFAULT_LISTEN_IP: 127.0.0.1
+          DISPLAY: 55
         shell: bash
         run: |
           echo "::group::run tests"
           ./LTSM_test_framebuf
+          ./LTSM_test_framebuf2
           ./LTSM_test_streambuf
           ./LTSM_test_unixsocket
           ./LTSM_test_json ./src/tests/json/test.json
@@ -133,6 +129,8 @@ jobs:
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           sleep 5
+          ./LTSM_test_x11enc --count 4
+          ./LTSM_test_xrandr
           echo "get vnc screenshot"
           ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
           echo "system log"

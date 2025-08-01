@@ -47,8 +47,13 @@ extern "C" {
 
 #endif
 
+#ifdef LTSM_ENCODING_FFMPEG
 #include "librfb_encodings.h"
+#endif
+
+#ifdef LTSM_DECODING_FFMPEG
 #include "librfb_decodings.h"
+#endif
 
 namespace LTSM
 {

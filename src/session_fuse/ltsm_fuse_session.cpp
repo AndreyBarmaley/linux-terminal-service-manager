@@ -39,6 +39,7 @@
 #include <unordered_map>
 
 #include "ltsm_tools.h"
+#include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_application.h"
 #include "ltsm_fuse_session.h"

@@ -1030,7 +1030,7 @@ namespace LTSM
             }
 
             // planned get stdout from running job
-            auto future = std::async(std::launch::async, jobWaitStdout, pid, pipefd[0]);
+            auto future = std::async(std::launch::async, & RunAs::jobWaitStdout, pid, pipefd[0]);
             return std::make_pair(pid, std::move(future));
         }
 
@@ -1077,7 +1077,7 @@ namespace LTSM
             }
 
             // main thread processed
-            auto future = std::async(std::launch::async, [pid]
+            auto future = std::async(std::launch::async, [pid]()
             {
                 Application::debug(DebugType::Mgr, "%s: pid: %d", "AsyncWaitPid", pid);
 
@@ -1227,8 +1227,6 @@ namespace LTSM
                 {
                     return ptr && ptr->pid2 == pid2;
                 });
-
-                pidStatus.second.wait();
 
                 if(it != this->sessions.end())
                 {
@@ -1491,10 +1489,6 @@ namespace LTSM
             childsRunning.emplace_front(
                              RunAs::sessionCommand(std::move(xvfb), cmd, std::move(params)));
             return childsRunning.front().first;
-        }
-        catch(const std::system_error &)
-        {
-            Application::error("%s: failed, check thread limit", __FUNCTION__);
         }
         catch(const std::exception & err)
         {
@@ -2154,10 +2148,12 @@ namespace LTSM
 
         // terminate connectors
         for(const auto & ptr : sessions)
+        {
             if(ptr)
             {
                 displayShutdown(ptr, true);
             }
+        }
 
         auto isValidSession = [](XvfbSessionPtr & ptr)
         {
@@ -2235,8 +2231,8 @@ namespace LTSM
         {
             auto cmd = _config->getString("idle:action:path");
 
-            // alse running
-            if(xvfb->idleActionRunning.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout)
+            // also running
+            if(xvfb->idleActionRunning.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready)
             {
                 return false;
             }
@@ -2249,10 +2245,6 @@ namespace LTSM
                 {
                     PidStatus pidStatus = RunAs::sessionCommand(xvfb, cmd, std::move(args));
                     xvfb->idleActionRunning = pidStatus.second;
-                }
-                catch(const std::system_error &)
-                {
-                    Application::error("%s: failed, check thread limit", __FUNCTION__);
                 }
                 catch(const std::exception & err)
                 {
@@ -2320,14 +2312,13 @@ namespace LTSM
     }
 
     void Manager::Object::transferFilesRequestCommunication(Object* owner, XvfbSessionPtr xvfb,
-            std::filesystem::path zenity, std::vector<sdbus::Struct<std::string, uint32_t>> files,
-            std::function<void(int, const std::vector<sdbus::Struct<std::string, uint32_t>> &)> emitTransferReject,
+            std::filesystem::path zenity, std::vector<FileNameSize> files,
+            std::function<void(int, const std::vector<FileNameSize> &)> emitTransferReject,
             std::shared_future<int> zenityQuestionResult)
     {
         // copy all files to (Connector) user home, after success move to real user
         auto xvfbHome = Tools::getUserHome(owner->_config->getString("user:xvfb"));
         // wait zenity question
-        zenityQuestionResult.wait();
         int status = zenityQuestionResult.get();
 
         // yes = 0, no: 256
@@ -2347,12 +2338,6 @@ namespace LTSM
             { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" });
             zenitySelectDirectoryResult = std::move(pair.second);
         }
-        catch(const std::system_error &)
-        {
-            Application::error("%s: failed, check thread limit", "RunZenity");
-            emitTransferReject(xvfb->displayNum, files);
-            return;
-        }
         catch(const std::exception & err)
         {
             Application::error("%s: exception: %s", "RunZenity", err.what());
@@ -2361,7 +2346,6 @@ namespace LTSM
         }
 
         // wait file selection
-        zenitySelectDirectoryResult.wait();
         // get StatusStdout
         auto ret = zenitySelectDirectoryResult.get();
         status = ret.first;
@@ -2484,7 +2468,7 @@ namespace LTSM
     }
 
     bool Manager::Object::busTransferFilesRequest(const int32_t & display,
-            const std::vector<sdbus::Struct<std::string, uint32_t>> & files)
+            const std::vector<FileNameSize> & files)
     {
         Application::info("%s: display: %" PRId32 ", count: %u", __FUNCTION__, display, files.size());
         auto xvfb = findDisplaySession(display);
@@ -2522,10 +2506,11 @@ namespace LTSM
         std::filesystem::path zenity = this->_config->getString("zenity:path", "/usr/bin/zenity");
         auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
         std::shared_future<int> zenityQuestionResult;
-        auto emitTransferReject = [this](int display, const std::vector<sdbus::Struct<std::string, uint32_t>> & files)
+        auto emitTransferReject = [this](int display, const std::vector<FileNameSize> & files)
         {
             for(const auto & info : files)
             {
+                // empty dst/file erase job
                 this->emitTransferAllow(display, std::get<0>(info), "", "");
             }
         };
@@ -2534,12 +2519,6 @@ namespace LTSM
         {
             auto pidStatus = RunAs::sessionCommand(xvfb, zenity, { "--question", "--default-cancel", "--text", msg });
             zenityQuestionResult = std::move(pidStatus.second);
-        }
-        catch(const std::system_error &)
-        {
-            Application::error("%s: failed, check thread limit", __FUNCTION__);
-            emitTransferReject(display, files);
-            return false;
         }
         catch(const std::exception & err)
         {
@@ -2570,6 +2549,79 @@ namespace LTSM
         return true;
     }
 
+    void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype)
+    {
+        // wait new session started
+        while(xvfb->aliveSec() < std::chrono::seconds(3))
+            std::this_thread::sleep_for(1s);
+
+        Application::info("%s: notification display: %d, user: %s, summary: %s", "busSendNotify", xvfb->displayNum, xvfb->userInfo->user(), summary.c_str());
+
+        std::string notificationIcon("dialog-information");
+        switch(icontype)
+        {
+            //case NotifyParams::IconType::Information:
+            case NotifyParams::IconType::Warning:
+                notificationIcon.assign("dialog-error");
+                break;
+
+            case NotifyParams::IconType::Error:
+                notificationIcon.assign("dialog-warning");
+                break;
+
+            case NotifyParams::IconType::Question:
+                notificationIcon.assign("dialog-question");
+                break;
+
+            default:
+                break;
+        }
+
+        auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+
+        if(dbusAddresses.empty())
+        {
+            Application::warning("%s: dbus address empty, display: %d, user: %s", "busSendNotify", xvfb->displayNum,
+                                 xvfb->userInfo->user());
+            return;
+        }
+
+        auto destinationName = "org.freedesktop.Notifications";
+        auto objectPath = "/org/freedesktop/Notifications";
+        std::vector<std::string> actions;
+        std::map<std::string, sdbus::Variant> hints;
+        int32_t expirationTimeout = -1;
+        std::string applicationName("LTSM");
+        uint32_t replacesID = 0;
+
+#ifdef SDBUS_ADDRESS_SUPPORT
+
+        try
+        {
+            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+#ifdef SDBUS_2_0_API
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
+#else
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+#endif
+            concatenatorProxy->callMethod("Notify").onInterface("org.freedesktop.Notifications").withArguments(applicationName,
+                    replacesID, notificationIcon,
+                    summary, body, actions, hints, expirationTimeout).dontExpectReply();
+        }
+        catch(const sdbus::Error & err)
+        {
+            Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", "busSendNotify", xvfb->displayNum,
+                               err.getName().c_str(), err.getMessage().c_str());
+        }
+        catch(std::exception & err)
+        {
+            Application::error("%s: exception: %s", "busSendNotify", err.what());
+        }
+#else
+        Application::warning("%s: sdbus address not supported, use 1.2 version", "busSendNotify");
+#endif
+    }
+
     bool Manager::Object::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
                                         const uint8_t & icontype, const uint8_t & urgency)
     {
@@ -2584,78 +2636,8 @@ namespace LTSM
             }
 
             // thread mode
-            std::thread([xvfb = std::move(xvfb), summary2 = summary, body2 = body, icontype2 = icontype /*, urgency2 = urgency */]
-            {
-                // wait new session started
-                while(xvfb->aliveSec() < std::chrono::seconds(3))
-                    std::this_thread::sleep_for(550ms);
+            std::thread(& sendNotifyCall, std::move(xvfb), summary, body, icontype /*, urgency2 = urgency */).detach();
 
-                Application::info("%s: notification display: %d, user: %s, summary: %s", "busSendNotify", xvfb->displayNum, xvfb->userInfo->user(), summary2.c_str());
-
-                std::string notificationIcon("dialog-information");
-                switch(icontype2)
-                {
-                    //case NotifyParams::IconType::Information:
-                    case NotifyParams::IconType::Warning:
-                        notificationIcon.assign("dialog-error");
-                        break;
-
-                    case NotifyParams::IconType::Error:
-                        notificationIcon.assign("dialog-warning");
-                        break;
-
-                    case NotifyParams::IconType::Question:
-                        notificationIcon.assign("dialog-question");
-                        break;
-
-                    default:
-                        break;
-                }
-
-                auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
-
-                if(dbusAddresses.empty())
-                {
-                    Application::warning("%s: dbus address empty, display: %d, user: %s", "busSendNotify", xvfb->displayNum,
-                                         xvfb->userInfo->user());
-                    return;
-                }
-
-                auto destinationName = "org.freedesktop.Notifications";
-                auto objectPath = "/org/freedesktop/Notifications";
-                std::vector<std::string> actions;
-                std::map<std::string, sdbus::Variant> hints;
-                int32_t expirationTimeout = -1;
-                std::string applicationName("LTSM");
-                uint32_t replacesID = 0;
-
-#ifdef SDBUS_ADDRESS_SUPPORT
-
-                try
-                {
-                    auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
-#ifdef SDBUS_2_0_API
-                    auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
-#else
-                    auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
-#endif
-                    concatenatorProxy->callMethod("Notify").onInterface("org.freedesktop.Notifications").withArguments(applicationName,
-                            replacesID, notificationIcon,
-                            summary2, body2, actions, hints, expirationTimeout).dontExpectReply();
-                }
-                catch(const sdbus::Error & err)
-                {
-                    Application::error("%s: failed, display: %d, sdbus error: %s, msg: %s", "busSendNotify", xvfb->displayNum,
-                                       err.getName().c_str(), err.getMessage().c_str());
-                }
-                catch(std::exception & err)
-                {
-                    Application::error("%s: exception: %s", "busSendNotify", err.what());
-                }
-#else
-                Application::warning("%s: sdbus address not supported, use 1.2 version", "busSendNotify");
-#endif
-            }).detach();
             return true;
         }
 

@@ -58,40 +58,49 @@ namespace LTSM
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
                   "usage: " << prog <<
-                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] [--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] "
-                  <<
-                  "[--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--fixed]" <<
-                  "[--notls] [--noltsm]" <<
+                  ": --host <localhost> [--port 5900] [--password <pass>] [password-file <file>] " <<
+                  "[--version] [--debug [<types>]] [--trace] [--syslog [<tofile>]] " <<
+                  "[--noltsm] [--noaccel] [--fullscreen] [--geometry <WIDTHxHEIGHT>] [--fixed] " <<
 #ifdef LTSM_WITH_GSSAPI
                   "[--kerberos <" << krb5def << ">] " <<
 #endif
 #ifdef LTSM_DECODING
  #ifdef LTSM_DECODING_QOI
-                  "[--qoi]" <<
+                  "[--qoi] " <<
  #endif
  #ifdef LTSM_DECODING_LZ4
-                  "[--lz4]" <<
+                  "[--lz4] " <<
  #endif
  #ifdef LTSM_DECODING_TJPG
-                  "[--tjpg]" <<
+                  "[--tjpg] " <<
  #endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
  #ifdef LTSM_DECODING_H264
-                  "[--h264]" <<
+                  "[--h264] " <<
  #endif
  #ifdef LTSM_DECODING_AV1
-                  "[--av1]" <<
+                  "[--av1] " <<
  #endif
  #ifdef LTSM_DECODING_VP8
-                  "[--vp8]" <<
+                  "[--vp8] " <<
  #endif
 #endif
                   "[--encoding <string>] " <<
-                  "[--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] [--share-folder <folder>] "
-                  <<
-                  "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " << "[--pcsc11-auth [" << librtdef << "]] " <<
-                  "[--pcsc] [--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
+#ifdef LTSM_WITH_GNUTLS
+                  "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
+#endif
+#ifdef LTSM_WITH_FUSE
+                  "[--share-folder <folder>] " <<
+#endif
+                  "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " <<
+#ifdef LTSM_PKCS11_AUTH
+                  "[--pcsc11-auth [" << librtdef << "]] " <<
+#endif
+#ifdef LTSM_WITH_PCSC
+                  "[--pcsc] " <<
+#endif
+                  "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
                   "    --debug <types> (allow types: [all],xcb,rfb,clip,sock,tls,chnl,conn,enc,x11srv,x11cli,audio,fuse,pcsc,pkcs11,sdl,app,ldap,gss,mgr)" << std::endl <<
                   "    --trace (big more debug)" << std::endl <<
@@ -108,9 +117,10 @@ namespace LTSM
                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
                   "    --fixed (not resizable window)" << std::endl <<
                   "    --extclip (extclip support)" << std::endl <<
-                  "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
-                  std::endl <<
+#ifdef LTSM_WITH_GNUTLS
+                  "    --notls (disable tls1.2, the server may reject the connection)" << std::endl <<
+#endif
 #ifdef LTSM_WITH_GSSAPI
                   "    --kerberos <" << krb5def <<
                   "> (kerberos auth, may be use --username for token name)" << std::endl <<
@@ -138,25 +148,31 @@ namespace LTSM
  #endif
 #endif
                   "    --encoding <string> (set preffered encoding)" << std::endl <<
+#ifdef LTSM_WITH_GNUTLS
                   "    --tls-priority <string> " << std::endl <<
                   "    --tls-ca-file <path> " << std::endl <<
                   "    --tls-cert-file <path> " << std::endl <<
                   "    --tls-key-file <path> " << std::endl <<
+#endif
+#ifdef LTSM_WITH_FUSE
                   "    --share-folder <folder> (redirect folder)" << std::endl <<
+#endif
                   "    --seamless <path> (seamless remote program)" << std::endl <<
                   "    --noxkb (disable send xkb)" << std::endl <<
                   "    --nocaps (disable send capslock)" << std::endl <<
                   "    --loop (always reconnecting)" << std::endl <<
-                  "    --audio [" <<
+                  "    --audio [ " <<
 #ifdef LTSM_WITH_OPUS
                   "opus, pcm" <<
 #else
-                  "opus" <<
+                  "pcm" <<
 #endif
-                  " " << "] (audio support)" << std::endl <<
+                  " ] (audio support)" << std::endl <<
                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
                   "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
+#ifdef LTSM_WITH_PCSC
                   "    --pcsc (redirect smartcard)" << std::endl <<
+#endif
 #ifdef LTSM_PKCS11_AUTH
                   "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
 #endif
@@ -166,7 +182,8 @@ namespace LTSM
 
         for(const auto & enc: encodings)
         {
-            std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
+            if(RFB::isVideoEncoding(enc))
+                std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
         }
 
         std::cout << std::endl;
@@ -224,8 +241,12 @@ namespace LTSM
         : Application("ltsm_client")
     {
         Application::setDebug(DebugTarget::Console, DebugLevel::Info);
+#ifdef LTSM_WITH_GNUTLS
         rfbsec.authVenCrypt = true;
         rfbsec.tlsDebug = 2;
+#else
+        rfbsec.authVenCrypt = false;
+#endif
 
         if(2 > argc)
         {
@@ -256,10 +277,12 @@ namespace LTSM
             {
                 windowAccel = false;
             }
+#ifdef LTSM_WITH_GNUTLS
             else if(0 == std::strcmp(argv[it], "--notls"))
             {
                 rfbsec.authVenCrypt = false;
             }
+#endif
             else if(0 == std::strcmp(argv[it], "--noxkb"))
             {
                 useXkb = false;
@@ -280,10 +303,12 @@ namespace LTSM
             {
                 xcbNoDamage = true;
             }
+#ifdef LTSM_WITH_PCSC
             else if(0 == std::strcmp(argv[it], "--pcsc"))
             {
                 pcscEnable = true;
             }
+#endif
             else if(0 == std::strcmp(argv[it], "--extclip"))
             {
                 setExtClipboardLocalCaps(ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml |
@@ -496,11 +521,6 @@ namespace LTSM
 
                 it = it + 1;
             }
-            else if(0 == std::strcmp(argv[it], "--tls-priority") && it + 1 < argc)
-            {
-                rfbsec.tlsPriority.assign(argv[it + 1]);
-                it = it + 1;
-            }
             else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
             {
                 rfbsec.passwdFile.assign(argv[it + 1]);
@@ -572,6 +592,12 @@ namespace LTSM
 
                 it = it + 1;
             }
+#ifdef LTSM_WITH_GNUTLS
+            else if(0 == std::strcmp(argv[it], "--tls-priority") && it + 1 < argc)
+            {
+                rfbsec.tlsPriority.assign(argv[it + 1]);
+                it = it + 1;
+            }
             else if(0 == std::strcmp(argv[it], "--tls-ca-file") && it + 1 < argc)
             {
                 rfbsec.caFile.assign(argv[it + 1]);
@@ -587,6 +613,7 @@ namespace LTSM
                 rfbsec.keyFile.assign(argv[it + 1]);
                 it = it + 1;
             }
+#endif
             else
             {
                 throw std::invalid_argument(argv[it]);
@@ -1705,8 +1732,11 @@ int main(int argc, const char** argv)
     {
         try
         {
+#ifdef __WIN32__
+            LTSM::Vnc2SDL app(argc, (const char**) argv);
+#else
             LTSM::Vnc2SDL app(argc, argv);
-
+#endif
             if(! app.isAlwaysRunning())
             {
                 programRestarting = false;

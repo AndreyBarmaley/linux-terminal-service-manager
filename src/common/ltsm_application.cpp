@@ -26,7 +26,7 @@
 #include <iostream>
 #include <filesystem>
 
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-journal.h>
 #endif
 
@@ -210,6 +210,21 @@ namespace LTSM
 #endif
     }
 
+    void toPlatformSyslog(int priority, const char* format, va_list args)
+    {
+#ifdef __UNIX__
+ #if defined(LTSM_FORCE_SYSLOG)
+        vsyslog(priority, format, args);
+ #elif defined(LTSM_WITH_SYSTEMD)
+        sd_journal_printv(priority, format, args);
+ #else
+        vsyslog(priority, format, args);
+ #endif
+#else
+        vfprintf(format, args);
+#endif
+    }
+
     void Application::info(const char* format, ...)
     {
         if(appDebugLevel != DebugLevel::None)
@@ -232,13 +247,7 @@ namespace LTSM
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-                sd_journal_printv(LOG_INFO, format, args);
- #else
-                vsyslog(LOG_INFO, format, args);
- #endif
-#endif
+                toPlatformSyslog(LOG_INFO, format, args);
             }
 
             va_end(args);
@@ -265,13 +274,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-            sd_journal_printv(LOG_NOTICE, format, args);
- #else
-            vsyslog(LOG_NOTICE, format, args);
- #endif
-#endif
+            toPlatformSyslog(LOG_NOTICE, format, args);
         }
 
         va_end(args);
@@ -300,13 +303,7 @@ namespace LTSM
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-                sd_journal_printv(LOG_WARNING, format, args);
- #else
-                vsyslog(LOG_WARNING, format, args);
- #endif
-#endif
+                toPlatformSyslog(LOG_WARNING, format, args);
             }
 
             va_end(args);
@@ -334,13 +331,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-            sd_journal_printv(LOG_ERR, format, args);
- #else
-            vsyslog(LOG_ERR, format, args);
- #endif
-#endif
+            toPlatformSyslog(LOG_ERR, format, args);
         }
 
         va_end(args);
@@ -363,13 +354,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-            sd_journal_printv(LOG_DEBUG, format, args);
- #else
-            vsyslog(LOG_DEBUG, format, args);
- #endif
-#endif
+            toPlatformSyslog(LOG_DEBUG, format, args);
         }
     }
 
@@ -404,13 +389,7 @@ namespace LTSM
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
-#ifdef __UNIX__
- #ifdef WITH_SYSTEMD
-            sd_journal_printv(LOG_DEBUG, format, args);
- #else
-            vsyslog(LOG_DEBUG, format, args);
- #endif
-#endif
+            toPlatformSyslog(LOG_DEBUG, format, args);
         }
     }
 
@@ -430,7 +409,7 @@ namespace LTSM
 
 
     // ApplicationJsonConfig
-#ifdef WITH_JSON
+#ifdef LTSM_WITH_JSON
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
         : Application(ident)
     {

@@ -175,20 +175,17 @@ namespace LTSM
         return "unknown";
     }
 
-/*
     bool RFB::isVideoEncoding(int type)
     {
         auto types = {
-            ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI,
-            ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4,
-
-            ENCODING_ZLIB, ENCODING_TIGHT, ENCODING_ZLIBHEX, ENCODING_TRLE, ENCODING_ZRLE,
-            ENCODING_RAW, ENCODING_COPYRECT, ENCODING_RRE, ENCODING_CORRE, ENCODING_HEXTILE
+                ENCODING_RAW, ENCODING_RRE, ENCODING_CORRE, ENCODING_HEXTILE,
+                ENCODING_ZLIB, ENCODING_TIGHT, ENCODING_ZLIBHEX, ENCODING_TRLE, ENCODING_ZRLE,
+                ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI
         };
 
         return std::any_of(types.begin(), types.end(), [=](auto & enc){ return enc == type; });
     }
-*/
+
     int RFB::encodingType(std::string_view name)
     {
         auto types = {

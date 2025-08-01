@@ -32,6 +32,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_audio.h"
+#include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_audio_session.h"
 

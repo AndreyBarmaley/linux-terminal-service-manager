@@ -26,6 +26,7 @@
 #include <filesystem>
 
 #include "ltsm_audio.h"
+#include "ltsm_audio_decoder.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_channels.h"

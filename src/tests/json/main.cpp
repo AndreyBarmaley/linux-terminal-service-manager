@@ -122,6 +122,13 @@ public:
 
 int main(int argc, const char** argv)
 {
-    Test1App test1("Test1", argc, argv);
-    return test1.start();
+    try
+    {
+        Test1App test1("Test1", argc, argv);
+        return test1.start();
+    }
+    catch(const std::exception & err)
+    {
+        std::cerr << "exception: " << err.what() << std::endl;
+    }
 }

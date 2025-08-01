@@ -44,7 +44,7 @@
 #undef explicit
 #include "xkbcommon/xkbcommon-x11.h"
 
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
 #include "libxcb-errors/xcb_errors.h"
 #endif
 
@@ -558,7 +558,7 @@ namespace LTSM
             std::vector<std::string> getNames(void) const;
         };
 
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
         struct ErrorContext
         {
             xcb_errors_context_t* ctx = nullptr;
@@ -577,7 +577,7 @@ namespace LTSM
             ConnectionShared _conn;
             const xcb_setup_t* _setup = nullptr;
 
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
             std::unique_ptr<ErrorContext> _error;
 #endif
         protected:

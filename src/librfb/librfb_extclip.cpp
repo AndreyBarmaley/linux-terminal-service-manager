@@ -32,7 +32,7 @@
 #include "librfb_extclip.h"
 
 #ifdef __UNIX__
-#include "librfb_server.h"
+//#include "librfb_server.h"
 #endif
 
 namespace LTSM

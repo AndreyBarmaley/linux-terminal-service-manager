@@ -67,7 +67,9 @@ namespace LTSM
             std::string clientAuthDomain;
 
             std::unique_ptr<NetworkStream> socket; /// socket layer
+#ifdef LTSM_WITH_GNUTLS
             std::unique_ptr<TLS::Stream> tls; /// tls layer
+#endif
             std::unique_ptr<EncodingBase> encoder;
 
             PixelFormat clientPf;
@@ -138,9 +140,10 @@ namespace LTSM
 
             bool serverSelectClientEncoding(void);
 
+#ifdef LTSM_WITH_GNUTLS
             bool authVncInit(const std::string &);
             bool authVenCryptInit(const SecurityInfo &);
-
+#endif
             bool sendFrameBufferUpdate(const FrameBuffer &);
             void sendColourMap(int first);
             void sendBellEvent(void);

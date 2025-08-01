@@ -331,7 +331,7 @@ int main(int argc, char** argv)
 {
     Run::process = true;
     int frameRate = 16;
-    int countLoop = 100;
+    int countLoop = 10;
     int useThreads = 4;
     std::list<std::string> encodings;
 
@@ -398,7 +398,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            std::cout << "usage: " << argv[0] << " [--fps 16] [--count 100] [--threads 4] [--encoding xxx] [--encodings xxx yyy zzz]" << std::endl;
+            std::cout << "usage: " << argv[0] << " [--fps 16] [--count 10] [--threads 4] [--encoding xxx] [--encodings xxx yyy zzz]" << std::endl;
             std::cout << std::endl << "supported encodings: " << std::endl <<
                   "    ";
       

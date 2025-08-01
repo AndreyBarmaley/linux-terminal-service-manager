@@ -27,7 +27,6 @@
 #include <cstdio>
 #include <string>
 #include <thread>
-#include <future>
 #include <memory>
 #include <cstring>
 #include <cstdlib>

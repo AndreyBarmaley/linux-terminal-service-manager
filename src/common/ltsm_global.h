@@ -37,7 +37,7 @@ namespace LTSM
     inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
     inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
 
-    inline static const int service_version = 20250721;
+    inline static const int service_version = 20250801;
 
     inline bool platformBigEndian(void)
     {
@@ -55,7 +55,7 @@ namespace LTSM
     };
 }
 
-#if defined(LTSM_BUILD_STD_MAP) || defined(__MINGW32__)
+#if defined(LTSM_WITH_STD_MAP) || defined(__MINGW32__)
 #include <unordered_map>
 #include <unordered_set>
 #define INTMAP std::unordered_map

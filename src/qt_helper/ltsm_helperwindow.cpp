@@ -47,6 +47,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_pkcs11.h"
+#include "ltsm_sockets.h"
 #include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
 #include "ltsm_pkcs11_session.h"
@@ -433,7 +434,7 @@ std::unique_ptr<DatumAlloc> gnutlsEncryptData(const std::vector<uint8_t> & certd
     {
         Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
                            err);
-        throw gnutls_error(NS_FuncName);
+        throw LTSM::gnutls_error(NS_FuncName);
     }
 
     const gnutls_datum_t dt1 = { .data = (unsigned char*) certder.data(), .size = (unsigned int) certder.size() };

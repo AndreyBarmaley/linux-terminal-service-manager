@@ -145,6 +145,7 @@ namespace LTSM
         int desktopResizeErrorCode(const DesktopResizeError &);
         int desktopResizeStatusCode(const DesktopResizeStatus &);
 
+        bool isVideoEncoding(int type);
         const char* encodingName(int type);
         int encodingType(std::string_view);
         std::string encodingOpts(int type);

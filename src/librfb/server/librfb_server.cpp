@@ -203,6 +203,7 @@ namespace LTSM
         }
     }
 
+#ifdef LTSM_WITH_GNUTLS
     bool RFB::ServerEncoder::authVncInit(const std::string & passwdFile)
     {
         std::vector<uint8_t> challenge = TLS::randomKey(16);
@@ -390,6 +391,7 @@ namespace LTSM
         streamIn = streamOut = tls.get();
         return true;
     }
+#endif
 
     int RFB::ServerEncoder::serverHandshakeVersion(void)
     {
@@ -443,6 +445,7 @@ namespace LTSM
             res.push_back(SECURITY_TYPE_GSSAPI);
 #endif
 
+#ifdef LTSM_WITH_GNUTLS
             if(secInfo.authVenCrypt)
             {
                 res.push_back(RFB::SECURITY_TYPE_VENCRYPT);
@@ -452,6 +455,7 @@ namespace LTSM
             {
                 res.push_back(RFB::SECURITY_TYPE_VNC);
             }
+#endif
 
             if(secInfo.authNone)
             {
@@ -484,6 +488,7 @@ namespace LTSM
                 {
                     sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
                 }
+#ifdef LTSM_WITH_GNUTLS
                 else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc)
                 {
                     if(secInfo.passwdFile.empty())
@@ -508,7 +513,6 @@ namespace LTSM
                         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                         return false;
                     }
-
                     sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
                 }
                 else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt)
@@ -521,7 +525,7 @@ namespace LTSM
 
                     sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
                 }
-
+#endif
 #ifdef LTSM_WITH_GSSAPI
                 else if(clientSecurity == SECURITY_TYPE_GSSAPI)
                 {
@@ -1136,7 +1140,11 @@ namespace LTSM
 
     std::string RFB::ServerEncoder::serverEncryptionInfo(void) const
     {
+#ifdef LTSM_WITH_GNUTLS
         return tls ? tls->sessionDescription() : "none";
+#else
+        return "unsupported";
+#endif
     }
 
     bool RFB::ServerEncoder::isContinueUpdatesProcessed(void) const

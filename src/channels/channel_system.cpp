@@ -794,7 +794,7 @@ bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::s
 
 bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-#ifdef LTSM_CLIENT
+#if defined(LTSM_CLIENT) && defined(LTSM_WITH_FUSE)
     Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
 
     try
@@ -817,7 +817,7 @@ bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::st
 
 bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts)
 {
-#ifdef LTSM_CLIENT
+#if defined(LTSM_CLIENT) && defined(LTSM_WITH_PCSC)
     Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
 
     try

@@ -995,7 +995,7 @@ namespace LTSM
         }
 
         socketPath = path;
-        std::future<int> job = std::async(std::launch::async, UnixSocket::accept, srvfd);
+        std::future<int> job = std::async(std::launch::async, &UnixSocket::accept, srvfd);
         bridgeSock = -1;
         // socket fd: client part
         clientSock = UnixSocket::connect(socketPath);
@@ -1005,8 +1005,6 @@ namespace LTSM
             close(srvfd);
             return false;
         }
-
-        while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
 
         // socket fd: server part
         bridgeSock = job.get();

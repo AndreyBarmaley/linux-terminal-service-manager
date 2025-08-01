@@ -77,7 +77,7 @@ namespace LTSM
 
         void error(xcb_connection_t* conn, const xcb_generic_error_t* err, const char* func, const char* xcbname)
         {
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
 
             if(!conn || !ErrorContext(conn).error(err, func, xcbname))
 #endif
@@ -2559,7 +2559,7 @@ namespace LTSM
         xcb_flush(ptr.get());
     }
 
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
     XCB::ErrorContext::ErrorContext(xcb_connection_t* conn)
     {
         xcb_errors_context_new(conn, & ctx);
@@ -2667,7 +2667,7 @@ namespace LTSM
             return false;
         }
 
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
         _error = std::make_unique<ErrorContext>(_conn.get());
 #endif
 
@@ -2740,7 +2740,7 @@ namespace LTSM
 
     void XCB::Connector::extendedError(const xcb_generic_error_t* err, const char* func, const char* xcbname) const
     {
-#ifdef LTSM_BUILD_XCB_ERRORS
+#ifdef LTSM_WITH_XCB_ERRORS
 
         if(! _error || ! _error->error(err, func, xcbname))
 #endif
