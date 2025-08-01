@@ -42,7 +42,9 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
         -DLTSM_BUILD_SERVER=on \
-        -DLTSM_BUILD_CLIENT=on
+        -DLTSM_BUILD_CLIENT=on \
+        -DLTSM_BUILD_TOOLS=on \
+        -DLTSM_BUILD_TESTS=on
 
     - name: Build
       # Build your program with the given configuration
