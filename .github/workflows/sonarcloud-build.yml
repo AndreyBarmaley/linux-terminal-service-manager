@@ -116,7 +116,6 @@ jobs:
         run: |
           echo "::group::run tests"
           ./LTSM_test_framebuf
-          ./LTSM_test_framebuf2
           ./LTSM_test_streambuf
           ./LTSM_test_unixsocket
           ./LTSM_test_json ./src/tests/json/test.json
@@ -129,6 +128,7 @@ jobs:
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           sleep 5
+          ./LTSM_test_framebuf2
           ./LTSM_test_x11enc --count 4
           ./LTSM_test_xrandr
           echo "get vnc screenshot"
