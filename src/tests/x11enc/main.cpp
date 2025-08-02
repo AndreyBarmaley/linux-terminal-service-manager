@@ -198,8 +198,10 @@ public:
             pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
             // RFB::ENCODING_CORRE
             pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingRRE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+#ifndef LTSM_BUILD_COVERAGE_TESTS
             // RFB::ENCODING_HEXTILE
             pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingHexTile>(), .stream = std::make_unique<FakeStream>(xcb.get()) } );
+#endif
             // RFB::ENCODING_TRLE
             pool.emplace_back( EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) } );
             // RFB::ENCODING_ZRLE

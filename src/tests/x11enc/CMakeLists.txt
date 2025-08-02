@@ -10,6 +10,10 @@ target_include_directories(${CUR_TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/src/channels
     ${CMAKE_SOURCE_DIR}/src/librfb)
 
+if(LTSM_BUILD_COVERAGE_TESTS)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_BUILD_COVERAGE_TESTS)
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/common ${CUR_TARGET}_common)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/channels ${CUR_TARGET}_channels)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/librfb ${CUR_TARGET}_librfb)
