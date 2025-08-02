@@ -236,7 +236,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hContext, ret);
+        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hContext, ret);
     }
 
     // reply
@@ -259,7 +259,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        LTSM::Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hContext, ret);
+        LTSM::Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hContext, ret);
         return {};
     }
 
@@ -321,7 +321,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hContext, ret);
+        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hContext, ret);
     }
 
     // reply
@@ -344,7 +344,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -363,7 +363,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -381,7 +381,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -400,7 +400,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -426,7 +426,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -459,7 +459,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -505,7 +505,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hContext, ret);
+        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hContext, ret);
     }
 
     // reply
@@ -541,7 +541,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -564,7 +564,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hContext, ret);
+        Application::error("%s: context: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hContext, ret);
     }
 
     // reply
@@ -584,7 +584,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
@@ -611,7 +611,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb)
 
     if(ret != SCARD_S_SUCCESS)
     {
-        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx32, __FUNCTION__, hCard, ret);
+        Application::error("%s: handle: %" PRIx64 ", return code: 0x%08" PRIx64, __FUNCTION__, hCard, ret);
     }
 
     // reply
