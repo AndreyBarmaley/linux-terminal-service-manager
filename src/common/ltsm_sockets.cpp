@@ -609,17 +609,20 @@ namespace LTSM
         size_t dataSz = 0;
 
         // inetFd -> bridgeSock
-        if(NetworkStream::hasInput(fdin) &&
-                (0 < (dataSz = NetworkStream::hasData(fdin))))
+        if(NetworkStream::hasInput(fdin))
         {
+            dataSz = NetworkStream::hasData(fdin);
 
-            auto buf = recvData(dataSz);
-            sendTo(bridgeSock, buf.data(), buf.size());
-
-            if(Application::isDebugLevel(DebugLevel::Trace))
+            if(0 < dataSz)
             {
-                std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                Application::trace(DebugType::Socket, "from remote: [%s]", str.c_str());
+                auto buf = recvData(dataSz);
+                sendTo(bridgeSock, buf.data(), buf.size());
+
+                if(Application::isDebugLevel(DebugLevel::Trace))
+                {
+                    std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
+                    Application::trace(DebugType::Socket, "from remote: [%s]", str.c_str());
+                }
             }
         }
 
@@ -629,18 +632,22 @@ namespace LTSM
         }
 
         // bridgeSock -> inetFd
-        if(NetworkStream::hasInput(bridgeSock) &&
-                (0 < (dataSz = NetworkStream::hasData(bridgeSock))))
+        if(NetworkStream::hasInput(bridgeSock))
         {
-            std::vector<uint8_t> buf(dataSz);
-            recvFrom(bridgeSock, buf.data(), buf.size());
-            sendRaw(buf.data(), buf.size());
-            sendFlush();
+            dataSz = NetworkStream::hasData(bridgeSock);
 
-            if(Application::isDebugLevel(DebugLevel::Trace))
+            if(0 < dataSz)
             {
-                std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                Application::trace(DebugType::Socket, "from local: [%s]", str.c_str());
+                std::vector<uint8_t> buf(dataSz);
+                recvFrom(bridgeSock, buf.data(), buf.size());
+                sendRaw(buf.data(), buf.size());
+                sendFlush();
+
+                if(Application::isDebugLevel(DebugLevel::Trace))
+                {
+                    std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
+                    Application::trace(DebugType::Socket, "from local: [%s]", str.c_str());
+                }
             }
         }
 

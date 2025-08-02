@@ -522,7 +522,7 @@ namespace LTSM
         tm.tm_mday = day;
         auto in_time = std::mktime(& tm);
         std::stringstream ss;
-        ss << std::put_time(std::localtime(&in_time), format.c_str());
+        ss << std::put_time(localtime_r(&in_time, &tm), format.c_str());
         return ss.str();
     }
 
