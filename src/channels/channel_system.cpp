@@ -723,7 +723,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
         return false;
     }
 
-    Application::debug(DebugType::Channels, "%s: server url: `%s', client url: `%s'", serverOpts.url.c_str(), clientOpts.url.c_str());
+    Application::debug(DebugType::Channels, "%s: server url: `%s', client url: `%s'", __FUNCTION__, serverOpts.url.c_str(), clientOpts.url.c_str());
 
     if(clientOpts.type() == Channel::ConnectorType::Unknown)
     {
