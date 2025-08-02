@@ -112,6 +112,8 @@ jobs:
         env:
           SOCAT_DEFAULT_LISTEN_IP: 127.0.0.1
           DISPLAY: 55
+          XAUTHORITY: /var/run/ltsm/auth_55
+          LTSM_SESSION_TEST: 55
         shell: bash
         run: |
           echo "::group::run tests"

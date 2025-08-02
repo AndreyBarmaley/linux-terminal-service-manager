@@ -2283,6 +2283,19 @@ namespace LTSM
         {
             if(xvfb->mode == XvfbMode::SessionLogin)
             {
+#LTSM_BUILD_COVERAGE_TESTS
+                try
+                {
+                    if(auto env = getenv("LTSM_SESSION_TEST"))
+                    {
+                        if(auto sid = std::stoi(env); sid == display)
+                            return true;
+                    }
+                }
+                catch(...)
+                {
+                }
+#endif
                 stopLoginChannels(xvfb);
                 displayShutdown(std::move(xvfb), false);
             }
