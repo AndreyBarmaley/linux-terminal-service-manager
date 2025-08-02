@@ -111,7 +111,7 @@ jobs:
       - name: Run tests to generate coverage statistics
         env:
           SOCAT_DEFAULT_LISTEN_IP: 127.0.0.1
-          DISPLAY: 55
+          DISPLAY: :55
           XAUTHORITY: /var/run/ltsm/auth_55
           LTSM_SESSION_TEST: 55
         shell: bash
@@ -132,17 +132,19 @@ jobs:
           sleep 5
           echo "get vnc screenshot"
           ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
-          echo "x11 tests"
+          echo "::endgroup::"
+          echo "::group::x11 tests"
           ./LTSM_test_framebuf2
           ./LTSM_test_x11enc --count 4
           ./LTSM_test_xrandr
-          echo "system log"
+          echo "::endgroup::"
+          echo "::group::ltsm logs"
           sleep 5
           grep -i ltsm /var/log/syslog
           echo "send shutdown service"
           dbus-send --dest=ltsm.manager.service --system --print-reply --type=method_call /ltsm/manager/service LTSM.Manager.Service.busShutdownService
           echo "wait"
-          sleep 10
+          sleep 5
           echo "::endgroup::"
 
       - name: Collect coverage into one XML report
