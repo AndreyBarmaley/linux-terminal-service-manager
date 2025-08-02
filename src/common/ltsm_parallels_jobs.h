@@ -39,10 +39,10 @@ namespace LTSM
         using JobList = std::list<JobFuture>;
 
         JobList jobs;
-        const uint8_t tnum;
+        const int tnum;
 
     public:
-        ParallelsJobs(uint8_t num = std::thread::hardware_concurrency()) : tnum(num)
+        explicit ParallelsJobs(int num = std::thread::hardware_concurrency()) : tnum(num)
         {
         }
 
@@ -85,25 +85,6 @@ namespace LTSM
         {
             waitAll().clear();
         }
-/*
-        void waitAny(void)
-        {
-            while(! jobs.empty())
-            {
-                for(auto it = jobs.begin(); it != jobs.end(); ++it)
-                {
-                    if(std::future_status::ready != it->wait_for(1us))
-                        continue;
-                    
-                    if(call)
-                        call(it->get());
-
-                    jobs.erase(it);
-                    return;
-                }
-            }
-        }
-*/
     };
 }
 
