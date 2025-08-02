@@ -130,11 +130,12 @@ jobs:
           echo "run socat connector"
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           sleep 5
+          echo "get vnc screenshot"
+          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
+          echo "x11 tests"
           ./LTSM_test_framebuf2
           ./LTSM_test_x11enc --count 4
           ./LTSM_test_xrandr
-          echo "get vnc screenshot"
-          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
           echo "system log"
           sleep 5
           grep -i ltsm /var/log/syslog
