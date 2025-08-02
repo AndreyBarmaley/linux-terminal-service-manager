@@ -281,7 +281,7 @@ void LTSM_HelperWindow::tokensChanged(void)
 #ifdef LTSM_PKCS11_AUTH
     auto & tokens = pkcs11->getTokens();
 
-    Application::debug(DebugType::Helper, "%s: tokens count: %u", __FUNCTION__, tokens.size());
+    Application::debug(DebugType::Helper, "%s: tokens count: %lu", __FUNCTION__, tokens.size());
 
     if(tokens.empty())
     {

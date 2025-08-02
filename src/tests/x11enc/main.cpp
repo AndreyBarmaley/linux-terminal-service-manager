@@ -181,7 +181,7 @@ public:
             pitch += 8 - align8;
 
         Application::info("%s: settings - fps: %d, threads: %d, iterations: %d", __FUNCTION__, frameRate, threadsCount, countLoop);
-        Application::info("%s: xcb - width: %u, height: %u, bpp: %u, pitch: %u, max request: %u", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("%s: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;

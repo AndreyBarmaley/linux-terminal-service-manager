@@ -124,7 +124,7 @@ namespace LTSM
 
         auto zip = recvData(zipsz);
 
-        Application::trace(DebugType::Enc, "%s: compress data length: %u", __FUNCTION__, zip.size());
+        Application::trace(DebugType::Enc, "%s: compress data length: %lu", __FUNCTION__, zip.size());
 
         zlib->appendData(zip);
         return zipsz;
@@ -384,7 +384,7 @@ namespace LTSM
                     val = cli.recvCPixel();
                 }
 
-                Application::trace(DebugType::Enc, "%s: type: %s, size: %u", __FUNCTION__, "packed palette", palette.size());
+                Application::trace(DebugType::Enc, "%s: type: %s, size: %lu", __FUNCTION__, "packed palette", palette.size());
 
                 // recv packed rows
                 for(int oy = 0; oy < reg.height; ++oy)
@@ -427,7 +427,7 @@ namespace LTSM
                     auto pixel = cli.recvCPixel();
                     auto runLength = cli.recvRunLength();
 
-                    Application::trace(DebugType::Enc, "%s: type: %s, pixel: 0x%08x, length: %u", __FUNCTION__, "plain rle", pixel, runLength);
+                    Application::trace(DebugType::Enc, "%s: type: %s, pixel: 0x%08x, length: %lu", __FUNCTION__, "plain rle", pixel, runLength);
 
                     while(runLength--)
                     {
@@ -454,7 +454,7 @@ namespace LTSM
                     val = cli.recvCPixel();
                 }
 
-                Application::trace(DebugType::Enc, "%s: type: %s, size: %u", __FUNCTION__, "rle palette", palsz);
+                Application::trace(DebugType::Enc, "%s: type: %s, size: %lu", __FUNCTION__, "rle palette", palsz);
 
                 auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
@@ -487,7 +487,7 @@ namespace LTSM
                         auto pixel = palette[index];
                         auto runLength = cli.recvRunLength();
 
-                        Application::trace(DebugType::Enc, "%s: type: %s, index: %" PRIu8 ", length: %u", __FUNCTION__, "rle palette", index, runLength);
+                        Application::trace(DebugType::Enc, "%s: type: %s, index: %" PRIu8 ", length: %lu", __FUNCTION__, "rle palette", index, runLength);
 
                         while(runLength--)
                         {

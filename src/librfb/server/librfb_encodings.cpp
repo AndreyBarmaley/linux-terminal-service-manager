@@ -365,7 +365,7 @@ namespace LTSM
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
             Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
-                                   "], back pixel 0x%08x, sub rects: %u",
+                                   "], back pixel 0x%08x, sub rects: %lu",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
 
             sendRects(& wrap, reg, fb, jobId, back, goods);
@@ -528,7 +528,7 @@ namespace LTSM
                 else
                 {
                     Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
-                                           "], back pixel: 0x%08x, sub rects: %u, %s",
+                                           "], back pixel: 0x%08x, sub rects: %lu, %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
@@ -549,7 +549,7 @@ namespace LTSM
                 else
                 {
                     Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
-                                           "], back pixel: 0x%08x, sub rects: %u, %s",
+                                           "], back pixel: 0x%08x, sub rects: %lu, %s",
                                            __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
@@ -693,7 +693,7 @@ namespace LTSM
                 fieldWidth = 2;
             }
 
-            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], palsz: %u, packed: %u",
+            Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], palsz: %lu, packed: %lu",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), fieldWidth);
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
@@ -721,7 +721,7 @@ namespace LTSM
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength)
             {
-                Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], length: %u, rle plain",
+                Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], length: %lu, rle plain",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
@@ -729,7 +729,7 @@ namespace LTSM
             else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength)
             {
                 Application::debug(DebugType::Enc, "%s: job id: %d, [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
-                                       "], pal size: %u, length: %u, rle palette",
+                                       "], pal size: %lu, length: %lu, rle palette",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
 
                 sendRegionPalette(& wrap, reg, fb, map, rleList);

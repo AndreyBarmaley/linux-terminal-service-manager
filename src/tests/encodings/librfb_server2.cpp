@@ -43,7 +43,7 @@ namespace LTSM
     RFB::ServerEncoderBuf::ServerEncoderBuf(const FrameBuffer* fb)
         : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat())
     {
-        LTSM::Application::info("%s: dsz: %u, %u", NS_FuncName.c_str(), dsz.width, dsz.height);
+        LTSM::Application::info("%s: dsz: %lu, %lu", NS_FuncName.c_str(), dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
         socket.reset(new EncoderWrapper(&bufData, this));
 

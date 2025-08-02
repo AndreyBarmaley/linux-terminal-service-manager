@@ -208,7 +208,7 @@ namespace LTSM
             throw vnc_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Conn, "%s: xcb max request: %u", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Conn, "%s: xcb max request: %lu", __FUNCTION__, xcbDisplay()->getMaxRequest());
         // init server format
         serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
@@ -431,7 +431,7 @@ namespace LTSM
 
     void Connector::VNC::systemClientVariables(const JsonObject & jo)
     {
-        Application::debug(DebugType::Conn, "%s: count: %u", __FUNCTION__, jo.size());
+        Application::debug(DebugType::Conn, "%s: count: %lu", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments"))
         {
@@ -583,7 +583,7 @@ namespace LTSM
             {
                 if(files.size() > channels)
                 {
-                    Application::warning("%s: files list is large, count: %u, channels: %u", __FUNCTION__, files.size(), channels);
+                    Application::warning("%s: files list is large, count: %lu, channels: %lu", __FUNCTION__, files.size(), channels);
                     files.resize(channels);
                 }
 

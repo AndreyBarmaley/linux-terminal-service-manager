@@ -280,7 +280,7 @@ namespace LTSM
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "%s: rects: %u, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
+            Application::debug(DebugType::Xcb, "%s: rects: %lu, resource id: 0x%08" PRIx32, __FUNCTION__, counts, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -1086,7 +1086,7 @@ namespace LTSM
         // params: Modeline "1024x600_60.00"   49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync
         if(params.size() != 13)
         {
-            Application::error("%s: incorrect cvt format, params: %u", __FUNCTION__, params.size());
+            Application::error("%s: incorrect cvt format, params: %lu", __FUNCTION__, params.size());
             return 0;
         }
 
@@ -1375,7 +1375,7 @@ namespace LTSM
 
             if(ito == outputs.end())
             {
-                Application::error("%s: %s failed, outputs count: %u", __FUNCTION__, "getOutputs", outputs.size());
+                Application::error("%s: %s failed, outputs count: %lu", __FUNCTION__, "getOutputs", outputs.size());
                 return false;
             }
 
@@ -1447,7 +1447,7 @@ namespace LTSM
                     *sequence = reply->sequence;
                 }
 
-                Application::debug(DebugType::Xcb, "%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %u, sequence: %" PRIu16, __FUNCTION__, szw, szh, sizeID, reply->sequence);
+                Application::debug(DebugType::Xcb, "%s: set size: [%" PRIu16 ", %" PRIu16 "], id: %lu, sequence: %" PRIu16, __FUNCTION__, szw, szh, sizeID, reply->sequence);
             }
 
             return true;
@@ -1511,7 +1511,7 @@ namespace LTSM
 
     XCB::ShmIdShared XCB::ModuleShm::createShm(size_t shmsz, int mode, bool readOnly, uid_t owner) const
     {
-        Application::debug(DebugType::Xcb, "%s: size: %u, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
+        Application::debug(DebugType::Xcb, "%s: size: %lu, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
 
         const size_t pagesz = 4096;
 
@@ -3795,7 +3795,7 @@ namespace LTSM
 
         if(pitch == 0)
         {
-            Application::error("%s: copy root image error, empty size: [%" PRIu16 ", %" PRIu16 "], bpp: %u", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
+            Application::error("%s: copy root image error, empty size: [%" PRIu16 ", %" PRIu16 "], bpp: %lu", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
@@ -4336,7 +4336,7 @@ namespace LTSM
             case 15: color = pf555.pixel({r,g,b,0}); break;
 
             default:
-                Application::error("%s: unknown depth: %u", __FUNCTION__, depth());
+                Application::error("%s: unknown depth: %lu", __FUNCTION__, depth());
                 throw xcb_error(NS_FuncName);
         }
 

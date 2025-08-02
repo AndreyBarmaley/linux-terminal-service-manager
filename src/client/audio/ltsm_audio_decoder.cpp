@@ -55,7 +55,7 @@ namespace LTSM
 
         if(0 > frames)
         {
-            Application::error("%s: %s failed, error: %d, data size: %u", __FUNCTION__, "opus_decoder_get_nb_samples", frames, len);
+            Application::error("%s: %s failed, error: %d, data size: %lu", __FUNCTION__, "opus_decoder_get_nb_samples", frames, len);
             throw audio_error(NS_FuncName);
         }
 
@@ -86,7 +86,7 @@ namespace LTSM
     {
         if(decodeSize > tmp.size())
         {
-            Application::error("%s: out of range, size: %u, buf: %u", __FUNCTION__, decodeSize, tmp.size());
+            Application::error("%s: out of range, size: %lu, buf: %lu", __FUNCTION__, decodeSize, tmp.size());
             throw audio_error(NS_FuncName);
         }
 

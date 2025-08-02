@@ -230,7 +230,7 @@ namespace LTSM
                 if(jc.isValid() && jc.isObject())
                 {
                     context->keymap = new JsonObject(jc.toObject());
-                    Application::info("keymap loaded: %s, items: %u", keymapFile.c_str(), context->keymap->size());
+                    Application::info("keymap loaded: %s, items: %lu", keymapFile.c_str(), context->keymap->size());
                 }
             }
 
@@ -564,7 +564,7 @@ namespace LTSM
             return false;
         }
 
-        Application::info("%s: xcb max request: %u", __FUNCTION__, XCB::RootDisplay::getMaxRequest());
+        Application::info("%s: xcb max request: %lu", __FUNCTION__, XCB::RootDisplay::getMaxRequest());
         // init server format
         serverFormat = PixelFormat(XCB::RootDisplay::bitsPerPixel(),
                             visual->red_mask, visual->green_mask, visual->blue_mask, 0);
@@ -714,7 +714,7 @@ namespace LTSM
         //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
         // reply info dump
-        Application::debug(DebugType::Conn, "%s: request size: [%" PRIu16 ", %" PRIu16 "], reply length: %u, bits per pixel: %" PRIu8
+        Application::debug(DebugType::Conn, "%s: request size: [%" PRIu16 ", %" PRIu16 "], reply length: %lu, bits per pixel: %" PRIu8
                            ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
                            __FUNCTION__, reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
@@ -733,7 +733,7 @@ namespace LTSM
 
         if(reply->size() != reg.height* reg.width* reply->bytePerPixel())
         {
-            Application::error("%s: %s failed, length: %u, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
+            Application::error("%s: %s failed, length: %lu, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
                                "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
@@ -764,7 +764,7 @@ namespace LTSM
         }
 
         Application::debug(DebugType::Conn, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
-                           ", scanline: %u", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+                           ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -826,7 +826,7 @@ namespace LTSM
 
             if(! freeRdp->peer->update->BitmapUpdate(context, &bitmapUpdate))
             {
-                Application::error("%s: %s failed, length: %u", __FUNCTION__, "BitmapUpdate", totalSize);
+                Application::error("%s: %s failed, length: %lu", __FUNCTION__, "BitmapUpdate", totalSize);
                 throw rdp_error(NS_FuncName);
             }
 
@@ -850,7 +850,7 @@ namespace LTSM
 
         if(reply->size() != reg.height* reg.width* reply->bytePerPixel())
         {
-            Application::error("%s: %s failed, length: %u, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
+            Application::error("%s: %s failed, length: %lu, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
                                "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
@@ -904,7 +904,7 @@ namespace LTSM
         }
 
         Application::debug(DebugType::Conn, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
-                           ", scanline: %u", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+                           ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx

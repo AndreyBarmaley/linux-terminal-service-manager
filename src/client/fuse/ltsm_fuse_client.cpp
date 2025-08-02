@@ -285,7 +285,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
                     break;
 
                 default:
-                    Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %u", __FUNCTION__, "fuse", fuseCmd, recv.size());
+                    Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
                     throw channel_error(NS_FuncName);
             }
         }
@@ -297,7 +297,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv)
     }
     catch(const std::underflow_error &)
     {
-        Application::warning("%s: underflow data: %u", __FUNCTION__, sb.last());
+        Application::warning("%s: underflow data: %lu", __FUNCTION__, sb.last());
 
         if(beginPacket)
         {
@@ -556,7 +556,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
         // <ERR32> - errno
         reply.writeIntLE16(FuseOp::Read);
         reply.writeIntLE32(error);
-        Application::error("%s: %s failed, error: %s, code: %d, offset: %u",
+        Application::error("%s: %s failed, error: %s, code: %d, offset: %lu",
                            __FUNCTION__, "lseek", strerror(error), error, offset);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
         return true;
@@ -578,7 +578,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     }
     else
     {
-        Application::debug(DebugType::Fuse, "%s: request block size: %u, send block size: %u, offset: %u", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "%s: request block size: %lu, send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size())
         {

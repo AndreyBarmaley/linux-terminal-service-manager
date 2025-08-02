@@ -1046,7 +1046,7 @@ namespace LTSM
 
     void RFB::ServerEncoder::sendColourMap(int first)
     {
-        Application::info("%s: first: %d, colour map length: %u", __FUNCTION__, first, colourMap.size());
+        Application::info("%s: first: %d, colour map length: %lu", __FUNCTION__, first, colourMap.size());
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
@@ -1393,7 +1393,7 @@ namespace LTSM
 
         if(bitmaskSize != bitmaskBuf.size())
         {
-            Application::error("%s: bitmask missmatch, buf size: %u, bitmask size: %u", __FUNCTION__, bitmaskBuf.size(),
+            Application::error("%s: bitmask missmatch, buf size: %lu, bitmask size: %lu", __FUNCTION__, bitmaskBuf.size(),
                                bitmaskSize);
             throw rfb_error(NS_FuncName);
         }

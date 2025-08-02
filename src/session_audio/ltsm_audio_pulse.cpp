@@ -818,7 +818,7 @@ namespace LTSM
 
     void PulseAudio::InputStream::streamWriteSilent(size_t len)
     {
-        Application::debug(DebugType::Audio, "%s: data size: %u", __FUNCTION__, len);
+        Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
         std::vector<uint8_t> buf(len, 0);
         streamWriteData(buf.data(), buf.size());
     }
@@ -830,7 +830,7 @@ namespace LTSM
 
     void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len)
     {
-        Application::info("%s: data size: %u", __FUNCTION__, len);
+        Application::info("%s: data size: %lu", __FUNCTION__, len);
         std::scoped_lock guard{ lock };
         pcm.insert(pcm.end(), ptr, ptr + len);
         auto writableSize = pa_stream_writable_size(stream.get());
@@ -875,7 +875,7 @@ namespace LTSM
         }
         else if(auto len = std::min(nbytes, pcm.size()))
         {
-            Application::info("%s: request: %u, last: %u, write: %u, latency: %8d, neg: %d", __FUNCTION__, nbytes, pcm.size(), len,
+            Application::info("%s: request: %lu, last: %lu, write: %lu, latency: %8d, neg: %d", __FUNCTION__, nbytes, pcm.size(), len,
                               usec, neg);
 
             if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE))
@@ -979,7 +979,7 @@ namespace LTSM
 
     void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes)
     {
-        Application::debug(DebugType::Audio, "%s: bytes: %u", __FUNCTION__, nbytes);
+        Application::debug(DebugType::Audio, "%s: bytes: %lu", __FUNCTION__, nbytes);
         const uint8_t* streamData = nullptr;
         size_t streamBytes = 0;
 
@@ -994,7 +994,7 @@ namespace LTSM
 
             if(pcm.size() + streamBytes > pcmReserveSize)
             {
-                Application::warning("%s: pcm overflow, size: %u, block: %u, limit: %u", __FUNCTION__, pcm.size(), streamBytes,
+                Application::warning("%s: pcm overflow, size: %lu, block: %lu, limit: %lu", __FUNCTION__, pcm.size(), streamBytes,
                                      pcmReserveSize);
                 pcm.assign(streamData, streamData + streamBytes);
             }

@@ -93,7 +93,7 @@ namespace LTSM
     {
         if(encodeSize > tmp.size())
         {
-            Application::error("%s: out of range, size: %u, buf: %u", __FUNCTION__, encodeSize, tmp.size());
+            Application::error("%s: out of range, size: %lu, buf: %lu", __FUNCTION__, encodeSize, tmp.size());
             throw audio_error(NS_FuncName);
         }
 
