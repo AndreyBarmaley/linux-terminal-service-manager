@@ -133,7 +133,7 @@ namespace LTSM
 #endif
             {
                 Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
-                                     __FUNCTION__, "special skipped", st.st_mode, path.c_str());
+                                     __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path.c_str());
                 continue;
             }
 
@@ -578,7 +578,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     }
     else
     {
-        Application::debug(DebugType::Fuse, "%s: request block size: %lu, send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "%s: request block size: %" PRIu16 ", send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size())
         {

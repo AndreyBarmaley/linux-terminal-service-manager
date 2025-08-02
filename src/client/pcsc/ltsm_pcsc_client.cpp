@@ -193,7 +193,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
             }
 
             Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu",
-                               __FUNCTION__, "pcsc", pcscInit, pcscCmd, recv.size());
+                               __FUNCTION__, "pcsc", pcscCmd, recv.size());
         }
 
         Application::error("%s: %s failed, op: 0x%" PRIx16 ", recv size: %lu",

@@ -310,7 +310,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     }
 
     auto len = sb.readIntLE32();
-    Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "%s: data size: %" PRIu32, __FUNCTION__, len);
     std::vector<uint8_t> buf(len, 0);
     player->streamWrite(buf.data(), buf.size());
 }
@@ -323,7 +323,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
     }
 
     auto len = sb.readIntLE32();
-    Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "%s: data size: %" PRIu32, __FUNCTION__, len);
 
     if(len > sb.last())
     {
