@@ -834,7 +834,7 @@ namespace LTSM
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, const_cast<CK_ATTRIBUTE*>(attribs), counts); ret != CKR_OK)
             {
                 Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
-                                   __FUNCTION__, "C_GetAttributeValue", rvString(ret));
+                                   __FUNCTION__, "C_GetAttributeValue", ret, rvString(ret));
                 return false;
             }
 
