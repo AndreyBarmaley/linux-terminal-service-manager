@@ -65,7 +65,7 @@ namespace LTSM
                     break;
             }
 
-            jobs.emplace_back(std::forward<JobFuture>(job));
+            jobs.emplace_back(std::move(job));
         }
 
         JobList & waitAll(void)
