@@ -2283,7 +2283,7 @@ namespace LTSM
         {
             if(xvfb->mode == XvfbMode::SessionLogin)
             {
-#LTSM_BUILD_COVERAGE_TESTS
+#ifdef LTSM_BUILD_COVERAGE_TESTS
                 try
                 {
                     if(auto env = getenv("LTSM_SESSION_TEST"))
