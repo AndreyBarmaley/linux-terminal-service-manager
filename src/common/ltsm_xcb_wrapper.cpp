@@ -3804,7 +3804,7 @@ namespace LTSM
 
         Application::debug(DebugType::Xcb, "%s: max request size: %" PRIu32 ", allow rows: %" PRIu16, __FUNCTION__, maxReqLength, allowRows);
 
-        for(int16_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
+        for(int32_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows)
         {
             // last rows
             if(yy + allowRows > reg.y + reg.height)
@@ -3833,7 +3833,7 @@ namespace LTSM
                         break;
                     }
 
-                    res = std::make_unique<PixmapBuffer>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height* pitch);
+                    res = std::make_unique<PixmapBuffer>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bitsPerPixel, reg.height * pitch);
                 }
 
                 auto info = static_cast<PixmapBuffer*>(res.get());
