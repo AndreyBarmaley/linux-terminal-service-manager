@@ -388,11 +388,6 @@ namespace LTSM
                 return false;
             }
         }
-        else if(sec.authNone && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_NONE; }))
-        {
-            Application::debug(DebugType::Rfb, "%s: security: %s selected", __FUNCTION__, "noauth");
-            sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
-        }
         else if(sec.authVnc && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_VNC; }))
         {
             auto & password = sec.passwdFile;
@@ -409,6 +404,12 @@ namespace LTSM
         }
         else
 #endif
+        if(sec.authNone && std::any_of(security.begin(), security.end(), [ = ](auto & val) { return val == RFB::SECURITY_TYPE_NONE; }))
+        {
+            Application::debug(DebugType::Rfb, "%s: security: %s selected", __FUNCTION__, "noauth");
+            sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
+        }
+        else
         {
             Application::error("%s: security vnc: not supported", __FUNCTION__);
             return false;

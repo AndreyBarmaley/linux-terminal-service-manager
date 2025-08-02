@@ -299,7 +299,7 @@ if(LTSM_BUILD_TOOLS)
     project(LTSM_vnc2image)
     set(CUR_TARGET LTSM_vnc2image)
 
-    CommonDefaults(PNG SDL JSON DECODER)
+    CommonDefaults(PNG SDL JSON DECODER GNUTLS GSSAPI)
 
     add_executable(${CUR_TARGET} tools/vnc2image/ltsm_vnc2image.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -314,7 +314,7 @@ if(LTSM_BUILD_TOOLS)
     project(LTSM_x11vnc)
     set(CUR_TARGET LTSM_x11vnc)
 
-    CommonDefaults(GNUTLS JSON ENCODER)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
