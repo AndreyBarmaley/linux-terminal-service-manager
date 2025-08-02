@@ -298,7 +298,7 @@ namespace LTSM
                                    _config->getInteger("default:height", 0));
         auto displaySz = xcbDisplay.size();
         int color = _config->getInteger("display:solid", 0x4e7db7);
-        Application::debug(DebugType::Conn, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %u", __FUNCTION__, screen, displaySz.width,
+        Application::debug(DebugType::Conn, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
                            displaySz.height, xcbDisplay.depth());
 
         if(0 != color)

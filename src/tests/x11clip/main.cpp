@@ -18,7 +18,7 @@ class X11Clip : public Application, public XCB::RootDisplay
 public:
     X11Clip(int display) : Application("x11clip"), XCB::RootDisplay(display)
     {
-	Application::info("DisplayInfo: width: %u, height: %u, depth: %u, maxreq: %u", width(), height(), depth(), getMaxRequest());
+	Application::info("DisplayInfo: width: %lu, height: %lu, depth: %lu, maxreq: %lu", width(), height(), depth(), getMaxRequest());
         XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
     }
 
@@ -36,7 +36,7 @@ protected:
     void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override
     {
         auto name = getAtomName(atom);
-        Application::info("%s: atom: `%s', size: %u", __FUNCTION__, name.data(), len);
+        Application::info("%s: atom: `%s', size: %lu", __FUNCTION__, name.data(), len);
 
         if(! file.empty())
         {
@@ -128,7 +128,7 @@ protected:
 
     std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override
     {
-        Application::info("%s, atom: `%s', offset: %u, length: %u", __FUNCTION__, getAtomName(atom).data(), offset, length);
+        Application::info("%s, atom: `%s', offset: %lu, length: %lu", __FUNCTION__, getAtomName(atom).data(), offset, length);
 
         if(atom == target)
         {
@@ -138,7 +138,7 @@ protected:
             }
             else
             {
-                Application::error("invalid length: %u, offset: %u", length, offset);
+                Application::error("invalid length: %lu, offset: %lu", length, offset);
             }
         }
 
@@ -164,7 +164,7 @@ public:
         if(buf.empty())
             buf.assign(test.begin(), test.end());
 
-	Application::info("mode: %s, target: `%s', data size: %u", "paste", getAtomName(target).data(), buf.size());
+	Application::info("mode: %s, target: `%s', data size: %lu", "paste", getAtomName(target).data(), buf.size());
 	paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE));
     }
 

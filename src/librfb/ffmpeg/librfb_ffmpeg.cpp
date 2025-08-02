@@ -311,7 +311,7 @@ namespace LTSM
         }
         else if(fb.width() != avcctx->width || fb.height() != avcctx->height)
         {
-            Application::warning("%s: incorrect region size: [%u, %u]", __FUNCTION__, fb.width(), fb.height());
+            Application::warning("%s: incorrect region size: [%lu, %lu]", __FUNCTION__, fb.width(), fb.height());
             initContext(fb.region().toSize());
         }
 

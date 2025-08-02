@@ -1457,7 +1457,7 @@ namespace LTSM
 
             if(pixels.size() < reg.width * reg.height * 4)
             {
-                Application::error("%s: invalid pixels, length: %u", __FUNCTION__, pixels.size());
+                Application::error("%s: invalid pixels, length: %lu", __FUNCTION__, pixels.size());
                 return;
             }
 

@@ -2163,7 +2163,7 @@ namespace LTSM
         // wait sessions
         while(auto sessionsAlive = std::count_if(sessions.begin(), sessions.end(), isValidSession))
         {
-            Application::info("%s: wait sessions: %u", __FUNCTION__, sessionsAlive);
+            Application::info("%s: wait sessions: %lu", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
         }
 
@@ -2177,7 +2177,7 @@ namespace LTSM
                 return 0 < pair.first;
             });
 
-            Application::error("%s: running childs: %u, killed process", __FUNCTION__, childsCount);
+            Application::error("%s: running childs: %lu, killed process", __FUNCTION__, childsCount);
 
             for(const auto & [pid, futureStatus] : childsRunning)
             {
@@ -2483,7 +2483,7 @@ namespace LTSM
     bool Manager::Object::busTransferFilesRequest(const int32_t & display,
             const std::vector<FileNameSize> & files)
     {
-        Application::info("%s: display: %" PRId32 ", count: %u", __FUNCTION__, display, files.size());
+        Application::info("%s: display: %" PRId32 ", count: %lu", __FUNCTION__, display, files.size());
         auto xvfb = findDisplaySession(display);
 
         if(! xvfb)

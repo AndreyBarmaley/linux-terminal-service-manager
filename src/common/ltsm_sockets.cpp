@@ -189,13 +189,13 @@ namespace LTSM
             if(bytesIn)
             {
                 auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
-                Application::info("%s: recv %u bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
+                Application::info("%s: recv %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
             }
 
             if(bytesOut)
             {
                 auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
-                Application::info("%s: send %u bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+                Application::info("%s: send %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
             }
         }
     }
@@ -1574,7 +1574,7 @@ namespace LTSM
         {
             if(sb.last() < len)
             {
-                Application::error("%s: stream last: %u, expected: %u", __FUNCTION__, sb.last(), len);
+                Application::error("%s: stream last: %lu, expected: %lu", __FUNCTION__, sb.last(), len);
                 throw std::invalid_argument(NS_FuncName);
             }
 

@@ -510,7 +510,7 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: invalid size: %u", __FUNCTION__, ref.size());
+            Application::error("%s: invalid size: %lu", __FUNCTION__, ref.size());
         }
     }
 

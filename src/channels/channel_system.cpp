@@ -332,7 +332,7 @@ size_t LTSM::ChannelClient::countFreeChannels(void) const
 
     if(used > 0xFF)
     {
-        Application::error("%s: used channel count is large, count: %u", __FUNCTION__, used);
+        Application::error("%s: used channel count is large, count: %lu", __FUNCTION__, used);
         throw channel_error(NS_FuncName);
     }
 
@@ -369,7 +369,7 @@ void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> &&
 
 void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> && buf)
 {
-    Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, buf.size());
+    Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", data size: %lu", __FUNCTION__, channel, buf.size());
 
     auto channelConn = findChannel(channel);
 
@@ -1129,7 +1129,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns)
 void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLock,
                                    uint8_t channel, const uint8_t* buf, size_t len)
 {
-    Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", data size: %u", __FUNCTION__, channel, len);
+    Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", data size: %lu", __FUNCTION__, channel, len);
 
     const std::scoped_lock guard{sendLock};
 
@@ -1158,7 +1158,7 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
     if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring(buf, buf + len, 2);
-        Application::info("%s: id: %" PRId8 ", size: %u, content: [%s]", __FUNCTION__, channel, len, str.c_str());
+        Application::info("%s: id: %" PRId8 ", size: %lu, content: [%s]", __FUNCTION__, channel, len, str.c_str());
     }
 
     ns.sendRaw(buf, len);
@@ -1313,7 +1313,7 @@ LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid)
 
 LTSM::Channel::Remote2Local::~Remote2Local()
 {
-    Application::info("%s: channel: %" PRIu8 ", receive: %u byte, transfer: %u byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
+    Application::info("%s: channel: %" PRIu8 ", receive: %lu byte, transfer: %lu byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
 }
 
 void LTSM::Channel::Remote2Local::pushData(std::vector<uint8_t> && buf)
@@ -1336,12 +1336,12 @@ std::vector<uint8_t> LTSM::Channel::Remote2Local::popData(void)
         // descrease delay
         if(delay > std::chrono::milliseconds{10})
         {
-            Application::warning("%s: id: %" PRId8 ", queue large: %u, change delay to %ums", __FUNCTION__, id, queueSz, delay.count());
+            Application::warning("%s: id: %" PRId8 ", queue large: %lu, change delay to %lums", __FUNCTION__, id, queueSz, delay.count());
             delay -= std::chrono::milliseconds{10};
         }
         else
         {
-            Application::warning("%s: id: %" PRId8 ", queue large: %u, fixme: `%s'", __FUNCTION__, id, queueSz, "fixme: remote decrease speed");
+            Application::warning("%s: id: %" PRId8 ", queue large: %lu, fixme: `%s'", __FUNCTION__, id, queueSz, "fixme: remote decrease speed");
         }
     }
 
@@ -1452,7 +1452,7 @@ LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid)
 
 LTSM::Channel::Local2Remote::~Local2Remote()
 {
-    Application::info("%s: channel: %" PRIu8 ", receive: %u byte, transfer: %u byte, error: %d", "Local2Remote", id, transfer1, transfer2, error);
+    Application::info("%s: channel: %" PRIu8 ", receive: %lu byte, transfer: %lu byte, error: %d", "Local2Remote", id, transfer1, transfer2, error);
 }
 
 bool LTSM::Channel::Local2Remote::readData(void)

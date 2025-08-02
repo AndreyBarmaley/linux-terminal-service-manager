@@ -113,7 +113,7 @@ void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed)
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
 {
-    Application::trace(DebugType::Pcsc, "%s: data size: %u", __FUNCTION__, recv.size());
+    Application::trace(DebugType::Pcsc, "%s: data size: %lu", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty())
@@ -192,17 +192,17 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
                     break;
             }
 
-            Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %u",
+            Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu",
                                __FUNCTION__, "pcsc", pcscInit, pcscCmd, recv.size());
         }
 
-        Application::error("%s: %s failed, op: 0x%" PRIx16 ", recv size: %u",
+        Application::error("%s: %s failed, op: 0x%" PRIx16 ", recv size: %lu",
                            __FUNCTION__, "pcsc", pcscInit, recv.size());
         throw channel_error(NS_FuncName);
     }
     else
     {
-        Application::error("%s: %s failed, recv size: %u", __FUNCTION__, "data", recv.size());
+        Application::error("%s: %s failed, recv size: %lu", __FUNCTION__, "data", recv.size());
     }
 }
 

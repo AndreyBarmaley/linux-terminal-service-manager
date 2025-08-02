@@ -955,7 +955,7 @@ namespace LTSM
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
             auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
-            Application::debug(DebugType::Rfb, "%s: update time: %uus", __FUNCTION__, dt.count());
+            Application::debug(DebugType::Rfb, "%s: update time: %luus", __FUNCTION__, dt.count());
         }
         clientRecvFBUpdateEvent();
     }
@@ -1063,7 +1063,7 @@ namespace LTSM
         auto buf = recvData(reg.width * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
-        Application::trace(DebugType::Rfb, "%s: bufsz: %u, masksz: %u", __FUNCTION__, buf.size(), mask.size());
+        Application::trace(DebugType::Rfb, "%s: bufsz: %lu, masksz: %lu", __FUNCTION__, buf.size(), mask.size());
         clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
     }
 

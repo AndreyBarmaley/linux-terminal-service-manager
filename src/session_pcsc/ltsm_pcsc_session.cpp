@@ -886,7 +886,7 @@ namespace LTSM
 
         if(sendLength != data.size())
         {
-            Application::error("%s: client id: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %u", __FUNCTION__, st.id(),
+            Application::error("%s: client id: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, st.id(),
                                sendLength, data.size());
             return false;
         }
@@ -1163,7 +1163,7 @@ namespace LTSM
 
         if(sendLength != data.size())
         {
-            Application::error("%s: client id: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %u", __FUNCTION__, st.id(),
+            Application::error("%s: client id: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, st.id(),
                                sendLength, data.size());
             return false;
         }

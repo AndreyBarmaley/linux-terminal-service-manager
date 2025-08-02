@@ -470,7 +470,7 @@ namespace Gss
         OM_uint32 stat;
         auto buf = recvToken();
 
-        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, buf.size());
+        Application::debug(DebugType::Gss, "%s: data length: %lu", __FUNCTION__, buf.size());
 
         gss_buffer_desc in_buf{ buf.size(), (void*) buf.data() };
         gss_buffer_desc out_buf{ 0, nullptr, };
@@ -499,7 +499,7 @@ namespace Gss
             throw std::invalid_argument("context is null");
         }
 
-        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, len);
+        Application::debug(DebugType::Gss, "%s: data length: %lu", __FUNCTION__, len);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ len, (void*) buf };
@@ -532,7 +532,7 @@ namespace Gss
         // recv token
         auto buf = recvToken();
 
-        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, buf.size());
+        Application::debug(DebugType::Gss, "%s: data length: %lu", __FUNCTION__, buf.size());
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
@@ -556,7 +556,7 @@ namespace Gss
             throw std::invalid_argument("context is null");
         }
 
-        Application::debug(DebugType::Gss, "%s: data length: %u", __FUNCTION__, msgsz);
+        Application::debug(DebugType::Gss, "%s: data length: %lu", __FUNCTION__, msgsz);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };

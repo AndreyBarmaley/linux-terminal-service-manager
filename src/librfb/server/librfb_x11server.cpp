@@ -270,7 +270,7 @@ namespace LTSM
 
                 if(dt.count() < delayTimeout)
                 {
-                    Application::debug(DebugType::X11Srv, "%s: update time ms: %u", __FUNCTION__, dt.count());
+                    Application::debug(DebugType::X11Srv, "%s: update time ms: %lu", __FUNCTION__, dt.count());
                     std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
                     continue;
                 }
@@ -634,7 +634,7 @@ namespace LTSM
         }
         else
         {
-            Application::error("%s: invalid length: %u, offset: %" PRIu32, __FUNCTION__, length, offset);
+            Application::error("%s: invalid length: %lu, offset: %" PRIu32, __FUNCTION__, length, offset);
         }
 
         return {};
@@ -744,7 +744,7 @@ namespace LTSM
                 size_t argbSize = reply->width * reply->height;
                 size_t dataSize = replyCursor.size();
 
-                Application::debug(X11Srv, "%s: data lenth: %u", __FUNCTION__, dataSize);
+                Application::debug(X11Srv, "%s: data lenth: %lu", __FUNCTION__, dataSize);
 
                 if(dataSize == argbSize)
                 {
@@ -758,7 +758,7 @@ namespace LTSM
                 }
                 else
                 {
-                    Application::warning("%s: size mismatch, data: %u, argb: %u", __FUNCTION__, dataSize, argbSize);
+                    Application::warning("%s: size mismatch, data: %lu, argb: %lu", __FUNCTION__, dataSize, argbSize);
                 }
             }
         }
@@ -794,7 +794,7 @@ namespace LTSM
             throw rfb_error(NS_FuncName);
         }
 
-        Application::trace(DebugType::X11Srv, "%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %u, bits per pixel: %" PRIu8
+        Application::trace(DebugType::X11Srv, "%s: request size [%" PRIu16 ", %" PRIu16 "], reply: length: %lu, bits per pixel: %" PRIu8
                                ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
                                __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
                                pixmapReply->gmask, pixmapReply->bmask);
@@ -802,7 +802,7 @@ namespace LTSM
         // fix align
         if(pixmapReply->size() != reg.width* reg.height* pixmapReply->bytePerPixel())
         {
-            Application::error("%s: region not aligned, reply size: %u, reg size: [%" PRIu16 ", %" PRIu16 "], byte per pixel: %"
+            Application::error("%s: region not aligned, reply size: %lu, reg size: [%" PRIu16 ", %" PRIu16 "], byte per pixel: %"
                                PRIu8,
                                __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);

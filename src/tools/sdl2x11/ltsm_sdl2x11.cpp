@@ -144,7 +144,7 @@ namespace LTSM
                 }
                 else
                 {
-                    Application::error("%s: invalid length: %u, offset: %" PRIu32, __FUNCTION__, length, offset);
+                    Application::error("%s: invalid length: %lu, offset: %" PRIu32, __FUNCTION__, length, offset);
                 }
             }
 
