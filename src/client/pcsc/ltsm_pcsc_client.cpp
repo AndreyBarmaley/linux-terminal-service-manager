@@ -219,7 +219,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
     }
     else
     {
-        Application::error("%s: return code: 0x%08" PRIx32, __FUNCTION__, ret);
+        Application::error("%s: return code: 0x%08" PRIx64, __FUNCTION__, ret);
     }
 
     // reply
