@@ -165,7 +165,7 @@ namespace LTSM
     {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
         pitch = std::max(pitch1, pitch2);
-        size_t length = pitch * fbsz.height;
+        size_t length = pitch * static_cast<size_t>(fbsz.height);
         buffer = new uint8_t[length];
         std::fill(buffer, buffer + length, 0);
     }
