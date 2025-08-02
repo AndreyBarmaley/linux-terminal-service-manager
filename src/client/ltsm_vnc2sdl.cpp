@@ -1455,7 +1455,7 @@ namespace LTSM
             auto sdlFormat = SDL_MasksToPixelFormatEnum(cursorFmt.bitsPerPixel(),
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
-            if(pixels.size() < reg.width * reg.height * static_cast<uint32_t>(4))
+            if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4)
             {
                 Application::error("%s: invalid pixels, length: %lu", __FUNCTION__, pixels.size());
                 return;

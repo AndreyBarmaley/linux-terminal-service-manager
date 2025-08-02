@@ -342,7 +342,7 @@ namespace LTSM
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1)
                 {
-                    Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+                    Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
                 }
 
                 std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
@@ -920,7 +920,7 @@ namespace LTSM
                 }
                 catch(const std::invalid_argument &)
                 {
-                    Application::error("format failed: `%s', arg: `%.*s'", this->c_str(), val.size(), val.data());
+                    Application::error("format failed: `%s', arg: `%.*s'", this->c_str(), static_cast<int>(val.size()), val.data());
                     return *this;
                 }
 

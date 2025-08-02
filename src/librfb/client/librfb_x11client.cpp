@@ -45,7 +45,7 @@ namespace LTSM
 
     void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf)
     {
-        Application::debug(DebugType::X11Cli, "%s, length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "%s, length: %lu", __FUNCTION__, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -112,7 +112,7 @@ namespace LTSM
 
     void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf)
     {
-        Application::debug(DebugType::X11Cli, "%s, type: 0x%04" PRIx16 ", length: %" PRIu32, __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::X11Cli, "%s, type: 0x%04" PRIx16 ", length: %lu", __FUNCTION__, type, buf.size());
         if(extClipboardRemoteCaps())
         {
             const std::scoped_lock guard{ clientLock };
@@ -246,7 +246,7 @@ namespace LTSM
 
     std::vector<uint8_t> RFB::X11Client::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const
     {
-        Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32 ", offset: %" PRIu32 ", length: %" PRIu32, __FUNCTION__, atom, offset, length);
+        Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32 ", offset: %lu, length: %" PRIu32, __FUNCTION__, atom, offset, length);
 
         auto targets = selectionSourceTargets();
 
@@ -270,7 +270,7 @@ namespace LTSM
     
     void RFB::X11Client::clientRecvCutTextEvent(std::vector<uint8_t> && buf)
     {
-        Application::debug(DebugType::X11Cli, "%s: data length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "%s: data length: %lu", __FUNCTION__, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);

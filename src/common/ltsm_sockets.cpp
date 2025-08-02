@@ -895,7 +895,7 @@ namespace LTSM
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1)
         {
-            Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+            Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
         }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
@@ -942,7 +942,7 @@ namespace LTSM
 
         if(native.size() > sizeof(sockaddr.sun_path) - 1)
         {
-            Application::warning("%s: unix path is long, truncated to size: %d", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+            Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
         }
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
@@ -1038,7 +1038,7 @@ namespace LTSM
                 // remove end line
                 if(size_t len = strnlen(str, 1024))
                 {
-                    Application::debug(DebugType::Tls, "%s: %.*s", __FUNCTION__, len-1, str);
+                    Application::debug(DebugType::Tls, "%s: %.*s", __FUNCTION__, static_cast<int>(len-1), str);
                 }
             }
         }

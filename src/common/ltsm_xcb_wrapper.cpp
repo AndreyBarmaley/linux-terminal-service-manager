@@ -1434,7 +1434,7 @@ namespace LTSM
             if(const auto & err = xcbReply2.error())
             {
                 Application::debug(DebugType::Xcb, "%s: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
-                                  __FUNCTION__, szw, szh, screenInfo->timestamp, screenInfo->config_timestamp, sizeID, screenInfo->rotation, screenInfo->rate);
+                                  __FUNCTION__, szw, szh, screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
 
                 error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;

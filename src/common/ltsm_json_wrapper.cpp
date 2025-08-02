@@ -1184,7 +1184,7 @@ namespace LTSM
             if(!(*itkey).isKey())
             {
                 auto str = stringToken(*itkey);
-                Application::error("%s: not key, index: %d, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), str.size(), str.data());
+                Application::error("%s: not key, index: %lu, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), str.size(), str.data());
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
@@ -1226,7 +1226,7 @@ namespace LTSM
 
         if(! (*it).isValue())
         {
-            Application::error("%s: not value, index: %d, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), val.size(), val.data());
+            Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), val.size(), val.data());
         }
 
         size_t dotpos = val.find(".");
@@ -1284,7 +1284,7 @@ namespace LTSM
 
         if(! tok.isValue())
         {
-            Application::error("%s: not value, index: %d, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), val.size(), val.data());
+            Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), val.size(), val.data());
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
