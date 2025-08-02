@@ -135,7 +135,7 @@ jobs:
           echo "::endgroup::"
           echo "::group::x11 tests"
           ./LTSM_test_framebuf2
-          ./LTSM_test_x11enc --count 2
+          ./LTSM_test_x11enc --fps 4 --count 2
           ./LTSM_test_xrandr
           echo "::endgroup::"
           echo "::group::ltsm logs"

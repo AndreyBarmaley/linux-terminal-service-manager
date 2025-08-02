@@ -1115,7 +1115,7 @@ namespace LTSM
     void RFB::ClientDecoder::recvDecodingLtsm(const XCB::Region & reg)
     {
         Application::info("%s: success", __FUNCTION__);
-        size_t type = recvIntBE32();
+        uint32_t type = recvIntBE32();
 
         // type 0: handshake part
         if(type == 0)
