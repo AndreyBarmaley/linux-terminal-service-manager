@@ -70,7 +70,7 @@ namespace LTSM
     void RFB::DecoderStream::recvRegionUpdatePixels(const XCB::Region & reg)
     {
         uint32_t pitch = reg.width * clientFormat().bytePerPixel();
-        auto pixels = recvData(pitch * static_cast<uint32_t>(reg.height));
+        auto pixels = recvData(static_cast<size_t>(pitch) * reg.height);
         updateRawPixels(pixels.data(), reg, pitch, serverFormat());
     }
 
@@ -521,7 +521,7 @@ namespace LTSM
         //DecoderWrapper wrap(zlib.get(), & cli)
 
         uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
-        auto pixels = zlib->recvData(pitch * static_cast<uint32_t>(reg.height));
+        auto pixels = zlib->recvData(static_cast<size_t>(pitch) * reg.height);
         cli.updateRawPixels(pixels.data(), reg, pitch, cli.serverFormat());
     }
 
@@ -748,7 +748,7 @@ namespace LTSM
         std::uint8_t run = 0;
 
         StreamBufRef sb(buf.data(), buf.size());
-        BinaryBuf res(pitch * static_cast<uint32_t>(rsz.height), 0);
+        BinaryBuf res(static_cast<size_t>(pitch) * rsz.height, 0);
         FrameBuffer fb(res.data(), XCB::Region{0,0,rsz.width,rsz.height}, clientPf, pitch);
 
         for(int16_t py = 0; py < rsz.height; ++py)

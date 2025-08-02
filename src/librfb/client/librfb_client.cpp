@@ -1060,7 +1060,7 @@ namespace LTSM
     {
         Application::debug(DebugType::Rfb, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
-        auto buf = recvData(reg.width * reg.height * static_cast<uint32_t>(clientFormat().bytePerPixel()));
+        auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
         Application::trace(DebugType::Rfb, "%s: bufsz: %lu, masksz: %lu", __FUNCTION__, buf.size(), mask.size());
