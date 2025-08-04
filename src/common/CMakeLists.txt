@@ -52,6 +52,12 @@ if(LTSM_WITH_GNUTLS)
         target_compile_definitions(${CUR_TARGET} PRIVATE ${GNUTLS_DEFINITIONS})
         target_include_directories(${CUR_TARGET} PRIVATE ${GNUTLS_INCLUDE_DIR})
         target_link_libraries(${CUR_TARGET} PRIVATE ${GNUTLS_LIBRARIES})
+
+        find_library(GnuTLSXX_LIBRARY gnutlsxx)
+
+        if(GnuTLSXX_LIBRARY)
+            target_link_libraries(${CUR_TARGET} PRIVATE ${GnuTLSXX_LIBRARY})
+        endif()
     else()
         set(LTSM_WITH_GNUTLS OFF)
         message(STATUS "GnuTLS not found")
