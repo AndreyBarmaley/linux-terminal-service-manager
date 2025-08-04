@@ -1198,9 +1198,14 @@ namespace LTSM
 
         if(0 > ret)
         {
+#ifdef tjGetErrorCode
             int err = tjGetErrorCode(jpeg.get());
             const char* str = tjGetErrorStr2(jpeg.get());
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "tjCompress", str, err);
+            Application::error("%s: %s failed, error: `%s', code: %d", __FUNCTION__, "tjCompress", str, err);
+#else
+            const char* str = tjGetErrorStr();
+            Application::error("%s: %s failed, error: `%s'", __FUNCTION__, "tjCompress", tjGetErrorStr());
+#endif
             throw rfb_error(NS_FuncName);
         }
 
