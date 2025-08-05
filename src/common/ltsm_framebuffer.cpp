@@ -297,7 +297,7 @@ namespace LTSM
             auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
             {
                 ParallelsJobs<void> jobs;
 
@@ -332,7 +332,7 @@ namespace LTSM
             auto raw = pixelFormat().pixel(col);
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
             {
                 ParallelsJobs<void> jobs;
 
@@ -362,7 +362,7 @@ namespace LTSM
             auto raw = pixelFormat().pixel(col);
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
             {
                 ParallelsJobs<void> jobs;
 
@@ -448,29 +448,6 @@ namespace LTSM
         return rawPixel(ptr, bitsPerPixel(), platformBigEndian());
     }
 
-    struct PixelIterator : XCB::PointIterator
-    {
-        const Point & topLeft;
-        const FrameBuffer & fb;
-        const uint8_t* pitch = nullptr;
-
-        PixelIterator(const PointIterator & it, const Point & pt, const FrameBuffer & own) : XCB::PointIterator(it), topLeft(pt), fb(own)
-        {
-            pitch = fb.pitchData(topLeft.y + y);
-        }
-
-        void lineChanged(void) override
-        {
-            pitch = fb.pitchData(topLeft.y + y);
-        }
-
-        uint32_t pixel(void) const
-        {
-            auto ptr = pitch + ((topLeft.x + x) * fb.bytePerPixel());
-            return FrameBuffer::rawPixel(ptr, fb.bitsPerPixel(), platformBigEndian());
-        }
-    };
-
     void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos)
     {
         auto dst = XCB::Region(pos, reg.toSize()).intersected(region());
@@ -483,7 +460,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
         {
             ParallelsJobs<void> jobs;
 
@@ -491,11 +468,11 @@ namespace LTSM
             {
                 for(auto & subdst: dst.divideCounts(2, 2))
                 {
-                    jobs.addJob(std::async(std::launch::async, [&subdst, &fb, &reg, this]()
+                    jobs.addJob(std::async(std::launch::async, [subdst, &fb, &reg, this]()
                     {
                         for(auto coord = subdst.coordBegin(); coord.isValid(); ++coord)
                         {
-                            setPixel(subdst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
+                            setPixel(subdst.topLeft() + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
                         }
                     }));
                 }
@@ -516,7 +493,7 @@ namespace LTSM
         {
             for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
             {
-                setPixel(dst + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
+                setPixel(dst.topLeft() + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
             }
         }
         else
@@ -558,7 +535,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
         {
             PixelLengthList list;
             ParallelsJobs<PixelLengthList> jobs;
@@ -604,7 +581,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (fbreg.width * fbreg.height))
+        if(2 < std::thread::hardware_concurrency() && 1024 < (fbreg.width * fbreg.height))
         {
             ColorMap map;
             ParallelsJobs<ColorMap> jobs;
@@ -654,7 +631,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
         {
             ParallelsJobs<PixelMapPalette> jobs;
             auto bsz = XCB::Size(reg.width, reg.height / 4);
@@ -717,7 +694,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
         {
             PixelMapWeight map;
             ParallelsJobs<PixelMapWeight> jobs;
@@ -749,7 +726,7 @@ namespace LTSM
     bool FrameBuffer::allOfPixel(uint32_t pix, const XCB::Region & reg) const
     {
         // fast check
-        if(15 < reg.width && 15 < reg.height)
+        if(1024 < (reg.width * reg.height))
         {
             if(pix != pixel(XCB::Point(reg.width-1, 0)))
                 return false;
@@ -767,38 +744,18 @@ namespace LTSM
                 return false;
         }
 
-        auto regionProcessed = [&pix, this](XCB::Region reg)
+        for(uint16_t py = 0; py < reg.height; ++py)
         {
-            for(uint16_t py = 0; py < reg.height; ++py)
+            const uint8_t* pitch = pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px)
             {
-                const uint8_t* pitch = pitchData(reg.y + py);
-
-                for(uint16_t px = 0; px < reg.width; ++px)
-                {
-                    auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                    if(pix != rawPixel(ptr, bitsPerPixel(), platformBigEndian())) { return false; }
-                }
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+                if(pix != rawPixel(ptr, bitsPerPixel(), platformBigEndian())) { return false; }
             }
-            
-            return true;
-        };
-
-#ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 256 < (reg.width * reg.height))
-        {
-            ParallelsJobs<bool> jobs;
-            auto bsz = XCB::Size(reg.width, reg.height / 4);
-
-            for(auto & subreg: reg.divideBlocks(bsz))
-            {
-                jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
-            }
-
-            auto & list = jobs.jobList();
-            return std::all_of(list.begin(), list.end(), [](auto & job){ return job.get(); });
         }
-#endif
-        return regionProcessed(reg);
+            
+        return true;
     }
 
     bool FrameBuffer::renderChar(int ch, const Color & col, const XCB::Point & pos)

@@ -62,7 +62,6 @@ namespace LTSM
                 }
 
                 x = 0;
-                lineChanged();
             }
 
             return *this;
@@ -91,20 +90,9 @@ namespace LTSM
                 }
 
                 x = limit.width - 1;
-                lineChanged();
             }
 
             return *this;
-        }
-
-        Region operator- (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x - pt.x, reg.y - pt.y, reg.width, reg.height);
-        }
-
-        Region operator+ (const Region & reg, const Point & pt)
-        {
-            return Region(reg.x + pt.x, reg.y + pt.y, reg.width, reg.height);
         }
 
         void Region::reset(void)

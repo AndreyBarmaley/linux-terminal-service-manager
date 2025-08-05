@@ -84,6 +84,12 @@ namespace LTSM
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
+
+        if(! res)
+        {
+            Application::warning("%s: user not found: `%s'", __FUNCTION__, name.c_str());
+            throw std::runtime_error(__FUNCTION__);
+        }
     }
 
     UserInfo::UserInfo(uid_t uid)
@@ -95,6 +101,12 @@ namespace LTSM
         if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0)
         {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+        
+        if(! res)
+        {
+            Application::warning("%s: uid not found: %d", __FUNCTION__, uid);
             throw std::runtime_error(__FUNCTION__);
         }
     }
@@ -128,6 +140,12 @@ namespace LTSM
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
+
+        if(! res)
+        {
+            Application::warning("%s: gid not found: %d", __FUNCTION__, gid);
+            throw std::runtime_error(__FUNCTION__);
+        }
     }
 
     GroupInfo::GroupInfo(const std::string & name)
@@ -140,6 +158,12 @@ namespace LTSM
         if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0)
         {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
+            throw std::runtime_error(__FUNCTION__);
+        }
+
+        if(! res)
+        {
+            Application::warning("%s: group not found: `%s'", __FUNCTION__, name.c_str());
             throw std::runtime_error(__FUNCTION__);
         }
     }

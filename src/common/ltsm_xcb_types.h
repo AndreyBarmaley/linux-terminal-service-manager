@@ -39,42 +39,39 @@ namespace LTSM
     {
         struct Point
         {
-            int16_t x, y;
-
-            Point() : x(-1), y(-1) {}
+            int16_t x = -1;
+            int16_t y = -1;
 
             Point(int16_t px, int16_t py) : x(px), y(py) {}
 
-            virtual ~Point() = default;
+            Point() = default;
+            ~Point() = default;
 
-            virtual bool isValid(void) const { return 0 <= x && 0 <= y; }
+            inline bool isValid(void) const { return 0 <= x && 0 <= y; }
 
-            Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
+            inline Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
+            inline Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
 
-            Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
-
-            bool operator==(const Point & pt) const { return pt.x == x && pt.y == y; }
-
-            bool operator!=(const Point & pt) const { return pt.x != x || pt.y != y; }
+            inline bool operator==(const Point & pt) const { return pt.x == x && pt.y == y; }
+            inline bool operator!=(const Point & pt) const { return pt.x != x || pt.y != y; }
         };
 
         struct Size
         {
-            uint16_t width, height;
-
-            Size() : width(0), height(0) {}
+            uint16_t width = 0;
+            uint16_t height = 0;
 
             Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
-            virtual ~Size() = default;
+            Size() = default;
+            ~Size() = default;
 
-            bool isEmpty(void) const { return width == 0 || height == 0; }
+            inline bool isEmpty(void) const { return width == 0 || height == 0; }
 
             void reset(void) { width = 0; height = 0; }
 
-            bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
-
-            bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
+            inline bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
+            inline bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
         };
 
         struct PointIterator : Point
@@ -82,33 +79,33 @@ namespace LTSM
             const Size limit;
             PointIterator(int16_t px, int16_t py, const Size & sz) : Point(px, py), limit(sz) {}
 
+            PointIterator() = default;
+            ~PointIterator() = default;
+
             PointIterator & operator++(void);
             PointIterator & operator--(void);
 
-            bool isValid(void) const override { return Point::isValid() && x < limit.width && y < limit.height; }
+            bool isValid(void) const { return Point::isValid() && x < limit.width && y < limit.height; }
 
             bool isBeginLine(void) const;
             bool isEndLine(void) const;
-            virtual void lineChanged(void) { /* default empty */ }
         };
 
-        struct Region : public Point, public Size
+        struct Region : Point, Size
         {
             Region() = default;
+            ~Region() = default;
 
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
-
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
-            const Point & topLeft(void) const { return *this; }
-
-            const Size & toSize(void) const { return *this; }
+            inline const Point & topLeft(void) const { return *this; }
+            inline const Size & toSize(void) const { return *this; }
 
             PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
 
-            bool operator== (const Region & rt) const { return rt.x == x && rt.y == y && rt.width == width && rt.height == height; }
-
-            bool operator!= (const Region & rt) const { return rt.x != x || rt.y != y || rt.width != width || rt.height != height; }
+            inline bool operator== (const Region & rt) const { return rt.topLeft() == topLeft() && rt.toSize() == toSize(); }
+            inline bool operator!= (const Region & rt) const { return rt.topLeft() != topLeft() || rt.toSize() != toSize(); }
 
             void reset(void);
 
@@ -131,8 +128,8 @@ namespace LTSM
             std::list<Region> divideCounts(uint16_t cols, uint16_t rows) const;
         };
 
-        Region operator- (const Region &, const Point &);
-        Region operator+ (const Region &, const Point &);
+        inline Region operator+ (const Region & reg, const Point & pt) { return Region(reg.topLeft() + pt, reg.toSize()); }
+        inline Region operator- (const Region & reg, const Point & pt) { return Region(reg.topLeft() - pt, reg.toSize()); }
 
         struct HasherRegion
         {
