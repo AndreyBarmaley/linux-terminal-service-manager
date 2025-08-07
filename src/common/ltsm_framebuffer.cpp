@@ -186,17 +186,27 @@ namespace LTSM
 
     int PixelMapPalette::findColorIndex(const uint32_t & col) const
     {
+#ifdef __APPLE__
+        auto it = std::find_if(cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
+#else
         auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
+#endif
         return it != cend() ? (*it).second : -1;
     }
 
     int PixelMapWeight::maxWeightPixel(void) const
     {
+#ifdef __APPLE__
+        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2)
+        {
+            return p1.second < p2.second;
+        });
+#else
         auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2)
         {
             return p1.second < p2.second;
         });
-
+#endif
         return it != cend() ? (*it).first : 0;
     }
 

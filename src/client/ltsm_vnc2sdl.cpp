@@ -983,6 +983,7 @@ namespace LTSM
                 break;
 
             case SDL_KEYDOWN:
+                Application::debug(DebugType::App, "%s: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32, __FUNCTION__, ev.key()->keysym.scancode, ev.key()->keysym.sym);
 
                 // ctrl + F10 -> fast close
                 if(ev.key()->keysym.sym == SDLK_F10 &&
@@ -1155,9 +1156,9 @@ namespace LTSM
                     sendSetDesktopSize(primarySize);
                 }
             }
-            // server runtime
             else
             {
+            // server runtime
                 if(windowFullScreen() && primarySize != nsz)
                 {
                     Application::warning("%s: fullscreen mode: [%" PRIu16 ", %" PRIu16
@@ -1169,27 +1170,26 @@ namespace LTSM
             }
         }
         else
-
-            // 3. server reply
-            if(status == 1)
+        if(status == 1)
+        {
+        // 3. server reply
+            if(0 == err)
             {
-                if(0 == err)
-                {
-                    pushEventWindowResize(nsz);
-                }
-                else
-                {
-                    Application::error("%s: status: %d, error code: %d", __FUNCTION__, status, err);
-
-                    if(nsz.isEmpty())
-                    {
-                        throw sdl_error(NS_FuncName);
-                    }
-
-                    pushEventWindowResize(nsz);
-                    primarySize.reset();
-                }
+                pushEventWindowResize(nsz);
             }
+            else
+            {
+                Application::error("%s: status: %d, error code: %d", __FUNCTION__, status, err);
+
+                if(nsz.isEmpty())
+                {
+                    throw sdl_error(NS_FuncName);
+                }
+
+                pushEventWindowResize(nsz);
+                primarySize.reset();
+            }
+        }
     }
 
     void Vnc2SDL::clientRecvFBUpdateEvent(void)

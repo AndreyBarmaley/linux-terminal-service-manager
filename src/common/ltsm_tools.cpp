@@ -494,14 +494,16 @@ namespace LTSM
         std::wstring_convert<convert_type, wchar_t> converter;
         return converter.from_bytes(str.begin(), str.end());
 */
-        if(auto len = std::mbstowcs(nullptr, str.c_str(), 0))
-        {
-            std::wstring res(len, L'\0');
-            std::mbstowcs(res.data(), str.c_str(), len);
-            return res;
+        auto len = std::mbstowcs(nullptr, str.c_str(), 0);
+        if(len == static_cast<std::size_t>(-1)) {
+            // utf16le or utf16be
+            Application::error("%s: %s failed, error: %d", __FUNCTION__, "mbstowcs", errno);
+            return {};
         }
 
-        return {};
+        std::wstring res(len, L'\0');
+        std::mbstowcs(res.data(), str.c_str(), len);
+        return res;
     }
 
     std::string Tools::wstring2string(const std::wstring & wstr)
@@ -511,14 +513,16 @@ namespace LTSM
         std::wstring_convert<convert_type, wchar_t> converter;
         return converter.to_bytes(wstr);
 */
-        if(auto len = std::wcstombs(nullptr, wstr.c_str(), 0))
-        {
-            std::string res(len, '\0');
-            std::wcstombs(res.data(), wstr.c_str(), len);
-            return res;
+        auto len = std::wcstombs(nullptr, wstr.c_str(), 0);
+        if(len == static_cast<std::size_t>(-1)) {
+            // utf16le or utf16be
+            Application::error("%s: %s failed, error: %d", __FUNCTION__, "wcstombs", errno);
+            return {};
         }
-        
-        return {};
+
+        std::string res(len, '\0');
+        std::wcstombs(res.data(), wstr.c_str(), len);
+        return res;
     }
 
     std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)
