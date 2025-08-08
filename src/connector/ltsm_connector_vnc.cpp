@@ -463,7 +463,7 @@ namespace LTSM
         if(auto opts = jo.getObject("options"))
         {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
-            ltsmClientVersion = opts->getBoolean("ltsm:client", 0);
+            ltsmClientVersion = opts->getInteger("ltsm:client", 0);
             x11NoDamage = opts->getBoolean("x11:nodamage", x11NoDamage);
             frameRate = opts->getInteger("frame:rate", frameRate);
 
@@ -729,5 +729,10 @@ namespace LTSM
         if(isUserSession())
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
+    }
+    
+    int Connector::VNC::remoteClientVersion(void) const
+    {
+        return ltsmClientVersion;
     }
 }

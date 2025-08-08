@@ -1457,8 +1457,8 @@ namespace LTSM
         sendIntBE16(0);
         sendIntBE16(0);
         sendIntBE32(ENCODING_LTSM);
-        // ltsm compat 1.1: zero
         sendIntBE32(0);
+        sendIntBE32(LTSM::service_version);
         sendFlush();
     }
 
@@ -1476,7 +1476,7 @@ namespace LTSM
         sendIntBE16(0);
         sendIntBE32(ENCODING_LTSM);
         // raw data
-        sendIntBE32(LTSM::service_version);
+        sendIntBE32(1);
         sendIntBE32(len);
         sendRaw(ptr, len);
         sendFlush();
@@ -1520,7 +1520,7 @@ namespace LTSM
             throw std::invalid_argument(NS_FuncName);
         }
 
-        Application::info("%s: cmd: %s", __FUNCTION__, cmd.c_str());
+        Application::debug(DebugType::Rfb, "%s: cmd: %s", __FUNCTION__, cmd.c_str());
 
         if(cmd == SystemCommand::ClientVariables)
         {
@@ -1529,6 +1529,10 @@ namespace LTSM
         else if(cmd == SystemCommand::KeyboardChange)
         {
             systemKeyboardChange(jo);
+        }
+        else if(cmd == SystemCommand::KeyboardEvent)
+        {
+            systemKeyboardEvent(jo);
         }
         else if(cmd == SystemCommand::TransferFiles)
         {

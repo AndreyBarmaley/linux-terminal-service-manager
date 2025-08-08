@@ -190,6 +190,8 @@ namespace LTSM
 
             std::pair<std::string, std::string> authInfo(void) const;
 
+            virtual int remoteClientVersion(void) const { return 0; }
+
             // server encoder events
             virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }
             virtual void serverRecvSetEncodingsEvent(const std::vector<int> &) { /* empty */ }

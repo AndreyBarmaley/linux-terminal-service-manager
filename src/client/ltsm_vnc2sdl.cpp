@@ -1031,7 +1031,7 @@ namespace LTSM
                 return true;
             }
 
-            if(20250806 <= remoteLtsmVersion())
+            if(20250808 <= remoteLtsmVersion())
             {
                 sendSystemKeyboardEvent(ev.type() == SDL_KEYDOWN, ke->keysym.scancode, ke->keysym.sym);
                 return true;

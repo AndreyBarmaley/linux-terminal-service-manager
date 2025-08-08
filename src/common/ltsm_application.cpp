@@ -22,7 +22,7 @@
 
 #include <unistd.h>
 
-#include <locale>
+#include <clocale>
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -184,7 +184,7 @@ namespace LTSM
 
     Application::Application(std::string_view sid)
     {
-        std::locale::global(std::locale(""));
+        std::setlocale(LC_ALL, "en_US.utf8");
         ident.assign(sid.begin(), sid.end());
     }
 

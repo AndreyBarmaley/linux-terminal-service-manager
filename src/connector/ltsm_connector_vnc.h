@@ -122,6 +122,8 @@ namespace LTSM
             void systemKeyboardChange(const JsonObject &) override;
             void systemKeyboardEvent(const JsonObject &) override;
 
+            int remoteClientVersion(void) const override;
+
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}
 

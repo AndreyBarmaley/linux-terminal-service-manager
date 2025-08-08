@@ -1363,7 +1363,7 @@ namespace LTSM
     {
         if(comma) { os << ","; }
 
-        os << std::quoted(key) << ":" << std::quoted(val);
+        os << std::quoted(key) << ":" << std::quoted(val ? val : "");
         comma = true;
         return *this;
     }
@@ -1456,7 +1456,7 @@ namespace LTSM
     {
         if(comma) { os << ","; }
 
-        os << std::quoted(val);
+        os << std::quoted(val ? val : "");
         comma = true;
         return *this;
     }

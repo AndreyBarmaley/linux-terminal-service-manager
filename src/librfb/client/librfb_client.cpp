@@ -1119,16 +1119,23 @@ namespace LTSM
         // type 0: handshake part
         if(type == 0)
         {
-            int flags = 0;
-            clientRecvLtsmHandshakeEvent(flags);
+            // ltsm 1.1 ver: flags
+            // ltsm 2.1 ver: version
+            serverLtsmVersion = recvIntBE32();
+            clientRecvLtsmHandshakeEvent(0 /* flags */);
         }
-        else
+        // type 1: data part
+        else if(type == 1)
         {
             // type: LTSM version
-            serverLtsmVersion = type;
             auto len = recvIntBE32();
             auto buf = recvData(len);
             clientRecvLtsmDataEvent(buf);
+        }
+        else
+        {
+            Application::error("%s: unknown type: %" PRIu32, __FUNCTION__, type);
+            throw rfb_error(NS_FuncName);
         }
     }
 

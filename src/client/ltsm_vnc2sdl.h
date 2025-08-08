@@ -42,7 +42,7 @@
  #include "librfb_winclient.h"
 #endif
 
-#define LTSM_VNC2SDL_VERSION 20250807
+#define LTSM_VNC2SDL_VERSION 20250808
 
 namespace LTSM
 {
