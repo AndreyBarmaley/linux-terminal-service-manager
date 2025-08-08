@@ -397,7 +397,10 @@ namespace LTSM
                 return;
             }
 
-            if(pressedMask^ mask)
+            // pressed mask:
+            //  left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
+            //  scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
+            if(pressedMask ^ mask)
             {
                 for(int num = 0; num < 8; ++num)
                 {

@@ -895,20 +895,237 @@ namespace LTSM
         return 0;
     }
 
-    void Vnc2SDL::sendMouseState(void)
+    bool Vnc2SDL::sdlMouseEvent(const SDL::GenericEvent & ev)
     {
-        int posx, posy;
-        uint8_t buttons = SDL_GetMouseState(& posx, & posy);
-        //auto [coordX, coordY] = SDL::Window::scaleCoord(ev.button()->x, ev.button()->y);
-        sendPointerEvent(buttons, posx, posy);
+        // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08,
+        // scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
+        switch(ev.type())
+        {
+            case SDL_MOUSEMOTION:
+                if(auto me = ev.motion())
+                {
+                    sendPointerEvent(0xFF & me->state, me->x, me->y);
+                    return true;
+                }
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                if(auto be = ev.button())
+                {
+                    sendPointerEvent(be->button, be->x, be->y);
+                    return true;
+                }
+                break;
+
+            case SDL_MOUSEWHEEL:
+                // scroll up
+                if(auto we = ev.wheel())
+                {
+                    if(0 == we->y)
+                        return false;
+
+                    auto state = SDL_GetMouseState(nullptr, nullptr);
+
+                    Application::info("%s: state - 0x%08" PRIx32 "", __FUNCTION__, state);
+
+                    // press/release up/down
+                    sendPointerEvent(0 < we->y ? SDL_BUTTON_X1MASK : SDL_BUTTON_X2MASK, we->mouseX, we->mouseY);
+                    sendPointerEvent(0, we->mouseX, we->mouseY);
+                    return true;
+                }
+            default:
+                break;
+        }
+        
+        return false;
     }
 
-    void Vnc2SDL::exitEvent(void)
+    bool Vnc2SDL::sdlWindowEvent(const SDL::GenericEvent & ev)
     {
-        RFB::ClientDecoder::rfbMessagesShutdown();
+        if(auto we = ev.window())
+        {
+            switch(we->event)
+            {
+                case SDL_WINDOWEVENT_EXPOSED:
+                    window->renderPresent();
+                    return true;
+
+                case SDL_WINDOWEVENT_FOCUS_GAINED:
+                    focusLost = false;
+                    return true;
+
+                case SDL_WINDOWEVENT_FOCUS_LOST:
+                    focusLost = true;
+                    return true;
+
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                    Application::debug(DebugType::App, "%s: size changed: [%" PRId32 "x%" PRId32 "]",
+                            __FUNCTION__, we->data1, we->data2);
+                    return true;
+
+                case SDL_WINDOWEVENT_RESIZED:
+                    Application::debug(DebugType::App, "%s: event resized: [%" PRId32 "x%" PRId32 "]",
+                            __FUNCTION__, we->data1, we->data2);
+                    windowResizedEvent(we->data1, we->data2);
+                    return true;
+                
+                default:
+                    break;
+            }
+        }
+
+        return false;
+    }
+
+    bool Vnc2SDL::sdlKeyboardEvent(const SDL::GenericEvent & ev)
+    {
+        if(auto ke = ev.key())
+        {
+            // pressed
+            if(ke->state == SDL_PRESSED)
+            {
+                Application::debug(DebugType::App, "%s: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32,
+                            __FUNCTION__, ke->keysym.scancode, ke->keysym.sym);
+
+                // ctrl + F10 -> fast close
+                if(ke->keysym.sym == SDLK_F10 &&
+                        (KMOD_CTRL & SDL_GetModState()))
+                {
+                    Application::warning("%s: hotkey received (%s), %s", __FUNCTION__, "ctrl + F10", "close application");
+                    return sdlQuitEvent();
+                }
+
+                // ctrl + F11 -> fullscreen toggle
+                if(ke->keysym.sym == SDLK_F11 &&
+                        (KMOD_CTRL & SDL_GetModState()))
+                {
+                    Application::warning("%s: hotkey received (%s), %s", __FUNCTION__, "ctrl + F11", "fullscreen toggle");
+                    if(windowFullScreen())
+                    {
+                        SDL_SetWindowFullscreen(window->get(), 0);
+                        windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
+                    }
+                    else
+                    {
+                        SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
+                        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+                    }
+                    return true;
+                }
+
+                // key press delay 200 ms
+                if(std::chrono::steady_clock::now() - keyPress < 200ms)
+                {
+                    keyPress = std::chrono::steady_clock::now();
+                    return true;
+                }
+            }
+            
+            // continue, released
+            if(ke->keysym.sym == 0x40000000 && ! capslockEnable)
+            {
+                auto mod = SDL_GetModState();
+                SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
+                Application::notice("%s: CAPS reset", __FUNCTION__);
+                return true;
+            }
+
+            if(20250806 <= remoteLtsmVersion())
+            {
+                sendSystemKeyboardEvent(ev.type() == SDL_KEYDOWN, ke->keysym.scancode, ke->keysym.sym);
+                return true;
+            }
+
+#ifdef __UNIX__
+            int xksym = SDL::Window::convertScanCodeToKeySym(ke->keysym.scancode);
+
+            if(xksym == 0)
+            {
+                xksym = ke->keysym.sym;
+            }
+
+            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
+            {
+                int group = extXkb->getLayoutGroup();
+                auto keycodeGroup = keysymToKeycodeGroup(xksym);
+
+                if(group != keycodeGroup.second)
+                {
+                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                }
+            }
+#else
+            int xksym = ke->keysym.sym;
+#endif
+            sendKeyEvent(ke->state == SDL_PRESSED, xksym);
+            return true;
+        }
+        
+        return false;
     }
 
     enum LocalEvent { Resize = 776, ResizeCont = 777 };
+
+    bool Vnc2SDL::sdlUserEvent(const SDL::GenericEvent & ev)
+    {
+        if(auto ue = ev.user())
+        {
+            // resize event
+            if(ue->code == LocalEvent::Resize ||
+                    ue->code == LocalEvent::ResizeCont)
+            {
+                auto width = (size_t) ue->data1;
+                auto height = (size_t) ue->data2;
+                bool contUpdateResume = ue->code == LocalEvent::ResizeCont;
+
+                cursors.clear();
+
+                if(windowFullScreen())
+                {
+                    window.reset(new SDL::Window(windowTitle, width, height, 0, 0, windowFlags, windowAccel));
+                }
+                else
+                {
+                    window->resize(width, height);
+                }
+
+                auto pair = window->geometry();
+                windowSize = XCB::Size(pair.first, pair.second);
+                displayResizeEvent(windowSize);
+                // full update
+                sendFrameBufferUpdate(false);
+
+                if(contUpdateResume)
+                {
+                    sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
+                }
+
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    bool Vnc2SDL::sdlDropFileEvent(const SDL::GenericEvent & ev)
+    {
+        if(auto de = ev.drop())
+        {
+            std::unique_ptr<char, void(*)(void*)> drop{ de->file, SDL_free };
+            dropFiles.emplace_front(drop.get());
+            dropStart = std::chrono::steady_clock::now();
+            return true;
+        }
+
+        return false;
+    }
+
+    bool Vnc2SDL::sdlQuitEvent(void)
+    {
+        RFB::ClientDecoder::rfbMessagesShutdown();
+        return true;
+    }
 
     bool Vnc2SDL::sdlEventProcessing(void)
     {
@@ -926,180 +1143,24 @@ namespace LTSM
             case SDL_MOUSEMOTION:
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
-                sendMouseState();
-                break;
-
             case SDL_MOUSEWHEEL:
-
-                // scroll up
-                if(ev.wheel()->y > 0)
-                {
-                    // press
-                    int posx, posy;
-                    uint8_t buttons = SDL_GetMouseState(& posx, & posy);
-                    sendPointerEvent(0x08 | buttons, posx, posy);
-                    // release
-                    sendMouseState();
-                }
-                else if(ev.wheel()->y < 0)
-                {
-                    // press
-                    int posx, posy;
-                    uint8_t buttons = SDL_GetMouseState(& posx, & posy);
-                    sendPointerEvent(0x10 | buttons, posx, posy);
-                    // release
-                    sendMouseState();
-                }
-
-                break;
+                return sdlMouseEvent(ev);
 
             case SDL_WINDOWEVENT:
-                if(SDL_WINDOWEVENT_EXPOSED == ev.window()->event)
-                {
-                    window->renderPresent();
-                }
-                else if(SDL_WINDOWEVENT_FOCUS_GAINED == ev.window()->event)
-                {
-                    focusLost = false;
-                }
-                else if(SDL_WINDOWEVENT_FOCUS_LOST == ev.window()->event)
-                {
-                    focusLost = true;
-                }
-                else if(SDL_WINDOWEVENT_SIZE_CHANGED == ev.window()->event)
-                {
-                    Application::info("%s: size changed: [%" PRId32 "x%" PRId32 "]",
-                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
-                }
-                else if(SDL_WINDOWEVENT_RESIZED == ev.window()->event)
-                {
-                    Application::info("%s: event resized: [%" PRId32 "x%" PRId32 "]",
-                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
-//                    Application::debug(DebugType::Sdl, "%s: resized window: [%" PRId32 "x%" PRId32 "]",
-//                            __FUNCTION__, ev.window()->data1, ev.window()->data2);
-                    windowResizedEvent(ev.window()->data1, ev.window()->data2);
-                }
-
-                break;
+                return sdlWindowEvent(ev);
 
             case SDL_KEYDOWN:
-                Application::debug(DebugType::App, "%s: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32, __FUNCTION__, ev.key()->keysym.scancode, ev.key()->keysym.sym);
-
-                // ctrl + F10 -> fast close
-                if(ev.key()->keysym.sym == SDLK_F10 &&
-                        (KMOD_CTRL & SDL_GetModState()))
-                {
-                    exitEvent();
-                    return true;
-                }
-
-                // ctrl + F11 -> fullscreen toggle
-                if(ev.key()->keysym.sym == SDLK_F11 &&
-                        (KMOD_CTRL & SDL_GetModState()))
-                {
-                    if(windowFullScreen())
-                    {
-                        SDL_SetWindowFullscreen(window->get(), 0);
-                        windowFlags &= ~SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    }
-                    else
-                    {
-                        SDL_SetWindowFullscreen(window->get(), SDL_WINDOW_FULLSCREEN);
-                        windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-                    }
-
-                    return true;
-                }
-
-                // key press delay 200 ms
-                if(std::chrono::steady_clock::now() - keyPress < 200ms)
-                {
-                    keyPress = std::chrono::steady_clock::now();
-                    break;
-                }
-
-            // continue
             case SDL_KEYUP:
-                if(ev.key()->keysym.sym == 0x40000000 && ! capslockEnable)
-                {
-                    auto mod = SDL_GetModState();
-                    SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
-                    Application::notice("%s: CAPS reset", __FUNCTION__);
-                    return true;
-                }
-                else
-                {
-#ifdef __UNIX__
-                    int xksym = SDL::Window::convertScanCodeToKeySym(ev.key()->keysym.scancode);
-
-                    if(xksym == 0)
-                    {
-                        xksym = ev.key()->keysym.sym;
-                    }
-
-                    if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)); extXkb && useXkb)
-                    {
-                        int group = extXkb->getLayoutGroup();
-                        auto keycodeGroup = keysymToKeycodeGroup(xksym);
-
-                        if(group != keycodeGroup.second)
-                        {
-                            xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
-                        }
-                    }
-#else
-                    int xksym = ev.key()->keysym.sym;
-#endif
-                    sendKeyEvent(ev.type() == SDL_KEYDOWN, xksym);
-                }
-
-                break;
+                return sdlKeyboardEvent(ev);
 
             case SDL_DROPFILE:
-            {
-                std::unique_ptr<char, void(*)(void*)> drop{ ev.drop()->file, SDL_free };
-                dropFiles.emplace_front(drop.get());
-                dropStart = std::chrono::steady_clock::now();
-            }
-            break;
+                return sdlDropFileEvent(ev);
 
             case SDL_USEREVENT:
-            {
-                // resize event
-                if(ev.user()->code == LocalEvent::Resize ||
-                        ev.user()->code == LocalEvent::ResizeCont)
-                {
-                    auto width = (size_t) ev.user()->data1;
-                    auto height = (size_t) ev.user()->data2;
-                    bool contUpdateResume = ev.user()->code == LocalEvent::ResizeCont;
-                    cursors.clear();
-
-                    if(windowFullScreen())
-                    {
-                        window.reset(new SDL::Window(windowTitle, width, height, 0, 0, windowFlags, windowAccel));
-                    }
-                    else
-                    {
-                        window->resize(width, height);
-                    }
-
-                    auto pair = window->geometry();
-                    windowSize = XCB::Size(pair.first, pair.second);
-                    displayResizeEvent(windowSize);
-                    // full update
-                    sendFrameBufferUpdate(false);
-
-                    if(contUpdateResume)
-                    {
-                        sendContinuousUpdates(true, {0, 0, windowSize.width, windowSize.height});
-                    }
-                }
-            }
-            break;
+                return sdlUserEvent(ev);
 
             case SDL_QUIT:
-                exitEvent();
-                return true;
+                return sdlQuitEvent();
         }
 
         return false;

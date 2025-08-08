@@ -526,7 +526,7 @@ namespace LTSM
         encodings.push_front(ENCODING_EXT_DESKTOP_SIZE);
         encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
 
-        if(ltsmSupported())
+        if(clientLtsmSupported())
         {
             encodings.push_front(ENCODING_LTSM);
         }
@@ -599,26 +599,25 @@ namespace LTSM
 
             if(msgType == PROTOCOL_LTSM)
             {
-                if(serverLtsmSupported)
-                {
-                    try
-                    {
-                        recvLtsmProto(*this);
-                    }
-                    catch(const std::runtime_error & err)
-                    {
-                        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-                        rfbMessagesShutdown();
-                    }
-                    catch(const std::exception & err)
-                    {
-                        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-                    }
-                }
-                else
+                if(0 == serverLtsmVersion)
                 {
                     Application::error("%s: server not supported: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
                     rfbMessagesShutdown();
+                    continue;
+                }
+
+                try
+                {
+                    recvLtsmProto(*this);
+                }
+                catch(const std::runtime_error & err)
+                {
+                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+                    rfbMessagesShutdown();
+                }
+                catch(const std::exception & err)
+                {
+                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
                 }
 
                 continue;
@@ -1124,19 +1123,13 @@ namespace LTSM
             clientRecvLtsmHandshakeEvent(flags);
         }
         else
-        if(type == 1)
         {
+            // type: LTSM version
+            serverLtsmVersion = type;
             auto len = recvIntBE32();
             auto buf = recvData(len);
             clientRecvLtsmDataEvent(buf);
         }
-        else
-        {
-            Application::error("%s: unknown type: %" PRIu32, __FUNCTION__, type);
-            throw rfb_error(NS_FuncName);
-        }
-
-        serverLtsmSupported = true;
     }
 
     void RFB::ClientDecoder::sendLtsmChannelData(uint8_t channel, const uint8_t* buf, size_t len)

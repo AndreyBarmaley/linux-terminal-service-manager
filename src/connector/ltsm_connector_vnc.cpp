@@ -28,6 +28,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_connector_vnc.h"
 #include "ltsm_xcb_wrapper.h"
+#include "ltsm_sdl_wrapper.h"
 #include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
@@ -462,6 +463,7 @@ namespace LTSM
         if(auto opts = jo.getObject("options"))
         {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
+            ltsmClientVersion = opts->getBoolean("ltsm:client", 0);
             x11NoDamage = opts->getBoolean("x11:nodamage", x11NoDamage);
             frameRate = opts->getInteger("frame:rate", frameRate);
 
@@ -471,6 +473,37 @@ namespace LTSM
             {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
             }
+        }
+    }
+
+    void Connector::VNC::systemKeyboardEvent(const JsonObject & jo)
+    {
+        // event supported
+        if(20250808 > ltsmClientVersion)
+            return;
+
+        if(xcbAllowMessages())
+        {
+            auto pressed = jo.getBoolean("pressed");
+            auto scancode = jo.getInteger("scancode");
+            auto keycode = jo.getInteger("keycode");
+
+            auto xksym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
+
+            if(xksym == 0)
+                xksym = keycode;
+
+            if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB)))
+            {
+                int group = xkb->getLayoutGroup();
+                auto keycodeGroup = keysymToKeycodeGroup(xksym);
+
+                if(group != keycodeGroup.second)
+                {
+                    xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
+                }
+            }
+            serverRecvKeyEvent(pressed, xksym);
         }
     }
 

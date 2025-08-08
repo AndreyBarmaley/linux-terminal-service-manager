@@ -100,7 +100,7 @@ if(LTSM_BUILD_SERVER)
         project(LTSM_connector)
         set(CUR_TARGET LTSM_connector)
 
-        CommonDefaults(SDBUS JSON SYSTEMD ENCODER)
+        CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER)
 
         set(LTSM_CONNECTOR_GSSAPI_AUTH ON CACHE BOOL "connector: kerberos auth")
         set(LTSM_CONNECTOR_GNUTLS_SUPPORT ON CACHE BOOL "connector: tls support")

@@ -42,7 +42,7 @@
  #include "librfb_winclient.h"
 #endif
 
-#define LTSM_VNC2SDL_VERSION 20250509
+#define LTSM_VNC2SDL_VERSION 20250807
 
 namespace LTSM
 {
@@ -124,8 +124,14 @@ namespace LTSM
         bool sdlEventProcessing(void);
         bool pushEventWindowResize(const XCB::Size &);
         int startSocket(std::string_view host, int port) const;
-        void sendMouseState(void);
-        void exitEvent(void);
+
+        bool sdlMouseEvent(const SDL::GenericEvent &);
+        bool sdlKeyboardEvent(const SDL::GenericEvent &);
+        bool sdlWindowEvent(const SDL::GenericEvent &);
+        bool sdlDropFileEvent(const SDL::GenericEvent &);
+        bool sdlUserEvent(const SDL::GenericEvent &);
+        bool sdlQuitEvent(void);
+
         void windowResizedEvent(int, int);
 
         json_plain clientOptions(void) const;
@@ -156,7 +162,7 @@ namespace LTSM
         const char* pkcs11Library(void) const override;
         bool createChannelAllow(const Channel::ConnectorType &, const std::string &,
                                 const Channel::ConnectorMode &) const override;
-        bool ltsmSupported(void) const override
+        bool clientLtsmSupported(void) const override
         {
             return ltsmSupport;
         }

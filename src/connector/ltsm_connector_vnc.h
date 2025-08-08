@@ -53,8 +53,7 @@ namespace LTSM
             std::list<std::pair<std::string, size_t>> transfer;
             std::mutex lockTransfer;
 
-            std::chrono::time_point<std::chrono::steady_clock>
-            idleSession;
+            std::chrono::time_point<std::chrono::steady_clock> idleSession;
             size_t idleTimeoutSec = 0;
 
             std::atomic<size_t> frameRate{16};
@@ -62,6 +61,7 @@ namespace LTSM
             std::atomic<bool> userSession{false};
             std::atomic<bool> x11NoDamage{false};
             uid_t shmUid = 0;
+            int ltsmClientVersion = 0;
 
         protected:
             // rfb server encoding
@@ -120,6 +120,7 @@ namespace LTSM
             void systemTransferFiles(const JsonObject &) override;
             void systemClientVariables(const JsonObject &) override;
             void systemKeyboardChange(const JsonObject &) override;
+            void systemKeyboardEvent(const JsonObject &) override;
 
         public:
             VNC(const JsonObject & jo) : SignalProxy(jo, "vnc") {}

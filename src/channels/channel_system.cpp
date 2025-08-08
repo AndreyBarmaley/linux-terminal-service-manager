@@ -638,6 +638,17 @@ void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, con
     sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
 }
 
+void LTSM::ChannelClient::sendSystemKeyboardEvent(bool pressed, int scancode, int keycode)
+{
+    JsonObjectStream jo;
+    jo.push("cmd", SystemCommand::KeyboardEvent);
+    jo.push("pressed", pressed);
+    jo.push("scancode", scancode);
+    jo.push("keycode", keycode);
+
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
+}
+
 void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string> & names, int group)
 {
     if(0 <= group && group < names.size())

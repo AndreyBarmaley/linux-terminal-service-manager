@@ -943,7 +943,8 @@ namespace LTSM
     void RFB::ServerEncoder::recvPointer(void)
     {
         // RFB: 6.4.5
-        uint8_t buttons = recvInt8(); // button1 0x01, button2 0x02, button3 0x04
+        // left 0x01, middle 0x02, right 0x04, scrollUp: 0x08, scrollDn: 0x10, scrollLf: 0x20, scrollRt: 0x40, back: 0x80
+        uint8_t buttons = recvInt8();
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
         Application::debug(DebugType::Rfb, "%s: mask: 0x%02" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
@@ -1475,7 +1476,7 @@ namespace LTSM
         sendIntBE16(0);
         sendIntBE32(ENCODING_LTSM);
         // raw data
-        sendIntBE32(1);
+        sendIntBE32(LTSM::service_version);
         sendIntBE32(len);
         sendRaw(ptr, len);
         sendFlush();

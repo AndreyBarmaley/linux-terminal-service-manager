@@ -69,6 +69,7 @@ namespace LTSM
         static const std::string_view ClientVariables{"ClientVariables"};
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
+        static const std::string_view KeyboardEvent{"KeyboardEvent"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
@@ -567,8 +568,8 @@ namespace LTSM
         virtual bool isUserSession(void) const { return false; }
 
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }
-
         virtual void systemKeyboardChange(const JsonObject &) { /* empty */ }
+        virtual void systemKeyboardEvent(const JsonObject &) { /* empty */ }
 
         void systemChannelOpen(const JsonObject &);
         void systemChannelListen(const JsonObject &) { /* empty */ }
@@ -610,6 +611,7 @@ namespace LTSM
         void sendLtsmChannelData(uint8_t channel, std::string_view);
         void sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> &);
 
+        void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);
         bool sendSystemTransferFiles(std::forward_list<std::string>);
