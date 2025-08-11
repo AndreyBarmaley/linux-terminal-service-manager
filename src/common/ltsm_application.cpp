@@ -184,7 +184,9 @@ namespace LTSM
 
     Application::Application(std::string_view sid)
     {
-        std::setlocale(LC_ALL, "en_US.utf8");
+        std::setlocale(LC_ALL, "ru_RU.utf8");
+        std::setlocale(LC_NUMERIC, "C");
+
         ident.assign(sid.begin(), sid.end());
     }
 

@@ -39,7 +39,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define LTSM_JSON_WRAPPER 20240916
+#define LTSM_JSON_WRAPPER 20250811
 
 namespace LTSM
 {
@@ -511,10 +511,13 @@ namespace LTSM
         std::string_view stringToken(const JsmnToken &) const;
         jsmntok_t* toJsmnTok(void);
 
-        std::pair<JsonValuePtr, int> getValueArray(const const_iterator &, JsonContainer* cont) const;
-        std::pair<JsonValuePtr, int> getValueObject(const const_iterator &, JsonContainer* cont) const;
-        std::pair<JsonValuePtr, int> getValuePrimitive(const const_iterator &, JsonContainer* cont) const;
-        std::pair<JsonValuePtr, int> getValueFromIter(const const_iterator &, JsonContainer* cont) const;
+        int pushValuesToArray(const const_iterator &, JsonArray &) const;
+        int pushValuesToObject(const const_iterator &, JsonObject &) const;
+
+        std::pair<JsonValuePtr, int> getValueArray(const const_iterator &) const;
+        std::pair<JsonValuePtr, int> getValueObject(const const_iterator &) const;
+        std::pair<JsonValuePtr, int> getValuePrimitive(const const_iterator &) const;
+        std::pair<JsonValuePtr, int> getValueFromIter(const const_iterator &) const;
 
     public:
         JsonContent() = default;

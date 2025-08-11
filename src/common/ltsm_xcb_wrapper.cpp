@@ -225,7 +225,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "XFIXES");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "XFIXES");
             throw xcb_error(NS_FuncName);
         }
 
@@ -239,7 +239,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "XFIXES", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "%s: extension version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
 
@@ -446,7 +447,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "DAMAGE");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "DAMAGE");
             throw xcb_error(NS_FuncName);
         }
 
@@ -460,7 +461,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "DAMAGE", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "%s: extension version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
 
@@ -558,7 +560,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "XTEST");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "XTEST");
             throw xcb_error(NS_FuncName);
         }
 
@@ -572,7 +574,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "TEST", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "%s: extension, version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->major_version, reply->minor_version);
         }
 
         std::fill(keycodes.begin(), keycodes.end(), NULL_KEYCODE);
@@ -690,7 +693,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "RANDR");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "RANDR");
             throw xcb_error(NS_FuncName);
         }
 
@@ -704,7 +707,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "RANDR", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "%s: extension version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->major_version, reply->minor_version);
         }
         
         // create randr notify
@@ -1463,7 +1467,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "SHM");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "SHM");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1477,7 +1481,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "SHM", reply->major_version, reply->minor_version);
+            Application::debug(DebugType::Xcb, "%s: extension version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
 
@@ -1586,7 +1591,7 @@ namespace LTSM
 
         if(! ext || ! ext->present)
         {
-            Application::error("extension not found: %s", "XKB");
+            Application::error("%s: extension not found: %s", __FUNCTION__, "XKB");
             throw xcb_error(NS_FuncName);
         }
 
@@ -1600,7 +1605,8 @@ namespace LTSM
 
         if(const auto & reply = xcbReply.reply())
         {
-            Application::debug(DebugType::Xcb, "used %s extension, version: %" PRIu32 ".%" PRIu32, "XKB", reply->serverMajor, reply->serverMinor);
+            Application::debug(DebugType::Xcb, "%s: extension version: %" PRIu32 ".%" PRIu32,
+                __FUNCTION__, reply->serverMajor, reply->serverMinor);
         }
 
         devid = xkb_x11_get_core_keyboard_device_id(ptr.get());

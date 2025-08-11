@@ -34,6 +34,11 @@
 
 namespace LTSM
 {
+    struct json_error : public std::runtime_error
+    {
+        explicit json_error(std::string_view what) : std::runtime_error(what.data()) {}
+    };
+
     JsmnToken::JsmnToken()
     {
         jsmntok_t::type = JSMN_PRIMITIVE;
@@ -1140,44 +1145,42 @@ namespace LTSM
         return isValid() && front().isObject();
     }
 
-    std::pair<JsonValuePtr, int>
-    JsonContent::getValueArray(const const_iterator & it, JsonContainer* cont) const
+    int JsonContent::pushValuesToArray(const const_iterator & it, JsonArray & arr) const
     {
         int counts = (*it).counts();
         int skip = 1;
         auto itval = Tools::nextToEnd(it, skip, end());
-        JsonArray* arr = cont ? static_cast<JsonArray*>(cont) : new JsonArray();
 
         while(counts-- && itval != end())
         {
-            auto [ptr, count] = getValueFromIter(itval, nullptr);
+            auto [ptr, count] = getValueFromIter(itval);
 
             if(ptr)
             {
-                arr->content.emplace_back(std::move(ptr));
+                arr.content.emplace_back(std::move(ptr));
             }
 
             skip += count;
             itval = Tools::nextToEnd(it, skip, end());
         }
-
-        // reset reference
-        if(cont)
-        {
-            arr = nullptr;
-        }
-
-        return std::make_pair(JsonValuePtr(arr), skip);
+        
+        return skip;
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValueObject(const const_iterator & it, JsonContainer* cont) const
+    JsonContent::getValueArray(const const_iterator & it) const
+    {
+        JsonArray* arr = new JsonArray();
+        int skip = pushValuesToArray(it, *arr);
+        return std::make_pair(JsonValuePtr(arr), skip);
+    }
+
+    int JsonContent::pushValuesToObject(const const_iterator & it, JsonObject & obj) const
     {
         int counts = (*it).counts();
         int skip = 1;
         auto itkey = Tools::nextToEnd(it, skip, end());
         auto itval = Tools::nextToEnd(itkey, 1, end());
-        JsonObject* obj = cont ? static_cast<JsonObject*>(cont) : new JsonObject();
 
         while(counts-- && itval != end())
         {
@@ -1188,19 +1191,19 @@ namespace LTSM
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
-            auto [ptr, count] = getValueFromIter(itval, nullptr);
+            auto [ptr, count] = getValueFromIter(itval);
 
             if(ptr)
             {
-                auto it = obj->content.find(key);
+                auto it = obj.content.find(key);
 
-                if(it != obj->content.end())
+                if(it != obj.content.end())
                 {
                     (*it).second = std::move(ptr);
                 }
                 else
                 {
-                    obj->content.emplace(key, std::move(ptr));
+                    obj.content.emplace(key, std::move(ptr));
                 }
             }
 
@@ -1209,19 +1212,20 @@ namespace LTSM
             itval = Tools::nextToEnd(itkey, 1, end());
         }
 
-        // reset reference
-        if(cont)
-        {
-            obj = nullptr;
-        }
+        return skip;
+    }
 
+    std::pair<JsonValuePtr, int>
+    JsonContent::getValueObject(const const_iterator & it) const
+    {
+        JsonObject* obj = new JsonObject();
+        int skip = pushValuesToObject(it, *obj);
         return std::make_pair(JsonValuePtr(obj), skip);
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValuePrimitive(const const_iterator & it, JsonContainer* cont) const
+    JsonContent::getValuePrimitive(const const_iterator & it) const
     {
-        //auto val = std::string(stringToken(*it));
         auto val = stringToken(*it);
 
         if(! (*it).isValue())
@@ -1261,23 +1265,23 @@ namespace LTSM
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValueFromIter(const const_iterator & it, JsonContainer* cont) const
+    JsonContent::getValueFromIter(const const_iterator & it) const
     {
         const JsmnToken & tok = *it;
 
         if(tok.isArray())
         {
-            return getValueArray(it, cont);
+            return getValueArray(it);
         }
 
         if(tok.isObject())
         {
-            return getValueObject(it, cont);
+            return getValueObject(it);
         }
 
         if(tok.isPrimitive())
         {
-            return getValuePrimitive(it, cont);
+            return getValuePrimitive(it);
         }
 
         auto val = stringToken(tok);
@@ -1292,24 +1296,28 @@ namespace LTSM
 
     JsonObject JsonContent::toObject(void) const
     {
-        JsonObject res;
-
-        if(isObject())
+        if(! isObject())
         {
-            getValueFromIter(begin(), & res);
+            Application::error("%s: not json object", __FUNCTION__);
+            throw json_error(NS_FuncName);
         }
+
+        JsonObject res;
+        pushValuesToObject(begin(), res);
 
         return res;
     }
 
     JsonArray JsonContent::toArray(void) const
     {
-        JsonArray res;
-
-        if(isArray())
+        if(! isArray())
         {
-            getValueFromIter(begin(), & res);
+            Application::error("%s: not json array", __FUNCTION__);
+            throw json_error(NS_FuncName);
         }
+
+        JsonArray res;
+        pushValuesToArray(begin(), res);
 
         return res;
     }
