@@ -19,6 +19,10 @@ target_sources(${CUR_TARGET} PRIVATE
     ltsm_framebuffer.cpp
     ltsm_xcb_types.cpp)
 
+if(LTSM_CENTOS7)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_CENTOS7)
+endif()
+
 if(LTSM_WITH_FB_PARALLELS)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_FB_PARALLELS)
 endif()

@@ -504,6 +504,7 @@ namespace LTSM
                 }
             }
             serverRecvKeyEvent(pressed, xksym);
+            X11Server::serverScreenUpdateRequest();
         }
     }
 

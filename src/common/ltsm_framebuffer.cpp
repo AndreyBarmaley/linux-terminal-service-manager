@@ -25,8 +25,11 @@
 #include <thread>
 #include <future>
 #include <algorithm>
-#include <execution>
 #include <exception>
+
+#if not defined(__APPLE__) && not defined(LTSM_CENTOS7)
+#include <execution>
+#endif
 
 #include "ltsm_tools.h"
 #include "ltsm_font_psf.h"
@@ -186,7 +189,7 @@ namespace LTSM
 
     int PixelMapPalette::findColorIndex(const uint32_t & col) const
     {
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(LTSM_CENTOS7)
         auto it = std::find_if(cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
 #else
         auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
@@ -196,7 +199,7 @@ namespace LTSM
 
     int PixelMapWeight::maxWeightPixel(void) const
     {
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(LTSM_CENTOS7)
         auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2)
         {
             return p1.second < p2.second;

@@ -925,13 +925,16 @@ namespace LTSM
                     if(0 == we->y)
                         return false;
 
-                    auto state = SDL_GetMouseState(nullptr, nullptr);
+                    int mouseX, mouseY;
+                    auto state = SDL_GetMouseState(& mouseX, & mouseY);
 
                     Application::info("%s: state - 0x%08" PRIx32 "", __FUNCTION__, state);
 
                     // press/release up/down
-                    sendPointerEvent(0 < we->y ? SDL_BUTTON_X1MASK : SDL_BUTTON_X2MASK, we->mouseX, we->mouseY);
-                    sendPointerEvent(0, we->mouseX, we->mouseY);
+                    sendPointerEvent(0 < we->y ? SDL_BUTTON_X1MASK : SDL_BUTTON_X2MASK, mouseX, mouseY);
+
+                    SDL_GetMouseState(& mouseX, & mouseY);
+                    sendPointerEvent(0, mouseX, mouseY);
                     return true;
                 }
             default:
