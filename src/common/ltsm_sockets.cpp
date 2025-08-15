@@ -184,18 +184,19 @@ namespace LTSM
     {
         if(showStatistic)
         {
-            auto dt = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tp);
-
-            if(bytesIn)
+            if(auto dt = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tp); dt.count())
             {
-                auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
-                Application::info("%s: recv %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
-            }
+                if(bytesIn)
+                {
+                    auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
+                    Application::info("%s: recv %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
+                }
 
-            if(bytesOut)
-            {
-                auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
-                Application::info("%s: send %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+                if(bytesOut)
+                {
+                    auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
+                    Application::info("%s: send %lu bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+                }
             }
         }
     }

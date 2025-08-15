@@ -504,15 +504,44 @@ namespace LTSM
         rfbMessages = false;
     }
 
-    std::list<int> RFB::ClientDecoder::supportedEncodings(void) const
+    std::list<int> RFB::ClientDecoder::supportedEncodings(bool extclip)
     {
-        std::list<int> encodings = {
+       std::list<int> encodings = {
+            // first preffered
+#ifdef LTSM_DECODING
+ #ifdef LTSM_DECODING_QOI
+            ENCODING_LTSM_QOI,
+ #endif
+ #ifdef LTSM_DECODING_LZ4
+            ENCODING_LTSM_LZ4,
+ #endif
+ #ifdef LTSM_DECODING_TJPG
+            ENCODING_LTSM_TJPG,
+ #endif
+#endif
+#ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
+            ENCODING_FFMPEG_H264,
+ #endif
+ #ifdef LTSM_DECODING_AV1
+            ENCODING_FFMPEG_AV1,
+ #endif
+ #ifdef LTSM_DECODING_VP8
+            ENCODING_FFMPEG_VP8,
+ #endif
+#endif
+            ENCODING_LTSM_CURSOR,
+
+            // compatible RFB encodings
             ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
-            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
+            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE
         };
 
-        encodings.splice( encodings.begin(), clientSupportedEncodings() );
-        encodings.insert( encodings.end(), ENCODING_RAW );
+        if(extclip)
+            encodings.push_back(ENCODING_EXT_CLIPBOARD);
+
+        // last
+        encodings.push_back(ENCODING_RAW);
 
         return encodings;
     }
@@ -889,6 +918,8 @@ namespace LTSM
                     throw rfb_error(NS_FuncName);
                 }
             }
+            
+            decoderInitEvent(decoder.get());
         }
 
         decoder->updateRegion(*this, reg);

@@ -50,8 +50,8 @@ namespace LTSM
             virtual void setPixel(const XCB::Point &, uint32_t pixel) = 0;
             virtual void fillPixel(const XCB::Region &, uint32_t pixel) = 0;
 
-            virtual void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) = 0;
-            virtual void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
+            virtual void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat &) = 0;
+            virtual void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
             virtual std::string clientPrefferedEncoding(void) const
@@ -126,16 +126,16 @@ namespace LTSM
                 owner->fillPixel(rt, pixel);
             }
 
-            void updateRawPixels(const void* data, const XCB::Region & wrt, uint32_t pitch,
+            void updateRawPixels(const XCB::Region & wrt, const void* data, uint32_t pitch,
                                  const PixelFormat & pf) override
             {
-                owner->updateRawPixels(data, wrt, pitch, pf);
+                owner->updateRawPixels(wrt, data, pitch, pf);
             }
 
-            void updateRawPixels2(const void* data, const XCB::Region & wrt, uint8_t depth,
+            void updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth,
                                   uint32_t pitch, uint32_t sdlFormat) override
             {
-                owner->updateRawPixels2(data, wrt, depth, pitch, sdlFormat);
+                owner->updateRawPixels2(wrt, data, depth, pitch, sdlFormat);
             }
 
             XCB::Size clientSize(void) const override

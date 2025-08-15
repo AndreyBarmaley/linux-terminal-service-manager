@@ -1358,9 +1358,9 @@ namespace LTSM
         return res;
     }
 
-    bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file)
+    bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file, bool append)
     {
-        std::ofstream ofs(file, std::ofstream::out | std::ios::binary | std::ofstream::trunc);
+        std::ofstream ofs(file, std::ofstream::out | std::ios::binary | (append ? std::ofstream::app : std::ofstream::trunc));
 
         if(ofs.is_open())
         {

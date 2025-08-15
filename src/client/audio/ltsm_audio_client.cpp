@@ -262,10 +262,13 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
         return false;
     }
 
+    Application::info("%s: audio format: channels: %" PRIu16 ", samples: %" PRIu32 ", bits: %" PRIu16,
+        __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
+
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
     try
     {
-        player = std::make_unique<OpenAL::Playback>(*format, 3 /* buffer sec, and autoplay */);
+        player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
     }
     catch(const std::exception &)
     {
@@ -311,6 +314,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
 
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "%s: data size: %" PRIu32, __FUNCTION__, len);
+
     std::vector<uint8_t> buf(len, 0);
     player->streamWrite(buf.data(), buf.size());
 }
@@ -334,6 +338,11 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
     {
         if(decoder->decode(sb.data(), len))
         {
+            Application::debug(DebugType::Audio, "%s: decode size: %" PRIu32, __FUNCTION__, decoder->size());
+
+            if(auto env = getenv("LTSM_AUDIO_SAVE"))
+                Tools::binaryToFile(decoder->data(), decoder->size(), env, true);
+
             player->streamWrite(decoder->data(), decoder->size());
         }
     }

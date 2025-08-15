@@ -640,7 +640,7 @@ namespace LTSM
 
             if(heightResult == avcctx->height)
             {
-                cli.updateRawPixels(rgb->data[0], XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->linesize[0], pf);
+                cli.updateRawPixels(XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->data[0], rgb->linesize[0], pf);
             }
 
             av_frame_unref(frame.get());

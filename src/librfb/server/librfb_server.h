@@ -138,7 +138,7 @@ namespace LTSM
             bool isUpdateProcessed(void) const;
             void waitUpdateProcess(void);
 
-            bool serverSelectClientEncoding(void);
+            void serverSelectClientEncoding(void);
 
 #ifdef LTSM_WITH_GNUTLS
             bool authVncInit(const std::string &);
@@ -191,6 +191,8 @@ namespace LTSM
             std::pair<std::string, std::string> authInfo(void) const;
 
             virtual int remoteClientVersion(void) const { return 0; }
+
+            virtual void encoderInitEvent(EncodingBase*) { /* empty */ }
 
             // server encoder events
             virtual void serverRecvPixelFormatEvent(const PixelFormat &, bool bigEndian) { /* empty */ }

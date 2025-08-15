@@ -113,7 +113,6 @@ namespace LTSM
         {
             if(rfbHandshake(rfbsec))
             {
-                tp = std::chrono::steady_clock::now();
                 rfbMessagesLoop();
             }
         }
@@ -125,8 +124,17 @@ namespace LTSM
         return 0;
     }
 
+    void Vnc2Image::decoderInitEvent(RFB::DecodingBase* decoder)
+    {
+        decoder->setThreads(1);
+        tp = std::chrono::steady_clock::now();
+    }
+
     void Vnc2Image::clientRecvFBUpdateEvent(void)
     {
+        if(std::chrono::steady_clock::time_point() == tp)
+            return;
+
         if(0 < timeout &&
                 std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
         {
@@ -163,13 +171,22 @@ namespace LTSM
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &)
+    void Vnc2Image::updateRawPixels(const XCB::Region & reg, const void* ptr, uint32_t pitch, const PixelFormat & pf)
     {
-        Application::warning("%s: not implemented", __FUNCTION__);
+        FrameBuffer fb((uint8_t*) ptr, XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
+        fbPtr->blitRegion(fb, fb.region(), reg.topLeft());
+
+/*
+        if(reg.width == 1024)
+        {
+            PNG::save(fb, Tools::joinToString("test_", reg.y, ".png"));
+        }
+*/
     }
 
-    void Vnc2Image::updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
+    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
     {
+        // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
         Application::warning("%s: not implemented", __FUNCTION__);
     }
 

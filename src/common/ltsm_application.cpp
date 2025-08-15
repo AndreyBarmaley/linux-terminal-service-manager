@@ -20,7 +20,10 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
+#include <errno.h>
 #include <unistd.h>
+#include <string.h>
+#include <signal.h>
 
 #include <clocale>
 #include <cstring>
@@ -64,7 +67,7 @@
 namespace LTSM
 {
     // local application
-    FILE* appLoggingFd = nullptr;
+    std::unique_ptr<FILE, int(*)(FILE*)> appLoggingFd{ nullptr, fclose };
     DebugTarget appDebugTarget = DebugTarget::Console;
     DebugLevel appDebugLevel = DebugLevel::Info;
     uint32_t appDebugTypes = DebugType::All;
@@ -98,6 +101,11 @@ namespace LTSM
 
     void Application::setDebugTarget(const DebugTarget & tgt)
     {
+        if(appDebugTarget == DebugTarget::SyslogFile && tgt != DebugTarget::SyslogFile)
+        {
+            appLoggingFd.reset();
+        }
+
 #ifdef __UNIX__
         if(appDebugTarget != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
         {
@@ -135,14 +143,11 @@ namespace LTSM
         {
 #ifdef __WIN32__
             auto tmp = Tools::wstring2string(file.native());
-            appLoggingFd = fopen(tmp.c_str(), "a");
+            appLoggingFd.reset(fopen(tmp.c_str(), "a"));
 #else
-            appLoggingFd = fopen(file.c_str(), "a");
+            appLoggingFd.reset(fopen(file.c_str(), "a"));
 #endif
-            if(! appLoggingFd)
-            {
-                appLoggingFd = stderr;
-            }
+            setDebugTarget(appLoggingFd ? DebugTarget::SyslogFile : DebugTarget::Console);
         }
     }
 
@@ -200,27 +205,33 @@ namespace LTSM
 #endif
     }
 
-    void Application::redirectSyslogFile(const char* file)
+    int Application::forkMode(void)
     {
-#ifdef __UNIX__
+        pid_t pid = fork();
+
+        if(pid < 0)
+        {
+            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+            throw std::runtime_error(NS_FuncName);
+        }
+
+        // parent mode
+        if(0 < pid)
+            return pid;
+
+        // child mode
+        signal(SIGTERM, SIG_DFL);
+        signal(SIGCHLD, SIG_DFL);
+        signal(SIGINT, SIG_IGN);
+        signal(SIGHUP, SIG_IGN);
+        
+        // skip closelog, glibc dead lock
         if(isDebugTarget(DebugTarget::Syslog))
         {
-            closelog();
-
-            if(file)
-            {
-                appLoggingFd = fopen(file, "a");
-
-                if(! appLoggingFd)
-                {
-                    appLoggingFd = stderr;
-                }
-            }
-
-            // child: switch syslog to stderr
-            appDebugTarget = DebugTarget::Console;
+            appDebugTarget = DebugTarget::Quiet;
         }
-#endif
+
+        return pid;
     }
 
     void toPlatformSyslog(int priority, const char* format, va_list args)
@@ -234,7 +245,7 @@ namespace LTSM
         vsyslog(priority, format, args);
  #endif
 #else
-        vfprintf(appLoggingFd, format, args);
+        vfprintf(appLoggingFd ? appLoggingFd.get() : stderr, format, args);
 #endif
     }
 
@@ -245,18 +256,14 @@ namespace LTSM
             va_list args;
             va_start(args, format);
 
-            if(appDebugTarget == DebugTarget::Console)
+            if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
             {
                 const std::scoped_lock guard{ appLoggingLock };
 
-                if(! appLoggingFd)
-                {
-                    appLoggingFd = stderr;
-                }
-
-                fprintf(appLoggingFd, "[info] ");
-                vfprintf(appLoggingFd, format, args);
-                fprintf(appLoggingFd, "\n");
+                FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+                fprintf(fd, "[info] ");
+                vfprintf(fd, format, args);
+                fprintf(fd, "\n");
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
@@ -272,18 +279,14 @@ namespace LTSM
         va_list args;
         va_start(args, format);
 
-        if(appDebugTarget == DebugTarget::Console)
+        if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
         {
             const std::scoped_lock guard{ appLoggingLock };
 
-            if(! appLoggingFd)
-            {
-                appLoggingFd = stderr;
-            }
-
-            fprintf(appLoggingFd, "[notice] ");
-            vfprintf(appLoggingFd, format, args);
-            fprintf(appLoggingFd, "\n");
+            FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+            fprintf(fd, "[notice] ");
+            vfprintf(fd, format, args);
+            fprintf(fd, "\n");
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
@@ -300,19 +303,15 @@ namespace LTSM
             va_list args;
             va_start(args, format);
 
-            if(appDebugTarget == DebugTarget::Console)
+            if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
             {
                 const std::scoped_lock guard{ appLoggingLock };
 
-                if(! appLoggingFd)
-                {
-                    appLoggingFd = stderr;
-                }
-
-                fprintf(appLoggingFd, "[warning] ");
-                vfprintf(appLoggingFd, format, args);
-                fprintf(appLoggingFd, "\n");
-                fflush(appLoggingFd);
+                FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+                fprintf(fd, "[warning] ");
+                vfprintf(fd, format, args);
+                fprintf(fd, "\n");
+                fflush(fd);
             }
             else if(appDebugTarget == DebugTarget::Syslog)
             {
@@ -328,19 +327,15 @@ namespace LTSM
         va_list args;
         va_start(args, format);
 
-        if(appDebugTarget == DebugTarget::Console)
+        if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
         {
             const std::scoped_lock guard{ appLoggingLock };
 
-            if(! appLoggingFd)
-            {
-                appLoggingFd = stderr;
-            }
-
-            fprintf(appLoggingFd, "[error] ");
-            vfprintf(appLoggingFd, format, args);
-            fprintf(appLoggingFd, "\n");
-            fflush(appLoggingFd);
+            FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+            fprintf(fd, "[error] ");
+            vfprintf(fd, format, args);
+            fprintf(fd, "\n");
+            fflush(fd);
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
@@ -352,18 +347,14 @@ namespace LTSM
 
     void Application::vdebug(uint32_t subsys, const char* format, va_list args)
     {
-        if(appDebugTarget == DebugTarget::Console)
+        if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
         {
             const std::scoped_lock guard{ appLoggingLock };
 
-            if(! appLoggingFd)
-            {
-                appLoggingFd = stderr;
-            }
-
-            fprintf(appLoggingFd, "[debug] ");
-            vfprintf(appLoggingFd, format, args);
-            fprintf(appLoggingFd, "\n");
+            FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+            fprintf(fd, "[debug] ");
+            vfprintf(fd, format, args);
+            fprintf(fd, "\n");
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {
@@ -387,18 +378,14 @@ namespace LTSM
 
     void Application::vtrace(uint32_t subsys, const char* format, va_list args)
     {
-        if(appDebugTarget == DebugTarget::Console)
+        if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile)
         {
             const std::scoped_lock guard{ appLoggingLock };
 
-            if(! appLoggingFd)
-            {
-                appLoggingFd = stderr;
-            }
-
-            fprintf(appLoggingFd, "[trace] ");
-            vfprintf(appLoggingFd, format, args);
-            fprintf(appLoggingFd, "\n");
+            FILE* fd = appLoggingFd ? appLoggingFd.get() : stderr;
+            fprintf(fd, "[trace] ");
+            vfprintf(fd, format, args);
+            fprintf(fd, "\n");
         }
         else if(appDebugTarget == DebugTarget::Syslog)
         {

@@ -458,7 +458,7 @@ namespace LTSM
     XvfbSessionPtr XvfbSessions::findDisplaySession(int screen)
     {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::find_if(sessions.begin(), sessions.end(), [ = ](auto & ptr)
+        auto it = std::find_if(sessions.begin(), sessions.end(), [ & screen ](auto & ptr)
         {
             return ptr && ptr->displayNum == screen;
         });
@@ -501,7 +501,7 @@ namespace LTSM
     void XvfbSessions::removeDisplaySession(int screen)
     {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::find_if(sessions.begin(), sessions.end(), [ = ](auto & ptr)
+        auto it = std::find_if(sessions.begin(), sessions.end(), [ & screen ](auto & ptr)
         {
             return ptr && ptr->displayNum == screen;
         });
@@ -840,11 +840,6 @@ namespace LTSM
             signal(SIGINT, SIG_IGN);
             signal(SIGHUP, SIG_IGN);
 
-            if(Application::isDebugTarget(DebugTarget::Syslog))
-            {
-                Application::setDebugTarget(DebugTarget::Quiet);
-            }
-
             Application::info("%s: pid: %d, cmd: `%s %s'", __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params.begin(),
                               params.end(), " ").c_str());
 
@@ -1005,13 +1000,7 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            pid_t pid = fork();
-
-            if(pid < 0)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
-                throw service_error(NS_FuncName);
-            }
+            pid_t pid = Application::forkMode();
 
             if(0 == pid)
             {
@@ -1061,13 +1050,7 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            pid_t pid = fork();
-
-            if(pid < 0)
-            {
-                Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
-                throw service_error(NS_FuncName);
-            }
+            pid_t pid = Application::forkMode();
 
             if(0 == pid)
             {
@@ -1610,27 +1593,17 @@ namespace LTSM
 
         Application::debug(DebugType::Mgr, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), xvfbArgs.c_str());
 
-        sess->pid1 = fork();
-
-        if(0 > sess->pid1)
+        try
         {
-	    Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+            sess->pid1 = Application::forkMode();
+        }
+        catch(const std::exception &)
+        {
 	    return nullptr;
         }
 
         if(0 == sess->pid1)
         {
-            signal(SIGTERM, SIG_DFL);
-            signal(SIGCHLD, SIG_DFL);
-            signal(SIGINT, SIG_IGN);
-            signal(SIGHUP, SIG_IGN);
-
-            // child mode
-            if(Application::isDebugTarget(DebugTarget::Syslog))
-            {
-                Application::setDebugTarget(DebugTarget::Quiet);
-            }
-
             if(switchToUser(*sess->userInfo))
             {
                 // errlog folder
@@ -1699,7 +1672,7 @@ namespace LTSM
             return -1;
         }
 
-        pid_t pid = fork();
+        pid_t pid = Application::forkMode();
 
         if(0 != pid)
         {
@@ -1708,16 +1681,6 @@ namespace LTSM
         }
 
         // child only
-        signal(SIGTERM, SIG_DFL);
-        signal(SIGCHLD, SIG_DFL);
-        signal(SIGINT, SIG_IGN);
-        signal(SIGHUP, SIG_IGN);
-        // child mode
-        if(Application::isDebugTarget(DebugTarget::Syslog))
-        {
-            Application::setDebugTarget(DebugTarget::Quiet);
-        }
-
         Application::info("%s: pid: %d", __FUNCTION__, getpid());
 
         auto childExit = []()
@@ -2863,7 +2826,7 @@ namespace LTSM
                 // shutdown prev connect
                 emitShutdownConnector(userSess->displayNum);
                 // wait session
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [ = ]()
+                Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [ & userSess ]()
                 {
                     return userSess->mode == XvfbMode::SessionSleep;
                 });

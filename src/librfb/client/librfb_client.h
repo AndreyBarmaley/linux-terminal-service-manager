@@ -131,7 +131,7 @@ namespace LTSM
             void sendCutTextEvent(const uint8_t*, uint32_t, bool ext);
             void sendLtsmChannelData(uint8_t channel, const uint8_t*, size_t) override;
 
-            std::list<int> supportedEncodings(void) const;
+            static std::list<int> supportedEncodings(bool extclip = false);
 
             // client decoder events
             virtual void clientRecvLtsmHandshakeEvent(int flags) { /* empty */ }
@@ -159,7 +159,7 @@ namespace LTSM
                 return serverLtsmVersion;
             }
 
-            virtual std::list<int> clientSupportedEncodings(void) const { return { /* empty */ }; }
+            virtual void decoderInitEvent(DecodingBase*) { /* empty */ }
         };
 
         class ClientDecoderSocket : public ClientDecoder

@@ -71,7 +71,7 @@ namespace LTSM
     {
         uint32_t pitch = reg.width * clientFormat().bytePerPixel();
         auto pixels = recvData(static_cast<size_t>(pitch) * reg.height);
-        updateRawPixels(pixels.data(), reg, pitch, serverFormat());
+        updateRawPixels(reg, pixels.data(), pitch, serverFormat());
     }
 
     int RFB::DecoderStream::recvCPixel(void)
@@ -522,7 +522,7 @@ namespace LTSM
 
         uint32_t pitch = reg.width * cli.clientFormat().bytePerPixel();
         auto pixels = zlib->recvData(static_cast<size_t>(pitch) * reg.height);
-        cli.updateRawPixels(pixels.data(), reg, pitch, cli.serverFormat());
+        cli.updateRawPixels(reg, pixels.data(), pitch, cli.serverFormat());
     }
 
 #ifdef LTSM_DECODING
@@ -554,7 +554,7 @@ namespace LTSM
             }
 
             bb.resize(ret);
-            cli->updateRawPixels(bb.data(), reg, pitch, cli->serverFormat());
+            cli->updateRawPixels(reg, bb.data(), pitch, cli->serverFormat());
         };
 
         if(1 < threads)
@@ -625,10 +625,10 @@ namespace LTSM
 #endif
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
-                    cli->updateRawPixels2(jpegData, reg, 32, pitch, SDL_PIXELFORMAT_RGBX8888);
+                    cli->updateRawPixels2(reg, jpegData, 32, pitch, SDL_PIXELFORMAT_RGBX8888);
 #else
 		    // deb10, turbojpeg-1.5.2
-                    cli->updateRawPixels2(jpegData, reg, 32, pitch, SDL_PIXELFORMAT_XBGR8888);
+                    cli->updateRawPixels2(reg, jpegData, 32, pitch, SDL_PIXELFORMAT_XBGR8888);
 #endif
                     tjFree(jpegData);
                 }
@@ -673,13 +673,15 @@ namespace LTSM
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
 
-        auto pitch = cli.clientFormat().bytePerPixel() * reg.width;
+        auto pitch = cli.serverFormat().bytePerPixel() * reg.width;
         auto rawsz = pitch * reg.height;
 
         auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli)
         {
             auto bb = this->decodeBGRx(buf, reg.toSize(), cli->serverFormat(), pitch);
-            cli->updateRawPixels(bb.data(), reg, pitch, cli->serverFormat());
+            assertm(bb.size() == pitch * reg.height, "invalid pitch");
+
+            cli->updateRawPixels(reg, bb.data(), pitch, cli->serverFormat());
         };
 
         if(1 < threads)

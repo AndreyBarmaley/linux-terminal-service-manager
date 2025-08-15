@@ -463,7 +463,10 @@ namespace LTSM
 
     void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos)
     {
-        auto dst = XCB::Region(pos, reg.toSize()).intersected(region());
+        XCB::Region dst;
+
+        if(! XCB::Region::intersection(XCB::Region(pos, reg.toSize()), region(), & dst))
+            return;
 
         auto rowCopy = [&fb, &reg, &dst, this](int row)
         {
@@ -481,11 +484,11 @@ namespace LTSM
             {
                 for(auto & subdst: dst.divideCounts(2, 2))
                 {
-                    jobs.addJob(std::async(std::launch::async, [subdst, &fb, &reg, this]()
+                    jobs.addJob(std::async(std::launch::async, [subdst, off = subdst.topLeft() - dst.topLeft(), &fb, &reg, this]()
                     {
                         for(auto coord = subdst.coordBegin(); coord.isValid(); ++coord)
                         {
-                            setPixel(subdst.topLeft() + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
+                            setPixel(subdst.topLeft() + coord, fb.pixel(reg.topLeft() + off + coord), & fb.pixelFormat());
                         }
                     }));
                 }

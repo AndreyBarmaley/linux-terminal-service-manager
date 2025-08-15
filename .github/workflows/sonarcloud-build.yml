@@ -135,7 +135,7 @@ jobs:
           socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type vnc" &
           sleep 5
           echo "get vnc screenshot"
-          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 3000
+          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
           echo "::endgroup::"
           echo "::group::x11 tests"
           ./LTSM_test_framebuf2

@@ -378,7 +378,7 @@ namespace LTSM
         /// Certificate
         struct CertificateInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_ISSUER, CKA_SERIAL_NUMBER, CKA_VALUE };
+            static constexpr std::initializer_list<CK_ATTRIBUTE_TYPE> types = { CKA_SUBJECT, CKA_ISSUER, CKA_SERIAL_NUMBER, CKA_VALUE };
 
             RawDataRef getRawValue(void) const
             {
@@ -407,7 +407,7 @@ namespace LTSM
         /// PublicKey
         struct PublicKeyInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP, };
+            static constexpr std::initializer_list<CK_ATTRIBUTE_TYPE> types = { CKA_SUBJECT, CKA_ENCRYPT, CKA_VERIFY, CKA_WRAP, };
 
             RawDataRef getSubject(void) const
             {
@@ -436,7 +436,7 @@ namespace LTSM
         /// PrivateKey
         struct PrivateKeyInfo : ObjectInfo
         {
-            inline static const auto types = { CKA_SUBJECT, CKA_DECRYPT, CKA_SIGN, CKA_UNWRAP, CKA_ALWAYS_AUTHENTICATE };
+            static constexpr std::initializer_list<CK_ATTRIBUTE_TYPE> types = { CKA_SUBJECT, CKA_DECRYPT, CKA_SIGN, CKA_UNWRAP, CKA_ALWAYS_AUTHENTICATE };
 
             RawDataRef getSubject(void) const
             {

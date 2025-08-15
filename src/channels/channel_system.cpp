@@ -182,59 +182,59 @@ const char* LTSM::Channel::Connector::speedString(const Speed & speed)
 }
 
 std::pair<LTSM::Channel::ConnectorType, std::string>
-LTSM::Channel::parseUrl(const std::string & url)
+LTSM::Channel::parseUrl(std::string_view url)
 {
     if(0 == url.compare(0, 7, "file://"))
     {
-        return std::make_pair(Channel::ConnectorType::File, url.substr(7));
+        return std::make_pair(Channel::ConnectorType::File, view2string(url.substr(7)));
     }
 
     if(0 == url.compare(0, 7, "unix://"))
     {
-        return std::make_pair(Channel::ConnectorType::Unix, url.substr(7));
+        return std::make_pair(Channel::ConnectorType::Unix, view2string(url.substr(7)));
     }
 
     if(0 == url.compare(0, 7, "sock://"))
     {
-        return std::make_pair(Channel::ConnectorType::Socket, url.substr(7));
+        return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(7)));
     }
 
     if(0 == url.compare(0, 9, "socket://"))
     {
-        return std::make_pair(Channel::ConnectorType::Socket, url.substr(9));
+        return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(9)));
     }
 
     if(0 == url.compare(0, 6, "cmd://"))
     {
-        return std::make_pair(Channel::ConnectorType::Command, url.substr(6));
+        return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(6)));
     }
 
     if(0 == url.compare(0, 10, "command://"))
     {
-        return std::make_pair(Channel::ConnectorType::Command, url.substr(10));
+        return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(10)));
     }
 
     if(0 == url.compare(0, 7, "fuse://"))
     {
-        return std::make_pair(Channel::ConnectorType::Fuse, url.substr(7));
+        return std::make_pair(Channel::ConnectorType::Fuse, view2string(url.substr(7)));
     }
 
     if(0 == url.compare(0, 8, "audio://"))
     {
-        return std::make_pair(Channel::ConnectorType::Audio, url.substr(8));
+        return std::make_pair(Channel::ConnectorType::Audio, view2string(url.substr(8)));
     }
 
     if(0 == url.compare(0, 7, "pcsc://"))
     {
-        return std::make_pair(Channel::ConnectorType::Pcsc, url.substr(7));
+        return std::make_pair(Channel::ConnectorType::Pcsc, view2string(url.substr(7)));
     }
 
     if(0 == url.compare(0, 9, "pkcs11://"))
     {
-        return std::make_pair(Channel::ConnectorType::Pkcs11, url.substr(9));
+        return std::make_pair(Channel::ConnectorType::Pkcs11, view2string(url.substr(9)));
     }
 
-    return std::make_pair(Channel::ConnectorType::Unknown, url);
+    return std::make_pair(Channel::ConnectorType::Unknown, view2string(url));
 }
 
 std::pair<std::string, int>

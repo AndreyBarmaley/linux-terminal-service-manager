@@ -26,6 +26,8 @@
 
 #include <memory>
 
+#include "ltsm_audio.h"
+
 #ifdef __APPLE__
  #include <OpenAL/al.h>
  #include <OpenAL/alc.h>
@@ -46,7 +48,7 @@ namespace LTSM
             std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, alcDestroyContext };
 
             ALuint sourceId = 0;
-            mutable ALuint playAfterBytes = 0;
+            mutable ALuint playAfterBytes = 65536;
 
             ALenum fmtFormat = 0;
             ALsizei fmtFrequency = 0;

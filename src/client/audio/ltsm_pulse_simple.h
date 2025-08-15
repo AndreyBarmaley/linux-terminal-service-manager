@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "pulse/simple.h"
+#include "ltsm_audio.h"
 
 namespace LTSM
 {

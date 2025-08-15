@@ -32,7 +32,6 @@
 
 #include <chrono>
 #include <thread>
-#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -51,9 +50,15 @@ namespace LTSM
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto krb5def = "TERMSRV@remotehost.name";
     const auto windowTitle = "LTSM_client";
+#ifdef __WIN32__
+    const auto usercfgdef = "$LOCALAPPDATA\\ltsm\\client.cfg";
+#else
+    const auto usercfgdef = "$HOME/.config/ltsm/client.cfg";
+#endif
 
-    void printHelp(const char* prog, const std::list<int> & encodings)
+    void printHelp(const char* prog)
     {
+        auto encodings = RFB::ClientDecoder::supportedEncodings();
         std::cout << std::endl <<
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
@@ -176,7 +181,10 @@ namespace LTSM
 #ifdef LTSM_PKCS11_AUTH
                   "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
 #endif
-                  std::endl;
+                  " ] (audio support)" << std::endl <<
+                  "    --load <path> (external params from config)" << std::endl <<
+                  "    --save [" << usercfgdef << "](save params to local config)" << std::endl;
+
         std::cout << std::endl << "supported encodings: " << std::endl <<
                   "    ";
 
@@ -196,45 +204,46 @@ namespace LTSM
                 std::cout << "    " << opts << std::endl;
             }
         }
+
+        std::cout << std::endl << "load priority: " << std::endl <<
+#ifndef __WIN32__
+                "     - /etc/ltsm/client.cfg" << std::endl <<
+#endif
+                "     - " << usercfgdef << std::endl <<
+                "     - set --param1 --param2" << std::endl <<
+                "     - load from ext config --load <path>" << std::endl;
+
+        std::cout << std::endl << "save example: " << std::endl <<
+                "     " << prog << " --host 172.17.0.2 --nocaps --geometry 1280x1024 --save" << std::endl;
+
         std::cout << std::endl;
     }
 
-    std::list<int> Vnc2SDL::clientSupportedEncodings(void) const
+    template<typename Iter>
+    void saveConfig(Iter beg, Iter end, std::filesystem::path file)
     {
-        std::list<int> encodings = { 
-            // first preffered
-#ifdef LTSM_DECODING
- #ifdef LTSM_DECODING_QOI
-            RFB::ENCODING_LTSM_QOI,
- #endif
- #ifdef LTSM_DECODING_LZ4
-            RFB::ENCODING_LTSM_LZ4,
- #endif
- #ifdef LTSM_DECODING_TJPG
-            RFB::ENCODING_LTSM_TJPG,
- #endif
-#endif
-#ifdef LTSM_DECODING_FFMPEG
- #ifdef LTSM_DECODING_H264
-            RFB::ENCODING_FFMPEG_H264,
- #endif
- #ifdef LTSM_DECODING_AV1
-            RFB::ENCODING_FFMPEG_AV1,
- #endif
- #ifdef LTSM_DECODING_VP8
-            RFB::ENCODING_FFMPEG_VP8,
- #endif
-#endif
-        };
+        if(! std::filesystem::is_directory(file.parent_path()))
+            std::filesystem::create_directories(file.parent_path());
 
-        encodings.push_back(RFB::ENCODING_LTSM_CURSOR);
+        std::ofstream ofs(file, std::ofstream::out | std::ofstream::trunc);
 
-        if(extClipboardLocalCaps())
+        if(ofs)
         {
-            encodings.push_back( RFB::ENCODING_EXT_CLIPBOARD );
-        }
+            for(auto it = beg; it != end; ++it)
+            {
+                ofs << *it;
 
-        return encodings;
+                if(auto val = std::next(it); val != end && ! std::string_view(*val).starts_with("--"))
+                {
+                    ofs << " " << *val;
+                    it = val;
+                }
+
+                ofs << std::endl;
+            }
+
+            std::cout << "save success, to file: " << file << std::endl;
+        }
     }
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
@@ -248,376 +257,36 @@ namespace LTSM
         rfbsec.authVenCrypt = false;
 #endif
 
-        if(2 > argc)
+        auto argBeg = argv + 1;
+        auto argEnd = argv + argc;
+
+#ifdef __WIN32__
+        if(auto home = getenv("LOCALAPPDATA"))
+            loadConfig(Tools::replace(usercfgdef, "$LOCALAPPDATA", home));
+#else
+        loadConfig(std::filesystem::path("/etc") / "ltsm" / "client.cfg");
+
+        if(auto home = getenv("HOME"))
+            loadConfig(Tools::replace(usercfgdef, "$HOME", home));
+#endif
+
+        for(auto it = argBeg; it != argEnd; ++it)
         {
-            printHelp(argv[0], supportedEncodings());
-            throw 0;
-        }
-
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
+            if(auto val = std::next(it); val != argEnd && ! std::string_view(*val).starts_with("--"))
             {
-                printHelp(argv[0], supportedEncodings());
-                throw 0;
+                parseCommand(*it, *val);
+                it = val;
             }
-        }
-
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--nocaps"))
-            {
-                capslockEnable = false;
-            }
-            else if(0 == std::strcmp(argv[it], "--noltsm"))
-            {
-                ltsmSupport = false;
-            }
-            else if(0 == std::strcmp(argv[it], "--noaccel"))
-            {
-                windowAccel = false;
-            }
-#ifdef LTSM_WITH_GNUTLS
-            else if(0 == std::strcmp(argv[it], "--notls"))
-            {
-                rfbsec.authVenCrypt = false;
-            }
-#endif
-            else if(0 == std::strcmp(argv[it], "--noxkb"))
-            {
-                useXkb = false;
-            }
-            else if(0 == std::strcmp(argv[it], "--loop"))
-            {
-                alwaysRunning = true;
-            }
-            else if(0 == std::strcmp(argv[it], "--fullscreen"))
-            {
-                windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-            }
-            else if(0 == std::strcmp(argv[it], "--fixed"))
-            {
-                windowFlags &= ~SDL_WINDOW_RESIZABLE;
-            }
-            else if(0 == std::strcmp(argv[it], "--nodamage"))
-            {
-                xcbNoDamage = true;
-            }
-#ifdef LTSM_WITH_PCSC
-            else if(0 == std::strcmp(argv[it], "--pcsc"))
-            {
-                pcscEnable = true;
-            }
-#endif
-            else if(0 == std::strcmp(argv[it], "--extclip"))
-            {
-                setExtClipboardLocalCaps(ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml |
-                                ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
-            }
-
-#ifdef LTSM_DECODING
-            else if(0 == std::strcmp(argv[it], "--qoi"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_LTSM_QOI)));
-            }
-            else if(0 == std::strcmp(argv[it], "--lz4"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_LTSM_LZ4)));
-            }
-            else if(0 == std::strcmp(argv[it], "--tjpg"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_LTSM_TJPG)));
-            }
-            else if(0 == std::strncmp(argv[it], "--tjpg,", 7))
-            {
-                auto opts = Tools::split(argv[it], ',');
-
-                opts.pop_front();
-                encodingOptions.assign(opts.begin(), opts.end());
-
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_LTSM_TJPG)));
-            }
-#endif
-#ifdef LTSM_DECODING_FFMPEG
- #ifdef LTSM_DECODING_H264
-            else if(0 == std::strcmp(argv[it], "--h264"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_FFMPEG_H264)));
-            }
- #endif
- #ifdef LTSM_DECODING_AV1
-            else if(0 == std::strcmp(argv[it], "--av1"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_FFMPEG_AV1)));
-            }
- #endif
- #ifdef LTSM_DECODING_VP8
-            else if(0 == std::strcmp(argv[it], "--vp8"))
-            {
-                prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                        RFB::ENCODING_FFMPEG_VP8)));
-            }
- #endif
-#endif
-            else if(0 == std::strcmp(argv[it], "--encoding"))
-            {
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
-                {
-                    auto opts = Tools::split(argv[it + 1], ',');
-
-                    prefferedEncoding.assign(Tools::lower(opts.front()));
-
-                    opts.pop_front();
-                    encodingOptions.assign(opts.begin(), opts.end());
-
-                    it = it + 1;
-                }
-
-                auto encodings = supportedEncodings();
-
-                if(std::none_of(encodings.begin(), encodings.end(), [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; }))
-                {
-                    Application::warning("%s: incorrect encoding: %s", __FUNCTION__,
-                                         prefferedEncoding.c_str());
-                    prefferedEncoding.clear();
-                }
-            }
-
-#ifdef LTSM_WITH_GSSAPI
-            else if(0 == std::strcmp(argv[it], "--kerberos"))
-            {
-                rfbsec.authKrb5 = true;
-                rfbsec.krb5Service = "TERMSRV";
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    rfbsec.krb5Service = argv[it + 1];
-                    it = it + 1;
-                }
-            }
-
-#endif
-            else if(0 == std::strcmp(argv[it], "--audio"))
-            {
-                audioEnable = true;
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    audioEncoding = argv[it + 1];
-                    it = it + 1;
-                }
-            }
-            else if(0 == std::strcmp(argv[it], "--printer"))
-            {
-                printerUrl.assign(printdef);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    auto url = Channel::parseUrl(argv[it + 1]);
-
-                    if(url.first == Channel::ConnectorType::Unknown)
-                    {
-                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__,
-                                             "printer", argv[it + 1]);
-                    }
-                    else
-                    {
-                        printerUrl.assign(argv[it + 1]);
-                    }
-
-                    it = it + 1;
-                }
-            }
-            else if(0 == std::strcmp(argv[it], "--sane"))
-            {
-                saneUrl.assign(sanedef);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    auto url = Channel::parseUrl(argv[it + 1]);
-
-                    if(url.first == Channel::ConnectorType::Unknown)
-                    {
-                        Application::warning("%s: parse %s failed, unknown url: %s", __FUNCTION__,
-                                             "sane", argv[it + 1]);
-                    }
-                    else
-                    {
-                        saneUrl.assign(argv[it + 1]);
-                    }
-
-                    it = it + 1;
-                }
-            }
-#ifdef LTSM_PKCS11_AUTH
-            else if(0 == std::strcmp(argv[it], "--pkcs11-auth"))
-            {
-                pkcs11Auth.assign(librtdef);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2))
-                {
-                    pkcs11Auth.assign(argv[it + 1]);
-                    it = it + 1;
-                }
-
-                if(! std::filesystem::exists(pkcs11Auth))
-                {
-                    Application::warning("%s: parse %s failed, not exist: %s", __FUNCTION__,
-                                         "pkcs11-auth", pkcs11Auth.c_str());
-                    pkcs11Auth.clear();
-                }
-            }
-#endif
-            else if(0 == std::strcmp(argv[it], "--trace"))
-            {
-                Application::setDebugLevel(DebugLevel::Trace);
-            }
-            else if(0 == std::strcmp(argv[it], "--debug"))
-            {
-                if(! Application::isDebugLevel(DebugLevel::Trace))
-                    Application::setDebugLevel(DebugLevel::Debug);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
-                {
-                    Application::setDebugTypes(Tools::debugTypes(Tools::split(argv[it + 1], ',')));
-                    it = it + 1;
-                }
-
-            }
-            else if(0 == std::strcmp(argv[it], "--syslog"))
-            {
-                Application::setDebugTarget(DebugTarget::Syslog);
-
-                if(it + 1 < argc && std::strncmp(argv[it + 1], "--", 2) /* not --param */)
-                {
-                    Application::setDebugTargetFile(argv[it + 1]);
-                    it = it + 1;
-                }
-            }
-            else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
-            {
-                host.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--seamless") && it + 1 < argc)
-            {
-                seamless.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--share-folder") && it + 1 < argc)
-            {
-                auto dir = argv[it + 1];
-
-                if(std::filesystem::is_directory(dir))
-                {
-                    shareFolders.emplace_front(argv[it + 1]);
-                }
-
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
-            {
-                rfbsec.passwdFile.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--password-file") && it + 1 < argc)
-            {
-                passfile.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--username") && it + 1 < argc)
-            {
-                username.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
-            {
-                try
-                {
-                    port = std::stoi(argv[it + 1]);
-                }
-                catch(const std::invalid_argument &)
-                {
-                    std::cerr << "incorrect port number" << std::endl;
-                    port = 5900;
-                }
-
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--framerate") && it + 1 < argc)
-            {
-                try
-                {
-                    frameRate = std::stoi(argv[it + 1]);
-
-                    if(frameRate < 5)
-                    {
-                        frameRate = 5;
-                        std::cerr << "set frame rate: " << frameRate << std::endl;
-                    }
-                    else if(frameRate > 25)
-                    {
-                        frameRate = 25;
-                        std::cerr << "set frame rate: " << frameRate << std::endl;
-                    }
-                }
-                catch(const std::invalid_argument &)
-                {
-                    std::cerr << "incorrect frame rate" << std::endl;
-                    frameRate = 16;
-                }
-
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--geometry") && it + 1 < argc)
-            {
-                size_t idx;
-
-                try
-                {
-                    auto width = std::stoi(argv[it + 1], & idx, 0);
-                    auto height = std::stoi(argv[it + 1] + idx + 1, nullptr, 0);
-                    primarySize = XCB::Size(width, height);
-                }
-                catch(const std::invalid_argument &)
-                {
-                    std::cerr << "invalid geometry" << std::endl;
-                }
-
-                it = it + 1;
-            }
-#ifdef LTSM_WITH_GNUTLS
-            else if(0 == std::strcmp(argv[it], "--tls-priority") && it + 1 < argc)
-            {
-                rfbsec.tlsPriority.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--tls-ca-file") && it + 1 < argc)
-            {
-                rfbsec.caFile.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--tls-cert-file") && it + 1 < argc)
-            {
-                rfbsec.certFile.assign(argv[it + 1]);
-                it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--tls-key-file") && it + 1 < argc)
-            {
-                rfbsec.keyFile.assign(argv[it + 1]);
-                it = it + 1;
-            }
-#endif
             else
             {
-                throw std::invalid_argument(argv[it]);
+                parseCommand(*it, "");
             }
+        }
+
+        if(auto it = std::find_if(argBeg, argEnd, [](std::string_view arg){ return arg == "--load"; }); it != argEnd)
+        {
+            if(it = std::next(it); it != argEnd)
+                loadConfig(*it);
         }
 
         if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size())
@@ -639,6 +308,376 @@ namespace LTSM
                     std::swap(primarySize.width, primarySize.height);
                 }
             }
+        }
+    }
+
+    void Vnc2SDL::loadConfig(const std::filesystem::path & config)
+    {
+        if(! std::filesystem::is_regular_file(config))
+            return;
+        
+        std::ifstream ifs(config);
+        while(ifs)
+        {
+            std::string line;
+            std::getline(ifs, line);
+
+            if(line.empty())
+                continue;
+
+            auto it1 = line.begin();
+            auto it2 = std::find(it1, line.end(), 0x20);
+            std::string_view cmd{it1, it2};
+
+            if(it2 != line.end())
+            {
+                std::string_view arg{it2 + 1, line.end()};
+                Application::info("%s: %.*s %.*s", __FUNCTION__, cmd.size(), cmd.data(), arg.size(), arg.data());
+                parseCommand(cmd, arg);
+            }
+            else
+            {
+                Application::info("%s: %.*s", __FUNCTION__, cmd.size(), cmd.data());
+                parseCommand(cmd, "");
+            }
+        }
+    }
+
+    void Vnc2SDL::parseCommand(std::string_view cmd, std::string_view arg)
+    {
+        if(cmd == "--nocaps")
+        {
+            capslockEnable = false;
+        }
+        else if(cmd == "--noltsm")
+        {
+            ltsmSupport = false;
+        }
+        else if(cmd == "--noaccel")
+        {
+            windowAccel = false;
+        }
+#ifdef LTSM_WITH_GNUTLS
+        else if(cmd == "--notls")
+        {
+            rfbsec.authVenCrypt = false;
+        }
+#endif
+        else if(cmd == "--noxkb")
+        {
+            useXkb = false;
+        }
+        else if(cmd == "--loop")
+        {
+            alwaysRunning = true;
+        }
+        else if(cmd == "--fullscreen")
+        {
+            windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+        }
+        else if(cmd == "--fixed")
+        {
+            windowFlags &= ~SDL_WINDOW_RESIZABLE;
+        }
+        else if(cmd == "--nodamage")
+        {
+            xcbNoDamage = true;
+        }
+#ifdef LTSM_WITH_PCSC
+        else if(cmd == "--pcsc")
+        {
+            pcscEnable = true;
+        }
+#endif
+        else if(cmd == "--extclip")
+        {
+            setExtClipboardLocalCaps(ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml |
+                            ExtClipCaps::OpRequest | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide);
+        }
+
+#ifdef LTSM_DECODING
+        else if(cmd == "--qoi")
+        {
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_LTSM_QOI)));
+        }
+        else if(cmd == "--lz4")
+        {
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_LTSM_LZ4)));
+        }
+        else if(cmd.starts_with("--tjpg"))
+        {
+            if(auto opts = Tools::split(cmd, ','); 1 < opts.size())
+            {
+                opts.pop_front();
+                encodingOptions.assign(opts.begin(), opts.end());
+            }
+
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_LTSM_TJPG)));
+        }
+#endif
+#ifdef LTSM_DECODING_FFMPEG
+ #ifdef LTSM_DECODING_H264
+        else if(cmd == "--h264")
+        {
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_FFMPEG_H264)));
+        }
+ #endif
+ #ifdef LTSM_DECODING_AV1
+        else if(cmd == "--av1")
+        {
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_FFMPEG_AV1)));
+        }
+ #endif
+ #ifdef LTSM_DECODING_VP8
+        else if(cmd == "--vp8")
+        {
+            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
+                    RFB::ENCODING_FFMPEG_VP8)));
+        }
+ #endif
+#endif
+        else if(cmd == "--encoding")
+        {
+            if(arg.size())
+            {
+                auto opts = Tools::split(arg, ',');
+
+                prefferedEncoding.assign(Tools::lower(opts.front()));
+
+                opts.pop_front();
+                encodingOptions.assign(opts.begin(), opts.end());
+            }
+
+            auto encodings = ClientDecoder::supportedEncodings(extClipboardLocalCaps());
+
+            if(std::none_of(encodings.begin(), encodings.end(), [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; }))
+            {
+                Application::warning("%s: incorrect encoding: %s", __FUNCTION__,
+                                     prefferedEncoding.c_str());
+                prefferedEncoding.clear();
+            }
+        }
+
+#ifdef LTSM_WITH_GSSAPI
+        else if(cmd == "--kerberos")
+        {
+            rfbsec.authKrb5 = true;
+            rfbsec.krb5Service = "TERMSRV";
+
+            if(arg.size())
+            {
+                rfbsec.krb5Service.assign(arg.begin(), arg.end());
+            }
+        }
+
+#endif
+        else if(cmd == "--audio")
+        {
+            audioEnable = true;
+
+            if(arg.size())
+            {
+                audioEncoding.assign(arg.begin(), arg.end());
+            }
+        }
+        else if(cmd == "--printer")
+        {
+            printerUrl.assign(printdef);
+
+            if(arg.size())
+            {
+                auto url = Channel::parseUrl(arg);
+
+                if(url.first == Channel::ConnectorType::Unknown)
+                {
+                    Application::warning("%s: parse %s failed, unknown url: %.*s",
+                            __FUNCTION__, "printer", arg.size(), arg.data());
+                }
+                else
+                {
+                    printerUrl.assign(arg.begin(), arg.end());
+                }
+            }
+        }
+        else if(cmd == "--sane")
+        {
+            saneUrl.assign(sanedef);
+
+            if(arg.size())
+            {
+                auto url = Channel::parseUrl(arg);
+
+                if(url.first == Channel::ConnectorType::Unknown)
+                {
+                    Application::warning("%s: parse %s failed, unknown url: %.*s",
+                            __FUNCTION__, "sane", arg.size(), arg.data());
+                }
+                else
+                {
+                    saneUrl.assign(arg.begin(), arg.end());
+                }
+            }
+        }
+#ifdef LTSM_PKCS11_AUTH
+        else if(cmd == "--pkcs11-auth")
+        {
+            pkcs11Auth.assign(librtdef);
+
+            if(arg.size())
+            {
+                pkcs11Auth.assign(arg.begin(), arg.end());
+            }
+
+            if(! std::filesystem::exists(pkcs11Auth))
+            {
+                Application::warning("%s: parse %s failed, not exist: %s",
+                        __FUNCTION__, "pkcs11-auth", pkcs11Auth.c_str());
+                pkcs11Auth.clear();
+            }
+        }
+#endif
+        else if(cmd == "--trace")
+        {
+            Application::setDebugLevel(DebugLevel::Trace);
+        }
+        else if(cmd == "--debug")
+        {
+            if(! Application::isDebugLevel(DebugLevel::Trace))
+                Application::setDebugLevel(DebugLevel::Debug);
+
+            if(arg.size())
+            {
+                Application::setDebugTypes(Tools::debugTypes(Tools::split(arg, ',')));
+            }
+        }
+        else if(cmd == "--syslog")
+        {
+            if(arg.size())
+            {
+                Application::setDebugTargetFile(arg);
+            }
+            else
+            {
+                Application::setDebugTarget(DebugTarget::Syslog);
+            }
+        }
+        else if(cmd == "--host" && arg.size())
+        {
+            host.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--seamless" && arg.size())
+        {
+            seamless.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--share-folder" && arg.size())
+        {
+            if(std::filesystem::is_directory(arg))
+            {
+                shareFolders.emplace_front(arg.begin(), arg.end());
+            }
+            else
+            {
+                Application::warning("%s: parse %s failed, not exist: %.*s",
+                        __FUNCTION__, "share-folder", arg.size(), arg.data());
+            }
+        }
+        else if(cmd == "--password" && arg.size())
+        {
+            rfbsec.passwdFile.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--password-file" && arg.size())
+        {
+            passfile.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--username" && arg.size())
+        {
+            username.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--port" && arg.size())
+        {
+            try
+            {
+                port = std::stoi(view2string(arg));
+            }
+            catch(const std::invalid_argument &)
+            {
+                std::cerr << "incorrect port number" << std::endl;
+                port = 5900;
+            }
+        }
+        else if(cmd == "--framerate" && arg.size())
+        {
+            try
+            {
+                frameRate = std::stoi(view2string(arg));
+
+                if(frameRate < 5)
+                {
+                    frameRate = 5;
+                    std::cerr << "set frame rate: " << frameRate << std::endl;
+                }
+                else if(frameRate > 25)
+                {
+                    frameRate = 25;
+                    std::cerr << "set frame rate: " << frameRate << std::endl;
+                }
+            }
+            catch(const std::invalid_argument &)
+            {
+                std::cerr << "incorrect frame rate" << std::endl;
+                frameRate = 16;
+            }
+        }
+        else if(cmd == "--geometry" && arg.size())
+        {
+            size_t idx;
+
+            try
+            {
+                auto width = std::stoi(view2string(arg), & idx, 0);
+                std::string_view arg2{arg.begin() + idx + 1, arg.end()};
+                auto height = std::stoi(view2string(arg2), nullptr, 0);
+                primarySize = XCB::Size(width, height);
+            }
+            catch(const std::invalid_argument &)
+            {
+                std::cerr << "invalid geometry" << std::endl;
+            }
+        }
+#ifdef LTSM_WITH_GNUTLS
+        else if(cmd == "--tls-priority" && arg.size())
+        {
+            rfbsec.tlsPriority.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--tls-ca-file" && arg.size())
+        {
+            rfbsec.caFile.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--tls-cert-file" && arg.size())
+        {
+            rfbsec.certFile.assign(arg.begin(), arg.end());
+        }
+        else if(cmd == "--tls-key-file" && arg.size())
+        {
+            rfbsec.keyFile.assign(arg.begin(), arg.end());
+        }
+#endif
+        else if(cmd == "--load")
+        {
+            // skip exception
+        }
+        else if(cmd == "--save")
+        {
+            // skip exception
+        }
+        else
+        {
+            throw std::invalid_argument(view2string(cmd));
         }
     }
 
@@ -913,7 +952,7 @@ namespace LTSM
             case SDL_MOUSEBUTTONUP:
                 if(auto be = ev.button())
                 {
-                    sendPointerEvent(be->button, be->x, be->y);
+                    sendPointerEvent(ev.type() == SDL_MOUSEBUTTONDOWN ? be->button : 0, be->x, be->y);
                     return true;
                 }
                 break;
@@ -927,8 +966,6 @@ namespace LTSM
 
                     int mouseX, mouseY;
                     auto state = SDL_GetMouseState(& mouseX, & mouseY);
-
-                    Application::info("%s: state - 0x%08" PRIx32 "", __FUNCTION__, state);
 
                     // press/release up/down
                     sendPointerEvent(0 < we->y ? SDL_BUTTON_X1MASK : SDL_BUTTON_X2MASK, mouseX, mouseY);
@@ -1333,14 +1370,14 @@ namespace LTSM
         }
     }
 
-    void Vnc2SDL::updateRawPixels(const void* data, const XCB::Region & wrt,
+    void Vnc2SDL::updateRawPixels(const XCB::Region & wrt, const void* data,
                                   uint32_t pitch, const PixelFormat & pf)
     {
         uint32_t sdlFormat = SDL_MasksToPixelFormatEnum(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
         if(sdlFormat != SDL_PIXELFORMAT_UNKNOWN)
         {
-            return updateRawPixels2(data, wrt, pf.bitsPerPixel(), pitch, sdlFormat);
+            return updateRawPixels2(wrt, data, pf.bitsPerPixel(), pitch, sdlFormat);
         }
 
         // lock part
@@ -1358,10 +1395,10 @@ namespace LTSM
             throw sdl_error(NS_FuncName);
         }
 
-        updateRawPixels3(sfframe.get(), wrt);
+        updateRawPixels3(wrt, sfframe.get());
     }
 
-    void Vnc2SDL::updateRawPixels2(const void* data, const XCB::Region & wrt, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
+    void Vnc2SDL::updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
     {
         // lock part
         const std::scoped_lock guard{ renderLock };
@@ -1378,10 +1415,10 @@ namespace LTSM
             throw sdl_error(NS_FuncName);
         }
 
-        updateRawPixels3(sfframe.get(), wrt);
+        updateRawPixels3(wrt, sfframe.get());
     }
 
-    void Vnc2SDL::updateRawPixels3(SDL_Surface* sfframe, const XCB::Region & wrt)
+    void Vnc2SDL::updateRawPixels3(const XCB::Region & wrt, SDL_Surface* sfframe)
     {
         if(! sfback || sfback->w != windowSize.width || sfback->h != windowSize.height)
         {
@@ -1725,10 +1762,7 @@ namespace LTSM
 
     void Vnc2SDL::systemLoginSuccess(const JsonObject & jo)
     {
-        if(jo.getBoolean("action", false))
-        {
-        }
-        else
+        if(! jo.getBoolean("action", false))
         {
             auto error = jo.getString("error");
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "login",
@@ -1766,12 +1800,45 @@ namespace LTSM
     }
 }
 
+using namespace LTSM;
+
 #ifdef __WIN32__
 int main(int argc, char** argv)
 #else
 int main(int argc, const char** argv)
 #endif
 {
+#ifdef __WIN32__
+    auto localcfg = Tools::replace(usercfgdef, "$LOCALAPPDATA", getenv("LOCALAPPDATA"));
+#else
+    auto localcfg = Tools::replace(usercfgdef, "$HOME", getenv("HOME"));
+#endif
+
+    auto argBeg = argv + 1;
+    auto argEnd = argv + argc;
+
+    if((argBeg == argEnd && ! std::filesystem::is_regular_file(localcfg)) ||
+        std::any_of(argBeg, argEnd, [](std::string_view arg){ return arg == "--help" || arg == "-h"; }))
+    {
+        printHelp(argv[0]);
+        return 0;
+    }
+
+    if(auto it = std::find_if(argBeg, argEnd, [](std::string_view arg){ return arg == "--save"; }); it != argEnd)
+    {
+        std::string_view path = localcfg;
+
+        if(auto it2 = std::next(it); it2 != argEnd)
+        {
+            std::string_view path2 = *it2;
+            if(! path2.starts_with("--"))
+                path = path2;
+        }
+
+        saveConfig(argBeg, it, path);
+        return 0;
+    }
+
     // init network
 #ifdef __WIN32__
     WSADATA wsaData;
@@ -1797,9 +1864,9 @@ int main(int argc, const char** argv)
         try
         {
 #ifdef __WIN32__
-            LTSM::Vnc2SDL app(argc, (const char**) argv);
+            Vnc2SDL app(argc, (const char**) argv);
 #else
-            LTSM::Vnc2SDL app(argc, argv);
+            Vnc2SDL app(argc, argv);
 #endif
             if(! app.isAlwaysRunning())
             {
@@ -1813,14 +1880,10 @@ int main(int argc, const char** argv)
             std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
             return -1;
         }
-        catch(int val)
-        {
-            return val;
-        }
         catch(const std::exception & err)
         {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-            LTSM::Application::info("program: %s", "terminate...");
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::info("program: %s", "terminate...");
         }
     }
 

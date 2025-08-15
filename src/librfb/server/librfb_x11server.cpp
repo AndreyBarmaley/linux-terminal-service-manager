@@ -98,7 +98,7 @@ namespace LTSM
         {
             auto status = randrSequence == notify.sequence ?
                           RFB::DesktopResizeStatus::ClientSide : RFB::DesktopResizeStatus::ServerRuntime;
-            std::thread([ = ]()
+            std::thread([this, status, wsz]()
             {
                 if(status == RFB::DesktopResizeStatus::ServerRuntime)
                 {
@@ -227,12 +227,12 @@ namespace LTSM
         size_t delayTimeout = 75;
 
         // process rfb messages background
-        auto rfbThread = std::thread([ = ]()
+        auto rfbThread = std::thread([this]()
         {
             this->rfbMessagesLoop();
         });
 
-        auto xcbThread = std::thread([ = ]()
+        auto xcbThread = std::thread([this]()
         {
             this->xcbProcessingEvents();
         });

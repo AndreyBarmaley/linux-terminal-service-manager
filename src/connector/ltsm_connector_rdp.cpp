@@ -570,7 +570,7 @@ namespace LTSM
                             visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        bool waitHelperStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [=]()
+        bool waitHelperStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]()
         {
             return !! this->helperStartedFlag;
         });
@@ -595,7 +595,7 @@ namespace LTSM
             // wait client update canceled, 1000ms, 10 ms pause
             if(updatePartFlag)
             {
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 100, [=]()
+                Tools::waitCallable<std::chrono::milliseconds>(1000, 100, [this]()
                 {
                     return ! this->updatePartFlag;
                 });

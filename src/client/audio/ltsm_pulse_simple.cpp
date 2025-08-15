@@ -24,7 +24,6 @@
 #include "pulse/error.h"
 
 #include "ltsm_tools.h"
-#include "ltsm_audio.h"
 #include "ltsm_pulse_simple.h"
 #include "ltsm_application.h"
 

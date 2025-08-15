@@ -96,7 +96,7 @@ namespace LTSM
         ConnectorMode connectorMode(std::string_view);
         Speed connectorSpeed(std::string_view);
 
-        std::pair<ConnectorType, std::string> parseUrl(const std::string &);
+        std::pair<ConnectorType, std::string> parseUrl(std::string_view);
         std::string createUrl(const ConnectorType &, std::string_view);
 
         struct TypeContent : std::pair<ConnectorType, std::string>

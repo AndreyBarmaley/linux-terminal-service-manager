@@ -113,9 +113,9 @@ namespace LTSM
     protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
-        void updateRawPixels(const void*, const XCB::Region &, uint32_t pitch, const PixelFormat &) override;
-        void updateRawPixels2(const void*, const XCB::Region &, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
-        void updateRawPixels3(SDL_Surface* sfframe, const XCB::Region & wrt);
+        void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat &) override;
+        void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) override;
+        void updateRawPixels3(const XCB::Region &, SDL_Surface*);
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
@@ -139,6 +139,9 @@ namespace LTSM
 
         bool windowFullScreen(void) const;
         bool windowResizable(void) const;
+
+        void parseCommand(std::string_view cmd, std::string_view arg);
+        void loadConfig(const std::filesystem::path &);
 
     public:
         Vnc2SDL(int argc, const char** argv);
@@ -166,8 +169,6 @@ namespace LTSM
         {
             return ltsmSupport;
         }
-
-        std::list<int> clientSupportedEncodings(void) const override;
 
         int start(void) override;
         bool isAlwaysRunning(void) const;

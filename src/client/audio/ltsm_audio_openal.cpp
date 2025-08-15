@@ -22,14 +22,11 @@
  **********************************************************************/
 
 #include "ltsm_tools.h"
-#include "ltsm_audio.h"
 #include "ltsm_application.h"
 #include "ltsm_audio_openal.h"
 
 namespace LTSM
 {
-    const ALuint format1SecBytes = 2 * 2 * 44100 /* 16 bit, 2 channels, 44100 */;
-
     const char* OpenAL::alcErrorName(ALCenum err)
     {
         switch(err)
@@ -155,7 +152,7 @@ namespace LTSM
 
     ALuint OpenAL::Playback::findFreeBufferId(void) const
     {
-        if(ALint bufProcesses = getBuffersProcessed(); 0 <= bufProcesses)
+        if(ALint bufProcesses = getBuffersProcessed(); 0 < bufProcesses)
         {
             ALuint bufId = 0;
             alSourceUnqueueBuffers(sourceId, 1, & bufId);
@@ -261,7 +258,7 @@ namespace LTSM
 
         if(playAfterBytes)
         {
-            if(playAfterBytes < len)
+            if(playAfterBytes <= len)
             {
                 playAfterBytes = 0;
                 playStart();

@@ -409,7 +409,7 @@ namespace LTSM
     {
         if(display == displayNum())
         {
-            std::thread([ = ]()
+            std::thread([this, display]()
             {
                 this->busConnectorAlive(display);
             }).detach();

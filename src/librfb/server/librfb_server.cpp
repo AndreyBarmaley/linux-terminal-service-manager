@@ -1208,20 +1208,18 @@ namespace LTSM
         return clientEncodings.findPriorityFrom(encs);
     }
 
-    bool RFB::ServerEncoder::serverSelectClientEncoding(void)
+    void RFB::ServerEncoder::serverSelectClientEncoding(void)
     {
         int compatible = serverSelectCompatibleEncoding(clientEncodings);
 
         if(encoder && encoder->getType() == compatible)
-        {
-            return true;
-        }
+            return;
 
         switch(compatible)
         {
             case RFB::ENCODING_RAW:
                 encoder = std::make_unique<EncodingRaw>();
-                return true;
+                break;
 
             case RFB::ENCODING_ZLIB:
             {
@@ -1235,57 +1233,57 @@ namespace LTSM
                 }
 
                 encoder = std::make_unique<EncodingZlib>(zlevel);
-                return true;
+                break;
             }
 
             case RFB::ENCODING_HEXTILE:
                 encoder = std::make_unique<EncodingHexTile>();
-                return true;
+                break;
 
             case RFB::ENCODING_CORRE:
                 encoder = std::make_unique<EncodingRRE>(true);
-                return true;
+                break;
 
             case RFB::ENCODING_RRE:
                 encoder = std::make_unique<EncodingRRE>(false);
-                return true;
+                break;
 
             case RFB::ENCODING_TRLE:
                 encoder = std::make_unique<EncodingTRLE>(false);
-                return true;
+                break;
 
             case RFB::ENCODING_ZRLE:
                 encoder = std::make_unique<EncodingTRLE>(true);
-                return true;
+                break;
 #ifdef LTSM_ENCODING_FFMPEG
 
             case RFB::ENCODING_FFMPEG_H264:
             case RFB::ENCODING_FFMPEG_VP8:
             case RFB::ENCODING_FFMPEG_AV1:
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
-                return true;
+                break;
 #endif
 #ifdef LTSM_ENCODING
 
             case RFB::ENCODING_LTSM_QOI:
                 encoder = std::make_unique<EncodingQOI>();
-                return true;
+                break;
 
             case RFB::ENCODING_LTSM_LZ4:
                 encoder = std::make_unique<EncodingLZ4>();
-                return true;
+                break;
 
             case RFB::ENCODING_LTSM_TJPG:
                 encoder = std::make_unique<EncodingTJPG>();
-                return true;
+                break;
 #endif
 
             default:
+                encoder = std::make_unique<EncodingRaw>();
                 break;
         }
 
-        encoder = std::make_unique<EncodingRaw>();
-        return true;
+        encoderInitEvent(encoder.get());
     }
 
     void RFB::ServerEncoder::serverSelectEncodings(void)

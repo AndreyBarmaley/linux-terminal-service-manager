@@ -68,6 +68,11 @@ namespace LTSM
 {
     class ByteArray;
 
+    inline std::string view2string(std::string_view view)
+    {
+        return std::string(view.begin(), view.end());
+    }
+
 #ifdef __UNIX__
     class UserInfo
     {
@@ -139,7 +144,7 @@ namespace LTSM
     {
         uint32_t debugTypes(const std::list<std::string> &);
 
-        bool binaryToFile(const void*, size_t len, const std::filesystem::path &);
+        bool binaryToFile(const void*, size_t len, const std::filesystem::path &, bool append = false);
         std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
         std::list<std::string> readDir(const std::filesystem::path &, bool recurse);

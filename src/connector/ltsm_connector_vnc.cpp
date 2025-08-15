@@ -280,7 +280,7 @@ namespace LTSM
     void Connector::VNC::serverConnectedEvent(void)
     {
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 100 ms pause
-        bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [=]()
+        bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]()
         {
             return !! this->loginWidgetStarted;
         });

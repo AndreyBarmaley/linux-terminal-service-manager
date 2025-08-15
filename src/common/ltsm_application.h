@@ -35,7 +35,7 @@
 
 namespace LTSM
 {
-    enum class DebugTarget { Quiet, Console, Syslog };
+    enum class DebugTarget { Quiet, Console, Syslog, SyslogFile };
     enum class DebugLevel { None, Info, Debug, Trace };
 
     enum DebugType
@@ -82,7 +82,6 @@ namespace LTSM
         static void vtrace(uint32_t subsys, const char* format, va_list args);
         static void trace(uint32_t subsys, const char* format, ...);
 
-        static void redirectSyslogFile(const char* file = nullptr);
         static void setDebug(const DebugTarget &, const DebugLevel &);
 
         static void setDebugTarget(const DebugTarget &);
@@ -96,6 +95,8 @@ namespace LTSM
 
         static void setDebugTypes(uint32_t);
         static bool isDebugTypes(uint32_t vals);
+
+        static int  forkMode(void);
 
         virtual int start(void) = 0;
     };
