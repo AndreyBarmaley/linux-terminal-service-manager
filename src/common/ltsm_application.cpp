@@ -23,7 +23,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
-#include <signal.h>
 
 #include <clocale>
 #include <cstring>
@@ -35,6 +34,7 @@
 #endif
 
 #ifdef __UNIX__
+#include <signal.h>
 #include <syslog.h>
 #endif
 
@@ -205,6 +205,7 @@ namespace LTSM
 #endif
     }
 
+#ifdef __UNIX__
     int Application::forkMode(void)
     {
         pid_t pid = fork();
@@ -233,6 +234,7 @@ namespace LTSM
 
         return pid;
     }
+#endif
 
     void toPlatformSyslog(int priority, const char* format, va_list args)
     {

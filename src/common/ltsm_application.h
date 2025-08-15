@@ -96,7 +96,9 @@ namespace LTSM
         static void setDebugTypes(uint32_t);
         static bool isDebugTypes(uint32_t vals);
 
+#ifdef __UNIX__
         static int  forkMode(void);
+#endif
 
         virtual int start(void) = 0;
     };
