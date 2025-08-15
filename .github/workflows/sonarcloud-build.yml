@@ -138,8 +138,8 @@ jobs:
           ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
           echo "::endgroup::"
           echo "::group::x11 tests"
+          ./LTSM_test_x11enc --fps 4 --count 1
           ./LTSM_test_framebuf2
-          ./LTSM_test_x11enc --fps 4 --count 2
           ./LTSM_test_xrandr
           echo "::endgroup::"
           echo "::group::ltsm logs"

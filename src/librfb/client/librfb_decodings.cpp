@@ -679,7 +679,7 @@ namespace LTSM
         auto runJob = [this](uint32_t rawsz, uint32_t pitch, std::vector<uint8_t> buf, XCB::Region reg, DecoderStream* cli)
         {
             auto bb = this->decodeBGRx(buf, reg.toSize(), cli->serverFormat(), pitch);
-            assertm(bb.size() == pitch * reg.height, "invalid pitch");
+            assertm(bb.size() == static_cast<size_t>(pitch) * reg.height, "invalid pitch");
 
             cli->updateRawPixels(reg, bb.data(), pitch, cli->serverFormat());
         };

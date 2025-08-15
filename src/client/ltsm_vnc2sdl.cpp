@@ -332,12 +332,12 @@ namespace LTSM
             if(it2 != line.end())
             {
                 std::string_view arg{it2 + 1, line.end()};
-                Application::info("%s: %.*s %.*s", __FUNCTION__, cmd.size(), cmd.data(), arg.size(), arg.data());
+                Application::info("%s: %.*s %.*s", __FUNCTION__, (int) cmd.size(), cmd.data(), (int) arg.size(), arg.data());
                 parseCommand(cmd, arg);
             }
             else
             {
-                Application::info("%s: %.*s", __FUNCTION__, cmd.size(), cmd.data());
+                Application::info("%s: %.*s", __FUNCTION__, (int) cmd.size(), cmd.data());
                 parseCommand(cmd, "");
             }
         }
@@ -496,7 +496,7 @@ namespace LTSM
                 if(url.first == Channel::ConnectorType::Unknown)
                 {
                     Application::warning("%s: parse %s failed, unknown url: %.*s",
-                            __FUNCTION__, "printer", arg.size(), arg.data());
+                            __FUNCTION__, "printer", (int) arg.size(), arg.data());
                 }
                 else
                 {
@@ -515,7 +515,7 @@ namespace LTSM
                 if(url.first == Channel::ConnectorType::Unknown)
                 {
                     Application::warning("%s: parse %s failed, unknown url: %.*s",
-                            __FUNCTION__, "sane", arg.size(), arg.data());
+                            __FUNCTION__, "sane", (int) arg.size(), arg.data());
                 }
                 else
                 {
@@ -583,7 +583,7 @@ namespace LTSM
             else
             {
                 Application::warning("%s: parse %s failed, not exist: %.*s",
-                        __FUNCTION__, "share-folder", arg.size(), arg.data());
+                        __FUNCTION__, "share-folder", (int) arg.size(), arg.data());
             }
         }
         else if(cmd == "--password" && arg.size())

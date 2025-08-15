@@ -338,7 +338,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
     {
         if(decoder->decode(sb.data(), len))
         {
-            Application::debug(DebugType::Audio, "%s: decode size: %" PRIu32, __FUNCTION__, decoder->size());
+            Application::debug(DebugType::Audio, "%s: decode size: %lu", __FUNCTION__, decoder->size());
 
             if(auto env = getenv("LTSM_AUDIO_SAVE"))
                 Tools::binaryToFile(decoder->data(), decoder->size(), env, true);
