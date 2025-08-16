@@ -1532,6 +1532,10 @@ namespace LTSM
         {
             systemKeyboardEvent(jo);
         }
+        else if(cmd == SystemCommand::CursorFailed)
+        {
+            systemCursorFailed(jo);
+        }
         else if(cmd == SystemCommand::TransferFiles)
         {
             systemTransferFiles(jo);
@@ -1574,5 +1578,11 @@ namespace LTSM
                 serverScreenUpdateRequest();
             }
         }
+    }
+    
+    void RFB::ServerEncoder::cursorFailed(uint32_t cursorId)
+    {
+        Application::info("%s: cursorId: 0x%08" PRIx32, __FUNCTION__, cursorId);
+        cursorSended.remove(cursorId);
     }
 }

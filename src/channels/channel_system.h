@@ -70,6 +70,7 @@ namespace LTSM
         static const std::string_view TransferFiles{"TransferFiles"};
         static const std::string_view KeyboardChange{"KeyboardChange"};
         static const std::string_view KeyboardEvent{"KeyboardEvent"};
+        static const std::string_view CursorFailed{"CursorFailed"};
         static const std::string_view LoginSuccess{"LoginSuccess"};
     }
 
@@ -567,20 +568,20 @@ namespace LTSM
 
         virtual bool isUserSession(void) const { return false; }
 
+        // recv system events
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }
+        virtual void systemCursorFailed(const JsonObject &) { /* empty */ }
         virtual void systemKeyboardChange(const JsonObject &) { /* empty */ }
         virtual void systemKeyboardEvent(const JsonObject &) { /* empty */ }
+        virtual void systemChannelError(const JsonObject &) { /* empty */ }
+        virtual void systemTransferFiles(const JsonObject &) { /* empty */ }
+        virtual void systemLoginSuccess(const JsonObject &) { /* empty */ }
 
         void systemChannelOpen(const JsonObject &);
         void systemChannelListen(const JsonObject &) { /* empty */ }
 
         bool systemChannelConnected(const JsonObject &);
         void systemChannelClose(const JsonObject &);
-        virtual void systemChannelError(const JsonObject &) { /* empty */ }
-
-        virtual void systemTransferFiles(const JsonObject &) { /* empty */ }
-
-        virtual void systemLoginSuccess(const JsonObject &) { /* empty */ }
 
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         void destroyChannel(uint8_t channel);
@@ -611,6 +612,7 @@ namespace LTSM
         void sendLtsmChannelData(uint8_t channel, std::string_view);
         void sendLtsmChannelData(uint8_t channel, const std::vector<uint8_t> &);
 
+        void sendSystemCursorFailed(int cursorId);
         void sendSystemKeyboardEvent(bool pressed, int scancode, int keycode);
         void sendSystemKeyboardChange(const std::vector<std::string> &, int);
         void sendSystemClientVariables(const json_plain &, const json_plain &, const std::vector<std::string> &, const std::string &);

@@ -952,7 +952,7 @@ namespace LTSM
             case SDL_MOUSEBUTTONUP:
                 if(auto be = ev.button())
                 {
-                    sendPointerEvent(ev.type() == SDL_MOUSEBUTTONDOWN ? be->button : 0, be->x, be->y);
+                    sendPointerEvent(ev.type() == SDL_MOUSEBUTTONDOWN ? SDL_BUTTON(be->button) : 0, be->x, be->y);
                     return true;
                 }
                 break;
@@ -968,7 +968,7 @@ namespace LTSM
                     auto state = SDL_GetMouseState(& mouseX, & mouseY);
 
                     // press/release up/down
-                    sendPointerEvent(0 < we->y ? SDL_BUTTON_X1MASK : SDL_BUTTON_X2MASK, mouseX, mouseY);
+                    sendPointerEvent(SDL_BUTTON(0 < we->y ? SDL_BUTTON_X1 : SDL_BUTTON_X2), mouseX, mouseY);
 
                     SDL_GetMouseState(& mouseX, & mouseY);
                     sendPointerEvent(0, mouseX, mouseY);
@@ -1548,6 +1548,13 @@ namespace LTSM
 
         if(cursors.end() == it)
         {
+            if(pixels.empty())
+            {
+                Application::error("%s: cursor not found, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                sendSystemCursorFailed(cursorId);
+                return;
+            }
+
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
             auto cursorFmt = BGRA32;
 #else
@@ -1558,7 +1565,7 @@ namespace LTSM
 
             if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4)
             {
-                Application::error("%s: invalid pixels, length: %lu", __FUNCTION__, pixels.size());
+                Application::error("%s: invalid pixels, length: %lu, id: 0x%08" PRIx32, __FUNCTION__, pixels.size(), cursorId);
                 return;
             }
 
@@ -1594,6 +1601,9 @@ namespace LTSM
             {
                 Application::warning("%s: %s failed, error: %s", __FUNCTION__,
                                    "SDL_CreateColorCursor", SDL_GetError());
+
+                Application::warning("%s: send cursor failed, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                sendSystemCursorFailed(cursorId);
                 return;
             }
 

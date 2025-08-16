@@ -51,6 +51,9 @@ namespace LTSM
 
         AudioClient(const std::string &);
         ~AudioClient();
+
+        void pcmDataNotify(const uint8_t* ptr, size_t len);
+        bool socketInitialize(void);
     };
 
     class AudioSessionBus : public sdbus::AdaptorInterfaces<Session::AUDIO_adaptor>, public Application
@@ -69,8 +72,6 @@ namespace LTSM
 
         bool connectChannel(const std::string & clientSocket) override;
         void disconnectChannel(const std::string & clientSocket) override;
-
-        void pulseFragmentSize(const uint32_t & fragsz) override;
     };
 }
 

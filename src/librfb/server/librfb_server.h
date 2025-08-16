@@ -162,6 +162,8 @@ namespace LTSM
             void recvSetContinuousUpdates(void);
             void recvSetDesktopSize(void);
 
+            void cursorFailed(uint32_t);
+
         public:
             ServerEncoder(int sockfd = 0);
 

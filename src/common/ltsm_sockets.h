@@ -174,6 +174,7 @@ namespace LTSM
         void recvRaw(void*, size_t) const override;
 
         int fd(void) const { return sock; }
+        void reset(void);
     };
 
     /// @brief: inetd stream

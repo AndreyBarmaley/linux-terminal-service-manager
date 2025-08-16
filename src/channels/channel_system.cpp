@@ -638,6 +638,15 @@ void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, con
     sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
 }
 
+void LTSM::ChannelClient::sendSystemCursorFailed(int cursorId)
+{
+    JsonObjectStream jo;
+    jo.push("cmd", SystemCommand::CursorFailed);
+    jo.push("cursor", cursorId);
+
+    sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
+}
+
 void LTSM::ChannelClient::sendSystemKeyboardEvent(bool pressed, int scancode, int keycode)
 {
     JsonObjectStream jo;

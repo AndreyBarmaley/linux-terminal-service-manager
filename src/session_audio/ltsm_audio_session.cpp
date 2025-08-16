@@ -25,7 +25,6 @@
 
 #include <chrono>
 #include <thread>
-#include <atomic>
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -41,14 +40,11 @@ using namespace std::chrono_literals;
 namespace LTSM
 {
     std::unique_ptr<sdbus::IConnection> conn;
-    std::atomic<bool> shutdownAudio{false};
 
     void signalHandler(int sig)
     {
         if(sig == SIGTERM || sig == SIGINT)
         {
-            shutdownAudio = true;
-
             if(conn)
             {
                 conn->leaveEventLoop();
@@ -57,18 +53,18 @@ namespace LTSM
     }
 
     /// AudioClient
-    bool audioClientSocketInitialize(AudioClient* client)
+    bool AudioClient::socketInitialize(void)
     {
         std::error_code fserr;
 
-        while(! client->shutdown)
+        while(! shutdown)
         {
             // wait socket
-            if(std::filesystem::is_socket(client->socketPath, fserr))
+            if(std::filesystem::is_socket(socketPath, fserr))
             {
-                if(int fd = UnixSocket::connect(client->socketPath); 0 < fd)
+                if(int fd = UnixSocket::connect(socketPath); 0 < fd)
                 {
-                    client->sock = std::make_unique<SocketStream>(fd);
+                    sock = std::make_unique<SocketStream>(fd);
                     break;
                 }
 
@@ -76,12 +72,12 @@ namespace LTSM
             }
         }
 
-        if(client->shutdown)
+        if(shutdown)
         {
             return false;
         }
 
-        if(! client->sock)
+        if(! sock)
         {
             Application::error("%s: %s failed", __FUNCTION__, "socket");
             return false;
@@ -91,31 +87,31 @@ namespace LTSM
         const uint8_t defaultChannels = 2;
         const uint16_t bitsPerSample = PulseAudio::formatBits(defaultFormat);
         // send initialize packet
-        client->sock->sendIntLE16(AudioOp::Init);
+        sock->sendIntLE16(AudioOp::Init);
         // send proto ver
-        client->sock->sendIntLE16(1);
+        sock->sendIntLE16(1);
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
         numenc++;
 #endif
         // send num encodings
-        client->sock->sendIntLE16(numenc);
+        sock->sendIntLE16(numenc);
         // encoding type PCM
-        client->sock->sendIntLE16(AudioEncoding::PCM);
-        client->sock->sendIntLE16(defaultChannels);
-        client->sock->sendIntLE32(44100);
-        client->sock->sendIntLE16(bitsPerSample);
+        sock->sendIntLE16(AudioEncoding::PCM);
+        sock->sendIntLE16(defaultChannels);
+        sock->sendIntLE32(44100);
+        sock->sendIntLE16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
         // encoding type OPUS
-        client->sock->sendIntLE16(AudioEncoding::OPUS);
-        client->sock->sendIntLE16(defaultChannels);
-        client->sock->sendIntLE32(48000);
-        client->sock->sendIntLE16(bitsPerSample);
+        sock->sendIntLE16(AudioEncoding::OPUS);
+        sock->sendIntLE16(defaultChannels);
+        sock->sendIntLE32(48000);
+        sock->sendIntLE16(bitsPerSample);
 #endif
-        client->sock->sendFlush();
+        sock->sendFlush();
         // client reply
-        auto cmd = client->sock->recvIntLE16();
-        auto err = client->sock->recvIntLE16();
+        auto cmd = sock->recvIntLE16();
+        auto err = sock->recvIntLE16();
 
         if(cmd != AudioOp::Init)
         {
@@ -125,15 +121,15 @@ namespace LTSM
 
         if(err)
         {
-            auto str = client->sock->recvString(err);
+            auto str = sock->recvString(err);
             Application::error("%s: recv error: %s", __FUNCTION__, str.c_str());
             return false;
         }
 
         // proto version
-        auto ver = client->sock->recvIntLE16();
+        auto ver = sock->recvIntLE16();
         // encoding
-        auto enc = client->sock->recvIntLE16();
+        auto enc = sock->recvIntLE16();
         Application::info("%s: client proto version: %" PRIu16 ", encode type: 0x%" PRIx16, __FUNCTION__, ver, enc);
         uint32_t defaultBitRate = 44100;
         uint32_t bufFragSize = 1024;
@@ -149,22 +145,27 @@ namespace LTSM
 #endif
         }
 
-        // PulseAudio init loop
-        while(! client->shutdown)
+        auto readEventCb = std::bind(&AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2);
+        const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
+
+        try
         {
-            try
-            {
-                client->pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels);
-            }
-            catch(const std::exception & err)
-            {
-            }
+            pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels, std::move(readEventCb));
+        }
+        catch(const std::exception & err)
+        {
+            return false;
+        }
 
-            if(client->pulse && client->pulse->initContext())
-            {
-                const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
+        // wait PulseAudio started
+        while(true)
+        {
+            if(shutdown)
+                return false;
 
-                if(client->pulse->streamConnect(false /* not paused */, & bufferAttr))
+            if(pulse->initContext())
+            {
+                if(pulse->streamConnect(false /* not paused */, & bufferAttr))
                 {
                     break;
                 }
@@ -179,7 +180,7 @@ namespace LTSM
         if(enc == AudioEncoding::OPUS)
         {
 #ifdef LTSM_WITH_OPUS
-            client->encoder = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
+            encoder = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
             Application::info("%s: selected encoder: %s", __FUNCTION__, "OPUS");
 #else
             Application::error("%s: unsupported encoder: %s", __FUNCTION__, "OPUS");
@@ -191,48 +192,38 @@ namespace LTSM
             Application::info("%s: selected encoder: %s", __FUNCTION__, "PCM");
         }
 
-        // transfer loop
-        while(! client->shutdown)
-        {
-            if(! client->pulse->pcmEmpty())
-            {
-                auto raw = client->pulse->pcmData();
-                bool sampleNotSilent = std::any_of(raw.begin(), raw.end(), [](auto & val) { return val != 0; });
-
-                if(sampleNotSilent)
-                {
-                    if(client->encoder)
-                    {
-                        if(client->encoder->encode(raw.data(), raw.size()))
-                        {
-                            // send enc samples
-                            client->sock->sendIntLE16(AudioOp::Data);
-                            client->sock->sendIntLE32(client->encoder->size());
-                            client->sock->sendRaw(client->encoder->data(), client->encoder->size());
-                            client->sock->sendFlush();
-                        }
-                    }
-                    else
-                    {
-                        // send raw samples
-                        client->sock->sendIntLE16(AudioOp::Data);
-                        client->sock->sendIntLE32(raw.size());
-                        client->sock->sendData(raw);
-                        client->sock->sendFlush();
-                    }
-                }
-                else
-                {
-                    client->sock->sendIntLE16(AudioOp::Silent);
-                    client->sock->sendIntLE32(raw.size());
-                    client->sock->sendFlush();
-                }
-            }
-
-            std::this_thread::sleep_for(3ms);
-        }
-
         return true;
+    }
+
+    void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len)
+    {
+        bool sampleNotSilent = std::any_of(ptr, ptr + len, [](auto & val) { return val != 0; });
+
+        if(sampleNotSilent)
+        {
+            if(! encoder)
+            {
+                // send raw samples
+                sock->sendIntLE16(AudioOp::Data);
+                sock->sendIntLE32(len);
+                sock->sendRaw(ptr, len);
+                sock->sendFlush();
+            }
+            else if(encoder->encode(ptr, len))
+            {
+                // send enc samples
+                sock->sendIntLE16(AudioOp::Data);
+                sock->sendIntLE32(encoder->size());
+                sock->sendRaw(encoder->data(), encoder->size());
+                sock->sendFlush();
+            }
+        }
+        else
+        {
+            sock->sendIntLE16(AudioOp::Silent);
+            sock->sendIntLE32(len);
+            sock->sendFlush();
+        }
     }
 
     AudioClient::AudioClient(const std::string & path) : socketPath(path)
@@ -241,17 +232,12 @@ namespace LTSM
         {
             try
             {
-                if(audioClientSocketInitialize(this))
-                {
-                    return;
-                }
+                this->socketInitialize();
             }
             catch(const std::exception & err)
             {
                 LTSM::Application::error("%s: exception: %s", "AudioClientThread", err.what());
             }
-
-            this->shutdown = true;
         });
     }
 
@@ -274,7 +260,6 @@ namespace LTSM
 #endif
          Application("ltsm_audio2session")
     {
-        //setDebug(DebugTarget::Console, DebugLevel::Debug);
         Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
         registerAdaptor();
@@ -290,11 +275,7 @@ namespace LTSM
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
 
-        while(! shutdownAudio)
-        {
-            conn->enterEventLoopAsync();
-            std::this_thread::sleep_for(5ms);
-        }
+        conn->enterEventLoop();
 
         return EXIT_SUCCESS;
     }
@@ -308,7 +289,7 @@ namespace LTSM
     void AudioSessionBus::serviceShutdown(void)
     {
         Application::info("%s", __FUNCTION__);
-        shutdownAudio = true;
+        conn->leaveEventLoop();
     }
 
     void AudioSessionBus::setDebug(const std::string & level)
@@ -337,19 +318,6 @@ namespace LTSM
         {
             return cli.socketPath == clientSocket;
         });
-    }
-
-    void AudioSessionBus::pulseFragmentSize(const uint32_t & fragsz)
-    {
-        Application::info("%s: fragment size: %" PRIu32, __FUNCTION__, fragsz);
-
-        for(const auto & cl : clients)
-        {
-            if(cl.pulse)
-            {
-                cl.pulse->setFragSize(fragsz);
-            }
-        }
     }
 }
 

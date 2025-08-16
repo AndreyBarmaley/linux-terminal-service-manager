@@ -427,15 +427,13 @@ namespace LTSM
             return false;
         }
 
-        while(contextState != PA_CONTEXT_READY)
-        {
-            if(PA_CONTEXT_FAILED == contextState)
-            {
-                Application::error("%s: %s failed", __FUNCTION__, "context state");
-                return false;
-            }
+        // wait conntext ready
+        waitNotify.wait(WaitOp::ContextState);
 
-            std::this_thread::sleep_for(50ms);
+        if(PA_CONTEXT_FAILED == pa_context_get_state(ctx.get()))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "context state");
+            return false;
         }
 
         serverInfo = contextServerInfoWait();
@@ -649,7 +647,8 @@ namespace LTSM
             Application::info("%s: state: %s", __FUNCTION__, contextStateName(state));
         }
 
-        contextState = state;
+        if(state == PA_CONTEXT_FAILED || state == PA_CONTEXT_READY)
+            waitNotify.notify(WaitOp::ContextState, &state);
     }
 
     void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol)
@@ -660,8 +659,9 @@ namespace LTSM
     void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state)
     {
         Application::info("%s: state: %s", __FUNCTION__, streamStateName(state));
-        streamState = state;
-    }
+        if(state == PA_STREAM_READY || state == PA_STREAM_FAILED)
+            waitNotify.notify(WaitOp::StreamState, &state);
+     }
 
     void PulseAudio::BaseStream::streamSuspendedEvent(int state)
     {
@@ -794,15 +794,13 @@ namespace LTSM
             }
         }
 
-        while(PA_STREAM_READY != streamState)
-        {
-            if(PA_STREAM_FAILED == streamState)
-            {
-                Application::error("%s: %s failed", __FUNCTION__, "stream state");
-                return false;
-            }
+        // wait ready state
+        waitNotify.wait(WaitOp::StreamState);
 
-            std::this_thread::sleep_for(50ms);
+        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get()))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "stream state");
+            return false;
         }
 
         if(paused)
@@ -902,16 +900,11 @@ namespace LTSM
 #else
 
     /// PulseAudio::OutputStream
-    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels)
-        : BaseStream("ltsm_audio_session", fmt, rate, channels)
+    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, ReadEventFunc && func)
+        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(std::forward<ReadEventFunc>(func))
     {
-        pcm.reserve(pcmReserveSize);
         // loop
-        thread = std::thread([loop = loop.get()]()
-        {
-            std::this_thread::sleep_for(5ms);
-            pa_mainloop_run(loop, nullptr);
-        });
+        thread = std::thread(& pa_mainloop_run, loop.get(), nullptr);
     }
 
     PulseAudio::OutputStream::~OutputStream()
@@ -945,15 +938,13 @@ namespace LTSM
             return false;
         }
 
-        while(PA_STREAM_READY != streamState)
-        {
-            if(PA_STREAM_FAILED == streamState)
-            {
-                Application::error("%s: %s failed", __FUNCTION__, "stream state");
-                return false;
-            }
+        // wait ready state
+        waitNotify.wait(WaitOp::StreamState);
 
-            std::this_thread::sleep_for(50ms);
+        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get()))
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "stream state");
+            return false;
         }
 
         if(paused)
@@ -967,16 +958,6 @@ namespace LTSM
         return true;
     }
 
-    void PulseAudio::OutputStream::setFragSize(uint32_t fragsize)
-    {
-        const pa_buffer_attr bufferAttr = { fragsize, UINT32_MAX, UINT32_MAX, UINT32_MAX, fragsize };
-
-        if(auto op = pa_stream_set_buffer_attr(stream.get(), & bufferAttr, nullptr, nullptr))
-        {
-            pa_operation_unref(op);
-        }
-    }
-
     void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes)
     {
         Application::debug(DebugType::Audio, "%s: bytes: %lu", __FUNCTION__, nbytes);
@@ -985,26 +966,9 @@ namespace LTSM
 
         if(0 == pa_stream_peek(stream.get(), (const void**) & streamData, & streamBytes))
         {
-            std::scoped_lock guard{ lock };
-
-            if(pcm.capacity() < pcmReserveSize)
-            {
-                pcm.reserve(pcmReserveSize);
-            }
-
-            if(pcm.size() + streamBytes > pcmReserveSize)
-            {
-                Application::warning("%s: pcm overflow, size: %lu, block: %lu, limit: %lu", __FUNCTION__, pcm.size(), streamBytes,
-                                     pcmReserveSize);
-                pcm.assign(streamData, streamData + streamBytes);
-            }
-            else
-            {
-                pcm.insert(pcm.end(), streamData, streamData + streamBytes);
-            }
-
             if(streamBytes)
             {
+                readEventCb(streamData, streamBytes);
                 pa_stream_drop(stream.get());
             }
         }
@@ -1013,18 +977,5 @@ namespace LTSM
             Application::error("%s: %s failed", __FUNCTION__, "pa_stream_peek");
         }
     }
-
-    bool PulseAudio::OutputStream::pcmEmpty(void) const
-    {
-        std::scoped_lock guard{ lock };
-        return pcm.empty();
-    }
-
-    std::vector<uint8_t> PulseAudio::OutputStream::pcmData(void)
-    {
-        std::scoped_lock guard{ lock };
-        return std::move(pcm);
-    }
-
 #endif
 }

@@ -30,6 +30,7 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <functional>
 #include <condition_variable>
 
 #include "pulse/stream.h"
@@ -57,8 +58,8 @@ namespace LTSM
 
     namespace PulseAudio
     {
-        enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02, ContextLoadModule = 0xAB03, ContextSourceInfo = 0xAB04,
-                      StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
+        enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02, ContextLoadModule = 0xAB03, ContextSourceInfo = 0xAB04, ContextState = 0xAB05,
+                     StreamState = 0xAB11,  StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
                     };
 
         struct MainLoopDeleter
@@ -97,9 +98,6 @@ namespace LTSM
             std::unique_ptr<pa_mainloop, MainLoopDeleter> loop;
             std::unique_ptr<pa_context, ContextDeleter> ctx;
             std::unique_ptr<pa_stream, StreamDeleter> stream;
-
-            std::atomic<int> contextState{PA_CONTEXT_UNCONNECTED};
-            std::atomic<int> streamState{PA_STREAM_UNCONNECTED};
 
             const pa_server_info* serverInfo = nullptr;
 
@@ -215,20 +213,20 @@ namespace LTSM
         };
 
 #else
+        using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
+
         class OutputStream : public BaseStream
         {
             std::thread thread;
             std::string monitorName;
-
-            std::vector<uint8_t> pcm;
-            mutable std::mutex lock;
+            ReadEventFunc readEventCb;
 
         protected:
             static void streamReadCallback(pa_stream* stream, const size_t nbytes, void* userData);
-            virtual void streamReadEvent(const size_t &);
+            void streamReadEvent(const size_t &);
 
         public:
-            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels);
+            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc &&);
             ~OutputStream();
 
             const char* streamName(void) const override
@@ -239,9 +237,6 @@ namespace LTSM
             bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) override;
 
             void setFragSize(uint32_t fragsz);
-
-            bool pcmEmpty(void) const;
-            std::vector<uint8_t> pcmData(void);
         };
 
 #endif

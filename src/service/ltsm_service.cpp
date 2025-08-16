@@ -3076,7 +3076,7 @@ namespace LTSM
     {
         if(0 < xvfb->connectorId)
         {
-            auto fuse = xvfb->options.find("fuse");
+            auto fuse = xvfb->options.find("redirect:fuse");
 
             if(xvfb->options.end() != fuse)
             {
@@ -3086,14 +3086,14 @@ namespace LTSM
                 }
             }
 
-            auto audio = xvfb->options.find("audio");
+            auto audio = xvfb->options.find("redirect:audio");
 
             if(xvfb->options.end() != audio)
             {
                 stopAudioListener(xvfb, audio->second);
             }
 
-            auto pcsc = xvfb->options.find("pcsc");
+            auto pcsc = xvfb->options.find("redirect:pcsc");
 
             if(xvfb->options.end() != pcsc)
             {
@@ -3110,7 +3110,7 @@ namespace LTSM
     {
         if(0 < xvfb->connectorId)
         {
-            auto pkcs11 = xvfb->options.find("pkcs11");
+            auto pkcs11 = xvfb->options.find("pkcs11:auth");
 
             if(xvfb->options.end() != pkcs11)
             {

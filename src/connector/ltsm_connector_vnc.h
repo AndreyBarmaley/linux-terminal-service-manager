@@ -121,6 +121,7 @@ namespace LTSM
             void systemClientVariables(const JsonObject &) override;
             void systemKeyboardChange(const JsonObject &) override;
             void systemKeyboardEvent(const JsonObject &) override;
+            void systemCursorFailed(const JsonObject & jo) override;
 
             int remoteClientVersion(void) const override;
 

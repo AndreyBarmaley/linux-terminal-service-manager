@@ -15,10 +15,6 @@
             <arg type="s" name="clientSocket" direction="in" />
         </method>
 
-        <method name="pulseFragmentSize">
-            <arg type="u" name="sz" direction="in" />
-        </method>
-
         <method name="serviceShutdown">
         </method>
 

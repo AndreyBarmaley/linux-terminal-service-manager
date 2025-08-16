@@ -403,9 +403,16 @@ namespace LTSM
 
     SocketStream::~SocketStream()
     {
-        if(0 < sock)
+        reset();
+    }
+
+    void SocketStream::reset(void)
+    {
+        if(0 <= sock)
         {
+            shutdown(sock, SHUT_RDWR);
             close(sock);
+            sock = -1;
         }
     }
 

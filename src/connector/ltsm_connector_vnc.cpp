@@ -476,6 +476,14 @@ namespace LTSM
         }
     }
 
+    void Connector::VNC::systemCursorFailed(const JsonObject & jo)
+    {
+        auto cursorId = jo.getInteger("cursor");
+
+        if(cursorId)
+            cursorFailed(cursorId);
+    }
+
     void Connector::VNC::systemKeyboardEvent(const JsonObject & jo)
     {
         // event supported
