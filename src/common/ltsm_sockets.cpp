@@ -410,7 +410,11 @@ namespace LTSM
     {
         if(0 <= sock)
         {
+#ifdef __WIN32__
+            shutdown(sock, SD_BOTH);
+#else
             shutdown(sock, SHUT_RDWR);
+#endif
             close(sock);
             sock = -1;
         }

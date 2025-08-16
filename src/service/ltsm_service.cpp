@@ -198,16 +198,16 @@ namespace LTSM
             case PAM_PROMPT_ECHO_ON:
                 Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_ON", msg);
 
-                if(0 == strncasecmp(msg, "login:", 6))
-                    return strdup(login.c_str());
+                //if(0 == strncasecmp(msg, "login:", 6));
+                return strdup(login.c_str());
 
                 break;
 
             case PAM_PROMPT_ECHO_OFF:
                 Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_OFF", msg);
 
-                if(0 == strncasecmp(msg, "password:", 9))
-                    return strdup(password.c_str());
+                //if(0 == strncasecmp(msg, "password:", 9));
+                return strdup(password.c_str());
 
                 break;
 
