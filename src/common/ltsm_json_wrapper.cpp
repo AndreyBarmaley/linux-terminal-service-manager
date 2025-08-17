@@ -597,7 +597,7 @@ namespace LTSM
 
     std::string JsonObject::getString(void) const
     {
-        return "";
+        return Tools::escaped(toString(), true);
     }
 
     double JsonObject::getDouble(void) const
@@ -859,7 +859,7 @@ namespace LTSM
 
     std::string JsonArray::getString(void) const
     {
-        return "";
+        return Tools::escaped(toString(), true);
     }
 
     double JsonArray::getDouble(void) const
