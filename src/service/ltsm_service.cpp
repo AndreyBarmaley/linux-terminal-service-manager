@@ -3083,12 +3083,19 @@ namespace LTSM
 
         auto fuse = xvfb->options.find("redirect:fuse");
 
-        if(xvfb->options.end() != fuse)
+        if(xvfb->options.end() != fuse && ! fuse->second.empty())
         {
-            for(const auto & share : JsonContentString(fuse->second).toArray().toStdList<std::string>())
-            {
-                startFuseListener(xvfb, share);
-            }
+	    try
+	    {
+        	for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>())
+        	{
+            	    startFuseListener(xvfb, share);
+        	}
+	    }
+	    catch(...)
+	    {
+		Application::warning("%s: invalid json array: `%s'", __FUNCTION__, fuse->second.c_str());
+	    }
         }
     }
 
@@ -3098,14 +3105,20 @@ namespace LTSM
         {
             auto fuse = xvfb->options.find("redirect:fuse");
 
-            if(xvfb->options.end() != fuse)
+            if(xvfb->options.end() != fuse && ! fuse->second.empty())
             {
-                for(const auto & share : Tools::split(fuse->second, '|'))
-                {
-                    stopFuseListener(xvfb, share);
+	        try
+	        {
+        	    for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>())
+        	    {
+                        stopFuseListener(xvfb, share);
+                    }
+                }
+	        catch(...)
+	        {
                 }
             }
-
+    
             auto audio = xvfb->options.find("redirect:audio");
 
             if(xvfb->options.end() != audio)
