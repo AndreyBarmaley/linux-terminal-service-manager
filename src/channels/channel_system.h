@@ -142,10 +142,9 @@ namespace LTSM
         class Local2Remote
         {
         protected:
-            std::vector<uint8_t> buf;
-
             std::chrono::milliseconds delay{100};
 
+            std::vector<uint8_t> buf;
             std::unique_ptr<ZLib::DeflateBase> zlib;
 
             size_t transfer1 = 0;
@@ -197,7 +196,7 @@ namespace LTSM
         {
         protected:
             std::list<std::vector<uint8_t>> queueBufs;
-            std::mutex lockQueue;
+            mutable std::mutex lockQueue;
 
             std::chrono::milliseconds delay{100};
 
@@ -221,12 +220,10 @@ namespace LTSM
             void pushData(std::vector<uint8_t> &&);
             bool writeData(void);
             void setSpeed(const Channel::Speed &);
+            bool isEmpty(void) const;
 
             uint8_t cid(void) const { return id; }
-
             int getError(void) const { return error; }
-
-            bool isEmpty(void) const { return queueBufs.empty(); }
 
             std::chrono::milliseconds getDelay(void) const { return delay; }
         };

@@ -1336,6 +1336,12 @@ LTSM::Channel::Remote2Local::~Remote2Local()
     Application::info("%s: channel: %" PRIu8 ", receive: %lu byte, transfer: %lu byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
 }
 
+bool LTSM::Channel::Remote2Local::isEmpty(void) const
+{
+    const std::scoped_lock guard{lockQueue};
+    return queueBufs.empty();
+}
+
 void LTSM::Channel::Remote2Local::pushData(std::vector<uint8_t> && buf)
 {
     const std::scoped_lock guard{lockQueue};
