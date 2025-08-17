@@ -9,7 +9,7 @@ if ( umask 077 && cp /dev/null "${errfile}" 2> /dev/null ); then
         exec > "${errfile}" 2>&1
 fi
 
-if [ -d $XDG_RUNTIME_DIR ]; 
+if [ -d $XDG_RUNTIME_DIR ]; then
     chmod 700 $XDG_RUNTIME_DIR
 else
     mkdir -m 700 $XDG_RUNTIME_DIR
@@ -34,7 +34,9 @@ DISPLAYNUM=$(echo ${DISPLAY} | cut --bytes=2- -)
 env | sort > $XDG_RUNTIME_DIR/ltsm/env_session_${DISPLAYNUM}
 echo "$DBUS_SESSION_BUS_ADDRESS" > $XDG_RUNTIME_DIR/ltsm/dbus_session_${DISPLAYNUM}
 
-# /bin/systemctl --user import-environment DISPLAY DBUS_SESSION_BUS_ADDRESS
+if [ -x /usr/bin/dbus-update-activation-environment ]; then
+    dbus-update-activation-environment --systemd --all
+fi
 
 # Xorg complete
 if [ -f /etc/X11/Xresources ]; then
