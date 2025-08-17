@@ -31,8 +31,8 @@
 #include <map>
 #include <mutex>
 #include <chrono>
-#include <thread>
 #include <atomic>
+#include <thread>
 #include <cstring>
 #include <iostream>
 #include <exception>
@@ -133,8 +133,8 @@ namespace LTSM
 
         DirBuf dirBuf;
 
+        std::atomic<bool> initShutdown{false};
         std::thread thloop;
-        std::atomic<bool> shutdown{false};
 
         const std::string localPoint;
         const std::string remotePoint;
@@ -147,7 +147,6 @@ namespace LTSM
         ~FuseSession();
 
         void exitSession(void);
-        bool waitReplyError(void) const;
         void recvStatStruct(struct stat* st);
         void recvShareRootInfo(void);
 
@@ -199,7 +198,7 @@ namespace LTSM
         {
             std::error_code fserr;
 
-            while(! fuse->shutdown)
+            while(! fuse->initShutdown)
             {
                 // wait socket
                 if(std::filesystem::is_socket(fuse->socketPath, fserr))
@@ -213,12 +212,7 @@ namespace LTSM
                     }
                 }
 
-                std::this_thread::sleep_for(100ms);
-            }
-
-            if(fuse->shutdown)
-            {
-                return;
+                std::this_thread::sleep_for(1s);
             }
 
             if(! fuse->sock)
@@ -228,49 +222,51 @@ namespace LTSM
                 return;
             }
 
-            // send inititialize packet
-            fuse->sock->sendIntLE16(FuseOp::Init);
-            // <VER16> - proto version
-            // <LEN16><MOUNTPOINT> - mount point
-            fuse->sock->sendIntLE16(1);
-            fuse->sock->sendIntLE16(fuse->remotePoint.size());
-            fuse->sock->sendString(fuse->remotePoint);
-            fuse->sock->sendFlush();
-
-            if(fuse->waitReplyError())
+            try
             {
-                Application::error("%s: %s failed", __FUNCTION__, "wait");
+                // send inititialize packet
+                fuse->sock->sendIntLE16(FuseOp::Init);
+                // <VER16> - proto version
+                // <LEN16><MOUNTPOINT> - mount point
+                fuse->sock->sendIntLE16(1);
+                fuse->sock->sendIntLE16(fuse->remotePoint.size());
+                fuse->sock->sendString(fuse->remotePoint);
+                fuse->sock->sendFlush();
+
+                // reply format:
+                // <CMD16> - fuse cmd
+                // <ERR32> - errno
+                auto cmd = fuse->sock->recvIntLE16();
+                auto err = fuse->sock->recvIntLE32();
+
+                if(cmd != FuseOp::Init)
+                {
+                    Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                    fuse->exitSession();
+                    return;
+                }
+
+                if(err)
+                {
+                    Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                    fuse->exitSession();
+                    return;
+                }
+
+                // <UID16> - proto
+                auto protoVer = fuse->sock->recvIntLE16();
+                // <UID32> - remote uid
+                fuse->remoteUid = fuse->sock->recvIntLE32();
+                // <GID32> - remote gid
+                fuse->remoteGid = fuse->sock->recvIntLE32();
+                fuse->recvShareRootInfo();
+            }
+            catch(const std::exception & err)
+            {
+                Application::error("%s: exception: %s", __FUNCTION__, err.what());
                 fuse->exitSession();
                 return;
             }
-
-            // reply format:
-            // <CMD16> - fuse cmd
-            // <ERR32> - errno
-            auto cmd = fuse->sock->recvIntLE16();
-            auto err = fuse->sock->recvIntLE32();
-
-            if(cmd != FuseOp::Init)
-            {
-                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
-                fuse->exitSession();
-                return;
-            }
-
-            if(err)
-            {
-                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
-                fuse->exitSession();
-                return;
-            }
-
-            // <UID16> - proto
-            auto protoVer = fuse->sock->recvIntLE16();
-            // <UID32> - remote uid
-            fuse->remoteUid = fuse->sock->recvIntLE32();
-            // <GID32> - remote gid
-            fuse->remoteGid = fuse->sock->recvIntLE32();
-            fuse->recvShareRootInfo();
         }
     }
 
@@ -490,47 +486,49 @@ namespace LTSM
             return;
         }
 
-        //
-        fuse->sock->sendIntLE16(FuseOp::Open);
-        auto & path = pathStat->relativePath();
-        // <FLAG32> - open flags
-        // <LEN16><PATH> - fuse path
-        fuse->sock->sendIntLE32(fi->flags);
-        fuse->sock->sendIntLE16(std::min(size_t(UINT16_MAX), path.size()));
-        fuse->sock->sendString(path);
-        fuse->sock->sendFlush();
-
-        // wait reply
-        if(fuse->waitReplyError())
+        try
         {
-            Application::error("%s: %s failed", __FUNCTION__, "wait");
+            //
+            fuse->sock->sendIntLE16(FuseOp::Open);
+            auto & path = pathStat->relativePath();
+            // <FLAG32> - open flags
+            // <LEN16><PATH> - fuse path
+            fuse->sock->sendIntLE32(fi->flags);
+            fuse->sock->sendIntLE16(std::min(size_t(UINT16_MAX), path.size()));
+            fuse->sock->sendString(path);
+            fuse->sock->sendFlush();
+
+            // reply format:
+            // <CMD16> - fuse cmd
+            // <ERR32> - errno
+            auto cmd = fuse->sock->recvIntLE16();
+            auto err = fuse->sock->recvIntLE32();
+
+            if(cmd != FuseOp::Open)
+            {
+                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                fuse_reply_err(req, EFAULT);
+                return;
+            }
+
+            if(err)
+            {
+                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                fuse_reply_err(req, err);
+                return;
+            }
+
+            // <FDH32> - fd handle
+            fi->fh = fuse->sock->recvIntLE32();
+            fuse_reply_open(req, fi);
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
 
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno
-        auto cmd = fuse->sock->recvIntLE16();
-        auto err = fuse->sock->recvIntLE32();
-
-        if(cmd != FuseOp::Open)
-        {
-            Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            return;
-        }
-
-        if(err)
-        {
-            Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
-            fuse_reply_err(req, err);
-            return;
-        }
-
-        // <FDH32> - fd handle
-        fi->fh = fuse->sock->recvIntLE32();
-        fuse_reply_open(req, fi);
     }
 
     void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
@@ -576,41 +574,42 @@ namespace LTSM
             return;
         }
 
-        //
-        fuse->sock->sendIntLE16(FuseOp::Release);
-        // <FDH32> - fd handle
-        fuse->sock->sendIntLE32(fi->fh);
-        fuse->sock->sendFlush();
-
-        // wait reply
-        if(fuse->waitReplyError())
+        try
         {
-            Application::error("%s: %s failed", __FUNCTION__, "wait");
+            //
+            fuse->sock->sendIntLE16(FuseOp::Release);
+            // <FDH32> - fd handle
+            fuse->sock->sendIntLE32(fi->fh);
+            fuse->sock->sendFlush();
+
+            // reply format:
+            // <CMD16> - fuse cmd
+            // <ERR32> - errno
+            auto cmd = fuse->sock->recvIntLE16();
+            auto err = fuse->sock->recvIntLE32();
+
+            if(cmd != FuseOp::Release)
+            {
+                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                fuse_reply_err(req, EFAULT);
+                return;
+            }
+
+            if(err)
+            {
+                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                fuse_reply_err(req, err);
+                return;
+            }
+
+            fuse_reply_err(req, 0);
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception %s", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
-
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno
-        auto cmd = fuse->sock->recvIntLE16();
-        auto err = fuse->sock->recvIntLE32();
-
-        if(cmd != FuseOp::Release)
-        {
-            Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            return;
-        }
-
-        if(err)
-        {
-            Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
-            fuse_reply_err(req, err);
-            return;
-        }
-
-        fuse_reply_err(req, 0);
     }
 
     void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info* fi)
@@ -656,56 +655,57 @@ namespace LTSM
             return;
         }
 
-        //
-        fuse->sock->sendIntLE16(FuseOp::Read);
-        const size_t blockmax = 48 * 1024;
-        // <FDH32> - fd handle
-        // <SIZE16> - blocksz
-        // <OFF64> - offset
-        fuse->sock->sendIntLE32(fi->fh);
-        fuse->sock->sendIntLE16(std::min(maxsize, blockmax));
-        fuse->sock->sendIntLE64(offset);
-        fuse->sock->sendFlush();
-
-        // wait reply
-        if(fuse->waitReplyError())
+        try
         {
-            Application::error("%s: %s failed", __FUNCTION__, "wait");
+            //
+            fuse->sock->sendIntLE16(FuseOp::Read);
+            const size_t blockmax = 48 * 1024;
+            // <FDH32> - fd handle
+            // <SIZE16> - blocksz
+            // <OFF64> - offset
+            fuse->sock->sendIntLE32(fi->fh);
+            fuse->sock->sendIntLE16(std::min(maxsize, blockmax));
+            fuse->sock->sendIntLE64(offset);
+            fuse->sock->sendFlush();
+
+            // reply format:
+            // <CMD16> - fuse cmd
+            // <ERR32> - errno ot read sz
+            auto cmd = fuse->sock->recvIntLE16();
+            int err = fuse->sock->recvIntLE32();
+
+            if(cmd != FuseOp::Read)
+            {
+                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                fuse_reply_err(req, EFAULT);
+                return;
+            }
+
+            if(err)
+            {
+                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                fuse_reply_err(req, err);
+                return;
+            }
+
+            // <LEN16><DATA> - raw data
+            const size_t len = fuse->sock->recvIntLE16();
+
+            if(len == 0)
+            {
+                fuse_reply_buf(req, nullptr, 0);
+                return;
+            }
+
+            auto buf = fuse->sock->recvData(len);
+            fuse_reply_buf(req, (const char*) buf.data(), buf.size());
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception %s", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
-
-        // reply format:
-        // <CMD16> - fuse cmd
-        // <ERR32> - errno ot read sz
-        auto cmd = fuse->sock->recvIntLE16();
-        int err = fuse->sock->recvIntLE32();
-
-        if(cmd != FuseOp::Read)
-        {
-            Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
-            fuse_reply_err(req, EFAULT);
-            return;
-        }
-
-        if(err)
-        {
-            Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
-            fuse_reply_err(req, err);
-            return;
-        }
-
-        // <LEN16><DATA> - raw data
-        const size_t len = fuse->sock->recvIntLE16();
-
-        if(len == 0)
-        {
-            fuse_reply_buf(req, nullptr, 0);
-            return;
-        }
-
-        auto buf = fuse->sock->recvData(len);
-        fuse_reply_buf(req, (const char*) buf.data(), buf.size());
     }
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask)
@@ -825,8 +825,6 @@ namespace LTSM
 
     FuseSession::~FuseSession()
     {
-        shutdown = true;
-
         if(ses)
         {
             if(! fuse_session_exited(ses.get()))
@@ -875,27 +873,6 @@ namespace LTSM
             fuse_session_unmount(ses.get());
             fuse_session_exit(ses.get());
         }
-    }
-
-    bool FuseSession::waitReplyError(void) const
-    {
-        // wait reply
-        while(! shutdown)
-        {
-            if(! sock)
-            {
-                break;
-            }
-
-            if(sock->hasInput() && 6 <= sock->hasData())
-            {
-                break;
-            }
-
-            std::this_thread::sleep_for(5ms);
-        }
-
-        return shutdown;
     }
 
     void FuseSession::recvStatStruct(struct stat* st)
@@ -1047,11 +1024,12 @@ namespace LTSM
 
         conn->enterEventLoop();
 
-        for(auto & st : childs)
+        for(auto & fuse : childs)
         {
-            st->shutdown = true;
+            fuse->initShutdown = true;
+            if(fuse->sock) fuse->sock->reset();
         }
-
+    
         return EXIT_SUCCESS;
     }
 
@@ -1112,7 +1090,7 @@ namespace LTSM
 
 int main(int argc, char** argv)
 {
-    bool debug = true;
+    bool debug = false;
 
     for(int it = 1; it < argc; ++it)
     {
