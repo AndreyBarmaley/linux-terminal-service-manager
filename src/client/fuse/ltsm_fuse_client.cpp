@@ -544,7 +544,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb)
     // <FDH32> - fd handle
     // <SIZE16> - blocksz
     // <OFF64> - offset
-    if(sb.last() < 20)
+    if(sb.last() < 14)
     {
         throw std::underflow_error(NS_FuncName);
     }

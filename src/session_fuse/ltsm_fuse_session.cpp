@@ -151,6 +151,10 @@ namespace LTSM
         void recvStatStruct(struct stat* st);
         void recvShareRootInfo(void);
 
+	bool accessR(const struct stat &) const;
+	bool accessW(const struct stat &) const;
+	bool accessX(const struct stat &) const;
+
         const LinkInfo* findLink(fuse_ino_t inode) const;
         const PathStat* findInode(fuse_ino_t inode) const;
         const struct stat* findChildStat(fuse_ino_t parent, const char* child) const;
@@ -721,6 +725,12 @@ namespace LTSM
             return;
         }
 
+        if(ino == 1)
+        {
+            fuse_reply_err(req, 0);
+            return;
+        }
+
         auto pathStat = fuse->findInode(ino);
 
         if(! pathStat)
@@ -734,32 +744,24 @@ namespace LTSM
             fuse_reply_err(req, 0);
             return;
         }
-        else if(mask & (R_OK | W_OK | X_OK))
+
+        if(mask & (R_OK | W_OK | X_OK))
         {
             auto & st = pathStat->statRef();
 
-            if((mask & R_OK) &&
-                    (0 == (S_IROTH & st.st_mode) &&
-                     (0 == (S_IRGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
-                     (0 == (S_IRUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+            if((mask & R_OK) && ! fuse->accessR(st))
             {
                 fuse_reply_err(req, EACCES);
                 return;
             }
 
-            if((mask & W_OK) &&
-                    (0 == (S_IWOTH & st.st_mode) &&
-                     (0 == (S_IWGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
-                     (0 == (S_IWUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+            if((mask & W_OK) && ! fuse->accessW(st))
             {
                 fuse_reply_err(req, EACCES);
                 return;
             }
 
-            if((mask & X_OK) &&
-                    (0 == (S_IXOTH & st.st_mode) &&
-                     (0 == (S_IXGRP & st.st_mode) || st.st_gid != fuse->remoteGid) &&
-                     (0 == (S_IXUSR & st.st_mode) || st.st_uid != fuse->remoteUid)))
+            if((mask & X_OK) && ! fuse->accessX(st))
             {
                 fuse_reply_err(req, EACCES);
                 return;
@@ -843,6 +845,27 @@ namespace LTSM
         }
 
         fuse_opt_free_args(& args);
+    }
+
+    bool FuseSession::accessR(const struct stat & st) const
+    {
+    	return (S_IROTH & st.st_mode) ||
+            ((S_IRGRP & st.st_mode) && st.st_gid == remoteGid) ||
+            ((S_IRUSR & st.st_mode) && st.st_uid == remoteUid);
+    }
+
+    bool FuseSession::accessW(const struct stat & st) const
+    {
+	return (S_IWOTH & st.st_mode) ||
+            ((S_IWGRP & st.st_mode) && st.st_gid == remoteGid) ||
+            ((S_IWUSR & st.st_mode) && st.st_uid == remoteUid);
+    }
+
+    bool FuseSession::accessX(const struct stat & st) const
+    {
+        return (S_IXOTH & st.st_mode) ||
+            ((S_IXGRP & st.st_mode) && st.st_gid == remoteGid) ||
+            ((S_IXUSR & st.st_mode) && st.st_uid == remoteUid);
     }
 
     void FuseSession::exitSession(void)
@@ -1089,7 +1112,7 @@ namespace LTSM
 
 int main(int argc, char** argv)
 {
-    bool debug = false;
+    bool debug = true;
 
     for(int it = 1; it < argc; ++it)
     {
