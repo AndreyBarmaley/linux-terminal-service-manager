@@ -369,7 +369,7 @@ namespace LTSM
             return;
         }
 
-        if(pathStat->statRef().st_mode & S_IFLNK)
+        if(S_ISLNK(pathStat->statRef().st_mode))
         {
             if(auto pair = fuse->findLink(ino))
             {

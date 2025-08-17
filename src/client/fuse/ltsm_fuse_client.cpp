@@ -126,20 +126,27 @@ namespace LTSM
                 continue;
             }
 
-#ifdef __UNIX__
-            if(0 == (st.st_mode & (S_IFREG | S_IFLNK | S_IFDIR)))
-#else
-            if(0 == (st.st_mode & (S_IFREG | S_IFDIR)))
-#endif
+            switch(st.st_mode & S_IFMT)
             {
-                Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
+#ifdef __UNIX__
+                case S_IFDIR:
+                case S_IFLNK:
+                case S_IFREG:
+                    break;
+#else
+                case S_IFDIR:
+                case S_IFREG:
+                    break;
+#endif
+                default:
+                    Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
                                      __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path.c_str());
-                continue;
+                    continue;
             }
 
 #ifdef __UNIX__
             // check link
-            if(st.st_mode & S_IFLNK)
+            if(S_ISLNK(st.st_mode))
             {
                 try
                 {
