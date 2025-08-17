@@ -39,7 +39,7 @@ namespace LTSM
         std::forward_list<std::unique_ptr<FuseSession>> childs;
 
     public:
-        FuseSessionBus(sdbus::IConnection &);
+        FuseSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~FuseSessionBus();
 
         int start(void) override;

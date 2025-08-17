@@ -758,31 +758,31 @@ namespace LTSM
 
     std::string Tools::fileToString(const std::filesystem::path & file)
     {
-        std::string str;
         std::error_code err;
 
-        if(std::filesystem::exists(file, err))
-        {
-            std::ifstream ifs(file, std::ios::binary);
-
-            if(ifs.is_open())
-            {
-                auto fsz = std::filesystem::file_size(file);
-                str.resize(fsz);
-                ifs.read(str.data(), str.size());
-                ifs.close();
-            }
-            else
-            {
-                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
-            }
-        }
-        else
+        if(! std::filesystem::exists(file, err))
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
-        }
+    	    return {};
+	}
 
-        return str;
+        if(auto ifs = std::ifstream(file))
+	{
+	    std::string content;
+	    content.reserve(256);
+
+	    std::copy(std::istreambuf_iterator<char>(ifs),
+		std::istreambuf_iterator<char>(), std::back_inserter(content));
+
+	    // remove endl
+            while(content.size() && std::iscntrl(content.back()))
+                content.pop_back();
+
+	    return content;
+	}
+
+        Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
+	return {};
     }
 
     std::string Tools::getTimeZone(void)

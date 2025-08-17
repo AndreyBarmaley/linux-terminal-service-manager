@@ -56,13 +56,12 @@ namespace LTSM
     fuse_args args = { .argc = 1, .argv = const_cast<char**>(argv2), .allocated = 0 };
 
     std::unique_ptr<sdbus::IConnection> conn;
-    std::atomic<bool> shutdownDbus{false};
 
     void signalHandler(int sig)
     {
         if(sig == SIGTERM || sig == SIGINT)
         {
-            shutdownDbus = true;
+            conn->leaveEventLoop();
         }
     }
 
@@ -999,7 +998,7 @@ namespace LTSM
     }
 
     /// FuseSessionBus
-    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn)
+    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug)
 #ifdef SDBUS_2_0_API
         : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_fuse_path}),
 #else
@@ -1007,9 +1006,7 @@ namespace LTSM
 #endif
          Application("ltsm_fuse2session")
     {
-        //setDebug(DebugTarget::Console, DebugLevel::Debug);
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
+        Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         registerAdaptor();
     }
 
@@ -1020,14 +1017,12 @@ namespace LTSM
 
     int FuseSessionBus::start(void)
     {
+        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
+
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
 
-        while(! shutdownDbus)
-        {
-            conn->enterEventLoopAsync();
-            std::this_thread::sleep_for(5ms);
-        }
+        conn->enterEventLoop();
 
         for(auto & st : childs)
         {
@@ -1046,7 +1041,7 @@ namespace LTSM
     void FuseSessionBus::serviceShutdown(void)
     {
         Application::debug(DebugType::Fuse, "%s, pid: %d", __FUNCTION__, getpid());
-        shutdownDbus = true;
+        conn->leaveEventLoop();
     }
 
     bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
@@ -1094,6 +1089,8 @@ namespace LTSM
 
 int main(int argc, char** argv)
 {
+    bool debug = false;
+
     for(int it = 1; it < argc; ++it)
     {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
@@ -1106,6 +1103,10 @@ int main(int argc, char** argv)
             std::cout << "version: " << LTSM_FUSE2SESSION_VERSION << std::endl;
             return EXIT_SUCCESS;
         }
+        else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d"))
+        {
+            debug = true;
+        }
     }
 
     if(0 == getuid())
@@ -1113,9 +1114,6 @@ int main(int argc, char** argv)
         std::cerr << "for users only" << std::endl;
         return EXIT_FAILURE;
     }
-
-    signal(SIGTERM, LTSM::signalHandler);
-    signal(SIGINT, LTSM::signalHandler);
 
     try
     {
@@ -1131,7 +1129,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        LTSM::FuseSessionBus fuseSession(*LTSM::conn);
+        LTSM::FuseSessionBus fuseSession(*LTSM::conn, debug);
         return fuseSession.start();
     }
     catch(const sdbus::Error & err)

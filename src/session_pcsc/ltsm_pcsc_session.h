@@ -138,7 +138,7 @@ namespace LTSM
         std::unique_ptr<SocketStream> ltsm;
         std::recursive_mutex ltsmLock;
 
-        std::filesystem::path socketPath;
+        std::filesystem::path pcscSocketPath;
         int socketFd = -1;
 
     protected:
@@ -167,7 +167,7 @@ namespace LTSM
         PcscLite::ReaderState* findReaderState(const std::string & name);
 
     public:
-        PcscSessionBus(sdbus::IConnection &, std::string_view pcscSockName);
+        PcscSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~PcscSessionBus();
 
         int start(void) override;

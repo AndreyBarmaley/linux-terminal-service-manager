@@ -9,14 +9,11 @@ if ( umask 077 && cp /dev/null "${errfile}" 2> /dev/null ); then
         exec > "${errfile}" 2>&1
 fi
 
-UID=`id --user`
-export XDG_CONFIG_DIRS="/etc/xdg"
-export XDG_DATA_DIRS="/usr/share"
-export XDG_RUNTIME_DIR=/run/user/$UID
-export XDG_SESSION_TYPE="x11"
-
-mkdir $XDG_RUNTIME_DIR
-chmod 700 $XDG_RUNTIME_DIR
+if [ -d $XDG_RUNTIME_DIR ]; 
+    chmod 700 $XDG_RUNTIME_DIR
+else
+    mkdir -m 700 $XDG_RUNTIME_DIR
+fi
 
 if [ -d /etc/X11/xinit/xinitrc.d ]; then
     for SCRIPT in /etc/X11/xinit/xinitrc.d/*.sh; do
@@ -26,8 +23,26 @@ if [ -d /etc/X11/xinit/xinitrc.d ]; then
     done
 fi
 
+# init ltsm environment
+mkdir $XDG_RUNTIME_DIR/ltsm
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --close-stderr --exit-with-x11)
+fi
+
+DISPLAYNUM=$(echo ${DISPLAY} | cut --bytes=2- -)
+env | sort > $XDG_RUNTIME_DIR/ltsm/env_session_${DISPLAYNUM}
+echo "$DBUS_SESSION_BUS_ADDRESS" > $XDG_RUNTIME_DIR/ltsm/dbus_session_${DISPLAYNUM}
+
+# /bin/systemctl --user import-environment DISPLAY DBUS_SESSION_BUS_ADDRESS
+
+# Xorg complete
 if [ -f /etc/X11/Xresources ]; then
     xrdb -load /etc/X11/Xresources
+fi
+
+if [ -f /etc/X11/ltsm.xres ]; then
+    xrdb -load /etc/X11/ltsm.xres
 fi
 
 if [ -f ${HOME}/.Xresources ]; then
@@ -59,5 +74,7 @@ if [ -z "$XSESSION" ]; then
         XSESSION=/usr/bin/xterm
     fi
 fi
+
+xsetroot -solid "#4e7db7"
 
 exec ${XSESSION}

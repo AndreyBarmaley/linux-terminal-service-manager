@@ -564,7 +564,7 @@ namespace LTSM
         return jas.flush();
     }
 
-    std::forward_list<std::string> Manager::getSessionDBusAddresses(const UserInfo & userInfo)
+    std::forward_list<std::string> Manager::getSessionDBusAddresses(const UserInfo & userInfo, int displayNum)
     {
         auto dbusSessionPath = std::filesystem::path(userInfo.home()) / ".dbus" / "session-bus";
         std::forward_list<std::string> dbusAddresses;
@@ -572,35 +572,52 @@ namespace LTSM
         // home may be nfs and deny for root
         try
         {
+	    auto xdgRuntimeDir = std::filesystem::path("/run/user") / std::to_string(userInfo.uid());
+
             if(std::filesystem::is_directory(dbusSessionPath))
             {
                 std::string_view dbusLabel = "DBUS_SESSION_BUS_ADDRESS='";
+		auto displaySuffix = Tools::joinToString("-", displayNum);
 
                 for(auto const & dirEntry : std::filesystem::directory_iterator{dbusSessionPath})
                 {
+		    if(! dirEntry.path().native().ends_with(displaySuffix))
+			continue;
+
                     std::ifstream ifs(dirEntry.path());
                     std::string line;
 
                     while(std::getline(ifs, line))
                     {
-                        auto pos = line.find(dbusLabel);
+                        if(! line.starts_with(dbusLabel))
+			    continue;
 
-                        if(pos != std::string::npos)
-                        {
-                            dbusAddresses.emplace_front(line.substr(pos + dbusLabel.size()));
-                            // remove last \'
-                            dbusAddresses.front().pop_back();
-                        }
+			auto it1 = line.begin() + dbusLabel.size();
+			auto it2 = std::prev(line.end());
+
+                        // remove last \'
+			while(std::iscntrl(*it2) || *it2 == '\'')
+			    it2 = std::prev(it2);
+
+                        dbusAddresses.emplace_front(it1, it2);
                     }
                 }
             }
 
-            auto dbusBrokerPath = std::filesystem::path("/run/user") / std::to_string(userInfo.uid()) / "bus";
+            auto dbusBrokerPath = xdgRuntimeDir / "bus";
 
             if(std::filesystem::is_socket(dbusBrokerPath))
             {
-                dbusAddresses.emplace_front(std::string("unix:path=").append(dbusBrokerPath.native()));
+                dbusAddresses.emplace_front(Tools::joinToString("unix:path=", dbusBrokerPath.native()));
             }
+
+	    // ltsm path from /etc/ltsm/xclients
+	    auto dbusLtsmSessionPath = xdgRuntimeDir / "ltsm" / Tools::joinToString("dbus_session_", displayNum);
+
+            if(std::filesystem::is_regular_file(dbusLtsmSessionPath))
+            {
+		dbusAddresses.emplace_front(Tools::fileToString(dbusLtsmSessionPath));
+	    }
         }
         catch(const std::filesystem::filesystem_error &)
         {
@@ -2553,7 +2570,7 @@ namespace LTSM
                 break;
         }
 
-        auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+        auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
         if(dbusAddresses.empty())
         {
@@ -2574,7 +2591,10 @@ namespace LTSM
 
         try
         {
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
 #else
@@ -3199,7 +3219,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3208,7 +3228,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
             auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
@@ -3335,7 +3358,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3344,7 +3367,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
 #else
@@ -3448,7 +3474,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3457,7 +3483,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
             auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
@@ -3581,7 +3610,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3590,7 +3619,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
 #else
@@ -3689,7 +3721,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3698,7 +3730,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
             auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
@@ -3840,7 +3875,7 @@ namespace LTSM
 
         try
         {
-            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo);
+            auto dbusAddresses = Manager::getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
 
             if(dbusAddresses.empty())
             {
@@ -3849,7 +3884,10 @@ namespace LTSM
                 throw service_error(NS_FuncName);
             }
 
-            auto conn = sdbus::createSessionBusConnectionWithAddress(Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";"));
+	    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+	    Application::debug(DebugType::Mgr, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
 #else

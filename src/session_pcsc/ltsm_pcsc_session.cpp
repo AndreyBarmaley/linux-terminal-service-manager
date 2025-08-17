@@ -176,18 +176,15 @@ namespace LTSM
     }
 
     /// PcscSessionBus
-    PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, std::string_view pcscSockName)
+    PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, bool debug)
 #ifdef SDBUS_2_0_API
         : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_pcsc_path}),
 #else
         : AdaptorInterfaces(conn, dbus_session_pcsc_path),
 #endif
-         Application("ltsm_pcsc2session"), socketPath(pcscSockName)
+         Application("ltsm_pcsc2session")
     {
-        //setDebug(DebugTarget::Console, DebugLevel::Debug);
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_PCSC2SESSION_VERSION);
-        Application::debug(DebugType::Pcsc, "PCSCLITE_CSOCK_NAME found: `%s'", socketPath.c_str());
+        Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         registerAdaptor();
     }
 
@@ -196,20 +193,42 @@ namespace LTSM
         unregisterAdaptor();
         close(socketFd);
 
-        if(std::filesystem::is_socket(socketPath))
+        if(std::filesystem::is_socket(pcscSocketPath))
         {
-            std::filesystem::remove(socketPath);
+            std::filesystem::remove(pcscSocketPath);
         }
     }
 
     int PcscSessionBus::start(void)
     {
+        Application::info("%s: uid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getpid(), LTSM_PCSC2SESSION_VERSION);
+
+	if(auto envSockName = getenv("PCSCLITE_CSOCK_NAME"))
+	{
+	    pcscSocketPath = envSockName;
+	}
+
+	if(pcscSocketPath.empty())
+	{
+    	    Application::error("%s: environment not found: %s", __FUNCTION__, "PCSCLITE_CSOCK_NAME");
+    	    return EXIT_FAILURE;
+	}
+
+        Application::info("%s: socket path: `%s'", __FUNCTION__, pcscSocketPath.c_str());
+
+	if(std::filesystem::is_socket(pcscSocketPath))
+	{
+    	    std::filesystem::remove(pcscSocketPath);
+	    Application::warning("%s: socket found: %s", __FUNCTION__, pcscSocketPath.c_str());
+	}
+
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
-        socketFd = UnixSocket::listen(socketPath, 50);
+        socketFd = UnixSocket::listen(pcscSocketPath, 50);
 
         if(0 > socketFd)
         {
+    	    Application::error("%s: socket failed", __FUNCTION__);
             return EXIT_FAILURE;
         }
 
@@ -259,21 +278,19 @@ namespace LTSM
 
     bool PcscSessionBus::connectChannel(const std::string & clientPath)
     {
-        std::filesystem::path socketPath(clientPath);
-
         bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&]()
         {
-            return Tools::checkUnixSocket(socketPath);
+            return Tools::checkUnixSocket(clientPath);
         });
 
         if(! waitSocket)
         {
-            Application::error("%s: checkUnixSocket failed, `%s'", __FUNCTION__, socketPath.c_str());
+            Application::error("%s: checkUnixSocket failed, `%s'", __FUNCTION__, clientPath.c_str());
             return false;
         }
 
-        Application::info("%s: socket path: `%s'", __FUNCTION__, socketPath.c_str());
-        int sockfd = UnixSocket::connect(socketPath);
+        Application::info("%s: client socket path: `%s'", __FUNCTION__, clientPath.c_str());
+        int sockfd = UnixSocket::connect(clientPath);
 
         if(0 > sockfd)
         {
@@ -284,9 +301,9 @@ namespace LTSM
         return true;
     }
 
-    void PcscSessionBus::disconnectChannel(const std::string & clientSocket)
+    void PcscSessionBus::disconnectChannel(const std::string & clientPath)
     {
-        Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
+        Application::info("%s: client socket path: `%s'", __FUNCTION__, clientPath.c_str());
     }
 
     bool PcscSessionBus::pcscClientAction(PcscClient & st)
@@ -1805,11 +1822,13 @@ namespace LTSM
 
 int main(int argc, char** argv)
 {
+    bool debug = false;
+
     for(int it = 1; it < argc; ++it)
     {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
         {
-            std::cout << "usage: " << argv[0] << std::endl;
+            std::cout << "usage: " << argv[0] << " [--version] [--debug]" << std::endl;
             return EXIT_SUCCESS;
         }
         else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
@@ -1817,26 +1836,16 @@ int main(int argc, char** argv)
             std::cout << "version: " << LTSM_PCSC2SESSION_VERSION << std::endl;
             return EXIT_SUCCESS;
         }
+        else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d"))
+        {
+	    debug = true;
+	}
     }
 
     if(0 == getuid())
     {
         std::cerr << "for users only" << std::endl;
         return EXIT_FAILURE;
-    }
-
-    auto pcscSockName = getenv("PCSCLITE_CSOCK_NAME");
-
-    if(! pcscSockName)
-    {
-        std::cerr << "PCSCLITE_CSOCK_NAME not found" << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    if(std::filesystem::is_socket(pcscSockName))
-    {
-        std::filesystem::remove(pcscSockName);
-        std::cerr << "warning, socket found: " << pcscSockName << std::endl;
     }
 
     try
@@ -1849,11 +1858,11 @@ int main(int argc, char** argv)
 
         if(! LTSM::conn)
         {
-            LTSM::Application::error("dbus connection failed, uid: %d", getuid());
+            std::cerr << "dbus connection failed, uid: " << getuid() << std::endl;
             return EXIT_FAILURE;
         }
 
-        LTSM::PcscSessionBus pcscSession(*LTSM::conn, pcscSockName);
+        LTSM::PcscSessionBus pcscSession(*LTSM::conn, debug);
         return pcscSession.start();
     }
     catch(const sdbus::Error & err)

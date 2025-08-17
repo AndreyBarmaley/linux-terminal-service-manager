@@ -24,7 +24,7 @@
 #ifndef _LTSM_AUDIO_
 #define _LTSM_AUDIO_
 
-#define LTSM_AUDIO2SESSION_VERSION 20240304
+#define LTSM_AUDIO2SESSION_VERSION 20250817
 
 #include <cstdint>
 #include <stdexcept>

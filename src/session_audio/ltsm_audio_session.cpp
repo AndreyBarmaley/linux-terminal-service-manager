@@ -252,7 +252,7 @@ namespace LTSM
     }
 
     /// AudioSessionBus
-    AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn)
+    AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn, bool debug)
 #ifdef SDBUS_2_0_API
         : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_audio_path}),
 #else
@@ -260,7 +260,7 @@ namespace LTSM
 #endif
          Application("ltsm_audio2session")
     {
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+        Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
         registerAdaptor();
     }
@@ -272,6 +272,8 @@ namespace LTSM
 
     int AudioSessionBus::start(void)
     {
+        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
+
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
 
@@ -323,6 +325,8 @@ namespace LTSM
 
 int main(int argc, char** argv)
 {
+    bool debug = false;
+    
     for(int it = 1; it < argc; ++it)
     {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
@@ -334,6 +338,10 @@ int main(int argc, char** argv)
         {
             std::cout << "version: " << LTSM_AUDIO2SESSION_VERSION << std::endl;
             return EXIT_SUCCESS;
+        }
+        else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d"))
+        {
+            debug = true;
         }
     }
 
@@ -357,7 +365,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        LTSM::AudioSessionBus audioSession(*LTSM::conn);
+        LTSM::AudioSessionBus audioSession(*LTSM::conn, debug);
         return audioSession.start();
     }
     catch(const sdbus::Error & err)

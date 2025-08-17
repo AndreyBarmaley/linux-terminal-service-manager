@@ -24,7 +24,7 @@
 #ifndef _LTSM_FUSE_
 #define _LTSM_FUSE_
 
-#define LTSM_FUSE2SESSION_VERSION 20240304
+#define LTSM_FUSE2SESSION_VERSION 20250817
 
 #include <stdexcept>
 

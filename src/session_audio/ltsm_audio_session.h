@@ -61,7 +61,7 @@ namespace LTSM
         std::forward_list<AudioClient> clients;
 
     public:
-        AudioSessionBus(sdbus::IConnection &);
+        AudioSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~AudioSessionBus();
 
         int start(void) override;
