@@ -981,14 +981,44 @@ namespace LTSM
         return false;
     }
 
+    const char* sdlWindowEventName(uint8_t id)
+    {
+        switch(id)
+        {
+            case SDL_WINDOWEVENT_NONE: return "none";
+            case SDL_WINDOWEVENT_SHOWN: return "show";
+            case SDL_WINDOWEVENT_HIDDEN: return "hidden";
+            case SDL_WINDOWEVENT_EXPOSED: return "exposed";
+            case SDL_WINDOWEVENT_MOVED: return "moved";
+            case SDL_WINDOWEVENT_RESIZED: return "resized";
+            case SDL_WINDOWEVENT_SIZE_CHANGED: return "size changed";
+            case SDL_WINDOWEVENT_MINIMIZED: return "minimized";
+            case SDL_WINDOWEVENT_MAXIMIZED: return "maximized";
+            case SDL_WINDOWEVENT_RESTORED: return "restored";
+            case SDL_WINDOWEVENT_ENTER: return "enter";
+            case SDL_WINDOWEVENT_LEAVE: return "leave";
+            case SDL_WINDOWEVENT_FOCUS_GAINED: return "focus gained";
+            case SDL_WINDOWEVENT_FOCUS_LOST: return "focus lost";
+            case SDL_WINDOWEVENT_CLOSE: return "close";
+            case SDL_WINDOWEVENT_TAKE_FOCUS: return "take focus";
+            case SDL_WINDOWEVENT_HIT_TEST: return "hit test";
+            case SDL_WINDOWEVENT_ICCPROF_CHANGED: return "iccprof changed";
+            case SDL_WINDOWEVENT_DISPLAY_CHANGED: return "display changed";
+            default: break;
+        }
+        return "unknown";
+    }
+
     bool Vnc2SDL::sdlWindowEvent(const SDL::GenericEvent & ev)
     {
         if(auto we = ev.window())
         {
+            Application::debug(DebugType::App, "%s: window event: %s", __FUNCTION__, sdlWindowEventName(we->event));
+
             switch(we->event)
             {
                 case SDL_WINDOWEVENT_EXPOSED:
-                    window->renderPresent();
+                    window->renderPresent(false);
                     return true;
 
                 case SDL_WINDOWEVENT_FOCUS_GAINED:

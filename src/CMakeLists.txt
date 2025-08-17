@@ -164,11 +164,13 @@ if(LTSM_BUILD_SERVER)
 
         CommonDefaults(SYSTEMD)
 
-        add_executable(${CUR_TARGET} cups_backend/main.cpp)
+        add_executable(${CUR_TARGET})
         find_package(Cups REQUIRED)
 
-        target_include_directories(${CUR_TARGET} PRIVATE common ${CUPS_INCLUDE_DIR})
+        target_include_directories(${CUR_TARGET} PRIVATE common)
+
         add_subdirectory(common ${CUR_TARGET}_common)
+        add_subdirectory(cups_backend ${CUR_TARGET}_cups_backend)
 
         set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
     endif()
@@ -264,9 +266,9 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_WITH_PKCS11 ${LTSM_CLIENT_PKCS11_AUTH})
 
     if(APPLE)
-        add_executable(${CUR_TARGET} MACOSX_BUNDLE client/ltsm_vnc2sdl.cpp)
+        add_executable(${CUR_TARGET} MACOSX_BUNDLE)
     else()
-        add_executable(${CUR_TARGET} client/ltsm_vnc2sdl.cpp)
+        add_executable(${CUR_TARGET})
     endif()
 
     target_compile_definitions(${CUR_TARGET} PRIVATE -DLTSM_CLIENT)

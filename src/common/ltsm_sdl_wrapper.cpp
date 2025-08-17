@@ -302,14 +302,17 @@ namespace LTSM
         }
     }
 
-    void SDL::Window::renderPresent(void)
+    void SDL::Window::renderPresent(bool sync)
     {
         renderReset();
 
-        if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr))
+        if(sync)
         {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr))
+            {
+                Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
+                throw sdl_error(NS_FuncName);
+            }
         }
 
         SDL_RenderPresent(_renderer.get());

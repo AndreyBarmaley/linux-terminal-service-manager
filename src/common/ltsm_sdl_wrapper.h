@@ -160,7 +160,7 @@ namespace LTSM
                                       const SDL_Rect* dstrt = nullptr);
 
             void renderReset(SDL_Texture* target = nullptr);
-            void renderPresent(void);
+            void renderPresent(bool sync = true);
 
             Texture createTexture(int width, int height, uint32_t format = TEXTURE_FMT) const;
 
