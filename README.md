@@ -5,8 +5,6 @@ Linux Terminal Service Manager (LTSM) is a set of service programs that allows r
 main dependencies:  
   - systemd, sd-bus  
   - [sdbus-cpp](https://github.com/Kistler-Group/sdbus-cpp)  
-  - [json parser](https://github.com/zserge/jsmn)  
-  - [freerdp](https://github.com/FreeRDP/FreeRDP)
   - system libs: gnutls, xcb, zlib  
 
 ## Developer indicators
@@ -86,5 +84,4 @@ You can test all implemented features in the **docker** version.
 * add video recordings of all working sessions (video recording)
 * add [**VirtualGL**](https://virtualgl.org) support
 * add a video redirect via **PipeWire**
-* work with graphics accelerated via **Cuda GPU** (there are no technical capabilities yet)
 * build client for MacOs/Windows

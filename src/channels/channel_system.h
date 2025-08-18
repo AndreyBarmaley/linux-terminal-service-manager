@@ -420,6 +420,8 @@ namespace LTSM
             std::vector<uint8_t> last;
 
         protected:
+            void pcscCommand(uint16_t cmd, const StreamBufRef & sb);
+
             void pcscEstablishContext(const StreamBufRef &);
             void pcscReleaseContext(const StreamBufRef &);
             void pcscListReaders(const StreamBufRef &);

@@ -736,24 +736,15 @@ namespace LTSM
         return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
     }
 
-    std::string Tools::prettyFuncName(const std::string & name)
+    std::string Tools::prettyFuncName(std::string_view name)
     {
-        size_t end = name.find('(');
+        auto end = std::find(name.begin(), name.end(), '(');
+        auto beg = end != name.end() ? end : end = std::prev(name.end());
 
-        if(end == std::string::npos) { end = name.size(); }
+        while(beg != name.begin() && ! std::isspace(*beg))
+            beg = std::prev(beg);
 
-        size_t begin = 0;
-
-        for(size_t it = end; it; --it)
-        {
-            if(name[it] == 0x20)
-            {
-                begin = it + 1;
-                break;
-            }
-        }
-
-        return name.substr(begin, end - begin);
+        return std::string{std::next(beg), end};
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file)

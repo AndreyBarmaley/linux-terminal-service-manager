@@ -73,6 +73,16 @@ namespace LTSM
         return std::string(view.begin(), view.end());
     }
 
+    template<typename Iter>
+    inline std::string_view string2view(Iter it1, Iter it2)
+    {
+#if __cplusplus >= 202002L
+        return std::string_view{it1, it2};
+#else
+        return std::string_view{std::addressof(*it1), (size_t) (it2 - it1) };
+#endif
+    }
+
 #ifdef __UNIX__
     class UserInfo
     {
@@ -150,7 +160,7 @@ namespace LTSM
         std::list<std::string> readDir(const std::filesystem::path &, bool recurse);
         std::filesystem::path resolveSymLink(const std::filesystem::path &);
 
-        std::string prettyFuncName(const std::string &);
+        std::string prettyFuncName(std::string_view);
         std::string randomHexString(size_t len);
 
         std::string fileToString(const std::filesystem::path &);

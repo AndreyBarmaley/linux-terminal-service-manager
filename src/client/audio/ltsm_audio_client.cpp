@@ -159,9 +159,9 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             throw std::underflow_error(NS_FuncName);
         }
     }
-    catch(const std::underflow_error &)
+    catch(const std::underflow_error & err)
     {
-        Application::warning("%s: underflow data: %lu", __FUNCTION__, sb.last());
+        Application::warning("%s: underflow data: %lu, func: %s", __FUNCTION__, sb.last(), err.what());
 
         if(beginPacket)
         {

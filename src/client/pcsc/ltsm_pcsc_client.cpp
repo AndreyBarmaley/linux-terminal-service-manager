@@ -128,86 +128,123 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv)
         last.clear();
     }
 
-    if(4 < sb.last())
-    {
-        // pcsc stream format:
-        // <CMD16> - pcsc init
-        // <CMD16> - pcsc cmd
-        // <DATA> - pcsc data
-        auto pcscInit = sb.readIntLE16();
+    const uint8_t* beginPacket = nullptr;
+    const uint8_t* endPacket = nullptr;
 
-        if(pcscInit == PcscOp::Init)
+    try
+    {
+        while(4 < sb.last())
         {
-            auto pcscCmd = sb.readIntLE16();
-            Application::debug(DebugType::Pcsc, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pcscCmd);
+            beginPacket = sb.data();
+            endPacket = beginPacket + sb.last();
 
-            switch(pcscCmd)
+            // pcsc stream format:
+            // <CMD16> - pcsc init
+            // <CMD16> - pcsc cmd
+            // <DATA> - pcsc data
+            auto pcscInit = sb.readIntLE16();
+
+            if(pcscInit == PcscOp::Init)
             {
-                case PcscLite::EstablishContext:
-                    return pcscEstablishContext(sb);
+                auto pcscCmd = sb.readIntLE16();
+                Application::debug(DebugType::Pcsc, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pcscCmd);
 
-                case PcscLite::ReleaseContext:
-                    return pcscReleaseContext(sb);
-
-                case PcscLite::ListReaders:
-                    return pcscListReaders(sb);
-
-                case PcscLite::Connect:
-                    return pcscConnect(sb);
-
-                case PcscLite::Reconnect:
-                    return pcscReconnect(sb);
-
-                case PcscLite::Disconnect:
-                    return pcscDisconnect(sb);
-
-                case PcscLite::BeginTransaction:
-                    return pcscBeginTransaction(sb);
-
-                case PcscLite::EndTransaction:
-                    return pcscEndTransaction(sb);
-
-                case PcscLite::Transmit:
-                    return pcscTransmit(sb);
-
-                case PcscLite::Status:
-                    return pcscStatus(sb);
-
-                case PcscLite::GetStatusChange:
-                    return pcscGetStatusChange(sb);
-
-                case PcscLite::Control:
-                    return pcscControl(sb);
-
-                case PcscLite::Cancel:
-                    return pcscCancel(sb);
-
-                case PcscLite::GetAttrib:
-                    return pcscGetAttrib(sb);
-
-                case PcscLite::SetAttrib:
-                    return pcscSetAttrib(sb);
-
-                default:
-                    break;
+                pcscCommand(pcscCmd, sb);
+                //
             }
-
-            Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu",
-                               __FUNCTION__, "pcsc", pcscCmd, recv.size());
+            else
+            {
+                Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu",
+                           __FUNCTION__, "pcsc init", pcscInit, recv.size());
+                throw channel_error(NS_FuncName);
+            }
         }
-
-        Application::error("%s: %s failed, op: 0x%" PRIx16 ", recv size: %lu",
-                           __FUNCTION__, "pcsc", pcscInit, recv.size());
-        throw channel_error(NS_FuncName);
+        
+        if(sb.last())
+        {
+            throw std::underflow_error(NS_FuncName);
+        }
     }
-    else
+    catch(const std::underflow_error & err)
     {
-        Application::error("%s: %s failed, recv size: %lu", __FUNCTION__, "data", recv.size());
+        Application::warning("%s: underflow data: %lu, func: %s", __FUNCTION__, sb.last(), err.what());
+
+        if(beginPacket)
+        {
+            last.assign(beginPacket, endPacket);
+        }
+        else
+        {
+            last.swap(recv);
+        }
     }
+}
+
+void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamBufRef & sb)
+{
+    switch(cmd)
+    {
+        case PcscLite::EstablishContext:
+            return pcscEstablishContext(sb);
+
+        case PcscLite::ReleaseContext:
+            return pcscReleaseContext(sb);
+
+        case PcscLite::ListReaders:
+            return pcscListReaders(sb);
+
+        case PcscLite::Connect:
+            return pcscConnect(sb);
+
+        case PcscLite::Reconnect:
+            return pcscReconnect(sb);
+
+        case PcscLite::Disconnect:
+            return pcscDisconnect(sb);
+
+        case PcscLite::BeginTransaction:
+            return pcscBeginTransaction(sb);
+
+        case PcscLite::EndTransaction:
+            return pcscEndTransaction(sb);
+
+        case PcscLite::Transmit:
+            return pcscTransmit(sb);
+
+        case PcscLite::Status:
+            return pcscStatus(sb);
+
+        case PcscLite::GetStatusChange:
+            return pcscGetStatusChange(sb);
+
+        case PcscLite::Control:
+            return pcscControl(sb);
+
+        case PcscLite::Cancel:
+            return pcscCancel(sb);
+
+        case PcscLite::GetAttrib:
+            return pcscGetAttrib(sb);
+
+        case PcscLite::SetAttrib:
+            return pcscSetAttrib(sb);
+
+        default:
+            break;
+    }
+
+    Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", last size: %lu",
+                       __FUNCTION__, "pcsc", cmd, sb.last());
+    throw channel_error(NS_FuncName);
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef & sb)
 {
+    if(4 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     uint32_t scope = sb.readIntLE32();
     Application::info("%s: dwScope: %" PRIu32, __FUNCTION__, scope);
     SCARDCONTEXT hContext = 0;
@@ -230,6 +267,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef & sb)
 {
+    if(8 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDCONTEXT hContext = sb.readIntLE64();
     Application::info("%s: context: %" PRIx64, __FUNCTION__, hContext);
     LONG ret = SCardReleaseContext(hContext);
@@ -287,6 +329,11 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb)
 {
+    if(8 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDCONTEXT hContext = sb.readIntLE64();
     Application::info("%s: context: %" PRIx64, __FUNCTION__, hContext);
     auto readers = getListReaders(hContext);
@@ -304,10 +351,21 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
 
 void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
 {
+    if(20 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDCONTEXT hContext = sb.readIntLE64();
     uint32_t shareMode = sb.readIntLE32();
     uint32_t prefferedProtocols = sb.readIntLE32();
     uint32_t len = sb.readIntLE32();
+
+    if(len > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     auto readerName = sb.readString(len);
     Application::info("%s: context: %" PRIx64 ", readerName: `%s', shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32,
                       __FUNCTION__, hContext, readerName.c_str(), shareMode, prefferedProtocols);
@@ -332,6 +390,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
 {
+    if(20 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t shareMode = sb.readIntLE32();
     uint32_t prefferedProtocols = sb.readIntLE32();
@@ -355,6 +418,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
 {
+    if(12 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
     Application::info("%s: handle: %" PRIx64 ", disposition: %" PRIu32,
@@ -374,6 +442,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef & sb)
 {
+    if(8 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     Application::info("%s: handle: %" PRIx64,
                       __FUNCTION__, hCard);
@@ -392,6 +465,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
 
 void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef & sb)
 {
+    if(12 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
     Application::info("%s: handle: %" PRIx64 ", disposition: %" PRIu32,
@@ -411,11 +489,22 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
 
 void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
 {
+    if(20 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARD_IO_REQUEST ioSendPci, ioRecvPci;
     SCARDHANDLE hCard = sb.readIntLE64();
     ioSendPci.dwProtocol = sb.readIntLE32();
     ioSendPci.cbPciLength = sb.readIntLE32();
     uint32_t sendLength = sb.readIntLE32();
+
+    if(sendLength > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     auto sendBuffer = sb.read(sendLength);
     Application::info("%s: handle: %" PRIx64 ", dwProtocol: %" PRIu64 ", pciLength: %" PRIu64 ", send size: %" PRIu32,
                       __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength);
@@ -443,6 +532,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
 {
+    if(8 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     Application::info("%s: handle: %" PRIx64, __FUNCTION__, hCard);
     DWORD state = 0;
@@ -473,6 +567,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef & sb)
 {
+    if(16 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hContext = sb.readIntLE64();
     uint32_t timeout = sb.readIntLE32();
     uint32_t statesCount = sb.readIntLE32();
@@ -482,13 +581,30 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
     {
         auto str = new std::string;
         auto len = sb.readIntLE32();
+
+        if(len > sb.last())
+        {
+            throw std::underflow_error(NS_FuncName);
+        }
+
         str->assign(sb.readString(len));
         state.szReader = str->c_str();
         state.pvUserData = str;
+
+        if(8 > sb.last())
+        {
+            throw std::underflow_error(NS_FuncName);
+        }
+
         state.dwCurrentState = sb.readIntLE32();
         state.dwEventState = 0;
         state.cbAtr = sb.readIntLE32();
         assertm(state.cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
+
+        if(state.cbAtr > sb.last())
+        {
+            throw std::underflow_error(NS_FuncName);
+        }
 
         if(state.cbAtr)
         {
@@ -527,10 +643,21 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
 
 void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
 {
+    if(20 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t controlCode = sb.readIntLE32();
     uint32_t sendLength = sb.readIntLE32();
     uint32_t recvLength = sb.readIntLE32();
+
+    if(sendLength > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     auto sendBuffer = sb.read(sendLength);
     Application::info("%s: handle: %" PRIx64 ", controlCode: 0x%08" PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
                       __FUNCTION__, hCard, controlCode, sendLength, recvLength);
@@ -558,6 +685,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb)
 {
+    if(8 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hContext = sb.readIntLE64();
     Application::info("%s: context: %" PRIx64, __FUNCTION__, hContext);
     LONG ret = SCardCancel(hContext);
@@ -575,6 +707,11 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb)
 {
+    if(12 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t attrId = sb.readIntLE32();
     Application::info("%s: handle: %" PRIx64 ", attrId: %" PRIu32, __FUNCTION__, hCard, attrId);
@@ -601,9 +738,20 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb)
 {
+    if(16 > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t attrId = sb.readIntLE32();
     uint32_t attrLen = sb.readIntLE32();
+
+    if(attrLen > sb.last())
+    {
+        throw std::underflow_error(NS_FuncName);
+    }
+
     auto attrBuf = sb.read(attrLen);
     Application::info("%s: handle: %" PRIx64 ", attrId: %" PRIu32 ", attrLen: %" PRIu32, __FUNCTION__, hCard, attrId,
                       attrLen);
