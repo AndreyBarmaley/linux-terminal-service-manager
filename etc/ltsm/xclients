@@ -9,6 +9,17 @@ if ( umask 077 && cp /dev/null "${errfile}" 2> /dev/null ); then
         exec > "${errfile}" 2>&1
 fi
 
+if [ -z "$UID" ]; then
+    export UID=`id --user`
+fi
+
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_CONFIG_DIRS="/etc/xdg"
+    export XDG_DATA_DIRS="/usr/share"
+    export XDG_RUNTIME_DIR=/run/user/$UID
+    export XDG_SESSION_TYPE="x11"
+fi
+
 if [ -d $XDG_RUNTIME_DIR ]; then
     chmod 700 $XDG_RUNTIME_DIR
 else
@@ -55,8 +66,9 @@ fi
 # setxkbmap -model pc105 -layout us -option ''
 #
 # change layout:
-# setxkbmap -option ""
-# setxkbmap -layout "us,ru" -variant ",winkeys" -option "grp:ctrl_shift_toggle"
+setxkbmap -option ""
+setxkbmap -layout "us,ru" -variant ",winkeys" -option "grp:ctrl_shift_toggle"
+
 #
 # change symbol:
 # setxkbmap -symbols "+kpdl(dotoss)+kpdl(dotoss):2"
