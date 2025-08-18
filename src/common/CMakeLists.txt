@@ -120,10 +120,6 @@ else()
     endif()
 endif()
 
-if(LTSM_FORCE_SYSLOG)
-    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_FORCE_SYSLOG)
-endif()
-
 if(LTSM_WITH_SYSTEMD)
     if(UNIX AND NOT APPLE)
         pkg_check_modules(SYSTEMD libsystemd)

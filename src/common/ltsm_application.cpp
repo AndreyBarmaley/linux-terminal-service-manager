@@ -76,6 +76,7 @@ namespace LTSM
 
     std::string ident{"application"};
     int facility = LOG_USER;
+    bool forceSyslog = true;
 
     bool Application::isDebugTarget(const DebugTarget & tgt)
     {
@@ -193,6 +194,12 @@ namespace LTSM
         std::setlocale(LC_NUMERIC, "C");
 
         ident.assign(sid.begin(), sid.end());
+#ifdef LTSM_WITH_SYSTEMD
+        // check systemd or docker
+        auto res = Tools::runcmd("systemctl is-system-running");
+        if(res.empty() || res == "offline")
+            forceSyslog = true;
+#endif
     }
 
     Application::~Application()
@@ -239,13 +246,14 @@ namespace LTSM
     void toPlatformSyslog(int priority, const char* format, va_list args)
     {
 #ifdef __UNIX__
- #if defined(LTSM_FORCE_SYSLOG)
-        vsyslog(priority, format, args);
- #elif defined(LTSM_WITH_SYSTEMD)
-        sd_journal_printv(priority, format, args);
- #else
-        vsyslog(priority, format, args);
+ #ifdef LTSM_WITH_SYSTEMD
+        if(! forceSyslog)
+        {
+            sd_journal_printv(priority, format, args);
+            return;
+        }
  #endif
+        vsyslog(priority, format, args);
 #else
         vfprintf(appLoggingFd ? appLoggingFd.get() : stderr, format, args);
 #endif
