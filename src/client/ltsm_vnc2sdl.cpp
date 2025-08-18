@@ -327,11 +327,11 @@ namespace LTSM
 
             auto it1 = line.begin();
             auto it2 = std::find(it1, line.end(), 0x20);
-            std::string_view cmd{it1, it2};
+            std::string_view cmd = string2view(it1, it2);
 
             if(it2 != line.end())
             {
-                std::string_view arg{it2 + 1, line.end()};
+                std::string_view arg = string2view(it2 + 1, line.end());
                 Application::info("%s: %.*s %.*s", __FUNCTION__, (int) cmd.size(), cmd.data(), (int) arg.size(), arg.data());
                 parseCommand(cmd, arg);
             }
@@ -640,7 +640,7 @@ namespace LTSM
             try
             {
                 auto width = std::stoi(view2string(arg), & idx, 0);
-                std::string_view arg2{arg.begin() + idx + 1, arg.end()};
+                std::string_view arg2 = string2view(arg.begin() + idx + 1, arg.end());
                 auto height = std::stoi(view2string(arg2), nullptr, 0);
                 primarySize = XCB::Size(width, height);
             }
@@ -1002,8 +1002,11 @@ namespace LTSM
             case SDL_WINDOWEVENT_CLOSE: return "close";
             case SDL_WINDOWEVENT_TAKE_FOCUS: return "take focus";
             case SDL_WINDOWEVENT_HIT_TEST: return "hit test";
+
+#if SDL_VERSION_ATLEAST(2, 0, 18)
             case SDL_WINDOWEVENT_ICCPROF_CHANGED: return "iccprof changed";
             case SDL_WINDOWEVENT_DISPLAY_CHANGED: return "display changed";
+#endif
             default: break;
         }
         return "unknown";
