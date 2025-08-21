@@ -76,7 +76,7 @@ namespace LTSM
 
     std::string ident{"application"};
     int facility = LOG_USER;
-    bool forceSyslog = true;
+    bool forceSyslog = false;
 
     bool Application::isDebugTarget(const DebugTarget & tgt)
     {
@@ -197,6 +197,7 @@ namespace LTSM
 #ifdef LTSM_WITH_SYSTEMD
         // check systemd or docker
         auto res = Tools::runcmd("systemctl is-system-running");
+        // systemd not running switch to syslog
         if(res.empty() || res == "offline")
             forceSyslog = true;
 #endif

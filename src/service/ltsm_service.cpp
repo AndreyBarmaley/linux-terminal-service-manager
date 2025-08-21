@@ -572,8 +572,6 @@ namespace LTSM
         // home may be nfs and deny for root
         try
         {
-	    auto xdgRuntimeDir = std::filesystem::path("/run/user") / std::to_string(userInfo.uid());
-
             if(std::filesystem::is_directory(dbusSessionPath))
             {
                 std::string_view dbusLabel = "DBUS_SESSION_BUS_ADDRESS='";
@@ -604,7 +602,7 @@ namespace LTSM
                 }
             }
 
-            auto dbusBrokerPath = xdgRuntimeDir / "bus";
+            auto dbusBrokerPath = userInfo.xdgRuntimeDir() / "bus";
 
             if(std::filesystem::is_socket(dbusBrokerPath))
             {
@@ -612,7 +610,7 @@ namespace LTSM
             }
 
 	    // ltsm path from /etc/ltsm/xclients
-	    auto dbusLtsmSessionPath = xdgRuntimeDir / "ltsm" / Tools::joinToString("dbus_session_", displayNum);
+	    auto dbusLtsmSessionPath = userInfo.xdgRuntimeDir() / "ltsm" / Tools::joinToString("dbus_session_", displayNum);
 
             if(std::filesystem::is_regular_file(dbusLtsmSessionPath))
             {
@@ -759,7 +757,7 @@ namespace LTSM
     {
         Application::debug(DebugType::Mgr, "%s: pid: %d, uid: %d, gid: %d, home:`%s', shell: `%s'", __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(),
                            userInfo.home(), userInfo.shell());
-        auto xdgRuntimeDir = std::filesystem::path("/run/user") / std::to_string(userInfo.uid());
+        auto xdgRuntimeDir = userInfo.xdgRuntimeDir();
         std::error_code err;
 
         if(! std::filesystem::exists(xdgRuntimeDir, err))
@@ -1433,7 +1431,7 @@ namespace LTSM
 
     bool Manager::Object::createSessionConnInfo(XvfbSessionPtr xvfb, bool destroy)
     {
-        auto ltsmInfo = std::filesystem::path(xvfb->userInfo->home()) / ".ltsm" / "conninfo";
+        auto ltsmInfo = xvfb->userInfo->xdgRuntimeDir() / "ltsm" / Tools::joinToString("conninfo_", xvfb->displayNum);
         auto dir = ltsmInfo.parent_path();
         std::error_code err;
 
@@ -2062,7 +2060,7 @@ namespace LTSM
             }
             else if(std::string::npos != val.find("%{runtime_dir}"))
             {
-                val = Tools::replace(val, "%{runtime_dir}", newSess->userInfo->runtime_dir());
+                val = Tools::replace(val, "%{runtime_dir}", newSess->userInfo->xdgRuntimeDir().native());
             }
         }
 

@@ -314,11 +314,14 @@ namespace LTSM
 
     std::string NetworkStream::recvString(size_t length) const
     {
-        std::string res(length, 0);
+        if(length)
+        {
+            std::string res(length, 0);
+            recvData(res.data(), res.size());
+            return res;
+        }
 
-        if(length) { recvData(& res[0], length); }
-
-        return res;
+        return {};
     }
 
     void NetworkStream::recvFrom(int fd, void* ptr, ssize_t len)

@@ -107,7 +107,7 @@ namespace LTSM
 
         inline const gid_t & gid(void) const { return st.pw_gid; }
 
-        inline std::string runtime_dir(void) const { return std::string("/run/user/").append(std::to_string(st.pw_uid)); }
+        inline std::filesystem::path xdgRuntimeDir(void) const { return std::filesystem::path("/run/user") / std::to_string(st.pw_uid); }
     };
 
     class GroupInfo

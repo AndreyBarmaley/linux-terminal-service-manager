@@ -575,7 +575,7 @@ namespace LTSM
             }
 
             std::vector<sdbus::Struct<std::string, uint32_t>> files;
-            std::scoped_lock<std::mutex> guard(lockTransfer);
+            std::scoped_lock<std::mutex> guard{lockTransfer};
 
             for(int it = 0; it < fa->size(); ++it)
             {
@@ -645,7 +645,7 @@ namespace LTSM
 
         if(display == displayNum())
         {
-            std::scoped_lock<std::mutex> guard(lockTransfer);
+            std::scoped_lock<std::mutex> guard{lockTransfer};
             auto it = std::find_if(transfer.begin(), transfer.end(), [&](auto & st)
             {
                 return st.first == filepath;

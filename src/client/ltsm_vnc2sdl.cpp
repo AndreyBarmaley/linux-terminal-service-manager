@@ -325,6 +325,9 @@ namespace LTSM
             if(line.empty())
                 continue;
 
+            if(! line.starts_with("--"))
+                continue;
+
             auto it1 = line.begin();
             auto it2 = std::find(it1, line.end(), 0x20);
             std::string_view cmd = string2view(it1, it2);

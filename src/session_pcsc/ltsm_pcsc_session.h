@@ -162,6 +162,7 @@ namespace LTSM
 
         int syncReaderStatusChange(PcscClient &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
         int64_t pcscGetStatusChange(PcscClient &, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
+        void pcscStatusApply(PcscClient &, const std::string &, uint32_t state, uint32_t protocol, const std::vector<uint8_t> &);
 
         std::list<std::string> pcscListReaders(PcscClient &);
         PcscLite::ReaderState* findReaderState(const std::string & name);
