@@ -36,7 +36,7 @@ namespace LTSM
 {
     struct json_error : public std::runtime_error
     {
-        explicit json_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit json_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     JsmnToken::JsmnToken()

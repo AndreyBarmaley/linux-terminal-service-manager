@@ -105,7 +105,6 @@ namespace LTSM
         PcscLite::ReaderState* reader = nullptr;
 
         std::thread thread;
-        std::atomic<bool> shutdown{false};
 
         WaitStatus waitStatusChanged;
 
@@ -139,7 +138,6 @@ namespace LTSM
         std::recursive_mutex ltsmLock;
 
         std::filesystem::path pcscSocketPath;
-        int socketFd = -1;
 
     protected:
         bool pcscEstablishContext(PcscClient &, uint32_t len);
@@ -181,6 +179,7 @@ namespace LTSM
         void disconnectChannel(const std::string & clientSocket) override;
 
         bool pcscClientAction(PcscClient &);
+        void clientShutdownNotify(const PcscClient*);
 
         int64_t syncReaders(PcscClient &, bool* changed = nullptr);
     };

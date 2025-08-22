@@ -80,7 +80,7 @@ namespace LTSM
     /// channel_error execption
     struct channel_error : public std::runtime_error
     {
-        explicit channel_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit channel_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     enum class ChannelType : uint8_t { System = 0, Reserved = 0xFF };

@@ -58,7 +58,7 @@ namespace LTSM
 {
     struct network_error : public std::runtime_error
     {
-        explicit network_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit network_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// @brief: network stream interface
@@ -155,7 +155,7 @@ namespace LTSM
         int sock;
 
     public:
-        explicit SocketStream(int fd = 0);
+        explicit SocketStream(int fd = 0, bool statistic = true);
         ~SocketStream();
 
         SocketStream(const SocketStream &) = delete;
@@ -253,7 +253,7 @@ namespace LTSM
 #ifdef LTSM_WITH_GNUTLS
     struct gnutls_error : public std::runtime_error
     {
-        explicit gnutls_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit gnutls_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// transport layer security
@@ -333,7 +333,7 @@ namespace LTSM
 #ifdef LTSM_WITH_GSSAPI
     struct gssapi_error : public std::runtime_error
     {
-        explicit gssapi_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit gssapi_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace GssApi
@@ -400,7 +400,7 @@ namespace LTSM
 
     struct zlib_error : public std::runtime_error
     {
-        explicit zlib_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace ZLib

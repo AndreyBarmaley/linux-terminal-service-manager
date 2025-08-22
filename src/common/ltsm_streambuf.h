@@ -30,6 +30,8 @@
 #include <utility>
 #include <cstdint>
 
+#include "ltsm_compat.h"
+
 #define LTSM_STREAMBUF_VERSION 20240810
 
 namespace LTSM
@@ -264,7 +266,7 @@ namespace LTSM
 
     struct streambuf_error : public std::runtime_error
     {
-        explicit streambuf_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit streambuf_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// @brief: read only StreamBuf

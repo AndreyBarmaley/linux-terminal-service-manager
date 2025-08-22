@@ -207,7 +207,7 @@ namespace LTSM
 
                     if(0 < fd)
                     {
-                        fuse->sock = std::make_unique<SocketStream>(fd);
+                        fuse->sock = std::make_unique<SocketStream>(fd, false /* statistic */);
                         break;
                     }
                 }

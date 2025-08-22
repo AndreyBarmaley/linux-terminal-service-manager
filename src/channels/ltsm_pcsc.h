@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include "ltsm_compat.h"
+
 namespace PcscLite
 {
     enum
@@ -68,7 +70,7 @@ namespace LTSM
 
     struct pcsc_error : public std::runtime_error
     {
-        explicit pcsc_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit pcsc_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }
 

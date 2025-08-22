@@ -38,7 +38,7 @@ namespace LTSM
 
     struct sdl_error : public std::runtime_error
     {
-        explicit sdl_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit sdl_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace SDL

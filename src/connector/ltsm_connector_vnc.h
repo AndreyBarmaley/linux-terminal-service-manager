@@ -38,7 +38,7 @@ namespace LTSM
 {
     struct vnc_error : public std::runtime_error
     {
-        explicit vnc_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit vnc_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace Connector

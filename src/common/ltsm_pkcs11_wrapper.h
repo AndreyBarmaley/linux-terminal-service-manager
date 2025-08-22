@@ -34,11 +34,13 @@
 #include <forward_list>
 #include <initializer_list>
 
+#include "ltsm_compat.h"
+
 namespace LTSM
 {
     struct pkcs11_error : public std::runtime_error
     {
-        explicit pkcs11_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit pkcs11_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace PKCS11

@@ -51,6 +51,8 @@
 #include <filesystem>
 #include <functional>
 
+#include "ltsm_compat.h"
+
 #include <cassert>
 // Use (void) to silence unused warnings.
 #define assertm(exp, msg) assert(((void)msg, exp))
@@ -67,21 +69,6 @@
 namespace LTSM
 {
     class ByteArray;
-
-    inline std::string view2string(std::string_view view)
-    {
-        return std::string(view.begin(), view.end());
-    }
-
-    template<typename Iter>
-    inline std::string_view string2view(Iter it1, Iter it2)
-    {
-#if __cplusplus >= 202002L
-        return std::string_view{it1, it2};
-#else
-        return std::string_view{std::addressof(*it1), (size_t) (it2 - it1) };
-#endif
-    }
 
 #ifdef __UNIX__
     class UserInfo

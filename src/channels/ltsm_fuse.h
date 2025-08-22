@@ -28,6 +28,8 @@
 
 #include <stdexcept>
 
+#include "ltsm_compat.h"
+
 namespace LTSM
 {
     namespace FuseOp
@@ -56,7 +58,7 @@ namespace LTSM
 
     struct fuse_error : public std::runtime_error
     {
-        explicit fuse_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit fuse_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }
 

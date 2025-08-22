@@ -38,7 +38,7 @@ namespace LTSM
 
     struct rdp_error : public std::runtime_error
     {
-        explicit rdp_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace Connector

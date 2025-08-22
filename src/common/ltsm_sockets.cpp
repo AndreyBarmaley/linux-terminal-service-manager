@@ -400,8 +400,9 @@ namespace LTSM
     }
 
     /* SocketStream */
-    SocketStream::SocketStream(int fd) : sock(fd)
+    SocketStream::SocketStream(int fd, bool statistic) : sock(fd)
     {
+        useStatistic(statistic);
     }
 
     SocketStream::~SocketStream()

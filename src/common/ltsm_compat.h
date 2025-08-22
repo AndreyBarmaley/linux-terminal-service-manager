@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright © 2022 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
+ *   Copyright © 2021 by Andrey Afletdinov <public.irkutsk@gmail.com>      *
  *                                                                         *
  *   Part of the LTSM: Linux Terminal Service Manager:                     *
  *   https://github.com/AndreyBarmaley/linux-terminal-service-manager      *
@@ -20,33 +20,28 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef _LTSM_LDAP_WRAPPER_H_
-#define _LTSM_LDAP_WRAPPER_H_
+#ifndef _LTSM_COMPAT_
+#define _LTSM_COMPAT_
 
-#include <ldap.h>
 
 #include <string>
-#include <vector>
-#include <stdexcept>
 
 namespace LTSM
 {
-    struct ldap_error : public std::runtime_error
+    inline std::string view2string(std::string_view view)
     {
-        explicit ldap_error(std::string_view what) : std::runtime_error(view2string(what)) {}
-    };
+        return std::string(view.begin(), view.end());
+    }
 
-    class LdapWrapper
+    template<typename Iter>
+    inline std::string_view string2view(Iter it1, Iter it2)
     {
-        LDAP* ldap = nullptr;
-
-    public:
-        LdapWrapper();
-        ~LdapWrapper();
-
-        std::string findLoginFromDn(const std::string & dn);
-        std::string findDnFromCertificate(const uint8_t*, size_t);
-    };
+#if __cplusplus >= 202002L
+        return std::string_view{it1, it2};
+#else
+        return std::string_view{std::addressof(*it1), (size_t) (it2 - it1) };
+#endif
+    }
 }
 
-#endif
+#endif // _LTSM_COMPAT_

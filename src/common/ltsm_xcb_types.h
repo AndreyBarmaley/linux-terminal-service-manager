@@ -28,11 +28,13 @@
 #include <cinttypes>
 #include <stdexcept>
 
+#include "ltsm_compat.h"
+
 namespace LTSM
 {
     struct xcb_error : public std::runtime_error
     {
-        explicit xcb_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit xcb_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     namespace XCB

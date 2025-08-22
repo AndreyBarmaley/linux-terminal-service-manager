@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include "ltsm_compat.h"
+
 namespace LTSM
 {
     namespace AudioOp
@@ -70,7 +72,7 @@ namespace LTSM
 
     struct audio_error : public std::runtime_error
     {
-        explicit audio_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit audio_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }
 

@@ -64,7 +64,7 @@ namespace LTSM
             {
                 if(int fd = UnixSocket::connect(socketPath); 0 < fd)
                 {
-                    sock = std::make_unique<SocketStream>(fd);
+                    sock = std::make_unique<SocketStream>(fd, false /* statistic */);
                     break;
                 }
 

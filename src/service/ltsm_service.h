@@ -44,7 +44,7 @@ namespace LTSM
 {
     struct service_error : public std::runtime_error
     {
-        explicit service_error(std::string_view what) : std::runtime_error(what.data()) {}
+        explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// PamService
@@ -261,7 +261,6 @@ namespace LTSM
 
             std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
 
-            const Application* _app = nullptr;
             const JsonObject* _config = nullptr;
             std::atomic<bool> loginsDisable = false;
 
@@ -302,7 +301,7 @@ namespace LTSM
             void childEndedEvent(void);
 
         public:
-            Object(sdbus::IConnection &, const JsonObject &, size_t displays, const Application &);
+            Object(sdbus::IConnection &, const JsonObject &, size_t displays);
             ~Object();
 
             void shutdownService(void);

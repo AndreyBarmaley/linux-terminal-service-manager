@@ -1094,13 +1094,13 @@ namespace LTSM
     }; // RunAs
 
     /* Manager::Object */
-    Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, size_t displays, const Application & app)
+    Manager::Object::Object(sdbus::IConnection & conn, const JsonObject & jo, size_t displays)
 #ifdef SDBUS_2_0_API
         : AdaptorInterfaces(conn, sdbus::ObjectPath{LTSM::dbus_manager_service_path})
 #else
         : AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(displays), _app(& app), _config(& jo)
+        , XvfbSessions(displays), _config(& jo)
     {
         // registry
         registerAdaptor();
@@ -4301,7 +4301,7 @@ namespace LTSM
         createXauthDir();
         int min = config().getInteger("display:min", 55);
         int max = config().getInteger("display:max", 99);
-        serviceAdaptor.reset(new Manager::Object(*conn, config(), std::abs(max - min), *this));
+        serviceAdaptor = std::make_unique<Manager::Object>(*conn, config(), std::abs(max - min));
         Manager::serviceRunning = true;
         inotifyWatchConfigStart();
 
