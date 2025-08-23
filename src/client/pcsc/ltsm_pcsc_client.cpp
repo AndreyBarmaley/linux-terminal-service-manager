@@ -622,7 +622,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
     if(ret == SCARD_S_SUCCESS)
     {
         Application::debug(DebugType::Pcsc, "%s: >> readerName: `%.*s', state: 0x%08" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
-                      __FUNCTION__, readerNameLen, readerName, static_cast<uint32_t>(state), static_cast<uint32_t>(protocol), static_cast<uint32_t>(atrLen));
+                      __FUNCTION__, (int) readerNameLen, readerName, static_cast<uint32_t>(state), static_cast<uint32_t>(protocol), static_cast<uint32_t>(atrLen));
     }
     else
     {

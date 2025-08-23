@@ -519,7 +519,7 @@ namespace LTSM::LoginHelper
 
     void LoginWindow::loginClicked( void )
     {
-        Application::error( "%s: tokenAuthMode: %d", __FUNCTION__, (int) tockenAuthMode );
+        Application::error( "%s: tokenAuthMode: %d", __FUNCTION__, (int) tokenAuthMode );
 
         ui->pushButtonLogin->setDisabled( true );
         ui->comboBoxUsername->setDisabled( true );
