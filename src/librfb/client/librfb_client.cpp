@@ -41,13 +41,13 @@ namespace LTSM
     /* RFB::ClientDecoder */
     void RFB::ClientDecoder::setInetStreamMode(void)
     {
-        socket.reset(new InetStream());
+        socket = std::make_unique<InetStream>();
         streamIn = streamOut = socket.get();
     }
 
     void RFB::ClientDecoder::setSocketStreamMode(int sockfd)
     {
-        socket.reset(new SocketStream(sockfd));
+        socket = std::make_unique<SocketStream>(sockfd);
         streamIn = streamOut = socket.get();
     }
 

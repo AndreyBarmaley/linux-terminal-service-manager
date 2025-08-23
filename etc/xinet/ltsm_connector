@@ -8,7 +8,7 @@ service rfb
   user            = ltsm-xvfb
   groups          = yes
   server          = /usr/local/sbin/LTSM_connector
-  server_args     = --type vnc
+  server_args     = --type ltsm
 }
 
 service ms-wbt-server

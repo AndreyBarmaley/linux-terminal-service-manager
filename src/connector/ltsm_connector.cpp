@@ -42,44 +42,36 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
-#include "ltsm_font_psf.h"
 #include "ltsm_connector.h"
+#include "ltsm_font_psf.h"
 
-#include "ltsm_connector_vnc.h"
+#include "ltsm_connector_proto.h"
 #ifdef LTSM_WITH_RDP
 #include "ltsm_connector_rdp.h"
 #endif
-#ifdef LTSM_WITH_SPICE
-#include "ltsm_connector_spice.h"
-#endif
+
+#include "ltsm_render_primitives.h"
 
 using namespace std::chrono_literals;
 
-namespace LTSM
+namespace LTSM::Connector
 {
     //
     void connectorHelp(const char* prog)
     {
         LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
-        std::list<std::string> proto = { "VNC" };
 #ifdef LTSM_WITH_RDP
-        proto.emplace_back("RDP");
+        auto proto = { "LTSM", "VNC" /* deprecated */, "RDP", "AUTO" };
+#else
+        auto proto = { "LTSM", "VNC" /* deprecated */ };
 #endif
-#ifdef LTSM_WITH_SPICE
-        proto.emplace_back("SPICE");
-#endif
-
-        if(1 < proto.size())
-        {
-            proto.emplace_back("AUTO");
-        }
 
         std::cout << "usage: " << prog << " --config <path> --type <" <<
                   Tools::join(proto.begin(), proto.end(), "|") << ">" << std::endl;
     }
 
-    /* Connector::Service */
-    Connector::Service::Service(int argc, const char** argv)
+    /* Service */
+    Service::Service(int argc, const char** argv)
         : ApplicationJsonConfig("ltsm_connector"), _type("auto")
     {
         for(int it = 1; it < argc; ++it)
@@ -117,7 +109,7 @@ namespace LTSM
         fds.events = POLLIN;
 
         // has input
-        if(0 < poll(& fds, 1, 1))
+        if(0 < poll( & fds, 1, 1))
         {
             int val = std::fgetc(stdin);
             std::ungetc(val, stdin);
@@ -127,7 +119,7 @@ namespace LTSM
         return -1;
     }
 
-    std::string Connector::homeRuntime(void)
+    std::string homeRuntime(void)
     {
         std::string home("/tmp");
 
@@ -139,15 +131,15 @@ namespace LTSM
         return home;
     }
 
-    int Connector::Service::start(void)
+    int Service::start(void)
     {
         // deprecated
-        if(auto str = configGetString("connector:debug"); !str.empty())
+        if(auto str = configGetString("connector:debug"); ! str.empty())
         {
             Application::setDebugLevel(str);
         }
 
-        if(auto str = configGetString("connector:debug:level", "info"); !str.empty())
+        if(auto str = configGetString("connector:debug:level", "info"); ! str.empty())
         {
             Application::setDebugLevel(str);
         }
@@ -162,7 +154,7 @@ namespace LTSM
 
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
 
-        auto home = Connector::homeRuntime();
+        auto home = homeRuntime();
         Application::debug(DebugType::Conn, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
 
         if(0 != chdir(home.c_str()))
@@ -170,50 +162,28 @@ namespace LTSM
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
 
+        std::unique_ptr<ManagerServiceProxy> connector;
+
+#ifdef LTSM_WITH_RDP
+
         // protocol up
         if(_type == "auto")
         {
-            _type = "vnc";
-            int first = autoDetectType();
-#ifdef LTSM_WITH_RDP
-
-            if(first == 0x03)
+            if(int first = autoDetectType(); first == 0x03)
             {
-                _type = "rdp";
+                connector = std::make_unique<ConnectorRdp>(config());
             }
-
-#endif
-#ifdef LTSM_WITH_SPICE
-
-            if(first == 0x52)
-            {
-                _type = "spice";
-            }
-
-#endif
         }
-
-        std::unique_ptr<SignalProxy> connector;
-#ifdef LTSM_WITH_RDP
-
-        if(_type == "rdp")
+        else if(_type == "rdp")
         {
-            connector.reset(new Connector::RDP(config()));
-        }
-
-#endif
-#ifdef LTSM_WITH_SPICE
-
-        if(_type == "spice")
-        {
-            connector.reset(new Connector::SPICE(config()));
+            connector = std::make_unique<ConnectorRdp>(config());
         }
 
 #endif
 
         if(! connector)
         {
-            connector.reset(new Connector::VNC(config()));
+            connector = std::make_unique<ConnectorLtsm>(config());
         }
 
         int res = 0;
@@ -238,14 +208,15 @@ namespace LTSM
         return res;
     }
 
-    /* Connector::SignalProxy */
-    Connector::SignalProxy::SignalProxy(const JsonObject & jo, const char* type)
+    /* ManagerServiceProxy */
+    ManagerServiceProxy::ManagerServiceProxy(const JsonObject & jo, const char* type)
 #ifdef SDBUS_2_0_API
-        : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName{LTSM::dbus_manager_service_name}, sdbus::ObjectPath{LTSM::dbus_manager_service_path}),
+        : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
-        : ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
+        :
+        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
-          _conntype(type), _config(& jo)
+          _conntype(type), _config(jo)
     {
         _remoteaddr.assign("local");
 
@@ -257,23 +228,23 @@ namespace LTSM
         registerProxy();
     }
 
-    Connector::SignalProxy::~SignalProxy()
+    ManagerServiceProxy::~ManagerServiceProxy()
     {
         unregisterProxy();
     }
 
-    bool Connector::SignalProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
+    bool ManagerServiceProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
     {
         Application::info("%s: display: %d", __FUNCTION__, screen);
         std::string xauthFile = busCreateAuthFile(screen);
         Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(),
                           getgid());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::string socketFormat = _config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
+        std::string socketFormat = _config.getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
         std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
 
         // wait display starting
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [&]()
+        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &socketPath ]()
         {
             return Tools::checkUnixSocket(socketPath);
         });
@@ -294,10 +265,10 @@ namespace LTSM
             return false;
         }
 
-        auto defaultSz = XCB::Size(_config->getInteger("default:width", 0),
-                                   _config->getInteger("default:height", 0));
+        auto defaultSz = XCB::Size(_config.getInteger("default:width", 0),
+                                   _config.getInteger("default:height", 0));
         auto displaySz = xcbDisplay.size();
-        int color = _config->getInteger("display:solid", 0x4e7db7);
+        int color = _config.getInteger("display:solid", 0x4e7db7);
         Application::debug(DebugType::Conn, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
                            displaySz.height, xcbDisplay.depth());
 
@@ -315,24 +286,24 @@ namespace LTSM
         return true;
     }
 
-    int Connector::SignalProxy::displayNum(void) const
+    int ManagerServiceProxy::displayNum(void) const
     {
         return _xcbDisplayNum;
     }
 
-    void Connector::SignalProxy::xcbDisableMessages(bool f)
+    void ManagerServiceProxy::xcbDisableMessages(bool f)
     {
         _xcbDisable = f;
     }
 
-    bool Connector::SignalProxy::xcbAllowMessages(void) const
+    bool ManagerServiceProxy::xcbAllowMessages(void) const
     {
         return ! _xcbDisable;
     }
 
-    std::string Connector::SignalProxy::checkFileOption(const std::string & param) const
+    std::string ManagerServiceProxy::checkFileOption(const std::string & param) const
     {
-        auto fileName = _config->getString(param);
+        auto fileName = _config.getString(param);
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err))
@@ -345,7 +316,7 @@ namespace LTSM
         return fileName;
     }
 
-    void Connector::SignalProxy::onClearRenderPrimitives(const int32_t & display)
+    void ManagerServiceProxy::onClearRenderPrimitives(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -353,19 +324,9 @@ namespace LTSM
 
             for(const auto & ptr : _renderPrimitives)
             {
-                if(ptr->type == RenderType::RenderRect)
+                if(auto prim = ptr.get())
                 {
-                    if(auto prim = static_cast<RenderRect*>(ptr.get()))
-                    {
-                        serverScreenUpdateRequest(prim->toRegion());
-                    }
-                }
-                else if(ptr->type == RenderType::RenderText)
-                {
-                    if(auto prim = static_cast<RenderText*>(ptr.get()))
-                    {
-                        serverScreenUpdateRequest(prim->toRegion());
-                    }
+                    serverScreenUpdateRequest(prim->xcbRegion());
                 }
             }
 
@@ -373,39 +334,33 @@ namespace LTSM
         }
     }
 
-    void Connector::SignalProxy::onAddRenderRect(const int32_t & display,
-            const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect,
-            const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill)
+    void ManagerServiceProxy::onAddRenderRect(const int32_t & display,
+            const TupleRegion & rect, const TupleColor & color, const bool & fill)
     {
         if(display == displayNum())
         {
             Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
-            const int16_t rx = std::get<0>(rect);
-            const int16_t ry = std::get<1>(rect);
-            const uint16_t rw = std::get<2>(rect);
-            const uint16_t rh = std::get<3>(rect);
-            serverScreenUpdateRequest({rx, ry, rw, rh});
+            serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
 
-    void Connector::SignalProxy::onAddRenderText(const int32_t & display, const std::string & text,
-            const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color)
+    void ManagerServiceProxy::onAddRenderText(const int32_t & display, const std::string & text,
+            const TuplePosition & pos, const TupleColor & color)
     {
         if(display == displayNum())
         {
             Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
-            const int16_t rx = std::get<0>(pos);
-            const int16_t ry = std::get<1>(pos);
-            const uint16_t rw = _systemfont.width * text.size();
-            const uint16_t rh = _systemfont.height;
-            const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> rt{rx, ry, rw, rh};
-            _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rt, color));
-            serverScreenUpdateRequest({rx, ry, rw, rh});
+
+            const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
+                                     _systemfont.width * text.size(), _systemfont.height);
+
+            _renderPrimitives.emplace_back(std::make_unique<RenderText>(text, rect, color));
+            serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
     }
 
-    void Connector::SignalProxy::onPingConnector(const int32_t & display)
+    void ManagerServiceProxy::onPingConnector(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -416,7 +371,7 @@ namespace LTSM
         }
     }
 
-    void Connector::SignalProxy::onDebugLevel(const int32_t & display, const std::string & level)
+    void ManagerServiceProxy::onDebugLevel(const int32_t & display, const std::string & level)
     {
         if(display == displayNum())
         {
@@ -425,69 +380,37 @@ namespace LTSM
         }
     }
 
-    void Connector::SignalProxy::renderPrimitivesToFB(FrameBuffer & fb) const
+    void ManagerServiceProxy::renderPrimitivesToFB(FrameBuffer & fb) const
     {
         for(const auto & ptr : _renderPrimitives)
         {
-            switch(ptr->type)
+            if(auto prim = static_cast<const RenderRect*>(ptr.get()))
             {
-                case RenderType::RenderRect:
-                    if(auto prim = static_cast<RenderRect*>(ptr.get()))
-                    {
-                        XCB::Region section;
-
-                        if(XCB::Region::intersection(fb.region(), prim->toRegion(), & section))
-                        {
-                            if(prim->fill)
-                            {
-                                fb.fillColor(section - fb.region().topLeft(), Color(prim->color));
-                            }
-                            else
-                            {
-                                fb.drawRect(section - fb.region().topLeft(), Color(prim->color));
-                            }
-                        }
-                    }
-
-                    break;
-
-                case RenderType::RenderText:
-                    if(auto prim = static_cast<RenderText*>(ptr.get()))
-                    {
-                        const XCB::Region reg = prim->toRegion();
-
-                        if(XCB::Region::intersection(fb.region(), reg, nullptr))
-                        {
-                            fb.renderText(prim->text, Color(prim->color), reg.topLeft() - fb.region().topLeft());
-                        }
-                    }
-
-                    break;
-
-                default:
-                    break;
+                prim->renderTo(fb);
             }
         }
     }
-}
+} // namespace LTSM::Connector
+
+using namespace LTSM;
 
 int main(int argc, const char** argv)
 {
     int res = 0;
-    LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
+    Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
 
     try
     {
-        LTSM::Connector::Service app(argc, argv);
+        Connector::Service app(argc, argv);
         res = app.start();
     }
     catch(const sdbus::Error & err)
     {
-        LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
     }
     catch(const std::exception & err)
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
     }
     catch(int val)
     {

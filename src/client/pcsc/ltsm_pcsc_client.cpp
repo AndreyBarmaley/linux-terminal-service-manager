@@ -382,7 +382,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     // reply
     StreamBuf reply(256);
     reply.writeIntLE32(readers.size());
-    Application::debug(DebugType::Pcsc, "%s: >> readers count: %" PRIu32, __FUNCTION__, readers.size());
+    Application::debug(DebugType::Pcsc, "%s: >> readers count: %lu", __FUNCTION__, readers.size());
 
     for(const auto & reader : readers)
     {
@@ -423,7 +423,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb)
 
     if(ret == SCARD_S_SUCCESS)
     {
-        Application::debug(DebugType::Pcsc, "%s: >> handle: 0x%016" PRIx64 ", activeProtocol: %" PRIu32, __FUNCTION__, hCard, activeProtocol);
+        Application::debug(DebugType::Pcsc, "%s: >> handle: 0x%016" PRIx64 ", activeProtocol: %" PRIu32, __FUNCTION__, hCard, static_cast<uint32_t>(activeProtocol));
     }
     else
     {
@@ -454,7 +454,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb)
 
     if(ret == SCARD_S_SUCCESS)
     {
-        Application::debug(DebugType::Pcsc, "%s: >> activeProtocol: %" PRIu32, __FUNCTION__, activeProtocol);
+        Application::debug(DebugType::Pcsc, "%s: >> activeProtocol: %" PRIu32, __FUNCTION__, static_cast<uint32_t>(activeProtocol));
     }
     else
     {
@@ -579,7 +579,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
     if(ret == SCARD_S_SUCCESS)
     {
         Application::debug(DebugType::Pcsc, "%s: >> dwProtocol: %" PRIu64 ", pciLength: %" PRIu64 ", recv size: %" PRIu32,
-                      __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, recvLength);
+                      __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, static_cast<uint32_t>(recvLength));
     }
     else
     {
@@ -622,7 +622,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb)
     if(ret == SCARD_S_SUCCESS)
     {
         Application::debug(DebugType::Pcsc, "%s: >> readerName: `%.*s', state: 0x%08" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
-                      __FUNCTION__, readerNameLen, readerName, state, protocol, atrLen);
+                      __FUNCTION__, readerNameLen, readerName, static_cast<uint32_t>(state), static_cast<uint32_t>(protocol), static_cast<uint32_t>(atrLen));
     }
     else
     {
@@ -721,7 +721,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         reply.writeIntLE32(state.cbAtr);
 
         Application::debug(DebugType::Pcsc, "%s: >> reader: `%s', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLen: %" PRIu32,
-            __FUNCTION__, state.szReader, state.dwCurrentState, state.dwEventState, state.cbAtr);
+            __FUNCTION__, state.szReader, static_cast<uint32_t>(state.dwCurrentState), static_cast<uint32_t>(state.dwEventState), static_cast<uint32_t>(state.cbAtr));
 
         if(szReader)
             reply.write(*szReader);

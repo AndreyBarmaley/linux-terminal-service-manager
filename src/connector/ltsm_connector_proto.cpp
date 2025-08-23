@@ -26,17 +26,17 @@
 #include <exception>
 
 #include "ltsm_tools.h"
-#include "ltsm_connector_vnc.h"
+#include "ltsm_connector_proto.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_sdl_wrapper.h"
 #include "ltsm_channels.h"
 
 using namespace std::chrono_literals;
 
-namespace LTSM
+namespace LTSM::Connector
 {
-    /* Connector::VNC */
-    Connector::VNC::~VNC()
+    /* ConnectorLtsm */
+    ConnectorLtsm::~ConnectorLtsm()
     {
         rfbMessagesShutdown();
         xcbDisableMessages(true);
@@ -51,7 +51,7 @@ namespace LTSM
         Application::info("%s: connector shutdown", __FUNCTION__);
     }
 
-    int Connector::VNC::communication(void)
+    int ConnectorLtsm::communication(void)
     {
         if(0 >= busGetServiceVersion())
         {
@@ -61,89 +61,91 @@ namespace LTSM
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
-        x11NoDamage = _config->getBoolean("vnc:xcb:nodamage", false);
-        frameRate = _config->getInteger("vnc:frame:rate", 16);
+        _x11NoDamage = _config.getBoolean("vnc:xcb:nodamage", false);
+        _frameRate = _config.getInteger("vnc:frame:rate", 16);
 
-        if(frameRate <= 0)
+        if(_frameRate <= 0)
         {
             Application::warning("%s: invalid value for: `%s'", __FUNCTION__, "vnc:frame:rate");
-            frameRate = 16;
+            _frameRate = 16;
         }
-        
+
         return rfbCommunication();
     }
 
-    void Connector::VNC::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
+    void ConnectorLtsm::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
     {
-        if(display == displayNum())
+        if(display != displayNum())
         {
-            xcbDisableMessages(true);
-            waitUpdateProcess();
-            shmUid = userUid;
-            Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s, uid: %" PRIu32, __FUNCTION__, display,
-                                userName.c_str(), userUid);
-            int oldDisplay = displayNum();
-            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
+            return;
+        }
 
-            if(newDisplay < 0)
+        xcbDisableMessages(true);
+        waitUpdateProcess();
+        _shmUid = userUid;
+        Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s, uid: %" PRIu32, __FUNCTION__, display,
+                            userName.c_str(), userUid);
+        int oldDisplay = displayNum();
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
+
+        if(newDisplay < 0)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "user session request");
+            throw std::runtime_error(NS_FuncName);
+        }
+
+        if(newDisplay != oldDisplay)
+        {
+            // wait xcb old operations ended
+            std::this_thread::sleep_for(100ms);
+
+            if(! xcbConnect(newDisplay, *this))
             {
-                Application::error("%s: %s failed", __FUNCTION__, "user session request");
+                Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
                 throw std::runtime_error(NS_FuncName);
             }
 
-            if(newDisplay != oldDisplay)
-            {
-                // wait xcb old operations ended
-                std::this_thread::sleep_for(100ms);
-
-                if(! xcbConnect(newDisplay, *this))
-                {
-                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
-                    throw std::runtime_error(NS_FuncName);
-                }
-
-                busShutdownDisplay(oldDisplay);
-            }
-
-            xcbShmInit(userUid);
-            xcbDisableMessages(false);
-            auto & clientRegion = getClientRegion();
-
-            // fix new session size
-            if(xcbDisplay()->size() != clientRegion.toSize())
-            {
-                Application::warning("%s: remote request desktop size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__,
-                                     clientRegion.width, clientRegion.height, displayNum());
-
-                if(0 < xcbDisplay()->setRandrScreenSize(clientRegion))
-                {
-                    Application::info("%s: change session size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__, clientRegion.width,
-                                      clientRegion.height, displayNum());
-                }
-            }
-            else
-            {
-                // full update
-                if(! x11NoDamage)
-                {
-                    X11Server::serverScreenUpdateRequest();
-                }
-            }
-
-            idleTimeoutSec = _config->getInteger("idle:action:timeout", 0);
-            idleSession = std::chrono::steady_clock::now();
-            userSession = true;
-            std::thread([this]()
-            {
-                JsonObjectStream jos;
-                jos.push("cmd", SystemCommand::LoginSuccess);
-                jos.push("action", true);
-                static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
-            }).detach();
+            busShutdownDisplay(oldDisplay);
         }
+
+        xcbShmInit(userUid);
+        xcbDisableMessages(false);
+        auto & clientRegion = getClientRegion();
+
+        // fix new session size
+        if(xcbDisplay()->size() != clientRegion.toSize())
+        {
+            Application::warning("%s: remote request desktop size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__,
+                                 clientRegion.width, clientRegion.height, displayNum());
+
+            if(0 < xcbDisplay()->setRandrScreenSize(clientRegion))
+            {
+                Application::info("%s: change session size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__, clientRegion.width,
+                                  clientRegion.height, displayNum());
+            }
+        }
+        else
+        {
+            // full update
+            if(! _x11NoDamage)
+            {
+                X11Server::serverScreenUpdateRequest();
+            }
+        }
+
+        _idleTimeoutSec = _config.getInteger("idle:action:timeout", 0);
+        _idleSession = std::chrono::steady_clock::now();
+        _userSession = true;
+        std::thread([this]()
+        {
+            JsonObjectStream jos;
+            jos.push("cmd", SystemCommand::LoginSuccess);
+            jos.push("action", true);
+            static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
+        }).detach();
     }
 
-    void Connector::VNC::onShutdownConnector(const int32_t & display)
+    void ConnectorLtsm::onShutdownConnector(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -154,16 +156,16 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onHelperWidgetStarted(const int32_t & display)
+    void ConnectorLtsm::onHelperWidgetStarted(const int32_t & display)
     {
         if(display == displayNum())
         {
             Application::info("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
-            loginWidgetStarted = true;
+            _loginWidgetStarted = true;
         }
     }
 
-    void Connector::VNC::onSendBellSignal(const int32_t & display)
+    void ConnectorLtsm::onSendBellSignal(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -172,25 +174,47 @@ namespace LTSM
         }
     }
 
-    const PixelFormat & Connector::VNC::serverFormat(void) const
+    const PixelFormat & ConnectorLtsm::serverFormat(void) const
     {
-        return serverPf;
+        return _serverPf;
     }
 
-    void Connector::VNC::serverFrameBufferModifyEvent(FrameBuffer & fb) const
+    void ConnectorLtsm::serverFrameBufferModifyEvent(FrameBuffer & fb) const
     {
         renderPrimitivesToFB(fb);
     }
 
-    void Connector::VNC::serverHandshakeVersionEvent(void)
+    void ConnectorLtsm::loadKeymap(const std::string & file)
+    {
+        if(JsonContentFile jc(file); jc.isObject())
+        {
+            auto jo = jc.toObject();
+
+            for(const auto & skey : jo.keys())
+            {
+                if(3 < skey.size() && skey.substr(0, 3) == "key")
+                {
+                    continue;
+                }
+
+                try
+                {
+                    _keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
+                }
+                catch(const std::exception & ) { }
+            }
+        }
+    }
+
+    void ConnectorLtsm::serverHandshakeVersionEvent(void)
     {
         // Xvfb: session request
-        int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "vnc");
+        int screen = busStartLoginSession(getpid(), 24, _remoteaddr, "ltsm");
 
         if(screen <= 0)
         {
             Application::error("%s: login session request: failure", __FUNCTION__);
-            throw vnc_error(NS_FuncName);
+            throw proto_error(NS_FuncName);
         }
 
         Application::info("%s: login session request success, display: %d", __FUNCTION__, screen);
@@ -198,7 +222,7 @@ namespace LTSM
         if(! xcbConnect(screen, *this))
         {
             Application::error("%s: xcb connect: failed", __FUNCTION__);
-            throw vnc_error(NS_FuncName);
+            throw proto_error(NS_FuncName);
         }
 
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
@@ -206,70 +230,48 @@ namespace LTSM
         if(! visual)
         {
             Application::error("%s: xcb visual empty", __FUNCTION__);
-            throw vnc_error(NS_FuncName);
+            throw proto_error(NS_FuncName);
         }
 
         Application::debug(DebugType::Conn, "%s: xcb max request: %lu", __FUNCTION__, xcbDisplay()->getMaxRequest());
         // init server format
-        serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
+        _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
-        if(_config->hasKey("vnc:keymap:file"))
+        if(_config.hasKey("vnc:keymap:file"))
         {
-            if(auto file = _config->getString("vnc:keymap:file"); ! file.empty())
-            {
-                JsonContentFile jc(file);
-
-                if(jc.isValid() && jc.isObject())
-                {
-                    auto jo = jc.toObject();
-
-                    for(const auto & skey : jo.keys())
-                    {
-                        if(3 < skey.size() && skey.substr(0, 3) == "key")
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
-                        }
-                        catch(const std::exception &) { }
-                    }
-                }
-            }
+            loadKeymap(_config.getString("vnc:keymap:file"));
         }
     }
 
-    std::forward_list<std::string> Connector::VNC::serverDisabledEncodings(void) const
+    std::forward_list<std::string> ConnectorLtsm::serverDisabledEncodings(void) const
     {
-        return _config->getStdListForward<std::string>("vnc:encoding:blacklist");
+        return _config.getStdListForward<std::string>("vnc:encoding:blacklist");
     }
 
-    void Connector::VNC::serverEncodingSelectedEvent(void)
+    void ConnectorLtsm::serverEncodingSelectedEvent(void)
     {
-        setEncodingThreads(_config->getInteger("vnc:encoding:threads", 2));
-        setEncodingDebug(_config->getInteger("vnc:encoding:debug", 0));
+        setEncodingThreads(_config.getInteger("vnc:encoding:threads", 2));
+        setEncodingDebug(_config.getInteger("vnc:encoding:debug", 0));
     }
 
-    void Connector::VNC::serverMainLoopEvent(void)
+    void ConnectorLtsm::serverMainLoopEvent(void)
     {
         // check idle timeout
-        if(idleTimeoutSec && std::chrono::seconds(idleTimeoutSec) < std::chrono::steady_clock::now() - idleSession)
+        if(_idleTimeoutSec && std::chrono::seconds(_idleTimeoutSec) < std::chrono::steady_clock::now() - _idleSession)
         {
             busIdleTimeoutAction(displayNum());
-            idleSession = std::chrono::steady_clock::now();
+            _idleSession = std::chrono::steady_clock::now();
         }
     }
 
-    void Connector::VNC::serverDisplayResizedEvent(const XCB::Size & sz)
+    void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz)
     {
-        xcbShmInit(shmUid);
+        xcbShmInit(_shmUid);
         busDisplayResized(displayNum(), sz.width, sz.height);
     }
 
-    void Connector::VNC::serverEncodingsEvent(void)
+    void ConnectorLtsm::serverEncodingsEvent(void)
     {
         if(isClientLtsmSupported())
         {
@@ -277,18 +279,18 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::serverConnectedEvent(void)
+    void ConnectorLtsm::serverConnectedEvent(void)
     {
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 100 ms pause
         bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]()
         {
-            return !! this->loginWidgetStarted;
+            return ! ! this->_loginWidgetStarted;
         });
 
         if(! waitWidgetStarted)
         {
-            Application::warning("%s: wait loginWidgetStarted failed", "serverConnectedEvent");
-            throw vnc_error(NS_FuncName);
+            Application::warning("%s: wait _loginWidgetStarted failed", "serverConnectedEvent");
+            throw proto_error(NS_FuncName);
         }
 
 #ifdef LTSM_WITH_GSSAPI
@@ -308,129 +310,127 @@ namespace LTSM
 #endif
     }
 
-    void Connector::VNC::serverSecurityInitEvent(void)
+    void ConnectorLtsm::serverSecurityInitEvent(void)
     {
         busSetEncryptionInfo(displayNum(), serverEncryptionInfo());
     }
 
-    RFB::SecurityInfo Connector::VNC::rfbSecurityInfo(void) const
+    RFB::SecurityInfo ConnectorLtsm::rfbSecurityInfo(void) const
     {
         RFB::SecurityInfo secInfo;
         secInfo.authNone = true;
         secInfo.authVnc = false;
-        secInfo.authVenCrypt = ! _config->getBoolean("vnc:gnutls:disable", false);
-        secInfo.tlsPriority = _config->getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        secInfo.tlsAnonMode = _config->getBoolean("vnc:gnutls:anonmode", true);
-        secInfo.caFile = _config->getString("vnc:gnutls:cafile");
-        secInfo.certFile = _config->getString("vnc:gnutls:certfile");
-        secInfo.keyFile = _config->getString("vnc:gnutls:keyfile");
-        secInfo.crlFile = _config->getString("vnc:gnutls:crlfile");
-        secInfo.tlsDebug = _config->getInteger("vnc:gnutls:debug", 0);
+        secInfo.authVenCrypt = ! _config.getBoolean("vnc:gnutls:disable", false);
+        secInfo.tlsPriority = _config.getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        secInfo.tlsAnonMode = _config.getBoolean("vnc:gnutls:anonmode", true);
+        secInfo.caFile = _config.getString("vnc:gnutls:cafile");
+        secInfo.certFile = _config.getString("vnc:gnutls:certfile");
+        secInfo.keyFile = _config.getString("vnc:gnutls:keyfile");
+        secInfo.crlFile = _config.getString("vnc:gnutls:crlfile");
+        secInfo.tlsDebug = _config.getInteger("vnc:gnutls:debug", 0);
 #ifdef LTSM_WITH_GSSAPI
-        secInfo.authKrb5 = ! _config->getBoolean("vnc:kerberos:disable", false);
-        secInfo.krb5Service = _config->getString("vnc:kerberos:service", "TERMSRV");
+        secInfo.authKrb5 = ! _config.getBoolean("vnc:kerberos:disable", false);
+        secInfo.krb5Service = _config.getString("vnc:kerberos:service", "TERMSRV");
 #endif
 
         if(secInfo.authKrb5)
         {
-            auto keytab = _config->getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
+            auto keytab = _config.getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
 
             if(keytab.empty())
             {
                 secInfo.authKrb5 = false;
+                return secInfo;
+            }
+
+            std::filesystem::path file(keytab);
+            std::error_code err;
+
+            if(std::filesystem::is_regular_file(keytab, err))
+            {
+                Application::info("%s: set KRB5_KTNAME=`%s'", __FUNCTION__, keytab.c_str());
+                setenv("KRB5_KTNAME", keytab.c_str(), 1);
+
+                if(auto debug = _config.getString("vnc:kerberos:trace"); ! debug.empty())
+                {
+                    Application::info("%s: set KRB5_TRACE=`%s'", __FUNCTION__, debug.c_str());
+                    setenv("KRB5_TRACE", debug.c_str(), 1);
+                }
             }
             else
             {
-                std::filesystem::path file(keytab);
-                std::error_code err;
-
-                if(std::filesystem::is_regular_file(keytab, err))
-                {
-                    Application::info("%s: set KRB5_KTNAME=`%s'", __FUNCTION__, keytab.c_str());
-                    setenv("KRB5_KTNAME", keytab.c_str(), 1);
-                    auto debug = _config->getString("vnc:kerberos:trace");
-
-                    if(! debug.empty())
-                    {
-                        Application::info("%s: set KRB5_TRACE=`%s'", __FUNCTION__, debug.c_str());
-                        setenv("KRB5_TRACE", debug.c_str(), 1);
-                    }
-                }
-                else
-                {
-                    Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
-                                       keytab.c_str(), getuid());
-                    secInfo.authKrb5 = false;
-                }
+                Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+                                   keytab.c_str(), getuid());
+                secInfo.authKrb5 = false;
             }
         }
 
         return secInfo;
     }
 
-    bool Connector::VNC::rfbClipboardEnable(void) const
+    bool ConnectorLtsm::rfbClipboardEnable(void) const
     {
-        return _config->getBoolean("vnc:clipboard");
+        return _config.getBoolean("vnc:clipboard");
     }
 
-    bool Connector::VNC::rfbDesktopResizeEnabled(void) const
+    bool ConnectorLtsm::rfbDesktopResizeEnabled(void) const
     {
         return true;
     }
 
-    bool Connector::VNC::xcbAllowMessages(void) const
+    bool ConnectorLtsm::xcbAllowMessages(void) const
     {
-        return SignalProxy::xcbAllowMessages();
+        return ManagerServiceProxy::xcbAllowMessages();
     }
 
-    void Connector::VNC::serverScreenUpdateRequest(const XCB::Region & reg)
+    void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region & reg)
     {
-        if(xcbAllowMessages() && ! x11NoDamage)
+        if(xcbAllowMessages() && ! _x11NoDamage)
         {
             X11Server::serverScreenUpdateRequest(reg);
         }
     }
 
-    size_t Connector::VNC::frameRateOption(void) const
+    size_t ConnectorLtsm::frameRateOption(void) const
     {
-        return frameRate;
+        return _frameRate;
     }
 
-    bool Connector::VNC::xcbNoDamageOption(void) const
+    bool ConnectorLtsm::xcbNoDamageOption(void) const
     {
         return isClientLtsmSupported() ?
-            static_cast<bool>(x11NoDamage) : false;
+               static_cast<bool>(_x11NoDamage) : false;
     }
 
-    void Connector::VNC::xcbDisableMessages(bool f)
+    void ConnectorLtsm::xcbDisableMessages(bool f)
     {
-        SignalProxy::xcbDisableMessages(f);
+        ManagerServiceProxy::xcbDisableMessages(f);
     }
 
-    int Connector::VNC::rfbUserKeycode(uint32_t keysym) const
+    int ConnectorLtsm::rfbUserKeycode(uint32_t keysym) const
     {
-        auto it = keymap.find(keysym);
-        return it != keymap.end() ? it->second : 0;
+        auto it = _keymap.find(keysym);
+        return it != _keymap.end() ? it->second : 0;
     }
 
-    void Connector::VNC::serverRecvKeyEvent(bool pressed, uint32_t keysym)
+    void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keysym)
     {
         X11Server::serverRecvKeyEvent(pressed, keysym);
-        idleSession = std::chrono::steady_clock::now();
+        _idleSession = std::chrono::steady_clock::now();
     }
 
-    void Connector::VNC::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
+    void ConnectorLtsm::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
     {
         X11Server::serverRecvPointerEvent(mask, posx, posy);
-        idleSession = std::chrono::steady_clock::now();
+        _idleSession = std::chrono::steady_clock::now();
     }
 
-    bool Connector::VNC::isUserSession(void) const
+    bool ConnectorLtsm::isUserSession(void) const
     {
-        return userSession;
+        return _userSession;
     }
 
-    void Connector::VNC::systemClientVariables(const JsonObject & jo)
+    void ConnectorLtsm::systemClientVariables(const JsonObject & jo)
     {
         Application::debug(DebugType::Conn, "%s: count: %lu", __FUNCTION__, jo.size());
 
@@ -444,7 +444,7 @@ namespace LTSM
             auto names = keyboard->getStdVector<std::string>("layouts");
             busSetSessionKeyboardLayouts(displayNum(), names);
             auto layout = keyboard->getString("current");
-            auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
+            auto it = std::find_if(names.begin(), names.end(), [ &](auto & str)
             {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
@@ -463,32 +463,36 @@ namespace LTSM
         if(auto opts = jo.getObject("options"))
         {
             busSetSessionOptions(displayNum(), opts->toStdMap<std::string>());
-            ltsmClientVersion = opts->getInteger("ltsm:client", 0);
-            x11NoDamage = opts->getBoolean("x11:nodamage", x11NoDamage);
-            frameRate = opts->getInteger("frame:rate", frameRate);
+            _ltsmClientVersion = opts->getInteger("ltsm:client", 0);
+            _x11NoDamage = opts->getBoolean("x11:nodamage", _x11NoDamage);
+            _frameRate = opts->getInteger("frame:rate", _frameRate);
 
             setEncodingOptions(opts->getStdListForward<std::string>("enc:opts"));
 
-            if( x11NoDamage && ! XCB::RootDisplay::hasError())
+            if( _x11NoDamage && ! XCB::RootDisplay::hasError())
             {
                 XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
             }
         }
     }
 
-    void Connector::VNC::systemCursorFailed(const JsonObject & jo)
+    void ConnectorLtsm::systemCursorFailed(const JsonObject & jo)
     {
         auto cursorId = jo.getInteger("cursor");
 
         if(cursorId)
+        {
             cursorFailed(cursorId);
+        }
     }
 
-    void Connector::VNC::systemKeyboardEvent(const JsonObject & jo)
+    void ConnectorLtsm::systemKeyboardEvent(const JsonObject & jo)
     {
         // event supported
-        if(20250808 > ltsmClientVersion)
+        if(20250808 > _ltsmClientVersion)
+        {
             return;
+        }
 
         if(xcbAllowMessages())
         {
@@ -499,7 +503,9 @@ namespace LTSM
             auto xksym = SDL::Window::convertScanCodeToKeySym(static_cast<SDL_Scancode>(scancode));
 
             if(xksym == 0)
+            {
                 xksym = keycode;
+            }
 
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB)))
             {
@@ -511,12 +517,13 @@ namespace LTSM
                     xksym = keycodeGroupToKeysym(keycodeGroup.first, group);
                 }
             }
+
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();
         }
     }
 
-    void Connector::VNC::systemKeyboardChange(const JsonObject & jo)
+    void ConnectorLtsm::systemKeyboardChange(const JsonObject & jo)
     {
         auto layout = jo.getString("layout");
 
@@ -526,7 +533,7 @@ namespace LTSM
             {
                 Application::debug(DebugType::Conn, "%s: layout: %s", __FUNCTION__, layout.c_str());
                 auto names = xkb->getNames();
-                auto it = std::find_if(names.begin(), names.end(), [&](auto & str)
+                auto it = std::find_if(names.begin(), names.end(), [ &](auto & str)
                 {
                     return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
                 });
@@ -536,13 +543,15 @@ namespace LTSM
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 }
                 else
+                {
                     Application::error("%s: layout not found: %s, names: [%s]",
                                        __FUNCTION__, layout.c_str(), Tools::join(names.begin(), names.end()).c_str());
+                }
             }
         }
     }
 
-    void Connector::VNC::systemTransferFiles(const JsonObject & jo)
+    void ConnectorLtsm::systemTransferFiles(const JsonObject & jo)
     {
         if(isUserSession())
         {
@@ -557,7 +566,7 @@ namespace LTSM
             Application::debug(DebugType::Conn, "%s: files count: %s", __FUNCTION__, fa->size());
 
             // check transfer disabled
-            if(_config->getBoolean("transfer:file:disabled", false))
+            if(_config.getBoolean("transfer:file:disabled", false))
             {
                 Application::error("%s: administrative disable", __FUNCTION__);
                 busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
@@ -568,14 +577,11 @@ namespace LTSM
             size_t fmax = 0;
             size_t prettyMb = 0;
 
-            if(_config->hasKey("transfer:file:max"))
+            if(_config.hasKey("transfer:file:max"))
             {
-                fmax = _config->getInteger("transfer:file:max");
+                fmax = _config.getInteger("transfer:file:max");
                 prettyMb = fmax / (1024 * 1024);
             }
-
-            std::vector<sdbus::Struct<std::string, uint32_t>> files;
-            std::scoped_lock<std::mutex> guard{lockTransfer};
 
             for(int it = 0; it < fa->size(); ++it)
             {
@@ -589,7 +595,7 @@ namespace LTSM
                 std::string fname = jo2->getString("file");
                 size_t fsize = jo2->getInteger("size");
 
-                if(std::any_of(transfer.begin(), transfer.end(), [&](auto & st) { return st.first == fname; }))
+                if(std::any_of(_transferPlanned.begin(), _transferPlanned.end(), [ &](auto & st) { return fname == std::get<0>(st); }))
                 {
                     Application::warning("%s: found planned and skipped, file: %s", __FUNCTION__, fname.c_str());
                     continue;
@@ -606,37 +612,81 @@ namespace LTSM
                 }
 
                 // add planned transfer
-                transfer.emplace_back(fname, fsize);
-                // add target
-                files.emplace_back(std::move(fname), fsize);
+                std::scoped_lock<std::mutex> guard{_lockTransfer};
+                _transferPlanned.emplace_back(std::move(fname), fsize);
             }
 
-            size_t channels = countFreeChannels();
+            size_t freeChannels = countFreeChannels();
 
-            if(files.empty())
+            if(_transferPlanned.empty())
             {
                 Application::warning("%s: file list empty", __FUNCTION__);
             }
-            else if(! channels)
+            else if(! freeChannels)
             {
                 Application::warning("%s: no free channels", __FUNCTION__);
             }
             else
             {
-                if(files.size() > channels)
-                {
-                    Application::warning("%s: files list is large, count: %lu, channels: %lu", __FUNCTION__, files.size(), channels);
-                    files.resize(channels);
-                }
+                std::scoped_lock<std::mutex> guard{_lockTransfer};
 
-                // send request to manager
-                busTransferFilesRequest(displayNum(), files);
+                if(_transferPlanned.size() <= freeChannels)
+                {
+                    // send request to manager
+                    busTransferFilesRequest(displayNum(), {_transferPlanned.begin(), _transferPlanned.end() });
+                }
+                else
+                {
+                    // transfer background
+                    std::thread( & ConnectorLtsm::transferFilesPartial, this, _transferPlanned).detach();
+                }
             }
         }
     }
 
-    void Connector::VNC::onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,
-                                         const std::string & dstdir)
+    void ConnectorLtsm::transferFilesPartial(std::list<TupleFileSize> files)
+    {
+        size_t freeChannels = countFreeChannels() / 3;
+        using TimePointSeconds = Tools::TimePoint<std::chrono::seconds>;
+        std::unique_ptr<TimePointSeconds> partial;
+        auto it1 = files.begin();
+
+        while(it1 != files.end())
+        {
+            // wait 5s
+            if(! partial || partial->check())
+            {
+                if(! partial)
+                {
+                    partial = std::make_unique<TimePointSeconds>(5s);
+                }
+
+                if(freeChannels > countFreeChannels())
+                {
+                    continue;
+                }
+
+                auto it2 = Tools::nextToEnd(it1, freeChannels, files.end());
+
+                try
+                {
+                    // send partial request to manager
+                    busTransferFilesRequest(displayNum(), { it1, it2 });
+                }
+                catch(...)
+                {
+                    break;
+                }
+
+                it1 = it2;
+            }
+
+            std::this_thread::sleep_for(1s);
+        }
+    }
+
+    void ConnectorLtsm::onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,
+                                        const std::string & dstdir)
     {
         // filepath - client file path
         // tmpfile - server tmpfile
@@ -645,13 +695,13 @@ namespace LTSM
 
         if(display == displayNum())
         {
-            std::scoped_lock<std::mutex> guard{lockTransfer};
-            auto it = std::find_if(transfer.begin(), transfer.end(), [&](auto & st)
+            std::scoped_lock<std::mutex> guard{_lockTransfer};
+            auto it = std::find_if(_transferPlanned.begin(), _transferPlanned.end(), [ &](auto & st)
             {
-                return st.first == filepath;
+                return filepath == std::get<0>(st);
             });
 
-            if(it == transfer.end())
+            if(it == _transferPlanned.end())
             {
                 Application::error("%s: transfer not found, file: %s", __FUNCTION__, filepath.c_str());
                 return;
@@ -665,16 +715,16 @@ namespace LTSM
                               Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
                               Channel::Opts{Channel::Speed::Slow, 0});
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(displayNum(), tmpfile, (*it).second, dstfile.c_str());
+                busTransferFileStarted(displayNum(), tmpfile, std::get<1>( * it) /* size */, dstfile.c_str());
             }
 
             // remove planned
-            transfer.erase(it);
+            _transferPlanned.erase(it);
         }
     }
 
-    void Connector::VNC::onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
-                                         const std::string & server, const std::string & smode, const std::string & speed)
+    void ConnectorLtsm::onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
+                                        const std::string & server, const std::string & smode, const std::string & speed)
     {
         if(display == displayNum())
         {
@@ -683,7 +733,7 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onDestroyChannel(const int32_t & display, const uint8_t & channel)
+    void ConnectorLtsm::onDestroyChannel(const int32_t & display, const uint8_t & channel)
     {
         if(display == displayNum())
         {
@@ -691,9 +741,9 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onCreateListener(const int32_t & display, const std::string & client, const std::string & cmode,
-                                          const std::string & server, const std::string & smode, const std::string & speed, const uint8_t & limit,
-                                          const uint32_t & flags)
+    void ConnectorLtsm::onCreateListener(const int32_t & display, const std::string & client, const std::string & cmode,
+                                         const std::string & server, const std::string & smode, const std::string & speed, const uint8_t & limit,
+                                         const uint32_t & flags)
     {
         if(display == displayNum())
         {
@@ -702,7 +752,7 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onDestroyListener(const int32_t & display, const std::string & client, const std::string & server)
+    void ConnectorLtsm::onDestroyListener(const int32_t & display, const std::string & client, const std::string & server)
     {
         if(display == displayNum())
         {
@@ -710,7 +760,7 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug)
+    void ConnectorLtsm::onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug)
     {
         if(display == displayNum())
         {
@@ -718,7 +768,7 @@ namespace LTSM
         }
     }
 
-    void Connector::VNC::onLoginFailure(const int32_t & display, const std::string & msg)
+    void ConnectorLtsm::onLoginFailure(const int32_t & display, const std::string & msg)
     {
         JsonObjectStream jos;
         jos.push("cmd", SystemCommand::LoginSuccess);
@@ -727,7 +777,7 @@ namespace LTSM
         static_cast<ChannelClient*>(this)->sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jos.flush());
     }
 
-    void Connector::VNC::systemChannelError(const JsonObject & jo)
+    void ConnectorLtsm::systemChannelError(const JsonObject & jo)
     {
         auto channel = jo.getInteger("id");
         auto code = jo.getInteger("code");
@@ -739,9 +789,9 @@ namespace LTSM
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
     }
-    
-    int Connector::VNC::remoteClientVersion(void) const
+
+    int ConnectorLtsm::remoteClientVersion(void) const
     {
-        return ltsmClientVersion;
+        return _ltsmClientVersion;
     }
 }

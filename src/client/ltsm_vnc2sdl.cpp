@@ -1159,7 +1159,7 @@ namespace LTSM
 
                 if(windowFullScreen())
                 {
-                    window.reset(new SDL::Window(windowTitle, width, height, 0, 0, windowFlags, windowAccel));
+                    window = std::make_unique<SDL::Window>(windowTitle, width, height, 0, 0, windowFlags, windowAccel);
                 }
                 else
                 {
@@ -1346,7 +1346,7 @@ namespace LTSM
 
         if(! window)
         {
-            window.reset(new SDL::Window(windowTitle, wsz.width, wsz.height, 0, 0, windowFlags, windowAccel));
+            window = std::make_unique<SDL::Window>(windowTitle, wsz.width, wsz.height, 0, 0, windowFlags, windowAccel);
             eventResize = true;
         }
 

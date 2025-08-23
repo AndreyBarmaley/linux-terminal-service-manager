@@ -26,43 +26,29 @@
 #include "ltsm_application.h"
 #include "ltsm_helperwindow.h"
 
-class LtsmHelper : public LTSM::Application, public QApplication
+int main( int argc, char* argv[] )
 {
-
-public:
-    LtsmHelper(int & argc, char** argv) : LTSM::Application("ltsm_helper"), QApplication(argc, argv)
-    {
-        LTSM::Application::setDebug(LTSM::DebugTarget::Syslog, LTSM::DebugLevel::Info);
-    }
-
-    int start(void) override
-    {
-        QTranslator tr;
-        tr.load(QLocale(), QLatin1String("ltsm_helper"), QLatin1String("_"), QLatin1String(":/i18n"));
-        installTranslator(& tr);
-        LTSM_HelperSDBus win;
-        win.show();
-        return exec();
-    }
-};
-
-int main(int argc, char* argv[])
-{
-    int res = 0;
+    QApplication app( argc, argv );
+    QTranslator tr;
+    tr.load( QLocale(), QLatin1String( "ltsm_helper" ), QLatin1String( "_" ), QLatin1String( ":/i18n" ) );
+    app.installTranslator( & tr );
 
     try
     {
-        LtsmHelper app(argc, argv);
-        res = app.start();
+
+        LTSM::LoginHelper::ManagerServiceProxy win;
+        win.show();
+        return app.exec();
+
     }
-    catch(const sdbus::Error & err)
+    catch( const sdbus::Error & err )
     {
-        LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error( "sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str() );
     }
-    catch(const std::exception & err)
+    catch( const std::exception & err )
     {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error( "%s: exception: %s", NS_FuncName.c_str(), err.what() );
     }
 
-    return res;
+    return EXIT_FAILURE;
 }

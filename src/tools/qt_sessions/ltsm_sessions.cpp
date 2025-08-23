@@ -94,7 +94,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
                               QString(tr("<b>DBus interface not found!</b><br><br>service: %1<br>path: %2<br>interface: %3")).arg(service).arg(
                                   path).arg(interface),
                               QMessageBox::Ok);
-        throw - 1;
+        throw -1;
     }
 
     tableReload();

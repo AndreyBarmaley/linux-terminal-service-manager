@@ -32,7 +32,7 @@
 #include "freerdp/freerdp.h"
 #include "freerdp/listener.h"
 
-namespace LTSM
+namespace LTSM::Connector
 {
     struct FreeRdpCallback;
 
@@ -41,73 +41,69 @@ namespace LTSM
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace Connector
+    class ConnectorRdp : public ManagerServiceProxy, public XCB::RootDisplay, protected ProxySocket
     {
-        /* Connector::RDP */
-        class RDP : public SignalProxy, public XCB::RootDisplay, protected ProxySocket
-        {
-            std::atomic<bool> helperStartedFlag{false};
-            std::atomic<bool> loopShutdownFlag{false};
-            std::atomic<bool> updatePartFlag{true};
-            std::unique_ptr<FreeRdpCallback> freeRdp;
-            PixelFormat serverFormat;
-            XCB::Region damageRegion;
+        std::atomic<bool> helperStartedFlag{false};
+        std::atomic<bool> loopShutdownFlag{false};
+        std::atomic<bool> updatePartFlag{true};
+        std::unique_ptr<FreeRdpCallback> freeRdp;
+        PixelFormat serverFormat;
+        XCB::Region damageRegion;
 
-        protected:
-            // dbus virtual signals
-            void onLoginSuccess(const int32_t & display, const std::string & userName,
-                                const uint32_t & userUid) override;
-            void onSendBellSignal(const int32_t & display) override;
-            void onShutdownConnector(const int32_t & display) override;
-            void onHelperWidgetStarted(const int32_t & display) override;
+    protected:
+        // dbus virtual signals
+        void onLoginSuccess(const int32_t & display, const std::string & userName,
+                            const uint32_t & userUid) override;
+        void onSendBellSignal(const int32_t & display) override;
+        void onShutdownConnector(const int32_t & display) override;
+        void onHelperWidgetStarted(const int32_t & display) override;
 
-            // connector
-            void serverScreenUpdateRequest(const XCB::Region &) override;
+        // connector
+        void serverScreenUpdateRequest(const XCB::Region & ) override;
 
-            // root display
-            void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
-            void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
-            void xcbXkbGroupChangedEvent(int) override;
+        // root display
+        void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
+        void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
+        void xcbXkbGroupChangedEvent(int) override;
 
-            bool updateEvent(const XCB::Region &);
-            bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
-            bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
-            void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
-            void disconnectedEvent(void);
+        bool updateEvent(const XCB::Region & );
+        bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply & );
+        bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply & );
+        void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
+        void disconnectedEvent(void);
 
-            bool xcbEventLoopAsync(bool nodamage);
+        bool xcbEventLoopAsync(bool nodamage);
 
-            bool channelsInit(void);
-            void channelsFree(void);
+        bool channelsInit(void);
+        void channelsFree(void);
 
-        public:
-            RDP(const JsonObject &);
-            ~RDP();
+    public:
+        ConnectorRdp(const JsonObject & );
+        ~ConnectorRdp();
 
-            int communication(void) override;
-            bool createX11Session(uint8_t depth);
-            void setEncryptionInfo(const std::string &);
-            void setAutoLogin(const std::string &, const std::string &);
+        int communication(void) override;
+        bool createX11Session(uint8_t depth);
+        void setEncryptionInfo(const std::string & );
+        void setAutoLogin(const std::string &, const std::string & );
 
-            // freerdp callback func
-            static BOOL cbServerPostConnect(freerdp_peer* client);
-            static BOOL cbServerActivate(freerdp_peer* client);
-            static BOOL cbServerAuthenticate(freerdp_peer* client, const char** user, const char** domain,
-                                             const char** password);
-            static BOOL cbServerSynchronizeEvent(rdpInput* input, UINT32 flags);
-            static BOOL cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
-            static BOOL cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
-            static BOOL cbServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
-            static BOOL cbServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
-            static BOOL cbServerRefreshRequest(freerdp_peer* client);
+        // freerdp callback func
+        static BOOL cbServerPostConnect(freerdp_peer * client);
+        static BOOL cbServerActivate(freerdp_peer * client);
+        static BOOL cbServerAuthenticate(freerdp_peer * client, const char** user, const char** domain,
+                                         const char** password);
+        static BOOL cbServerSynchronizeEvent(rdpInput * input, UINT32 flags);
+        static BOOL cbServerKeyboardEvent(rdpInput * input, UINT16 flags, UINT16 code);
+        static BOOL cbServerMouseEvent(rdpInput * input, UINT16 flags, UINT16 x, UINT16 y);
+        static BOOL cbServerRefreshRect(rdpContext * context, BYTE count, const RECTANGLE_16 * areas);
+        static BOOL cbServerSuppressOutput(rdpContext * context, BYTE allow, const RECTANGLE_16 * area);
+        static BOOL cbServerRefreshRequest(freerdp_peer * client);
 
-            static BOOL cbServerClose(freerdp_peer* client);
-            static void cbServerDisconnect(freerdp_peer* client);
-            static BOOL cbServerCapabilities(freerdp_peer* client);
-            static BOOL cbServerAdjustMonitorsLayout(freerdp_peer* client);
-            static BOOL cbServerClientCapabilities(freerdp_peer* client);
-        };
-    }
+        static BOOL cbServerClose(freerdp_peer * client);
+        static void cbServerDisconnect(freerdp_peer * client);
+        static BOOL cbServerCapabilities(freerdp_peer * client);
+        static BOOL cbServerAdjustMonitorsLayout(freerdp_peer * client);
+        static BOOL cbServerClientCapabilities(freerdp_peer * client);
+    };
 }
 
 #endif // _LTSM_CONNECTOR_RDP_

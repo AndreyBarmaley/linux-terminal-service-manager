@@ -32,10 +32,6 @@
 #include "ltsm_xcb_types.h"
 #include "ltsm_streambuf.h"
 
-#ifdef LTSM_WITH_SDBUS
-#include "sdbus-c++/sdbus-c++.h"
-#endif
-
 namespace LTSM
 {
     struct Color
@@ -43,16 +39,8 @@ namespace LTSM
         uint8_t r, g, b, x;
 
         Color() : r(0), g(0), b(0), x(0) {}
-
         Color(uint8_t cr, uint8_t cg, uint8_t cb, uint8_t ca = 0) : r(cr), g(cg), b(cb), x(ca) {}
 
-#ifdef LTSM_WITH_SDBUS
-        explicit Color(const sdbus::Struct<uint8_t, uint8_t, uint8_t> & tuple) : x(0)
-        {
-            std::tie(r, g, b) = tuple;
-        }
-
-#endif
         int toARGB(void) const
         {
             return (static_cast<int>(x) << 24) | (static_cast<int>(r) << 16) | (static_cast<int>(g) << 8) | b;

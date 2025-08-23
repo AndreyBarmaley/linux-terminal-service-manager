@@ -1,6 +1,6 @@
 # LTSM connector
 
-target_sources(${CUR_TARGET} PRIVATE ltsm_connector.cpp ltsm_connector_vnc.cpp)
+target_sources(${CUR_TARGET} PRIVATE ltsm_connector.cpp ltsm_connector_proto.cpp ltsm_render_primitives.cpp)
 
 if(LTSM_SERVER_CONNECTOR_RDP)
 

@@ -158,7 +158,7 @@ namespace LTSM
     {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
-        fbPtr.reset(new FrameBuffer(XCB::Region(0, 0, wsz.width, wsz.height), format));
+        fbPtr = std::make_unique<FrameBuffer>(XCB::Region(0, 0, wsz.width, wsz.height), format);
     }
 
     void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel)

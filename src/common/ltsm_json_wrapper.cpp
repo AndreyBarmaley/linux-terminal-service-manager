@@ -435,49 +435,40 @@ namespace LTSM
     }
 
     /* JsonValuePtr */
-    JsonValuePtr::JsonValuePtr()
+    JsonValuePtr::JsonValuePtr() : std::unique_ptr<JsonValue>(std::make_unique<JsonNull>())
     {
-        reset(new JsonNull());
     }
 
-    JsonValuePtr::JsonValuePtr(int v)
+    JsonValuePtr::JsonValuePtr(int v) : std::unique_ptr<JsonValue>(std::make_unique<JsonInteger>(v))
     {
-        reset(new JsonInteger(v));
     }
 
-    JsonValuePtr::JsonValuePtr(bool v)
+    JsonValuePtr::JsonValuePtr(bool v) : std::unique_ptr<JsonValue>(std::make_unique<JsonBoolean>(v))
     {
-        reset(new JsonBoolean(v));
     }
 
-    JsonValuePtr::JsonValuePtr(double v)
+    JsonValuePtr::JsonValuePtr(double v) : std::unique_ptr<JsonValue>(std::make_unique<JsonDouble>(v))
     {
-        reset(new JsonDouble(v));
     }
 
-    JsonValuePtr::JsonValuePtr(std::string_view v)
+    JsonValuePtr::JsonValuePtr(std::string_view v) : std::unique_ptr<JsonValue>(std::make_unique<JsonString>(v))
     {
-        reset(new JsonString(v));
     }
 
-    JsonValuePtr::JsonValuePtr(JsonArray && v)
+    JsonValuePtr::JsonValuePtr(JsonArray && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(std::move(v)))
     {
-        reset(new JsonArray(std::move(v)));
     }
 
-    JsonValuePtr::JsonValuePtr(JsonObject && v)
+    JsonValuePtr::JsonValuePtr(JsonObject && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(std::move(v)))
     {
-        reset(new JsonObject(std::move(v)));
     }
 
-    JsonValuePtr::JsonValuePtr(const JsonArray & v)
+    JsonValuePtr::JsonValuePtr(const JsonArray & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(v))
     {
-        reset(new JsonArray(v));
     }
 
-    JsonValuePtr::JsonValuePtr(const JsonObject & v)
+    JsonValuePtr::JsonValuePtr(const JsonObject & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(v))
     {
-        reset(new JsonObject(v));
     }
 
     JsonValuePtr::JsonValuePtr(JsonValue* v)
@@ -1170,9 +1161,9 @@ namespace LTSM
     std::pair<JsonValuePtr, int>
     JsonContent::getValueArray(const const_iterator & it) const
     {
-        JsonArray* arr = new JsonArray();
-        int skip = pushValuesToArray(it, *arr);
-        return std::make_pair(JsonValuePtr(arr), skip);
+        JsonArray arr;
+        int skip = pushValuesToArray(it, arr);
+        return std::make_pair(JsonValuePtr(std::move(arr)), skip);
     }
 
     int JsonContent::pushValuesToObject(const const_iterator & it, JsonObject & obj) const
@@ -1218,9 +1209,9 @@ namespace LTSM
     std::pair<JsonValuePtr, int>
     JsonContent::getValueObject(const const_iterator & it) const
     {
-        JsonObject* obj = new JsonObject();
-        int skip = pushValuesToObject(it, *obj);
-        return std::make_pair(JsonValuePtr(obj), skip);
+        JsonObject obj;
+        int skip = pushValuesToObject(it, obj);
+        return std::make_pair(JsonValuePtr(std::move(obj)), skip);
     }
 
     std::pair<JsonValuePtr, int>

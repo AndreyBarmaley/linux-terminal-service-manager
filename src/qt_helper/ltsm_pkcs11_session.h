@@ -41,18 +41,18 @@ struct Pkcs11Token
     LTSM::PKCS11::SlotInfo slotInfo;
     LTSM::PKCS11::TokenInfo tokenInfo;
 
-    bool operator== (const Pkcs11Token & st) const
+    bool operator== ( const Pkcs11Token & st ) const
     {
         return tokenInfo.getModel() == st.tokenInfo.getModel() &&
                tokenInfo.getSerialNumber() == st.tokenInfo.getSerialNumber();
     }
 
-    bool operator< (const Pkcs11Token & st) const
+    bool operator< ( const Pkcs11Token & st ) const
     {
         auto model1 = tokenInfo.getModel();
         auto model2 = st.tokenInfo.getModel();
 
-        if(model1 == model2)
+        if( model1 == model2 )
         {
             return tokenInfo.getSerialNumber() < st.tokenInfo.getSerialNumber();
         }
@@ -89,27 +89,27 @@ class Pkcs11Client : public QThread
     std::list<Pkcs11Token> tokens;
 
 public:
-    Pkcs11Client(int displayNum, QObject*);
+    Pkcs11Client( int displayNum, QObject * );
     ~Pkcs11Client();
 
-    const std::list<Pkcs11Token> & getTokens(void) const;
-    std::list<Pkcs11Cert> getCertificates(uint64_t slotId);
-    std::list<Pkcs11Mech> getMechanisms(uint64_t slotId);
+    const std::list<Pkcs11Token> & getTokens( void ) const;
+    std::list<Pkcs11Cert> getCertificates( uint64_t slotId );
+    std::list<Pkcs11Mech> getMechanisms( uint64_t slotId );
 
-    std::vector<uint8_t> signData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                  const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
-    std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
-                                     const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
+    std::vector<uint8_t> signData( uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                   const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS );
+    std::vector<uint8_t> decryptData( uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
+                                      const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS );
 
 protected:
-    void run(void) override;
+    void run( void ) override;
 
-    bool updateTokens(void);
+    bool updateTokens( void );
 
 signals:
-    void pkcs11Error(const QString &);
-    void pkcs11Shutdown(void);
-    void pkcs11TokensChanged(void);
+    void pkcs11Error( const QString & );
+    void pkcs11Shutdown( void );
+    void pkcs11TokensChanged( void );
 };
 
 #endif // LTSM_HELPER_PKCS11_H

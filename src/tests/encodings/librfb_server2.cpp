@@ -45,7 +45,7 @@ namespace LTSM
     {
         LTSM::Application::info("%s: dsz: %lu, %lu", NS_FuncName.c_str(), dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
-        socket.reset(new EncoderWrapper(&bufData, this));
+        socket = std::make_unique<EncoderWrapper>(&bufData, this);
 
         streamIn = streamOut = socket.get();
     }

@@ -857,7 +857,7 @@ namespace LTSM
         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION)
             zlevel = Z_BEST_SPEED;
 
-        zlib.reset(new ZLib::DeflateStream(zlevel));
+        zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
         buf.reserve(64 * 1024);
     }
 
@@ -915,7 +915,7 @@ namespace LTSM
                     }
 
                     Application::info("%s: set zlevel: %d", __FUNCTION__, zlevel);
-                    zlib.reset(new ZLib::DeflateStream(zlevel));
+                    zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
                 }
             }
         }

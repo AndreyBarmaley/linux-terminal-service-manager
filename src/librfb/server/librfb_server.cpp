@@ -76,11 +76,11 @@ namespace LTSM
     {
         if(0 < sockfd)
         {
-            socket.reset(new SocketStream(sockfd));
+            socket = std::make_unique<SocketStream>(sockfd);
         }
         else
         {
-            socket.reset(new InetStream());
+            socket = std::make_unique<InetStream>();
         }
 
         streamIn = streamOut = socket.get();
@@ -542,7 +542,7 @@ namespace LTSM
                             if(auto len = krb->recvIntBE32(); 0 < len)
                             {
                                 auto raw = krb->recvData(len);
-                                jo.reset(new JsonObject(JsonContentString(std::string(raw.begin(), raw.end())).toObject()));
+                                jo = std::make_unique<JsonObject>(JsonContentString(std::string(raw.begin(), raw.end())).toObject());
                             }
 
                             // stop kerbero session

@@ -1110,10 +1110,9 @@ namespace LTSM
             {
                 Application::debug(DebugType::Tls, "%s: tls server mode, priority: `%s'", __FUNCTION__, priority.c_str());
                 dhparams.generate(1024);
-                auto ptr = new gnutls::anon_server_credentials();
-                ptr->set_dh_params(dhparams);
-                cred.reset(ptr);
-
+                cred = std::make_unique<gnutls::anon_server_credentials>();
+                if(auto ptr = dynamic_cast<gnutls::anon_server_credentials*>(cred.get()))
+                    ptr->set_dh_params(dhparams);
                 session = std::make_unique<gnutls::server_session>();
             }
             else
@@ -1171,9 +1170,9 @@ namespace LTSM
             if(srvmode)
             {
                 cred = std::make_unique<gnutls::certificate_server_credentials>();
-                auto ptr = new gnutls::server_session();
-                ptr->set_certificate_request(GNUTLS_CERT_IGNORE);
-                session.reset(ptr);
+                session = std::make_unique<gnutls::server_session>();
+                if(auto ptr = dynamic_cast<gnutls::server_session*>(session.get()))
+                    ptr->set_certificate_request(GNUTLS_CERT_IGNORE);
             }
             else
             {

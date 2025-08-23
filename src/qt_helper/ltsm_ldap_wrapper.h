@@ -33,19 +33,19 @@ namespace LTSM
 {
     struct ldap_error : public std::runtime_error
     {
-        explicit ldap_error(std::string_view what) : std::runtime_error(view2string(what)) {}
+        explicit ldap_error( std::string_view what ) : std::runtime_error( view2string( what ) ) {}
     };
 
     class LdapWrapper
     {
-        LDAP* ldap = nullptr;
+        LDAP * ldap = nullptr;
 
     public:
         LdapWrapper();
         ~LdapWrapper();
 
-        std::string findLoginFromDn(const std::string & dn);
-        std::string findDnFromCertificate(const uint8_t*, size_t);
+        std::string findLoginFromDn( const std::string & dn );
+        std::string findDnFromCertificate( const uint8_t*, size_t );
     };
 }
 

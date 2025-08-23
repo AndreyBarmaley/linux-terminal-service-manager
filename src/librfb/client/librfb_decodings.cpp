@@ -294,7 +294,7 @@ namespace LTSM
     {
         if(zip)
         {
-            zlib.reset(new ZLib::InflateStream());
+            zlib = std::make_unique<ZLib::InflateStream>();
         }
     }
 
@@ -509,7 +509,7 @@ namespace LTSM
 
     RFB::DecodingZlib::DecodingZlib() : DecodingBase(ENCODING_ZLIB)
     {
-        zlib.reset(new ZLib::InflateStream());
+        zlib = std::make_unique<ZLib::InflateStream>();
     }
 
     void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg)

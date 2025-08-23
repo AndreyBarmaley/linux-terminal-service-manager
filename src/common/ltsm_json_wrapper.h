@@ -208,13 +208,16 @@ namespace LTSM
         explicit JsonValuePtr(bool);
         explicit JsonValuePtr(double);
         explicit JsonValuePtr(std::string_view);
-        explicit JsonValuePtr(const JsonArray &);
-        explicit JsonValuePtr(const JsonObject &);
-        explicit JsonValuePtr(JsonArray &&);
-        explicit JsonValuePtr(JsonObject &&);
+
         explicit JsonValuePtr(JsonValue*);
+
         explicit JsonValuePtr(const JsonValuePtr &);
         explicit JsonValuePtr(JsonValuePtr &&) noexcept;
+
+        explicit JsonValuePtr(const JsonArray &);
+        explicit JsonValuePtr(const JsonObject &);
+        explicit JsonValuePtr(JsonArray &&) noexcept;
+        explicit JsonValuePtr(JsonObject &&) noexcept;
 
         JsonValuePtr & operator=(const JsonValuePtr &);
         JsonValuePtr & operator=(JsonValuePtr &&) noexcept;
