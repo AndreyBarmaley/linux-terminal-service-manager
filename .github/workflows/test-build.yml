@@ -5,9 +5,9 @@ permissions:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, devel ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, devel ]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
