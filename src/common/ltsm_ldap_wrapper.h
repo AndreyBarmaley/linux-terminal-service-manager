@@ -25,27 +25,49 @@
 
 #include <ldap.h>
 
+#include <list>
+#include <memory>
 #include <string>
 #include <vector>
 #include <stdexcept>
+
+#include "ltsm_compat.h"
 
 namespace LTSM
 {
     struct ldap_error : public std::runtime_error
     {
-        explicit ldap_error( std::string_view what ) : std::runtime_error( view2string( what ) ) {}
+        explicit ldap_error(std::string_view what) : std::runtime_error(view2string(what)) {}
+    };
+
+    struct LdapResult
+    {
+        std::shared_ptr<char[]> _dn;
+        std::unique_ptr<char[], void(*)(void*)> _attr;
+        std::unique_ptr<berval*, void(*)(berval**)> _vals;
+
+        const char* dn(void) const;
+        const char* attr(void) const;
+
+        int valuesCount(void) const;
+        std::string_view valueString(void) const;
+        std::list<std::string_view> valueListString(void) const;
+        
+        bool hasValue(const char* ptr, size_t len) const;
     };
 
     class LdapWrapper
     {
-        LDAP * ldap = nullptr;
+        LDAP* ldap = nullptr;
 
     public:
         LdapWrapper();
         ~LdapWrapper();
 
-        std::string findLoginFromDn( const std::string & dn );
-        std::string findDnFromCertificate( const uint8_t*, size_t );
+        std::string findLoginFromDn(const std::string & dn);
+        std::string findDnFromCertificate(const uint8_t*, size_t);
+        
+        std::list<LdapResult> search(int scope, std::vector<const char*> attrs, const char* filter = nullptr, const char* basedn = nullptr);
     };
 }
 

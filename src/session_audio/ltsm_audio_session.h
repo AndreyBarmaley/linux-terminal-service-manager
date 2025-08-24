@@ -49,7 +49,7 @@ namespace LTSM
         std::thread thread;
         std::atomic<bool> shutdown{false};
 
-        AudioClient(const std::string &);
+        AudioClient(const std::string & );
         ~AudioClient();
 
         void pcmDataNotify(const uint8_t* ptr, size_t len);

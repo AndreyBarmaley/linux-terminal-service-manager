@@ -70,7 +70,7 @@ namespace LTSM
             return false;
         }
 
-        auto src = (const opus_int16*) last.data();
+        auto src = reinterpret_cast<const opus_int16*>(last.data());
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
         if(nBytes < 0)

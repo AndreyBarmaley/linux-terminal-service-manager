@@ -715,7 +715,7 @@ namespace LTSM::Connector
                               Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
                               Channel::Opts{Channel::Speed::Slow, 0});
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(displayNum(), tmpfile, std::get<1>( * it) /* size */, dstfile.c_str());
+                busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile.c_str());
             }
 
             // remove planned

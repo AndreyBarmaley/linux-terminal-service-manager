@@ -49,6 +49,14 @@ if(LTSM_WITH_PNG)
     endif()
 endif()
 
+if(LTSM_WITH_LDAP)
+    find_library(LDAP_LIBRARY ldap REQUIRED)
+    find_library(LBER_LIBRARY lber REQUIRED)
+
+    target_sources(${CUR_TARGET} PRIVATE ltsm_ldap_wrapper.cpp)
+    target_link_libraries(${CUR_TARGET} PRIVATE ${LBER_LIBRARY} ${LDAP_LIBRARY})
+endif()
+
 if(LTSM_WITH_GNUTLS)
     find_package(GnuTLS REQUIRED)
     if(GnuTLS_FOUND)

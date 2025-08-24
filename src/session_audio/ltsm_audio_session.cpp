@@ -145,7 +145,7 @@ namespace LTSM
 #endif
         }
 
-        auto readEventCb = std::bind(&AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2);
+        auto readEventCb = std::bind( & AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2);
         const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
 
         try
@@ -161,7 +161,9 @@ namespace LTSM
         while(true)
         {
             if(shutdown)
+            {
                 return false;
+            }
 
             if(pulse->initContext())
             {
@@ -254,11 +256,12 @@ namespace LTSM
     /// AudioSessionBus
     AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn, bool debug)
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_audio_path}),
+        : AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_audio_path}),
 #else
-        : AdaptorInterfaces(conn, dbus_session_audio_path),
+        :
+        AdaptorInterfaces(conn, dbus_session_audio_path),
 #endif
-         Application("ltsm_audio2session")
+          Application("ltsm_audio2session")
     {
         Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
@@ -303,7 +306,7 @@ namespace LTSM
     {
         Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
 
-        if(std::any_of(clients.begin(), clients.end(), [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; }))
+        if(std::any_of(clients.begin(), clients.end(), [ &](auto & cli) { return cli.socketPath == clientSocket && ! ! cli.sock; }))
         {
             Application::error("%s: socket busy, path: `%s'", __FUNCTION__, clientSocket.c_str());
             return false;
@@ -316,7 +319,7 @@ namespace LTSM
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket)
     {
         Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
-        clients.remove_if([&](auto & cli)
+        clients.remove_if([ &](auto & cli)
         {
             return cli.socketPath == clientSocket;
         });
@@ -326,7 +329,7 @@ namespace LTSM
 int main(int argc, char** argv)
 {
     bool debug = false;
-    
+
     for(int it = 1; it < argc; ++it)
     {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
@@ -354,7 +357,7 @@ int main(int argc, char** argv)
     try
     {
 #ifdef SDBUS_2_0_API
-        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName{LTSM::dbus_session_audio_name});
+        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_audio_name});
 #else
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_audio_name);
 #endif

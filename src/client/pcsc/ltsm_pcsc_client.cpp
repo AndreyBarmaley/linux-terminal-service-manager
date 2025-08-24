@@ -36,6 +36,8 @@
  #define MAX_READERNAME  128
  #define MAX_BUFFER_SIZE 264
  #define MAX_BUFFER_SIZE_EXTENDED (4 + 3 + (1<<16) + 3 + 2)
+
+const char* pcsc_stringify_error(int err);
 #endif
 
 #ifdef __APPLE__

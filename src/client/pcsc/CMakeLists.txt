@@ -2,7 +2,7 @@
 
 if(MINGW)
     # internal support
-    target_sources(${CUR_TARGET} PRIVATE ltsm_pcsc_client.cpp)
+    target_sources(${CUR_TARGET} PRIVATE ltsm_pcsc_client.cpp ltsm_pcsc_winerrors.cpp)
     target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_PCSC)
 
 elseif(LTSM_CLIENT_SCARD_REDIRECT)

@@ -90,32 +90,32 @@ namespace LTSM
     };
 
     class PathStat : protected std::pair<std::string, struct stat>
+    {
+    public:
+        PathStat() = default;
+        PathStat(const std::string & str, struct stat && st) : std::pair<std::string, struct stat>(str, st) {}
+
+        virtual ~PathStat() = default;
+
+        std::string localPath(const FuseSession*) const;
+        std::string remotePath(const FuseSession*) const;
+        std::string joinPath(std::string_view) const;
+
+        const std::string & relativePath(void) const
         {
-            public:
-            PathStat() = default;
-            PathStat(const std::string & str, struct stat && st) : std::pair<std::string, struct stat>(str, st) {}
+            return first;
+        }
 
-            virtual ~PathStat() = default;
+        const struct stat & statRef(void) const
+        {
+            return second;
+        }
 
-            std::string localPath(const FuseSession*) const;
-            std::string remotePath(const FuseSession*) const;
-            std::string joinPath(std::string_view) const;
-
-            const std::string & relativePath(void) const
-            {
-                return first;
-            }
-
-            const struct stat & statRef(void) const
-            {
-                return second;
-            }
-
-            const struct stat* statPtr(void) const
-            {
-                return std::addressof(second);
-            }
-        };
+        const struct stat* statPtr(void) const
+        {
+            return std::addressof(second);
+        }
+    };
 
     typedef std::pair<ino_t, ino_t> LinkInfo;
 
@@ -150,9 +150,9 @@ namespace LTSM
         void recvStatStruct(struct stat* st);
         void recvShareRootInfo(void);
 
-	bool accessR(const struct stat &) const;
-	bool accessW(const struct stat &) const;
-	bool accessX(const struct stat &) const;
+        bool accessR(const struct stat & ) const;
+        bool accessW(const struct stat & ) const;
+        bool accessX(const struct stat & ) const;
 
         const LinkInfo* findLink(fuse_ino_t inode) const;
         const PathStat* findInode(fuse_ino_t inode) const;
@@ -194,79 +194,75 @@ namespace LTSM
 
     void ll_init(void* userdata, struct fuse_conn_info* conn)
     {
-        if(auto fuse = (FuseSession*) userdata)
+        auto fuse = (FuseSession*) userdata;
+        std::error_code fserr;
+
+        while(! fuse->initShutdown)
         {
-            std::error_code fserr;
-
-            while(! fuse->initShutdown)
+            // wait socket
+            if(std::filesystem::is_socket(fuse->socketPath, fserr))
             {
-                // wait socket
-                if(std::filesystem::is_socket(fuse->socketPath, fserr))
+                if(int fd = UnixSocket::connect(fuse->socketPath); 0 <= fd)
                 {
-                    int fd = UnixSocket::connect(fuse->socketPath);
-
-                    if(0 < fd)
-                    {
-                        fuse->sock = std::make_unique<SocketStream>(fd, false /* statistic */);
-                        break;
-                    }
+                    fuse->sock = std::make_unique<SocketStream>(fd, false /* statistic */);
+                    break;
                 }
-
-                std::this_thread::sleep_for(1s);
             }
 
-            if(! fuse->sock)
+            std::this_thread::sleep_for(1s);
+        }
+
+        if(! fuse->sock)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "socket");
+            fuse->exitSession();
+            return;
+        }
+
+        try
+        {
+            // send inititialize packet
+            fuse->sock->sendIntLE16(FuseOp::Init);
+            // <VER16> - proto version
+            // <LEN16><MOUNTPOINT> - mount point
+            fuse->sock->sendIntLE16(1);
+            fuse->sock->sendIntLE16(fuse->remotePoint.size());
+            fuse->sock->sendString(fuse->remotePoint);
+            fuse->sock->sendFlush();
+
+            // reply format:
+            // <CMD16> - fuse cmd
+            // <ERR32> - errno
+            auto cmd = fuse->sock->recvIntLE16();
+            auto err = fuse->sock->recvIntLE32();
+
+            if(cmd != FuseOp::Init)
             {
-                Application::error("%s: %s failed", __FUNCTION__, "socket");
+                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse->exitSession();
                 return;
             }
 
-            try
+            if(err)
             {
-                // send inititialize packet
-                fuse->sock->sendIntLE16(FuseOp::Init);
-                // <VER16> - proto version
-                // <LEN16><MOUNTPOINT> - mount point
-                fuse->sock->sendIntLE16(1);
-                fuse->sock->sendIntLE16(fuse->remotePoint.size());
-                fuse->sock->sendString(fuse->remotePoint);
-                fuse->sock->sendFlush();
-
-                // reply format:
-                // <CMD16> - fuse cmd
-                // <ERR32> - errno
-                auto cmd = fuse->sock->recvIntLE16();
-                auto err = fuse->sock->recvIntLE32();
-
-                if(cmd != FuseOp::Init)
-                {
-                    Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
-                    fuse->exitSession();
-                    return;
-                }
-
-                if(err)
-                {
-                    Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
-                    fuse->exitSession();
-                    return;
-                }
-
-                // <UID16> - proto
-                auto protoVer = fuse->sock->recvIntLE16();
-                // <UID32> - remote uid
-                fuse->remoteUid = fuse->sock->recvIntLE32();
-                // <GID32> - remote gid
-                fuse->remoteGid = fuse->sock->recvIntLE32();
-                fuse->recvShareRootInfo();
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", __FUNCTION__, err.what());
+                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
                 fuse->exitSession();
                 return;
             }
+
+            // <UID16> - proto
+            auto protoVer = fuse->sock->recvIntLE16();
+            // <UID32> - remote uid
+            fuse->remoteUid = fuse->sock->recvIntLE32();
+            // <GID32> - remote gid
+            fuse->remoteGid = fuse->sock->recvIntLE32();
+            fuse->recvShareRootInfo();
+        }
+        catch(const std::exception & err)
+        {
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            fuse->exitSession();
+            return;
         }
     }
 
@@ -317,14 +313,14 @@ namespace LTSM
 
         if(! fuse)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "fuse");
+            Application::error("%s: %s failed", __FUNCTION__, "fuse");
             fuse_reply_err(req, EFAULT);
             return;
         }
 
         if(! fuse->sock)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "sock");
+            Application::error("%s: %s failed", __FUNCTION__, "sock");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -333,7 +329,7 @@ namespace LTSM
 
         if(! pathStat)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "inode");
+            Application::error("%s: %s failed", __FUNCTION__, "inode");
             fuse_reply_err(req, ENOENT);
             return;
         }
@@ -348,14 +344,14 @@ namespace LTSM
 
         if(! fuse)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "fuse");
+            Application::error("%s: %s failed", __FUNCTION__, "fuse");
             fuse_reply_err(req, EFAULT);
             return;
         }
 
         if(! fuse->sock)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "sock");
+            Application::error("%s: %s failed", __FUNCTION__, "sock");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -364,28 +360,38 @@ namespace LTSM
 
         if(! pathStat)
         {
-            Application::error("%s: %s filed", __FUNCTION__, "inode");
+            Application::error("%s: %s failed", __FUNCTION__, "inode");
             fuse_reply_err(req, ENOENT);
             return;
         }
 
-        if(S_ISLNK(pathStat->statRef().st_mode))
+        if(! S_ISLNK(pathStat->statRef().st_mode))
         {
-            if(auto pair = fuse->findLink(ino))
-            {
-                if(auto pathStat2 = fuse->findInode(pair->second))
-                {
-                    auto path = pathStat2->localPath(fuse);
-                    fuse_reply_readlink(req, path.c_str());
-                    return;
-                }
-            }
+            Application::error("%s: %s failed", __FUNCTION__, "islnk");
+            fuse_reply_err(req, EINVAL);
+            return;
+        }
 
+        auto pair = fuse->findLink(ino);
+
+        if(! pair)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "findLink");
             fuse_reply_err(req, ENOENT);
             return;
         }
 
-        fuse_reply_err(req, EINVAL);
+        pathStat = fuse->findInode(pair->second);
+
+        if(! pathStat)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "findInode");
+            fuse_reply_err(req, ENOENT);
+            return;
+        }
+
+        auto path = pathStat2->localPath(fuse);
+        fuse_reply_readlink(req, path.c_str());
     }
 
     void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi)
@@ -801,7 +807,7 @@ namespace LTSM
         oper.read = ll_read;
         oper.access = ll_access;
         oper.readlink = ll_readlink;
-        ses.reset(fuse_session_new(& args, & oper, sizeof(oper), this));
+        ses.reset(fuse_session_new( & args, & oper, sizeof(oper), this));
 
         if(! ses)
         {
@@ -842,28 +848,28 @@ namespace LTSM
             thloop.join();
         }
 
-        fuse_opt_free_args(& args);
+        fuse_opt_free_args( & args);
     }
 
     bool FuseSession::accessR(const struct stat & st) const
     {
-    	return (S_IROTH & st.st_mode) ||
-            ((S_IRGRP & st.st_mode) && st.st_gid == remoteGid) ||
-            ((S_IRUSR & st.st_mode) && st.st_uid == remoteUid);
+        return (S_IROTH & st.st_mode) ||
+               ((S_IRGRP & st.st_mode) && st.st_gid == remoteGid) ||
+               ((S_IRUSR & st.st_mode) && st.st_uid == remoteUid);
     }
 
     bool FuseSession::accessW(const struct stat & st) const
     {
-	return (S_IWOTH & st.st_mode) ||
-            ((S_IWGRP & st.st_mode) && st.st_gid == remoteGid) ||
-            ((S_IWUSR & st.st_mode) && st.st_uid == remoteUid);
+        return (S_IWOTH & st.st_mode) ||
+               ((S_IWGRP & st.st_mode) && st.st_gid == remoteGid) ||
+               ((S_IWUSR & st.st_mode) && st.st_uid == remoteUid);
     }
 
     bool FuseSession::accessX(const struct stat & st) const
     {
         return (S_IXOTH & st.st_mode) ||
-            ((S_IXGRP & st.st_mode) && st.st_gid == remoteGid) ||
-            ((S_IXUSR & st.st_mode) && st.st_uid == remoteUid);
+               ((S_IXGRP & st.st_mode) && st.st_gid == remoteGid) ||
+               ((S_IXUSR & st.st_mode) && st.st_uid == remoteUid);
     }
 
     void FuseSession::exitSession(void)
@@ -908,7 +914,7 @@ namespace LTSM
             // remote path
             auto path = sock->recvString(len);
             struct stat st;
-            recvStatStruct(& st);
+            recvStatStruct( & st);
             auto ino = st.st_ino;
 
             if(ino != 1 &&
@@ -935,7 +941,7 @@ namespace LTSM
 
     const LinkInfo* FuseSession::findLink(fuse_ino_t inode) const
     {
-        auto it = std::find_if(symlinks.begin(), symlinks.end(), [&](auto & st)
+        auto it = std::find_if(symlinks.begin(), symlinks.end(), [ &](auto & st)
         {
             return st.first == inode;
         });
@@ -1000,11 +1006,12 @@ namespace LTSM
     /// FuseSessionBus
     FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug)
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath{dbus_session_fuse_path}),
+        : AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_fuse_path}),
 #else
-        : AdaptorInterfaces(conn, dbus_session_fuse_path),
+        :
+        AdaptorInterfaces(conn, dbus_session_fuse_path),
 #endif
-         Application("ltsm_fuse2session")
+          Application("ltsm_fuse2session")
     {
         Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         registerAdaptor();
@@ -1027,9 +1034,10 @@ namespace LTSM
         for(auto & fuse : childs)
         {
             fuse->initShutdown = true;
-            if(fuse->sock) fuse->sock->reset();
+
+            if(fuse->sock) { fuse->sock->reset(); }
         }
-    
+
         return EXIT_SUCCESS;
     }
 
@@ -1051,7 +1059,7 @@ namespace LTSM
         Application::info("%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
                           remotePoint.c_str(), fuseSocket.c_str());
 
-        if(std::any_of(childs.begin(), childs.end(), [&](auto & ptr) { return ptr->localPoint == localPoint; }))
+        if(std::any_of(childs.begin(), childs.end(), [ &](auto & ptr) { return ptr->localPoint == localPoint; }))
         {
             Application::error("%s: point busy, point: `%s'", __FUNCTION__, localPoint.c_str());
             return false;
@@ -1081,7 +1089,7 @@ namespace LTSM
     void FuseSessionBus::umountPoint(const std::string & localPoint)
     {
         LTSM::Application::info("%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
-        childs.remove_if([&](auto & ptr)
+        childs.remove_if([ &](auto & ptr)
         {
             return ptr->localPoint == localPoint;
         });
@@ -1119,7 +1127,7 @@ int main(int argc, char** argv)
     try
     {
 #ifdef SDBUS_2_0_API
-        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName{LTSM::dbus_session_fuse_name});
+        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_fuse_name});
 #else
         LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_fuse_name);
 #endif

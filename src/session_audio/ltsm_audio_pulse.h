@@ -59,12 +59,12 @@ namespace LTSM
     namespace PulseAudio
     {
         enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02, ContextLoadModule = 0xAB03, ContextSourceInfo = 0xAB04, ContextState = 0xAB05,
-                     StreamState = 0xAB11,  StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
+                      StreamState = 0xAB11, StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
                     };
 
         struct MainLoopDeleter
         {
-            void operator()(pa_mainloop* loop)
+            void operator()(pa_mainloop * loop)
             {
                 pa_mainloop_free(loop);
             }
@@ -72,7 +72,7 @@ namespace LTSM
 
         struct ContextDeleter
         {
-            void operator()(pa_context* ctx)
+            void operator()(pa_context * ctx)
             {
                 pa_context_unref(ctx);
             }
@@ -80,7 +80,7 @@ namespace LTSM
 
         struct StreamDeleter
         {
-            void operator()(pa_stream* st)
+            void operator()(pa_stream * st)
             {
                 pa_stream_unref(st);
             }
@@ -99,38 +99,38 @@ namespace LTSM
             std::unique_ptr<pa_context, ContextDeleter> ctx;
             std::unique_ptr<pa_stream, StreamDeleter> stream;
 
-            const pa_server_info* serverInfo = nullptr;
+            const pa_server_info * serverInfo = nullptr;
 
         protected:
-            static void contextStateCallback(pa_context* ctx, void* userData);
-            static void streamStateCallback(pa_stream* stream, void* userData);
-            static void streamSuspendedCallback(pa_stream* stream, void* userData);
-            static void streamOverflowCallback(pa_stream* stream, void* userData);
-            static void streamUnderflowCallback(pa_stream* stream, void* userData);
-            static void sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData);
+            static void contextStateCallback(pa_context * ctx, void* userData);
+            static void streamStateCallback(pa_stream * stream, void* userData);
+            static void streamSuspendedCallback(pa_stream * stream, void* userData);
+            static void streamOverflowCallback(pa_stream * stream, void* userData);
+            static void streamUnderflowCallback(pa_stream * stream, void* userData);
+            static void sourceInfoCallback(pa_context * ctx, const pa_source_info * info, int eol, void* userData);
 
-            static void contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData);
-            static void contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData);
-            static void contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData);
-            static void contextDrainCallback(pa_context* ctx, void* userData);
+            static void contextServerInfoCallback(pa_context * ctx, const pa_server_info * info, void* userData);
+            static void contextLoadModuleCallback(pa_context * ctx, uint32_t idx, void* userData);
+            static void contextSourceInfoCallback(pa_context * ctx, const pa_source_info * info, int eol, void* userData);
+            static void contextDrainCallback(pa_context * ctx, void* userData);
 
 
-            static void streamCorkCallback(pa_stream* stream, int success, void* userData);
-            static void streamTriggerCallback(pa_stream* stream, int success, void* userData);
-            static void streamFlushCallback(pa_stream* stream, int success, void* userData);
-            static void streamDrainCallback(pa_stream* stream, int success, void* userData);
+            static void streamCorkCallback(pa_stream * stream, int success, void* userData);
+            static void streamTriggerCallback(pa_stream * stream, int success, void* userData);
+            static void streamFlushCallback(pa_stream * stream, int success, void* userData);
+            static void streamDrainCallback(pa_stream * stream, int success, void* userData);
 
             void contextDrainNotify(void);
             void contextDrainWait(void);
 
-            void contextServerInfoNotify(const pa_server_info*);
-            const pa_server_info* contextServerInfoWait(void);
+            void contextServerInfoNotify(const pa_server_info * );
+            const pa_server_info * contextServerInfoWait(void);
 
             void contextLoadModuleNotify(uint32_t idx);
             uint32_t contextLoadModuleWait(const std::string & name, const std::string & args);
 
-            void contextSourceInfoNotify(const pa_source_info* info, int eol);
-            const pa_source_info* contextSourceInfoWait(const std::string & name);
+            void contextSourceInfoNotify(const pa_source_info * info, int eol);
+            const pa_source_info * contextSourceInfoWait(const std::string & name);
 
             void streamCorkNotify(int success);
             bool streamCorkWait(bool);
@@ -145,7 +145,7 @@ namespace LTSM
             bool streamDrainWait(void);
 
             virtual void contextStateEvent(const pa_context_state_t &);
-            virtual void sourceInfoEvent(const pa_source_info* info, int eol);
+            virtual void sourceInfoEvent(const pa_source_info * info, int eol);
             virtual void streamStateEvent(const pa_stream_state_t &);
             virtual void streamSuspendedEvent(int state);
             virtual void streamOverflowEvent(void);
@@ -161,7 +161,7 @@ namespace LTSM
             void contextDisconnect(void);
 
             virtual const char* streamName(void) const = 0;
-            virtual bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) = 0;
+            virtual bool streamConnect(bool paused, const pa_buffer_attr * attr = nullptr) = 0;
 
             void streamDisconnect(void);
 
@@ -186,7 +186,7 @@ namespace LTSM
             mutable std::mutex lock;
 
         protected:
-            static void streamWriteCallback(pa_stream* stream, const size_t nbytes, void* userData);
+            static void streamWriteCallback(pa_stream * stream, const size_t nbytes, void* userData);
             virtual void streamWriteEvent(const size_t &);
 
         public:
@@ -199,7 +199,7 @@ namespace LTSM
                 return "LTSM Audio Input";
             }
 
-            bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) override;
+            bool streamConnect(bool paused, const pa_buffer_attr * attr = nullptr) override;
 
             void streamPlayImmediatly(void);
 
@@ -222,11 +222,11 @@ namespace LTSM
             ReadEventFunc readEventCb;
 
         protected:
-            static void streamReadCallback(pa_stream* stream, const size_t nbytes, void* userData);
+            static void streamReadCallback(pa_stream * stream, const size_t nbytes, void* userData);
             void streamReadEvent(const size_t &);
 
         public:
-            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc &&);
+            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc && );
             ~OutputStream();
 
             const char* streamName(void) const override
@@ -234,7 +234,7 @@ namespace LTSM
                 return "LTSM Audio Output";
             }
 
-            bool streamConnect(bool paused, const pa_buffer_attr* attr = nullptr) override;
+            bool streamConnect(bool paused, const pa_buffer_attr * attr = nullptr) override;
 
             void setFragSize(uint32_t fragsz);
         };

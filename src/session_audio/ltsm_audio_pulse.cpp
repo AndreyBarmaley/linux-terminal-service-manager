@@ -42,7 +42,7 @@ namespace LTSM
     const void* WaitNotify::wait(int id)
     {
         std::unique_lock<std::mutex> lk{ lock };
-        cv.wait(lk, [&] { return waitId < 0 || waitId == id; });
+        cv.wait(lk, [ &] { return waitId < 0 || waitId == id; });
         return waitData;
     }
 
@@ -197,7 +197,7 @@ namespace LTSM
             }
         }
 
-        void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData)
+        void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData)
         {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
@@ -238,7 +238,7 @@ namespace LTSM
             }
         }
 
-        void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void *userData)
+        void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData)
         {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
@@ -341,7 +341,7 @@ namespace LTSM
         audioSpec.rate = rate;
         audioSpec.channels = channels;
 
-        if(0 == pa_sample_spec_valid(& audioSpec))
+        if(0 == pa_sample_spec_valid( & audioSpec))
         {
             Application::error("%s: %s failed, format: `%s', rate: %" PRIu32 ", channels: %" PRIu8,
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
@@ -648,7 +648,9 @@ namespace LTSM
         }
 
         if(state == PA_CONTEXT_FAILED || state == PA_CONTEXT_READY)
-            waitNotify.notify(WaitOp::ContextState, &state);
+        {
+            waitNotify.notify(WaitOp::ContextState, & state);
+        }
     }
 
     void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol)
@@ -659,9 +661,12 @@ namespace LTSM
     void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state)
     {
         Application::info("%s: state: %s", __FUNCTION__, streamStateName(state));
+
         if(state == PA_STREAM_READY || state == PA_STREAM_FAILED)
-            waitNotify.notify(WaitOp::StreamState, &state);
-     }
+        {
+            waitNotify.notify(WaitOp::StreamState, & state);
+        }
+    }
 
     void PulseAudio::BaseStream::streamSuspendedEvent(int state)
     {
@@ -904,7 +909,7 @@ namespace LTSM
         : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(std::forward<ReadEventFunc>(func))
     {
         // loop
-        thread = std::thread(& pa_mainloop_run, loop.get(), nullptr);
+        thread = std::thread( & pa_mainloop_run, loop.get(), nullptr);
     }
 
     PulseAudio::OutputStream::~OutputStream()

@@ -102,7 +102,7 @@ namespace LTSM
     struct PcscClient
     {
         SocketStream sock;
-        PcscLite::ReaderState* reader = nullptr;
+        PcscLite::ReaderState * reader = nullptr;
 
         std::thread thread;
 
@@ -117,7 +117,7 @@ namespace LTSM
         uint32_t context = 0;
         uint32_t handle = 0;
 
-        PcscClient(int fd, PcscSessionBus* sessionBus);
+        PcscClient(int fd, PcscSessionBus * sessionBus);
         ~PcscClient();
 
         int id(void) const
@@ -158,12 +158,12 @@ namespace LTSM
         bool pcscReaderStateChangeStart(PcscClient &, uint32_t len);
         bool pcscReaderStateChangeStop(PcscClient &, uint32_t len);
 
-        int syncReaderStatusChange(PcscClient &, const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
-        int64_t pcscGetStatusChange(PcscClient &, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
-        void pcscStatusApply(PcscClient &, const std::string &, uint32_t state, uint32_t protocol, const std::vector<uint8_t> &);
+        int syncReaderStatusChange(PcscClient &, const std::string &, PcscLite::ReaderState &, bool * changed = nullptr);
+        int64_t pcscGetStatusChange(PcscClient &, uint32_t timeout, SCARD_READERSTATE * states, uint32_t statesCount);
+        void pcscStatusApply(PcscClient &, const std::string &, uint32_t state, uint32_t protocol, const std::vector<uint8_t> & );
 
-        std::list<std::string> pcscListReaders(PcscClient &);
-        PcscLite::ReaderState* findReaderState(const std::string & name);
+        std::list<std::string> pcscListReaders(PcscClient & );
+        PcscLite::ReaderState * findReaderState(const std::string & name);
 
     public:
         PcscSessionBus(sdbus::IConnection &, bool debug = false);
@@ -178,10 +178,10 @@ namespace LTSM
         bool connectChannel(const std::string & clientSocket) override;
         void disconnectChannel(const std::string & clientSocket) override;
 
-        bool pcscClientAction(PcscClient &);
-        void clientShutdownNotify(const PcscClient*);
+        bool pcscClientAction(PcscClient & );
+        void clientShutdownNotify(const PcscClient * );
 
-        int64_t syncReaders(PcscClient &, bool* changed = nullptr);
+        int64_t syncReaders(PcscClient &, bool * changed = nullptr);
     };
 }
 

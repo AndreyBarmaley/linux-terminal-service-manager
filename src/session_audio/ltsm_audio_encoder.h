@@ -51,7 +51,7 @@ namespace LTSM
 #ifdef LTSM_WITH_OPUS
         struct OpusDeleter
         {
-            void operator()(OpusEncoder* st)
+            void operator()(OpusEncoder * st)
             {
                 opus_encoder_destroy(st);
             }
