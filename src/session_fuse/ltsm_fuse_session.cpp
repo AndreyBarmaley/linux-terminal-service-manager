@@ -390,7 +390,7 @@ namespace LTSM
             return;
         }
 
-        auto path = pathStat2->localPath(fuse);
+        auto path = pathStat->localPath(fuse);
         fuse_reply_readlink(req, path.c_str());
     }
 
