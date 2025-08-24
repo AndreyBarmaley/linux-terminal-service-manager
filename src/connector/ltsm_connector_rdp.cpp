@@ -1004,14 +1004,14 @@ namespace LTSM::Connector
         return TRUE;
     }
 
-    BOOL ConnectorRdp::cbServerAdjustMonitorsLayout(freerdp_perr* peer)
+    BOOL ConnectorRdp::cbServerAdjustMonitorsLayout(freerdp_peer* peer)
     {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
-    BOOL ConnectorRdp::cbServerClientCapabilities(freerdp_perr* peer)
+    BOOL ConnectorRdp::cbServerClientCapabilities(freerdp_peer* peer)
     {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
@@ -1024,7 +1024,7 @@ namespace LTSM::Connector
         return TRUE;
     }
 
-    BOOL ConnectorRdp::cbServerPostConnect(freerdp_perr* peer)
+    BOOL ConnectorRdp::cbServerPostConnect(freerdp_peer* peer)
     {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
@@ -1048,20 +1048,20 @@ namespace LTSM::Connector
         return TRUE;
     }
 
-    BOOL ConnectorRdp::cbServerClose(freerdp_perr* peer)
+    BOOL ConnectorRdp::cbServerClose(freerdp_peer* peer)
     {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
-    void ConnectorRdp::cbServerDisconnect(freerdp_perr* peer)
+    void ConnectorRdp::cbServerDisconnect(freerdp_peer* peer)
     {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
     }
 
-    BOOL ConnectorRdp::cbServerActivate(freerdp_perr* peer)
+    BOOL ConnectorRdp::cbServerActivate(freerdp_peer* peer)
     {
         Application::info("%s: peer:%p", __FUNCTION__, peer);
         auto context = static_cast<ServerContext*>(peer->context);
