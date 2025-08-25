@@ -145,12 +145,12 @@ namespace LTSM
 #endif
         }
 
-        auto readEventCb = std::bind( & AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2);
         const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
 
         try
         {
-            pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels, std::move(readEventCb));
+            pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels,
+                        std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
         }
         catch(const std::exception & err)
         {

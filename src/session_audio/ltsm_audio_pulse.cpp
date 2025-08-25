@@ -906,7 +906,7 @@ namespace LTSM
 
     /// PulseAudio::OutputStream
     PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, ReadEventFunc && func)
-        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(std::forward<ReadEventFunc>(func))
+        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(std::move(func))
     {
         // loop
         thread = std::thread( & pa_mainloop_run, loop.get(), nullptr);

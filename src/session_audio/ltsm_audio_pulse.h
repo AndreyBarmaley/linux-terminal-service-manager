@@ -226,7 +226,7 @@ namespace LTSM
             void streamReadEvent(const size_t &);
 
         public:
-            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc && );
+            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc &&);
             ~OutputStream();
 
             const char* streamName(void) const override
