@@ -654,6 +654,12 @@ namespace LTSM::LoginHelper
                 int ny = (screenSize.height() - QMainWindow::height()) / 2;
                 move(nx, ny);
             }
+            
+            if(ui->lineEditEncryption->text().isEmpty())
+            {
+                auto encryption = dbus->busEncryptionInfo(displayNum);
+                ui->lineEditEncryption->setText(QString::fromStdString(encryption));
+            }
         }
         else if(ev->timerId() == timer200ms)
         {
