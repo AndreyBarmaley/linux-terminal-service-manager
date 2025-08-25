@@ -43,7 +43,7 @@ namespace LTSM::Connector
 
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
-    class ConnectorLtsm : public ManagerServiceProxy, protected RFB::X11Server
+    class ConnectorLtsm : public DBusProxy, protected RFB::X11Server
     {
         PixelFormat _serverPf;
         std::unordered_map<uint32_t, int> _keymap;
@@ -129,7 +129,7 @@ namespace LTSM::Connector
         void transferFilesPartial(std::list<TupleFileSize> files);
 
     public:
-        ConnectorLtsm(const JsonObject & jo) : ManagerServiceProxy(jo, "ltsm") {}
+        ConnectorLtsm(const JsonObject & jo) : DBusProxy(jo, "ltsm") {}
         ~ConnectorLtsm();
 
         int communication(void) override;

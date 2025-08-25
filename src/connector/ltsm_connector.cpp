@@ -162,7 +162,7 @@ namespace LTSM::Connector
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
 
-        std::unique_ptr<ManagerServiceProxy> connector;
+        std::unique_ptr<DBusProxy> connector;
 
 #ifdef LTSM_WITH_RDP
 
@@ -208,8 +208,8 @@ namespace LTSM::Connector
         return res;
     }
 
-    /* ManagerServiceProxy */
-    ManagerServiceProxy::ManagerServiceProxy(const JsonObject & jo, const char* type)
+    /* DBusProxy */
+    DBusProxy::DBusProxy(const JsonObject & jo, const char* type)
 #ifdef SDBUS_2_0_API
         : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
@@ -228,12 +228,12 @@ namespace LTSM::Connector
         registerProxy();
     }
 
-    ManagerServiceProxy::~ManagerServiceProxy()
+    DBusProxy::~DBusProxy()
     {
         unregisterProxy();
     }
 
-    bool ManagerServiceProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
+    bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
     {
         Application::info("%s: display: %d", __FUNCTION__, screen);
         std::string xauthFile = busCreateAuthFile(screen);
@@ -286,22 +286,22 @@ namespace LTSM::Connector
         return true;
     }
 
-    int ManagerServiceProxy::displayNum(void) const
+    int DBusProxy::displayNum(void) const
     {
         return _xcbDisplayNum;
     }
 
-    void ManagerServiceProxy::xcbDisableMessages(bool f)
+    void DBusProxy::xcbDisableMessages(bool f)
     {
         _xcbDisable = f;
     }
 
-    bool ManagerServiceProxy::xcbAllowMessages(void) const
+    bool DBusProxy::xcbAllowMessages(void) const
     {
         return ! _xcbDisable;
     }
 
-    std::string ManagerServiceProxy::checkFileOption(const std::string & param) const
+    std::string DBusProxy::checkFileOption(const std::string & param) const
     {
         auto fileName = _config.getString(param);
         std::error_code err;
@@ -316,7 +316,7 @@ namespace LTSM::Connector
         return fileName;
     }
 
-    void ManagerServiceProxy::onClearRenderPrimitives(const int32_t & display)
+    void DBusProxy::onClearRenderPrimitives(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -334,7 +334,7 @@ namespace LTSM::Connector
         }
     }
 
-    void ManagerServiceProxy::onAddRenderRect(const int32_t & display,
+    void DBusProxy::onAddRenderRect(const int32_t & display,
             const TupleRegion & rect, const TupleColor & color, const bool & fill)
     {
         if(display == displayNum())
@@ -345,7 +345,7 @@ namespace LTSM::Connector
         }
     }
 
-    void ManagerServiceProxy::onAddRenderText(const int32_t & display, const std::string & text,
+    void DBusProxy::onAddRenderText(const int32_t & display, const std::string & text,
             const TuplePosition & pos, const TupleColor & color)
     {
         if(display == displayNum())
@@ -360,7 +360,7 @@ namespace LTSM::Connector
         }
     }
 
-    void ManagerServiceProxy::onPingConnector(const int32_t & display)
+    void DBusProxy::onPingConnector(const int32_t & display)
     {
         if(display == displayNum())
         {
@@ -371,7 +371,7 @@ namespace LTSM::Connector
         }
     }
 
-    void ManagerServiceProxy::onDebugLevel(const int32_t & display, const std::string & level)
+    void DBusProxy::onDebugLevel(const int32_t & display, const std::string & level)
     {
         if(display == displayNum())
         {
@@ -380,7 +380,7 @@ namespace LTSM::Connector
         }
     }
 
-    void ManagerServiceProxy::renderPrimitivesToFB(FrameBuffer & fb) const
+    void DBusProxy::renderPrimitivesToFB(FrameBuffer & fb) const
     {
         for(const auto & ptr : _renderPrimitives)
         {

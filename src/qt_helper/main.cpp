@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
     try
     {
 
-        LTSM::LoginHelper::ManagerServiceProxy win;
+        LTSM::LoginHelper::LoginWindow win;
         win.show();
         return app.exec();
 

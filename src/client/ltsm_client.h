@@ -20,8 +20,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  **************************************************************************/
 
-#ifndef _LTSM_VNC2SDL_
-#define _LTSM_VNC2SDL_
+#ifndef _LTSM_CLIENT_
+#define _LTSM_CLIENT_
 
 #include <chrono>
 #include <string>

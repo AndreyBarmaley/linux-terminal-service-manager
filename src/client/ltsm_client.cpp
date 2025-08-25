@@ -39,7 +39,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "librfb_client.h"
-#include "ltsm_vnc2sdl.h"
+#include "ltsm_client.h"
 
 using namespace std::chrono_literals;
 
@@ -246,6 +246,15 @@ namespace LTSM
         }
     }
 
+    void hidePasswordArgument(char* pass)
+    {
+        while(pass && *pass)
+        {
+            *pass = '*';
+            pass++;
+        }
+    }
+
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
         : Application("ltsm_client")
     {
@@ -275,6 +284,10 @@ namespace LTSM
             if(auto val = std::next(it); val != argEnd && ! std::string_view(*val).starts_with("--"))
             {
                 parseCommand(*it, *val);
+
+                if(0 == strncmp("--password", *it, 10))
+                    hidePasswordArgument(const_cast<char*>(*val));
+
                 it = val;
             }
             else

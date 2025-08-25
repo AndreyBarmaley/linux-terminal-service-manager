@@ -58,91 +58,100 @@ using namespace std::chrono_literals;
 
 namespace LTSM::LoginHelper
 {
-    /// ManagerServiceProxy
-    ManagerServiceProxy::ManagerServiceProxy() : LTSM::Application("ltsm_helper"),
+    /// DBusProxy
+    DBusProxy::DBusProxy(int display) :
 #ifdef SDBUS_2_0_API
-        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
-        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
+        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
+        displayNum(display)
     {
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
         registerProxy();
-
-        Application::info("%s: started, display: `%s'", "LoginWindow", getenv("DISPLAY"));
     }
 
-    ManagerServiceProxy::~ManagerServiceProxy()
+    DBusProxy::~DBusProxy()
     {
         unregisterProxy();
     }
 
-    void ManagerServiceProxy::onLoginFailure(const int32_t & display, const std::string & msg)
+    void DBusProxy::onLoginFailure(const int32_t & display, const std::string & msg)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", message: `%s'",
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", message: `%s'",
                            __FUNCTION__, display, msg.c_str());
-        loginFailureCallback(display, QString::fromStdString(msg));
+
+            emit loginFailureNotify(QString::fromStdString(msg));
+        }
     }
 
-    void ManagerServiceProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
+    void DBusProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", username: `%s', uid: %" PRIu32,
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", username: `%s', uid: %" PRIu32,
                            __FUNCTION__, display, userName.c_str(), userUid);
 
-        loginSuccessCallback(display, QString::fromStdString(userName));
+            emit loginSuccessNotify(QString::fromStdString(userName));
+        }
     }
 
-    void ManagerServiceProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
+    void DBusProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
             const std::string & pass, const bool & autologin)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", login: `%s', pass length: %" PRIu32 ", auto login: %d",
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", login: `%s', pass length: %" PRIu32 ", auto login: %d",
                            __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
-        setLoginPasswordCallback(display, QString::fromStdString(login), QString::fromStdString(pass), autologin);
+            emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
+        }
     }
 
-    void ManagerServiceProxy::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId)
+    void DBusProxy::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
                            __FUNCTION__, display, connectorId);
 
-        pkcs11ListennerCallback(display, connectorId);
+            emit pkcs11ListennerStartedNotify(connectorId);
+        }
     }
 
-    void ManagerServiceProxy::onHelperWidgetCentered(const int32_t & display)
+    void DBusProxy::onHelperSetTimezone(const int32_t & display, const std::string & tz)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32,
-                           __FUNCTION__, display);
-
-        widgetCenteredCallback(display);
-    }
-
-    void ManagerServiceProxy::onHelperWidgetTimezone(const int32_t & display, const std::string & tz)
-    {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", tz: `%s'",
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", tz: `%s'",
                            __FUNCTION__, display, tz.c_str());
 
-        widgetTimezoneCallback(display, QString::fromStdString(tz));
+            setenv("TZ", tz.c_str(), 1);
+        }
     }
 
-    void ManagerServiceProxy::onSessionChanged(const int32_t & display)
+    void DBusProxy::onShutdownConnector(const int32_t & display)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32,
+        if(display == displayNum)
+        {
+            Application::debug(DebugType::Helper, "%s: display: %" PRId32,
                            __FUNCTION__, display);
 
-        sessionChangedCallback(display);
+            emit connectorShutdownNotify();
+        }
     }
 
-    void ManagerServiceProxy::onShutdownConnector(const int32_t & display)
+    void DBusProxy::onHelperWidgetStarted(const int32_t & display)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32,
-                           __FUNCTION__, display);
-
-        shutdownConnectorCallback(display);
+        if(displayNum == display)
+        {
+            emit widgetStartedNotify();
+        }
     }
 
     ///
-    void ManagerServiceProxy::sendAuthenticateLoginPass(int displayNum, const QString & user, const QString & pass)
+    void DBusProxy::sendAuthenticateLoginPass(const QString & user, const QString & pass)
     {
         auto login = user.toStdString();
 
@@ -155,7 +164,7 @@ namespace LTSM::LoginHelper
         }).detach();
     }
 
-    void ManagerServiceProxy::sendAuthenticateToken(int displayNum, const QString & user)
+    void DBusProxy::sendAuthenticateToken(const QString & user)
     {
         auto login = user.toStdString();
 
@@ -168,61 +177,26 @@ namespace LTSM::LoginHelper
         }).detach();
     }
 
-    void ManagerServiceProxy::widgetStartedAction(int displayNum)
+    void DBusProxy::widgetStartedAction(void)
     {
         Application::debug(DebugType::Helper, "%s: display: %" PRId32,
                            __FUNCTION__, displayNum);
 
         std::thread([this, display = displayNum]()
         {
-            std::this_thread::sleep_for(300ms);
+            std::this_thread::sleep_for(30ms);
             this->helperWidgetStartedAction(display);
         }).detach();
     }
 
-    QString ManagerServiceProxy::getEncryptionInfo(int displayNum)
-    {
-        return QString::fromStdString(busEncryptionInfo(displayNum));
-    }
-
-    int ManagerServiceProxy::getServiceVersion(void)
-    {
-        return busGetServiceVersion();
-    }
-
-    bool ManagerServiceProxy::isAutoComplete(int displayNum)
-    {
-        return helperIsAutoComplete(displayNum);
-    }
-
-    QString ManagerServiceProxy::getTitle(int displayNum)
-    {
-        return QString::fromStdString(helperGetTitle(displayNum));
-    }
-
-    QString ManagerServiceProxy::getDateFormat(int displayNum)
-    {
-        return QString::fromStdString(helperGetDateFormat(displayNum));
-    }
-
-    QStringList ManagerServiceProxy::getUsersList(int displayNum)
-    {
-        QStringList res;
-
-        for(const auto & user : helperGetUsersList(displayNum))
-        {
-            res << QString::fromStdString(user);
-        }
-
-        return res;
-    }
-
     /// LoginWindow
     LoginWindow::LoginWindow(QWidget* parent) :
-        QMainWindow(parent),
-        ui(new Ui::LoginWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer300ms(0),
+        QMainWindow(parent), LTSM::Application("ltsm_helper"),
+        ui(new Ui::LoginWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer200ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
     {
+        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+
         if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr))
         {
             Application::error("%s: xcb connect failed", __FUNCTION__);
@@ -242,15 +216,24 @@ namespace LTSM::LoginHelper
                 Qt::QueuedConnection);
         connect(ui->comboBoxUsername, SIGNAL(currentIndexChanged(int)), this, SLOT(usernameIndexChanged(int)),
                 Qt::QueuedConnection);
-        auto val = qgetenv("DISPLAY");
 
-        if(val.size() && val[0] == ':')
-        {
-            displayNum = val.remove(0, 1).toInt();
-        }
+        auto displayScreen = XCB::Connector::displayScreen();
+        displayNum = displayScreen.first;
+
+        dbus.reset(new DBusProxy(displayNum));
+
+        connect(dbus.get(), SIGNAL(loginFailureNotify(const QString &)), this, SLOT(loginFailureCallback(const QString &)));
+        connect(dbus.get(), SIGNAL(loginSuccessNotify(const QString &)), this, SLOT(loginSuccessCallback(const QString &)));
+
+        connect(dbus.get(), SIGNAL(loginPasswordChangedNotify(const QString &, const QString &, bool)), 
+                this, SLOT(setLoginPasswordCallback(const QString &, const QString &, bool)));
+
+        connect(dbus.get(), SIGNAL(pkcs11ListennerStartedNotify(int)), this, SLOT(pkcs11ListennerCallback(int)));
+        connect(dbus.get(), SIGNAL(connectorShutdownNotify()), this, SLOT(shutdownConnectorCallback()));
+        connect(dbus.get(), SIGNAL(widgetStartedNotify()), this, SLOT(widgetStartedCallback()));
 
         timerOneSec = startTimer(std::chrono::seconds(1));
-        timer300ms = startTimer(std::chrono::milliseconds(300));
+        timer200ms = startTimer(std::chrono::milliseconds(200));
         timerReloadUsers = startTimer(std::chrono::minutes(3));
 
         if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
@@ -263,6 +246,8 @@ namespace LTSM::LoginHelper
                 ui->labelXkb->setText(QString::fromStdString(names[group]).toUpper().left(2));
             }
         }
+
+        Application::info("%s: started, display: %d", "LoginWindow", displayNum);
     }
 
     LoginWindow::~LoginWindow()
@@ -527,7 +512,7 @@ namespace LTSM::LoginHelper
 
         if(! tokenAuthMode)
         {
-            sendAuthenticateLoginPass(displayNum, ui->comboBoxUsername->currentText(), ui->lineEditPassword->text());
+            dbus->sendAuthenticateLoginPass(ui->comboBoxUsername->currentText(), ui->lineEditPassword->text());
             return;
         }
 
@@ -579,7 +564,7 @@ namespace LTSM::LoginHelper
                 if(! login.empty())
                 {
                     setLabelInfo("LDAP: login found");
-                    sendAuthenticateToken(displayNum, QString::fromStdString(login));
+                    dbus->sendAuthenticateToken(QString::fromStdString(login));
                     return;
                 }
                 else
@@ -615,26 +600,28 @@ namespace LTSM::LoginHelper
 
     void LoginWindow::showEvent(QShowEvent*)
     {
-        widgetStartedAction(displayNum);
+        dbus->widgetStartedAction();
+    }
+
+    void LoginWindow::widgetStartedCallback(void)
+    {
         auto screen = QGuiApplication::primaryScreen();
         auto pos = (screen->size() - QMainWindow::size()) / 2;
         move(pos.width(), pos.height());
 
         if(! initArguments)
         {
-            auto title = getTitle(displayNum);
-
-            if(! title.isEmpty())
+            if(auto title = QString::fromStdString(dbus->helperGetTitle(displayNum)); ! title.isEmpty())
             {
-                auto version = getServiceVersion();
+                auto version = dbus->busGetServiceVersion();
                 title.replace("%{version}", QString::number(version));
                 ui->labelTitle->setText(title);
             }
 
-            dateFormat = getDateFormat(displayNum);
-            loginAutoComplete = isAutoComplete(displayNum);
-            auto encryption = getEncryptionInfo(displayNum);
-            ui->lineEditEncryption->setText(encryption);
+            dateFormat = QString::fromStdString(dbus->helperGetDateFormat(displayNum));
+            loginAutoComplete = dbus->helperIsAutoComplete(displayNum);
+            auto encryption = dbus->busEncryptionInfo(displayNum);
+            ui->lineEditEncryption->setText(QString::fromStdString(encryption));
 
             if(loginAutoComplete)
             {
@@ -658,8 +645,17 @@ namespace LTSM::LoginHelper
                 ui->labelInfo->setText(QDateTime::currentDateTime().toString(dateFormat));
                 ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
             }
+
+            // change display size
+            if(auto primary = QGuiApplication::primaryScreen(); screenSize != primary->geometry().size())
+            {
+                screenSize = primary->geometry().size();
+                int nx = (screenSize.width() - QMainWindow::width()) / 2;
+                int ny = (screenSize.height() - QMainWindow::height()) / 2;
+                move(nx, ny);
+            }
         }
-        else if(ev->timerId() == timer300ms)
+        else if(ev->timerId() == timer200ms)
         {
             if(auto err = XCB::RootDisplay::hasError())
             {
@@ -667,13 +663,15 @@ namespace LTSM::LoginHelper
                 return;
             }
 
-            if(auto ev = XCB::RootDisplay::pollEvent())
+            // xcb pool events (processed xcb::damage/fixes/randr/xkb events)
+            if(auto xcbEvent = XCB::RootDisplay::pollEvent())
             {
+                // check extension error
                 if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
                 {
                     uint16_t opcode = 0;
 
-                    if(extXkb->isEventError(ev, & opcode))
+                    if(extXkb->isEventError(xcbEvent, & opcode))
                     {
                         Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
                     }
@@ -716,113 +714,60 @@ namespace LTSM::LoginHelper
     void LoginWindow::reloadUsersList(void)
     {
         ui->comboBoxUsername->clear();
-        ui->comboBoxUsername->addItems(getUsersList(displayNum));
         ui->comboBoxUsername->setEditText(prefferedLogin);
+        
+        for(const auto & user : dbus->helperGetUsersList(displayNum))
+        {
+            ui->comboBoxUsername->addItem(QString::fromStdString(user));
+        }
     }
 
-    void LoginWindow::pkcs11ListennerCallback(int display, int connectorId)
+    void LoginWindow::pkcs11ListennerCallback(int connectorId)
     {
-        if(display == displayNum)
-        {
 #ifdef LTSM_PKCS11_AUTH
 
-            if(! pkcs11)
+        if(! pkcs11)
+        {
+            try
             {
-                try
-                {
-                    ldap.reset(new LdapWrapper());
-                }
-                catch(const std::exception &)
-                {
-                }
-
-                pkcs11.reset(new Pkcs11Client(displayNum, this));
-                connect(pkcs11.data(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
-                pkcs11->start();
+                ldap.reset(new LdapWrapper());
             }
+            catch(const std::exception &)
+            {
+            }
+
+            pkcs11.reset(new Pkcs11Client(displayNum, this));
+            connect(pkcs11.data(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
+            pkcs11->start();
+        }
 
 #endif
-        }
     }
 
-    void LoginWindow::widgetTimezoneCallback(int display, const QString & tz)
+    void LoginWindow::loginFailureCallback(const QString & error)
     {
-        if(display == displayNum)
-        {
-            setenv("TZ", tz.toStdString().c_str(), 1);
-        }
+        Application::error("%s: login failure", __FUNCTION__);
+        ui->pushButtonLogin->setDisabled(false);
+        ui->comboBoxUsername->setDisabled(false);
+        ui->lineEditPassword->setDisabled(false);
+        ui->lineEditPassword->selectAll();
+        ui->lineEditPassword->setFocus();
+        setLabelError(error);
     }
 
-    void LoginWindow::widgetCenteredCallback(int display)
+    void LoginWindow::shutdownConnectorCallback(void)
     {
-        if(display == displayNum)
-        {
-            if(auto primary = QGuiApplication::primaryScreen())
-            {
-                auto screenGeometry = primary->geometry();
-                int nx = (screenGeometry.width() - QMainWindow::width()) / 2;
-                int ny = (screenGeometry.height() - QMainWindow::height()) / 2;
-                move(nx, ny);
-            }
-        }
+        close();
     }
 
-    void LoginWindow::loginFailureCallback(int display, const QString & error)
+    void LoginWindow::loginSuccessCallback(const QString & username)
     {
-        if(display == displayNum)
-        {
-            Application::error("%s: login failure", __FUNCTION__);
-            ui->pushButtonLogin->setDisabled(false);
-            ui->comboBoxUsername->setDisabled(false);
-            ui->lineEditPassword->setDisabled(false);
-            ui->lineEditPassword->selectAll();
-            ui->lineEditPassword->setFocus();
-            setLabelError(error);
-        }
+        close();
     }
 
-    void LoginWindow::setLabelError(const QString & error)
+    void LoginWindow::setLoginPasswordCallback(const QString & login, const QString & pass, bool autoLogin)
     {
-        ui->labelInfo->setText(error);
-        ui->labelInfo->setStyleSheet("QLabel { color: red; }");
-        labelPause = 2;
-    }
-
-    void LoginWindow::setLabelInfo(const QString & info)
-    {
-        ui->labelInfo->setText(info);
-        ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
-        labelPause = 2;
-    }
-
-    void LoginWindow::shutdownConnectorCallback(int display)
-    {
-        if(display == displayNum)
-        {
-            close();
-        }
-    }
-
-    void LoginWindow::sessionChangedCallback(int display)
-    {
-        if(display == displayNum)
-        {
-            ui->lineEditEncryption->setText(getEncryptionInfo(displayNum));
-        }
-    }
-
-    void LoginWindow::loginSuccessCallback(int display, const QString & username)
-    {
-        if(display == displayNum)
-        {
-            close();
-        }
-    }
-
-    void LoginWindow::setLoginPasswordCallback(int display, const QString & login, const QString & pass,
-            const bool & autoLogin)
-    {
-        if(display == displayNum && 0 < login.size())
+        if(0 < login.size())
         {
             prefferedLogin = login;
             ui->comboBoxUsername->setEditText(prefferedLogin);
@@ -838,6 +783,20 @@ namespace LTSM::LoginHelper
                 loginClicked();
             }
         }
+    }
+
+    void LoginWindow::setLabelError(const QString & error)
+    {
+        ui->labelInfo->setText(error);
+        ui->labelInfo->setStyleSheet("QLabel { color: red; }");
+        labelPause = 2;
+    }
+
+    void LoginWindow::setLabelInfo(const QString & info)
+    {
+        ui->labelInfo->setText(info);
+        ui->labelInfo->setStyleSheet("QLabel { color: blue; }");
+        labelPause = 2;
     }
 
     void LoginWindow::xcbXkbGroupChangedEvent(int group)

@@ -36,7 +36,7 @@ namespace LTSM::Connector
 
     std::string homeRuntime(void);
 
-    class ManagerServiceProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
+    class DBusProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
     {
     protected:
         std::list<RenderPrimitivePtr> _renderPrimitives;
@@ -56,15 +56,11 @@ namespace LTSM::Connector
         void onHelperSetLoginPassword(const int32_t & display, const std::string & login,
                                       const std::string & pass, const bool & autologin) override {}
 
-        void onHelperWidgetCentered(const int32_t & display) override {}
-
-        void onHelperWidgetTimezone(const int32_t & display, const std::string & ) override {}
+        void onHelperSetTimezone(const int32_t & display, const std::string & ) override {}
 
         void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override {}
 
         void onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
-
-        void onSessionChanged(const int32_t & display) override {}
 
         void onDisplayRemoved(const int32_t & display) override {}
 
@@ -106,8 +102,8 @@ namespace LTSM::Connector
         bool xcbAllowMessages(void) const;
 
     public:
-        ManagerServiceProxy(const JsonObject &, const char* conntype);
-        virtual ~ManagerServiceProxy();
+        DBusProxy(const JsonObject &, const char* conntype);
+        virtual ~DBusProxy();
 
         virtual int communication(void) = 0;
 

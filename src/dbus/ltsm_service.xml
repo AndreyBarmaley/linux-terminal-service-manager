@@ -209,7 +209,7 @@
         <signal name="helperWidgetStarted">
             <arg type="i" name="display" />
         </signal>
-        <signal name="helperWidgetTimezone">
+        <signal name="helperSetTimezone">
             <arg type="i" name="display" />
             <arg type="s" name="tz" />
         </signal>
@@ -218,9 +218,6 @@
             <arg type="s" name="login" />
             <arg type="s" name="pass" />
             <arg type="b" name="autologin" />
-        </signal>
-        <signal name="helperWidgetCentered">
-            <arg type="i" name="display" />
         </signal>
         <signal name="helperPkcs11ListennerStarted">
             <arg type="i" name="display" />
@@ -247,9 +244,6 @@
         <signal name="sessionReconnect">
             <arg type="s" name="removeAddr" />
             <arg type="s" name="connType" />
-        </signal>
-        <signal name="sessionChanged">
-            <arg type="i" name="display" />
         </signal>
         <signal name="displayRemoved">
             <arg type="i" name="display" />

@@ -41,7 +41,7 @@ namespace LTSM::Connector
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    class ConnectorRdp : public ManagerServiceProxy, public XCB::RootDisplay, protected ProxySocket
+    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected ProxySocket
     {
         std::atomic<bool> helperStartedFlag{false};
         std::atomic<bool> loopShutdownFlag{false};

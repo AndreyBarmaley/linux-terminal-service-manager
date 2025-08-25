@@ -3237,6 +3237,15 @@ namespace LTSM
         return res;
     }
 
+    std::pair<int, int> XCB::Connector::displayScreen(void) const
+    {
+        int display, screen; char* host;
+        xcb_parse_display(nullptr, &host, &display, &screen);
+
+        if(host) free(host);
+        return std::make_pair(display, screen);
+    }
+
     void XCB::Connector::bell(uint8_t percent) const
     {
         xcb_bell(_conn.get(), percent);

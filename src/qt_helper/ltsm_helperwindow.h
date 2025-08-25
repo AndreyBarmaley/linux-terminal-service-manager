@@ -47,83 +47,17 @@ struct Pkcs11Token;
 
 namespace LTSM::LoginHelper
 {
-    class LoginWindow : public QMainWindow, protected LTSM::XCB::RootDisplay
+    using TuplePosition = sdbus::Struct<int16_t, int16_t>;
+    using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
+    using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
+
+    class DBusProxy : public QObject, public sdbus::ProxyInterfaces<LTSM::Manager::Service_proxy>
     {
         Q_OBJECT
 
-    public:
-        explicit LoginWindow(QWidget * parent = 0);
-        ~LoginWindow();
-
-    protected slots:
-        void loginClicked(void);
-        void domainIndexChanged(int);
-        // void                tokenChanged(const QString &);
-        void usernameIndexChanged(int);
-        // void                usernameChanged(const QString &);
-        void passwordChanged(const QString &);
-        void loginFailureCallback(int, const QString &);
-        void loginSuccessCallback(int, const QString &);
-        void setLoginPasswordCallback(int, const QString &, const QString &, const bool &);
-        void widgetCenteredCallback(int);
-        void widgetTimezoneCallback(int, const QString &);
-        void sessionChangedCallback(int);
-        void shutdownConnectorCallback(int);
-        void pkcs11ListennerCallback(int, int);
-        void setLabelError(const QString &);
-        void setLabelInfo(const QString &);
-        void reloadUsersList(void);
-
-        void tokensChanged(void);
-
-    protected:
-        virtual void showEvent(QShowEvent*) override;
-        virtual void timerEvent(QTimerEvent*) override;
-        virtual void mouseMoveEvent(QMouseEvent*) override;
-        virtual void mousePressEvent(QMouseEvent*) override;
-        virtual void mouseReleaseEvent(QMouseEvent*) override;
-        virtual void keyPressEvent(QKeyEvent*) override;
-
-        virtual void sendAuthenticateLoginPass(int displayNum, const QString & user, const QString & pass) = 0;
-        virtual void sendAuthenticateToken(int displayNum, const QString & user) = 0;
-        virtual QString getEncryptionInfo(int displayNum) = 0;
-        virtual int getServiceVersion(void) = 0;
-        virtual void widgetStartedAction(int displayNum) = 0;
-        virtual bool isAutoComplete(int displayNum) = 0;
-        virtual QString getTitle(int displayNum) = 0;
-        virtual QString getDateFormat(int displayNum) = 0;
-        virtual QStringList getUsersList(int displayNum) = 0;
-
-        // xkb client interface
-        void xcbXkbGroupChangedEvent(int group) override;
-
-        void switchLoginMode(void);
-
     private:
-        Ui::LoginWindow* ui;
-        QString dateFormat;
-        QString prefferedLogin;
-
-        std::string tokenCheck, tokenSerial, tokenCert;
         int displayNum;
-        int timerOneSec;
-        int timer300ms;
-        int timerReloadUsers;
-        int labelPause;
-        bool loginAutoComplete;
-        bool initArguments;
-        bool tokenAuthMode;
-        QScopedPointer<QPoint> titleBarPressed;
 
-#ifdef LTSM_PKCS11_AUTH
-        QScopedPointer<LTSM::LdapWrapper> ldap;
-        QScopedPointer<Pkcs11Client> pkcs11;
-#endif
-    };
-
-    class ManagerServiceProxy : public LoginWindow, public LTSM::Application, public sdbus::ProxyInterfaces<LTSM::Manager::Service_proxy>
-    {
-    private:
         // dbus virtual signals
         void onSessionReconnect(const std::string & removeAddr, const std::string & connType) override {}
 
@@ -150,18 +84,14 @@ namespace LTSM::LoginHelper
 
         void onClearRenderPrimitives(const int32_t & display) override {}
 
-        void onAddRenderRect(const int32_t & display,
-                             const sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t> & rect,
-                             const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color, const bool & fill) override {}
+        void onAddRenderRect(const int32_t & display, const TupleRegion & rect,
+                             const TupleColor & color, const bool & fill) override {}
 
         void onAddRenderText(const int32_t & display, const std::string & text,
-                             const sdbus::Struct<int16_t, int16_t> & pos, const sdbus::Struct<uint8_t, uint8_t, uint8_t> & color) override {}
+                             const TuplePosition & pos, const TupleColor & color) override {}
 
-        void onHelperWidgetStarted(const int32_t & display) override {}
 
         void onSendBellSignal(const int32_t & display) override {}
-
-        int start(void) override { return 0; }
 
     protected:
         // dbus virtual signals
@@ -170,26 +100,93 @@ namespace LTSM::LoginHelper
                             const uint32_t & userUid) override;
         void onHelperSetLoginPassword(const int32_t & display, const std::string & login,
                                       const std::string & pass, const bool & autologin) override;
-        void onHelperWidgetCentered(const int32_t & display) override;
-        void onHelperWidgetTimezone(const int32_t & display, const std::string &) override;
+        void onHelperSetTimezone(const int32_t & display, const std::string &) override;
+        void onHelperWidgetStarted(const int32_t & display) override;
         void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override;
-        void onSessionChanged(const int32_t & display) override;
         void onShutdownConnector(const int32_t & display) override;
 
-        // helper window interface
-        void sendAuthenticateLoginPass(int displayNum, const QString & user, const QString & pass) override;
-        void sendAuthenticateToken(int displayNum, const QString & user) override;
-        QString getEncryptionInfo(int displayNum) override;
-        int getServiceVersion(void) override;
-        bool isAutoComplete(int displayNum) override;
-        void widgetStartedAction(int displayNum) override;
-        QString getTitle(int displayNum) override;
-        QString getDateFormat(int displayNum) override;
-        QStringList getUsersList(int displayNum) override;
+    public:
+        DBusProxy(int display);
+        ~DBusProxy();
+
+    signals:
+        void loginFailureNotify(const QString &);
+        void loginSuccessNotify(const QString &);
+        void loginPasswordChangedNotify(const QString, const QString &, bool);
+        void pkcs11ListennerStartedNotify(int);
+        void connectorShutdownNotify(void);
+        void widgetStartedNotify(void);
+
+    public slots:
+        void sendAuthenticateLoginPass(const QString & user, const QString & pass);
+        void sendAuthenticateToken(const QString & user);
+        void widgetStartedAction(void);
+    };
+
+    class LoginWindow : public QMainWindow, public LTSM::Application, protected LTSM::XCB::RootDisplay
+    {
+        Q_OBJECT
 
     public:
-        ManagerServiceProxy();
-        ~ManagerServiceProxy();
+        explicit LoginWindow(QWidget * parent = 0);
+        ~LoginWindow();
+
+        int start(void) override { return 0; }
+
+    protected slots:
+        void loginClicked(void);
+        void domainIndexChanged(int);
+        void usernameIndexChanged(int);
+
+        void passwordChanged(const QString &);
+        void loginFailureCallback(const QString &);
+        void loginSuccessCallback(const QString &);
+        void setLoginPasswordCallback(const QString &, const QString &, bool);
+        void pkcs11ListennerCallback(int);
+        void shutdownConnectorCallback(void);
+        void widgetStartedCallback(void);
+        void setLabelError(const QString &);
+        void setLabelInfo(const QString &);
+        void reloadUsersList(void);
+
+        void tokensChanged(void);
+
+    protected:
+        virtual void showEvent(QShowEvent*) override;
+        virtual void timerEvent(QTimerEvent*) override;
+        virtual void mouseMoveEvent(QMouseEvent*) override;
+        virtual void mousePressEvent(QMouseEvent*) override;
+        virtual void mouseReleaseEvent(QMouseEvent*) override;
+        virtual void keyPressEvent(QKeyEvent*) override;
+
+        // xkb client interface
+        void xcbXkbGroupChangedEvent(int group) override;
+
+        void switchLoginMode(void);
+
+    private:
+        Ui::LoginWindow* ui;
+        QString dateFormat;
+        QString prefferedLogin;
+        QSize screenSize;
+
+        std::string tokenCheck, tokenSerial, tokenCert;
+        int displayNum;
+        int timerOneSec;
+        int timer200ms;
+        int timerReloadUsers;
+        int labelPause;
+        bool loginAutoComplete;
+        bool initArguments;
+        bool tokenAuthMode;
+
+        QScopedPointer<DBusProxy> dbus;
+        QScopedPointer<QPoint> titleBarPressed;
+
+#ifdef LTSM_PKCS11_AUTH
+        QScopedPointer<LTSM::LdapWrapper> ldap;
+        QScopedPointer<Pkcs11Client> pkcs11;
+#endif
     };
 }
 

@@ -380,7 +380,7 @@ namespace LTSM::Connector
 
     bool ConnectorLtsm::xcbAllowMessages(void) const
     {
-        return ManagerServiceProxy::xcbAllowMessages();
+        return DBusProxy::xcbAllowMessages();
     }
 
     void ConnectorLtsm::serverScreenUpdateRequest(const XCB::Region & reg)
@@ -404,7 +404,7 @@ namespace LTSM::Connector
 
     void ConnectorLtsm::xcbDisableMessages(bool f)
     {
-        ManagerServiceProxy::xcbDisableMessages(f);
+        DBusProxy::xcbDisableMessages(f);
     }
 
     int ConnectorLtsm::rfbUserKeycode(uint32_t keysym) const

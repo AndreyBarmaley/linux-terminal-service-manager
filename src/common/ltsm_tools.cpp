@@ -736,6 +736,14 @@ namespace LTSM
         return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
     }
 
+    std::string Tools::quotedString(std::string_view str)
+    {
+        // quoted input values
+        std::ostringstream os;
+        os << std::quoted(str);
+        return os.str();
+    }
+
     std::string Tools::prettyFuncName(std::string_view name)
     {
         auto end = std::find(name.begin(), name.end(), '(');
@@ -745,6 +753,20 @@ namespace LTSM
             beg = std::prev(beg);
 
         return std::string{std::next(beg), end};
+    }
+
+    bool Tools::fileReadable(const std::filesystem::path & path)
+    {
+        return 0 == access(path.c_str(), R_OK);
+    }
+
+    void Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid)
+    {
+        if(0 != chown(path.c_str(), uid, gid))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "chown", strerror(errno), errno,
+                               path.c_str());
+        }
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file)

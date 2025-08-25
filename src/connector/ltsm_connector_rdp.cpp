@@ -375,7 +375,7 @@ namespace LTSM::Connector
         }
     };
 
-    ConnectorRdp::ConnectorRdp(const JsonObject & jo) : ManagerServiceProxy(jo, "rdp")
+    ConnectorRdp::ConnectorRdp(const JsonObject & jo) : DBusProxy(jo, "rdp")
     {
     }
 

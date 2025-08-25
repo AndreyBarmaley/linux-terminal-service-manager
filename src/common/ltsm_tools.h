@@ -149,7 +149,11 @@ namespace LTSM
 
         std::string prettyFuncName(std::string_view);
         std::string randomHexString(size_t len);
+        std::string quotedString(std::string_view);
 
+        bool fileReadable(const std::filesystem::path &);
+        void setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid);
+    
         std::string fileToString(const std::filesystem::path &);
         std::vector<uint8_t> randomBytes(size_t bytesCount);
 

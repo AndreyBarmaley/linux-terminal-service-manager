@@ -1,4 +1,4 @@
-target_sources(${CUR_TARGET} PRIVATE ltsm_vnc2sdl.cpp)
+target_sources(${CUR_TARGET} PRIVATE ltsm_client.cpp)
 
 add_subdirectory(pcsc ${CUR_TARGET}_pcsc)
 add_subdirectory(fuse ${CUR_TARGET}_fuse)

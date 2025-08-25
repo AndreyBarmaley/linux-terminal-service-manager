@@ -595,6 +595,7 @@ namespace LTSM
             size_t depthFromBpp(size_t bitsPerPixel) const;
             size_t bppFromDepth(size_t depth) const;
 
+            std::pair<int, int> displayScreen(void) const;
             const xcb_setup_t* setup(void) const;
 
             xcb_connection_t* xcb_ptr(void);
