@@ -233,7 +233,7 @@ namespace LTSM
             {
                 ofs << *it;
 
-                if(auto val = std::next(it); val != end && ! std::string_view(*val).starts_with("--"))
+                if(auto val = std::next(it); val != end && ! startsWith(*val, "--"))
                 {
                     ofs << " " << *val;
                     it = val;
@@ -281,7 +281,7 @@ namespace LTSM
 
         for(auto it = argBeg; it != argEnd; ++it)
         {
-            if(auto val = std::next(it); val != argEnd && ! std::string_view(*val).starts_with("--"))
+            if(auto val = std::next(it); val != argEnd && ! startsWith(*val, "--"))
             {
                 parseCommand(*it, *val);
 
@@ -338,7 +338,7 @@ namespace LTSM
             if(line.empty())
                 continue;
 
-            if(! line.starts_with("--"))
+            if(! startsWith(line, "--"))
                 continue;
 
             auto it1 = line.begin();
@@ -422,7 +422,7 @@ namespace LTSM
             prefferedEncoding.assign(Tools::lower(RFB::encodingName(
                     RFB::ENCODING_LTSM_LZ4)));
         }
-        else if(cmd.starts_with("--tjpg"))
+        else if(startsWith(cmd, "--tjpg"))
         {
             if(auto opts = Tools::split(cmd, ','); 1 < opts.size())
             {
@@ -1890,7 +1890,7 @@ int main(int argc, const char** argv)
         if(auto it2 = std::next(it); it2 != argEnd)
         {
             std::string_view path2 = *it2;
-            if(! path2.starts_with("--"))
+            if(! startsWith(path2, "--"))
                 path = path2;
         }
 

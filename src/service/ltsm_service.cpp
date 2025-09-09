@@ -594,7 +594,7 @@ namespace LTSM::Manager
 
                 for(auto const & dirEntry : std::filesystem::directory_iterator{dbusSessionPath})
                 {
-                    if(! dirEntry.path().native().ends_with(displaySuffix))
+                    if(! endsWith(dirEntry.path().native(), displaySuffix))
                     {
                         continue;
                     }
@@ -604,7 +604,7 @@ namespace LTSM::Manager
 
                     while(std::getline(ifs, line))
                     {
-                        if(! line.starts_with(dbusLabel))
+                        if(! startsWith(line, dbusLabel))
                         {
                             continue;
                         }

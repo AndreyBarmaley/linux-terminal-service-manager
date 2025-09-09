@@ -27,6 +27,10 @@
 #include <algorithm>
 #include <exception>
 
+#if __GNUC__ < 9
+ #define LTSM_CENTOS7
+#endif
+
 #if not defined(__APPLE__) && not defined(LTSM_CENTOS7)
 #include <execution>
 #endif
