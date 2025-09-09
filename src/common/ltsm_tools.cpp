@@ -802,6 +802,13 @@ namespace LTSM
         return res;
     }
 
+    std::filesystem::path Tools::x11UnixPath(int display)
+    {
+        std::filesystem::path path{"/tmp/.X11-unix/X"};
+        path += std::to_string(display);
+        return path;
+    }
+
     std::string Tools::replace(std::string_view src, std::string_view pred, int val)
     {
         return replace(src, pred, std::to_string(val));
@@ -852,7 +859,8 @@ namespace LTSM
             }
         }
 
-        if(result.size() && result.back() == '\n')
+        // remove endl
+        while(result.size() && std::iscntrl(result.back()))
         {
             result.pop_back();
         }

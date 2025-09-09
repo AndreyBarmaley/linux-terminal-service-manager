@@ -1,3 +1,3 @@
 [D-BUS Service]
 Name=ltsm.session.fuse
-Exec=/usr/libexec/ltsm/LTSM_fuse2session
+Exec=/usr/libexec/ltsm/LTSM_session_fuse

@@ -108,7 +108,7 @@ namespace LTSM::Connector
             busShutdownDisplay(oldDisplay);
         }
 
-        xcbShmInit(userUid);
+        xcbShmInit(_shmUid);
         xcbDisableMessages(false);
         auto & clientRegion = getClientRegion();
 
@@ -133,9 +133,12 @@ namespace LTSM::Connector
             }
         }
 
-        _idleTimeoutSec = _config.getInteger("idle:action:timeout", 0);
-        _idleSession = std::chrono::steady_clock::now();
+        _idleTimeoutSec = _config.getInteger("session:idle:timeout", 0);
+        _idleSessionTp = std::chrono::steady_clock::now();
         _userSession = true;
+
+        busConnectorConnected(newDisplay, getpid());
+
         std::thread([this]()
         {
             JsonObjectStream jos;
@@ -252,12 +255,7 @@ namespace LTSM::Connector
 
     void ConnectorLtsm::serverMainLoopEvent(void)
     {
-        // check idle timeout
-        if(_idleTimeoutSec && std::chrono::seconds(_idleTimeoutSec) < std::chrono::steady_clock::now() - _idleSession)
-        {
-            busIdleTimeoutAction(displayNum());
-            _idleSession = std::chrono::steady_clock::now();
-        }
+        checkIdleTimeout();
     }
 
     void ConnectorLtsm::serverDisplayResizedEvent(const XCB::Size & sz)
@@ -292,10 +290,10 @@ namespace LTSM::Connector
         if(auto info = ServerEncoder::authInfo(); ! info.first.empty())
         {
             const auto & login = info.first;
-            this->helperSetSessionLoginPassword(this->displayNum(), login, "", false);
+            helperSetSessionLoginPassword(displayNum(), login, "", false);
             // not so fast
             std::this_thread::sleep_for(50ms);
-            this->busSetAuthenticateToken(this->displayNum(), login);
+            busSetAuthenticateToken(displayNum(), login);
         }
 
 #endif
@@ -407,13 +405,13 @@ namespace LTSM::Connector
     void ConnectorLtsm::serverRecvKeyEvent(bool pressed, uint32_t keysym)
     {
         X11Server::serverRecvKeyEvent(pressed, keysym);
-        _idleSession = std::chrono::steady_clock::now();
+        _idleSessionTp = std::chrono::steady_clock::now();
     }
 
     void ConnectorLtsm::serverRecvPointerEvent(uint8_t mask, uint16_t posx, uint16_t posy)
     {
         X11Server::serverRecvPointerEvent(mask, posx, posy);
-        _idleSession = std::chrono::steady_clock::now();
+        _idleSessionTp = std::chrono::steady_clock::now();
     }
 
     bool ConnectorLtsm::isUserSession(void) const

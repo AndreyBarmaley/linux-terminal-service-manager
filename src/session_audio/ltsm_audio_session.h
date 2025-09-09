@@ -56,7 +56,7 @@ namespace LTSM
         bool socketInitialize(void);
     };
 
-    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::AUDIO_adaptor>
+    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>
     {
         std::forward_list<AudioClient> clients;
 

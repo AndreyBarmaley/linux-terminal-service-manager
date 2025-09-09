@@ -24,11 +24,14 @@
 #ifndef _LTSM_PCSC_SESSION_
 #define _LTSM_PCSC_SESSION_
 
+#include <tuple>
 #include <thread>
 #include <atomic>
 #include <memory>
 #include <future>
 #include <string>
+#include <vector>
+#include <functional>
 #include <forward_list>
 
 #include "pcsclite.h"
@@ -99,71 +102,102 @@ namespace LTSM
         }
     };
 
-    struct PcscClient
+    using binary_buf = std::vector<uint8_t>;
+ 
+    class PcscRemote
     {
         SocketStream sock;
-        PcscLite::ReaderState * reader = nullptr;
+        std::recursive_mutex sockLock;
+
+        uint64_t context = 0;
+        uint64_t handle = 0;
+
+    protected:
+
+    public:
+        PcscRemote(int fd) : sock(fd, false) {}
+
+        std::tuple<uint64_t, uint32_t> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
+        std::tuple<uint32_t> sendReleaseContext(const int32_t & id);
+        std::tuple<uint64_t, uint32_t, uint32_t> sendConnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName);
+        std::tuple<uint32_t, uint32_t> sendReconnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
+        std::tuple<uint32_t> sendDisconnect(const int32_t & id, const uint32_t & disposition);
+        std::tuple<uint32_t> sendBeginTransaction(const int32_t & id);
+        std::tuple<uint32_t> sendEndTransaction(const int32_t & id, const uint32_t & disposition);
+        std::tuple<uint32_t, uint32_t, uint32_t, binary_buf> sendTransmit(const int32_t & id, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const binary_buf & data);
+        std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf> sendStatus(const int32_t & id);
+        std::tuple<uint32_t, binary_buf> sendControl(const int32_t & id, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
+        std::tuple<uint32_t, binary_buf> sendGetAttrib(const int32_t & id, const uint32_t & attrId);
+        std::tuple<uint32_t> sendSetAttrib(const int32_t & id, const uint32_t & attrId, const binary_buf & attr);
+
+        uint32_t sendGetStatusChange(const int32_t & id, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
+        std::list<std::string> sendListReaders(const int32_t & id);
+
+        const uint64_t & remoteContext(void) const { return context; }
+        const uint64_t & remoteHandle(void) const { return handle; }
+    };
+
+    class PcscLocal
+    {
+        SocketStream sock;
+        PcscLite::ReaderState* reader = nullptr;
 
         std::thread thread;
-
         WaitStatus waitStatusChanged;
-
-        uint64_t remoteContext = 0;
-        uint64_t remoteHandle = 0;
-
-        uint32_t versionMajor = 0;
-        uint32_t versionMinor = 0;
 
         uint32_t context = 0;
         uint32_t handle = 0;
 
-        PcscClient(int fd, PcscSessionBus * sessionBus);
-        ~PcscClient();
-
-        int id(void) const
-        {
-            return sock.fd();
-        }
-    };
-
-    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::PCSC_adaptor>
-    {
-        std::forward_list<PcscClient> clients;
-        std::mutex clientsLock;
-
-        std::array<PcscLite::ReaderState, PCSCLITE_MAX_READERS_CONTEXTS> readers;
-        std::mutex readersLock;
-
-        std::unique_ptr<SocketStream> remote;
-        std::recursive_mutex remoteLock;
-
-        std::filesystem::path pcscSocketPath;
+        std::weak_ptr<PcscRemote> remote;
+        std::function<bool(uint32_t)> clientCanceledCb;
 
     protected:
-        bool pcscEstablishContext(PcscClient &, uint32_t len);
-        bool pcscReleaseContext(PcscClient &, uint32_t len);
-        bool pcscConnect(PcscClient &, uint32_t len);
-        bool pcscReconnect(PcscClient &, uint32_t len);
-        bool pcscDisconnect(PcscClient &, uint32_t len);
-        bool pcscBeginTransaction(PcscClient &, uint32_t len);
-        bool pcscEndTransaction(PcscClient &, uint32_t len);
-        bool pcscTransmit(PcscClient &, uint32_t len);
-        bool pcscStatus(PcscClient &, uint32_t len);
-        bool pcscControl(PcscClient &, uint32_t len);
-        bool pcscCancel(PcscClient &, uint32_t len);
-        bool pcscGetAttrib(PcscClient &, uint32_t len);
-        bool pcscSetAttrib(PcscClient &, uint32_t len);
-        bool pcscGetVersion(PcscClient &, uint32_t len);
-        bool pcscGetReaderState(PcscClient &, uint32_t len);
-        bool pcscReaderStateChangeStart(PcscClient &, uint32_t len);
-        bool pcscReaderStateChangeStop(PcscClient &, uint32_t len);
+        void replyError(uint32_t len, uint32_t err);
 
-        int syncReaderStatusChange(PcscClient &, const std::string &, PcscLite::ReaderState &, bool * changed = nullptr);
-        int64_t pcscGetStatusChange(PcscClient &, uint32_t timeout, SCARD_READERSTATE * states, uint32_t statesCount);
-        void pcscStatusApply(PcscClient &, const std::string &, uint32_t state, uint32_t protocol, const std::vector<uint8_t> & );
+        bool proxyEstablishContext(void);
+        bool proxyReleaseContext(void);
+        bool proxyConnect(void);
+        bool proxyReconnect(void);
+        bool proxyDisconnect(void);
+        bool proxyBeginTransaction(void);
+        bool proxyEndTransaction(void);
+        bool proxyTransmit(void);
+        bool proxyStatus(void);
+        bool proxyControl(void);
+        bool proxyGetAttrib(void);
+        bool proxySetAttrib(void);
+        bool proxyCancel(void);
+        bool proxyGetVersion(void);
+        bool proxyGetReaderState(void);
+        bool proxyReaderStateChangeStart(void);
+        bool proxyReaderStateChangeStop(void);
 
-        std::list<std::string> pcscListReaders(PcscClient & );
-        PcscLite::ReaderState * findReaderState(const std::string & name);
+        bool clientAction(void);
+        void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
+
+        uint32_t syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
+        uint32_t syncReaders(bool* changed = nullptr);
+        uint32_t waitReadersStatusChanged(uint32_t timeout);
+
+    public:
+        PcscLocal(int fd, const std::shared_ptr<PcscRemote> &, PcscSessionBus* sessionBus);
+        ~PcscLocal();
+
+        inline int id(void) const { return sock.fd(); }
+
+        const uint32_t & localContext(void) const { return context; }
+        const uint32_t & localHandle(void) const { return handle; }
+
+        void canceledAction(void);
+    };
+
+    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor>
+    {
+        std::forward_list<PcscLocal> clients;
+        std::mutex clientsLock;
+
+        std::shared_ptr<PcscRemote> remote;
+        std::filesystem::path pcscSocketPath;
 
     public:
         PcscSessionBus(sdbus::IConnection &, bool debug = false);
@@ -175,13 +209,11 @@ namespace LTSM
         void serviceShutdown(void) override;
         void setDebug(const std::string & level) override;
 
-        bool connectChannel(const std::string & clientSocket) override;
-        void disconnectChannel(const std::string & clientSocket) override;
+        bool connectChannel(const std::string & sock) override;
+        void disconnectChannel(const std::string & sock) override;
 
-        bool pcscClientAction(PcscClient & );
-        void clientShutdownNotify(const PcscClient * );
-
-        int64_t syncReaders(PcscClient &, bool * changed = nullptr);
+        void clientShutdownNotify(const PcscLocal*);
+        bool clientCanceledNotify(uint32_t ctx);
     };
 }
 

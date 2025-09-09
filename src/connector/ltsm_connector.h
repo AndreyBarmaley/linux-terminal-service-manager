@@ -24,6 +24,11 @@
 #ifndef _LTSM_CONNECTOR_
 #define _LTSM_CONNECTOR_
 
+#include <list>
+#include <chrono>
+#include <atomic>
+#include <string>
+
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
@@ -50,6 +55,9 @@ namespace LTSM::Connector
 
         std::atomic<int> _xcbDisplayNum{0};
         std::atomic<bool> _xcbDisable{true};
+
+        std::chrono::time_point<std::chrono::steady_clock> _idleSessionTp;
+        uint32_t _idleTimeoutSec = 0;
 
     private:
         // dbus virtual signals
@@ -83,6 +91,12 @@ namespace LTSM::Connector
         void onDebugChannel(const int32_t & display, const uint8_t & channel,
                             const bool & debug) override {}
 
+        void onSessionOnline(const int32_t & display, const std::string & userName) override {}
+
+        void onSessionOffline(const int32_t & display, const std::string & userName) override {}
+
+        void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
+
     protected:
         // dbus virtual signals
         void onPingConnector(const int32_t & display) override;
@@ -110,6 +124,8 @@ namespace LTSM::Connector
 
         std::string checkFileOption(const std::string & ) const;
         const std::string & connectorType(void) const;
+
+        void checkIdleTimeout(void);
     };
 
     /* Connector::Service */

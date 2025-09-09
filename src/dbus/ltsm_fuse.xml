@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <node name="/ltsm/session/fuse">
-    <interface name="LTSM.Session.FUSE">
+    <interface name="LTSM.Session.Fuse">
         <method name="getVersion">
             <arg type="i" name="version" direction="out" />
         </method>

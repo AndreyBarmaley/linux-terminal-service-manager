@@ -228,7 +228,7 @@ void LTSM_Sessions::changeSessionDuration(void)
 
         if(change)
         {
-            dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationSec", xvfb.display,
+            dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationLimitSec", xvfb.display,
                                    static_cast<quint32>(duration));
         }
     }

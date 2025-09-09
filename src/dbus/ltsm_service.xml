@@ -18,13 +18,11 @@
         </method>
         <method name="busShutdownConnector">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="success" direction="out" />
         </method>
         <method name="busShutdownService">
         </method>
         <method name="busShutdownDisplay">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="success" direction="out" />
         </method>
         <method name="busStartUserSession">
             <arg type="i" name="display" direction="in" />
@@ -37,7 +35,6 @@
         <method name="busSendMessage">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="message" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSendNotify">
             <arg type="i" name="display" direction="in" />
@@ -45,7 +42,6 @@
             <arg type="s" name="body" direction="in" />
             <arg type="y" name="icontype" direction="in" />
             <arg type="y" name="urgency" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetDebugLevel">
             <arg type="s" name="level" direction="in" />
@@ -58,36 +54,37 @@
         <method name="busSetEncryptionInfo">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="info" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
-        <method name="busSetSessionDurationSec">
+        <method name="busSetSessionDurationLimitSec">
             <arg type="i" name="display" direction="in" />
-            <arg type="u" name="duration" direction="in" />
-            <arg type="b" name="result" direction="out" />
+            <arg type="u" name="limit" direction="in" />
+        </method>
+        <method name="busSetSessionOnlineLimitSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="u" name="limit" direction="in" />
+        </method>
+        <method name="busSetSessionOfflineLimitSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="u" name="limit" direction="in" />
         </method>
         <method name="busSetSessionPolicy">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="policy" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetLoginsDisable">
             <arg type="b" name="action" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetSessionEnvironments">
             <arg type="i" name="display" direction="in" />
             <arg type="a{ss}" name="map" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetSessionOptions">
             <arg type="i" name="display" direction="in" />
             <arg type="a{ss}" name="map" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetSessionKeyboardLayouts">
             <arg type="i" name="display" direction="in" />
             <arg type="as" name="layouts" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busEncryptionInfo">
             <arg type="i" name="display" direction="in" />
@@ -97,20 +94,20 @@
             <arg type="i" name="display" direction="in" />
             <arg type="q" name="width" direction="in" />
             <arg type="q" name="height" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
-        <method name="busIdleTimeoutAction">
+        <method name="busSessionIdleTimeout">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
+        </method>
+        <method name="busConnectorConnected">
+            <arg type="i" name="display" direction="in" />
+            <arg type="i" name="connectorId" direction="in" />
         </method>
         <method name="busConnectorTerminated">
             <arg type="i" name="display" direction="in" />
             <arg type="i" name="connectorId" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busConnectorAlive">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busTransferFilesRequest">
             <arg type="i" name="display" direction="in" />
@@ -147,18 +144,15 @@
             <arg type="(nnqq)" name="rect" direction="in" />
             <arg type="(yyy)" name="color" direction="in" />
             <arg type="b" name="fill" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busRenderText">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="text" direction="in" />
             <arg type="(nn)" name="pos" direction="in" />
             <arg type="(yyy)" name="color" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busRenderClear">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="busCreateChannel">
             <arg type="i" name="display" direction="in" />
@@ -174,32 +168,18 @@
             <arg type="y" name="channel" direction="in" />
             <arg type="b" name="result" direction="out" />
         </method>
-        <method name="helperIsAutoComplete">
-            <arg type="i" name="display" direction="in" />
-            <arg type="b" name="success" direction="out" />
-        </method>
-        <method name="helperGetTitle">
-            <arg type="i" name="display" direction="in" />
-            <arg type="s" name="result" direction="out" />
-        </method>
-        <method name="helperGetDateFormat">
-            <arg type="i" name="display" direction="in" />
-            <arg type="s" name="result" direction="out" />
-        </method>
         <method name="helperGetUsersList">
             <arg type="i" name="display" direction="in" />
             <arg type="as" name="result" direction="out" />
         </method>
         <method name="helperWidgetStartedAction">
             <arg type="i" name="display" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
         <method name="helperSetSessionLoginPassword">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="login" direction="in" />
             <arg type="s" name="password" direction="in" />
             <arg type="b" name="action" direction="in" />
-            <arg type="b" name="result" direction="out" />
         </method>
 
         <signal name="helperWidgetStarted">
@@ -236,6 +216,18 @@
         </signal>
         <signal name="sendBellSignal">
             <arg type="i" name="display" />
+        </signal>
+        <signal name="sessionOnline">
+            <arg type="i" name="display" />
+            <arg type="s" name="userName" />
+        </signal>
+        <signal name="sessionOffline">
+            <arg type="i" name="display" />
+            <arg type="s" name="userName" />
+        </signal>
+        <signal name="sessionIdleTimeout">
+            <arg type="i" name="display" />
+            <arg type="s" name="userName" />
         </signal>
         <signal name="sessionReconnect">
             <arg type="s" name="removeAddr" />

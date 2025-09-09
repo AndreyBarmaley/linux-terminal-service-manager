@@ -24,9 +24,9 @@
 
 #include <ctime>
 #include <chrono>
-#include <thread>
 #include <filesystem>
 
+#include <QList>
 #include <QFile>
 #include <QDate>
 #include <QTime>
@@ -34,6 +34,7 @@
 #include <QScreen>
 #include <QCursor>
 #include <QDateTime>
+#include <QSslSocket>
 #include <QApplication>
 #include <QDesktopWidget>
 #include <QGuiApplication>
@@ -42,6 +43,7 @@
 #ifdef LTSM_PKCS11_AUTH
 #include "gnutls/x509.h"
 #include "gnutls/abstract.h"
+#include "ltsm_ldap_wrapper.h"
 #endif
 
 #include "ltsm_tools.h"
@@ -153,42 +155,9 @@ namespace LTSM::LoginHelper
         }
     }
 
-    ///
-    void DBusProxy::sendAuthenticateLoginPass(const QString & user, const QString & pass)
-    {
-        auto login = user.toStdString();
-
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: `%s', pass length: %" PRIu32,
-                           __FUNCTION__, displayNum, login.c_str(), pass.size());
-
-        this->busSetAuthenticateLoginPass(displayNum, login, pass.toStdString());
-    }
-
-    void DBusProxy::sendAuthenticateToken(const QString & user)
-    {
-        auto login = user.toStdString();
-
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: `%s'",
-                           __FUNCTION__, displayNum, login.c_str());
-
-        this->busSetAuthenticateToken(displayNum, login);
-    }
-
-    void DBusProxy::widgetStartedAction(void)
-    {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
-                           __FUNCTION__, displayNum);
-
-        std::thread([this, display = displayNum]()
-        {
-            std::this_thread::sleep_for(30ms);
-            this->helperWidgetStartedAction(display);
-        }).detach();
-    }
-
     /// LoginWindow
     LoginWindow::LoginWindow(QWidget* parent) :
-        QMainWindow(parent), ApplicationLog("ltsm_helper"),
+        QMainWindow(parent), ApplicationJsonConfig("ltsm_helper"),
         ui(new Ui::LoginWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer200ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
     {
@@ -226,6 +195,8 @@ namespace LTSM::LoginHelper
         connect(dbus.get(), SIGNAL(pkcs11ListennerStartedNotify(int)), this, SLOT(pkcs11ListennerCallback(int)));
         connect(dbus.get(), SIGNAL(connectorShutdownNotify()), this, SLOT(shutdownConnectorCallback()));
         connect(dbus.get(), SIGNAL(widgetStartedNotify()), this, SLOT(widgetStartedCallback()));
+
+        loginTimeSec = configGetInteger("login:timeout:sec");
 
         timerOneSec = startTimer(std::chrono::seconds(1));
         timer200ms = startTimer(std::chrono::milliseconds(200));
@@ -507,7 +478,21 @@ namespace LTSM::LoginHelper
 
         if(! tokenAuthMode)
         {
-            dbus->sendAuthenticateLoginPass(ui->comboBoxUsername->currentText(), ui->lineEditPassword->text());
+            auto login = ui->comboBoxUsername->currentText().toStdString();
+            auto pass = ui->lineEditPassword->text().toStdString();
+
+            Application::debug(DebugType::App, "%s: display: %" PRId32 ", user: `%s', pass length: %" PRIu32,
+                           __FUNCTION__, displayNum, login.c_str(), pass.size());
+
+            if(! dbus->busSetAuthenticateLoginPass(displayNum, login, pass))
+            {
+                Application::error("%s: %s, display: %" PRId32 ", user: `%s'",
+                           __FUNCTION__, "session failed", displayNum, login.c_str());
+                // failed
+                close();
+            }
+
+            // success
             return;
         }
 
@@ -524,7 +509,15 @@ namespace LTSM::LoginHelper
 
         Application::debug(DebugType::Pkcs11, "%s: hash1 random bytes: %lu", __FUNCTION__, hash1.size());
         setLabelInfo("check token...");
-        bool certValidate = false;
+
+        auto returnInvalidCert = [ui = this->ui]()
+        {
+            ui->pushButtonLogin->setDisabled(false);
+            ui->comboBoxUsername->setDisabled(false);
+            //ui->comboBoxUsername->setToolTip("");
+            ui->lineEditPassword->setDisabled(false);
+            ui->lineEditPassword->setFocus();
+        };
 
         try
         {
@@ -535,57 +528,159 @@ namespace LTSM::LoginHelper
                                          CKM_RSA_PKCS);
 
             Application::debug(DebugType::Pkcs11, "%s: hash2 decrypted size: %lu", __FUNCTION__, hash2.size());
-            certValidate = (hash1 == hash2);
+
+            if(hash1 != hash2)
+            {
+                setLabelError("invalid token hash");
+                return returnInvalidCert();
+            }
         }
         catch(const std::exception & err)
         {
+            setLabelError("system error");
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            return returnInvalidCert();
         }
 
-        if(! certValidate)
+        // verify certs chain
+        if(auto certVerify = configGetBoolean("pkcs11:ca:verify", true))
         {
-            setLabelError("token failed");
-            Application::warning("%s: %s failed", __FUNCTION__, "pkcs11 check");
+            auto listErrors = QSslCertificate::verify(QList<QSslCertificate>() << ssl);
 
-            ui->pushButtonLogin->setDisabled(false);
-            ui->comboBoxUsername->setDisabled(false);
-            //ui->comboBoxUsername->setToolTip("");
-            ui->lineEditPassword->setDisabled(false);
-            ui->lineEditPassword->setFocus();
-            return;
-        }
-        else
-        {
-            Application::notice("%s: %s success", __FUNCTION__, "pkcs11 check");
-        }
-
-        if(! ldap)
-        {
-            setLabelError("LDAP: initialize failed");
-            return;
-        }
-
-        auto der = ssl.toDer();
-        if(auto dn = ldap->findDnFromCertificate((const uint8_t*) der.data(), der.size()); ! dn.empty())
-        {
-            setLabelInfo("LDAP: certificate found");
-
-            if(auto login = ldap->findLoginFromDn(dn); ! login.empty())
+            if(listErrors.size())
             {
-                Application::debug(DebugType::Ldap, "%s: LDAP login found: `%s'", __FUNCTION__, login.c_str());
-                setLabelInfo("LDAP: login found");
-                dbus->sendAuthenticateToken(QString::fromStdString(login));
-                return;
+                for(auto & err: listErrors)
+                {
+                    setLabelError(err.errorString());
+                    Application::warning("%s: %s failed, error: %s", __FUNCTION__, "cert verify", err.errorString().toStdString().c_str());
+                }
+
+                return returnInvalidCert();
+            }
+        }
+
+        // check cert expires
+        if(auto certExpires = configGetBoolean("pkcs11:cert:expires", true))
+        {
+            if(ssl.expiryDate() < QDateTime::currentDateTime())
+            {
+                setLabelError("certificate expired");
+                Application::warning("%s: %s failed, error: %s", __FUNCTION__, "cert verify", "expired date");
+                return returnInvalidCert();
+            }
+        }
+
+        Application::notice("%s: %s success", __FUNCTION__, "pkcs11 check");
+
+        auto authType = configGetString("pkcs11:auth:type");
+        std::string login;
+
+        if(authType == "cert:email")
+        {
+            if(auto list = ssl.subjectInfo(QSslCertificate::EmailAddress); list.size())
+            {
+                login = list.front().toStdString();
+                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "cert:email", login.c_str());
             }
             else
             {
-                setLabelError("LDAP: login not found");
+                setLabelError("cert:email not found");
+                Application::warning("%s: %s failed", __FUNCTION__, "cert:email");
+                return returnInvalidCert();
             }
         }
         else
+        if(authType == "cert:cn")
         {
-            setLabelError("LDAP: certificate not found");
+            if(auto list = ssl.subjectInfo(QSslCertificate::CommonName); list.size())
+            {
+                login = list.front().toStdString();
+                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "cert:cn", login.c_str());
+            }
+            else
+            {
+                setLabelError("cert:cn not found");
+                Application::warning("%s: %s failed", __FUNCTION__, "cert:cn");
+                return returnInvalidCert();
+            }
+        }
+        else
+        if(authType == "script")
+        {
+            if(auto cmd = configGetString("pkcs11:script:path"); std::filesystem::exists(cmd))
+            {
+                auto sha256 = ssl.digest(QCryptographicHash::Sha256);
+                auto arg = QString("digest:sha256:").append(sha256.toHex());
+                login = Tools::runcmd(cmd.append(" ").append(arg.toStdString()));
+                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "script", login.c_str());
+            }
+            else
+            {
+                setLabelError("script not found");
+                Application::warning("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
+                return returnInvalidCert();
+            }
+        }
+#ifdef LTSM_WITH_LDAP
+        else
+        if(authType == "ldap")
+        {
+            QScopedPointer<LTSM::LdapWrapper> ldap;
+
+            try
+            {
+                ldap.reset(new LdapWrapper());
+            }
+            catch(const std::exception &)
+            {
+                setLabelError("LDAP failed");
+                Application::warning("%s: %s", __FUNCTION__, "LDAP failed");
+                return returnInvalidCert();
+            }
+
+            auto der = ssl.toDer();
+
+            if(auto res = ldap->search(LDAP_SCOPE_SUBTREE, { "userCertificate" }, "userCertificate;binary=*"); res.size())
+            {
+                if(auto it = std::find_if(res.begin(), res.end(), [& der](auto & st)
+                        { return st.hasValue((const char*) der.data(), der.size()); }); it != res.end())
+                {
+                    if(res = ldap->search(LDAP_SCOPE_BASE, { "uid" }, nullptr, it->dn()); res.size())
+                        login = view2string(res.front().valueString());
+                }
+            }
+
+            if(login.empty())
+            {
+                setLabelError("LDAP cert not found");
+                Application::warning("%s: %s", __FUNCTION__, "LDAP cert not found");
+                return returnInvalidCert();
+            }
+        }
+#endif
+
+        if(login.empty())
+        {
+            setLabelError("login not found");
+            Application::warning("%s: %s", __FUNCTION__, "login not found");
+            return returnInvalidCert();
         }
 
+        Application::debug(DebugType::Pkcs11, "%s: display: % " PRId32 ", login found: `%s'",
+                __FUNCTION__, displayNum, login.c_str());
+
+        setLabelInfo("Login found");
+
+        if(! dbus->busSetAuthenticateToken(displayNum, login))
+        {
+            Application::error("%s: %s, display: %" PRId32 ", user: `%s'",
+                    __FUNCTION__, "session failed", displayNum, login.c_str());
+
+            // failed
+            close();
+        }
+
+        // success
 #endif
     }
 
@@ -602,9 +697,15 @@ namespace LTSM::LoginHelper
         }
     }
 
-    void LoginWindow::showEvent(QShowEvent*)
+    void LoginWindow::showEvent(QShowEvent* ev)
     {
-        dbus->widgetStartedAction();
+        if(QEvent::Show == ev->type())
+        {
+            std::call_once(widgetStarted, [dbus = dbus.get(), display = displayNum]()
+            {
+                dbus->helperWidgetStartedAction(display);
+            });
+        }
     }
 
     void LoginWindow::widgetStartedCallback(void)
@@ -615,15 +716,15 @@ namespace LTSM::LoginHelper
 
         if(! initArguments)
         {
-            if(auto title = QString::fromStdString(dbus->helperGetTitle(displayNum)); ! title.isEmpty())
+            if(auto title = QString::fromStdString(configGetString("title:format")); ! title.isEmpty())
             {
                 auto version = dbus->busGetServiceVersion();
                 title.replace("%{version}", QString::number(version));
                 ui->labelTitle->setText(title);
             }
 
-            dateFormat = QString::fromStdString(dbus->helperGetDateFormat(displayNum));
-            loginAutoComplete = dbus->helperIsAutoComplete(displayNum);
+            dateFormat = QString::fromStdString(configGetString("datetime:format"));
+            loginAutoComplete = configGetBoolean("login:autocomplete");
             auto encryption = dbus->busEncryptionInfo(displayNum);
             ui->lineEditEncryption->setText(QString::fromStdString(encryption));
 
@@ -658,11 +759,22 @@ namespace LTSM::LoginHelper
                 int ny = (screenSize.height() - QMainWindow::height()) / 2;
                 move(nx, ny);
             }
-            
+
             if(ui->lineEditEncryption->text().isEmpty())
             {
                 auto encryption = dbus->busEncryptionInfo(displayNum);
                 ui->lineEditEncryption->setText(QString::fromStdString(encryption));
+            }
+
+            if(0 < loginTimeSec)
+            {
+                loginTimeSec--;
+
+                if(0 == loginTimeSec)
+                {
+                    Application::debug(DebugType::App, "%s: close", __FUNCTION__);
+                    close();
+                }
             }
         }
         else if(ev->timerId() == timer200ms)
@@ -738,14 +850,6 @@ namespace LTSM::LoginHelper
 
         if(! pkcs11)
         {
-            try
-            {
-                ldap.reset(new LdapWrapper());
-            }
-            catch(const std::exception &)
-            {
-            }
-
             pkcs11.reset(new Pkcs11Client(displayNum, this));
             connect(pkcs11.data(), SIGNAL(pkcs11TokensChanged()), this, SLOT(tokensChanged()), Qt::QueuedConnection);
             pkcs11->start();

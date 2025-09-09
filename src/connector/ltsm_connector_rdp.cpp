@@ -333,7 +333,9 @@ namespace LTSM::Connector
         static bool enterEventLoop(FreeRdpCallback* rdp)
         {
             Application::info("%s: enter event loop", "FreeRdpCallback");
-            auto peer = rdp->peer;
+            freerdp_peer* peer = rdp->peer;
+            ServerContext* context = rdp->context;
+            ConnectorRdp* conrdp = context->conrdp;
 
             // freerdp client events
             while(true)
@@ -348,7 +350,7 @@ namespace LTSM::Connector
                     break;
                 }
 
-                if(WTSVirtualChannelManagerCheckFileDescriptor(rdp->context->vcm) != TRUE)
+                if(WTSVirtualChannelManagerCheckFileDescriptor(context->vcm) != TRUE)
                 {
                     break;
                 }
@@ -357,6 +359,8 @@ namespace LTSM::Connector
                 {
                     break;
                 }
+
+                conrdp->checkIdleTimeout();
 
                 // wait
                 std::this_thread::sleep_for(1ms);
@@ -570,7 +574,7 @@ namespace LTSM::Connector
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
         bool waitHelperStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]()
         {
-            return ! ! this->helperStartedFlag;
+            return !! this->helperStartedFlag;
         });
 
         if(! waitHelperStarted)
@@ -585,69 +589,71 @@ namespace LTSM::Connector
 
     void ConnectorRdp::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid)
     {
-        if(display == displayNum())
+        if(display != displayNum())
+            return;
+
+        // disable xcb messages processing
+        xcbDisableMessages(true);
+
+        // wait client update canceled, 1000ms, 10 ms pause
+        if(updatePartFlag)
         {
-            // disable xcb messages processing
-            xcbDisableMessages(true);
-
-            // wait client update canceled, 1000ms, 10 ms pause
-            if(updatePartFlag)
+            Tools::waitCallable<std::chrono::milliseconds>(1000, 100, [this]()
             {
-                Tools::waitCallable<std::chrono::milliseconds>(1000, 100, [this]()
-                {
-                    return ! this->updatePartFlag;
-                });
-            }
+                return ! this->updatePartFlag;
+            });
+        }
 
-            Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s", __FUNCTION__, display, userName.c_str());
-            int oldDisplay = displayNum();
-            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
+        Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s", __FUNCTION__, display, userName.c_str());
+        int oldDisplay = displayNum();
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
-            if(newDisplay < 0)
+        if(newDisplay < 0)
+        {
+            Application::error("%s: %s failed", __FUNCTION__, "user session request");
+            throw std::runtime_error(NS_FuncName);
+        }
+
+        if(newDisplay != oldDisplay)
+        {
+            // wait xcb old operations ended
+            std::this_thread::sleep_for(100ms);
+
+            if(! xcbConnect(newDisplay, *this))
             {
-                Application::error("%s: %s failed", __FUNCTION__, "user session request");
+                Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
                 throw std::runtime_error(NS_FuncName);
             }
 
-            if(newDisplay != oldDisplay)
-            {
-                // wait xcb old operations ended
-                std::this_thread::sleep_for(100ms);
-
-                if(! xcbConnect(newDisplay, *this))
-                {
-                    Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
-                    throw std::runtime_error(NS_FuncName);
-                }
-
-                busShutdownDisplay(oldDisplay);
-            }
-
-            // update context
-            xcbDisableMessages(false);
-            // fix new session size
-            auto wsz = XCB::RootDisplay::size();
-
-            if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
-            {
-                Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__,
-                                     freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
-
-                if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
-                                                        freeRdp->peer->settings->DesktopHeight)))
-                {
-                    wsz = XCB::RootDisplay::size();
-                    Application::info("change session size [%" PRIu16 ", %" PRIu16 "], display: %d", wsz.width, wsz.height, displayNum());
-                }
-            }
-            else
-            {
-                // full update
-                serverScreenUpdateRequest(XCB::RootDisplay::region());
-            }
-
-            Application::info("dbus signal: login success, display: %d, username: %s", displayNum(), userName.c_str());
+            busShutdownDisplay(oldDisplay);
         }
+
+        // update context
+        xcbDisableMessages(false);
+        // fix new session size
+        auto wsz = XCB::RootDisplay::size();
+
+        if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight)
+        {
+            Application::warning("%s: remote request desktop size [%dx%d], display: %d", __FUNCTION__,
+                                 freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
+
+            if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
+                                                    freeRdp->peer->settings->DesktopHeight)))
+            {
+                wsz = XCB::RootDisplay::size();
+                Application::info("change session size [%" PRIu16 ", %" PRIu16 "], display: %d", wsz.width, wsz.height, displayNum());
+            }
+        }
+        else
+        {
+            // full update
+            serverScreenUpdateRequest(XCB::RootDisplay::region());
+        }
+
+        busConnectorConnected(newDisplay, getpid());
+
+        Application::info("dbus signal: login success, display: %d, username: %s", displayNum(), userName.c_str());
     }
 
     void ConnectorRdp::onShutdownConnector(const int32_t & display)
@@ -1181,6 +1187,8 @@ namespace LTSM::Connector
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
+        connector->_idleSessionTp = std::chrono::steady_clock::now();
+
         if(connector->xcbAllowMessages())
         {
             auto test = static_cast<const XCB::ModuleTest*>(xcbDisplay->getExtension(XCB::Module::TEST));
@@ -1242,6 +1250,8 @@ namespace LTSM::Connector
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
+
+        connector->_idleSessionTp = std::chrono::steady_clock::now();
 
         if(connector->xcbAllowMessages())
         {

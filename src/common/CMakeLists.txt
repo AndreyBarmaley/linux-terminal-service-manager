@@ -50,11 +50,14 @@ if(LTSM_WITH_PNG)
 endif()
 
 if(LTSM_WITH_LDAP)
-    find_library(LDAP_LIBRARY ldap REQUIRED)
-    find_library(LBER_LIBRARY lber REQUIRED)
+    find_library(LDAP_LIBRARY NAMES ldap)
+    find_library(LBER_LIBRARY NAMES lber)
 
-    target_sources(${CUR_TARGET} PRIVATE ltsm_ldap_wrapper.cpp)
-    target_link_libraries(${CUR_TARGET} PRIVATE ${LBER_LIBRARY} ${LDAP_LIBRARY})
+    if(LDAP_LIBRARY AND LBER_LIBRARY)
+        target_sources(${CUR_TARGET} PRIVATE ltsm_ldap_wrapper.cpp)
+        target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_LDAP)
+        target_link_libraries(${CUR_TARGET} PRIVATE ${LDAP_LIBRARY} ${LBER_LIBRARY})
+    endif()
 endif()
 
 if(LTSM_WITH_GNUTLS)

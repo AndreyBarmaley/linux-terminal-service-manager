@@ -89,6 +89,6 @@ if [ -z "$XSESSION" ]; then
     fi
 fi
 
-xsetroot -solid "#4e7db7"
+xsetroot -solid "#4e7db7" -cursor_name left_ptr
 
 exec ${XSESSION}

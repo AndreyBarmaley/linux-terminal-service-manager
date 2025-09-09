@@ -191,7 +191,7 @@ namespace LTSM
             if(this->rfbMessagesRunning())
             {
                 Application::error("session timeout trigger: %s", "rfbMessagesRunning");
-                throw rfb_error(NS_FuncName);
+                this->rfbMessagesShutdown();
             }
         });
 

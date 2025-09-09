@@ -63,6 +63,14 @@ add_custom_command(
     COMMENT "Generating D-Bus LTSM_PCSC adaptor interface"
 )
 
+add_custom_command(
+    OUTPUT ltsm_display_adaptor.h
+    COMMAND sdbus-c++-xml2cpp ${CMAKE_CURRENT_SOURCE_DIR}/dbus/ltsm_display.xml
+                    --adaptor=${CMAKE_BINARY_DIR}/src/ltsm_display_adaptor.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/dbus/ltsm_display.xml
+    COMMENT "Generating D-Bus LTSM_DISPLAY adaptor interface"
+)
+
 include_directories(${CMAKE_BINARY_DIR}/src)
 
 if(LTSM_BUILD_SERVER)
@@ -176,8 +184,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_PCSC)
-        project(LTSM_pcsc2session)
-        set(CUR_TARGET LTSM_pcsc2session)
+        project(LTSM_session_pcsc)
+        set(CUR_TARGET LTSM_session_pcsc)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 
@@ -192,8 +200,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_FUSE)
-        project(LTSM_fuse2session)
-        set(CUR_TARGET LTSM_fuse2session)
+        project(LTSM_session_fuse)
+        set(CUR_TARGET LTSM_session_fuse)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 
@@ -208,8 +216,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_AUDIO)
-        project(LTSM_audio2session)
-        set(CUR_TARGET LTSM_audio2session)
+        project(LTSM_session_audio)
+        set(CUR_TARGET LTSM_session_audio)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 

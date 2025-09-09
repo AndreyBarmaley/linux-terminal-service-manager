@@ -51,17 +51,12 @@
     "channel:fuse:format": "/var/run/ltsm/fuse/%{user}",
     "channel:sane:disabled": false,
 
-    "#idle:timeout:xvfb": 10,
-    "#idle:timeout:login": 70,
-    "#idle:timeout:logout": 0,
+    "session:started:timeout": 0,
+    "session:online:timeout": 0,
+    "session:offline:timeout": 0,
+    "session:idle:timeout": 30,
+    "session:idle:disconnect": false,
 
-    "#idle:action:timeout": 0,
-    "#idle:action:path": "/usr/bin/xlock",
-    "#idle:action:args": [],
-
-    "group:shm": "ltsm-shm",
-    "group:auth": "ltsm-auth",
-    "user:xvfb": "ltsm-xvfb",
     "pam:service": "ltsm",
 
     "#access:groups": [ "ts-users", "ts-admins" ],
@@ -69,11 +64,8 @@
     "access:uid:max": 9999,
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
-    "helper:autocomplete": true,
     "helper:path": "/usr/libexec/ltsm/LTSM_helper",
     "helper:args": "",
-    "helper:dateformat": "dddd dd MMMM, hh:mm:ss",
-    "helper:title": "X11 Remote Desktop Service (%{version})",
 
     "login:failures_count": 3,
     "session:kill:stop": false,
@@ -94,7 +86,6 @@
 
     "xvfb:path": "/usr/bin/Xvfb",
     "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",
-    "xvfb:socket": "/tmp/.X11-unix/X%{display}",
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",

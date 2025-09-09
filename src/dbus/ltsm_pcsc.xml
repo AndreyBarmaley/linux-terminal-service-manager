@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <node name="/ltsm/session/pcsc">
-    <interface name="LTSM.Session.PCSC">
+    <interface name="LTSM.Session.Pcsc">
         <method name="getVersion">
             <arg type="i" name="version" direction="out" />
         </method>

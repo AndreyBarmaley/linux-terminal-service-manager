@@ -17,19 +17,19 @@
 	"debug:target": "syslog",
 	"debug:syslog": "local6"
     },
-    "ltsm_audio2session": {
+    "ltsm_session_audio": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "audio" ],
 	"debug:target": "syslog",
 	"debug:syslog": "user"
     },
-    "ltsm_pcsc2session": {
+    "ltsm_session_pcsc": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "pcsc" ],
 	"debug:target": "syslog",
 	"debug:syslog": "user"
     },
-    "ltsm_fuse2session": {
+    "ltsm_session_fuse": {
 	"debug:level": "info",
 	"debug:types": [ "app", "dbus", "fuse" ],
 	"debug:target": "syslog",

@@ -1004,7 +1004,7 @@ namespace LTSM
     }
 
     /// FuseSessionBus
-    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_fuse2session"),
+    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_session_fuse"),
 #ifdef SDBUS_2_0_API
         AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_fuse_path})
 #else
@@ -1026,7 +1026,7 @@ namespace LTSM
 
     int FuseSessionBus::start(void)
     {
-        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
+        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
@@ -1047,7 +1047,7 @@ namespace LTSM
     int32_t FuseSessionBus::getVersion(void)
     {
         Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        return LTSM_FUSE2SESSION_VERSION;
+        return LTSM_SESSION_FUSE_VERSION;
     }
 
     void FuseSessionBus::serviceShutdown(void)
@@ -1113,7 +1113,7 @@ int main(int argc, char** argv)
         }
         else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
         {
-            std::cout << "version: " << LTSM_FUSE2SESSION_VERSION << std::endl;
+            std::cout << "version: " << LTSM_SESSION_FUSE_VERSION << std::endl;
             return EXIT_SUCCESS;
         }
         else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d"))

@@ -399,36 +399,6 @@ namespace LTSM::Manager
 
     std::string XvfbSession::toJsonString(void) const
     {
-        int sesmode = 0, conpol = 0;
-
-        switch(mode)
-        {
-            case XvfbMode::SessionOnline:
-                sesmode = 1;
-                break;
-
-            case XvfbMode::SessionSleep:
-                sesmode = 2;
-                break;
-
-            default:
-                break;
-        }
-
-        switch(policy)
-        {
-            case SessionPolicy::AuthTake:
-                conpol = 1;
-                break;
-
-            case SessionPolicy::AuthShare:
-                conpol = 2;
-                break;
-
-            default:
-                break;
-        }
-
         JsonObjectStream jos;
         jos.push("displaynum", displayNum);
         jos.push("pid1", pid1);
@@ -437,15 +407,25 @@ namespace LTSM::Manager
         jos.push("height", height);
         jos.push("uid", userInfo->uid());
         jos.push("gid", userInfo->gid());
-        jos.push("durationlimit", static_cast<uint32_t>(durationLimit));
-        jos.push("sesmode", sesmode);
-        jos.push("conpol", conpol);
+        jos.push("start:limit", startTimeLimitSec.load());
+        jos.push("online:limit", onlineTimeLimitSec.load());
+        jos.push("offline:limit", offlineTimeLimitSec.load());
+        jos.push("status:flags", statusFlags.load());
+        jos.push("sesion:mode", static_cast<int>(mode.load()));
+        jos.push("connect:policy", static_cast<int>(policy));
         jos.push("user", userInfo->user());
         jos.push("xauthfile", xauthfile);
         jos.push("remoteaddr", remoteAddr);
         jos.push("conntype", conntype);
         jos.push("encryption", encryption);
-        jos.push("alivesec", aliveSec().count());
+        jos.push("started:sec", sessionStartedSec().count());
+
+        if(mode == SessionMode::Connected)
+            jos.push("onlined:sec", sessionOnlinedSec().count());
+        else
+        if(mode == SessionMode::Disconnected)
+            jos.push("offlined:sec", sessionOfflinedSec().count());
+
         return jos.flush();
     }
 
@@ -461,7 +441,7 @@ namespace LTSM::Manager
         auto it = std::find_if(sessions.begin(), sessions.end(), [&](auto & ptr)
         {
             return ptr &&
-                   (ptr->mode == XvfbMode::SessionOnline || ptr->mode == XvfbMode::SessionSleep) &&
+                   (ptr->mode == SessionMode::Started || ptr->mode == SessionMode::Connected || ptr->mode == SessionMode::Disconnected) &&
                    username == ptr->userInfo->user();
         });
 
@@ -486,7 +466,7 @@ namespace LTSM::Manager
 
         for(const auto & ptr : sessions)
         {
-            if(ptr && 0 < ptr->durationLimit)
+            if(ptr && (0 < ptr->startTimeLimitSec || 0 < ptr->onlineTimeLimitSec || 0 < ptr->offlineTimeLimitSec))
             {
                 res.push_front(ptr);
             }
@@ -502,7 +482,7 @@ namespace LTSM::Manager
 
         for(const auto & ptr : sessions)
         {
-            if(ptr && ptr->mode == XvfbMode::SessionOnline)
+            if(ptr && ptr->mode == SessionMode::Connected)
             {
                 res.push_front(ptr);
             }
@@ -748,6 +728,7 @@ namespace LTSM::Manager
 
         auto str = Tools::replace(cmd, "%{display}", xvfb->displayNum);
         str = Tools::replace(str, "%{user}", xvfb->userInfo->user());
+
         std::thread([ptr = std::move(xvfb), str]()
         {
             int ret = std::system(str.c_str());
@@ -850,7 +831,7 @@ namespace LTSM::Manager
             return status;
         }
 
-        void childProcess(XvfbSessionPtr xvfb, int pipeout, const std::filesystem::path & cmd,
+        void runChildProcess(XvfbSessionPtr xvfb, int pipeout, const std::filesystem::path & cmd,
                                  std::list<std::string> params)
         {
             signal(SIGTERM, SIG_DFL);
@@ -983,7 +964,7 @@ namespace LTSM::Manager
             return std::make_pair(status, std::move(res));
         }
 
-        PidStatusStdout sessionCommandStdout(XvfbSessionPtr xvfb, const std::filesystem::path & cmd,
+        PidStatusStdout runSessionCommandStdout(XvfbSessionPtr xvfb, const std::filesystem::path & cmd,
                 std::list<std::string> params)
         {
             if(! xvfb)
@@ -1025,7 +1006,7 @@ namespace LTSM::Manager
             if(0 == pid)
             {
                 close(pipefd[0]);
-                childProcess(xvfb, pipefd[1], cmd, std::move(params));
+                runChildProcess(xvfb, pipefd[1], cmd, std::move(params));
                 // child ended
                 std::exit(0);
             }
@@ -1043,7 +1024,7 @@ namespace LTSM::Manager
             return std::make_pair(pid, std::move(future));
         }
 
-        PidStatus sessionCommand(XvfbSessionPtr xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
+        PidStatus runSessionCommand(XvfbSessionPtr xvfb, const std::filesystem::path & cmd, std::list<std::string> params)
         {
             if(! xvfb)
             {
@@ -1074,7 +1055,7 @@ namespace LTSM::Manager
 
             if(0 == pid)
             {
-                childProcess(xvfb, -1, cmd, std::move(params));
+                runChildProcess(xvfb, -1, cmd, std::move(params));
                 // child ended
                 std::exit(0);
             }
@@ -1112,22 +1093,16 @@ namespace LTSM::Manager
         // registry
         registerAdaptor();
         // check sessions timepoint limit
-        timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [this]()
-        {
-            this->sessionsTimeLimitAction();
-        });
+        timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true,
+            std::bind(& DBusAdaptor::sessionsTimeLimitAction, this));
 
         // check sessions killed
-        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(1, true, [this]()
-        {
-            this->sessionsEndedAction();
-        });
+        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(1, true,
+            std::bind(& DBusAdaptor::sessionsEndedAction, this));
 
         // check sessions alive
-        timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true, [this]()
-        {
-            this->sessionsCheckAliveAction();
-        });
+        timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true,
+            std::bind(& DBusAdaptor::sessionsCheckConnectedAction, this));
     }
 
     DBusAdaptor::~DBusAdaptor()
@@ -1157,23 +1132,61 @@ namespace LTSM::Manager
     {
         for(const auto & ptr : findTimepointLimitSessions())
         {
-            // task background
-            auto sessionAliveSec = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() -
-                                   ptr->tpstart);
-            auto lastsec = std::chrono::seconds(ptr->durationLimit) - ptr->aliveSec();
+            // check started timepoint
+            auto startedSec = ptr->sessionStartedSec();
 
-            // shutdown session
-            if(std::chrono::seconds(ptr->durationLimit) < sessionAliveSec)
+            if(startedSec.count() > ptr->startTimeLimitSec)
             {
-                Application::notice("time point limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRId64 "sec",
-                                    ptr->displayNum, static_cast<uint32_t>(ptr->durationLimit), sessionAliveSec.count());
+                Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                                    __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->startTimeLimitSec), startedSec.count());
                 displayShutdown(ptr, true);
+                continue;
             }
-            else
-            if(ptr->mode != XvfbMode::SessionLogin)
+
+            uint32_t lastsec = ptr->mode != SessionMode::Login ? ptr->startTimeLimitSec - startedSec.count() : 0;
+
+            // check online timepoint
+            if(ptr->mode == SessionMode::Connected)
+            {
+                auto onlinedSec = ptr->sessionOnlinedSec();
+
+                if(onlinedSec.count() > ptr->onlineTimeLimitSec)
+                {
+                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                                    __FUNCTION__, "online", ptr->displayNum, static_cast<uint32_t>(ptr->onlineTimeLimitSec), onlinedSec.count());
+                    displayShutdown(ptr, true);
+                    continue;
+                }
+
+                uint32_t lastsec2 = ptr->onlineTimeLimitSec - onlinedSec.count();
+
+                if(lastsec2 < lastsec)
+                    lastsec = lastsec2;
+            }
+
+            // check offline timepoint
+            if(ptr->mode == SessionMode::Disconnected)
+            {
+                auto offlinedSec = ptr->sessionOfflinedSec();
+
+                if(offlinedSec.count() > ptr->offlineTimeLimitSec)
+                {
+                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                                    __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
+                    displayShutdown(ptr, true);
+                    continue;
+                }
+
+                uint32_t lastsec2 = ptr->offlineTimeLimitSec - offlinedSec.count();
+
+                if(lastsec2 < lastsec)
+                    lastsec = lastsec2;
+            }
+
+            if(lastsec)
             {
                 // inform alert
-                if(std::chrono::seconds(100) > lastsec)
+                if(100 > lastsec)
                 {
                     emitClearRenderPrimitives(ptr->displayNum);
                     // send render rect
@@ -1181,14 +1194,14 @@ namespace LTSM::Manager
                     const uint16_t fh = 24;
                     emitAddRenderRect(ptr->displayNum, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
                     // send render text
-                    auto text = Tools::joinToString("time left: ", lastsec.count(), "sec");
+                    auto text = Tools::joinToString("time left: ", lastsec, "sec");
                     const int16_t px = (fw - text.size() * 8) / 2;
                     const int16_t py = (fh - 16) / 2;
                     emitAddRenderText(ptr->displayNum, text, {px, py}, {0xFF, 0xFF, 0});
                 }
 
                 // inform beep
-                if(std::chrono::seconds(10) > lastsec)
+                if(10 > lastsec)
                 {
                     emitSendBellSignal(ptr->displayNum);
                 }
@@ -1224,7 +1237,7 @@ namespace LTSM::Manager
                 auto & ptr = *it;
 
                 // skip login helper, or arnormal shutdown only
-                if(ptr && (ptr->mode != XvfbMode::SessionLogin || 0 < pidStatus.second.get()))
+                if(ptr && (ptr->mode != SessionMode::Login || 0 < pidStatus.second.get()))
                 {
                     ptr->pid2 = 0;
                     this->displayShutdown(ptr, true);
@@ -1235,7 +1248,7 @@ namespace LTSM::Manager
         });
     }
 
-    void DBusAdaptor::sessionsCheckAliveAction(void)
+    void DBusAdaptor::sessionsCheckConnectedAction(void)
     {
         for(const auto & ptr : getOnlineSessions())
         {
@@ -1248,7 +1261,7 @@ namespace LTSM::Manager
             else
             {
                 // not reply
-                Application::warning("connector not reply, display: %" PRId32, ptr->displayNum);
+                Application::warning("connector not reply, display: %" PRId32 ", connector id: %" PRId32, ptr->displayNum, ptr->connectorId);
                 // complete shutdown
                 busConnectorTerminated(ptr->displayNum, -1);
             }
@@ -1258,16 +1271,14 @@ namespace LTSM::Manager
     bool DBusAdaptor::checkXvfbSocket(int display) const
     {
         return 0 < display ?
-               Tools::checkUnixSocket(Tools::replace(_config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}"), "%{display}",
-                                      display)) : false;
+               Tools::checkUnixSocket(Tools::x11UnixPath(display)) : false;
     }
 
     void DBusAdaptor::removeXvfbSocket(int display) const
     {
         if(0 < display)
         {
-            std::filesystem::path socketPath = Tools::replace(_config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}"),
-                                               "%{display}", display);
+            std::filesystem::path socketPath = Tools::x11UnixPath(display);
 
             try
             {
@@ -1281,13 +1292,13 @@ namespace LTSM::Manager
 
     bool DBusAdaptor::displayShutdown(XvfbSessionPtr xvfb, bool emitSignal)
     {
-        if(! xvfb || xvfb->mode == XvfbMode::SessionShutdown)
+        if(! xvfb || xvfb->mode == SessionMode::Shutdown)
         {
             return false;
         }
 
         Application::notice("%s: shutdown display: %" PRId32 " %s", __FUNCTION__, xvfb->displayNum, "starting");
-        xvfb->mode = XvfbMode::SessionShutdown;
+        xvfb->mode = SessionMode::Shutdown;
 
         if(emitSignal)
         {
@@ -1295,8 +1306,7 @@ namespace LTSM::Manager
         }
 
         // dbus no wait, remove background
-        std::string sysuser = _config->getString("user:xvfb");
-        bool notSysUser = sysuser != xvfb->userInfo->user();
+        bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
 
         if(notSysUser)
         {
@@ -1478,7 +1488,7 @@ namespace LTSM::Manager
         {
             std::scoped_lock guard{ lockRunning };
             childsRunning.emplace_front(
-                RunAs::sessionCommand(std::move(xvfb), cmd, std::move(params)));
+                RunAs::runSessionCommand(std::move(xvfb), cmd, std::move(params)));
             return childsRunning.front().first;
         }
         catch(const std::exception & err)
@@ -1547,7 +1557,7 @@ namespace LTSM::Manager
             return nullptr;
         }
 
-        auto xvfbSocket = Tools::replace(_config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}"), "%{display}", freeDisplay);
+        auto xvfbSocket = Tools::x11UnixPath(freeDisplay);
         auto x11unix = std::filesystem::path(xvfbSocket).parent_path();
 
         if(! std::filesystem::is_directory(x11unix))
@@ -1571,14 +1581,16 @@ namespace LTSM::Manager
             return nullptr;
         }
 
-        sess->mode = XvfbMode::SessionLogin;
+        sess->mode = SessionMode::Login;
         sess->displayNum = freeDisplay;
         sess->depth = depth;
         sess->width = width;
         sess->height = height;
         sess->displayAddr = Tools::joinToString(":", sess->displayNum);
-        sess->tpstart = std::chrono::system_clock::now();
-        sess->durationLimit = _config->getInteger("idle:timeout:xvfb", 10);
+
+        sess->tpStart = std::chrono::system_clock::now();
+        sess->startTimeLimitSec = _config->getInteger("session:started:timeout", 0);
+
         // generate session key
         sess->mcookie = Tools::randomBytes(128);
         // session xauthfile
@@ -1692,16 +1704,17 @@ namespace LTSM::Manager
         // child only
         Application::info("%s: pid: %" PRId32, __FUNCTION__, getpid());
 
-        auto childExit = []()
+        auto childExit = [](int res)
         {
             execl("/bin/true", "/bin/true", nullptr);
-            std::exit(0);
+            std::exit(res);
+            return res;
         };
 
         if(xvfb->userInfo->uid() == 0)
         {
             Application::error("%s: deny for root", __FUNCTION__);
-            childExit();
+            return childExit(-1);
         }
 
         std::error_code err;
@@ -1710,21 +1723,21 @@ namespace LTSM::Manager
         {
             Application::error("%s: %s, path: `%s', uid: %" PRId32,
                 __FUNCTION__, (err ? err.message().c_str() : "not directory"), xvfb->userInfo->home(), getuid());
-            childExit();
+            return childExit(-1);
         }
 
         if(0 != initgroups(xvfb->userInfo->user(), xvfb->userInfo->gid()))
         {
             Application::error("%s: %s failed, user: %s, gid: %" PRId32 ", error: %s",
                 __FUNCTION__, "initgroups", xvfb->userInfo->user(), xvfb->userInfo->gid(), strerror(errno));
-            childExit();
+            return childExit(-1);
         }
 
         if(! pam->openSession())
         {
             Application::error("%s: %s, display: %" PRId32 ", user: %s",
                 __FUNCTION__, "PAM open session failed", xvfb->displayNum, xvfb->userInfo->user());
-            childExit();
+            return childExit(-1);
         }
 
         Application::debug(DebugType::App, "%s: child mode, type: %s, uid: %" PRId32,
@@ -1733,7 +1746,7 @@ namespace LTSM::Manager
         // assign groups
         if(! switchToUser(*xvfb->userInfo))
         {
-            childExit();
+            return childExit(-1);
         }
 
         for(const auto & [key, val] : xvfb->environments)
@@ -1768,9 +1781,8 @@ namespace LTSM::Manager
             Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
                 __FUNCTION__, "execl", strerror(errno), errno, sessionBin.c_str());
         }
-        
-        childExit();
-        return 0;
+
+        return childExit(0);
     }
 
     int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
@@ -1779,15 +1791,13 @@ namespace LTSM::Manager
         Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
             __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
-        auto userXvfb = _config->getString("user:xvfb");
-        auto groupAuth = _config->getString("group:auth");
         auto displayWidth = _config->getInteger("default:width", 1024);
         auto displayHeight = _config->getInteger("default:height", 768);
-        auto userInfo = Tools::getUserInfo(userXvfb);
+        auto userInfo = Tools::getUserInfo(ltsm_user_conn);
 
         if(! userInfo)
         {
-            Application::error("%s: user not found: `%s'", __FUNCTION__, userXvfb.c_str());
+            Application::error("%s: user not found: `%s'", __FUNCTION__, ltsm_user_conn);
             return -1;
         }
 
@@ -1806,7 +1816,7 @@ namespace LTSM::Manager
         xvfb->conntype = connType;
         xvfb->connectorId = connectorId;
         // fix permission
-        auto groupAuthGid = Tools::getGroupGid(groupAuth);
+        auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
         Tools::setFileOwner(xvfb->xauthfile, xvfb->userInfo->uid(), groupAuthGid);
 
         // wait Xvfb display starting
@@ -1817,8 +1827,7 @@ namespace LTSM::Manager
         }
 
         // check socket
-        std::filesystem::path socketPath = Tools::replace(_config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}"),
-                                           "%{display}", xvfb->displayNum);
+        std::filesystem::path socketPath = Tools::x11UnixPath(xvfb->displayNum);
         std::error_code err;
 
         if(! std::filesystem::is_socket(socketPath, err))
@@ -1861,8 +1870,6 @@ namespace LTSM::Manager
             return -1;
         }
 
-        xvfb->durationLimit = _config->getInteger("idle:timeout:login", 80);
-
         startLoginChannels(xvfb);
 
         return xvfb->displayNum;
@@ -1874,9 +1881,7 @@ namespace LTSM::Manager
         Application::debug(DebugType::Dbus, "%s: session request, user: %s, remote: %s, display: %" PRId32,
             __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
-        std::string userXvfb = _config->getString("user:xvfb");
         std::string sessionBin = _config->getString("session:path");
-        std::string groupAuth = _config->getString("group:auth");
 
         auto userInfo = Tools::getUserInfo(userName);
 
@@ -1904,7 +1909,6 @@ namespace LTSM::Manager
         }
 
         // auto close login session
-        loginSess->durationLimit = loginSess->aliveSec().count() + 3;
         std::unique_ptr<PamSession> pam = std::move(loginSess->pam);
 
         if(! pam)
@@ -1936,7 +1940,6 @@ namespace LTSM::Manager
             oldSess->remoteAddr = remoteAddr;
             oldSess->conntype = connType;
             oldSess->connectorId = connectorId;
-            oldSess->mode = XvfbMode::SessionOnline;
             oldSess->environments = std::move(loginSess->environments);
             oldSess->options = std::move(loginSess->options);
             oldSess->encryption = std::move(loginSess->encryption);
@@ -1947,6 +1950,7 @@ namespace LTSM::Manager
             {
                 Application::error("%s: %s, display: %" PRId32 ", user: %s",
                     __FUNCTION__, "PAM failed", oldSess->displayNum, oldSess->userInfo->user());
+                displayShutdown(oldSess, true);
                 return -1;
             }
 
@@ -1989,8 +1993,10 @@ namespace LTSM::Manager
         newSess->remoteAddr = remoteAddr;
         newSess->conntype = connType;
         newSess->connectorId = connectorId;
-        newSess->durationLimit = _config->getInteger("idle:timeout:logout", 0);
         newSess->policy = sessionPolicy(Tools::lower(_config->getString("session:policy")));
+        newSess->mode = SessionMode::Started;
+        newSess->tpStart = std::chrono::system_clock::now();
+        newSess->startTimeLimitSec = _config->getInteger("session:started:timeout", 0);
 
         if(! _config->getBoolean("transfer:file:disabled", false))
         {
@@ -2023,7 +2029,7 @@ namespace LTSM::Manager
         }
 
         // fix permission
-        auto groupAuthGid = Tools::getGroupGid(groupAuth);
+        auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
         Tools::setFileOwner(newSess->xauthfile, newSess->userInfo->uid(), groupAuthGid);
 
         // wait Xvfb display starting
@@ -2035,8 +2041,7 @@ namespace LTSM::Manager
         }
 
         // check socket
-        std::filesystem::path socketPath = Tools::replace(_config->getString("xvfb:socket", "/tmp/.X11-unix/X%{display}"),
-                                           "%{display}", oldScreen);
+        std::filesystem::path socketPath = Tools::x11UnixPath(oldScreen);
 
         if(! std::filesystem::is_socket(socketPath, err))
         {
@@ -2072,7 +2077,6 @@ namespace LTSM::Manager
 
         // move pam from login session
         newSess->pam = std::move(pam);
-        newSess->mode = XvfbMode::SessionOnline;
         newSess->pid2 = runUserSession(newSess, sessionBin, newSess->pam.get());
 
         if(newSess->pid2 < 0)
@@ -2114,25 +2118,32 @@ namespace LTSM::Manager
         return "";
     }
 
-    bool DBusAdaptor::busShutdownDisplay(const int32_t & display)
+    void DBusAdaptor::busShutdownDisplay(const int32_t & display)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
-        if(auto xvfb = findDisplaySession(display))
+        if(auto ptr = findDisplaySession(display))
         {
-            displayShutdown(xvfb, true);
-            return true;
+            std::thread([this, xvfb = std::move(ptr)]()
+            {
+                std::this_thread::sleep_for(10ms);
+                this->displayShutdown(xvfb, true);
+            }).detach();
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busShutdownConnector(const int32_t & display)
+    void DBusAdaptor::busShutdownConnector(const int32_t & display)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
-        emitShutdownConnector(display);
-        return true;
+        std::thread([this, display]()
+        {
+            std::this_thread::sleep_for(10ms);
+            this->emitShutdownConnector(display);
+        }).detach();
     }
 
     void DBusAdaptor::busShutdownService(void)
@@ -2197,83 +2208,68 @@ namespace LTSM::Manager
         return 0 != runSessionCommandSafe(std::move(xvfb), zenity, std::move(params));
     }
 
-    bool DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message)
+    void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", message: `%s'", __FUNCTION__, display, message.c_str());
 
         if(auto xvfb = findDisplaySession(display))
         {
-            if(xvfb->mode == XvfbMode::SessionLogin)
+            if(xvfb->mode == SessionMode::Connected ||
+                xvfb->mode == SessionMode::Disconnected)
             {
-                Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, display);
-                return false;
+                sessionRunZenity(xvfb, { "--info", "--no-wrap", "--text", Tools::quotedString(message) });
+                return;
             }
 
-            // new mode: zenity info
-            return sessionRunZenity(xvfb, { "--info", "--no-wrap", "--text", Tools::quotedString(message) });
+            Application::warning("%s: %s failed, display: %" PRId32, __FUNCTION__, "session mode", display);
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busIdleTimeoutAction(const int32_t & display)
+    void DBusAdaptor::busSessionIdleTimeout(const int32_t & display)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
-        if(auto xvfb = findDisplaySession(display))
+        if(auto ptr = findDisplaySession(display))
         {
-            auto cmd = _config->getString("idle:action:path");
+            emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
-            // also running
-            if(xvfb->idleActionStatus.second.valid() &&
-                xvfb->idleActionStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready)
+            if(_config->getBoolean("session:idle:disconnect", false))
             {
-                return false;
+                std::thread([this, xvfb = std::move(ptr)]()
+                {
+                    std::this_thread::sleep_for(10ms);
+                    this->emitShutdownConnector(xvfb->displayNum);
+                }).detach();
             }
-
-            if(xvfb->mode == XvfbMode::SessionLogin || cmd.empty())
-            {
-                return false;
-            }
-
-            auto args = _config->getStdList<std::string>("idle:action:args");
-
-            try
-            {
-                xvfb->idleActionStatus = RunAs::sessionCommand(xvfb, cmd, std::move(args));
-            }
-            catch(const std::exception & err)
-            {
-                Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-            }
-
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busConnectorAlive(const int32_t & display)
+    void DBusAdaptor::busConnectorAlive(const int32_t & display)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display))
         {
             xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetLoginsDisable(const bool & action)
+    void DBusAdaptor::busSetLoginsDisable(const bool & action)
     {
         Application::debug(DebugType::Dbus, "%s: action: %s", __FUNCTION__, (action ? "true" : "false"));
         loginsDisable = action;
-        return true;
     }
 
 #ifdef LTSM_BUILD_COVERAGE_TESTS
@@ -2297,54 +2293,77 @@ namespace LTSM::Manager
     }
 #endif
 
-    bool DBusAdaptor::busConnectorTerminated(const int32_t & display, const int32_t & connectorId)
+    void DBusAdaptor::busConnectorConnected(const int32_t & display, const int32_t & connectorId)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display))
         {
-            if(xvfb->mode == XvfbMode::SessionLogin)
-            {
-#ifdef LTSM_BUILD_COVERAGE_TESTS
-                if(skipLoginShutdown(display))
-                    return true;
-#endif
-                stopLoginChannels(xvfb);
-                displayShutdown(std::move(xvfb), false);
-            }
-            else if(xvfb->mode == XvfbMode::SessionOnline)
-            {
-                xvfb->mode = XvfbMode::SessionSleep;
-                xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
-                xvfb->remoteAddr.clear();
-                xvfb->conntype.clear();
-                xvfb->encryption.clear();
-                createSessionConnInfo(xvfb, false);
+            xvfb->connectorId = connectorId;
+            xvfb->tpOnline = std::chrono::system_clock::now();
+            xvfb->onlineTimeLimitSec = _config->getInteger("session:online:timeout", 0);
+            xvfb->mode = SessionMode::Connected;
 
-                // stop user process
-                if(_config->getBoolean("session:kill:stop", false))
-                {
-                    auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(xvfb->userInfo->user());
-                    int ret = std::system(cmd.c_str());
-                    Application::debug(DebugType::App, "%s: command: `%s', return code: %" PRId32 ", display: %" PRId32,
-                        __FUNCTION__, cmd.c_str(), ret, xvfb->displayNum);
-                }
+            emitSessionOnline(xvfb->displayNum, xvfb->userInfo->user());
+        }
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
+    }
 
-                stopSessionChannels(std::move(xvfb));
-            }
+    void DBusAdaptor::busConnectorTerminated(const int32_t & display, const int32_t & connectorId)
+    {
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
-            return true;
+        auto ptr = findDisplaySession(display);
+
+        if(! ptr)
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            return;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        if(ptr->mode == SessionMode::Login)
+        {
+#ifdef LTSM_BUILD_COVERAGE_TESTS
+            if(skipLoginShutdown(display))
+                return true;
+#endif
+            stopLoginChannels(ptr);
+            displayShutdown(std::move(ptr), false);
+        }
+        else if(ptr->mode == SessionMode::Connected)
+        {
+            ptr->resetStatus(Flags::SessionStatus::CheckConnection);
+            ptr->remoteAddr.clear();
+            ptr->conntype.clear();
+            ptr->encryption.clear();
+            ptr->connectorId = 0;
+            ptr->tpOffline = std::chrono::system_clock::now();
+            ptr->offlineTimeLimitSec = _config->getInteger("session:offline:timeout", 0);
+            ptr->mode = SessionMode::Disconnected;
+            createSessionConnInfo(ptr, false);
+
+            // stop user process
+            if(_config->getBoolean("session:kill:stop", false))
+            {
+                auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(ptr->userInfo->user());
+                int ret = std::system(cmd.c_str());
+                Application::debug(DebugType::App, "%s: command: `%s', return code: %" PRId32 ", display: %" PRId32,
+                    __FUNCTION__, cmd.c_str(), ret, ptr->displayNum);
+            }
+
+            emitSessionOffline(ptr->displayNum, ptr->userInfo->user());
+            stopSessionChannels(std::move(ptr));
+        }
     }
 
     void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb, std::filesystem::path zenity,
             std::vector<FileNameSize> files, TransferRejectFunc emitTransferReject, PidStatus zenityQuestionResult)
     {
         // copy all files to (Connector) user home, after success move to real user
-        auto xvfbHome = Tools::getUserHome(_config->getString("user:xvfb"));
+        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
         // wait zenity question
         int status = zenityQuestionResult.second.get();
 
@@ -2361,7 +2380,7 @@ namespace LTSM::Manager
 
         try
         {
-            auto pair = RunAs::sessionCommandStdout(xvfb, zenity,
+            auto pair = RunAs::runSessionCommandStdout(xvfb, zenity,
             { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" });
             zenitySelectDirectoryResult = std::move(pair.second);
         }
@@ -2400,7 +2419,7 @@ namespace LTSM::Manager
 
         for(const auto & info : files)
         {
-            auto tmpname = std::filesystem::path(xvfbHome) / "transfer_";
+            auto tmpname = std::filesystem::path(connectorHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
             Application::debug(DebugType::App, "%s: transfer file request, display: %" PRId32 ", select dir: `%s', tmp name: `%s'",
                 __FUNCTION__, xvfb->displayNum, dstdir.c_str(), tmpname.c_str());
@@ -2451,7 +2470,7 @@ namespace LTSM::Manager
             // FIXME create progress informer session
 
             // check lost conn
-            if(xvfb->mode != XvfbMode::SessionOnline)
+            if(xvfb->mode != SessionMode::Connected)
             {
                 busSendNotify(xvfb->displayNum, "Transfer Error", Tools::StringFormat("transfer connection is lost"),
                                      NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
@@ -2533,7 +2552,7 @@ namespace LTSM::Manager
             }
         }
 
-        std::filesystem::path zenity = this->_config->getString("zenity:path", "/usr/bin/zenity");
+        std::filesystem::path zenity = _config->getString("zenity:path", "/usr/bin/zenity");
         auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
         PidStatus zenityResult;
 
@@ -2548,7 +2567,7 @@ namespace LTSM::Manager
 
         try
         {
-            zenityResult = RunAs::sessionCommand(xvfb, zenity, { "--question", "--default-cancel", "--text", msg });
+            zenityResult = RunAs::runSessionCommand(xvfb, zenity, { "--question", "--default-cancel", "--text", msg });
         }
         catch(const std::exception & err)
         {
@@ -2582,7 +2601,7 @@ namespace LTSM::Manager
     void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype)
     {
         // wait new session started
-        while(xvfb->aliveSec() < std::chrono::seconds(3))
+        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
         {
             std::this_thread::sleep_for(1s);
         }
@@ -2637,7 +2656,7 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{destinationName}, sdbus::ObjectPath{objectPath});
 #else
             auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
 #endif
@@ -2660,7 +2679,7 @@ namespace LTSM::Manager
 #endif
     }
 
-    bool DBusAdaptor::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
+    void DBusAdaptor::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
                                        const uint8_t & icontype, const uint8_t & urgency)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", summary: `%s', body: `%s'",
@@ -2670,42 +2689,30 @@ namespace LTSM::Manager
         // icontype: NotifyParams::IconType { Information, Warning, Error, Question }
         if(auto xvfb = findDisplaySession(display))
         {
-            if(xvfb->mode == XvfbMode::SessionLogin)
+            if(xvfb->mode == SessionMode::Connected ||
+                xvfb->mode == SessionMode::Disconnected)
             {
-                Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, display);
-                return false;
+                // thread mode
+                std::thread(& sendNotifyCall, std::move(xvfb), summary, body, icontype /*, urgency2 = urgency */).detach();
+                return;
             }
 
-            // thread mode
-            std::thread(& sendNotifyCall, std::move(xvfb), summary, body, icontype /*, urgency2 = urgency */).detach();
-
-            return true;
+            Application::warning("%s: %s failed, display: %" PRId32, __FUNCTION__, "session mode", display);
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::helperWidgetStartedAction(const int32_t & display)
+    void DBusAdaptor::helperWidgetStartedAction(const int32_t & display)
     {
         Application::info("%s: display: %" PRId32, __FUNCTION__, display);
-        emitHelperWidgetStarted(display);
-        return true;
-    }
 
-    std::string DBusAdaptor::helperGetTitle(const int32_t & display)
-    {
-        return _config->getString("helper:title", "X11 Remote Desktop Service");
-    }
-
-    std::string DBusAdaptor::helperGetDateFormat(const int32_t & display)
-    {
-        return _config->getString("helper:dateformat");
-    }
-
-    bool DBusAdaptor::helperIsAutoComplete(const int32_t & display)
-    {
-        return _config->getBoolean("helper:autocomplete", false);
+        std::thread([this, display]()
+        {
+            this->emitHelperWidgetStarted(display);
+        }).detach();
     }
 
     std::forward_list<std::string> DBusAdaptor::getAllowLogins(void) const
@@ -2871,7 +2878,7 @@ namespace LTSM::Manager
         auto userSess = findUserSession(login);
 
         if(userSess && 0 < userSess->displayNum &&
-                userSess->mode == XvfbMode::SessionOnline)
+                userSess->mode == SessionMode::Connected)
         {
             if(userSess->policy == SessionPolicy::AuthLock)
             {
@@ -2888,7 +2895,7 @@ namespace LTSM::Manager
                 // wait session
                 Tools::waitCallable<std::chrono::milliseconds>(1000, 50, [& userSess]()
                 {
-                    return userSess->mode == XvfbMode::SessionSleep;
+                    return userSess->mode == SessionMode::Disconnected;
                 });
             }
         }
@@ -2912,7 +2919,7 @@ namespace LTSM::Manager
         }
     }
 
-    bool DBusAdaptor::busSetSessionKeyboardLayouts(const int32_t & display, const std::vector<std::string> & layouts)
+    void DBusAdaptor::busSetSessionKeyboardLayouts(const int32_t & display, const std::vector<std::string> & layouts)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", layouts: [%s]",
             __FUNCTION__, display, Tools::join(layouts.begin(), layouts.end(), ",").c_str());
@@ -2921,7 +2928,7 @@ namespace LTSM::Manager
         {
             if(layouts.empty())
             {
-                return false;
+                return;
             }
 
             std::ostringstream os;
@@ -2945,14 +2952,14 @@ namespace LTSM::Manager
 
             xvfb->layout = Tools::quotedString(os.str());
             sessionRunSetxkbmapLayout(xvfb);
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string> & map)
+    void DBusAdaptor::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string> & map)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", env counts: %lu",
             __FUNCTION__, display, map.size());
@@ -2971,15 +2978,14 @@ namespace LTSM::Manager
                     emitHelperSetTimezone(display, val);
                 }
             }
-
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetSessionOptions(const int32_t & display, const std::map<std::string, std::string> & map)
+    void DBusAdaptor::busSetSessionOptions(const int32_t & display, const std::map<std::string, std::string> & map)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", opts counts: %lu",
             __FUNCTION__, display, map.size());
@@ -2989,7 +2995,7 @@ namespace LTSM::Manager
         if(!  xvfb)
         {
             Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-            return false;
+            return;
         }
 
         xvfb->options.clear();
@@ -3060,8 +3066,6 @@ namespace LTSM::Manager
         {
             emitHelperSetLoginPassword(display, login, pass, ! pass.empty());
         }
-
-        return true;
     }
 
     void fixPermissionJob(std::filesystem::path path, uid_t uid, gid_t gid, mode_t mode)
@@ -3231,7 +3235,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.lp
-        Tools::setFileOwner(socketFolder, Tools::getUserUid(_config->getString("user:xvfb")), lp);
+        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), lp);
         printerSocket = Tools::replace(printerSocket, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(printerSocket, err))
@@ -3251,16 +3255,14 @@ namespace LTSM::Manager
     bool startAudioSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string audioSocket)
     {
         // wait new session started
-        while(xvfb->aliveSec() < std::chrono::seconds(3))
+        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
         {
             std::this_thread::sleep_for(550ms);
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
             __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket.c_str());
-        auto destinationName = "ltsm.session.audio";
-        auto objectPath = "/ltsm/session/audio";
-        auto interfaceName = "LTSM.Session.AUDIO";
+
 #ifdef SDBUS_ADDRESS_SUPPORT
 
         try
@@ -3279,25 +3281,24 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
-            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_audio_name}, sdbus::ObjectPath{dbus_session_audio_path});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{dbus_session_audio_ifce}, sdbus::MethodName{"getVersion"});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
-            auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_audio_name, dbus_session_audio_path);
+            auto method1 = concatenatorProxy->createMethodCall(dbus_session_audio_ifce, "getVersion");
 #endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
-            concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
+            concatenatorProxy->callMethod("getVersion").onInterface(dbus_session_audio_ifce).storeResultsTo(version);
 
-            if(version < LTSM_AUDIO2SESSION_VERSION)
+            if(version < LTSM_SESSION_AUDIO_VERSION)
             {
-                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "audio2session", version);
+                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "session_audio", version);
                 throw service_error(NS_FuncName);
             }
 
             bool ret = false;
-            concatenatorProxy->callMethod("connectChannel").onInterface(interfaceName).withArguments(audioSocket).storeResultsTo(
-                ret);
+            concatenatorProxy->callMethod("connectChannel").onInterface(dbus_session_audio_ifce).withArguments(audioSocket).storeResultsTo(ret);
 
             if(! ret)
             {
@@ -3327,7 +3328,7 @@ namespace LTSM::Manager
 
     bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & encoding)
     {
-        if(xvfb->mode == XvfbMode::SessionLogin)
+        if(xvfb->mode == SessionMode::Login)
         {
             Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
@@ -3366,7 +3367,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.user
-        Tools::setFileOwner(audioFolder, Tools::getUserUid(_config->getString("user:xvfb")), xvfb->userInfo->gid());
+        Tools::setFileOwner(audioFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
 
@@ -3391,9 +3392,6 @@ namespace LTSM::Manager
         Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
         auto audioFormat = _config->getString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
         auto audioFolder = std::filesystem::path(Tools::replace(audioFormat, "%{user}", xvfb->userInfo->user()));
-        auto destinationName = "ltsm.session.audio";
-        auto objectPath = "/ltsm/session/audio";
-        auto interfaceName = "LTSM.Session.AUDIO";
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
@@ -3416,11 +3414,11 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_audio_name}, sdbus::ObjectPath{dbus_session_audio_path});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_audio_name, dbus_session_audio_path);
 #endif
-            concatenatorProxy->callMethod("disconnectChannel").onInterface(interfaceName).withArguments(
+            concatenatorProxy->callMethod("disconnectChannel").onInterface(dbus_session_audio_ifce).withArguments(
                 audioSocket.native()).dontExpectReply();
         }
         catch(const sdbus::Error & err)
@@ -3481,7 +3479,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.user
-        Tools::setFileOwner(socketFolder, Tools::getUserUid(_config->getString("user:xvfb")), xvfb->userInfo->gid());
+        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
         saneSocket = Tools::replace(saneSocket, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(saneSocket, err))
@@ -3502,16 +3500,14 @@ namespace LTSM::Manager
     bool startPcscSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string pcscSocket)
     {
         // wait new session started
-        while(xvfb->aliveSec() < std::chrono::seconds(3))
+        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
         {
             std::this_thread::sleep_for(550ms);
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
             __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
-        auto destinationName = "ltsm.session.pcsc";
-        auto objectPath = "/ltsm/session/pcsc";
-        auto interfaceName = "LTSM.Session.PCSC";
+
 #ifdef SDBUS_ADDRESS_SUPPORT
 
         try
@@ -3530,25 +3526,24 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
-            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_pcsc_name}, sdbus::ObjectPath{dbus_session_pcsc_path});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{dbus_session_pcsc_ifce}, sdbus::MethodName{"getVersion"});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
-            auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_pcsc_name, dbus_session_pcsc_path);
+            auto method1 = concatenatorProxy->createMethodCall(dbus_session_pcsc_ifce, "getVersion");
 #endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
-            concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
+            concatenatorProxy->callMethod("getVersion").onInterface(dbus_session_pcsc_ifce).storeResultsTo(version);
 
-            if(version < LTSM_PCSC2SESSION_VERSION)
+            if(version < LTSM_SESSION_PCSC_VERSION)
             {
-                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "pcsc2session", version);
+                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "session_pcsc", version);
                 throw service_error(NS_FuncName);
             }
 
             bool ret = false;
-            concatenatorProxy->callMethod("connectChannel").onInterface(interfaceName).withArguments(pcscSocket).storeResultsTo(
-                ret);
+            concatenatorProxy->callMethod("connectChannel").onInterface(dbus_session_pcsc_ifce).withArguments(pcscSocket).storeResultsTo(ret);
 
             if(! ret)
             {
@@ -3578,7 +3573,7 @@ namespace LTSM::Manager
 
     bool DBusAdaptor::startPcscListener(XvfbSessionPtr xvfb, const std::string & param)
     {
-        if(xvfb->mode == XvfbMode::SessionLogin)
+        if(xvfb->mode == SessionMode::Login)
         {
             Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
@@ -3617,7 +3612,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.user
-        Tools::setFileOwner(pcscFolder, Tools::getUserUid(_config->getString("user:xvfb")), xvfb->userInfo->gid());
+        Tools::setFileOwner(pcscFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         if(std::filesystem::is_socket(pcscSocket, err))
@@ -3641,12 +3636,11 @@ namespace LTSM::Manager
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
         auto pcscFormat = _config->getString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
         auto pcscFolder = std::filesystem::path(Tools::replace(pcscFormat, "%{user}", xvfb->userInfo->user()));
-        auto destinationName = "ltsm.session.pcsc";
-        auto objectPath = "/ltsm/session/pcsc";
-        auto interfaceName = "LTSM.Session.PCSC";
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
+
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
                  __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
+
 #ifdef SDBUS_ADDRESS_SUPPORT
 
         try
@@ -3665,11 +3659,11 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_pcsc_name}, sdbus::ObjectPath{dbus_session_pcsc_path});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_pcsc_name, dbus_session_pcsc_path);
 #endif
-            concatenatorProxy->callMethod("disconnectChannel").onInterface(interfaceName).withArguments(
+            concatenatorProxy->callMethod("disconnectChannel").onInterface(dbus_session_pcsc_ifce).withArguments(
                 pcscSocket.native()).dontExpectReply();
         }
         catch(const sdbus::Error & err)
@@ -3689,7 +3683,7 @@ namespace LTSM::Manager
 
     bool DBusAdaptor::startPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param)
     {
-        if(xvfb->mode != XvfbMode::SessionLogin)
+        if(xvfb->mode != SessionMode::Login)
         {
             Application::warning("%s: login session only, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
@@ -3719,7 +3713,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.user
-        Tools::setFileOwner(pkcs11Folder, Tools::getUserUid(_config->getString("user:xvfb")), xvfb->userInfo->gid());
+        Tools::setFileOwner(pkcs11Folder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
         auto pkcs11Socket = std::filesystem::path(pkcs11Folder) / "sock";
 
         if(std::filesystem::is_socket(pkcs11Socket, err))
@@ -3746,16 +3740,14 @@ namespace LTSM::Manager
                              std::string fuseSocket)
     {
         // wait new session started
-        while(xvfb->aliveSec() < std::chrono::seconds(3))
+        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
         {
             std::this_thread::sleep_for(550ms);
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, local: `%s', remote: `%s', socket: `%s'",
             __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint.c_str(), remotePoint.c_str(), fuseSocket.c_str());
-        auto destinationName = "ltsm.session.fuse";
-        auto objectPath = "/ltsm/session/fuse";
-        auto interfaceName = "LTSM.Session.FUSE";
+
 #ifdef SDBUS_ADDRESS_SUPPORT
 
         try
@@ -3774,24 +3766,24 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
-            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{interfaceName}, sdbus::MethodName{"getVersion"});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_fuse_name}, sdbus::ObjectPath{dbus_session_fuse_path});
+            auto method1 = concatenatorProxy->createMethodCall(sdbus::InterfaceName{dbus_session_fuse_ifce}, sdbus::MethodName{"getVersion"});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
-            auto method1 = concatenatorProxy->createMethodCall(interfaceName, "getVersion");
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_fuse_name, dbus_session_fuse_path);
+            auto method1 = concatenatorProxy->createMethodCall(dbus_session_fuse_ifce, "getVersion");
 #endif
             auto reply1 = concatenatorProxy->callMethod(method1);
             int32_t version = 0;
-            concatenatorProxy->callMethod("getVersion").onInterface(interfaceName).storeResultsTo(version);
+            concatenatorProxy->callMethod("getVersion").onInterface(dbus_session_fuse_ifce).storeResultsTo(version);
 
-            if(version < LTSM_FUSE2SESSION_VERSION)
+            if(version < LTSM_SESSION_FUSE_VERSION)
             {
-                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "fuse2session", version);
+                Application::error("%s: unsupported %s, version: %" PRId32, __FUNCTION__, "session_fuse", version);
                 throw service_error(NS_FuncName);
             }
 
             bool ret = false;
-            concatenatorProxy->callMethod("mountPoint").onInterface(interfaceName).withArguments(localPoint, remotePoint,
+            concatenatorProxy->callMethod("mountPoint").onInterface(dbus_session_fuse_ifce).withArguments(localPoint, remotePoint,
                     fuseSocket).storeResultsTo(ret);
 
             if(! ret)
@@ -3822,7 +3814,7 @@ namespace LTSM::Manager
 
     bool DBusAdaptor::startFuseListener(XvfbSessionPtr xvfb, const std::string & remotePoint)
     {
-        if(xvfb->mode == XvfbMode::SessionLogin)
+        if(xvfb->mode == SessionMode::Login)
         {
             Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
@@ -3863,7 +3855,7 @@ namespace LTSM::Manager
         }
 
         // fix owner xvfb.user
-        Tools::setFileOwner(userShareFolder, Tools::getUserUid(_config->getString("user:xvfb")), xvfb->userInfo->gid());
+        Tools::setFileOwner(userShareFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
         // fix mode 0700
         std::filesystem::permissions(fusePointFolder, std::filesystem::perms::group_all | std::filesystem::perms::others_all,
                                      std::filesystem::perm_options::remove, err);
@@ -3902,12 +3894,11 @@ namespace LTSM::Manager
         auto userShareFolder = Tools::replace(userShareFormat, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
-        auto destinationName = "ltsm.session.fuse";
-        auto objectPath = "/ltsm/session/fuse";
-        auto interfaceName = "LTSM.Session.FUSE";
         auto localPoint = fusePointFolder.native();
+
         Application::info("%s: display: %" PRId32 ", user: %s, local point: `%s'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint.c_str());
+
 #ifdef SDBUS_ADDRESS_SUPPORT
 
         try
@@ -3926,11 +3917,11 @@ namespace LTSM::Manager
 
             auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
 #ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{dbus_session_fuse_name}, sdbus::ObjectPath{dbus_session_fuse_path});
 #else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
+            auto concatenatorProxy = sdbus::createProxy(std::move(conn), dbus_session_fuse_name, dbus_session_fuse_path);
 #endif
-            concatenatorProxy->callMethod("umountPoint").onInterface(interfaceName).withArguments(localPoint).dontExpectReply();
+            concatenatorProxy->callMethod("umountPoint").onInterface(dbus_session_fuse_ifce).withArguments(localPoint).dontExpectReply();
         }
         catch(const sdbus::Error & err)
         {
@@ -3974,7 +3965,7 @@ namespace LTSM::Manager
         return "none";
     }
 
-    bool DBusAdaptor::busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height)
+    void DBusAdaptor::busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", width: %" PRIu16 ", height: %" PRIu16,
             __FUNCTION__, display, width, height);
@@ -3983,43 +3974,73 @@ namespace LTSM::Manager
         {
             xvfb->width = width;
             xvfb->height = height;
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetEncryptionInfo(const int32_t & display, const std::string & info)
+    void DBusAdaptor::busSetEncryptionInfo(const int32_t & display, const std::string & info)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", encryption: %s", __FUNCTION__, display, info.c_str());
 
         if(auto xvfb = findDisplaySession(display))
         {
             xvfb->encryption = info;
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetSessionDurationSec(const int32_t & display, const uint32_t & duration)
+    void DBusAdaptor::busSetSessionDurationLimitSec(const int32_t & display, const uint32_t & limit)
     {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", duration: %" PRIu32, __FUNCTION__, display, duration);
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display))
         {
-            xvfb->durationLimit = duration;
+            xvfb->startTimeLimitSec = limit;
             emitClearRenderPrimitives(display);
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::busSetSessionPolicy(const int32_t & display, const std::string & policy)
+    void DBusAdaptor::busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit)
+    {
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+
+        if(auto xvfb = findDisplaySession(display))
+        {
+            xvfb->onlineTimeLimitSec = limit;
+            emitClearRenderPrimitives(display);
+        }
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
+    }
+
+    void DBusAdaptor::busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit)
+    {
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+
+        if(auto xvfb = findDisplaySession(display))
+        {
+            xvfb->offlineTimeLimitSec = limit;
+            emitClearRenderPrimitives(display);
+        }
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
+    }
+
+    void DBusAdaptor::busSetSessionPolicy(const int32_t & display, const std::string & policy)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", policy: %s", __FUNCTION__, display, policy.c_str());
 
@@ -4041,20 +4062,23 @@ namespace LTSM::Manager
             {
                 Application::warning("%s: %s, display: %" PRId32 ", policy: %s", __FUNCTION__, "unknown value", display, policy.c_str());
             }
-
-            return true;
         }
-
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
-        return false;
+        else
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
     }
 
-    bool DBusAdaptor::helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
+    void DBusAdaptor::helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
             const std::string & password, const bool & action)
     {
         Application::info("%s: display: %" PRId32 ", user: %s", __FUNCTION__, display, login.c_str());
-        emitHelperSetLoginPassword(display, login, password, action);
-        return true;
+
+        std::thread([this, display, login, password, action]()
+        {
+            std::this_thread::sleep_for(10ms);
+            this->emitHelperSetLoginPassword(display, login, password, action);
+        }).detach();
     }
 
     std::string DBusAdaptor::busGetSessionJson(const int32_t & display)
@@ -4076,25 +4100,37 @@ namespace LTSM::Manager
         return XvfbSessions::toJsonString();
     }
 
-    bool DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill)
+    void DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill)
     {
         Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        emitAddRenderRect(display, rect, color, fill);
-        return true;
+
+        std::thread([this, display, rect, color, fill]()
+        {
+            std::this_thread::sleep_for(10ms);
+            this->emitAddRenderRect(display, rect, color, fill);
+        }).detach();
     }
 
-    bool DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color)
+    void DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color)
     {
         Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        emitAddRenderText(display, text, pos, color);
-        return true;
+
+        std::thread([this, display, text, pos, color]()
+        {
+            std::this_thread::sleep_for(10ms);
+            this->emitAddRenderText(display, text, pos, color);
+        }).detach();
     }
 
-    bool DBusAdaptor::busRenderClear(const int32_t & display)
+    void DBusAdaptor::busRenderClear(const int32_t & display)
     {
         Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        emitClearRenderPrimitives(display);
-        return true;
+
+        std::thread([this, display]()
+        {
+            std::this_thread::sleep_for(10ms);
+            this->emitClearRenderPrimitives(display);
+        }).detach();
     }
 
     bool DBusAdaptor::busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
@@ -4183,9 +4219,8 @@ namespace LTSM::Manager
     bool SystemService::createXauthDir(void)
     {
         auto xauthFile = configGetString("xauth:file", "/var/run/ltsm/auth_%{display}");
-        auto groupAuth = configGetString("group:auth");
         // find group id
-        gid_t setgid = Tools::getGroupGid(groupAuth);
+        gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
         // check directory
         auto folderPath = std::filesystem::path(xauthFile).parent_path();
 
@@ -4224,6 +4259,46 @@ namespace LTSM::Manager
         return true;
     }
 
+    void SystemService::inotifyWatchConfigCb(int fd, std::string filename)
+    {
+        // read single inotify_event (16byte)
+        struct inotify_event st = {};
+        const auto bufsz = sizeof(st);
+
+        if(auto len = read(fd, & st, bufsz); len != bufsz)
+        {
+            // non blocking mode, continue
+            // 
+            //Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            //    "InotifyWatch", "read", strarror(errno), errno);
+            return;
+        }
+
+        // read name
+        if(st.len)
+        {
+            std::vector<char> buf(st.len);
+            read(fd, buf.data(), buf.size());
+        }
+
+        JsonContentFile jsonFile(filename);
+
+        if(jsonFile.isValid() && jsonFile.isObject())
+        {
+            configSet(jsonFile.toObject());
+            Application::notice("%s: reload config %s, file: %s", __FUNCTION__, "success", filename.c_str());
+
+            if(serviceAdaptor)
+            {
+                serviceAdaptor->configReloadedEvent();
+            }
+        }
+        else
+        {
+            Application::error("%s: reload config %s, file: %s", __FUNCTION__, "failed", filename.c_str());
+        }
+    }
+
     bool SystemService::inotifyWatchConfigStart(void)
     {
         std::string filename = configGetString("config:path", "/etc/ltsm/config.json");
@@ -4253,45 +4328,8 @@ namespace LTSM::Manager
             return false;
         }
 
-        timerInotifyWatchConfig = Tools::BaseTimer::create<std::chrono::seconds>(3, true, [fd, filename, this]()
-        {
-            // read single inotify_event (16byte)
-            struct inotify_event st = {};
-            const auto bufsz = sizeof(st);
-
-            if(auto len = read(fd, & st, bufsz); len != bufsz)
-            {
-                // non blocking mode, continue
-                // 
-                //Application::error("%s: %s failed, error: %s, code: %" PRId32,
-                //    "InotifyWatch", "read", strarror(errno), errno);
-                return;
-            }
-
-            // read name
-            if(st.len)
-            {
-                std::vector<char> buf(st.len);
-                read(fd, buf.data(), buf.size());
-            }
-
-            JsonContentFile jsonFile(filename);
-
-            if(jsonFile.isValid() && jsonFile.isObject())
-            {
-                this->configSet(jsonFile.toObject());
-                Application::notice("%s: reload config %s, file: %s", "InotifyWatch", "success", filename.c_str());
-
-                if(serviceAdaptor)
-                {
-                    serviceAdaptor->configReloadedEvent();
-                }
-            }
-            else
-            {
-                Application::error("%s: reload config %s, file: %s", "InotifyWatch", "failed", filename.c_str());
-            }
-        });
+        timerInotifyWatchConfig = Tools::BaseTimer::create<std::chrono::seconds>(3, true,
+                                        std::bind(& SystemService::inotifyWatchConfigCb, this, fd, filename));
 
         return true;
     }
@@ -4310,7 +4348,7 @@ namespace LTSM::Manager
         }
 
 #ifdef SDBUS_2_0_API
-        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName {LTSM::dbus_manager_service_name});
+        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName{LTSM::dbus_manager_service_name});
 #else
         auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
 #endif
@@ -4322,18 +4360,18 @@ namespace LTSM::Manager
             return EXIT_FAILURE;
         }
 
-        auto xvfbHome = Tools::getUserHome(configGetString("user:xvfb"));
+        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
         std::error_code err;
 
-        if(! std::filesystem::is_directory(xvfbHome, err))
+        if(! std::filesystem::is_directory(connectorHome, err))
         {
             Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                "ServiceStart", err.message().c_str(), xvfbHome.c_str(), getuid());
+                "ServiceStart", err.message().c_str(), connectorHome.c_str(), getuid());
             return EXIT_FAILURE;
         }
 
         // remove old sockets
-        for(auto const & dirEntry : std::filesystem::directory_iterator{xvfbHome})
+        for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome})
         {
             if(dirEntry.is_socket(err))
             {

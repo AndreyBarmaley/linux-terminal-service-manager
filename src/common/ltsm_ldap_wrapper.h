@@ -64,9 +64,6 @@ namespace LTSM
         LdapWrapper();
         ~LdapWrapper();
 
-        std::string findLoginFromDn(const std::string & dn);
-        std::string findDnFromCertificate(const uint8_t*, size_t);
-        
         std::list<LdapResult> search(int scope, std::vector<const char*> attrs, const char* filter = nullptr, const char* basedn = nullptr);
     };
 }

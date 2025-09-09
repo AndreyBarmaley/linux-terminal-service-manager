@@ -608,12 +608,13 @@ namespace LTSM
                 files.emplace_back(env);
             }
 
-            files.emplace_back(std::filesystem::current_path() / "config.json");
+            auto ident_json = Tools::joinToString(ident, ".json");
+            files.emplace_back(std::filesystem::current_path() / ident_json);
 
-            auto ident_conf = std::filesystem::path("/etc/ltsm") / ident;
-                 ident_conf += ".json";
+            auto ident_conf = std::filesystem::path("/etc/ltsm") / ident_json;
             files.emplace_back(std::move(ident_conf));
 
+            files.emplace_back(std::filesystem::current_path() / "config.json");
             files.emplace_back("/etc/ltsm/config.json");
 
             for(const auto & path : files)

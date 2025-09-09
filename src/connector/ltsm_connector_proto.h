@@ -56,8 +56,8 @@ namespace LTSM::Connector
         std::atomic<bool> _userSession{false};
         std::atomic<bool> _x11NoDamage{false};
 
-        std::chrono::time_point<std::chrono::steady_clock> _idleSession;
-        uint32_t _idleTimeoutSec = 0;
+        //std::chrono::time_point<std::chrono::steady_clock> _idleSession;
+        //uint32_t _idleTimeoutSec = 0;
 
         uid_t _shmUid = 0;
         int _ltsmClientVersion = 0;

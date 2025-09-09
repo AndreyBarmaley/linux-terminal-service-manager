@@ -30,14 +30,23 @@ namespace LTSM
 
     inline static const char* dbus_session_fuse_name = "ltsm.session.fuse";
     inline static const char* dbus_session_fuse_path = "/ltsm/session/fuse";
+    inline static const char* dbus_session_fuse_ifce = "LTSM.Session.Fuse";
 
     inline static const char* dbus_session_audio_name = "ltsm.session.audio";
     inline static const char* dbus_session_audio_path = "/ltsm/session/audio";
+    inline static const char* dbus_session_audio_ifce = "LTSM.Session.Audio";
 
     inline static const char* dbus_session_pcsc_name = "ltsm.session.pcsc";
     inline static const char* dbus_session_pcsc_path = "/ltsm/session/pcsc";
+    inline static const char* dbus_session_pcsc_ifce = "LTSM.Session.Pcsc";
 
-    inline static const int service_version = 20250826;
+    inline static const char* dbus_session_display_name = "ltsm.session.display";
+    inline static const char* dbus_session_display_path = "/ltsm/session/display";
+
+    inline static const char* ltsm_group_auth = "ltsm-auth";
+    inline static const char* ltsm_user_conn = "ltsm-xvfb";
+
+    inline static const int service_version = 20250905;
 
     inline bool platformBigEndian(void)
     {

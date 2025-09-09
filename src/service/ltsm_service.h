@@ -116,8 +116,8 @@ namespace LTSM::Manager
         std::forward_list<std::string> getEnvList(void);
     };
 
-    enum class XvfbMode { SessionLogin, SessionOnline, SessionSleep, SessionShutdown };
-    enum class SessionPolicy { AuthLock, AuthTake, AuthShare };
+    enum class SessionMode : int { Started = 0, Connected = 1, Disconnected = 2, Login = 3, Shutdown = 4 };
+    enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
     namespace Flags
@@ -149,6 +149,8 @@ namespace LTSM::Manager
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
     using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
 
+    using system_time_point = std::chrono::system_clock::time_point;
+
     /// XvfbSession
     struct XvfbSession
     {
@@ -169,7 +171,9 @@ namespace LTSM::Manager
         std::string layout;
         std::vector<uint8_t> mcookie;
 
-        std::chrono::system_clock::time_point tpstart;
+        system_time_point tpStart;
+        system_time_point tpOnline;
+        system_time_point tpOffline;
 
         int displayNum = -1;
 
@@ -177,7 +181,10 @@ namespace LTSM::Manager
         int pid2 = 0; // session pid
         int connectorId = 0; // connector pid
 
-        std::atomic<uint32_t> durationLimit{0};
+        std::atomic<uint32_t> startTimeLimitSec{0};
+        std::atomic<uint32_t> onlineTimeLimitSec{0};
+        std::atomic<uint32_t> offlineTimeLimitSec{0};
+
         std::atomic<uint64_t> statusFlags{0};
 
         int loginFailures = 0;
@@ -189,27 +196,40 @@ namespace LTSM::Manager
         PidStatus idleActionStatus;
         std::unique_ptr<PamSession> pam;
 
-        std::atomic<XvfbMode> mode{XvfbMode::SessionLogin};
+        std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
-        bool checkStatus(uint64_t st) const
+        inline bool checkStatus(uint64_t st) const
         {
             return statusFlags & st;
         }
 
-        void setStatus(uint64_t st)
+        inline void setStatus(uint64_t st)
         {
             statusFlags |= st;
         }
 
-        void resetStatus(uint64_t st)
+        inline void resetStatus(uint64_t st)
         {
             statusFlags &= ~st;
         }
 
-        std::chrono::seconds aliveSec(void) const
+        inline std::chrono::seconds sessionStartedSec(void) const
         {
-            return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpstart);
+            return system_time_point() == tpStart ? std::chrono::seconds(0) :
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpStart);
+        }
+
+        inline std::chrono::seconds sessionOnlinedSec(void) const
+        {
+            return mode != SessionMode::Connected ? std::chrono::seconds(0) :
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOnline);
+        }
+
+        inline std::chrono::seconds sessionOfflinedSec(void) const
+        {
+            return mode != SessionMode::Disconnected ? std::chrono::seconds(0) :
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOffline);
         }
 
         XvfbSession() = default;
@@ -280,7 +300,7 @@ namespace LTSM::Manager
 
         void sessionsTimeLimitAction(void);
         void sessionsEndedAction(void);
-        void sessionsCheckAliveAction(void);
+        void sessionsCheckConnectedAction(void);
 
         void childEndedEvent(void);
 
@@ -300,28 +320,31 @@ namespace LTSM::Manager
                                     const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
         std::string busDisplayAuthFile(const int32_t & display) override;
         std::string busEncryptionInfo(const int32_t & display) override;
-        bool busShutdownDisplay(const int32_t & display) override;
-        bool busShutdownConnector(const int32_t & display) override;
-        bool busConnectorTerminated(const int32_t & display, const int32_t & connectorId) override;
-        bool busConnectorAlive(const int32_t & display) override;
-        bool busIdleTimeoutAction(const int32_t & display) override;
-        bool busSetLoginsDisable(const bool & action) override;
+        void busShutdownDisplay(const int32_t & display) override;
+        void busShutdownConnector(const int32_t & display) override;
+        void busConnectorConnected(const int32_t & display, const int32_t & connectorId) override;
+        void busConnectorTerminated(const int32_t & display, const int32_t & connectorId) override;
+        void busConnectorAlive(const int32_t & display) override;
+        void busSessionIdleTimeout(const int32_t & display) override;
+        void busSetLoginsDisable(const bool & action) override;
         void busSetDebugLevel(const std::string & level) override;
         void busSetChannelDebug(const int32_t & display, const uint8_t & channel,
                                 const bool & debug) override;
-        bool busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
-        bool busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
-        bool busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
-        bool busSetSessionEnvironments(const int32_t & display,
+        void busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
+        void busSetSessionDurationLimitSec(const int32_t & display, const uint32_t & limit) override;
+        void busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit) override;
+        void busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) override;
+        void busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
+        void busSetSessionEnvironments(const int32_t & display,
                                        const std::map<std::string, std::string> & map) override;
-        bool busSetSessionOptions(const int32_t & display,
+        void busSetSessionOptions(const int32_t & display,
                                   const std::map<std::string, std::string> & map) override;
-        bool busSetSessionKeyboardLayouts(const int32_t & display,
+        void busSetSessionKeyboardLayouts(const int32_t & display,
                                           const std::vector<std::string> & layouts) override;
-        bool busSendMessage(const int32_t & display, const std::string & message) override;
-        bool busSendNotify(const int32_t & display, const std::string & summary,
+        void busSendMessage(const int32_t & display, const std::string & message) override;
+        void busSendNotify(const int32_t & display, const std::string & summary,
                            const std::string & body, const uint8_t & icontype, const uint8_t & urgency) override;
-        bool busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) override;
+        void busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) override;
         bool busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
                             const std::string & server, const std::string & smode, const std::string & speed) override;
         bool busDestroyChannel(const int32_t & display, const uint8_t & channel) override;
@@ -329,12 +352,9 @@ namespace LTSM::Manager
         bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
                                     const uint32_t & filesz, const std::string & dstfile) override;
 
-        bool helperWidgetStartedAction(const int32_t & display) override;
+        void helperWidgetStartedAction(const int32_t & display) override;
         std::vector<std::string> helperGetUsersList(const int32_t & display) override;
-        bool helperIsAutoComplete(const int32_t & display) override;
-        std::string helperGetTitle(const int32_t & display) override;
-        std::string helperGetDateFormat(const int32_t & display) override;
-        bool helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
+        void helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
                                            const std::string & password, const bool & action) override;
 
         bool busSetAuthenticateLoginPass(const int32_t & display, const std::string & login,
@@ -344,9 +364,9 @@ namespace LTSM::Manager
         std::string busGetSessionJson(const int32_t & display) override;
         std::string busGetSessionsJson(void) override;
 
-        bool busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) override;
-        bool busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
-        bool busRenderClear(const int32_t & display) override;
+        void busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) override;
+        void busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
+        void busRenderClear(const int32_t & display) override;
 
         void startSessionChannels(XvfbSessionPtr);
         void stopSessionChannels(XvfbSessionPtr);
@@ -374,6 +394,7 @@ namespace LTSM::Manager
 
     protected:
         bool createXauthDir(void);
+        void inotifyWatchConfigCb(int fd, std::string filename);
         bool inotifyWatchConfigStart(void);
 
     public:

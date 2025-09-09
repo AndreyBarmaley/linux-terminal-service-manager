@@ -51,7 +51,7 @@ namespace LTSM
             auto arr = _vals.get();
             return string2view(arr[0]->bv_val, arr[0]->bv_val + arr[0]->bv_len);
         }
-        
+
         return {};
     }
 
@@ -151,7 +151,7 @@ namespace LTSM
             {
                 std::unique_ptr<char[], void(*)(void*)> guard_attr{ attr, ldap_memfree };
                 std::unique_ptr<berval*, void(*)(berval**)> vals{ ldap_get_values_len(ldap, entry, attr), ldap_value_free_len };
-                
+
                 Application::debug(DebugType::Ldap, "%s: attr: `%s'", __FUNCTION__, attr);
                 res.emplace_back(LdapResult{ dn, std::move(guard_attr), std::move(vals) });
             }
@@ -161,27 +161,7 @@ namespace LTSM
                 ber_free(ber, 0);
             }
         }
-        
+
         return res;
-    }
-
-    std::string LdapWrapper::findLoginFromDn(const std::string & dn)
-    {
-        if(auto res = search(LDAP_SCOPE_BASE, { "uid" }, nullptr, dn.c_str()); res.size())
-            return view2string(res.front().valueString());
-
-        return "";
-    }
-
-    std::string LdapWrapper::findDnFromCertificate(const uint8_t* derform, size_t length)
-    {
-        if(auto res = search(LDAP_SCOPE_SUBTREE, { "userCertificate" }, "userCertificate;binary=*"); res.size())
-        {
-            if(auto it = std::find_if(res.begin(), res.end(), [=](auto & st)
-                { return st.hasValue((const char*) derform, length); }); it != res.end())
-                return it->dn();
-        }
-
-        return "";
     }
 }

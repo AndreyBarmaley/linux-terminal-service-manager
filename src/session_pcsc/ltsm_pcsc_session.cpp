@@ -24,6 +24,7 @@
 #include <signal.h>
 #include <sys/socket.h>
 
+#include <array>
 #include <chrono>
 #include <thread>
 #include <cstring>
@@ -42,6 +43,73 @@ using namespace std::chrono_literals;
 
 namespace PcscLite
 {
+    uint32_t apiVersion = 0;
+
+    std::array<ReaderState, PCSCLITE_MAX_READERS_CONTEXTS> readers;
+    std::mutex readersLock;
+
+    ReaderState* findReaderState(const std::string & name)
+    {
+        std::scoped_lock guard{ readersLock };
+        auto it = std::find_if(readers.begin(), readers.end(),
+                               [ &](auto & rd)
+        {
+            return 0 == name.compare(rd.name);
+        });
+
+        return it != readers.end() ? std::addressof(*it) : nullptr;
+    }
+
+    bool readersReset(void)
+    {
+        std::scoped_lock guard{ readersLock };
+        bool changed = false;
+
+        // reset all readers
+        for(auto & rd : readers)
+        {
+            // empty
+            if(0 == rd.name[0])
+                continue;
+
+            rd.reset();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    bool readersSyncNotFound(const std::list<std::string> & names)
+    {
+        std::scoped_lock guard{ readersLock };
+        bool changed = false;
+
+        for(auto & rd : readers)
+        {
+            if(0 == rd.name[0])
+            {
+                continue;
+            }
+
+            auto it = std::find_if(names.begin(), names.end(),
+                                   [&rd](auto & name)
+            {
+                return 0 == name.compare(rd.name);
+            });
+
+            // not found, mark absent
+            if(it == names.end())
+            {
+                // reset reader
+                rd.reset();
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+
     enum ScardState
     {
         StateUnknown = 0x0001,
@@ -67,6 +135,40 @@ namespace PcscLite
     inline const char* err2str(uint32_t err)
     {
         return pcsc_stringify_error(err);
+    }
+
+    uint32_t apiCmdLength(uint32_t cmd)
+    {
+        uint32_t zero = 0;
+
+        switch(cmd)
+        {
+            case EstablishContext:    return 12;
+            case ReleaseContext:      return 8;
+            case Connect:             return 24 + MAX_READERNAME;
+            case Reconnect:           return 24;
+            case Disconnect:          return 12;
+            case BeginTransaction:    return 8;
+            case EndTransaction:      return 12;
+            case Transmit:            return 32;
+            case Status:              return 8;
+            case Control:             return 24;
+            case GetAttrib:           return 16 + MAX_BUFFER_SIZE;
+            case SetAttrib:           return 16 + MAX_BUFFER_SIZE;
+
+            case Cancel:              return 8;
+            case GetVersion:          return 12;
+            case GetReaderState:      return 0;
+
+            case WaitReaderStateChangeStart: return apiVersion < 43 ? 8 : 0;
+            case WaitReaderStateChangeStop:  return apiVersion < 43 ? 8 : 0;
+
+            default:
+                LTSM::Application::warning("%s: unknown cmd: 0x%08" PRIx32, __FUNCTION__, cmd);
+                break;
+        }
+
+        return 0;
     }
 }
 
@@ -128,10 +230,364 @@ namespace LTSM
         }
     }
 
-    /// PcscClient
-    PcscClient::PcscClient(int fd, PcscSessionBus* sessionBus)
+    /// PcscRemote
+    std::tuple<uint64_t, uint32_t>
+    PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope)
     {
-        sock.setSocket(fd);
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << scope: %" PRIu32, __FUNCTION__, id, scope);
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EstablishContext);
+        sock.sendIntLE32(scope);
+        sock.sendFlush();
+
+        // recv
+        context = sock.recvIntLE64();
+        auto ret = sock.recvIntLE32();
+
+        return std::make_tuple(context, ret);
+    }
+
+    std::tuple<uint32_t>
+    PcscRemote::sendReleaseContext(const int32_t & id)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64,
+                           __FUNCTION__, id, context);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ReleaseContext);
+        sock.sendIntLE64(context);
+        sock.sendFlush();
+
+        context = 0;
+
+        // recv
+        auto ret = sock.recvIntLE32();
+
+        return std::make_tuple(ret);
+    }
+
+    std::tuple<uint64_t, uint32_t, uint32_t>
+    PcscRemote::sendConnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", reader: `%s'",
+                           __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName.c_str());
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Connect);
+        sock.sendIntLE64(context).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols);
+        sock.sendIntLE32(readerName.size()).sendString(readerName);
+        sock.sendFlush();
+
+        // recv
+        handle = sock.recvIntLE64();
+        auto activeProtocol = sock.recvIntLE32();
+        auto ret = sock.recvIntLE32();
+
+        return std::make_tuple(handle, activeProtocol, ret);
+    }
+
+    std::tuple<uint32_t, uint32_t>
+    PcscRemote::sendReconnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", shareMode: %" PRIu32
+                           ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32,
+                           __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Reconnect);
+        sock.sendIntLE64(handle).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols).sendIntLE32(initialization);
+        sock.sendFlush();
+
+        // recv
+        auto activeProtocol = sock.recvIntLE32();
+        auto ret = sock.recvIntLE32();
+
+        return std::make_tuple(activeProtocol, ret);
+    }
+
+    std::tuple<uint32_t>
+    PcscRemote::sendDisconnect(const int32_t & id, const uint32_t & disposition)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
+                           __FUNCTION__, id, handle, disposition);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Disconnect);
+        sock.sendIntLE64(handle).sendIntLE32(disposition);
+        sock.sendFlush();
+
+        handle = 0;
+
+        // recv
+        auto ret = sock.recvIntLE32();
+        return std::make_tuple(ret);
+    }
+
+    std::tuple<uint32_t>
+    PcscRemote::sendBeginTransaction(const int32_t & id)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
+                           __FUNCTION__, id, handle);
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::BeginTransaction);
+        sock.sendIntLE64(handle);
+        sock.sendFlush();
+
+        // recv
+        auto ret = sock.recvIntLE32();
+        return std::make_tuple(ret);
+    }
+
+    std::tuple<uint32_t>
+    PcscRemote::sendEndTransaction(const int32_t & id, const uint32_t & disposition)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
+                           __FUNCTION__, id, handle, disposition);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EndTransaction);
+        sock.sendIntLE64(handle).sendIntLE32(disposition);
+        sock.sendFlush();
+
+        // recv
+        auto ret = sock.recvIntLE32();
+        return std::make_tuple(ret);
+    }
+
+    std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>
+    PcscRemote::sendTransmit(const int32_t & id, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const binary_buf & data1)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64
+                        ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32 ", send size: %lu",
+                           __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size());
+
+        if(Application::isDebugLevel(DebugLevel::Trace))
+        {
+            auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
+            Application::debug(DebugType::Pcsc, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
+        }
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Transmit);
+        sock.sendIntLE64(handle).sendIntLE32(ioSendPciProtocol).sendIntLE32(ioSendPciLength).sendIntLE32(data1.size());
+
+        if(data1.size())
+        {
+            sock.sendData(data1);
+        }
+
+        sock.sendFlush();
+
+        // resv
+        auto ioRecvPciProtocol = sock.recvIntLE32();
+        auto ioRecvPciLength = sock.recvIntLE32();
+        auto recvLength = sock.recvIntLE32();
+        auto ret = sock.recvIntLE32();
+        auto data2 = sock.recvData(recvLength);
+
+        return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, data2);
+    }
+
+    std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
+    PcscRemote::sendStatus(const int32_t & id)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
+                           __FUNCTION__, id, handle);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Status);
+        sock.sendIntLE64(handle);
+        sock.sendFlush();
+
+        // recv
+        auto nameLen = sock.recvIntLE32();
+        auto name = sock.recvString(nameLen);
+        auto state = sock.recvIntLE32();
+        auto protocol = sock.recvIntLE32();
+        auto atrLen = sock.recvIntLE32();
+        auto atr = sock.recvData(atrLen);
+        auto ret = sock.recvIntLE32();
+
+        return std::make_tuple(name, state, protocol, ret, atr);
+    }
+
+    std::tuple<uint32_t, binary_buf>
+    PcscRemote::sendControl(const int32_t & id, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", controlCode: 0x%08"
+                           PRIx32 ", send size: %lu, recv size: %" PRIu32,
+                           __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
+
+        if(Application::isDebugLevel(DebugLevel::Trace))
+        {
+            auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
+            Application::debug(DebugType::Pcsc, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
+        }
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Control);
+        sock.sendIntLE64(handle).sendIntLE32(controlCode).sendIntLE32(data1.size()).sendIntLE32(recvLength);
+
+        if(data1.size())
+        {
+            sock.sendData(data1);
+        }
+
+        sock.sendFlush();
+
+        // recv
+        auto bytesReturned = sock.recvIntLE32();
+        auto ret = sock.recvIntLE32();
+        auto data2 = sock.recvData(bytesReturned);
+
+        return std::make_tuple(ret, data2);
+    }
+
+    std::tuple<uint32_t, binary_buf>
+    PcscRemote::sendGetAttrib(const int32_t & id, const uint32_t & attrId)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", attrId: %" PRIu32,
+                           __FUNCTION__, id, handle, attrId);
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetAttrib);
+        sock.sendIntLE64(handle).sendIntLE32(attrId);
+        sock.sendFlush();
+
+        // recv
+        auto attrLen = sock.recvIntLE32();
+        auto ret = sock.recvIntLE32();
+        assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
+        auto attr = sock.recvData(attrLen);
+
+        return std::make_tuple(ret, attr);
+    }
+
+    std::tuple<uint32_t>
+    PcscRemote::sendSetAttrib(const int32_t & id, const uint32_t & attrId, const binary_buf & attr)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle 0x%016" PRIx64 ", attrId: %" PRIu32 ", attrLength %lu",
+                           __FUNCTION__, id, handle, attrId, attr.size());
+
+        if(Application::isDebugLevel(DebugLevel::Trace))
+        {
+            auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
+            Application::debug(DebugType::Pcsc, "%s: attr: [ `%s' ]", __FUNCTION__, str.c_str());
+        }
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::SetAttrib);
+        sock.sendIntLE64(handle).sendIntLE32(attrId).sendIntLE32(attr.size());
+
+        if(attr.size())
+        {
+            sock.sendData(attr);
+        }
+
+        sock.sendFlush();
+
+        // recv
+        auto ret = sock.recvIntLE32();
+        return std::make_tuple(ret);
+    }
+
+    std::list<std::string> PcscRemote::sendListReaders(const int32_t & id)
+    {
+        const std::scoped_lock guard{ sockLock };
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ListReaders);
+        sock.sendIntLE64(context);
+        sock.sendFlush();
+
+        // recv
+        uint32_t readersCount = sock.recvIntLE32();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers count: %" PRIu32,
+                            __FUNCTION__, id, context, readersCount);
+
+        std::list<std::string> names;
+
+        while(readersCount--)
+        {
+            uint32_t len = sock.recvIntLE32();
+            names.emplace_back(sock.recvString(len));
+
+            if(names.back().size() > MAX_READERNAME - 1)
+            {
+                names.back().resize(MAX_READERNAME - 1);
+            }
+        }
+
+        return names;
+    }
+
+    uint32_t PcscRemote::sendGetStatusChange(const int32_t & id, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount)
+    {
+        const std::scoped_lock guard{ sockLock };
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetStatusChange);
+        sock.sendIntLE64(context).sendIntLE32(timeout).sendIntLE32(statesCount);
+
+        for(uint32_t it = 0; it < statesCount; ++it)
+        {
+            const SCARD_READERSTATE & state = states[it];
+            sock.sendIntLE32(strnlen(state.szReader, MAX_READERNAME));
+            sock.sendIntLE32(state.dwCurrentState);
+            sock.sendIntLE32(state.cbAtr);
+            sock.sendString(state.szReader);
+            sock.sendRaw(state.rgbAtr, state.cbAtr);
+        }
+
+        sock.sendFlush();
+
+        // recv
+        uint32_t counts = sock.recvIntLE32();
+        uint32_t ret = sock.recvIntLE32();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> remoteContext: 0x%016" PRIx64 ", timeout: %" PRIu32 ", states: %" PRIu32,
+                           __FUNCTION__, id, context, timeout, counts);
+
+        assertm(counts == statesCount, "count states invalid");
+
+        for(uint32_t it = 0; it < statesCount; ++it)
+        {
+            SCARD_READERSTATE & state = states[it];
+            state.dwCurrentState = sock.recvIntLE32();
+            state.dwEventState = sock.recvIntLE32();
+
+            uint32_t szReader = sock.recvIntLE32();
+            uint32_t cbAtr = sock.recvIntLE32();
+
+            std::string reader = sock.recvString(szReader);
+
+            if(reader != state.szReader)
+            {
+                Application::warning("%s: invalid reader, `%s' != `'", __FUNCTION__, reader.c_str(), state.szReader);
+            }
+
+            assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
+            state.cbAtr = cbAtr;
+            sock.recvData(state.rgbAtr, cbAtr);
+        }
+
+        return ret;
+    }
+
+    /// PcscLocal
+    PcscLocal::PcscLocal(int fd, const std::shared_ptr<PcscRemote> & ptr, PcscSessionBus* sessionBus)
+        : sock(fd, false /* disable statistic */), remote(ptr)
+    {
+        clientCanceledCb = std::bind(&PcscSessionBus::clientCanceledNotify, sessionBus, std::placeholders::_1);
+
         thread = std::thread([this, sessionBus]()
         {
             bool processed = true;
@@ -140,22 +596,22 @@ namespace LTSM
             {
                 try
                 {
-                    processed = sessionBus->pcscClientAction(*this);
+                    processed = clientAction();
                 }
                 catch(const std::exception & ex)
                 {
                     Application::error("%s: client id: %" PRId32 ", context: 0x%08" PRIx32 ", exception: %s",
-                                       "PcscClientThread", this->id(), this->context, ex.what());
+                                       "PcscLocalThread", this->id(), this->context, ex.what());
                     processed = false;
                 }
             }
 
             waitTransaction.shutdownClient();
-            std::thread( & PcscSessionBus::clientShutdownNotify,sessionBus, this).detach();
+            std::thread(& PcscSessionBus::clientShutdownNotify, sessionBus, this).detach();
         });
     }
 
-    PcscClient::~PcscClient()
+    PcscLocal::~PcscLocal()
     {
         sock.reset();
 
@@ -168,8 +624,1201 @@ namespace LTSM
         }
     }
 
+    bool PcscLocal::clientAction(void)
+    {
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 ", wait command", __FUNCTION__, id());
+
+        uint32_t len = sock.recvInt32();
+        uint32_t cmd = sock.recvInt32();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 ", cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, id(), cmd, len);
+
+        if(len != PcscLite::apiCmdLength(cmd) ||
+            // transmit: cmd length + variable size
+            (cmd == PcscLite::Transmit && len < PcscLite::apiCmdLength(cmd)) ||
+            // control: cmd length + variable size
+            (cmd == PcscLite::Control && len < PcscLite::apiCmdLength(cmd)))
+        {
+            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, id(), len);
+            return false;
+        }
+
+        switch(cmd)
+        {
+            case PcscLite::EstablishContext:
+                return proxyEstablishContext();
+
+            case PcscLite::ReleaseContext:
+                return proxyReleaseContext();
+
+            case PcscLite::Connect:
+                return proxyConnect();
+
+            case PcscLite::Reconnect:
+                return proxyReconnect();
+
+            case PcscLite::Disconnect:
+                return proxyDisconnect();
+
+            case PcscLite::BeginTransaction:
+                return proxyBeginTransaction();
+
+            case PcscLite::EndTransaction:
+                return proxyEndTransaction();
+
+            case PcscLite::Transmit:
+                return proxyTransmit();
+
+            case PcscLite::Status:
+                return proxyStatus();
+
+            case PcscLite::Control:
+                return proxyControl();
+
+            case PcscLite::GetAttrib:
+                return proxyGetAttrib();
+
+            case PcscLite::SetAttrib:
+                return proxySetAttrib();
+
+            case PcscLite::Cancel:
+                return proxyCancel();
+
+            case PcscLite::GetVersion:
+                return proxyGetVersion();
+
+            case PcscLite::GetReaderState:
+                return proxyGetReaderState();
+
+            case PcscLite::WaitReaderStateChangeStart:
+                return proxyReaderStateChangeStart();
+
+            case PcscLite::WaitReaderStateChangeStop:
+                return proxyReaderStateChangeStop();
+
+            // not used
+            case PcscLite::ListReaders:
+            case PcscLite::GetStatusChange:
+            case PcscLite::CancelTransaction:
+                Application::error("%s: not used cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
+                break;
+
+            default:
+                Application::error("%s: unknown cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
+                break;
+        }
+
+        return false;
+    }
+
+    void PcscLocal::replyError(uint32_t cmd, uint32_t err)
+    {
+        uint32_t zero = 0;
+
+        switch(cmd)
+        {
+            case PcscLite::EstablishContext:
+            case PcscLite::ReleaseContext:
+            case PcscLite::Connect:
+            case PcscLite::Reconnect:
+            case PcscLite::Disconnect:
+            case PcscLite::BeginTransaction:
+            case PcscLite::EndTransaction:
+            case PcscLite::Transmit:
+            case PcscLite::Status:
+            case PcscLite::Control:
+            case PcscLite::GetAttrib:
+            case PcscLite::SetAttrib:
+                zero = PcscLite::apiCmdLength(cmd) - 4;
+                break;
+
+            case PcscLite::Cancel:
+            case PcscLite::GetVersion:
+            case PcscLite::GetReaderState:
+            case PcscLite::WaitReaderStateChangeStart:
+            case PcscLite::WaitReaderStateChangeStop:
+                Application::warning("%s: not implemented, cmd: 0x%08" PRIx32, __FUNCTION__, cmd);
+                return;
+
+            default:
+                Application::error("%s: unknown command, cmd: 0x%08" PRIx32, __FUNCTION__, cmd);
+                return;
+        }
+
+        sock.sendZero(zero).sendInt32(err).sendFlush();
+    }
+
+    bool PcscLocal::proxyEstablishContext(void)
+    {
+        const uint32_t scope = sock.recvInt32();
+        // skip: context, ret
+        sock.recvSkip(8);
+
+        if(context)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid context", __FUNCTION__, id());
+            replyError(PcscLite::EstablishContext, SCARD_E_INVALID_PARAMETER);
+            return false;
+        }
+
+        uint64_t remoteContext;
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            std::tie(remoteContext, ret) = ptr->sendEstablishedContext(id(), scope);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::EstablishContext, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            // make 32bit context
+            context = Tools::crc32b((const uint8_t*) & remoteContext, sizeof(remoteContext));
+            context &= 0x7FFFFFFF;
+
+            // init readers status
+            syncReaders();
+
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> remoteContext: 0x%016" PRIx64 ", localContext: 0x%08" PRIx32,
+                __FUNCTION__, id(), remoteContext, context);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", error: 0x%08" PRIx32 " (%s)",
+                __FUNCTION__, id(), ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(scope).sendInt32(context).sendInt32(ret).sendFlush();
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyReleaseContext(void)
+    {
+        const uint32_t ctx = sock.recvInt32();
+        // skip: ret
+        sock.recvSkip(4);
+
+        if(! ctx || ctx != context)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
+            replyError(PcscLite::ReleaseContext, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteContext())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, id());
+                replyError(PcscLite::ReleaseContext, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret) = ptr->sendReleaseContext(id());
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::ReleaseContext, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret != SCARD_S_SUCCESS)
+        {
+            Application::error("%s: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(context).sendInt32(ret).sendFlush();
+        context = 0;
+
+        // set shutdown
+        return false;
+    }
+
+    bool PcscLocal::proxyConnect(void)
+    {
+        const uint32_t ctx = sock.recvInt32();
+        const auto readerData = sock.recvData(MAX_READERNAME);
+        const uint32_t shareMode = sock.recvInt32();
+        const uint32_t prefferedProtocols = sock.recvInt32();
+        // skip: handle, activeProtocol, ret
+        sock.recvSkip(12);
+
+        if(! ctx || ctx != context)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
+            replyError(PcscLite::Connect, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        auto readerName = std::string(readerData.begin(),
+                                      std::find(readerData.begin(), readerData.end(), 0));
+        auto currentReader = PcscLite::findReaderState(readerName);
+
+        if(! currentReader)
+        {
+            Application::error("%s: failed, reader not found: `%s'", __FUNCTION__, readerName.c_str());
+            replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
+            return false;
+        }
+
+        uint64_t remoteHandle;
+        uint32_t activeProtocol, ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteContext())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, id());
+                replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(remoteHandle, activeProtocol, ret) = ptr->sendConnect(id(), shareMode, prefferedProtocols, readerName);
+        }
+        else
+        {
+            Application::error("%s: failed, reader not found: `%s'", __FUNCTION__, readerName.c_str());
+            replyError(PcscLite::Connect, SCARD_E_INVALID_VALUE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            // make localHandle
+            handle = ret != SCARD_S_SUCCESS ? 0 : Tools::crc32b((const uint8_t*) & remoteHandle, sizeof(remoteHandle));
+            handle &= 0x7FFFFFFF;
+
+            // sync reader
+            reader = currentReader;
+
+            if(reader)
+            {
+                std::scoped_lock guard{ PcscLite::readersLock };
+                reader->share = shareMode;
+                reader->protocol = activeProtocol;
+            }
+
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> remoteHandle: 0x%016" PRIx64 ", localHandle: 0x%08" PRIx32
+                               ", activeProtocol: %" PRIu32, __FUNCTION__, id(), remoteHandle, handle, activeProtocol);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(context).sendData(readerData).sendInt32(shareMode).
+            sendInt32(prefferedProtocols).sendInt32(handle).sendInt32(activeProtocol).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyReconnect(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t shareMode = sock.recvInt32();
+        const uint32_t prefferedProtocols = sock.recvInt32();
+        const uint32_t initialization = sock.recvInt32();
+        // skip activeProtocol, ret
+        sock.recvSkip(8);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::Reconnect, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t activeProtocol, ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::Reconnect, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(activeProtocol, ret) = ptr->sendReconnect(id(), shareMode, prefferedProtocols, initialization);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::Reconnect, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            assertm(reader, "reader not connected");
+            std::scoped_lock guard{ PcscLite::readersLock };
+            reader->share = shareMode;
+            reader->protocol = activeProtocol;
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32 ", activeProtocol: %" PRIu32,
+                               __FUNCTION__, id(), handle, shareMode, prefferedProtocols, initialization, activeProtocol);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(shareMode).sendInt32(prefferedProtocols).
+            sendInt32(initialization).sendInt32(activeProtocol).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyDisconnect(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t disposition = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::Disconnect, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::Disconnect, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret) = ptr->sendDisconnect(id(), disposition);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::Disconnect, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            // sync after
+            handle = 0;
+            assertm(reader, "reader not connected");
+
+            std::scoped_lock guard{ PcscLite::readersLock };
+            reader->share = 0;
+            reader->protocol = 0;
+            reader = nullptr;
+
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
+                               __FUNCTION__, id(), handle, disposition);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(disposition).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+
+    bool PcscLocal::proxyBeginTransaction(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::BeginTransaction, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::BeginTransaction, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            assertm(reader, "reader not connected");
+            waitTransaction.readerLock(reader);
+
+            std::tie(ret) = ptr->sendBeginTransaction(id());
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::BeginTransaction, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
+                               __FUNCTION__, id(), handle);
+        }
+        else
+        {
+            // transaction failed
+            waitTransaction.readerUnlock(reader);
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyEndTransaction(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t disposition = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::EndTransaction, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::EndTransaction, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret) = ptr->sendEndTransaction(id(), disposition);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::EndTransaction, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
+                               __FUNCTION__,id(), handle, disposition);
+            // transaction ended
+            assertm(reader, "reader not connected");
+            waitTransaction.readerUnlock(reader);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(disposition).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyTransmit(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t ioSendPciProtocol = sock.recvInt32();
+        const uint32_t ioSendPciLength = sock.recvInt32();
+        const uint32_t sendLength = sock.recvInt32();
+        // skip ioRecvPciProtocol, ioRecvPciLength, recvLength, ret
+        sock.recvSkip(16);
+        const auto data1 = sock.recvData(sendLength);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::Transmit, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        if(sendLength != data1.size())
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
+                               sendLength, data1.size());
+            return false;
+        }
+
+        uint32_t ioRecvPciProtocol, ioRecvPciLength, ret;
+        binary_buf data2;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::Transmit, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ioRecvPciProtocol, ioRecvPciLength, ret, data2) = ptr->sendTransmit(id(), ioSendPciProtocol, ioSendPciLength, data1);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::Transmit, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32
+                               ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32 ", recv size: %lu",
+                               __FUNCTION__, id(), handle, ioRecvPciProtocol, ioRecvPciLength, data2.size());
+
+            if(Application::isDebugLevel(DebugLevel::Trace))
+            {
+                auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
+                Application::debug(DebugType::Pcsc, "%s: recv data: [ `%s' ]", __FUNCTION__, str.c_str());
+            }
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(ioSendPciProtocol).sendInt32(ioSendPciLength).sendInt32(sendLength).
+            sendInt32(ioRecvPciProtocol).sendInt32(ioRecvPciLength).sendInt32(data2.size()).sendInt32(ret);
+
+        if(data2.size())
+        {
+            sock.sendData(data2);
+        }
+
+        sock.sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    void PcscLocal::statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr)
+    {
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " reader: `%s', state: %" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
+                           __FUNCTION__, id(), name.c_str(), state, protocol, atr.size());
+
+        assertm(reader, "reader not connected");
+        assertm(atr.size() <= sizeof(reader->atr), "atr length invalid");
+        std::scoped_lock guard{ PcscLite::readersLock };
+
+        // atr changed
+        if(! std::equal(atr.begin(), atr.end(), std::begin(reader->atr)))
+        {
+            std::fill(std::begin(reader->atr), std::end(reader->atr), 0);
+            std::copy_n(atr.data(), atr.size(), std::begin(reader->atr));
+
+            reader->atrLen = atr.size();
+
+            if(Application::isDebugLevel(DebugLevel::Trace))
+            {
+                auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
+                Application::debug(DebugType::Pcsc, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
+            }
+        }
+
+        // protocol changed
+        if(protocol != reader->protocol)
+        {
+            reader->protocol = protocol;
+        }
+
+        if(state != reader->state)
+        {
+            reader->state = state;
+        }
+    }
+
+    bool PcscLocal::proxyStatus(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::Status, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        std::string name;
+        uint32_t state, protocol, ret;
+        binary_buf atr;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(name, state, protocol, ret, atr) = ptr->sendStatus(id());
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::Status, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
+                               __FUNCTION__, id(), handle);
+
+            statusApply(name, state, protocol, atr);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        sock.sendInt32(handle).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyControl(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t controlCode = sock.recvInt32();
+        const uint32_t sendLength = sock.recvInt32();
+        const uint32_t recvLength = sock.recvInt32();
+        // skip bytesReturned, ret
+        sock.recvSkip(8);
+        auto data1 = sock.recvData(sendLength);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::Control, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        if(sendLength != data1.size())
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
+                               sendLength, data1.size());
+            return false;
+        }
+
+        uint32_t ret;
+        binary_buf data2;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::Control, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret, data2) = ptr->sendControl(id(), controlCode, recvLength, data1);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::Control, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", controlCode: 0x%08" PRIx32 ", bytesReturned: %lu",
+                               __FUNCTION__, id(), handle, controlCode, data2.size());
+
+            if(Application::isDebugLevel(DebugLevel::Trace))
+            {
+                auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
+                Application::debug(DebugType::Pcsc, "%s: recv data: [ `%s' ]", __FUNCTION__, str.c_str());
+            }
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        // reply
+        sock.sendInt32(handle).sendInt32(controlCode).sendInt32(sendLength).sendInt32(recvLength).
+            sendInt32(data2.size()).sendInt32(ret);
+
+        if(data2.size())
+        {
+            sock.sendData(data2);
+        }
+
+        sock.sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyGetAttrib(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t attrId = sock.recvInt32();
+        // skip attr[MAX_BUFFER_SIZE], attrLen, ret
+        sock.recvSkip(MAX_BUFFER_SIZE + 8);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::GetAttrib, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+        binary_buf attr;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::GetAttrib, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret, attr) = ptr->sendGetAttrib(id(), attrId);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::GetAttrib, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLen: %lu",
+                               __FUNCTION__, id(), handle, attrId, attr.size());
+
+            if(Application::isDebugLevel(DebugLevel::Trace))
+            {
+                auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
+                Application::debug(DebugType::Pcsc, "%s: attr: [ `%s' ]", __FUNCTION__, str.c_str());
+            }
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        if(attr.size() != MAX_BUFFER_SIZE)
+            attr.resize(MAX_BUFFER_SIZE, 0);
+
+        sock.sendInt32(handle).sendInt32(attrId).
+            sendData(attr).sendInt32(attr.size()).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxySetAttrib(void)
+    {
+        const uint32_t hdl = sock.recvInt32();
+        const uint32_t attrId = sock.recvInt32();
+        auto attr = sock.recvData(MAX_BUFFER_SIZE);
+        const uint32_t attrLen = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
+
+        // fixed attr
+        if(attrLen < attr.size())
+            attr.resize(attrLen);
+
+        if(hdl != handle)
+        {
+            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            replyError(PcscLite::SetAttrib, SCARD_E_INVALID_HANDLE);
+            return false;
+        }
+
+        uint32_t ret;
+
+        if(auto ptr = remote.lock())
+        {
+            if(! ptr->remoteHandle())
+            {
+                Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                replyError(PcscLite::SetAttrib, SCARD_F_INTERNAL_ERROR);
+                return false;
+            }
+
+            std::tie(ret) = ptr->sendSetAttrib(id(), attrId, attr);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            replyError(PcscLite::SetAttrib, SCARD_E_NO_SERVICE);
+            return false;
+        }
+
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle 0x%08" PRIx32,
+                               __FUNCTION__, id(), handle);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
+        }
+
+        if(attr.size() != MAX_BUFFER_SIZE)
+            attr.resize(MAX_BUFFER_SIZE, 0);
+
+        sock.sendInt32(handle).sendInt32(attrId).
+            sendData(attr).sendInt32(attrLen).sendInt32(ret).sendFlush();
+
+        return ret == SCARD_S_SUCCESS;
+    }
+
+    bool PcscLocal::proxyCancel(void)
+    {
+        const uint32_t ctx = sock.recvInt32();
+        uint32_t ret = sock.recvInt32();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << context: 0x%08" PRIx32,
+                           __FUNCTION__, id(), ctx);
+
+        if(clientCanceledCb(ctx))
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 ", canceled found and notify",
+                               __FUNCTION__, id());
+            ret = SCARD_S_SUCCESS;
+        }
+        else
+        {
+            Application::error("%s: clientId: 0x%08" PRIx32 ", canceled not found, context: 0x%08" PRIx32,
+                __FUNCTION__, id(), ctx);
+            ret = SCARD_E_INVALID_HANDLE;
+        }
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> context: 0x%016" PRIx64,
+                           __FUNCTION__, id(), ctx);
+
+        sock.sendInt32(ctx).sendInt32(ret).sendFlush();
+        return true;
+    }
+
+    bool PcscLocal::proxyGetVersion(void)
+    {
+        const uint32_t versionMajor = sock.recvInt32();
+        const uint32_t versionMinor = sock.recvInt32();
+        const uint32_t ret = sock.recvInt32();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> protocol version: %" PRIu32 ".%" PRIu32,
+            __FUNCTION__, id(), versionMajor, versionMinor);
+        PcscLite::apiVersion = versionMajor * 10 + versionMinor;
+
+        sock.sendInt32(versionMajor).sendInt32(versionMinor).sendInt32(0).sendFlush();
+        return true;
+    }
+
+    bool PcscLocal::proxyGetReaderState(void)
+    {
+        const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers length: %" PRIu32,
+            __FUNCTION__, id(), context, readersLength);
+
+        std::scoped_lock guard{ PcscLite::readersLock };
+
+        sock.sendRaw(PcscLite::readers.data(), readersLength);
+        sock.sendFlush();
+
+        return true;
+    }
+
+    uint32_t PcscLocal::waitReadersStatusChanged(uint32_t timeout)
+    {
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+            __FUNCTION__, id(), context, timeout);
+
+        if(0 == timeout)
+        {
+            auto ret = syncReaders();
+            return ret == SCARD_E_NO_READERS_AVAILABLE ?
+                   SCARD_S_SUCCESS : ret;
+        }
+
+        std::this_thread::sleep_for(100ms);
+        auto wait_ms = std::chrono::milliseconds(timeout);
+        uint32_t ret = SCARD_E_TIMEOUT;
+        Tools::Timeout timeoutLimit(wait_ms);
+        Tools::Timeout timeoutSyncReaders(1s);
+        waitStatusChanged.start();
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, id(), "started");
+
+        while(ret == SCARD_E_TIMEOUT)
+        {
+            if(waitStatusChanged.canceled)
+            {
+                Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, id(), "timeout");
+                ret = SCARD_E_CANCELLED;
+                break;
+            }
+
+            if(waitStatusChanged.stopped)
+            {
+                Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, id(), "stopped");
+                ret = SCARD_S_SUCCESS;
+                break;
+            }
+
+            if(timeoutLimit.check())
+            {
+                Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, id(), "limit");
+                break;
+            }
+
+            if(timeoutSyncReaders.check())
+            {
+                bool readersChanged = false;
+                auto ret2 = syncReaders(& readersChanged);
+
+                if(ret2 != SCARD_S_SUCCESS || readersChanged)
+                {
+                    Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, id(), "error");
+                    ret = ret2;
+                    break;
+                }
+            }
+
+            std::this_thread::sleep_for(100ms);
+        }
+
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> timeout: %" PRIu32, __FUNCTION__, id(), timeout);
+        sock.sendInt32(timeout).sendInt32(ret).sendFlush();
+        waitStatusChanged.reset();
+
+        return ret;
+    }
+
+    bool PcscLocal::proxyReaderStateChangeStart(void)
+    {
+        if(PcscLite::apiVersion < 43)
+        {
+            // old protocol: 4.2
+            const uint32_t timeout = sock.recvInt32();
+            const uint32_t ret = sock.recvInt32();
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+                __FUNCTION__, id(), context, timeout);
+            waitStatusChanged.stop();
+            waitStatusChanged.job = std::async(std::launch::async, & PcscLocal::waitReadersStatusChanged, this, timeout);
+        }
+        else
+        {
+            // new protocol 4.4: empty params
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+                __FUNCTION__, id(), context);
+            waitReadersStatusChanged(0);
+
+            // send all readers
+            const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
+            std::scoped_lock guard{ PcscLite::readersLock };
+            sock.sendRaw(PcscLite::readers.data(), readersLength);
+            sock.sendFlush();
+        }
+
+        return true;
+    }
+
+    bool PcscLocal::proxyReaderStateChangeStop(void)
+    {
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32,
+            __FUNCTION__, id(), context);
+
+        if(PcscLite::apiVersion < 43)
+        {
+            // old protocol: 4.2
+            const uint32_t timeout = sock.recvInt32();
+            const uint32_t ret = sock.recvInt32();
+        }
+        else
+        {
+            // new protocol: 4.4, empty params
+        }
+
+        // stop
+        waitStatusChanged.stop();
+        sock.sendInt32(0).sendInt32(SCARD_S_SUCCESS).sendFlush();
+
+        return true;
+    }
+
+    uint32_t PcscLocal::syncReaderStatus(const std::string & readerName, PcscLite::ReaderState & rd, bool* changed)
+    {
+        const uint32_t timeout = 0;
+        SCARD_READERSTATE state = {};
+
+        state.szReader = readerName.c_str();
+        state.dwCurrentState = SCARD_STATE_UNAWARE;
+        state.cbAtr = MAX_ATR_SIZE;
+
+        uint32_t ret = SCARD_S_SUCCESS;
+
+        if(auto ptr = remote.lock())
+        {
+            ret = ptr->sendGetStatusChange(id(), timeout, & state, 1);
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            return SCARD_E_NO_SERVICE;
+        }
+
+        if(ret == SCARD_E_TIMEOUT)
+        {
+            Application::warning("%s: timeout", __FUNCTION__);
+            return ret;
+        }
+
+        if(ret != SCARD_S_SUCCESS)
+        {
+            Application::warning("%s: error: 0x%08" PRIx32 " (%s)", __FUNCTION__, ret, PcscLite::err2str(ret));
+            return ret;
+        }
+
+        Application::debug(DebugType::Pcsc, "%s: reader: `%s', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLen: %" PRIu32,
+                           __FUNCTION__, readerName.c_str(), state.dwCurrentState, state.dwEventState, state.cbAtr);
+
+        if(Application::isDebugLevel(DebugLevel::Trace))
+        {
+            auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
+            Application::debug(DebugType::Pcsc, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
+        }
+
+        if(state.dwEventState & SCARD_STATE_CHANGED)
+        {
+            assertm(readerName.size() < sizeof(rd.name), "reader name invalid");
+            assertm(state.cbAtr <= sizeof(rd.atr), "atr length invalid");
+            rd.state = state.dwEventState & SCARD_STATE_PRESENT ? (PcscLite::StatePresent | PcscLite::StatePowered |
+                       PcscLite::StateNegotiable) : PcscLite::StateAbsent;
+            std::copy_n(readerName.data(), readerName.size(), rd.name);
+            std::copy_n(state.rgbAtr, state.cbAtr, rd.atr);
+            rd.atrLen = state.cbAtr;
+
+            if(changed)
+            {
+                *changed = true;
+            }
+        }
+
+        return SCARD_S_SUCCESS;
+    }
+
+    uint32_t PcscLocal::syncReaders(bool* changed)
+    {
+        std::list<std::string> names;
+
+        if(auto ptr = remote.lock())
+        {
+            names = ptr->sendListReaders(id());
+        }
+        else
+        {
+            Application::error("%s: no service", __FUNCTION__);
+            return SCARD_E_NO_SERVICE;
+        }
+
+        if(names.empty())
+        {
+            Application::warning("%s: no readers available", __FUNCTION__);
+
+            bool res = PcscLite::readersReset();
+
+            if(changed && res)
+                *changed = true;
+
+            return SCARD_E_NO_READERS_AVAILABLE;
+        }
+
+        if(PcscLite::readersSyncNotFound(names))
+        {
+            if(changed)
+                *changed = true;
+        }
+
+        std::scoped_lock guard{ PcscLite::readersLock };
+
+        for(const auto & name : names)
+        {
+            auto it = std::find_if(PcscLite::readers.begin(), PcscLite::readers.end(),
+                                   [&name](auto & rd)
+            {
+                return 0 == name.compare(rd.name);
+            });
+
+            // not found, add new
+            if(it == PcscLite::readers.end())
+            {
+                Application::debug(DebugType::Pcsc, "%s: added reader, name: `%s'", __FUNCTION__, name.c_str());
+                // find unused slot
+                auto rd = std::find_if(PcscLite::readers.begin(), PcscLite::readers.end(),
+                                       [](auto & rd)
+                {
+                    return 0 == rd.name[0];
+                });
+
+                if(rd == PcscLite::readers.end())
+                {
+                    LTSM::Application::error("%s: failed, %s", __FUNCTION__, "all slots is busy");
+                    return SCARD_E_NO_MEMORY;
+                }
+
+                rd->reset();
+                syncReaderStatus(name, *rd, changed);
+            }
+        }
+
+        return SCARD_S_SUCCESS;
+    }
+
+    void PcscLocal::canceledAction(void)
+    {
+        waitStatusChanged.cancel();
+        sock.reset();
+    }
+
     /// PcscSessionBus
-    PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_pcsc2session"),
+    PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_session_pcsc"),
 #ifdef SDBUS_2_0_API
         AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_pcsc_path})
 #else
@@ -196,7 +1845,7 @@ namespace LTSM
 
     int PcscSessionBus::start(void)
     {
-        Application::info("%s: uid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getpid(), LTSM_PCSC2SESSION_VERSION);
+        Application::info("%s: uid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
         if(auto envSockName = getenv("PCSCLITE_CSOCK_NAME"))
         {
@@ -241,7 +1890,7 @@ namespace LTSM
                 Application::debug(DebugType::App, "%s: add clientId: %" PRId32, "PcscSessionBusThread", sock);
 
                 const std::scoped_lock guard{ clientsLock };
-                this->clients.emplace_front(sock, this);
+                this->clients.emplace_front(sock, remote, this);
             }
         });
 
@@ -263,12 +1912,30 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
-    void PcscSessionBus::clientShutdownNotify(const PcscClient* cli)
+    bool PcscSessionBus::clientCanceledNotify(uint32_t ctx)
+    {
+        const std::scoped_lock guard{ clientsLock };
+        auto it = std::find_if(clients.begin(), clients.end(), [&ctx](auto & cl)
+        {
+            return 0 <= cl.id() && cl.localContext() == ctx;
+        });
+
+        if(it != clients.end())
+        {
+            Application::debug(DebugType::App, "%s: calceled clientId: %" PRId32, __FUNCTION__, it->id());
+            it->canceledAction();
+            return true;
+        }
+
+        return false;
+    }
+
+    void PcscSessionBus::clientShutdownNotify(const PcscLocal* cli)
     {
         Application::debug(DebugType::App, "%s: shutdown clientId: %" PRId32, __FUNCTION__, cli->id());
 
         const std::scoped_lock guard{ clientsLock };
-        this->clients.remove_if([ =](auto & st)
+        this->clients.remove_if([cli](auto & st)
         {
             return cli == std::addressof(st);
         });
@@ -277,7 +1944,7 @@ namespace LTSM
     int32_t PcscSessionBus::getVersion(void)
     {
         Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        return LTSM_PCSC2SESSION_VERSION;
+        return LTSM_SESSION_PCSC_VERSION;
     }
 
     void PcscSessionBus::serviceShutdown(void)
@@ -314,1552 +1981,14 @@ namespace LTSM
             return false;
         }
 
-        const std::scoped_lock guard{ remoteLock };
-        remote = std::make_unique<SocketStream>(sockfd, false /* statistic */);
-
+        remote = std::make_shared<PcscRemote>(sockfd);
         return true;
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath)
     {
         Application::debug(DebugType::Dbus, "%s: client socket path: `%s'", __FUNCTION__, clientPath.c_str());
-
-        const std::scoped_lock guard{ remoteLock };
         remote.reset();
-    }
-
-    bool PcscSessionBus::pcscClientAction(PcscClient & st)
-    {
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 ", wait command", __FUNCTION__, st.id());
-
-        uint32_t len = st.sock.recvInt32();
-        uint32_t cmd = st.sock.recvInt32();
-        Application::trace(DebugType::App, "%s: cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
-
-        switch(cmd)
-        {
-            case PcscLite::EstablishContext:
-                return pcscEstablishContext(st, len);
-
-            case PcscLite::ReleaseContext:
-                return pcscReleaseContext(st, len);
-
-            case PcscLite::Connect:
-                return pcscConnect(st, len);
-
-            case PcscLite::Reconnect:
-                return pcscReconnect(st, len);
-
-            case PcscLite::Disconnect:
-                return pcscDisconnect(st, len);
-
-            case PcscLite::BeginTransaction:
-                return pcscBeginTransaction(st, len);
-
-            case PcscLite::EndTransaction:
-                return pcscEndTransaction(st, len);
-
-            case PcscLite::Transmit:
-                return pcscTransmit(st, len);
-
-            case PcscLite::Status:
-                return pcscStatus(st, len);
-
-            case PcscLite::Control:
-                return pcscControl(st, len);
-
-            case PcscLite::Cancel:
-                return pcscCancel(st, len);
-
-            // not used
-            case PcscLite::ListReaders:
-            case PcscLite::GetStatusChange:
-            case PcscLite::CancelTransaction:
-                Application::error("%s: not used cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
-                break;
-
-            case PcscLite::GetAttrib:
-                return pcscGetAttrib(st, len);
-
-            case PcscLite::SetAttrib:
-                return pcscSetAttrib(st, len);
-
-            case PcscLite::GetVersion:
-                return pcscGetVersion(st, len);
-
-            case PcscLite::GetReaderState:
-                return pcscGetReaderState(st, len);
-
-            case PcscLite::WaitReaderStateChangeStart:
-                return pcscReaderStateChangeStart(st, len);
-
-            case PcscLite::WaitReaderStateChangeStop:
-                return pcscReaderStateChangeStop(st, len);
-
-            default:
-                Application::error("%s: unknown cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, cmd, len);
-                break;
-        }
-
-        return false;
-    }
-
-    bool PcscSessionBus::pcscEstablishContext(PcscClient & st, uint32_t len)
-    {
-        if(len != 12)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t scope = st.sock.recvInt32();
-        uint32_t context = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(st.context)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid context", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_PARAMETER).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << scope: %" PRIu32, __FUNCTION__, st.id(), scope);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EstablishContext);
-        remote->sendIntLE32(scope);
-        remote->sendFlush();
-
-        // wait
-        auto remoteContext = remote->recvIntLE64();
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            // make localContext 32bit
-            context = Tools::crc32b((const uint8_t*) & remoteContext, sizeof(remoteContext));
-            context &= 0x7FFFFFFF;
-
-            st.remoteContext = remoteContext;
-            st.context = context;
-
-            // init readers status
-            syncReaders(st);
-
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> remoteContext: 0x%016" PRIx64 ", localContext: 0x%08" PRIx32,
-                               __FUNCTION__, st.id(), remoteContext, context);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", error: 0x%08" PRIx32 " (%s)", __FUNCTION__, st.id(), ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(scope).
-        sendInt32(context).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscReleaseContext(PcscClient & st, uint32_t len)
-    {
-        if(len != 8)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t context = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteContext)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(! context || context != st.context)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, st.id(), context);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64,
-                           __FUNCTION__, st.id(), st.remoteContext);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ReleaseContext);
-        remote->sendIntLE64(st.remoteContext);
-        remote->sendFlush();
-        // wait
-        ret = remote->recvIntLE32();
-
-        if(ret != SCARD_S_SUCCESS)
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteContext: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteContext, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(context).
-        sendInt32(ret).sendFlush();
-
-        // set shutdown
-        return false;
-    }
-
-    PcscLite::ReaderState* PcscSessionBus::findReaderState(const std::string & name)
-    {
-        std::scoped_lock guard{ readersLock };
-        auto it = std::find_if(readers.begin(), readers.end(),
-                               [ &](auto & rd)
-        {
-            return 0 == name.compare(rd.name);
-        });
-
-        return it != readers.end() ? std::addressof(*it) : nullptr;
-    }
-
-    bool PcscSessionBus::pcscConnect(PcscClient & st, uint32_t len)
-    {
-        if(len != 24 + MAX_READERNAME)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t context = st.sock.recvInt32();
-        auto reader = st.sock.recvData(MAX_READERNAME);
-        uint32_t shareMode = st.sock.recvInt32();
-        uint32_t prefferedProtocols = st.sock.recvInt32();
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t activeProtocol = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteContext)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(! context || context != st.context)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, st.id(), context);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        auto readerName = std::string(reader.begin(),
-                                      std::find(reader.begin(), reader.end(), 0));
-        auto currentReader = findReaderState(readerName);
-
-        if(! currentReader)
-        {
-            Application::error("%s: failed, reader not found: `%s'", __FUNCTION__, readerName.c_str());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", reader: `%s'",
-                           __FUNCTION__, st.id(), st.remoteContext, shareMode, prefferedProtocols, readerName.c_str());
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Connect);
-        remote->sendIntLE64(st.remoteContext).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols);
-        remote->sendIntLE32(readerName.size()).sendString(readerName);
-        remote->sendFlush();
-        // wait
-        auto remoteHandle = remote->recvIntLE64();
-        activeProtocol = remote->recvIntLE32();
-        ret = remote->recvIntLE32();
-        // make localHandle
-        handle = ret != SCARD_S_SUCCESS ? 0 : Tools::crc32b((const uint8_t*) & remoteHandle, sizeof(remoteHandle));
-        handle &= 0x7FFFFFFF;
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            st.remoteHandle = remoteHandle;
-            st.handle = handle;
-            // sync reader
-            std::scoped_lock guard{ readersLock };
-            st.reader = currentReader;
-            st.reader->share = shareMode;
-            st.reader->protocol = activeProtocol;
-
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> remoteHandle: 0x%016" PRIx64 ", localHandle: 0x%08" PRIx32
-                               ", activeProtocol: %" PRIu32, __FUNCTION__, st.id(), remoteHandle, handle, activeProtocol);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteContext: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteContext, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(context).
-        sendData(reader).
-        sendInt32(shareMode).
-        sendInt32(prefferedProtocols).
-        sendInt32(handle).
-        sendInt32(activeProtocol).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscReconnect(PcscClient & st, uint32_t len)
-    {
-        if(len != 24)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t shareMode = st.sock.recvInt32();
-        uint32_t prefferedProtocols = st.sock.recvInt32();
-        uint32_t initialization = st.sock.recvInt32();
-        uint32_t activeProtocol = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", shareMode: %" PRIu32
-                           ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, shareMode, prefferedProtocols, initialization);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Reconnect);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols).sendIntLE32(initialization);
-        remote->sendFlush();
-        // wait
-        activeProtocol = remote->recvIntLE32();
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            assertm(st.reader, "reader not connected");
-            std::scoped_lock guard{ readersLock };
-            st.reader->share = shareMode;
-            st.reader->protocol = activeProtocol;
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32 ", activeProtocol: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, shareMode, prefferedProtocols, initialization, activeProtocol);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(shareMode).
-        sendInt32(prefferedProtocols).
-        sendInt32(initialization).
-        sendInt32(activeProtocol).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscDisconnect(PcscClient & st, uint32_t len)
-    {
-        if(len != 12)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t disposition = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, disposition);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Disconnect);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(disposition);
-        remote->sendFlush();
-        // wait
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            // sync after
-            st.handle = 0;
-            st.remoteHandle = 0;
-            assertm(st.reader, "reader not connected");
-            std::scoped_lock guard{ readersLock };
-            st.reader->share = 0;
-            st.reader->protocol = 0;
-            st.reader = nullptr;
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, disposition);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(disposition).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscBeginTransaction(PcscClient & st, uint32_t len)
-    {
-        if(len != 8)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
-                           __FUNCTION__, st.id(), st.remoteHandle);
-        assertm(st.reader, "reader not connected");
-        waitTransaction.readerLock(st.reader);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::BeginTransaction);
-        remote->sendIntLE64(st.remoteHandle);
-        remote->sendFlush();
-        // wait
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
-                               __FUNCTION__, st.id(), handle);
-        }
-        else
-        {
-            // transaction failed
-            waitTransaction.readerUnlock(st.reader);
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscEndTransaction(PcscClient & st, uint32_t len)
-    {
-        if(len != 12)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t disposition = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, disposition);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EndTransaction);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(disposition);
-        remote->sendFlush();
-        // wait
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, disposition);
-            // transaction ended
-            assertm(st.reader, "reader not connected");
-            waitTransaction.readerUnlock(st.reader);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(disposition).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscTransmit(PcscClient & st, uint32_t len)
-    {
-        if(len < 32)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t ioSendPciProtocol = st.sock.recvInt32();
-        uint32_t ioSendPciLength = st.sock.recvInt32();
-        uint32_t sendLength = st.sock.recvInt32();
-        uint32_t ioRecvPciProtocol = st.sock.recvInt32();
-        uint32_t ioRecvPciLength = st.sock.recvInt32();
-        uint32_t recvLength = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-        auto data = st.sock.recvData(sendLength);
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(28).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(28).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(28).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        if(sendLength != data.size())
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, st.id(),
-                               sendLength, data.size());
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", pciProtocol: 0x%08"
-                           PRIx32 ", pciLength: %" PRIu32 ", send size: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, ioSendPciProtocol, ioSendPciLength, sendLength);
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug(DebugType::App, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
-        }
-
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Transmit);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(ioSendPciProtocol).sendIntLE32(ioSendPciLength).sendIntLE32(sendLength);
-
-        if(sendLength)
-        {
-            remote->sendData(data);
-        }
-
-        remote->sendFlush();
-        // wait
-        ioRecvPciProtocol = remote->recvIntLE32();
-        ioRecvPciLength = remote->recvIntLE32();
-        recvLength = remote->recvIntLE32();
-        ret = remote->recvIntLE32();
-        data = remote->recvData(recvLength);
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32
-                               ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32 ", recv size: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, ioRecvPciProtocol, ioRecvPciLength, recvLength);
-
-            if(Application::isDebugLevel(DebugLevel::Trace))
-            {
-                auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-                Application::debug(DebugType::App, "%s: recv data: [ `%s' ]", __FUNCTION__, str.c_str());
-            }
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(ioSendPciProtocol).
-        sendInt32(ioSendPciLength).
-        sendInt32(sendLength).
-        sendInt32(ioRecvPciProtocol).
-        sendInt32(ioRecvPciLength).
-        sendInt32(recvLength).
-        sendInt32(ret);
-
-        if(recvLength)
-        {
-            st.sock.sendData(data);
-        }
-
-        st.sock.sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    void PcscSessionBus::pcscStatusApply(PcscClient & st, const std::string & name, uint32_t state, uint32_t protocol, const std::vector<uint8_t> & atr)
-    {
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " reader: `%s', state: %" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
-                           __FUNCTION__, st.id(), name.c_str(), state, protocol, atr.size());
-
-        assertm(st.reader, "reader not connected");
-        assertm(atr.size() <= sizeof(st.reader->atr), "atr length invalid");
-        std::scoped_lock guard{ readersLock };
-
-        // atr changed
-        if(! std::equal(atr.begin(), atr.end(), std::begin(st.reader->atr)))
-        {
-            std::fill(std::begin(st.reader->atr), std::end(st.reader->atr), 0);
-            std::copy_n(atr.data(), atr.size(), std::begin(st.reader->atr));
-
-            st.reader->atrLen = atr.size();
-
-            if(Application::isDebugLevel(DebugLevel::Trace))
-            {
-                auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
-                Application::debug(DebugType::App, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
-            }
-        }
-
-        // protocol changed
-        if(protocol != st.reader->protocol)
-        {
-            st.reader->protocol = protocol;
-        }
-
-        if(state != st.reader->state)
-        {
-            st.reader->state = state;
-        }
-    }
-
-    bool PcscSessionBus::pcscStatus(PcscClient & st, uint32_t len)
-    {
-        if(len != 8)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(len - 4).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(len - 4).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
-                           __FUNCTION__, st.id(), st.remoteHandle);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Status);
-        remote->sendIntLE64(st.remoteHandle);
-        remote->sendFlush();
-
-        // wait
-        uint32_t nameLen = remote->recvIntLE32();
-        auto name = remote->recvString(nameLen);
-        uint32_t state = remote->recvIntLE32();
-        uint32_t protocol = remote->recvIntLE32();
-        uint32_t atrLen = remote->recvIntLE32();
-        auto atr = remote->recvData(atrLen);
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
-                               __FUNCTION__, st.id());
-
-            pcscStatusApply(st, name, state, protocol, atr);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscControl(PcscClient & st, uint32_t len)
-    {
-        if(len < 24)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t controlCode = st.sock.recvInt32();
-        uint32_t sendLength = st.sock.recvInt32();
-        uint32_t recvLength = st.sock.recvInt32();
-        uint32_t bytesReturned = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-        auto data = st.sock.recvData(sendLength);
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(20).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(20).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(20).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        if(sendLength != data.size())
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, st.id(),
-                               sendLength, data.size());
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", controlCode: 0x%08"
-                           PRIx32 ", send size: %" PRIu32 ", recv size: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, controlCode, sendLength, recvLength);
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-            Application::debug(DebugType::App, "%s: send data: [ `%s' ]", __FUNCTION__, str.c_str());
-        }
-
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Control);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(controlCode).sendIntLE32(sendLength).sendIntLE32(recvLength);
-
-        if(sendLength)
-        {
-            remote->sendData(data);
-        }
-
-        remote->sendFlush();
-        // wait
-        bytesReturned = remote->recvIntLE32();
-        ret = remote->recvIntLE32();
-
-        if(bytesReturned)
-        {
-            data = remote->recvData(bytesReturned);
-        }
-        else
-        {
-            data.clear();
-        }
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", controlCode: 0x%08" PRIx32 ", bytesReturned: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, controlCode, bytesReturned);
-
-            if(Application::isDebugLevel(DebugLevel::Trace))
-            {
-                auto str = Tools::buffer2hexstring(data.begin(), data.end(), 2, ",", false);
-                Application::debug(DebugType::App, "%s: recvLength: %" PRIu32 ", recv data: [ `%s' ]", __FUNCTION__, bytesReturned, str.c_str());
-            }
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(controlCode).
-        sendInt32(sendLength).
-        sendInt32(recvLength).
-        sendInt32(bytesReturned).
-        sendInt32(ret);
-
-        if(bytesReturned)
-        {
-            st.sock.sendData(data);
-        }
-
-        st.sock.sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscGetAttrib(PcscClient & st, uint32_t len)
-    {
-        if(len != 16 + MAX_BUFFER_SIZE)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t attrId = st.sock.recvInt32();
-        auto attr = st.sock.recvData(MAX_BUFFER_SIZE);
-        uint32_t attrLen = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", attrId: %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, attrId);
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetAttrib);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(attrId);
-        remote->sendFlush();
-        // wait
-        attrLen = remote->recvIntLE32();
-        ret = remote->recvIntLE32();
-        assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-
-        if(attrLen)
-        {
-            attr = remote->recvData(attrLen);
-        }
-        else
-        {
-            attr.clear();
-        }
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLen: %" PRIu32,
-                               __FUNCTION__, st.id(), handle, attrId, attrLen);
-
-            if(Application::isDebugLevel(DebugLevel::Trace))
-            {
-                auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-                Application::debug(DebugType::App, "%s: attrLength: %" PRIu32 ", attr: [ `%s' ]", __FUNCTION__, attrLen, str.c_str());
-            }
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(attrId);
-
-        if(attrLen)
-        {
-            st.sock.sendData(attr);
-        }
-
-        st.sock.
-        sendZero(MAX_BUFFER_SIZE - attrLen).
-        sendInt32(attrLen).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscSetAttrib(PcscClient & st, uint32_t len)
-    {
-        if(len != 16 + MAX_BUFFER_SIZE)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t handle = st.sock.recvInt32();
-        uint32_t attrId = st.sock.recvInt32();
-        auto attr = st.sock.recvData(MAX_BUFFER_SIZE);
-        uint32_t attrLen = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        if(! st.remoteHandle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, st.id());
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_F_INTERNAL_ERROR).sendFlush();
-            return false;
-        }
-
-        if(handle != st.handle)
-        {
-            Application::error("%s: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, st.id(), handle);
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_E_INVALID_HANDLE).sendFlush();
-            return false;
-        }
-
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            st.sock.sendZero(12 + MAX_BUFFER_SIZE).sendInt32(SCARD_E_NO_SERVICE).sendFlush();
-            return false;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteHandle 0x%016" PRIx64 ", attrId: %" PRIu32 ", attrLength %" PRIu32,
-                           __FUNCTION__, st.id(), st.remoteHandle, attrId, attrLen);
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-            Application::debug(DebugType::App, "%s: attr: [ `%s' ]", __FUNCTION__, str.c_str());
-        }
-
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::SetAttrib);
-        remote->sendIntLE64(st.remoteHandle).sendIntLE32(attrId).sendIntLE32(attrLen);
-
-        if(attrLen)
-        {
-            remote->sendData(attr);
-        }
-
-        remote->sendFlush();
-
-        // wait
-        ret = remote->recvIntLE32();
-
-        if(ret == SCARD_S_SUCCESS)
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localHandle 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLength %" PRIu32,
-                               __FUNCTION__, st.id(), handle, attrId, attrLen);
-        }
-        else
-        {
-            Application::error("%s: clientId: %" PRId32 ", remoteHandle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " (%s)",
-                               __FUNCTION__, st.id(), st.remoteHandle, ret, PcscLite::err2str(ret));
-        }
-
-        // reply
-        st.sock.
-        sendInt32(handle).
-        sendInt32(attrId).
-        sendData(attr).
-        sendInt32(attrLen).
-        sendInt32(ret).sendFlush();
-
-        return ret == SCARD_S_SUCCESS;
-    }
-
-    bool PcscSessionBus::pcscGetVersion(PcscClient & st, uint32_t len)
-    {
-        if(len != 12)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t versionMajor = st.sock.recvInt32();
-        uint32_t versionMinor = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> protocol version: %" PRIu32 ".%" PRIu32, __FUNCTION__, st.id(),
-                           versionMajor, versionMinor);
-        st.sock.
-        sendInt32(versionMajor).
-        sendInt32(versionMinor).
-        sendInt32(0).sendFlush();
-        st.versionMajor = versionMajor;
-        st.versionMinor = versionMinor;
-        return true;
-    }
-
-    bool PcscSessionBus::pcscGetReaderState(PcscClient & st, uint32_t len)
-    {
-        const uint32_t readersLength = readers.size() * sizeof(PcscLite::ReaderState);
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers length: %" PRIu32, __FUNCTION__,
-                           st.id(), st.context, readersLength);
-        std::scoped_lock guard{ readersLock };
-        st.sock.sendRaw(readers.data(), readersLength);
-        st.sock.sendFlush();
-        return true;
-    }
-
-    uint32_t waitReadersStatusChanged(PcscSessionBus* owner, PcscClient* st, uint32_t timeout)
-    {
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st->id(),
-                           st->context, timeout);
-
-        if(0 == timeout)
-        {
-            auto ret = owner->syncReaders(*st);
-            return ret == SCARD_E_NO_READERS_AVAILABLE ?
-                   SCARD_S_SUCCESS : ret;
-        }
-
-        std::this_thread::sleep_for(100ms);
-        auto wait_ms = std::chrono::milliseconds(timeout);
-        uint32_t ret = SCARD_E_TIMEOUT;
-        Tools::Timeout timeoutLimit(wait_ms);
-        Tools::Timeout timeoutSyncReaders(1s);
-        st->waitStatusChanged.start();
-
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, st->id(), "started");
-
-        while(ret == SCARD_E_TIMEOUT)
-        {
-            if(st->waitStatusChanged.canceled)
-            {
-                Application::debug(DebugType::App, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, st->id(), "timeout");
-                ret = SCARD_E_CANCELLED;
-                break;
-            }
-
-            if(st->waitStatusChanged.stopped)
-            {
-                Application::debug(DebugType::App, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, st->id(), "stopped");
-                ret = SCARD_S_SUCCESS;
-                break;
-            }
-
-            if(timeoutLimit.check())
-            {
-                Application::debug(DebugType::App, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, st->id(), "limit");
-                break;
-            }
-
-            if(timeoutSyncReaders.check())
-            {
-                bool readersChanged = false;
-                auto ret2 = owner->syncReaders(*st, & readersChanged);
-
-                if(ret2 != SCARD_S_SUCCESS || readersChanged)
-                {
-                    Application::debug(DebugType::App, "%s: clientId: %" PRId32 " wait: %s", __FUNCTION__, st->id(), "error");
-                    ret = ret2;
-                    break;
-                }
-            }
-
-            std::this_thread::sleep_for(100ms);
-        }
-
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> timeout: %" PRIu32, __FUNCTION__, st->id(), timeout);
-        st->sock.sendInt32(timeout).sendInt32(ret).sendFlush();
-        st->waitStatusChanged.reset();
-
-        return ret;
-    }
-
-    bool PcscSessionBus::pcscReaderStateChangeStart(PcscClient & st, uint32_t len)
-    {
-        if(st.versionMajor == 4 && st.versionMinor < 3)
-        {
-            // old protocol: 4.2
-            uint32_t timeout = st.sock.recvInt32();
-            uint32_t ret = st.sock.recvInt32();
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
-                               st.context, timeout);
-            st.waitStatusChanged.stop();
-            st.waitStatusChanged.job = std::async(std::launch::async, & waitReadersStatusChanged, this, & st, timeout);
-        }
-        else if(st.versionMajor == 4 && st.versionMinor > 2)
-        {
-            // new protocol 4.4: empty params
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32, __FUNCTION__, st.id(),
-                               st.context);
-            waitReadersStatusChanged(this, & st, 0);
-            // send all readers
-            const uint32_t readersLength = readers.size() * sizeof(PcscLite::ReaderState);
-            std::scoped_lock guard{ readersLock };
-            st.sock.sendRaw(readers.data(), readersLength);
-            st.sock.sendFlush();
-        }
-
-        return true;
-    }
-
-    bool PcscSessionBus::pcscReaderStateChangeStop(PcscClient & st, uint32_t len)
-    {
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32, __FUNCTION__, st.id(), st.context);
-
-        if(st.versionMajor == 4 && st.versionMinor < 3)
-        {
-            // old protocol: 4.2
-            uint32_t timeout = st.sock.recvInt32();
-            uint32_t ret = st.sock.recvInt32();
-        }
-        else if(st.versionMajor == 4 && st.versionMinor > 2)
-        {
-            // new protocol: 4.4, empty params
-        }
-
-        // stop
-        st.waitStatusChanged.stop();
-        st.sock.
-        sendInt32(0).
-        sendInt32(SCARD_S_SUCCESS).sendFlush();
-        return true;
-    }
-
-    bool PcscSessionBus::pcscCancel(PcscClient & st, uint32_t len)
-    {
-        if(len != 8)
-        {
-            Application::error("%s: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, st.id(), len);
-            return false;
-        }
-
-        uint32_t context = st.sock.recvInt32();
-        uint32_t ret = st.sock.recvInt32();
-
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64 ", localContext: 0x%08" PRIx32,
-                           __FUNCTION__, st.id(), st.remoteContext, context);
-
-        const std::scoped_lock guard{ clientsLock };
-        auto it = std::find_if(clients.begin(), clients.end(), [ &](auto & cl)
-        {
-            return 0 <= cl.id() && cl.context == context;
-        });
-
-        if(it != clients.end())
-        {
-            Application::debug(DebugType::App, "%s: clientId: %" PRId32 ", canceled found [ context: 0x%08" PRIx32 ", client Id: %" PRId32 "] and notify",
-                               __FUNCTION__, st.id(), context, it->id());
-            it->waitStatusChanged.cancel();
-            it->sock.reset();
-            ret = SCARD_S_SUCCESS;
-        }
-        else
-        {
-            Application::error("%s: clientId: 0x%08" PRIx32 ", canceled not found, context: 0x%08" PRIx32, __FUNCTION__, st.id(), context);
-            ret = SCARD_E_INVALID_HANDLE;
-        }
-
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localContext: 0x%016" PRIx64,
-                           __FUNCTION__, st.id(), context);
-
-        st.sock.
-        sendInt32(context).
-        sendInt32(ret).sendFlush();
-        return true;
-    }
-
-    std::list<std::string> PcscSessionBus::pcscListReaders(PcscClient & st)
-    {
-        if(! remote)
-            return {};
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ListReaders);
-
-        remote->sendIntLE64(st.remoteContext);
-
-        remote->sendFlush();
-
-        // wait
-        uint32_t readersCount = remote->recvIntLE32();
-
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers count: %" PRIu32, __FUNCTION__,
-                           st.id(), st.context, readersCount);
-
-        std::list<std::string> names;
-
-        while(readersCount--)
-        {
-            uint32_t len = remote->recvIntLE32();
-            names.emplace_back(remote->recvString(len));
-
-            if(names.back().size() > MAX_READERNAME - 1)
-            {
-                names.back().resize(MAX_READERNAME - 1);
-            }
-        }
-
-        return names;
-    }
-
-    int64_t PcscSessionBus::syncReaders(PcscClient & st, bool* changed)
-    {
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            return SCARD_E_NO_SERVICE;
-        }
-
-        auto names = pcscListReaders(st);
-
-        if(names.empty())
-        {
-            Application::warning("%s: no readers available", __FUNCTION__);
-            std::scoped_lock guard{ readersLock };
-
-            // reset all readers
-            for(auto & rd : readers)
-            {
-                if(rd.name[0])
-                {
-                    rd.reset();
-
-                    if(changed)
-                    {
-                        *changed = true;
-                    }
-                }
-            }
-
-            return SCARD_E_NO_READERS_AVAILABLE;
-        }
-
-        // sync readers
-        std::scoped_lock guard{ readersLock };
-
-        for(auto & rd : readers)
-        {
-            if(0 == rd.name[0])
-            {
-                continue;
-            }
-
-            auto it = std::find_if(names.begin(), names.end(),
-                                   [&rd](auto & name)
-            {
-                return 0 == name.compare(rd.name);
-            });
-
-            // not found, mark absent
-            if(it == names.end())
-            {
-                // reset reader
-                rd.reset();
-
-                if(changed)
-                {
-                    *changed = true;
-                }
-            }
-        }
-
-        for(const auto & name : names)
-        {
-            auto it = std::find_if(readers.begin(), readers.end(),
-                                   [ &](auto & rd)
-            {
-                return 0 == name.compare(rd.name);
-            });
-
-            // not found, add new
-            if(it == readers.end())
-            {
-                Application::debug(DebugType::App, "%s: added reader, name: `%s'", __FUNCTION__, name.c_str());
-                // find unused slot
-                auto rd = std::find_if(readers.begin(), readers.end(),
-                                       [ &](auto & rd)
-                {
-                    return 0 == rd.name[0];
-                });
-
-                if(rd == readers.end())
-                {
-                    Application::error("%s: failed, %s", __FUNCTION__, "all slots is busy");
-                    return SCARD_E_NO_MEMORY;
-                }
-
-                rd->reset();
-                syncReaderStatusChange(st, name, *rd, changed);
-            }
-        }
-
-        return SCARD_S_SUCCESS;
-    }
-
-    int64_t PcscSessionBus::pcscGetStatusChange(PcscClient & st, uint32_t timeout, SCARD_READERSTATE* states,
-            uint32_t statesCount)
-    {
-        if(! remote)
-        {
-            Application::error("%s: no service", __FUNCTION__);
-            return SCARD_E_NO_SERVICE;
-        }
-
-        // multiple client to one socket order
-        const std::scoped_lock guard{ remoteLock };
-        // send
-        remote->sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetStatusChange);
-        remote->sendIntLE64(st.remoteContext).sendIntLE32(timeout).sendIntLE32(statesCount);
-
-        for(uint32_t it = 0; it < statesCount; ++it)
-        {
-            const SCARD_READERSTATE & state = states[it];
-            remote->sendIntLE32(strnlen(state.szReader, MAX_READERNAME));
-            remote->sendIntLE32(state.dwCurrentState);
-            remote->sendIntLE32(state.cbAtr);
-            remote->sendString(state.szReader);
-            remote->sendRaw(state.rgbAtr, state.cbAtr);
-        }
-
-        remote->sendFlush();
-        // wait
-        uint32_t counts = remote->recvIntLE32();
-        uint32_t ret = remote->recvIntLE32();
-        Application::debug(DebugType::App, "%s: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", timeout: %" PRIu32 ", states: %" PRIu32,
-                           __FUNCTION__, st.id(), st.context, timeout, counts);
-        assertm(counts == statesCount, "count states invalid");
-
-        for(uint32_t it = 0; it < statesCount; ++it)
-        {
-            SCARD_READERSTATE & state = states[it];
-            state.dwCurrentState = remote->recvIntLE32();
-            state.dwEventState = remote->recvIntLE32();
-
-            uint32_t szReader = remote->recvIntLE32();
-            uint32_t cbAtr = remote->recvIntLE32();
-
-            std::string reader = remote->recvString(szReader);
-
-            if(reader != state.szReader)
-            {
-                Application::warning("%s: invalid reader, `%s' != `'", __FUNCTION__, reader.c_str(), state.szReader);
-            }
-
-            assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
-            state.cbAtr = cbAtr;
-            remote->recvData(state.rgbAtr, cbAtr);
-        }
-
-        return ret;
-    }
-
-    int PcscSessionBus::syncReaderStatusChange(PcscClient & st, const std::string & readerName, PcscLite::ReaderState & rd,
-            bool* changed)
-    {
-        const uint32_t timeout = 0;
-        SCARD_READERSTATE state = {};
-
-        state.szReader = readerName.c_str();
-        state.dwCurrentState = SCARD_STATE_UNAWARE;
-        state.cbAtr = MAX_ATR_SIZE;
-
-        auto ret = pcscGetStatusChange(st, timeout, & state, 1);
-
-        if(ret == SCARD_E_TIMEOUT)
-        {
-            Application::warning("%s: timeout", __FUNCTION__);
-            return ret;
-        }
-
-        if(ret != SCARD_S_SUCCESS)
-        {
-            Application::warning("%s: error: 0x%08" PRIx32 " (%s)", __FUNCTION__, ret, PcscLite::err2str(ret));
-            return ret;
-        }
-
-        Application::debug(DebugType::App, "%s: reader: `%s', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLen: %" PRIu32,
-                           __FUNCTION__, readerName.c_str(), state.dwCurrentState, state.dwEventState, state.cbAtr);
-
-        if(Application::isDebugLevel(DebugLevel::Trace))
-        {
-            auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
-            Application::debug(DebugType::App, "%s: atr: [ `%s' ]", __FUNCTION__, str.c_str());
-        }
-
-        if(state.dwEventState & SCARD_STATE_CHANGED)
-        {
-            assertm(readerName.size() < sizeof(rd.name), "reader name invalid");
-            assertm(state.cbAtr <= sizeof(rd.atr), "atr length invalid");
-            rd.state = state.dwEventState & SCARD_STATE_PRESENT ? (PcscLite::StatePresent | PcscLite::StatePowered |
-                       PcscLite::StateNegotiable) : PcscLite::StateAbsent;
-            std::copy_n(readerName.data(), readerName.size(), rd.name);
-            std::copy_n(state.rgbAtr, state.cbAtr, rd.atr);
-            rd.atrLen = state.cbAtr;
-
-            if(changed)
-            {
-                *changed = true;
-            }
-        }
-
-        return SCARD_S_SUCCESS;
     }
 }
 
@@ -1876,7 +2005,7 @@ int main(int argc, char** argv)
         }
         else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v"))
         {
-            std::cout << "version: " << LTSM_PCSC2SESSION_VERSION << std::endl;
+            std::cout << "version: " << LTSM_SESSION_PCSC_VERSION << std::endl;
             return EXIT_SUCCESS;
         }
         else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d"))

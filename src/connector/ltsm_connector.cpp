@@ -234,8 +234,7 @@ namespace LTSM::Connector
         Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(),
                           getgid());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
-        std::string socketFormat = _config.getString("xvfb:socket", "/tmp/.X11-unix/X%{display}");
-        std::filesystem::path socketPath = Tools::replace(socketFormat, "%{display}", screen);
+        std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
         // wait display starting
         bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &socketPath ]()
@@ -377,6 +376,16 @@ namespace LTSM::Connector
             {
                 prim->renderTo(fb);
             }
+        }
+    }
+
+    void DBusProxy::checkIdleTimeout(void)
+    {
+        if(_idleTimeoutSec &&
+            _idleTimeoutSec < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _idleSessionTp).count())
+        {
+            busSessionIdleTimeout(displayNum());
+            _idleSessionTp = std::chrono::steady_clock::now();
         }
     }
 } // namespace LTSM::Connector

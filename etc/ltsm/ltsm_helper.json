@@ -1,0 +1,15 @@
+{
+    "login:autocomplete": true,
+    "login:timeout:sec": 80,
+
+    "datetime:format": "dddd dd MMMM, hh:mm:ss",
+    "title:format": "X11 Remote Desktop Service (%{version})",
+
+    "pkcs11:auth:type": "ldap",
+    "pkcs11:auth:type:values": [ "cert:email", "cert:cn", "ldap", "script" ],
+
+    "pkcs11:ca:verify": false,
+    "pkcs11:cert:expires": false,
+
+    "pkcs11:script:path": "/etc/ltsm/pkcs11_auth.sh"
+}

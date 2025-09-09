@@ -151,7 +151,9 @@ namespace LTSM
 
         bool fileReadable(const std::filesystem::path &);
         bool setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid, mode_t mode = 0);
-    
+
+        std::filesystem::path x11UnixPath(int display);
+
         std::string fileToString(const std::filesystem::path &);
         std::vector<uint8_t> randomBytes(size_t bytesCount);
 

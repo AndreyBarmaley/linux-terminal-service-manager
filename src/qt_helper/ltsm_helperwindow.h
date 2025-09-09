@@ -28,14 +28,12 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 
+#include <mutex>
+
 #include "ltsm_service_proxy.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_sockets.h"
-
-#ifdef LTSM_PKCS11_AUTH
-#include "ltsm_ldap_wrapper.h"
-#endif
 
 namespace Ui
 {
@@ -88,8 +86,13 @@ namespace LTSM::LoginHelper
         void onAddRenderText(const int32_t & display, const std::string & text,
                              const TuplePosition & pos, const TupleColor & color) override {}
 
-
         void onSendBellSignal(const int32_t & display) override {}
+
+        void onSessionOnline(const int32_t & display, const std::string & userName) override {}
+
+        void onSessionOffline(const int32_t & display, const std::string & userName) override {}
+
+        void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
     protected:
         // dbus virtual signals
@@ -114,14 +117,9 @@ namespace LTSM::LoginHelper
         void pkcs11ListennerStartedNotify(int);
         void connectorShutdownNotify(void);
         void widgetStartedNotify(void);
-
-    public slots:
-        void sendAuthenticateLoginPass(const QString & user, const QString & pass);
-        void sendAuthenticateToken(const QString & user);
-        void widgetStartedAction(void);
     };
 
-    class LoginWindow : public QMainWindow, public ApplicationLog, protected XCB::RootDisplay
+    class LoginWindow : public QMainWindow, public ApplicationJsonConfig, protected XCB::RootDisplay
     {
         Q_OBJECT
 
@@ -173,6 +171,7 @@ namespace LTSM::LoginHelper
         int timerOneSec;
         int timer200ms;
         int timerReloadUsers;
+        int loginTimeSec;
         int labelPause;
         bool loginAutoComplete;
         bool initArguments;
@@ -182,9 +181,9 @@ namespace LTSM::LoginHelper
         QScopedPointer<QPoint> titleBarPressed;
 
 #ifdef LTSM_PKCS11_AUTH
-        QScopedPointer<LTSM::LdapWrapper> ldap;
         QScopedPointer<Pkcs11Client> pkcs11;
 #endif
+        std::once_flag widgetStarted;
     };
 }
 

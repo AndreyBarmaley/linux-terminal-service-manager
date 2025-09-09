@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <node name="/ltsm/session/audio">
-    <interface name="LTSM.Session.AUDIO">
+    <interface name="LTSM.Session.Audio">
         <method name="getVersion">
             <arg type="i" name="version" direction="out" />
         </method>
