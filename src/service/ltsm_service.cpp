@@ -4259,28 +4259,8 @@ namespace LTSM::Manager
         return true;
     }
 
-    void SystemService::inotifyWatchConfigCb(int fd, std::string filename)
+    void SystemService::inotifyWatchConfigEvent(const std::string & filename)
     {
-        // read single inotify_event (16byte)
-        struct inotify_event st = {};
-        const auto bufsz = sizeof(st);
-
-        if(auto len = read(fd, & st, bufsz); len != bufsz)
-        {
-            // non blocking mode, continue
-            // 
-            //Application::error("%s: %s failed, error: %s, code: %" PRId32,
-            //    "InotifyWatch", "read", strarror(errno), errno);
-            return;
-        }
-
-        // read name
-        if(st.len)
-        {
-            std::vector<char> buf(st.len);
-            read(fd, buf.data(), buf.size());
-        }
-
         JsonContentFile jsonFile(filename);
 
         if(jsonFile.isValid() && jsonFile.isObject())
@@ -4298,6 +4278,58 @@ namespace LTSM::Manager
             Application::error("%s: reload config %s, file: %s", __FUNCTION__, "failed", filename.c_str());
         }
     }
+    
+    void SystemService::inotifyWatchConfigCb(int fd, int wd, std::string filename)
+    {
+        std::array<char, 4096> buf = {};
+
+        while(true)
+        {
+            auto len = read(fd, buf.data(), buf.size());
+
+            if(len < 0)
+            {
+                if(errno == EAGAIN)
+                    continue;
+
+                if(errno != EBADF)
+                {
+                    Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                        __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                }
+
+                break;
+            }
+
+            if(len < sizeof(struct inotify_event))
+            {
+                Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                    __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                break;
+            }
+
+            auto beg = buf.begin();
+            auto end = buf.begin() + len;
+            bool reload = false;
+
+            while(beg < end)
+            {
+                auto st = (const struct inotify_event*) std::addressof(*beg);
+
+                if(st->mask && st->mask != IN_IGNORED)
+                {
+                    reload = true;
+                }
+
+                beg += sizeof(struct inotify_event) + st->len;
+            }
+
+            if(reload)
+                inotifyWatchConfigEvent(filename);
+        }
+
+        inotify_rm_watch(fd, wd);
+    }
 
     bool SystemService::inotifyWatchConfigStart(void)
     {
@@ -4313,7 +4345,7 @@ namespace LTSM::Manager
             return false;
         }
 
-        int wd = inotify_add_watch(fd, filename.c_str(), IN_CLOSE_WRITE);
+        int wd = inotify_add_watch(fd, filename.c_str(), IN_CLOSE_WRITE|IN_DELETE_SELF);
 
         if(0 > wd)
         {
@@ -4322,14 +4354,8 @@ namespace LTSM::Manager
             return false;
         }
 
-        if(0 > fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK))
-        {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "fcntl", strerror(errno), errno);
-            return false;
-        }
-
-        timerInotifyWatchConfig = Tools::BaseTimer::create<std::chrono::seconds>(3, true,
-                                        std::bind(& SystemService::inotifyWatchConfigCb, this, fd, filename));
+        inotifyWatchConfigFd = fd;
+        inotifyWatchConfigJob = std::thread(& SystemService::inotifyWatchConfigCb, this, fd, wd, filename);
 
         return true;
     }
@@ -4418,7 +4444,7 @@ namespace LTSM::Manager
 #ifdef WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
-        timerInotifyWatchConfig->stop();
+        close(inotifyWatchConfigFd);
         // wait dbus 100ms
         auto tp = std::chrono::steady_clock::now();
 
@@ -4436,6 +4462,10 @@ namespace LTSM::Manager
         }
 
         serviceAdaptor.reset();
+
+        if(inotifyWatchConfigJob.joinable())
+            inotifyWatchConfigJob.join();
+
         return EXIT_SUCCESS;
     }
 }

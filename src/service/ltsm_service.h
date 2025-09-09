@@ -389,12 +389,14 @@ namespace LTSM::Manager
 
     class SystemService : public ApplicationJsonConfig
     {
-        std::unique_ptr<Tools::BaseTimer> timerInotifyWatchConfig;
+        std::thread inotifyWatchConfigJob;
+        int inotifyWatchConfigFd;
         bool isBackground = false;
 
     protected:
         bool createXauthDir(void);
-        void inotifyWatchConfigCb(int fd, std::string filename);
+        void inotifyWatchConfigEvent(const std::string &);
+        void inotifyWatchConfigCb(int fd, int wd, std::string filename);
         bool inotifyWatchConfigStart(void);
 
     public:
