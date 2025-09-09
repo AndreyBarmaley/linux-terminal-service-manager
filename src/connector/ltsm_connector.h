@@ -36,6 +36,8 @@ namespace LTSM::Connector
 
     std::string homeRuntime(void);
 
+    enum class ConnectorType { VNC, LTSM, RDP };
+
     class DBusProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
     {
     protected:
@@ -83,7 +85,6 @@ namespace LTSM::Connector
 
     protected:
         // dbus virtual signals
-        void onDebugLevel(const int32_t & display, const std::string & level) override;
         void onPingConnector(const int32_t & display) override;
         void onClearRenderPrimitives(const int32_t & display) override;
         void onAddRenderRect(const int32_t & display,
@@ -97,18 +98,18 @@ namespace LTSM::Connector
         virtual void serverScreenUpdateRequest(const XCB::Region & ) = 0;
 
         int displayNum(void) const;
-        bool xcbConnect(int screen, XCB::RootDisplay & );
+        bool xcbConnect(int screen, XCB::RootDisplay &);
         void xcbDisableMessages(bool f);
         bool xcbAllowMessages(void) const;
 
     public:
-        DBusProxy(const JsonObject &, const char* conntype);
+        DBusProxy(const JsonObject &, const ConnectorType &);
         virtual ~DBusProxy();
 
         virtual int communication(void) = 0;
 
         std::string checkFileOption(const std::string & ) const;
-
+        const std::string & connectorType(void) const;
     };
 
     /* Connector::Service */

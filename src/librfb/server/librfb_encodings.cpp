@@ -896,9 +896,9 @@ namespace LTSM
         for(const auto & str: encopts)
         {
             // parce zlevel
-            if(0 == std::strncmp(str.c_str(), "zlev", 4))
+            if(startsWith(str, "zlev"))
             {
-                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                if(auto it = str.find(':'); it != str.npos && ++it != str.npos)
                 {
                     try
                     {
@@ -1022,9 +1022,9 @@ namespace LTSM
         for(const auto & str: encopts)
         {
             // parce quality
-            if(0 == std::strncmp(str.c_str(), "qual", 4))
+            if(startsWith(str, "qual"))
             {
-                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                if(auto it = str.find(':'); it != str.npos && ++it != str.npos)
                 {
                     try
                     {
@@ -1049,43 +1049,43 @@ namespace LTSM
             }
             else
             // parce sample
-            if(0 == std::strncmp(str.c_str(), "samp", 4))
+            if(startsWith(str, "samp"))
             {
-                if(auto it = str.find(':'); it++ != str.npos && it != str.npos)
+                if(auto it = str.find(':'); it != str.npos && ++it != str.npos)
                 {
-                    if(0 == str.compare(it, -1, "420"))
+                    if(0 == str.compare(it, 3, "420"))
                     {
                         jpegSamp = TJSAMP_420;
                         fullscreenUpdate = true;
                     }
                     else
-                    if(0 == str.compare(it, -1, "422"))
+                    if(0 == str.compare(it, 3, "422"))
                     {
                         jpegSamp = TJSAMP_422;
                         fullscreenUpdate = true;
                     }
                     else
-                    if(0 == str.compare(it, -1, "440"))
+                    if(0 == str.compare(it, 3, "440"))
                     {
                         jpegSamp = TJSAMP_440;
                         fullscreenUpdate = true;
                     }
                     else
-                    if(0 == str.compare(it, -1, "444"))
+                    if(0 == str.compare(it, 3, "444"))
                     {
                         jpegSamp = TJSAMP_444;
                         fullscreenUpdate = true;
                     }
 #ifndef LTSM_CENTOS7
                     else
-                    if(0 == str.compare(it, -1, "411"))
+                    if(0 == str.compare(it, 3, "411"))
                     {
                         jpegSamp = TJSAMP_411;
                         fullscreenUpdate = true;
                     }
 #endif
                     else
-                    if(0 == str.compare(it, -1, "gray"))
+                    if(0 == str.compare(it, 4, "gray"))
                     {
                         jpegSamp = TJSAMP_GRAY;
                         fullscreenUpdate = true;

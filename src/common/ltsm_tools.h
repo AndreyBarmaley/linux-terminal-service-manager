@@ -139,8 +139,6 @@ namespace LTSM
 
     namespace Tools
     {
-        uint32_t debugTypes(const std::list<std::string> &);
-
         bool binaryToFile(const void*, size_t len, const std::filesystem::path &, bool append = false);
         std::vector<uint8_t> fileToBinaryBuf(const std::filesystem::path &);
 
@@ -152,7 +150,7 @@ namespace LTSM
         std::string quotedString(std::string_view);
 
         bool fileReadable(const std::filesystem::path &);
-        void setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid);
+        bool setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid, mode_t mode = 0);
     
         std::string fileToString(const std::filesystem::path &);
         std::vector<uint8_t> randomBytes(size_t bytesCount);
@@ -212,17 +210,17 @@ namespace LTSM
         template<typename Iterator>
         Iterator nextToEnd(Iterator it1, size_t count, Iterator it2)
         {
-            if(it1 != it2)
-            {
-                // check itbeg nexted
-                for(auto num = 0; num < count; ++num)
-                {
-                    it1 = std::next(it1);
+            if(it1 == it2)
+                return it1;
 
-                    if(it1 == it2)
-                    {
-                        return it2;
-                    }
+            // check itbeg nexted
+            for(auto num = 0; num < count; ++num)
+            {
+                it1 = std::next(it1);
+
+                if(it1 == it2)
+                {
+                    return it2;
                 }
             }
 

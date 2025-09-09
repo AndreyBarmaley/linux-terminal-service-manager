@@ -86,7 +86,7 @@ namespace LTSM::Connector
         Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s, uid: %" PRIu32, __FUNCTION__, display,
                             userName.c_str(), userUid);
         int oldDisplay = displayNum();
-        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
+        int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
         if(newDisplay < 0)
         {
@@ -192,11 +192,6 @@ namespace LTSM::Connector
 
             for(const auto & skey : jo.keys())
             {
-                if(3 < skey.size() && skey.substr(0, 3) == "key")
-                {
-                    continue;
-                }
-
                 try
                 {
                     _keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
@@ -233,7 +228,7 @@ namespace LTSM::Connector
             throw proto_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Conn, "%s: xcb max request: %lu", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Xcb, "%s: xcb max request: %lu", __FUNCTION__, xcbDisplay()->getMaxRequest());
         // init server format
         _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
@@ -284,27 +279,23 @@ namespace LTSM::Connector
         // wait widget started signal(onHelperWidgetStarted), 3000ms, 100 ms pause
         bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]()
         {
-            return ! ! this->_loginWidgetStarted;
+            return !! this->_loginWidgetStarted;
         });
 
         if(! waitWidgetStarted)
         {
-            Application::warning("%s: wait _loginWidgetStarted failed", "serverConnectedEvent");
+            Application::error("%s: wait _loginWidgetStarted failed", "serverConnectedEvent");
             throw proto_error(NS_FuncName);
         }
 
 #ifdef LTSM_WITH_GSSAPI
-        auto info = ServerEncoder::authInfo();
-
-        if(! info.first.empty())
+        if(auto info = ServerEncoder::authInfo(); ! info.first.empty())
         {
-            std::thread([this, login = info.first]()
-            {
-                this->helperSetSessionLoginPassword(this->displayNum(), login, "", false);
-                // not so fast
-                std::this_thread::sleep_for(300ms);
-                this->busSetAuthenticateToken(this->displayNum(), login);
-            }).detach();
+            const auto & login = info.first;
+            this->helperSetSessionLoginPassword(this->displayNum(), login, "", false);
+            // not so fast
+            std::this_thread::sleep_for(50ms);
+            this->busSetAuthenticateToken(this->displayNum(), login);
         }
 
 #endif
@@ -432,7 +423,7 @@ namespace LTSM::Connector
 
     void ConnectorLtsm::systemClientVariables(const JsonObject & jo)
     {
-        Application::debug(DebugType::Conn, "%s: count: %lu", __FUNCTION__, jo.size());
+        Application::debug(DebugType::App, "%s: count: %lu", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments"))
         {
@@ -482,6 +473,7 @@ namespace LTSM::Connector
 
         if(cursorId)
         {
+    	    Application::debug(DebugType::App, "%s: cursor id: 0x%08" PRIx32, __FUNCTION__, cursorId);
             cursorFailed(cursorId);
         }
     }
@@ -518,6 +510,8 @@ namespace LTSM::Connector
                 }
             }
 
+    	    //Application::debug(DebugType::Input, "%s: pressed: %d, scancode: 0x%08" PRIx32 ", keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
+
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();
         }
@@ -531,7 +525,7 @@ namespace LTSM::Connector
         {
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB)))
             {
-                Application::debug(DebugType::Conn, "%s: layout: %s", __FUNCTION__, layout.c_str());
+                Application::debug(DebugType::App, "%s: layout: %s", __FUNCTION__, layout.c_str());
                 auto names = xkb->getNames();
                 auto it = std::find_if(names.begin(), names.end(), [ &](auto & str)
                 {
@@ -540,6 +534,7 @@ namespace LTSM::Connector
 
                 if(it != names.end())
                 {
+    		    //Application::debug(DebugType::Input, "%s: group: `s'", __FUNCTION__, it->c_str());
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 }
                 else
@@ -563,7 +558,7 @@ namespace LTSM::Connector
                 return;
             }
 
-            Application::debug(DebugType::Conn, "%s: files count: %s", __FUNCTION__, fa->size());
+            Application::debug(DebugType::App, "%s: files count: %s", __FUNCTION__, fa->size());
 
             // check transfer disabled
             if(_config.getBoolean("transfer:file:disabled", false))
@@ -691,7 +686,7 @@ namespace LTSM::Connector
         // filepath - client file path
         // tmpfile - server tmpfile
         // dstdir - server target directory
-        Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::App, "%s: display: %" PRId32, __FUNCTION__, display);
 
         if(display == displayNum())
         {

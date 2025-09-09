@@ -31,6 +31,7 @@
 #include <memory>
 #include <sstream>
 #include <utility>
+#include <iomanip>
 #include <typeindex>
 #include <filesystem>
 #include <string_view>
@@ -580,12 +581,19 @@ namespace LTSM
         JsonObjectStream & push(std::string_view, const json_plain &);
         JsonObjectStream & push(std::string_view, const std::string &);
         JsonObjectStream & push(std::string_view, const std::string_view &);
+
         JsonObjectStream & push(std::string_view, const char*);
-        JsonObjectStream & push(std::string_view, int);
-        JsonObjectStream & push(std::string_view, size_t);
-        JsonObjectStream & push(std::string_view, double);
         JsonObjectStream & push(std::string_view, bool);
         JsonObjectStream & push(std::string_view);
+
+        template<typename T>
+        JsonObjectStream & push(std::string_view key, const T & val)
+        {
+            if(comma) { os << ","; }
+            os << std::quoted(key) << ":" << val;
+            comma = true;
+            return *this;
+        }
 
         json_plain flush(void) override;
     };
@@ -610,11 +618,18 @@ namespace LTSM
         JsonArrayStream & push(const std::string &);
         JsonArrayStream & push(const std::string_view &);
         JsonArrayStream & push(const char*);
-        JsonArrayStream & push(int);
-        JsonArrayStream & push(size_t);
-        JsonArrayStream & push(double);
+
         JsonArrayStream & push(bool);
         JsonArrayStream & push(void);
+
+        template<typename T>
+        JsonArrayStream & push(const T & val)
+        {
+            if(comma) { os << ","; }
+            os << val;
+            comma = true;
+            return *this;
+        }
 
         json_plain flush(void) override;
     };

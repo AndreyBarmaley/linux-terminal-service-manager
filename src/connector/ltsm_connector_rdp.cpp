@@ -215,8 +215,8 @@ namespace LTSM::Connector
                 throw EXIT_FAILURE;
             }
 
-            Application::debug(DebugType::Conn, "peer context: %p", peer);
-            Application::debug(DebugType::Conn, "rdp context: %p", peer->context);
+            Application::debug(DebugType::App, "peer context: %p", peer);
+            Application::debug(DebugType::App, "rdp context: %p", peer->context);
             context = static_cast<ServerContext*>(peer->context);
             context->config = & config;
             context->conrdp = connector;
@@ -375,7 +375,7 @@ namespace LTSM::Connector
         }
     };
 
-    ConnectorRdp::ConnectorRdp(const JsonObject & jo) : DBusProxy(jo, "rdp")
+    ConnectorRdp::ConnectorRdp(const JsonObject & jo) : DBusProxy(jo, ConnectorType::RDP)
     {
     }
 
@@ -546,7 +546,7 @@ namespace LTSM::Connector
             return false;
         }
 
-        Application::debug(DebugType::Conn, "login session request success, display: %d", screen);
+        Application::debug(DebugType::App, "login session request success, display: %d", screen);
 
         if(! xcbConnect(screen, *this))
         {
@@ -601,7 +601,7 @@ namespace LTSM::Connector
 
             Application::notice("%s: dbus signal, display: %" PRId32 ", username: %s", __FUNCTION__, display, userName.c_str());
             int oldDisplay = displayNum();
-            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, _conntype);
+            int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
             if(newDisplay < 0)
             {
@@ -712,7 +712,7 @@ namespace LTSM::Connector
         //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
         // reply info dump
-        Application::debug(DebugType::Conn, "%s: request size: [%" PRIu16 ", %" PRIu16 "], reply length: %lu, bits per pixel: %" PRIu8
+        Application::debug(DebugType::App, "%s: request size: [%" PRIu16 ", %" PRIu16 "], reply length: %lu, bits per pixel: %" PRIu8
                            ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
                            __FUNCTION__, reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
@@ -761,7 +761,7 @@ namespace LTSM::Connector
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Conn, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
+        Application::debug(DebugType::App, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
                            ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
@@ -901,7 +901,7 @@ namespace LTSM::Connector
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Conn, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
+        Application::debug(DebugType::App, "%s: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
                            ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
@@ -1175,7 +1175,7 @@ namespace LTSM::Connector
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code)
     {
-        Application::debug(DebugType::Conn, "%s: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: %p, context: %p", __FUNCTION__, flags, code,
+        Application::debug(DebugType::App, "%s: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: %p, context: %p", __FUNCTION__, flags, code,
                            input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
@@ -1237,7 +1237,7 @@ namespace LTSM::Connector
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy)
     {
-        Application::debug(DebugType::Conn, "%s: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: %p, context: %p", __FUNCTION__,
+        Application::debug(DebugType::App, "%s: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: %p, context: %p", __FUNCTION__,
                            flags, posx, posy, input, input->context);
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
@@ -1286,7 +1286,7 @@ namespace LTSM::Connector
 
     BOOL ConnectorRdp::cbServerRefreshRect(rdpContext* rdpctx, BYTE count, const RECTANGLE_16* areas)
     {
-        Application::debug(DebugType::Conn, "%s: count rects: %d, context: %p", __FUNCTION__, (int) count, rdpctx);
+        Application::debug(DebugType::App, "%s: count rects: %d, context: %p", __FUNCTION__, (int) count, rdpctx);
         auto context = static_cast<ServerContext*>(rdpctx);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
@@ -1321,7 +1321,7 @@ namespace LTSM::Connector
 
         if(area && 0 < allow)
         {
-            Application::debug(DebugType::Conn, "%s: peer restore output(left:%d,top:%d,right:%d,bottom:%d)", __FUNCTION__, area->left, area->top,
+            Application::debug(DebugType::App, "%s: peer restore output(left:%d,top:%d,right:%d,bottom:%d)", __FUNCTION__, area->left, area->top,
                                area->right, area->bottom);
             connector->xcbDisableMessages(false);
             auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
@@ -1329,7 +1329,7 @@ namespace LTSM::Connector
         }
         else
         {
-            Application::debug(DebugType::Conn, "%s: peer minimized and suppress output", __FUNCTION__);
+            Application::debug(DebugType::App, "%s: peer minimized and suppress output", __FUNCTION__);
             connector->xcbDisableMessages(true);
         }
 

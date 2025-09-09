@@ -23,6 +23,7 @@
 #ifndef _LTSM_APPLICATION_
 #define _LTSM_APPLICATION_
 
+#include <list>
 #include <mutex>
 #include <string>
 #include <cstdarg>
@@ -44,10 +45,10 @@ namespace LTSM
         Xcb = 1 << 31,
         Rfb = 1 << 30,
         Clip = 1 << 29,
-        Socket = 1 << 28,
+        Sock = 1 << 28,
         Tls = 1 << 27,
         Channels = 1 << 26,
-        Conn = 1 << 25,
+        Dbus = 1 << 25,
         Enc = 1 << 24,
         X11Srv = 1 << 23,
         X11Cli = 1 << 22,
@@ -58,10 +59,8 @@ namespace LTSM
         Pkcs11 = 1 << 18,
         Sdl = 1 << 17,
         App = 1 << 16,
-        Mgr = 1 << 15,
         Ldap = 1 << 14,
-        Gss = 1 << 13,
-        Helper = 1 << 14
+        Gss = 1 << 13
     };
 
     class Application
@@ -93,7 +92,7 @@ namespace LTSM
         static void setDebugLevel(std::string_view level);
         static bool isDebugLevel(const DebugLevel &);
 
-        static void setDebugTypes(uint32_t);
+        static void setDebugTypes(const std::list<std::string> &);
         static bool isDebugTypes(uint32_t vals);
 
 #ifdef __UNIX__
@@ -104,7 +103,16 @@ namespace LTSM
     };
 
 #ifdef LTSM_WITH_JSON
-    class ApplicationJsonConfig : public Application
+    class ApplicationLog : public Application
+    {
+    protected:
+	void setAppLog(const JsonObject*);
+
+    public:
+        ApplicationLog(std::string_view ident);
+    };
+
+    class ApplicationJsonConfig : public ApplicationLog
     {
         JsonObject json;
 
@@ -114,7 +122,7 @@ namespace LTSM
     public:
         ApplicationJsonConfig(std::string_view ident, const char* fconf = nullptr);
 
-        void readConfig(const std::filesystem::path &);
+        bool readConfig(const std::filesystem::path &);
 
         void configSetInteger(const std::string &, int);
         void configSetBoolean(const std::string &, bool);

@@ -254,18 +254,19 @@ namespace LTSM
     }
 
     /// AudioSessionBus
-    AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn, bool debug)
+    AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_audio2session"),
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_audio_path}),
+        AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_audio_path})
 #else
-        :
-        AdaptorInterfaces(conn, dbus_session_audio_path),
+        AdaptorInterfaces(conn, dbus_session_audio_path)
 #endif
-          Application("ltsm_audio2session")
     {
-        Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
-        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
         registerAdaptor();
+
+        if(debug)
+        {
+            Application::setDebugLevel(DebugLevel::Debug);
+        }
     }
 
     AudioSessionBus::~AudioSessionBus()
@@ -275,36 +276,38 @@ namespace LTSM
 
     int AudioSessionBus::start(void)
     {
-        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
+        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_AUDIO2SESSION_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
 
         conn->enterEventLoop();
 
+        Application::debug(DebugType::App, "service stopped");
         return EXIT_SUCCESS;
     }
 
     int32_t AudioSessionBus::getVersion(void)
     {
-        Application::debug(DebugType::Audio, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
         return LTSM_AUDIO2SESSION_VERSION;
     }
 
     void AudioSessionBus::serviceShutdown(void)
     {
-        Application::info("%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "%s: pid: %s", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 
     void AudioSessionBus::setDebug(const std::string & level)
     {
+        Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
         setDebugLevel(level);
     }
 
     bool AudioSessionBus::connectChannel(const std::string & clientSocket)
     {
-        Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
 
         if(std::any_of(clients.begin(), clients.end(), [ &](auto & cli) { return cli.socketPath == clientSocket && ! ! cli.sock; }))
         {
@@ -318,7 +321,7 @@ namespace LTSM
 
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket)
     {
-        Application::info("%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
         clients.remove_if([ &](auto & cli)
         {
             return cli.socketPath == clientSocket;

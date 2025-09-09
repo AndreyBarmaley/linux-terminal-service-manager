@@ -12,7 +12,7 @@
             <arg type="s" name="connType" direction="in" />
             <arg type="i" name="display" direction="out" />
         </method>
-        <method name="busCreateAuthFile">
+        <method name="busDisplayAuthFile">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="path" direction="out" />
         </method>
@@ -48,10 +48,6 @@
             <arg type="b" name="result" direction="out" />
         </method>
         <method name="busSetDebugLevel">
-            <arg type="s" name="level" direction="in" />
-        </method>
-        <method name="busSetConnectorDebugLevel">
-            <arg type="i" name="display" direction="in" />
             <arg type="s" name="level" direction="in" />
         </method>
         <method name="busSetChannelDebug">
@@ -295,10 +291,6 @@
             <arg type="s" name="text" />
             <arg type="(nn)" name="pos" />
             <arg type="(yyy)" name="color" />
-        </signal>
-        <signal name="debugLevel">
-            <arg type="i" name="display" />
-            <arg type="s" name="level" />
         </signal>
         <signal name="debugChannel">
             <arg type="i" name="display" />

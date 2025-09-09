@@ -179,7 +179,7 @@ if(LTSM_BUILD_SERVER)
         project(LTSM_pcsc2session)
         set(CUR_TARGET LTSM_pcsc2session)
 
-        CommonDefaults(SDBUS SYSTEMD)
+        CommonDefaults(SDBUS SYSTEMD JSON)
 
         add_executable(${CUR_TARGET} ltsm_pcsc_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)
@@ -195,7 +195,7 @@ if(LTSM_BUILD_SERVER)
         project(LTSM_fuse2session)
         set(CUR_TARGET LTSM_fuse2session)
 
-        CommonDefaults(SDBUS SYSTEMD)
+        CommonDefaults(SDBUS SYSTEMD JSON)
 
         add_executable(${CUR_TARGET} ltsm_fuse_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)
@@ -211,7 +211,7 @@ if(LTSM_BUILD_SERVER)
         project(LTSM_audio2session)
         set(CUR_TARGET LTSM_audio2session)
 
-        CommonDefaults(SDBUS SYSTEMD)
+        CommonDefaults(SDBUS SYSTEMD JSON)
 
         add_executable(${CUR_TARGET} ltsm_audio_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)

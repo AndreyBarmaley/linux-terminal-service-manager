@@ -268,7 +268,7 @@ namespace LTSM
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -302,11 +302,11 @@ namespace LTSM
 
     void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -339,7 +339,7 @@ namespace LTSM
 
     void ll_readlink(fuse_req_t req, fuse_ino_t ino)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -396,11 +396,11 @@ namespace LTSM
 
     void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
 
         if(fi)
         {
-            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -451,11 +451,11 @@ namespace LTSM
 
     void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -539,11 +539,11 @@ namespace LTSM
 
     void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -620,11 +620,11 @@ namespace LTSM
 
     void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info* fi)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi)
         {
-            Application::debug(DebugType::Fuse, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
         else
         {
@@ -716,7 +716,7 @@ namespace LTSM
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask)
     {
-        Application::debug(DebugType::Fuse, "%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
+        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse)
@@ -794,7 +794,7 @@ namespace LTSM
             throw fuse_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Fuse, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
+        Application::debug(DebugType::App, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
         auto pair = inodes.emplace(1, PathStat{"/", std::move(st)});
         pathes.emplace("/", pair.first->second.statPtr());
         // fuse init
@@ -918,10 +918,10 @@ namespace LTSM
             auto ino = st.st_ino;
 
             if(ino != 1 &&
-                    path.substr(0, remotePoint.size()) == remotePoint)
+                    startsWith(path, remotePoint))
             {
                 path = path.substr(remotePoint.size());
-                Application::debug(DebugType::Fuse, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
+                Application::debug(DebugType::App, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
                 // added relative path
                 auto pair = inodes.emplace(ino, PathStat{path, std::move(st)});
                 pathes.emplace(std::move(path), pair.first->second.statPtr());
@@ -1004,17 +1004,19 @@ namespace LTSM
     }
 
     /// FuseSessionBus
-    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug)
+    FuseSessionBus::FuseSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_fuse2session"),
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_fuse_path}),
+        AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_fuse_path})
 #else
-        :
-        AdaptorInterfaces(conn, dbus_session_fuse_path),
+        AdaptorInterfaces(conn, dbus_session_fuse_path)
 #endif
-          Application("ltsm_fuse2session")
     {
-        Application::setDebug(DebugTarget::Syslog, debug ? DebugLevel::Debug : DebugLevel::Info);
         registerAdaptor();
+
+        if(debug)
+        {
+            Application::setDebugLevel(DebugLevel::Debug);
+        }
     }
 
     FuseSessionBus::~FuseSessionBus()
@@ -1024,7 +1026,7 @@ namespace LTSM
 
     int FuseSessionBus::start(void)
     {
-        Application::info("started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
+        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_FUSE2SESSION_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
@@ -1038,25 +1040,26 @@ namespace LTSM
             if(fuse->sock) { fuse->sock->reset(); }
         }
 
+        Application::debug(DebugType::App, "service stopped");
         return EXIT_SUCCESS;
     }
 
     int32_t FuseSessionBus::getVersion(void)
     {
-        Application::debug(DebugType::Fuse, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
         return LTSM_FUSE2SESSION_VERSION;
     }
 
     void FuseSessionBus::serviceShutdown(void)
     {
-        Application::debug(DebugType::Fuse, "%s, pid: %d", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "%s: pid: %d", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 
     bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
                                     const std::string & fuseSocket)
     {
-        Application::info("%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
+        Application::debug(DebugType::Dbus, "%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
                           remotePoint.c_str(), fuseSocket.c_str());
 
         if(std::any_of(childs.begin(), childs.end(), [ &](auto & ptr) { return ptr->localPoint == localPoint; }))
@@ -1083,12 +1086,13 @@ namespace LTSM
 
     void FuseSessionBus::setDebug(const std::string & level)
     {
+        LTSM::Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
         setDebugLevel(level);
     }
 
     void FuseSessionBus::umountPoint(const std::string & localPoint)
     {
-        LTSM::Application::info("%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
+        LTSM::Application::debug(DebugType::Dbus, "%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
         childs.remove_if([ &](auto & ptr)
         {
             return ptr->localPoint == localPoint;

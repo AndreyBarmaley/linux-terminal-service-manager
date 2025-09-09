@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #ifdef __UNIX__
@@ -381,83 +382,6 @@ namespace LTSM
 
 #endif // __UNIX__
 
-    uint32_t Tools::debugTypes(const std::list<std::string> & typesList)
-    {
-        uint32_t types = 0;
-                    
-        for(const auto & val: typesList)
-        {
-            auto slower = lower(val);
-        
-            if(slower == "xcb")
-                types |= DebugType::Xcb;
-            else
-            if(slower == "rfb")
-                types |= DebugType::Rfb;
-            else
-            if(slower == "clip")
-                types |= DebugType::Clip;
-            else
-            if(slower == "sock")
-                types |= DebugType::Socket;
-            else
-            if(slower == "tls")
-                types |= DebugType::Tls;
-            else
-            if(slower == "chnl")
-                types |= DebugType::Channels;
-            else
-            if(slower == "conn")
-                types |= DebugType::Conn;
-            else
-            if(slower == "enc")
-                types |= DebugType::Enc;
-            else
-            if(slower == "x11srv")
-                types |= DebugType::X11Srv;
-            else
-            if(slower == "x11cli")
-                types |= DebugType::X11Cli;
-            else
-            if(slower == "audio")
-                types |= DebugType::Audio;
-            else
-            if(slower == "fuse")
-                types |= DebugType::Fuse;
-            else
-            if(slower == "pcsc")
-                types |= DebugType::Pcsc;
-            else
-            if(slower == "pkcs11")
-                types |= DebugType::Pkcs11;
-            else
-            if(slower == "sdl")
-                types |= DebugType::Sdl;
-            else
-            if(slower == "app")
-                types |= DebugType::App;
-            else
-            if(slower == "mgr")
-                types |= DebugType::Mgr;
-            else
-            if(slower == "ldap")
-                types |= DebugType::Ldap;
-            else
-            if(slower == "gss")
-                types |= DebugType::Gss;
-            else
-            if(slower == "helper")
-                types |= DebugType::Helper;
-            else
-            if(slower == "all")
-                types |= DebugType::All;
-            else
-                Application::warning( "%s: unknown debug marker: `%s'", __FUNCTION__, slower.c_str());
-        }
-        
-        return types;
-    }
-
     std::list<std::string> Tools::readDir(const std::filesystem::path & path, bool recurse)
     {
         std::list<std::string> res;
@@ -760,13 +684,23 @@ namespace LTSM
         return 0 == access(path.c_str(), R_OK);
     }
 
-    void Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid)
+    bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode)
     {
         if(0 != chown(path.c_str(), uid, gid))
         {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "chown", strerror(errno), errno,
-                               path.c_str());
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
+            return false;
         }
+
+        if(mode && 0 != chmod(path.c_str(), mode))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                    __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
+            return false;
+        }
+
+        return true;
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file)

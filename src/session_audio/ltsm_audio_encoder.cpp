@@ -58,6 +58,8 @@ namespace LTSM
 
     bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len)
     {
+        Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
+
         if(len)
         {
             last.insert(last.end(), ptr, ptr + len);

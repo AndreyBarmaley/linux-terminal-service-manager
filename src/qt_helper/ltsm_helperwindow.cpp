@@ -79,7 +79,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", message: `%s'",
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", message: `%s'",
                            __FUNCTION__, display, msg.c_str());
 
             emit loginFailureNotify(QString::fromStdString(msg));
@@ -90,7 +90,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", username: `%s', uid: %" PRIu32,
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", username: `%s', uid: %" PRIu32,
                            __FUNCTION__, display, userName.c_str(), userUid);
 
             emit loginSuccessNotify(QString::fromStdString(userName));
@@ -102,7 +102,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", login: `%s', pass length: %" PRIu32 ", auto login: %d",
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", login: `%s', pass length: %" PRIu32 ", auto login: %d",
                            __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
@@ -113,7 +113,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
                            __FUNCTION__, display, connectorId);
 
             emit pkcs11ListennerStartedNotify(connectorId);
@@ -124,7 +124,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", tz: `%s'",
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", tz: `%s'",
                            __FUNCTION__, display, tz.c_str());
 
             setenv("TZ", tz.c_str(), 1);
@@ -135,7 +135,7 @@ namespace LTSM::LoginHelper
     {
         if(display == displayNum)
         {
-            Application::debug(DebugType::Helper, "%s: display: %" PRId32,
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
                            __FUNCTION__, display);
 
             emit connectorShutdownNotify();
@@ -146,6 +146,9 @@ namespace LTSM::LoginHelper
     {
         if(displayNum == display)
         {
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
+                           __FUNCTION__, display);
+
             emit widgetStartedNotify();
         }
     }
@@ -155,31 +158,25 @@ namespace LTSM::LoginHelper
     {
         auto login = user.toStdString();
 
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", user: `%s', pass length: %" PRIu32,
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: `%s', pass length: %" PRIu32,
                            __FUNCTION__, displayNum, login.c_str(), pass.size());
 
-        std::thread([this, display = displayNum, user = std::move(login), pass = pass.toStdString()]()
-        {
-            this->busSetAuthenticateLoginPass(display, user, pass);
-        }).detach();
+        this->busSetAuthenticateLoginPass(displayNum, login, pass.toStdString());
     }
 
     void DBusProxy::sendAuthenticateToken(const QString & user)
     {
         auto login = user.toStdString();
 
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32 ", user: `%s'",
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: `%s'",
                            __FUNCTION__, displayNum, login.c_str());
 
-        std::thread([this, display = displayNum, user = std::move(login)]()
-        {
-            this->busSetAuthenticateToken(display, user);
-        }).detach();
+        this->busSetAuthenticateToken(displayNum, login);
     }
 
     void DBusProxy::widgetStartedAction(void)
     {
-        Application::debug(DebugType::Helper, "%s: display: %" PRId32,
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
                            __FUNCTION__, displayNum);
 
         std::thread([this, display = displayNum]()
@@ -191,12 +188,10 @@ namespace LTSM::LoginHelper
 
     /// LoginWindow
     LoginWindow::LoginWindow(QWidget* parent) :
-        QMainWindow(parent), LTSM::Application("ltsm_helper"),
+        QMainWindow(parent), ApplicationLog("ltsm_helper"),
         ui(new Ui::LoginWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer200ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false)
     {
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-
         if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr))
         {
             Application::error("%s: xcb connect failed", __FUNCTION__);
@@ -247,7 +242,7 @@ namespace LTSM::LoginHelper
             }
         }
 
-        Application::info("%s: started, display: %d", "LoginWindow", displayNum);
+        Application::info("helper started, display: %d, pid: %d", displayNum, getpid());
     }
 
     LoginWindow::~LoginWindow()
@@ -257,7 +252,7 @@ namespace LTSM::LoginHelper
 
     void LoginWindow::switchLoginMode(void)
     {
-        Application::debug(DebugType::Helper, "%s: set login mode", __FUNCTION__);
+        Application::debug(DebugType::App, "%s: set login mode", __FUNCTION__);
 
         tokenAuthMode = false;
         ui->labelDomain->setText(tr("domain:"));
@@ -304,7 +299,7 @@ namespace LTSM::LoginHelper
 #ifdef LTSM_PKCS11_AUTH
         auto & tokens = pkcs11->getTokens();
 
-        Application::debug(DebugType::Helper, "%s: tokens count: %lu", __FUNCTION__, tokens.size());
+        Application::debug(DebugType::App, "%s: tokens count: %lu", __FUNCTION__, tokens.size());
 
         if(tokens.empty())
         {
@@ -526,14 +521,20 @@ namespace LTSM::LoginHelper
         auto pin = ui->lineEditPassword->text().toStdString();
         // generate 32byte hash
         std::vector<uint8_t> hash1 = Tools::randomBytes(32);
+
+        Application::debug(DebugType::Pkcs11, "%s: hash1 random bytes: %lu", __FUNCTION__, hash1.size());
         setLabelInfo("check token...");
         bool certValidate = false;
 
         try
         {
             auto dt = gnutlsEncryptData(certPtr->objectValue, hash1);
+            Application::debug(DebugType::Pkcs11, "%s: hash1 encrypted size: %lu", __FUNCTION__, dt->size);
+
             std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size,
                                          CKM_RSA_PKCS);
+
+            Application::debug(DebugType::Pkcs11, "%s: hash2 decrypted size: %lu", __FUNCTION__, hash2.size());
             certValidate = (hash1 == hash2);
         }
         catch(const std::exception & err)
@@ -543,6 +544,8 @@ namespace LTSM::LoginHelper
         if(! certValidate)
         {
             setLabelError("token failed");
+            Application::warning("%s: %s failed", __FUNCTION__, "pkcs11 check");
+
             ui->pushButtonLogin->setDisabled(false);
             ui->comboBoxUsername->setDisabled(false);
             //ui->comboBoxUsername->setToolTip("");
@@ -550,36 +553,37 @@ namespace LTSM::LoginHelper
             ui->lineEditPassword->setFocus();
             return;
         }
-
-        if(ldap)
+        else
         {
-            auto der = ssl.toDer();
-            auto dn = ldap->findDnFromCertificate((const uint8_t*) der.data(), der.size());
+            Application::notice("%s: %s success", __FUNCTION__, "pkcs11 check");
+        }
 
-            if(! dn.empty())
+        if(! ldap)
+        {
+            setLabelError("LDAP: initialize failed");
+            return;
+        }
+
+        auto der = ssl.toDer();
+        if(auto dn = ldap->findDnFromCertificate((const uint8_t*) der.data(), der.size()); ! dn.empty())
+        {
+            setLabelInfo("LDAP: certificate found");
+
+            if(auto login = ldap->findLoginFromDn(dn); ! login.empty())
             {
-                setLabelInfo("LDAP: certificate found");
-                auto login = ldap->findLoginFromDn(dn);
-
-                if(! login.empty())
-                {
-                    setLabelInfo("LDAP: login found");
-                    dbus->sendAuthenticateToken(QString::fromStdString(login));
-                    return;
-                }
-                else
-                {
-                    setLabelError("LDAP: login not found");
-                }
+                Application::debug(DebugType::Ldap, "%s: LDAP login found: `%s'", __FUNCTION__, login.c_str());
+                setLabelInfo("LDAP: login found");
+                dbus->sendAuthenticateToken(QString::fromStdString(login));
+                return;
             }
             else
             {
-                setLabelError("LDAP: certificate not found");
+                setLabelError("LDAP: login not found");
             }
         }
         else
         {
-            setLabelError("LDAP: initialize failed");
+            setLabelError("LDAP: certificate not found");
         }
 
 #endif
@@ -695,7 +699,7 @@ namespace LTSM::LoginHelper
         if((ev->buttons() & Qt::LeftButton) && titleBarPressed)
         {
             auto distance = ev->globalPos() - *titleBarPressed;
-            * titleBarPressed = ev->globalPos();
+            *titleBarPressed = ev->globalPos();
             move(pos() + distance);
         }
     }
@@ -763,11 +767,13 @@ namespace LTSM::LoginHelper
 
     void LoginWindow::shutdownConnectorCallback(void)
     {
+        Application::debug(DebugType::App, "%s: close", __FUNCTION__);
         close();
     }
 
     void LoginWindow::loginSuccessCallback(const QString & username)
     {
+        Application::debug(DebugType::App, "%s: close", __FUNCTION__);
         close();
     }
 

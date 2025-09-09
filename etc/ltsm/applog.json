@@ -1,0 +1,49 @@
+{
+    "ltsm_service": {
+	"debug:level": "debug",
+	"debug:types": [ "app", "dbus" ],
+	"debug:target": "syslog",
+	"debug:syslog": "local6"
+    },
+    "ltsm_connector": {
+	"debug:level": "info",
+	"debug:types": [ "all" ],
+	"debug:target": "syslog",
+	"debug:syslog": "local6"
+    },
+    "ltsm_helper": {
+	"debug:level": "info",
+	"debug:types": [ "app", "dbus", "pkcs11", "ldap" ],
+	"debug:target": "syslog",
+	"debug:syslog": "local6"
+    },
+    "ltsm_audio2session": {
+	"debug:level": "info",
+	"debug:types": [ "app", "dbus", "audio" ],
+	"debug:target": "syslog",
+	"debug:syslog": "user"
+    },
+    "ltsm_pcsc2session": {
+	"debug:level": "info",
+	"debug:types": [ "app", "dbus", "pcsc" ],
+	"debug:target": "syslog",
+	"debug:syslog": "user"
+    },
+    "ltsm_fuse2session": {
+	"debug:level": "info",
+	"debug:types": [ "app", "dbus", "fuse" ],
+	"debug:target": "syslog",
+	"debug:syslog": "user"
+    },
+    "ltsm_client": {
+	"debug:level": "info",
+	"# debug:types": [ "all" ],
+	"debug:target": "console"
+    },
+    "ltsm_tofile_example": {
+	"debug:level": "debug",
+	"# debug:types": [ "all" ],
+	"debug:target": "file",
+	"debug:file": "/var/tmp/app.log"
+    }
+}

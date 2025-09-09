@@ -140,11 +140,22 @@ namespace LTSM::Manager
 
     SessionPolicy sessionPolicy(const std::string &);
 
+    using StdoutBuf = std::vector<uint8_t>;
+    using StatusStdout = std::pair<int, StdoutBuf>;
+    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
+    using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
+    using FileNameSize = sdbus::Struct<std::string, uint32_t>;
+    using TuplePosition = sdbus::Struct<int16_t, int16_t>;
+    using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
+    using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
+
     /// XvfbSession
     struct XvfbSession
     {
         std::unordered_map<std::string, std::string> environments;
         std::unordered_map<std::string, std::string> options;
+
+        std::forward_list<std::string> allowTransfer;
 
         std::filesystem::path xauthfile;
 
@@ -166,31 +177,32 @@ namespace LTSM::Manager
         int pid2 = 0; // session pid
         int connectorId = 0; // connector pid
 
-        std::atomic<size_t> durationLimit{0};
-        std::atomic<size_t> statusFlags{0};
+        std::atomic<uint32_t> durationLimit{0};
+        std::atomic<uint64_t> statusFlags{0};
+
         int loginFailures = 0;
 
         uint16_t width = 0;
         uint16_t height = 0;
         uint8_t depth = 0;
 
-        std::shared_future<int> idleActionRunning;
+        PidStatus idleActionStatus;
         std::unique_ptr<PamSession> pam;
 
         std::atomic<XvfbMode> mode{XvfbMode::SessionLogin};
         SessionPolicy policy = SessionPolicy::AuthTake;
 
-        bool checkStatus(size_t st) const
+        bool checkStatus(uint64_t st) const
         {
             return statusFlags & st;
         }
 
-        void setStatus(size_t st)
+        void setStatus(uint64_t st)
         {
             statusFlags |= st;
         }
 
-        void resetStatus(size_t st)
+        void resetStatus(uint64_t st)
         {
             statusFlags &= ~st;
         }
@@ -206,15 +218,8 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-    using StdoutBuf = std::vector<uint8_t>;
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
-    using StatusStdout = std::pair<int, StdoutBuf>;
-    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
-    using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
-    using FileNameSize = sdbus::Struct<std::string, uint32_t>;
-    using TuplePosition = sdbus::Struct<int16_t, int16_t>;
-    using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
-    using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
+    using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
 
     class XvfbSessions
     {
@@ -241,9 +246,6 @@ namespace LTSM::Manager
         std::forward_list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
-        std::forward_list<std::string> allowTransfer;
-        std::mutex lockTransfer;
-
         std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
 
         const JsonObject* _config = nullptr;
@@ -256,12 +258,9 @@ namespace LTSM::Manager
         bool sessionRunZenity(XvfbSessionPtr, std::initializer_list<std::string>);
         void sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
-        static void transferFileStartBackground(DBusAdaptor * owner, XvfbSessionPtr,
-                                                std::string tmpfile, std::string dstfile, uint32_t filesz);
-        static void transferFilesRequestCommunication(DBusAdaptor * owner, XvfbSessionPtr,
-                std::filesystem::path zenity, std::vector<FileNameSize> files,
-                std::function<void(int, const std::vector<FileNameSize> &)> emitTransferReject,
-                std::shared_future<int>);
+        void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
+        void transferFilesRequestCommunication(XvfbSessionPtr, std::filesystem::path zenity, std::vector<FileNameSize> files,
+                TransferRejectFunc emitTransferReject, PidStatus zenityResult);
     protected:
         void closeSystemSession(XvfbSessionPtr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
@@ -299,7 +298,7 @@ namespace LTSM::Manager
                                      const std::string & remoteAddr, const std::string & connType) override;
         int32_t busStartUserSession(const int32_t & oldDisplay, const int32_t & connectorId,
                                     const std::string & userName, const std::string & remoteAddr, const std::string & connType) override;
-        std::string busCreateAuthFile(const int32_t & display) override;
+        std::string busDisplayAuthFile(const int32_t & display) override;
         std::string busEncryptionInfo(const int32_t & display) override;
         bool busShutdownDisplay(const int32_t & display) override;
         bool busShutdownConnector(const int32_t & display) override;
@@ -310,7 +309,6 @@ namespace LTSM::Manager
         void busSetDebugLevel(const std::string & level) override;
         void busSetChannelDebug(const int32_t & display, const uint8_t & channel,
                                 const bool & debug) override;
-        void busSetConnectorDebugLevel(const int32_t & display, const std::string & level) override;
         bool busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
         bool busSetSessionDurationSec(const int32_t & display, const uint32_t & duration) override;
         bool busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
@@ -324,11 +322,10 @@ namespace LTSM::Manager
         bool busSendNotify(const int32_t & display, const std::string & summary,
                            const std::string & body, const uint8_t & icontype, const uint8_t & urgency) override;
         bool busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) override;
-        bool busCreateChannel(const int32_t & display, const std::string & client,
-                              const std::string & cmode, const std::string & server, const std::string & smode, const std::string & speed) override;
+        bool busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
+                            const std::string & server, const std::string & smode, const std::string & speed) override;
         bool busDestroyChannel(const int32_t & display, const uint8_t & channel) override;
-        bool busTransferFilesRequest(const int32_t & display,
-                                     const std::vector<FileNameSize> & files) override;
+        bool busTransferFilesRequest(const int32_t & display, const std::vector<FileNameSize> & files) override;
         bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
                                     const uint32_t & filesz, const std::string & dstfile) override;
 

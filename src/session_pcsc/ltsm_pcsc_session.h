@@ -126,7 +126,7 @@ namespace LTSM
         }
     };
 
-    class PcscSessionBus : public sdbus::AdaptorInterfaces<Session::PCSC_adaptor>, public Application
+    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::PCSC_adaptor>
     {
         std::forward_list<PcscClient> clients;
         std::mutex clientsLock;
@@ -134,8 +134,8 @@ namespace LTSM
         std::array<PcscLite::ReaderState, PCSCLITE_MAX_READERS_CONTEXTS> readers;
         std::mutex readersLock;
 
-        std::unique_ptr<SocketStream> ltsm;
-        std::recursive_mutex ltsmLock;
+        std::unique_ptr<SocketStream> remote;
+        std::recursive_mutex remoteLock;
 
         std::filesystem::path pcscSocketPath;
 

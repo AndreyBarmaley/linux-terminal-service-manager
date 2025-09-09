@@ -34,7 +34,7 @@ namespace LTSM
 {
     struct FuseSession;
 
-    class FuseSessionBus : public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>, public Application
+    class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::FUSE_adaptor>
     {
         std::forward_list<std::unique_ptr<FuseSession>> childs;
 

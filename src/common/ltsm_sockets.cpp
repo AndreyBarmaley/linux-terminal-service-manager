@@ -637,7 +637,7 @@ namespace LTSM
                 if(Application::isDebugLevel(DebugLevel::Trace))
                 {
                     std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                    Application::trace(DebugType::Socket, "from remote: [%s]", str.c_str());
+                    Application::trace(DebugType::Sock, "from remote: [%s]", str.c_str());
                 }
             }
         }
@@ -662,7 +662,7 @@ namespace LTSM
                 if(Application::isDebugLevel(DebugLevel::Trace))
                 {
                     std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                    Application::trace(DebugType::Socket, "from local: [%s]", str.c_str());
+                    Application::trace(DebugType::Sock, "from local: [%s]", str.c_str());
                 }
             }
         }
@@ -708,7 +708,7 @@ namespace LTSM
         sockaddr.sin_port = htons(port);
         sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.c_str());
 
-        Application::debug(DebugType::Socket, "%s: bind addr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "%s: bind addr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
@@ -716,7 +716,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::debug(DebugType::Socket, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Sock, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn))
         {
@@ -738,7 +738,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug(DebugType::Socket, "%s: conected client, fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "%s: conected client, fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
@@ -875,7 +875,7 @@ namespace LTSM
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
         sockaddr.sin_port = htons(port);
 
-        Application::debug(DebugType::Socket, "%s: ipaddr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "%s: ipaddr: `%s', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in)))
         {
@@ -885,7 +885,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug(DebugType::Socket, "%s: fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "%s: fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
@@ -916,7 +916,7 @@ namespace LTSM
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug(DebugType::Socket, "%s: path: %s", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Sock, "%s: path: %s", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
@@ -926,7 +926,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug(DebugType::Socket, "%s: fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "%s: fd: %d", __FUNCTION__, sock);
         }
 
         return sock;
@@ -963,7 +963,7 @@ namespace LTSM
 
         std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
 
-        Application::debug(DebugType::Socket, "%s: bind path: %s", __FUNCTION__, sockaddr.sun_path);
+        Application::debug(DebugType::Sock, "%s: bind path: %s", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)))
         {
@@ -972,7 +972,7 @@ namespace LTSM
             return -1;
         }
 
-        Application::debug(DebugType::Socket, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
+        Application::debug(DebugType::Sock, "%s: listen: %d, conn: %d", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn))
         {
@@ -994,7 +994,7 @@ namespace LTSM
         }
         else
         {
-            Application::debug(DebugType::Socket, "%s: conected client, fd: %d", __FUNCTION__, sock);
+            Application::debug(DebugType::Sock, "%s: conected client, fd: %d", __FUNCTION__, sock);
         }
 
         return sock;

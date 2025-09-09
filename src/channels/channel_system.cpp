@@ -184,52 +184,52 @@ const char* LTSM::Channel::Connector::speedString(const Speed & speed)
 std::pair<LTSM::Channel::ConnectorType, std::string>
 LTSM::Channel::parseUrl(std::string_view url)
 {
-    if(0 == url.compare(0, 7, "file://"))
+    if(startsWith(url, "file://"))
     {
         return std::make_pair(Channel::ConnectorType::File, view2string(url.substr(7)));
     }
 
-    if(0 == url.compare(0, 7, "unix://"))
+    if(startsWith(url, "unix://"))
     {
         return std::make_pair(Channel::ConnectorType::Unix, view2string(url.substr(7)));
     }
 
-    if(0 == url.compare(0, 7, "sock://"))
+    if(startsWith(url, "sock://"))
     {
         return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(7)));
     }
 
-    if(0 == url.compare(0, 9, "socket://"))
+    if(startsWith(url, "socket://"))
     {
         return std::make_pair(Channel::ConnectorType::Socket, view2string(url.substr(9)));
     }
 
-    if(0 == url.compare(0, 6, "cmd://"))
+    if(startsWith(url, "cmd://"))
     {
         return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(6)));
     }
 
-    if(0 == url.compare(0, 10, "command://"))
+    if(startsWith(url, "command://"))
     {
         return std::make_pair(Channel::ConnectorType::Command, view2string(url.substr(10)));
     }
 
-    if(0 == url.compare(0, 7, "fuse://"))
+    if(startsWith(url, "fuse://"))
     {
         return std::make_pair(Channel::ConnectorType::Fuse, view2string(url.substr(7)));
     }
 
-    if(0 == url.compare(0, 8, "audio://"))
+    if(startsWith(url, "audio://"))
     {
         return std::make_pair(Channel::ConnectorType::Audio, view2string(url.substr(8)));
     }
 
-    if(0 == url.compare(0, 7, "pcsc://"))
+    if(startsWith(url, "pcsc://"))
     {
         return std::make_pair(Channel::ConnectorType::Pcsc, view2string(url.substr(7)));
     }
 
-    if(0 == url.compare(0, 9, "pkcs11://"))
+    if(startsWith(url, "pkcs11://"))
     {
         return std::make_pair(Channel::ConnectorType::Pkcs11, view2string(url.substr(9)));
     }
@@ -989,7 +989,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::st
 
     Application::debug(DebugType::Channels, "%s: id: %" PRId8 ", addr: %s, port: %d, mode: %s", __FUNCTION__, channel, ipAddrPort.first.c_str(), ipAddrPort.second, Channel::Connector::modeString(mode));
 
-    if(serverSide() && 0 != ipAddrPort.first.compare(0, 4, "127."))
+    if(serverSide() && ! startsWith(ipAddrPort.first, "127."))
     {
         Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "server side allow socket only for localhost", channel);
         return false;
@@ -1140,7 +1140,8 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns)
     if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-        Application::info("%s: id: %" PRId8 ", size: %" PRIu16 ", content: [%s]", __FUNCTION__, channel, length, str.c_str());
+        Application::trace(DebugType::Channels, "%s: id: %" PRId8 ", size: %" PRIu16 ", content: [%s]",
+            __FUNCTION__, channel, length, str.c_str());
     }
 
     recvLtsmEvent(channel, std::move(buf));
@@ -1178,7 +1179,8 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
     if(channelDebug == channel)
     {
         auto str = Tools::buffer2hexstring(buf, buf + len, 2);
-        Application::info("%s: id: %" PRId8 ", size: %lu, content: [%s]", __FUNCTION__, channel, len, str.c_str());
+        Application::trace(DebugType::Channels, "%s: id: %" PRId8 ", size: %lu, content: [%s]",
+            __FUNCTION__, channel, len, str.c_str());
     }
 
     ns.sendRaw(buf, len);

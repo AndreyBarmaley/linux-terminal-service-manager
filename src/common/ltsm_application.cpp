@@ -41,6 +41,7 @@
 #include <cstdio>
 
 #include "ltsm_tools.h"
+#include "ltsm_compat.h"
 #include "ltsm_application.h"
 
 #if defined(__WIN32__) || defined(__APPLE__)
@@ -78,6 +79,129 @@ namespace LTSM
     int facility = LOG_USER;
     bool forceSyslog = false;
 
+    uint32_t debugListToTypes(const std::list<std::string> & typesList)
+    {
+        uint32_t types = 0;
+                    
+        for(const auto & val: typesList)
+        {
+            auto slower = Tools::lower(val);
+        
+            if(slower == "xcb")
+                types |= DebugType::Xcb;
+            else
+            if(slower == "rfb")
+                types |= DebugType::Rfb;
+            else
+            if(slower == "clip")
+                types |= DebugType::Clip;
+            else
+            if(slower == "sock")
+                types |= DebugType::Sock;
+            else
+            if(slower == "tls")
+                types |= DebugType::Tls;
+            else
+            if(slower == "chnl")
+                types |= DebugType::Channels;
+            else
+            if(slower == "dbus")
+                types |= DebugType::Dbus;
+            else
+            if(slower == "enc")
+                types |= DebugType::Enc;
+            else
+            if(slower == "x11srv")
+                types |= DebugType::X11Srv;
+            else
+            if(slower == "x11cli")
+                types |= DebugType::X11Cli;
+            else
+            if(slower == "audio")
+                types |= DebugType::Audio;
+            else
+            if(slower == "fuse")
+                types |= DebugType::Fuse;
+            else
+            if(slower == "pcsc")
+                types |= DebugType::Pcsc;
+            else
+            if(slower == "pkcs11")
+                types |= DebugType::Pkcs11;
+            else
+            if(slower == "sdl")
+                types |= DebugType::Sdl;
+            else
+            if(slower == "app")
+                types |= DebugType::App;
+            else
+            if(slower == "ldap")
+                types |= DebugType::Ldap;
+            else
+            if(slower == "gss")
+                types |= DebugType::Gss;
+            else
+            if(slower == "all")
+                types |= DebugType::All;
+            else
+                Application::warning( "%s: unknown debug marker: `%s'", __FUNCTION__, slower.c_str());
+        }
+
+        return types;
+    }
+
+    void setDebugSyslogFacility(std::string_view name)
+    {
+        if(startsWith(name, "local"))
+        {
+            switch(name[5])
+            {
+                case '0':
+                    facility = LOG_LOCAL0;
+                    break;
+
+                case '1':
+                    facility = LOG_LOCAL1;
+                    break;
+
+                case '2':
+                    facility = LOG_LOCAL2;
+                    break;
+
+                case '3':
+                    facility = LOG_LOCAL3;
+                    break;
+
+                case '4':
+                    facility = LOG_LOCAL4;
+                    break;
+
+                case '5':
+                    facility = LOG_LOCAL5;
+                    break;
+
+                case '6':
+                    facility = LOG_LOCAL6;
+                    break;
+
+                case '7':
+                    facility = LOG_LOCAL7;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+#ifdef __UNIX__
+        if(0 < facility)
+        {
+            closelog();
+            ::openlog(ident.c_str(), 0, facility);
+        }
+#endif
+    }
+
     bool Application::isDebugTarget(const DebugTarget & tgt)
     {
         return appDebugTarget == tgt;
@@ -95,9 +219,9 @@ namespace LTSM
         appDebugLevel = lvl;
     }
 
-    void Application::setDebugTypes(uint32_t val)
+    void Application::setDebugTypes(const std::list<std::string> & list)
     {
-        appDebugTypes = val;
+        appDebugTypes = debugListToTypes(list);
     }
 
     void Application::setDebugTarget(const DebugTarget & tgt)
@@ -212,6 +336,7 @@ namespace LTSM
         }
 #endif
     }
+
 
 #ifdef __UNIX__
     int Application::forkMode(void)
@@ -418,11 +543,55 @@ namespace LTSM
         }
     }
 
+#ifdef LTSM_WITH_JSON
+    // ApplicationLog
+    ApplicationLog::ApplicationLog(std::string_view sid)
+        : Application(ident)
+    {
+	const char* applog = getenv("LTSM_APPLOG");
+	if(!applog)
+	    applog = "/etc/ltsm/applog.json";
+
+	if(auto jc = JsonContentFile(applog); jc.isObject())
+	{
+	    if(auto jo = jc.toObject(); jo.isObject(ident))
+	    {
+		setAppLog(jo.getObject(ident));
+	    }
+	}
+    }
+
+    void ApplicationLog::setAppLog(const JsonObject* jo)
+    {
+	setDebugTarget(jo->getString("debug:target", "console"));
+	setDebugLevel(jo->getString("debug:level", "info"));
+
+	if(isDebugTarget(DebugTarget::Syslog))
+	{
+	    auto facility = jo->getString("debug:syslog", "user");
+	    setDebugSyslogFacility(facility);
+	}
+	else if(isDebugTarget(DebugTarget::SyslogFile))
+	{
+	    if(auto file = jo->getString("debug:file"); ! file.empty())
+	    {
+		setDebugTargetFile(file);
+	    }
+	    else
+	    {
+		setDebugTarget(DebugTarget::Console);
+	    }
+	}
+
+	if(auto types = jo->getArray("debug:types"))
+	{
+	    setDebugTypes(types->toStdList<std::string>());
+	}
+    }
 
     // ApplicationJsonConfig
-#ifdef LTSM_WITH_JSON
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
-        : Application(ident)
+        : ApplicationLog(ident)
     {
         if(fconf)
         {
@@ -440,37 +609,43 @@ namespace LTSM
             }
 
             files.emplace_back(std::filesystem::current_path() / "config.json");
+
+            auto ident_conf = std::filesystem::path("/etc/ltsm") / ident;
+                 ident_conf += ".json";
+            files.emplace_back(std::move(ident_conf));
+
             files.emplace_back("/etc/ltsm/config.json");
 
             for(const auto & path : files)
             {
                 auto st = std::filesystem::status(path);
 
-                if(std::filesystem::file_type::not_found != st.type() &&
-                        (st.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none)
+                if(std::filesystem::file_type::not_found == st.type())
+                    continue;
+
+                if(readConfig(path))
                 {
-                    readConfig(path);
                     break;
                 }
             }
         }
     }
 
-    void ApplicationJsonConfig::readConfig(const std::filesystem::path & file)
+    bool ApplicationJsonConfig::readConfig(const std::filesystem::path & file)
     {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err))
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
-            throw std::invalid_argument(__FUNCTION__);
+            return false;
         }
 
         if((std::filesystem::status(file, err).permissions() & std::filesystem::perms::owner_read)
                 == std::filesystem::perms::none)
         {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
-            throw std::invalid_argument(__FUNCTION__);
+            return false;
         }
 
 
@@ -479,64 +654,13 @@ namespace LTSM
 
         if(! jsonFile.isValid() || ! jsonFile.isObject())
         {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "json parse", file.c_str());
-            throw std::invalid_argument(__FUNCTION__);
+            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "json object", file.c_str());
+            return false;
         }
 
         json = jsonFile.toObject();
         json.addString("config:path", file.native());
-
-        std::string str = json.getString("logging:facility");
-        facility = LOG_USER;
-
-        if(6 == str.size() && 0 == str.compare(0, 5, "local"))
-        {
-            switch(str[5])
-            {
-                case '0':
-                    facility = LOG_LOCAL0;
-                    break;
-
-                case '1':
-                    facility = LOG_LOCAL1;
-                    break;
-
-                case '2':
-                    facility = LOG_LOCAL2;
-                    break;
-
-                case '3':
-                    facility = LOG_LOCAL3;
-                    break;
-
-                case '4':
-                    facility = LOG_LOCAL4;
-                    break;
-
-                case '5':
-                    facility = LOG_LOCAL5;
-                    break;
-
-                case '6':
-                    facility = LOG_LOCAL6;
-                    break;
-
-                case '7':
-                    facility = LOG_LOCAL7;
-                    break;
-
-                default:
-                    break;
-            }
-        }
-
-#ifdef __UNIX__
-        if(0 < facility)
-        {
-            closelog();
-            ::openlog(ident.c_str(), 0, facility);
-        }
-#endif
+        return true;
     }
 
     void ApplicationJsonConfig::configSetInteger(const std::string & key, int val)

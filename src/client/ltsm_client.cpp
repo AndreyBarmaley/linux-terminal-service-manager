@@ -285,7 +285,7 @@ namespace LTSM
             {
                 parseCommand(*it, *val);
 
-                if(0 == strncmp("--password", *it, 10))
+                if(0 == strcmp(*it, "--password"))
                     hidePasswordArgument(const_cast<char*>(*val));
 
                 it = val;
@@ -568,7 +568,7 @@ namespace LTSM
 
             if(arg.size())
             {
-                Application::setDebugTypes(Tools::debugTypes(Tools::split(arg, ',')));
+                Application::setDebugTypes(Tools::split(arg, ','));
             }
         }
         else if(cmd == "--syslog")

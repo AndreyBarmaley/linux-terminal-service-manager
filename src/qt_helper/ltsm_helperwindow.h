@@ -76,8 +76,6 @@ namespace LTSM::LoginHelper
         void onTransferAllow(const int32_t & display, const std::string & filepath, const std::string & tmpfile,
                              const std::string & dstdir) override {}
 
-        void onDebugLevel(const int32_t & display, const std::string & level) override {}
-
         void onDebugChannel(const int32_t & display, const uint8_t & channel, const bool & debug) override {}
 
         void onPingConnector(const int32_t & display) override {}
@@ -123,7 +121,7 @@ namespace LTSM::LoginHelper
         void widgetStartedAction(void);
     };
 
-    class LoginWindow : public QMainWindow, public LTSM::Application, protected LTSM::XCB::RootDisplay
+    class LoginWindow : public QMainWindow, public ApplicationLog, protected XCB::RootDisplay
     {
         Q_OBJECT
 

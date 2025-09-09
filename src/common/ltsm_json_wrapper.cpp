@@ -29,6 +29,7 @@
 #include <stdexcept>
 
 #include "ltsm_tools.h"
+#include "ltsm_compat.h"
 #include "ltsm_application.h"
 #include "ltsm_json_wrapper.h"
 
@@ -327,12 +328,12 @@ namespace LTSM
     {
         auto content = getString();
 
-        if(content.compare(0, 4, "fals") == 0)
+        if(startsWith(content, "fals"))
         {
             return false;
         }
 
-        if(content.compare(0, 4, "true") == 0)
+        if(startsWith(content, "true"))
         {
             return true;
         }
@@ -1241,12 +1242,12 @@ namespace LTSM
         }
         catch(const std::invalid_argument &)
         {
-            if(Tools::lower(val).compare(0, 5, "false") == 0)
+            if(startsWith(Tools::lower(val), "fals"))
             {
                 return std::make_pair(JsonValuePtr(false), 1);
             }
 
-            if(Tools::lower(val).compare(0, 4, "true") == 0)
+            if(startsWith(Tools::lower(val), "true"))
             {
                 return std::make_pair(JsonValuePtr(true), 1);
             }
@@ -1367,33 +1368,6 @@ namespace LTSM
         return *this;
     }
 
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, size_t val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, int val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, double val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << val;
-        comma = true;
-        return *this;
-    }
-
     JsonObjectStream & JsonObjectStream::push(std::string_view key, bool val)
     {
         if(comma) { os << ","; }
@@ -1456,33 +1430,6 @@ namespace LTSM
         if(comma) { os << ","; }
 
         os << std::quoted(val ? val : "");
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(int val)
-    {
-        if(comma) { os << ","; }
-
-        os << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(size_t val)
-    {
-        if(comma) { os << ","; }
-
-        os << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(double val)
-    {
-        if(comma) { os << ","; }
-
-        os << val;
         comma = true;
         return *this;
     }

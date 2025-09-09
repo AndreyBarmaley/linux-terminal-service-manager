@@ -59,7 +59,6 @@ namespace LTSM::Connector
     //
     void connectorHelp(const char* prog)
     {
-        LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
 #ifdef LTSM_WITH_RDP
         auto proto = { "LTSM", "VNC" /* deprecated */, "RDP", "AUTO" };
 #else
@@ -95,7 +94,6 @@ namespace LTSM::Connector
 
         if(! config().isValid())
         {
-            LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
             Application::error("%s: %s failed", "Connector", "config");
             throw std::invalid_argument("Connector");
         }
@@ -133,29 +131,13 @@ namespace LTSM::Connector
 
     int Service::start(void)
     {
-        // deprecated
-        if(auto str = configGetString("connector:debug"); ! str.empty())
-        {
-            Application::setDebugLevel(str);
-        }
-
-        if(auto str = configGetString("connector:debug:level", "info"); ! str.empty())
-        {
-            Application::setDebugLevel(str);
-        }
-
-        if(auto arr = config().getArray("connector:debug:types"))
-        {
-            Application::setDebugTypes(Tools::debugTypes(arr->toStdList<std::string>()));
-        }
-
         // signals
         signal(SIGPIPE, SIG_IGN);
 
         Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
 
         auto home = homeRuntime();
-        Application::debug(DebugType::Conn, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
+        Application::debug(DebugType::App, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
 
         if(0 != chdir(home.c_str()))
         {
@@ -209,16 +191,23 @@ namespace LTSM::Connector
     }
 
     /* DBusProxy */
-    DBusProxy::DBusProxy(const JsonObject & jo, const char* type)
+    DBusProxy::DBusProxy(const JsonObject & jo, const ConnectorType & type)
 #ifdef SDBUS_2_0_API
         : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
 #else
         :
         ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
-          _conntype(type), _config(jo)
+          _config(jo)
     {
         _remoteaddr.assign("local");
+
+        switch(type)
+        {
+            case ConnectorType::RDP: _conntype = "rdp"; break;
+            case ConnectorType::VNC: _conntype = "vnc"; break;
+            case ConnectorType::LTSM: _conntype = "ltsm"; break;
+        }
 
         if(auto env = std::getenv("REMOTE_ADDR"))
         {
@@ -233,10 +222,15 @@ namespace LTSM::Connector
         unregisterProxy();
     }
 
+    const std::string & DBusProxy::connectorType(void) const
+    {
+        return _conntype;
+    }
+
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
     {
         Application::info("%s: display: %d", __FUNCTION__, screen);
-        std::string xauthFile = busCreateAuthFile(screen);
+        std::string xauthFile = busDisplayAuthFile(screen);
         Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(),
                           getgid());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
@@ -269,7 +263,7 @@ namespace LTSM::Connector
                                    _config.getInteger("default:height", 0));
         auto displaySz = xcbDisplay.size();
         int color = _config.getInteger("display:solid", 0x4e7db7);
-        Application::debug(DebugType::Conn, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
+        Application::debug(DebugType::App, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
                            displaySz.height, xcbDisplay.depth());
 
         if(0 != color)
@@ -320,7 +314,7 @@ namespace LTSM::Connector
     {
         if(display == displayNum())
         {
-            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
             for(const auto & ptr : _renderPrimitives)
             {
@@ -339,7 +333,8 @@ namespace LTSM::Connector
     {
         if(display == displayNum())
         {
-            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
         }
@@ -350,7 +345,7 @@ namespace LTSM::Connector
     {
         if(display == displayNum())
         {
-            Application::debug(DebugType::Conn, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
@@ -364,19 +359,13 @@ namespace LTSM::Connector
     {
         if(display == displayNum())
         {
+            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
+                __FUNCTION__, display);
+
             std::thread([this, display]()
             {
                 this->busConnectorAlive(display);
             }).detach();
-        }
-    }
-
-    void DBusProxy::onDebugLevel(const int32_t & display, const std::string & level)
-    {
-        if(display == displayNum())
-        {
-            Application::info("%s: display: %" PRId32 ", level: %s", __FUNCTION__, display, level.c_str());
-            Application::setDebugLevel(level);
         }
     }
 
