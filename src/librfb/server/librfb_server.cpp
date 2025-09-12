@@ -457,6 +457,11 @@ namespace LTSM
             }
 #endif
 
+            if(noVncMode())
+            {
+                res.clear();
+            }
+
             if(secInfo.authNone)
             {
                 res.push_back(RFB::SECURITY_TYPE_NONE);

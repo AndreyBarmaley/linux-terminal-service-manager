@@ -122,7 +122,9 @@ namespace LTSM::Connector
         void systemKeyboardEvent(const JsonObject & ) override;
         void systemCursorFailed(const JsonObject & jo) override;
 
+        bool noVncMode(void) const override;
         int remoteClientVersion(void) const override;
+        std::string remoteClientAddress(void) const override;
 
     protected:
         void loadKeymap(const std::string & file);

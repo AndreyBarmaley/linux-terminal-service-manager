@@ -193,6 +193,8 @@ namespace LTSM
             std::pair<std::string, std::string> authInfo(void) const;
 
             virtual int remoteClientVersion(void) const { return 0; }
+            virtual std::string remoteClientAddress(void) const { return ""; }
+            virtual bool noVncMode(void) const { return false; }
 
             virtual void encoderInitEvent(EncodingBase*) { /* empty */ }
 

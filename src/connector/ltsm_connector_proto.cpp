@@ -783,6 +783,17 @@ namespace LTSM::Connector
                           NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
     }
 
+    bool ConnectorLtsm::noVncMode(void) const
+    {
+        return _remoteaddr == "127.0.0.1" &&
+                _config.getBoolean("vnc:novnc:allow", false);
+    }
+
+    std::string ConnectorLtsm::remoteClientAddress(void) const
+    {
+        return _remoteaddr;
+    }
+
     int ConnectorLtsm::remoteClientVersion(void) const
     {
         return _ltsmClientVersion;
