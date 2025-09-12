@@ -2367,7 +2367,7 @@ namespace LTSM::Manager
         {
 #ifdef LTSM_BUILD_COVERAGE_TESTS
             if(skipLoginShutdown(display))
-                return true;
+                return;
 #endif
             stopLoginChannels(ptr);
             displayShutdown(std::move(ptr), false);
