@@ -261,14 +261,12 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-    class DBusAdaptor : public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
+    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
     {
         std::forward_list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
         std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
-
-        const JsonObject* _config = nullptr;
         std::atomic<bool> loginsDisable = false;
 
         pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
@@ -281,6 +279,12 @@ namespace LTSM::Manager
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::filesystem::path zenity, std::vector<FileNameSize> files,
                 TransferRejectFunc emitTransferReject, PidStatus zenityResult);
+
+        void checkStartConfig(void);
+        bool createXauthDir(void);
+
+        int start(void) override { return 0; }
+
     protected:
         void closeSystemSession(XvfbSessionPtr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
@@ -305,11 +309,13 @@ namespace LTSM::Manager
         void childEndedEvent(void);
 
     public:
-        DBusAdaptor(sdbus::IConnection &, const JsonObject &, size_t displays);
+        DBusAdaptor(sdbus::IConnection &, const std::string & confile);
         ~DBusAdaptor();
 
         void shutdownService(void);
-        void configReloadedEvent(void);
+
+        // ApplicationJsonConfig interface
+        void configReloadedEvent(void) override;
 
     private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
@@ -387,18 +393,11 @@ namespace LTSM::Manager
         void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
     };
 
-    class SystemService : public ApplicationJsonConfig
+    class SystemService
     {
-        std::thread inotifyWatchConfigJob;
-        int inotifyWatchConfigFd;
         bool isBackground = false;
-
-    protected:
-        bool createXauthDir(void);
-        void inotifyWatchConfigEvent(const std::string &);
-        void inotifyWatchConfigCb(int fd, int wd, std::string filename);
-        bool inotifyWatchConfigStart(void);
-
+        std::string config;
+        
     public:
         SystemService(int argc, const char** argv);
 

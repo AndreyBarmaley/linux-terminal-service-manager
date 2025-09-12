@@ -792,7 +792,7 @@ namespace LTSM
         addValue<JsonObject>(key, val);
     }
 
-    void JsonObject::swap(JsonObject & jo) noexcept
+    void JsonObject::swap(JsonObject && jo) noexcept
     {
         content.swap(jo.content);
     }
@@ -1083,13 +1083,13 @@ namespace LTSM
 
         if(counts == JSMN_ERROR_INVAL)
         {
-            Application::error("%s: %s", __FUNCTION__, "invalid character inside JSON content");
+            Application::error("%s: %s, `%.*s'", __FUNCTION__, "invalid character inside JSON content", (int) len, str);
             clear();
             return false;
         }
         else if(counts == JSMN_ERROR_PART)
         {
-            Application::error("%s: %s", __FUNCTION__, "the content is not a full JSON packet, more bytes expected");
+            Application::error("%s: %s, `%.*s'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", (int) len, str);
             clear();
             return false;
         }
@@ -1332,51 +1332,6 @@ namespace LTSM
         os << "{";
     }
 
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, const json_plain & val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string & val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << std::quoted(val);
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, const std::string_view & val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << std::quoted(val);
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, const char* val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << std::quoted(val ? val : "");
-        comma = true;
-        return *this;
-    }
-
-    JsonObjectStream & JsonObjectStream::push(std::string_view key, bool val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(key) << ":" << (val ? "true" : "false");
-        comma = true;
-        return *this;
-    }
-
     JsonObjectStream & JsonObjectStream::push(std::string_view key)
     {
         if(comma) { os << ","; }
@@ -1396,51 +1351,6 @@ namespace LTSM
     JsonArrayStream::JsonArrayStream()
     {
         os << "[";
-    }
-
-    JsonArrayStream & JsonArrayStream::push(const json_plain & val)
-    {
-        if(comma) { os << ","; }
-
-        os << val;
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(const std::string & val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(val);
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(const std::string_view & val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(val);
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(const char* val)
-    {
-        if(comma) { os << ","; }
-
-        os << std::quoted(val ? val : "");
-        comma = true;
-        return *this;
-    }
-
-    JsonArrayStream & JsonArrayStream::push(bool val)
-    {
-        if(comma) { os << ","; }
-
-        os << (val ? "true" : "false");
-        comma = true;
-        return *this;
     }
 
     JsonArrayStream & JsonArrayStream::push(void)

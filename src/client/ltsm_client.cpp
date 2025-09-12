@@ -100,10 +100,10 @@ namespace LTSM
 #endif
                   "[--printer [" << printdef << "]] " << "[--sane [" << sanedef << "]] " <<
 #ifdef LTSM_PKCS11_AUTH
-                  "[--pcsc11-auth [" << librtdef << "]] " <<
+                  "[--pkcs11-auth [" << librtdef << "]] " <<
 #endif
 #ifdef LTSM_WITH_PCSC
-                  "[--pcsc] " <<
+                  "[--smartcard] " <<
 #endif
                   "[--noxkb] [--nocaps] [--loop] [--seamless <path>] " << std::endl;
         std::cout << std::endl << "arguments:" << std::endl <<
@@ -176,7 +176,7 @@ namespace LTSM
                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
                   "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
 #ifdef LTSM_WITH_PCSC
-                  "    --pcsc (redirect smartcard)" << std::endl <<
+                  "    --smartcard (redirect smartcard)" << std::endl <<
 #endif
 #ifdef LTSM_PKCS11_AUTH
                   "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
@@ -400,7 +400,7 @@ namespace LTSM
             xcbNoDamage = true;
         }
 #ifdef LTSM_WITH_PCSC
-        else if(cmd == "--pcsc")
+        else if(cmd == "--pcsc" || cmd == "--smartcard")
         {
             pcscEnable = true;
         }

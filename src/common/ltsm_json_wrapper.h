@@ -40,7 +40,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define LTSM_JSON_WRAPPER 20250811
+#define LTSM_JSON_WRAPPER 20250912
 
 namespace LTSM
 {
@@ -456,7 +456,7 @@ namespace LTSM
         void addObject(const std::string &, JsonObject &&);
 
         void join(const JsonObject &);
-        void swap(JsonObject &) noexcept;
+        void swap(JsonObject &&) noexcept;
 
         template<typename T>
         std::map<std::string, T> toStdMap(void) const
@@ -578,19 +578,26 @@ namespace LTSM
     public:
         JsonObjectStream();
 
-        JsonObjectStream & push(std::string_view, const json_plain &);
-        JsonObjectStream & push(std::string_view, const std::string &);
-        JsonObjectStream & push(std::string_view, const std::string_view &);
-
-        JsonObjectStream & push(std::string_view, const char*);
-        JsonObjectStream & push(std::string_view, bool);
+        // push null
         JsonObjectStream & push(std::string_view);
 
         template<typename T>
         JsonObjectStream & push(std::string_view key, const T & val)
         {
             if(comma) { os << ","; }
-            os << std::quoted(key) << ":" << val;
+
+            if constexpr (std::is_pointer_v<T> && sizeof(std::remove_pointer_t<T>) == 1) {
+                os << std::quoted(key) << ":" << std::quoted(val ? val : "");
+            } else if constexpr (std::is_same_v<T, bool>) {
+                os << std::quoted(key) << ":" << (val ? "true" : "false");
+            } else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
+                os << std::quoted(key) << ":" << std::quoted( val );
+            } else if constexpr (std::is_integral_v<T> && sizeof(T) == 1) {
+                os << std::quoted(key) << ":" << static_cast<int>( val );
+            } else {
+                os << std::quoted(key) << ":" << val;
+            }
+
             comma = true;
             return *this;
         }
@@ -614,19 +621,24 @@ namespace LTSM
             }
         }
 
-        JsonArrayStream & push(const json_plain &);
-        JsonArrayStream & push(const std::string &);
-        JsonArrayStream & push(const std::string_view &);
-        JsonArrayStream & push(const char*);
-
-        JsonArrayStream & push(bool);
         JsonArrayStream & push(void);
 
         template<typename T>
         JsonArrayStream & push(const T & val)
         {
             if(comma) { os << ","; }
-            os << val;
+
+            if constexpr (std::is_pointer_v<T> && sizeof(std::remove_pointer_t<T>) == 1) {
+                os << std::quoted(val ? val : "");
+            } else if constexpr (std::is_same_v<T, bool>) {
+                os << (val ? "true" : "false");
+            } else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
+                os << std::quoted( val );
+            } else if constexpr (std::is_integral_v<T> && sizeof(T) == 1) {
+                os << static_cast<int>( val );
+            } else {
+                os << val;
+            }
             comma = true;
             return *this;
         }

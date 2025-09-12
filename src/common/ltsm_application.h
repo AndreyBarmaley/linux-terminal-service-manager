@@ -25,10 +25,9 @@
 
 #include <list>
 #include <mutex>
+#include <thread>
 #include <string>
-#include <cstdarg>
 #include <filesystem>
-#include <string_view>
 
 #ifdef LTSM_WITH_JSON
 #include "ltsm_json_wrapper.h"
@@ -96,7 +95,7 @@ namespace LTSM
         static bool isDebugTypes(uint32_t vals);
 
 #ifdef __UNIX__
-        static int  forkMode(void);
+        static int forkMode(void);
 #endif
 
         virtual int start(void) = 0;
@@ -106,21 +105,45 @@ namespace LTSM
     class ApplicationLog : public Application
     {
     protected:
-	void setAppLog(const JsonObject*);
+        void setAppLog(const JsonObject*);
 
     public:
         ApplicationLog(std::string_view ident);
     };
 
-    class ApplicationJsonConfig : public ApplicationLog
+    class WatchModification
+    {
+        std::thread _inotifyJob;
+        std::string _fileName;
+
+        int _inotifyFd = -1;
+        int _inotifyWd = -1;
+
+    protected:
+        bool inotifyWatchStart(const std::filesystem::path &);
+        void inotifyWatchStop(void);
+
+    public:
+        WatchModification() = default;
+        virtual ~WatchModification();
+
+        bool inotifyWatchTarget(std::string_view) const;
+        virtual void closeWriteEvent(const std::string &) {}
+    };
+
+    class ApplicationJsonConfig : public ApplicationLog, protected WatchModification
     {
         JsonObject json;
 
     protected:
-        void configSet(JsonObject &&) noexcept;
+        // WatchModification interface;
+        void closeWriteEvent(const std::string &) override;
+
+        bool inotifyWatchStart(void);
+        void readDefaultConfig(void);
 
     public:
-        ApplicationJsonConfig(std::string_view ident, const char* fconf = nullptr);
+        ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & file = "");
 
         bool readConfig(const std::filesystem::path &);
 
@@ -129,12 +152,33 @@ namespace LTSM
         void configSetString(const std::string &, std::string_view);
         void configSetDouble(const std::string &, double);
 
-        int configGetInteger(std::string_view, int = 0) const;
-        bool configGetBoolean(std::string_view, bool = false) const;
-        std::string configGetString(std::string_view, std::string_view = "") const;
-        double configGetDouble(std::string_view, double = 0) const;
+        inline int configGetInteger(std::string_view key, int def = 0) const
+        {
+            return json.getInteger(key, def);
+        }
 
+        inline bool configGetBoolean(std::string_view key, bool def = false) const
+        {
+            return json.getBoolean(key, def);
+        }
+
+        inline std::string configGetString(std::string_view key, std::string_view def = "") const
+        {
+            return json.getString(key, def);
+        }
+
+        inline double configGetDouble(std::string_view key, double def = 0) const
+        {
+            return json.getDouble(key, def);
+        }
+
+        inline bool configHasKey(std::string_view key) const
+        {
+            return json.hasKey(key);
+        }
+    
         const JsonObject & config(void) const;
+        virtual void configReloadedEvent(void) {}
     };
 
 #endif

@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <chrono>
+#include <cstdarg>
 #include <clocale>
 #include <cstring>
 #include <iostream>
@@ -36,6 +38,7 @@
 #ifdef __UNIX__
 #include <signal.h>
 #include <syslog.h>
+#include <sys/inotify.h>
 #endif
 
 #include <cstdio>
@@ -65,6 +68,8 @@
 #define LOG_LOCAL7      (23<<3) /* reserved for local use */
 #endif
 
+using namespace std::chrono_literals;
+
 namespace LTSM
 {
     // local application
@@ -82,69 +87,91 @@ namespace LTSM
     uint32_t debugListToTypes(const std::list<std::string> & typesList)
     {
         uint32_t types = 0;
-                    
-        for(const auto & val: typesList)
+
+        for(const auto & val : typesList)
         {
             auto slower = Tools::lower(val);
-        
+
             if(slower == "xcb")
+            {
                 types |= DebugType::Xcb;
-            else
-            if(slower == "rfb")
+            }
+            else if(slower == "rfb")
+            {
                 types |= DebugType::Rfb;
-            else
-            if(slower == "clip")
+            }
+            else if(slower == "clip")
+            {
                 types |= DebugType::Clip;
-            else
-            if(slower == "sock")
+            }
+            else if(slower == "sock")
+            {
                 types |= DebugType::Sock;
-            else
-            if(slower == "tls")
+            }
+            else if(slower == "tls")
+            {
                 types |= DebugType::Tls;
-            else
-            if(slower == "chnl")
+            }
+            else if(slower == "chnl")
+            {
                 types |= DebugType::Channels;
-            else
-            if(slower == "dbus")
+            }
+            else if(slower == "dbus")
+            {
                 types |= DebugType::Dbus;
-            else
-            if(slower == "enc")
+            }
+            else if(slower == "enc")
+            {
                 types |= DebugType::Enc;
-            else
-            if(slower == "x11srv")
+            }
+            else if(slower == "x11srv")
+            {
                 types |= DebugType::X11Srv;
-            else
-            if(slower == "x11cli")
+            }
+            else if(slower == "x11cli")
+            {
                 types |= DebugType::X11Cli;
-            else
-            if(slower == "audio")
+            }
+            else if(slower == "audio")
+            {
                 types |= DebugType::Audio;
-            else
-            if(slower == "fuse")
+            }
+            else if(slower == "fuse")
+            {
                 types |= DebugType::Fuse;
-            else
-            if(slower == "pcsc")
+            }
+            else if(slower == "pcsc")
+            {
                 types |= DebugType::Pcsc;
-            else
-            if(slower == "pkcs11")
+            }
+            else if(slower == "pkcs11")
+            {
                 types |= DebugType::Pkcs11;
-            else
-            if(slower == "sdl")
+            }
+            else if(slower == "sdl")
+            {
                 types |= DebugType::Sdl;
-            else
-            if(slower == "app")
+            }
+            else if(slower == "app")
+            {
                 types |= DebugType::App;
-            else
-            if(slower == "ldap")
+            }
+            else if(slower == "ldap")
+            {
                 types |= DebugType::Ldap;
-            else
-            if(slower == "gss")
+            }
+            else if(slower == "gss")
+            {
                 types |= DebugType::Gss;
-            else
-            if(slower == "all")
+            }
+            else if(slower == "all")
+            {
                 types |= DebugType::All;
+            }
             else
-                Application::warning( "%s: unknown debug marker: `%s'", __FUNCTION__, slower.c_str());
+            {
+                Application::warning("%s: unknown debug marker: `%s'", __FUNCTION__, slower.c_str());
+            }
         }
 
         return types;
@@ -194,11 +221,13 @@ namespace LTSM
         }
 
 #ifdef __UNIX__
+
         if(0 < facility)
         {
             closelog();
             ::openlog(ident.c_str(), 0, facility);
         }
+
 #endif
     }
 
@@ -232,6 +261,7 @@ namespace LTSM
         }
 
 #ifdef __UNIX__
+
         if(appDebugTarget != DebugTarget::Syslog && tgt == DebugTarget::Syslog)
         {
             openlog(ident.c_str(), 0, facility);
@@ -240,6 +270,7 @@ namespace LTSM
         {
             closelog();
         }
+
 #endif
         appDebugTarget = tgt;
     }
@@ -250,11 +281,13 @@ namespace LTSM
         {
             setDebugTarget(DebugTarget::Console);
         }
+
 #ifdef __UNIX__
         else if(tgt == "syslog")
         {
             setDebugTarget(DebugTarget::Syslog);
         }
+
 #endif
         else
         {
@@ -279,10 +312,14 @@ namespace LTSM
     bool Application::isDebugLevel(const DebugLevel & lvl)
     {
         if(appDebugLevel == DebugLevel::Trace)
+        {
             return true;
+        }
 
         if(appDebugLevel == DebugLevel::Debug && lvl == DebugLevel::Info)
+        {
             return true;
+        }
 
         return appDebugLevel == lvl;
     }
@@ -321,19 +358,25 @@ namespace LTSM
 #ifdef LTSM_WITH_SYSTEMD
         // check systemd or docker
         auto res = Tools::runcmd("systemctl is-system-running");
+
         // systemd not running switch to syslog
         if(res.empty() || res == "offline")
+        {
             forceSyslog = true;
+        }
+
 #endif
     }
 
     Application::~Application()
     {
 #ifdef __UNIX__
+
         if(isDebugTarget(DebugTarget::Syslog))
         {
             closelog();
         }
+
 #endif
     }
 
@@ -351,14 +394,16 @@ namespace LTSM
 
         // parent mode
         if(0 < pid)
+        {
             return pid;
+        }
 
         // child mode
         signal(SIGTERM, SIG_DFL);
         signal(SIGCHLD, SIG_DFL);
         signal(SIGINT, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
-        
+
         // skip closelog, glibc dead lock
         if(isDebugTarget(DebugTarget::Syslog))
         {
@@ -372,13 +417,15 @@ namespace LTSM
     void toPlatformSyslog(int priority, const char* format, va_list args)
     {
 #ifdef __UNIX__
- #ifdef LTSM_WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
+
         if(! forceSyslog)
         {
             sd_journal_printv(priority, format, args);
             return;
         }
- #endif
+
+#endif
         vsyslog(priority, format, args);
 #else
         vfprintf(appLoggingFd ? appLoggingFd.get() : stderr, format, args);
@@ -501,7 +548,7 @@ namespace LTSM
     void Application::debug(uint32_t subsys, const char* format, ...)
     {
         if((subsys & appDebugTypes) &&
-            (appDebugLevel == DebugLevel::Debug || appDebugLevel == DebugLevel::Trace))
+                (appDebugLevel == DebugLevel::Debug || appDebugLevel == DebugLevel::Trace))
         {
             va_list args;
             va_start(args, format);
@@ -532,7 +579,7 @@ namespace LTSM
     void Application::trace(uint32_t subsys, const char* format, ...)
     {
         if((subsys & appDebugTypes) &&
-            (appDebugLevel == DebugLevel::Trace))
+                (appDebugLevel == DebugLevel::Trace))
         {
             va_list args;
             va_start(args, format);
@@ -546,88 +593,215 @@ namespace LTSM
 #ifdef LTSM_WITH_JSON
     // ApplicationLog
     ApplicationLog::ApplicationLog(std::string_view sid)
-        : Application(ident)
+        : Application(sid)
     {
-	const char* applog = getenv("LTSM_APPLOG");
-	if(!applog)
-	    applog = "/etc/ltsm/applog.json";
+        const char* applog = getenv("LTSM_APPLOG");
 
-	if(auto jc = JsonContentFile(applog); jc.isObject())
-	{
-	    if(auto jo = jc.toObject(); jo.isObject(ident))
-	    {
-		setAppLog(jo.getObject(ident));
-	    }
-	}
+        if(! applog)
+        {
+            applog = "/etc/ltsm/applog.json";
+        }
+
+        if(auto jc = JsonContentFile(applog); jc.isObject())
+        {
+            if(auto jo = jc.toObject(); jo.isObject(ident))
+            {
+                setAppLog(jo.getObject(ident));
+            }
+        }
     }
 
     void ApplicationLog::setAppLog(const JsonObject* jo)
     {
-	setDebugTarget(jo->getString("debug:target", "console"));
-	setDebugLevel(jo->getString("debug:level", "info"));
+        setDebugTarget(jo->getString("debug:target", "console"));
+        setDebugLevel(jo->getString("debug:level", "info"));
 
-	if(isDebugTarget(DebugTarget::Syslog))
-	{
-	    auto facility = jo->getString("debug:syslog", "user");
-	    setDebugSyslogFacility(facility);
-	}
-	else if(isDebugTarget(DebugTarget::SyslogFile))
-	{
-	    if(auto file = jo->getString("debug:file"); ! file.empty())
-	    {
-		setDebugTargetFile(file);
-	    }
-	    else
-	    {
-		setDebugTarget(DebugTarget::Console);
-	    }
-	}
+        if(isDebugTarget(DebugTarget::Syslog))
+        {
+            auto facility = jo->getString("debug:syslog", "user");
+            setDebugSyslogFacility(facility);
+        }
+        else if(isDebugTarget(DebugTarget::SyslogFile))
+        {
+            if(auto file = jo->getString("debug:file"); ! file.empty())
+            {
+                setDebugTargetFile(file);
+            }
+            else
+            {
+                setDebugTarget(DebugTarget::Console);
+            }
+        }
 
-	if(auto types = jo->getArray("debug:types"))
-	{
-	    setDebugTypes(types->toStdList<std::string>());
-	}
+        if(auto types = jo->getArray("debug:types"))
+        {
+            setDebugTypes(types->toStdList<std::string>());
+        }
     }
 
+    // WatchModification
+    WatchModification::~WatchModification()
+    {
+        inotifyWatchStop();
+    }
+
+#ifdef __UNIX__
+    void inotifyWatchCb(int fd, std::string filename, WatchModification* owner)
+    {
+        std::array<char, 256> buf = {};
+
+        while(true)
+        {
+            auto len = read(fd, buf.data(), buf.size());
+
+            if(len < 0)
+            {
+                if(errno == EAGAIN)
+                    continue;
+
+                if(errno != EBADF)
+                {
+                    Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                        __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                }
+
+                break;
+            }
+
+            if(len < sizeof(struct inotify_event))
+            {
+                Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                    __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                break;
+            }
+
+            auto beg = buf.begin();
+            auto end = buf.begin() + len;
+
+            while(beg < end)
+            {
+                auto st = (const struct inotify_event*) std::addressof(*beg);
+
+                if(st->mask == IN_CLOSE_WRITE)
+                {
+                    if(st->len && owner->inotifyWatchTarget(st->name))
+                        owner->closeWriteEvent(filename);
+                }
+
+                beg += sizeof(struct inotify_event) + st->len;
+            }
+        }
+    }
+
+    bool WatchModification::inotifyWatchTarget(std::string_view name) const
+    {
+        return _fileName == name;
+    }
+
+    bool WatchModification::inotifyWatchStart(const std::filesystem::path & file)
+    {
+        if(! std::filesystem::is_regular_file(file))
+        {
+            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            return false;
+        }
+
+        _inotifyFd = inotify_init();
+
+        if(0 > _inotifyFd)
+        {
+            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+                __FUNCTION__, "inotify_init", strerror(errno), errno);
+            return false;
+        }
+
+        _fileName = file.filename();
+        _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
+
+        if(0 > _inotifyWd)
+        {
+            Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.c_str());
+
+            inotifyWatchStop();
+            return false;
+        }
+
+        _inotifyJob = std::thread(& inotifyWatchCb, _inotifyFd, file.native(), this );
+
+        Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, file.c_str());
+        return true;
+    }
+
+    void WatchModification::inotifyWatchStop(void)
+    {
+        if(0 <= _inotifyWd)
+            inotify_rm_watch(_inotifyFd, _inotifyWd);
+
+        if(0 <= _inotifyFd)
+            close(_inotifyFd);
+
+        _inotifyFd = -1;
+        _inotifyWd = -1;
+
+        if(_inotifyJob.joinable())
+            _inotifyJob.join();
+    }
+#else
+    bool WatchModification::inotifyWatchStart(const std::filesystem::path & file)
+    {
+        return false;
+    }
+
+    void WatchModification::inotifyWatchStop(void)
+    {
+    }
+#endif
+
     // ApplicationJsonConfig
-    ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const char* fconf)
+    ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & fconf)
         : ApplicationLog(ident)
     {
-        if(fconf)
+        if(fconf.empty() || ! std::filesystem::exists(fconf))
         {
-            readConfig(fconf);
+            readDefaultConfig();
         }
         else
         {
-            std::list<std::filesystem::path> files;
+            readConfig(fconf);
+        }
+    }
 
-            auto env = std::getenv("LTSM_CONFIG");
+    void ApplicationJsonConfig::readDefaultConfig(void)
+    {
+        std::list<std::filesystem::path> files;
 
-            if(env)
+        if(auto env = std::getenv("LTSM_CONFIG"))
+        {
+            files.emplace_back(env);
+        }
+
+        auto ident_json = Tools::joinToString(ident, ".json");
+        files.emplace_back(std::filesystem::current_path() / ident_json);
+
+        auto ident_conf = std::filesystem::path("/etc/ltsm") / ident_json;
+        files.emplace_back(std::move(ident_conf));
+
+        files.emplace_back(std::filesystem::current_path() / "config.json");
+        files.emplace_back("/etc/ltsm/config.json");
+
+        for(const auto & path : files)
+        {
+            auto st = std::filesystem::status(path);
+
+            if(std::filesystem::file_type::not_found == st.type())
             {
-                files.emplace_back(env);
+                continue;
             }
 
-            auto ident_json = Tools::joinToString(ident, ".json");
-            files.emplace_back(std::filesystem::current_path() / ident_json);
-
-            auto ident_conf = std::filesystem::path("/etc/ltsm") / ident_json;
-            files.emplace_back(std::move(ident_conf));
-
-            files.emplace_back(std::filesystem::current_path() / "config.json");
-            files.emplace_back("/etc/ltsm/config.json");
-
-            for(const auto & path : files)
+            if(readConfig(path))
             {
-                auto st = std::filesystem::status(path);
-
-                if(std::filesystem::file_type::not_found == st.type())
-                    continue;
-
-                if(readConfig(path))
-                {
-                    break;
-                }
+                break;
             }
         }
     }
@@ -659,9 +833,15 @@ namespace LTSM
             return false;
         }
 
-        json = jsonFile.toObject();
+        json.swap(jsonFile.toObject());
         json.addString("config:path", file.native());
+
         return true;
+    }
+
+    bool ApplicationJsonConfig::inotifyWatchStart(void)
+    {
+        return WatchModification::inotifyWatchStart(configGetString("config:path"));
     }
 
     void ApplicationJsonConfig::configSetInteger(const std::string & key, int val)
@@ -684,35 +864,15 @@ namespace LTSM
         json.addDouble(key, val);
     }
 
-    int ApplicationJsonConfig::configGetInteger(std::string_view key, int def) const
-    {
-        return json.getInteger(key, def);
-    }
-
-    bool ApplicationJsonConfig::configGetBoolean(std::string_view key, bool def) const
-    {
-        return json.getBoolean(key, def);
-    }
-
-    std::string ApplicationJsonConfig::configGetString(std::string_view key, std::string_view def) const
-    {
-        return json.getString(key, def);
-    }
-
-    double ApplicationJsonConfig::configGetDouble(std::string_view key, double def) const
-    {
-        return json.getDouble(key, def);
-    }
-
     const JsonObject & ApplicationJsonConfig::config(void) const
     {
         return json;
     }
 
-    void ApplicationJsonConfig::configSet(JsonObject && jo) noexcept
+    void ApplicationJsonConfig::closeWriteEvent(const std::string & file)
     {
-        json.swap(jo);
+        if(readConfig(file))
+            configReloadedEvent();
     }
-
 #endif
 }

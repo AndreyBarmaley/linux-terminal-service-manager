@@ -27,7 +27,6 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
-#include <sys/inotify.h>
 #include <sys/mount.h>
 
 #include <cctype>
@@ -62,8 +61,7 @@ using namespace std::chrono_literals;
 
 namespace LTSM::Manager
 {
-    std::atomic<bool> serviceRunning = false;
-    std::atomic<bool> serviceKilled = false;
+    std::unique_ptr<sdbus::IConnection> serviceConn;
     std::unique_ptr<DBusAdaptor> serviceAdaptor;
 
     //
@@ -77,7 +75,8 @@ namespace LTSM::Manager
     {
         if(sig == SIGTERM || sig == SIGINT)
         {
-            serviceKilled = true;
+            if(serviceConn)
+                serviceConn->leaveEventLoop();
         }
     }
 
@@ -1082,14 +1081,18 @@ namespace LTSM::Manager
     }; // RunAs
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const JsonObject & jo, size_t displays)
+    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::string & confile)
+        : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        , AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
-        : AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
+        , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(displays), _config(& jo)
+        , XvfbSessions(300)
     {
+        checkStartConfig();
+        createXauthDir();
+
         // registry
         registerAdaptor();
         // check sessions timepoint limit
@@ -1103,11 +1106,45 @@ namespace LTSM::Manager
         // check sessions alive
         timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true,
             std::bind(& DBusAdaptor::sessionsCheckConnectedAction, this));
+            
+        inotifyWatchStart();
     }
 
     DBusAdaptor::~DBusAdaptor()
     {
         unregisterAdaptor();
+    }
+
+    void DBusAdaptor::checkStartConfig(void)
+    {
+        // check present executable files
+        for(const auto & key : config().keys())
+        {
+            // only for path
+            if(startsWith(key, "#") || ! endsWith(key, ":path"))
+                continue;
+
+            // skip comment
+            if( 0 == std::ispunct(key.front()))
+                continue;
+
+            if(auto value = configGetString(key);
+                ! std::filesystem::exists(value))
+            {
+                Application::warning("%s: path not found: `%s'", "CheckProgram", value.c_str());
+            }
+        }
+
+        int min = configGetInteger("display:min", 55);
+        int max = configGetInteger("display:max", 99);
+
+        size_t poolsz = std::abs(max - min);
+
+        if(poolsz > sessions.size())
+        {
+            std::scoped_lock guard{ lockSessions };
+            sessions.resize(poolsz);
+        }
     }
 
     void DBusAdaptor::shutdownService(void)
@@ -1117,8 +1154,8 @@ namespace LTSM::Manager
 
     void DBusAdaptor::configReloadedEvent(void)
     {
-        int min = _config->getInteger("display:min", 55);
-        int max = _config->getInteger("display:max", 99);
+        int min = configGetInteger("display:min", 55);
+        int max = configGetInteger("display:max", 99);
         size_t poolsz = std::abs(max - min);
 
         if(poolsz > sessions.size())
@@ -1126,6 +1163,8 @@ namespace LTSM::Manager
             std::scoped_lock guard{ lockSessions };
             sessions.resize(poolsz);
         }
+
+        Application::notice("%s: success", __FUNCTION__);
     }
 
     void DBusAdaptor::sessionsTimeLimitAction(void)
@@ -1325,7 +1364,7 @@ namespace LTSM::Manager
 
             if(notsys)
             {
-                runSystemScript(std::move(ptr), _config->getString("system:logoff"));
+                runSystemScript(std::move(ptr), configGetString("system:logoff"));
             }
 
             this->removeDisplaySession(displayNum);
@@ -1340,11 +1379,11 @@ namespace LTSM::Manager
     void DBusAdaptor::closeSystemSession(XvfbSessionPtr xvfb)
     {
         Application::info("%s: user: %s, display: %" PRId32, __FUNCTION__, xvfb->userInfo->user(), xvfb->displayNum);
-        runSessionScript(xvfb, _config->getString("session:disconnect"));
+        runSessionScript(xvfb, configGetString("session:disconnect"));
         // PAM close
         xvfb->pam.reset();
         // unreg sessreg
-        runSystemScript(std::move(xvfb), _config->getString("system:disconnect"));
+        runSystemScript(std::move(xvfb), configGetString("system:disconnect"));
     }
 
     bool DBusAdaptor::waitXvfbStarting(int display, const std::vector<uint8_t> & cookie, uint32_t ms) const
@@ -1376,7 +1415,7 @@ namespace LTSM::Manager
 
     std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie)
     {
-        std::string xauthFileTemplate = _config->getString("xauth:file", "/var/run/ltsm/auth_%{display}");
+        std::string xauthFileTemplate = configGetString("xauth:file", "/var/run/ltsm/auth_%{display}");
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{pid}", getpid());
         xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", displayNum);
         std::filesystem::path xauthFilePath(xauthFileTemplate);
@@ -1539,8 +1578,8 @@ namespace LTSM::Manager
             return nullptr;
         }
 
-        int min = _config->getInteger("display:min", 55);
-        int max = _config->getInteger("display:max", 99);
+        int min = configGetInteger("display:min", 55);
+        int max = configGetInteger("display:max", 99);
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay)
@@ -1589,7 +1628,7 @@ namespace LTSM::Manager
         sess->displayAddr = Tools::joinToString(":", sess->displayNum);
 
         sess->tpStart = std::chrono::system_clock::now();
-        sess->startTimeLimitSec = _config->getInteger("session:started:timeout", 0);
+        sess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
 
         // generate session key
         sess->mcookie = Tools::randomBytes(128);
@@ -1602,8 +1641,8 @@ namespace LTSM::Manager
         }
 
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
-        std::string xvfbBin = _config->getString("xvfb:path");
-        std::string xvfbArgs = _config->getString("xvfb:args");
+        std::string xvfbBin = configGetString("xvfb:path");
+        std::string xvfbArgs = configGetString("xvfb:args");
         // xvfb args
         xvfbArgs = Tools::replace(xvfbArgs, "%{display}", sess->displayNum);
         xvfbArgs = Tools::replace(xvfbArgs, "%{depth}", sess->depth);
@@ -1791,8 +1830,8 @@ namespace LTSM::Manager
         Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
             __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
-        auto displayWidth = _config->getInteger("default:width", 1024);
-        auto displayHeight = _config->getInteger("default:height", 768);
+        auto displayWidth = configGetInteger("default:width", 1024);
+        auto displayHeight = configGetInteger("default:height", 768);
         auto userInfo = Tools::getUserInfo(ltsm_user_conn);
 
         if(! userInfo)
@@ -1848,7 +1887,7 @@ namespace LTSM::Manager
         }
 
         Tools::setFileOwner(socketPath, xvfb->userInfo->uid(), groupAuthGid);
-        std::string helperArgs = _config->getString("helper:args");
+        std::string helperArgs = configGetString("helper:args");
 
         if(helperArgs.size())
         {
@@ -1857,13 +1896,13 @@ namespace LTSM::Manager
         }
 
         // simple cursor
-        if(_config->hasKey("display:cursor"))
+        if(configHasKey("display:cursor"))
         {
-            runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", _config->getString("display:cursor") });
+            runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", configGetString("display:cursor") });
         }
 
         // runas login helper
-        xvfb->pid2 = runSessionCommandSafe(xvfb, _config->getString("helper:path"), Tools::split(helperArgs, 0x20));
+        xvfb->pid2 = runSessionCommandSafe(xvfb, configGetString("helper:path"), Tools::split(helperArgs, 0x20));
 
         if(0 >= xvfb->pid2)
         {
@@ -1881,7 +1920,7 @@ namespace LTSM::Manager
         Application::debug(DebugType::Dbus, "%s: session request, user: %s, remote: %s, display: %" PRId32,
             __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
-        std::string sessionBin = _config->getString("session:path");
+        std::string sessionBin = configGetString("session:path");
 
         auto userInfo = Tools::getUserInfo(userName);
 
@@ -1960,7 +1999,7 @@ namespace LTSM::Manager
                 __FUNCTION__, "user connect to session", oldSess->displayNum, oldSess->userInfo->user());
             emitSessionReconnect(remoteAddr, connType);
 
-            if(_config->getBoolean("session:kill:stop", false))
+            if(configGetBoolean("session:kill:stop", false))
             {
                 auto cmd = std::string("/usr/bin/killall -s SIGCONT -u ").append(oldSess->userInfo->user());
                 int ret = std::system(cmd.c_str());
@@ -1970,7 +2009,7 @@ namespace LTSM::Manager
 
             sessionRunSetxkbmapLayout(oldSess);
             startSessionChannels(oldSess);
-            runSessionScript(oldSess, _config->getString("session:connect"));
+            runSessionScript(oldSess, configGetString("session:connect"));
             return oldSess->displayNum;
         }
 
@@ -1993,37 +2032,37 @@ namespace LTSM::Manager
         newSess->remoteAddr = remoteAddr;
         newSess->conntype = connType;
         newSess->connectorId = connectorId;
-        newSess->policy = sessionPolicy(Tools::lower(_config->getString("session:policy")));
+        newSess->policy = sessionPolicy(Tools::lower(configGetString("session:policy")));
         newSess->mode = SessionMode::Started;
         newSess->tpStart = std::chrono::system_clock::now();
-        newSess->startTimeLimitSec = _config->getInteger("session:started:timeout", 0);
+        newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
 
-        if(! _config->getBoolean("transfer:file:disabled", false))
+        if(! configGetBoolean("transfer:file:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel:: TransferFiles);
         }
 
-        if(! _config->getBoolean("channel:printer:disabled", false))
+        if(! configGetBoolean("channel:printer:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel::RedirectPrinter);
         }
 
-        if(! _config->getBoolean("channel:audio:disabled", false))
+        if(! configGetBoolean("channel:audio:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel::RedirectAudio);
         }
 
-        if(! _config->getBoolean("channel:pcsc:disabled", false))
+        if(! configGetBoolean("channel:pcsc:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel::RedirectPcsc);
         }
 
-        if(! _config->getBoolean("channel:sane:disabled", false))
+        if(! configGetBoolean("channel:sane:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel::RedirectScanner);
         }
 
-        if(! _config->getBoolean("channel:fuse:disabled", false))
+        if(! configGetBoolean("channel:fuse:disabled", false))
         {
             newSess->setStatus(Flags::AllowChannel::RemoteFilesUse);
         }
@@ -2092,10 +2131,10 @@ namespace LTSM::Manager
         Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
             __FUNCTION__, newSess->pid2, newSess->displayNum);
         sessionRunSetxkbmapLayout(newSess);
-        runSystemScript(newSess, _config->getString("system:logon"));
-        runSystemScript(newSess, _config->getString("system:connect"));
+        runSystemScript(newSess, configGetString("system:logon"));
+        runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);
-        runSessionScript(newSess, _config->getString("session:connect"));
+        runSessionScript(newSess, configGetString("session:connect"));
         return newSess->displayNum;
     }
 
@@ -2199,12 +2238,12 @@ namespace LTSM::Manager
         }
 
         Application::notice("%s: %s, pid: %" PRId32, __FUNCTION__, "complete", getpid());
-        serviceRunning = false;
+        serviceConn->leaveEventLoop();
     }
 
     bool DBusAdaptor::sessionRunZenity(XvfbSessionPtr xvfb, std::initializer_list<std::string> params)
     {
-        std::filesystem::path zenity = _config->getString("zenity:path", "/usr/bin/zenity");
+        std::filesystem::path zenity = configGetString("zenity:path", "/usr/bin/zenity");
         return 0 != runSessionCommandSafe(std::move(xvfb), zenity, std::move(params));
     }
 
@@ -2237,7 +2276,7 @@ namespace LTSM::Manager
         {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
-            if(_config->getBoolean("session:idle:disconnect", false))
+            if(configGetBoolean("session:idle:disconnect", false))
             {
                 std::thread([this, xvfb = std::move(ptr)]()
                 {
@@ -2301,7 +2340,7 @@ namespace LTSM::Manager
         {
             xvfb->connectorId = connectorId;
             xvfb->tpOnline = std::chrono::system_clock::now();
-            xvfb->onlineTimeLimitSec = _config->getInteger("session:online:timeout", 0);
+            xvfb->onlineTimeLimitSec = configGetInteger("session:online:timeout", 0);
             xvfb->mode = SessionMode::Connected;
 
             emitSessionOnline(xvfb->displayNum, xvfb->userInfo->user());
@@ -2341,12 +2380,12 @@ namespace LTSM::Manager
             ptr->encryption.clear();
             ptr->connectorId = 0;
             ptr->tpOffline = std::chrono::system_clock::now();
-            ptr->offlineTimeLimitSec = _config->getInteger("session:offline:timeout", 0);
+            ptr->offlineTimeLimitSec = configGetInteger("session:offline:timeout", 0);
             ptr->mode = SessionMode::Disconnected;
             createSessionConnInfo(ptr, false);
 
             // stop user process
-            if(_config->getBoolean("session:kill:stop", false))
+            if(configGetBoolean("session:kill:stop", false))
             {
                 auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(ptr->userInfo->user());
                 int ret = std::system(cmd.c_str());
@@ -2536,9 +2575,9 @@ namespace LTSM::Manager
             return false;
         }
 
-        if(_config->hasKey("transfer:group:only"))
+        if(configHasKey("transfer:group:only"))
         {
-            if(auto groupInfo = Tools::getGroupInfo(_config->getString("transfer:group:only")))
+            if(auto groupInfo = Tools::getGroupInfo(configGetString("transfer:group:only")))
             {
                 auto gids = xvfb->userInfo->groups();
 
@@ -2552,7 +2591,7 @@ namespace LTSM::Manager
             }
         }
 
-        std::filesystem::path zenity = _config->getString("zenity:path", "/usr/bin/zenity");
+        std::filesystem::path zenity = configGetString("zenity:path", "/usr/bin/zenity");
         auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
         PidStatus zenityResult;
 
@@ -2718,14 +2757,14 @@ namespace LTSM::Manager
     std::forward_list<std::string> DBusAdaptor::getAllowLogins(void) const
     {
         // uids names: "access:uid:min", "access:uid:max"
-        int minUidRange = _config->getInteger("access:uid:min", 0);
-        int maxUidRange = _config->getInteger("access:uid:max", INT32_MAX);
+        int minUidRange = configGetInteger("access:uid:min", 0);
+        int maxUidRange = configGetInteger("access:uid:max", INT32_MAX);
         auto accessUidNames = Tools::getSystemUsers(minUidRange, maxUidRange);
         // access list: "access:users"
-        auto accessUsersNames = _config->getStdListForward<std::string>("access:users");
+        auto accessUsersNames = config().getStdListForward<std::string>("access:users");
 
         // append list: "access:groups"
-        for(const auto & group : _config->getStdListForward<std::string>("access:groups"))
+        for(const auto & group : config().getStdListForward<std::string>("access:groups"))
         {
             try
             {
@@ -2823,7 +2862,7 @@ namespace LTSM::Manager
             return false;
         }
 
-        int loginFailuresConf = _config->getInteger("login:failures_count", 0);
+        int loginFailuresConf = configGetInteger("login:failures_count", 0);
 
         if(0 > loginFailuresConf)
         {
@@ -2831,7 +2870,7 @@ namespace LTSM::Manager
         }
 
         // open PAM
-        auto pam = std::make_unique<PamSession>(_config->getString("pam:service"), login, password);
+        auto pam = std::make_unique<PamSession>(configGetString("pam:service"), login, password);
 
         if(! pam->pamStart(login))
         {
@@ -3007,28 +3046,28 @@ namespace LTSM::Manager
 
             if(key == "redirect:cups")
             {
-                if(_config->getBoolean("channel:printer:disabled", false))
+                if(configGetBoolean("channel:printer:disabled", false))
                 {
                     continue;
                 }
             }
             else if(key == "redirect:fuse")
             {
-                if(_config->getBoolean("channel:fuse:disabled", false))
+                if(configGetBoolean("channel:fuse:disabled", false))
                 {
                     continue;
                 }
             }
             else if(key == "redirect:audio")
             {
-                if(_config->getBoolean("channel:audio:disabled", false))
+                if(configGetBoolean("channel:audio:disabled", false))
                 {
                     continue;
                 }
             }
             else if(key == "redirect:pcsc")
             {
-                if(_config->getBoolean("channel:pcsc:disabled", false))
+                if(configGetBoolean("channel:pcsc:disabled", false))
                 {
                     continue;
                 }
@@ -3037,12 +3076,12 @@ namespace LTSM::Manager
             }
             else if(key == "redirect:sane")
             {
-                if(_config->getBoolean("channel:sane:disabled", false))
+                if(configGetBoolean("channel:sane:disabled", false))
                 {
                     continue;
                 }
 
-                auto socket = _config->getString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
+                auto socket = configGetString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
                 xvfb->environments.emplace("SANE_UNIX_PATH", socket);
             }
             else if(key == "username")
@@ -3211,7 +3250,7 @@ namespace LTSM::Manager
             return false;
         }
 
-        auto printerSocket = _config->getString("channel:printer:format", "/var/run/ltsm/cups/printer_%{user}");
+        auto printerSocket = configGetString("channel:printer:format", "/var/run/ltsm/cups/printer_%{user}");
         auto socketFolder = std::filesystem::path(printerSocket).parent_path();
         auto lp = Tools::getGroupGid("lp");
         std::error_code err;
@@ -3344,7 +3383,7 @@ namespace LTSM::Manager
         }
 
         Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
-        auto audioFormat = _config->getString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
+        auto audioFormat = configGetString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
         auto audioFolder = std::filesystem::path(Tools::replace(audioFormat, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
@@ -3390,7 +3429,7 @@ namespace LTSM::Manager
     void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & encoding)
     {
         Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
-        auto audioFormat = _config->getString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
+        auto audioFormat = configGetString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
         auto audioFolder = std::filesystem::path(Tools::replace(audioFormat, "%{user}", xvfb->userInfo->user()));
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
@@ -3456,7 +3495,7 @@ namespace LTSM::Manager
             return false;
         }
 
-        auto saneSocket = _config->getString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
+        auto saneSocket = configGetString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
         auto socketFolder = std::filesystem::path(saneSocket).parent_path();
         std::error_code err;
 
@@ -3589,7 +3628,7 @@ namespace LTSM::Manager
         }
 
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pcscFormat = _config->getString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
+        auto pcscFormat = configGetString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
         auto pcscFolder = std::filesystem::path(Tools::replace(pcscFormat, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
@@ -3634,7 +3673,7 @@ namespace LTSM::Manager
     void DBusAdaptor::stopPcscListener(XvfbSessionPtr xvfb, const std::string & param)
     {
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pcscFormat = _config->getString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
+        auto pcscFormat = configGetString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
         auto pcscFolder = std::filesystem::path(Tools::replace(pcscFormat, "%{user}", xvfb->userInfo->user()));
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
@@ -3690,7 +3729,7 @@ namespace LTSM::Manager
         }
 
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pkcs11Format = _config->getString("channel:pkcs11:format", "/var/run/ltsm/pkcs11/%{display}");
+        auto pkcs11Format = configGetString("channel:pkcs11:format", "/var/run/ltsm/pkcs11/%{display}");
         auto pkcs11Folder = std::filesystem::path(Tools::replace(pkcs11Format, "%{display}", xvfb->displayNum));
         std::error_code err;
 
@@ -3830,7 +3869,7 @@ namespace LTSM::Manager
         }
 
         Application::info("%s: remote point: %s", __FUNCTION__, remotePoint.c_str());
-        auto userShareFormat = _config->getString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
+        auto userShareFormat = configGetString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
         auto userShareFolder = Tools::replace(userShareFormat, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
@@ -3890,7 +3929,7 @@ namespace LTSM::Manager
 
     void DBusAdaptor::stopFuseListener(XvfbSessionPtr xvfb, const std::string & remotePoint)
     {
-        auto userShareFormat = _config->getString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
+        auto userShareFormat = configGetString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
         auto userShareFolder = Tools::replace(userShareFormat, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
@@ -4166,59 +4205,10 @@ namespace LTSM::Manager
         return true;
     }
 
-    /* SystemService */
-    SystemService::SystemService(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_service")
-    {
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--background"))
-            {
-                isBackground = true;
-            }
-            else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc)
-            {
-                readConfig(argv[it + 1]);
-                it = it + 1;
-            }
-            else
-            {
-                std::cout << "usage: " << argv[0] << " --config <path> [--background]" << std::endl;
-                throw 0;
-            }
-        }
-
-        if(! config().isValid())
-        {
-            Application::error("%s: %s failed", __FUNCTION__, "config");
-            throw std::invalid_argument(__FUNCTION__);
-        }
-
-        std::error_code err;
-
-        // check present executable files
-        for(const auto & key : config().keys())
-        {
-            // only for path
-            if(! endsWith(key, ":path"))
-                continue;
-
-            // skip comment
-            if( 0 == std::ispunct(key.front()))
-                continue;
-
-            if(auto value = configGetString(key);
-                ! std::filesystem::exists(value, err))
-            {
-                Application::error("%s: path not found: `%s'", "CheckProgram", value.c_str());
-                throw std::invalid_argument(__FUNCTION__);
-            }
-        }
-    }
-
-    bool SystemService::createXauthDir(void)
+    bool DBusAdaptor::createXauthDir(void)
     {
         auto xauthFile = configGetString("xauth:file", "/var/run/ltsm/auth_%{display}");
+
         // find group id
         gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
         // check directory
@@ -4259,105 +4249,27 @@ namespace LTSM::Manager
         return true;
     }
 
-    void SystemService::inotifyWatchConfigEvent(const std::string & filename)
+    /* SystemService */
+    SystemService::SystemService(int argc, const char** argv)
     {
-        JsonContentFile jsonFile(filename);
-
-        if(jsonFile.isValid() && jsonFile.isObject())
+        for(int it = 1; it < argc; ++it)
         {
-            configSet(jsonFile.toObject());
-            Application::notice("%s: reload config %s, file: %s", __FUNCTION__, "success", filename.c_str());
-
-            if(serviceAdaptor)
+            if(0 == std::strcmp(argv[it], "--background"))
             {
-                serviceAdaptor->configReloadedEvent();
+                isBackground = true;
+            }
+            else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc)
+            {
+                config.assign(argv[it + 1]);
+                it = it + 1;
+            }
+            else
+            {
+                std::cout << "usage: " << argv[0] << " [--config file] [--background]" << std::endl;
+                throw 0;
             }
         }
-        else
-        {
-            Application::error("%s: reload config %s, file: %s", __FUNCTION__, "failed", filename.c_str());
-        }
-    }
-    
-    void SystemService::inotifyWatchConfigCb(int fd, int wd, std::string filename)
-    {
-        std::array<char, 4096> buf = {};
 
-        while(true)
-        {
-            auto len = read(fd, buf.data(), buf.size());
-
-            if(len < 0)
-            {
-                if(errno == EAGAIN)
-                    continue;
-
-                if(errno != EBADF)
-                {
-                    Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                        __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
-                }
-
-                break;
-            }
-
-            if(len < sizeof(struct inotify_event))
-            {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                    __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
-                break;
-            }
-
-            auto beg = buf.begin();
-            auto end = buf.begin() + len;
-            bool reload = false;
-
-            while(beg < end)
-            {
-                auto st = (const struct inotify_event*) std::addressof(*beg);
-
-                if(st->mask && st->mask != IN_IGNORED)
-                {
-                    reload = true;
-                }
-
-                beg += sizeof(struct inotify_event) + st->len;
-            }
-
-            if(reload)
-                inotifyWatchConfigEvent(filename);
-        }
-
-        inotify_rm_watch(fd, wd);
-    }
-
-    bool SystemService::inotifyWatchConfigStart(void)
-    {
-        std::string filename = configGetString("config:path", "/etc/ltsm/config.json");
-        Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, filename.c_str());
-
-        int fd = inotify_init();
-
-        if(0 > fd)
-        {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
-                __FUNCTION__, "inotify_init", strerror(errno), errno);
-            return false;
-        }
-
-        int wd = inotify_add_watch(fd, filename.c_str(), IN_CLOSE_WRITE|IN_DELETE_SELF);
-
-        if(0 > wd)
-        {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                __FUNCTION__, "inotify_add_watch", strerror(errno), errno, filename.c_str());
-            return false;
-        }
-
-        inotifyWatchConfigFd = fd;
-        inotifyWatchConfigJob = std::thread(& SystemService::inotifyWatchConfigCb, this, fd, wd, filename);
-
-        return true;
     }
 
     int SystemService::start(void)
@@ -4374,12 +4286,12 @@ namespace LTSM::Manager
         }
 
 #ifdef SDBUS_2_0_API
-        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName{LTSM::dbus_manager_service_name});
+        serviceConn = sdbus::createSystemBusConnection(sdbus::ServiceName{LTSM::dbus_manager_service_name});
 #else
-        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
+        serviceConn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
 #endif
 
-        if(! conn)
+        if(! serviceConn)
         {
             Application::error("%s: %s failed",
                 "ServiceStart", "dbus connection");
@@ -4387,27 +4299,19 @@ namespace LTSM::Manager
         }
 
         auto connectorHome = Tools::getUserHome(ltsm_user_conn);
-        std::error_code err;
 
-        if(! std::filesystem::is_directory(connectorHome, err))
+        if(! std::filesystem::is_directory(connectorHome))
         {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                "ServiceStart", err.message().c_str(), connectorHome.c_str(), getuid());
+            Application::error("%s: path not found: `%s'", __FUNCTION__, connectorHome.c_str());
             return EXIT_FAILURE;
         }
 
         // remove old sockets
         for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome})
         {
-            if(dirEntry.is_socket(err))
+            if(dirEntry.is_socket())
             {
-                std::filesystem::remove(dirEntry, err);
-            }
-
-            if(err)
-            {
-                Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                    "ServiceStart", err.message().c_str(), dirEntry.path().c_str(), getuid());
+                std::filesystem::remove(dirEntry);
             }
         }
 
@@ -4416,55 +4320,21 @@ namespace LTSM::Manager
         signal(SIGINT, isBackground ? SIG_IGN : signalHandler);
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
-        createXauthDir();
-        int min = config().getInteger("display:min", 55);
-        int max = config().getInteger("display:max", 99);
-        serviceAdaptor = std::make_unique<DBusAdaptor>(*conn, config(), std::abs(max - min));
-        serviceRunning = true;
-        inotifyWatchConfigStart();
 
+        serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, config);
         Application::notice("%s: service started, uid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getpid(), LTSM::service_version);
+
 #ifdef WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
 
-        while(serviceRunning)
-        {
-            conn->enterEventLoopAsync();
-            std::this_thread::sleep_for(10ms);
-
-            if(serviceKilled)
-            {
-                Application::notice("%s: receive kill signal", "ServiceStart");
-                serviceAdaptor->shutdownService();
-                serviceKilled = false;
-            }
-        }
+        serviceConn->enterEventLoop();
 
 #ifdef WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
-        close(inotifyWatchConfigFd);
-        // wait dbus 100ms
-        auto tp = std::chrono::steady_clock::now();
-
-        while(true)
-        {
-            auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-
-            if(dt.count() > 100)
-            {
-                break;
-            }
-
-            conn->enterEventLoopAsync();
-            std::this_thread::sleep_for(10ms);
-        }
-
+        Application::notice("%s: service stopped", "ServiceStart");
         serviceAdaptor.reset();
-
-        if(inotifyWatchConfigJob.joinable())
-            inotifyWatchConfigJob.join();
 
         return EXIT_SUCCESS;
     }

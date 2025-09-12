@@ -24,7 +24,7 @@
 #ifndef _LTSM_PCSC_
 #define _LTSM_PCSC_
 
-#define LTSM_SESSION_PCSC_VERSION 20250905
+#define LTSM_SESSION_PCSC_VERSION 20250912
 
 #include <cstdint>
 #include <stdexcept>

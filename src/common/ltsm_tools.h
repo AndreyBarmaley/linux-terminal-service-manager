@@ -133,6 +133,9 @@ namespace LTSM
 
         std::string getHostname(void);
         bool checkUnixSocket(const std::filesystem::path &);
+
+        bool fileReadable(const std::filesystem::path &);
+        bool setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid, mode_t mode = 0);
     }
 
 #endif
@@ -148,9 +151,6 @@ namespace LTSM
         std::string prettyFuncName(std::string_view);
         std::string randomHexString(size_t len);
         std::string quotedString(std::string_view);
-
-        bool fileReadable(const std::filesystem::path &);
-        bool setFileOwner(const std::filesystem::path &, uid_t uid, gid_t gid, mode_t mode = 0);
 
         std::filesystem::path x11UnixPath(int display);
 

@@ -54,7 +54,7 @@
     "session:started:timeout": 0,
     "session:online:timeout": 0,
     "session:offline:timeout": 0,
-    "session:idle:timeout": 30,
+    "session:idle:timeout": 120,
     "session:idle:disconnect": false,
 
     "pam:service": "ltsm",

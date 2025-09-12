@@ -30,7 +30,6 @@
 #include <cstring>
 #include <iostream>
 #include <filesystem>
-#include <condition_variable>
 
 #include "pcsclite.h"
 
@@ -174,50 +173,10 @@ namespace PcscLite
 
 namespace LTSM
 {
-    struct WaitTransaction
-    {
-        std::mutex lock;
-        std::condition_variable cv;
-        std::forward_list<const PcscLite::ReaderState*> listLocked;
-        bool shutdown = false;
-
-        void shutdownClient(void)
-        {
-            const std::lock_guard<std::mutex> lk{ lock };
-            cv.notify_all();
-        }
-
-        void shutdownNotify(void)
-        {
-            const std::lock_guard<std::mutex> lk{ lock };
-            shutdown = true;
-            cv.notify_all();
-        }
-
-        void readerUnlock(const PcscLite::ReaderState* st)
-        {
-            const std::lock_guard<std::mutex> lk{ lock };
-            listLocked.remove(st);
-            cv.notify_all();
-        }
-
-        bool readerLock(const PcscLite::ReaderState* st)
-        {
-            Application::trace(DebugType::App, "%s: reader: %p wait", __FUNCTION__, st);
-            std::unique_lock<std::mutex> lk{ lock };
-            cv.wait(lk, [ &]
-            {
-                return shutdown ||
-                std::none_of(listLocked.begin(), listLocked.end(), [ &](auto & ptr) { return st == ptr; });
-            });
-            listLocked.push_front(st);
-            Application::trace(DebugType::App, "%s: reader: %p success", __FUNCTION__, st);
-            return ! shutdown;
-        }
-    };
-
     std::unique_ptr<sdbus::IConnection> conn;
-    WaitTransaction waitTransaction;
+
+    std::mutex transLock;
+    int32_t transactionId = 0;
 
     void signalHandler(int sig)
     {
@@ -243,14 +202,14 @@ namespace LTSM
         sock.sendFlush();
 
         // recv
-        context = sock.recvIntLE64();
+        auto context = sock.recvIntLE64();
         auto ret = sock.recvIntLE32();
 
         return std::make_tuple(context, ret);
     }
 
     std::tuple<uint32_t>
-    PcscRemote::sendReleaseContext(const int32_t & id)
+    PcscRemote::sendReleaseContext(const int32_t & id, const uint64_t & context)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64,
@@ -260,8 +219,6 @@ namespace LTSM
         sock.sendIntLE64(context);
         sock.sendFlush();
 
-        context = 0;
-
         // recv
         auto ret = sock.recvIntLE32();
 
@@ -269,8 +226,11 @@ namespace LTSM
     }
 
     std::tuple<uint64_t, uint32_t, uint32_t>
-    PcscRemote::sendConnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName)
+    PcscRemote::sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName)
     {
+        transLock.lock();
+        transactionId = id;
+
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", reader: `%s'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName.c_str());
@@ -281,15 +241,18 @@ namespace LTSM
         sock.sendFlush();
 
         // recv
-        handle = sock.recvIntLE64();
+        auto handle = sock.recvIntLE64();
         auto activeProtocol = sock.recvIntLE32();
         auto ret = sock.recvIntLE32();
+
+        transactionId = 0;
+        transLock.unlock();
 
         return std::make_tuple(handle, activeProtocol, ret);
     }
 
     std::tuple<uint32_t, uint32_t>
-    PcscRemote::sendReconnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization)
+    PcscRemote::sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", shareMode: %" PRIu32
@@ -308,7 +271,7 @@ namespace LTSM
     }
 
     std::tuple<uint32_t>
-    PcscRemote::sendDisconnect(const int32_t & id, const uint32_t & disposition)
+    PcscRemote::sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
@@ -318,16 +281,17 @@ namespace LTSM
         sock.sendIntLE64(handle).sendIntLE32(disposition);
         sock.sendFlush();
 
-        handle = 0;
-
         // recv
         auto ret = sock.recvIntLE32();
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t>
-    PcscRemote::sendBeginTransaction(const int32_t & id)
+    PcscRemote::sendBeginTransaction(const int32_t & id, const uint64_t & handle)
     {
+        transLock.lock();
+        transactionId = id;
+
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
                            __FUNCTION__, id, handle);
@@ -339,11 +303,18 @@ namespace LTSM
 
         // recv
         auto ret = sock.recvIntLE32();
+
+        if(ret != SCARD_S_SUCCESS)
+        {
+            transactionId = 0;
+            transLock.unlock();
+        }
+
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t>
-    PcscRemote::sendEndTransaction(const int32_t & id, const uint32_t & disposition)
+    PcscRemote::sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
@@ -355,16 +326,20 @@ namespace LTSM
 
         // recv
         auto ret = sock.recvIntLE32();
+
+        transactionId = 0;
+        transLock.unlock();
+
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>
-    PcscRemote::sendTransmit(const int32_t & id, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const binary_buf & data1)
+    PcscRemote::sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data1)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64
-                        ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32 ", send size: %lu",
-                           __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size());
+                        ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32  ", send size: %lu, recv size: %" PRIu32,
+                           __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace))
         {
@@ -374,7 +349,7 @@ namespace LTSM
 
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Transmit);
-        sock.sendIntLE64(handle).sendIntLE32(ioSendPciProtocol).sendIntLE32(ioSendPciLength).sendIntLE32(data1.size());
+        sock.sendIntLE64(handle).sendIntLE32(ioSendPciProtocol).sendIntLE32(ioSendPciLength).sendIntLE32(recvLength).sendIntLE32(data1.size());
 
         if(data1.size())
         {
@@ -383,18 +358,18 @@ namespace LTSM
 
         sock.sendFlush();
 
-        // resv
+        // recv
         auto ioRecvPciProtocol = sock.recvIntLE32();
         auto ioRecvPciLength = sock.recvIntLE32();
-        auto recvLength = sock.recvIntLE32();
+        auto bytesReturned = sock.recvIntLE32();
         auto ret = sock.recvIntLE32();
-        auto data2 = sock.recvData(recvLength);
+        auto data2 = sock.recvData(bytesReturned);
 
         return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, data2);
     }
 
     std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
-    PcscRemote::sendStatus(const int32_t & id)
+    PcscRemote::sendStatus(const int32_t & id, const uint64_t & handle)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
@@ -417,7 +392,7 @@ namespace LTSM
     }
 
     std::tuple<uint32_t, binary_buf>
-    PcscRemote::sendControl(const int32_t & id, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1)
+    PcscRemote::sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", controlCode: 0x%08"
@@ -450,7 +425,7 @@ namespace LTSM
     }
 
     std::tuple<uint32_t, binary_buf>
-    PcscRemote::sendGetAttrib(const int32_t & id, const uint32_t & attrId)
+    PcscRemote::sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", attrId: %" PRIu32,
@@ -470,7 +445,7 @@ namespace LTSM
     }
 
     std::tuple<uint32_t>
-    PcscRemote::sendSetAttrib(const int32_t & id, const uint32_t & attrId, const binary_buf & attr)
+    PcscRemote::sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr)
     {
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteHandle 0x%016" PRIx64 ", attrId: %" PRIu32 ", attrLength %lu",
@@ -498,7 +473,23 @@ namespace LTSM
         return std::make_tuple(ret);
     }
 
-    std::list<std::string> PcscRemote::sendListReaders(const int32_t & id)
+    std::tuple<uint32_t>
+    PcscRemote::sendCancel(const int32_t & id, const uint64_t & context)
+    {
+        const std::scoped_lock guard{ sockLock };
+        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << remoteContext 0x%016" PRIx64,
+                           __FUNCTION__, id, context);
+
+        // send
+        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Cancel);
+        sock.sendIntLE64(context).sendFlush();
+
+        // recv
+        auto ret = sock.recvIntLE32();
+        return std::make_tuple(ret);
+    }
+
+    std::list<std::string> PcscRemote::sendListReaders(const int32_t & id, const uint64_t & context)
     {
         const std::scoped_lock guard{ sockLock };
 
@@ -529,7 +520,7 @@ namespace LTSM
         return names;
     }
 
-    uint32_t PcscRemote::sendGetStatusChange(const int32_t & id, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount)
+    uint32_t PcscRemote::sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount)
     {
         const std::scoped_lock guard{ sockLock };
 
@@ -606,17 +597,27 @@ namespace LTSM
                 }
             }
 
-            waitTransaction.shutdownClient();
+            if(transactionId == id())
+            {
+                transactionId = 0;
+                transLock.unlock();
+            }
+
             std::thread(& PcscSessionBus::clientShutdownNotify, sessionBus, this).detach();
         });
     }
 
     PcscLocal::~PcscLocal()
     {
+        if(transactionId == id())
+        {
+            transactionId = 0;
+            transLock.unlock();
+        }
+
         sock.reset();
 
         waitStatusChanged.stop();
-        waitTransaction.shutdownClient();
 
         if(thread.joinable())
         {
@@ -761,7 +762,6 @@ namespace LTSM
             return false;
         }
 
-        uint64_t remoteContext;
         uint32_t ret;
 
         if(auto ptr = remote.lock())
@@ -810,34 +810,32 @@ namespace LTSM
             return false;
         }
 
-        uint32_t ret;
+        auto ptr = remote.lock();
 
-        if(auto ptr = remote.lock())
-        {
-            if(! ptr->remoteContext())
-            {
-                Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, id());
-                replyError(PcscLite::ReleaseContext, SCARD_F_INTERNAL_ERROR);
-                return false;
-            }
-
-            std::tie(ret) = ptr->sendReleaseContext(id());
-        }
-        else
+        if(! ptr)
         {
             Application::error("%s: no service", __FUNCTION__);
             replyError(PcscLite::ReleaseContext, SCARD_E_NO_SERVICE);
             return false;
         }
 
-        if(ret != SCARD_S_SUCCESS)
+        uint32_t ret = SCARD_S_SUCCESS;
+
+        if(remoteContext)
         {
-            Application::error("%s: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+            std::tie(ret) = ptr->sendReleaseContext(id(), remoteContext);
+
+            if(ret != SCARD_S_SUCCESS)
+            {
+                Application::error("%s: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
                                __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
+            }
         }
 
         sock.sendInt32(context).sendInt32(ret).sendFlush();
+
         context = 0;
+        remoteContext = 0;
 
         // set shutdown
         return false;
@@ -870,19 +868,18 @@ namespace LTSM
             return false;
         }
 
-        uint64_t remoteHandle;
         uint32_t activeProtocol, ret;
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteContext())
+            if(! remoteContext)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, id());
                 replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(remoteHandle, activeProtocol, ret) = ptr->sendConnect(id(), shareMode, prefferedProtocols, readerName);
+            std::tie(remoteHandle, activeProtocol, ret) = ptr->sendConnect(id(), remoteContext, shareMode, prefferedProtocols, readerName);
         }
         else
         {
@@ -942,14 +939,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Reconnect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(activeProtocol, ret) = ptr->sendReconnect(id(), shareMode, prefferedProtocols, initialization);
+            std::tie(activeProtocol, ret) = ptr->sendReconnect(id(), remoteHandle, shareMode, prefferedProtocols, initialization);
         }
         else
         {
@@ -997,14 +994,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Disconnect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ret) = ptr->sendDisconnect(id(), disposition);
+            std::tie(ret) = ptr->sendDisconnect(id(), remoteHandle, disposition);
         }
         else
         {
@@ -1017,6 +1014,7 @@ namespace LTSM
         {
             // sync after
             handle = 0;
+            remoteHandle = 0;
             assertm(reader, "reader not connected");
 
             std::scoped_lock guard{ PcscLite::readersLock };
@@ -1056,7 +1054,7 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::BeginTransaction, SCARD_F_INTERNAL_ERROR);
@@ -1064,9 +1062,7 @@ namespace LTSM
             }
 
             assertm(reader, "reader not connected");
-            waitTransaction.readerLock(reader);
-
-            std::tie(ret) = ptr->sendBeginTransaction(id());
+            std::tie(ret) = ptr->sendBeginTransaction(id(), remoteHandle);
         }
         else
         {
@@ -1082,8 +1078,6 @@ namespace LTSM
         }
         else
         {
-            // transaction failed
-            waitTransaction.readerUnlock(reader);
             Application::error("%s: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
@@ -1111,14 +1105,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::EndTransaction, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ret) = ptr->sendEndTransaction(id(), disposition);
+            std::tie(ret) = ptr->sendEndTransaction(id(), remoteHandle, disposition);
         }
         else
         {
@@ -1131,9 +1125,6 @@ namespace LTSM
         {
             Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
                                __FUNCTION__,id(), handle, disposition);
-            // transaction ended
-            assertm(reader, "reader not connected");
-            waitTransaction.readerUnlock(reader);
         }
         else
         {
@@ -1152,8 +1143,11 @@ namespace LTSM
         const uint32_t ioSendPciProtocol = sock.recvInt32();
         const uint32_t ioSendPciLength = sock.recvInt32();
         const uint32_t sendLength = sock.recvInt32();
-        // skip ioRecvPciProtocol, ioRecvPciLength, recvLength, ret
-        sock.recvSkip(16);
+        // skip ioRecvPciProtocol, ioRecvPciLength
+        sock.recvSkip(8);
+        const uint32_t recvLength = sock.recvInt32();
+        // skip ret
+        sock.recvSkip(4);
         const auto data1 = sock.recvData(sendLength);
 
         if(hdl != handle)
@@ -1175,14 +1169,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Transmit, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ioRecvPciProtocol, ioRecvPciLength, ret, data2) = ptr->sendTransmit(id(), ioSendPciProtocol, ioSendPciLength, data1);
+            std::tie(ioRecvPciProtocol, ioRecvPciLength, ret, data2) = ptr->sendTransmit(id(), remoteHandle, ioSendPciProtocol, ioSendPciLength, recvLength, data1);
         }
         else
         {
@@ -1277,14 +1271,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(name, state, protocol, ret, atr) = ptr->sendStatus(id());
+            std::tie(name, state, protocol, ret, atr) = ptr->sendStatus(id(), remoteHandle);
         }
         else
         {
@@ -1340,14 +1334,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Control, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ret, data2) = ptr->sendControl(id(), controlCode, recvLength, data1);
+            std::tie(ret, data2) = ptr->sendControl(id(), remoteHandle, controlCode, recvLength, data1);
         }
         else
         {
@@ -1406,14 +1400,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::GetAttrib, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ret, attr) = ptr->sendGetAttrib(id(), attrId);
+            std::tie(ret, attr) = ptr->sendGetAttrib(id(), remoteHandle, attrId);
         }
         else
         {
@@ -1472,14 +1466,14 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            if(! ptr->remoteHandle())
+            if(! remoteHandle)
             {
                 Application::error("%s: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::SetAttrib, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            std::tie(ret) = ptr->sendSetAttrib(id(), attrId, attr);
+            std::tie(ret) = ptr->sendSetAttrib(id(), remoteHandle, attrId, attr);
         }
         else
         {
@@ -1516,21 +1510,35 @@ namespace LTSM
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << context: 0x%08" PRIx32,
                            __FUNCTION__, id(), ctx);
 
-        if(clientCanceledCb(ctx))
+        if(auto remoteContext2 = clientCanceledCb(ctx))
         {
-            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 ", canceled found and notify",
-                               __FUNCTION__, id());
-            ret = SCARD_S_SUCCESS;
+            if(auto ptr = remote.lock())
+            {
+                std::tie(ret) = ptr->sendCancel(id(), remoteContext2);
+            }
+            else
+            {
+                Application::error("%s: no service", __FUNCTION__);
+                replyError(PcscLite::Cancel, SCARD_E_NO_SERVICE);
+                return false;
+            }
         }
         else
         {
             Application::error("%s: clientId: 0x%08" PRIx32 ", canceled not found, context: 0x%08" PRIx32,
                 __FUNCTION__, id(), ctx);
-            ret = SCARD_E_INVALID_HANDLE;
         }
 
-        Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> context: 0x%016" PRIx64,
-                           __FUNCTION__, id(), ctx);
+        if(ret == SCARD_S_SUCCESS)
+        {
+            Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> localContext 0x%08" PRIx32,
+                               __FUNCTION__, id(), context);
+        }
+        else
+        {
+            Application::error("%s: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " (%s)",
+                               __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
+        }
 
         sock.sendInt32(ctx).sendInt32(ret).sendFlush();
         return true;
@@ -1696,7 +1704,7 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            ret = ptr->sendGetStatusChange(id(), timeout, & state, 1);
+            ret = ptr->sendGetStatusChange(id(), remoteContext, timeout, & state, 1);
         }
         else
         {
@@ -1750,7 +1758,7 @@ namespace LTSM
 
         if(auto ptr = remote.lock())
         {
-            names = ptr->sendListReaders(id());
+            names = ptr->sendListReaders(id(), remoteContext);
         }
         else
         {
@@ -1902,7 +1910,7 @@ namespace LTSM
         shutdown(socketFd, SHUT_RDWR);
         close(socketFd);
 
-        waitTransaction.shutdownNotify();
+        transLock.unlock();
 
         if(thrAccept.joinable())
         {
@@ -1912,7 +1920,7 @@ namespace LTSM
         return EXIT_SUCCESS;
     }
 
-    bool PcscSessionBus::clientCanceledNotify(uint32_t ctx)
+    uint64_t PcscSessionBus::clientCanceledNotify(uint32_t ctx)
     {
         const std::scoped_lock guard{ clientsLock };
         auto it = std::find_if(clients.begin(), clients.end(), [&ctx](auto & cl)
@@ -1924,10 +1932,10 @@ namespace LTSM
         {
             Application::debug(DebugType::App, "%s: calceled clientId: %" PRId32, __FUNCTION__, it->id());
             it->canceledAction();
-            return true;
+            return it->proxyContext();
         }
 
-        return false;
+        return 0;
     }
 
     void PcscSessionBus::clientShutdownNotify(const PcscLocal* cli)

@@ -554,15 +554,17 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
 
 void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
 {
-    if(20 > sb.last())
+    if(24 > sb.last())
     {
         throw std::underflow_error(NS_FuncName);
     }
 
-    SCARD_IO_REQUEST ioSendPci, ioRecvPci;
+    SCARD_IO_REQUEST ioSendPci = {};
+    SCARD_IO_REQUEST ioRecvPci = {};
     SCARDHANDLE hCard = sb.readIntLE64();
     ioSendPci.dwProtocol = sb.readIntLE32();
     ioSendPci.cbPciLength = sb.readIntLE32();
+    DWORD recvLength = sb.readIntLE32();
     uint32_t sendLength = sb.readIntLE32();
 
     if(sendLength > sb.last())
@@ -571,10 +573,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
     }
 
     auto sendBuffer = sb.read(sendLength);
-    Application::debug(DebugType::Pcsc, "%s: << handle: 0x%016" PRIx64 ", dwProtocol: %" PRIu64 ", pciLength: %" PRIu64 ", send size: %" PRIu32,
-                      __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength);
-    DWORD recvLength = MAX_BUFFER_SIZE_EXTENDED;
-    std::vector<BYTE> recvBuffer(recvLength);
+    Application::debug(DebugType::Pcsc, "%s: << handle: 0x%016" PRIx64 ", dwProtocol: %" PRIu64 ", pciLength: %" PRIu64 ", send size: %" PRIu32 ", recv size: %" PRIu32,
+                      __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
+
+    std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),
                              & ioRecvPci, recvBuffer.data(), & recvLength);
 

@@ -107,10 +107,7 @@ namespace LTSM
     class PcscRemote
     {
         SocketStream sock;
-        std::recursive_mutex sockLock;
-
-        uint64_t context = 0;
-        uint64_t handle = 0;
+        std::mutex sockLock;
 
     protected:
 
@@ -118,23 +115,21 @@ namespace LTSM
         PcscRemote(int fd) : sock(fd, false) {}
 
         std::tuple<uint64_t, uint32_t> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
-        std::tuple<uint32_t> sendReleaseContext(const int32_t & id);
-        std::tuple<uint64_t, uint32_t, uint32_t> sendConnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName);
-        std::tuple<uint32_t, uint32_t> sendReconnect(const int32_t & id, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
-        std::tuple<uint32_t> sendDisconnect(const int32_t & id, const uint32_t & disposition);
-        std::tuple<uint32_t> sendBeginTransaction(const int32_t & id);
-        std::tuple<uint32_t> sendEndTransaction(const int32_t & id, const uint32_t & disposition);
-        std::tuple<uint32_t, uint32_t, uint32_t, binary_buf> sendTransmit(const int32_t & id, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const binary_buf & data);
-        std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf> sendStatus(const int32_t & id);
-        std::tuple<uint32_t, binary_buf> sendControl(const int32_t & id, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
-        std::tuple<uint32_t, binary_buf> sendGetAttrib(const int32_t & id, const uint32_t & attrId);
-        std::tuple<uint32_t> sendSetAttrib(const int32_t & id, const uint32_t & attrId, const binary_buf & attr);
+        std::tuple<uint32_t> sendReleaseContext(const int32_t & id, const uint64_t & context);
+        std::tuple<uint64_t, uint32_t, uint32_t> sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName);
+        std::tuple<uint32_t, uint32_t> sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization);
+        std::tuple<uint32_t> sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        std::tuple<uint32_t> sendBeginTransaction(const int32_t & id, const uint64_t & handle);
+        std::tuple<uint32_t> sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition);
+        std::tuple<uint32_t, uint32_t, uint32_t, binary_buf> sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data);
+        std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf> sendStatus(const int32_t & id, const uint64_t & handle);
+        std::tuple<uint32_t, binary_buf> sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1);
+        std::tuple<uint32_t, binary_buf> sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId);
+        std::tuple<uint32_t> sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr);
+        std::tuple<uint32_t> sendCancel(const int32_t & id, const uint64_t & context);
 
-        uint32_t sendGetStatusChange(const int32_t & id, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
-        std::list<std::string> sendListReaders(const int32_t & id);
-
-        const uint64_t & remoteContext(void) const { return context; }
-        const uint64_t & remoteHandle(void) const { return handle; }
+        uint32_t sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount);
+        std::list<std::string> sendListReaders(const int32_t & id, const uint64_t & context);
     };
 
     class PcscLocal
@@ -145,11 +140,14 @@ namespace LTSM
         std::thread thread;
         WaitStatus waitStatusChanged;
 
+        uint64_t remoteContext = 0;
+        uint64_t remoteHandle = 0;
+
         uint32_t context = 0;
         uint32_t handle = 0;
 
         std::weak_ptr<PcscRemote> remote;
-        std::function<bool(uint32_t)> clientCanceledCb;
+        std::function<uint64_t(uint32_t)> clientCanceledCb;
 
     protected:
         void replyError(uint32_t len, uint32_t err);
@@ -185,6 +183,9 @@ namespace LTSM
 
         inline int id(void) const { return sock.fd(); }
 
+        const uint64_t & proxyContext(void) const { return remoteContext; }
+        const uint64_t & proxyHandle(void) const { return remoteHandle; }
+
         const uint32_t & localContext(void) const { return context; }
         const uint32_t & localHandle(void) const { return handle; }
 
@@ -213,7 +214,7 @@ namespace LTSM
         void disconnectChannel(const std::string & sock) override;
 
         void clientShutdownNotify(const PcscLocal*);
-        bool clientCanceledNotify(uint32_t ctx);
+        uint64_t clientCanceledNotify(uint32_t ctx);
     };
 }
 

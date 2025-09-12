@@ -380,6 +380,30 @@ namespace LTSM
         return false;
     }
 
+    bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode)
+    {
+        if(0 != chown(path.c_str(), uid, gid))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
+            return false;
+        }
+
+        if(mode && 0 != chmod(path.c_str(), mode))
+        {
+            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                    __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
+            return false;
+        }
+
+        return true;
+    }
+
+    bool Tools::fileReadable(const std::filesystem::path & path)
+    {
+        return 0 == access(path.c_str(), R_OK);
+    }
+
 #endif // __UNIX__
 
     std::list<std::string> Tools::readDir(const std::filesystem::path & path, bool recurse)
@@ -677,30 +701,6 @@ namespace LTSM
             beg = std::prev(beg);
 
         return std::string{std::next(beg), end};
-    }
-
-    bool Tools::fileReadable(const std::filesystem::path & path)
-    {
-        return 0 == access(path.c_str(), R_OK);
-    }
-
-    bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode)
-    {
-        if(0 != chown(path.c_str(), uid, gid))
-        {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
-            return false;
-        }
-
-        if(mode && 0 != chmod(path.c_str(), mode))
-        {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                    __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
-            return false;
-        }
-
-        return true;
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file)
