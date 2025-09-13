@@ -186,15 +186,15 @@ namespace LTSM::LoginHelper
 
         dbus.reset(new DBusProxy(displayNum));
 
-        connect(dbus.get(), SIGNAL(loginFailureNotify(const QString &)), this, SLOT(loginFailureCallback(const QString &)));
-        connect(dbus.get(), SIGNAL(loginSuccessNotify(const QString &)), this, SLOT(loginSuccessCallback(const QString &)));
+        connect(dbus.data(), SIGNAL(loginFailureNotify(const QString &)), this, SLOT(loginFailureCallback(const QString &)));
+        connect(dbus.data(), SIGNAL(loginSuccessNotify(const QString &)), this, SLOT(loginSuccessCallback(const QString &)));
 
-        connect(dbus.get(), SIGNAL(loginPasswordChangedNotify(const QString &, const QString &, bool)), 
+        connect(dbus.data(), SIGNAL(loginPasswordChangedNotify(const QString &, const QString &, bool)), 
                 this, SLOT(setLoginPasswordCallback(const QString &, const QString &, bool)));
 
-        connect(dbus.get(), SIGNAL(pkcs11ListennerStartedNotify(int)), this, SLOT(pkcs11ListennerCallback(int)));
-        connect(dbus.get(), SIGNAL(connectorShutdownNotify()), this, SLOT(shutdownConnectorCallback()));
-        connect(dbus.get(), SIGNAL(widgetStartedNotify()), this, SLOT(widgetStartedCallback()));
+        connect(dbus.data(), SIGNAL(pkcs11ListennerStartedNotify(int)), this, SLOT(pkcs11ListennerCallback(int)));
+        connect(dbus.data(), SIGNAL(connectorShutdownNotify()), this, SLOT(shutdownConnectorCallback()));
+        connect(dbus.data(), SIGNAL(widgetStartedNotify()), this, SLOT(widgetStartedCallback()));
 
         loginTimeSec = configGetInteger("login:timeout:sec");
 
@@ -701,7 +701,7 @@ namespace LTSM::LoginHelper
     {
         if(QEvent::Show == ev->type())
         {
-            std::call_once(widgetStarted, [dbus = dbus.get(), display = displayNum]()
+            std::call_once(widgetStarted, [dbus = dbus.data(), display = displayNum]()
             {
                 dbus->helperWidgetStartedAction(display);
             });
