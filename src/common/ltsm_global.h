@@ -46,7 +46,7 @@ namespace LTSM
     inline static const char* ltsm_group_auth = "ltsm-auth";
     inline static const char* ltsm_user_conn = "ltsm-xvfb";
 
-    inline static const int service_version = 20250912;
+    inline static const int service_version = 20250913;
 
     inline bool platformBigEndian(void)
     {

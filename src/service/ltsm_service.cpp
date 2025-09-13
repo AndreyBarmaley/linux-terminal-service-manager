@@ -1171,21 +1171,26 @@ namespace LTSM::Manager
     {
         for(const auto & ptr : findTimepointLimitSessions())
         {
-            // check started timepoint
-            auto startedSec = ptr->sessionStartedSec();
+            uint32_t lastsec = 0;
 
-            if(startedSec.count() > ptr->startTimeLimitSec)
+            // check started timepoint
+            if(0 < ptr->startTimeLimitSec)
             {
-                Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                auto startedSec = ptr->sessionStartedSec();
+            
+                if(startedSec.count() > ptr->startTimeLimitSec)
+                {
+                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
                                     __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->startTimeLimitSec), startedSec.count());
-                displayShutdown(ptr, true);
-                continue;
+                    displayShutdown(ptr, true);
+                    continue;
+                }
+
+                lastsec = ptr->mode != SessionMode::Login ? ptr->startTimeLimitSec - startedSec.count() : 0;
             }
 
-            uint32_t lastsec = ptr->mode != SessionMode::Login ? ptr->startTimeLimitSec - startedSec.count() : 0;
-
             // check online timepoint
-            if(ptr->mode == SessionMode::Connected)
+            ifptr->mode == SessionMode::Connected && 0 < ptr->onlineTimeLimitSec)
             {
                 auto onlinedSec = ptr->sessionOnlinedSec();
 
@@ -1204,7 +1209,7 @@ namespace LTSM::Manager
             }
 
             // check offline timepoint
-            if(ptr->mode == SessionMode::Disconnected)
+            if(ptr->mode == SessionMode::Disconnected && 0 < ptr->offlineTimeLimitSec)
             {
                 auto offlinedSec = ptr->sessionOfflinedSec();
 
