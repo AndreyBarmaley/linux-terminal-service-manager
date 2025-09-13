@@ -18,11 +18,20 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Prepare LTSM coverage tests
+        run: |
+          echo "::group::0000"
+          id
+          echo "::group::1111"
+          sudo cat /etc/passwd
+          echo "::group::2222"
+          sudo cat /etc/group
 
       - name: Update packages
         run: |
