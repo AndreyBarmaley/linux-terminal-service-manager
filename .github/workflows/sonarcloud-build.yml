@@ -18,20 +18,11 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-
-      - name: Prepare LTSM coverage tests
-        run: |
-          echo "::group::0000"
-          id
-          echo "::group::1111"
-          sudo cat /etc/passwd
-          echo "::group::2222"
-          sudo cat /etc/group
 
       - name: Update packages
         run: |
@@ -91,12 +82,17 @@ jobs:
 
       - name: Run build-wrapper
         run: |
+          echo "fix user group"
+          sed -i -e 's|ltsm-auth|adm|' ${{github.workspace}}/src/common/ltsm_global.h
+          sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/src/common/ltsm_global.h
+          echo "start cmake"
           cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
                 -DLTSM_BUILD_SERVER=on \
                 -DLTSM_BUILD_CLIENT=on \
                 -DLTSM_BUILD_TESTS=on \
                 -DLTSM_BUILD_TOOLS=on \
                 -DLTSM_BUILD_COVERAGE_TESTS=on
+          echo "start build"
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
       - name: Prepare LTSM coverage tests
@@ -107,17 +103,11 @@ jobs:
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
           sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/config.json
-          sudo groupadd -r ltsm-shm
-          sudo groupadd -r ltsm-dbus
-          sudo groupadd -r ltsm-auth
-          sudo useradd -c "LTSM xvfb user" -d /var/lib/ltsm -g ltsm-shm -G ltsm-auth,ltsm-dbus -l -m -N -r -s /sbin/nologin ltsm-xvfb
-          #sed -i -e 's|ltsm-shm|adm|' ${{github.workspace}}/etc/ltsm/config.json
-          #sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/ltsm/config.json
-          #sed -i -e 's|ltsm-xvfb|runner|' ${{github.workspace}}/etc/ltsm/config.json
-          #sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf
+          echo "change groups"
           sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/config.json
           sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/config.json
-          echo "sudo actions"
+          sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf
+          echo "copy configs"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
           sudo cp ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf /etc/dbus-1/system.d
           sudo cp ${{github.workspace}}/etc/xorg/ltsm.conf /etc/X11
