@@ -1281,16 +1281,14 @@ namespace LTSM::Manager
                 return ptr && ptr->pid2 == pid2;
             });
 
-            if(it != this->sessions.end())
+            if(it != this->sessions.end() && *it)
             {
                 auto & ptr = *it;
-
-                // skip login helper, or arnormal shutdown only
-                if(ptr && (ptr->mode != SessionMode::Login || 0 < pidStatus.second.get()))
-                {
-                    ptr->pid2 = 0;
-                    this->displayShutdown(ptr, true);
-                }
+                auto res = pidStatus.second.get();
+                ptr->pid2 = 0;
+                Application::notice("%s: helper ended, display: %" PRId32 ", ret: %" PRId32,
+                                        __FUNCTION__, ptr->displayNum, pidStatus.second.get());
+                this->displayShutdown(ptr, true);
             }
 
             return true;
