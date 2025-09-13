@@ -3248,7 +3248,10 @@ namespace LTSM
 
     void XCB::Connector::bell(uint8_t percent) const
     {
+        Application::notice("%s: beep");
+
         xcb_bell(_conn.get(), percent);
+        xcb_flush(_conn.get());
     }
 
     /* XCB::RootDisplay */

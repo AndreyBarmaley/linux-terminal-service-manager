@@ -830,7 +830,7 @@ namespace LTSM
         for(auto it = str.cbegin(); it != str.cend(); ++it)
         {
             jobs.addJob(std::async(std::launch::async, 
-                &FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it), pos.y)));
+                &FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it) * _systemfont.width, pos.y)));
         }
 #else
         int offset = 0;

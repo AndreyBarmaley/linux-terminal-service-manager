@@ -1,12 +1,4 @@
 {
-    "service:debug:level": "debug",
-    "#service:debug:types": [ "all" ],
-
-    "connector:debug:level": "info",
-    "#connector:debug:types": [ "all" ],
-
-    "logging:facility": "local6",
-
     "vnc:encoding:debug": 0,
     "vnc:encoding:threads": 4,
     "vnc:encoding:blacklist": [ "zlib" ],
@@ -21,6 +13,7 @@
     "#vnc:keymap:file": "/etc/ltsm/keymap_vnc.json",
     "#vnc:xcb:nodamage": false,
     "vnc:clipboard": true,
+    "vnc:novnc:allow": false,
 
     "vnc:kerberos:disable": false,
     "vnc:kerberos:service": "TERMSRV",
