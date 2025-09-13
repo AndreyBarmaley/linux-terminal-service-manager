@@ -1190,7 +1190,7 @@ namespace LTSM::Manager
             }
 
             // check online timepoint
-            ifptr->mode == SessionMode::Connected && 0 < ptr->onlineTimeLimitSec)
+            if(ptr->mode == SessionMode::Connected && 0 < ptr->onlineTimeLimitSec)
             {
                 auto onlinedSec = ptr->sessionOnlinedSec();
 
