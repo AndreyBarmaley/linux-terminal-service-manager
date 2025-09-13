@@ -101,20 +101,26 @@ namespace LTSM
 
     int RFB::EncoderStream::sendCPixel(uint32_t pixel)
     {
-        if(clientFormat().bitsPerPixel() == 32)
+        if(clientFormat().bitsPerPixel() != 32)
         {
-            auto pixel2 = clientFormat().convertFrom(serverFormat(), pixel);
-            auto red = clientFormat().red(pixel2);
-            auto green = clientFormat().green(pixel2);
-            auto blue = clientFormat().blue(pixel2);
-            std::swap(red, blue);
-            sendInt8(red);
-            sendInt8(green);
-            sendInt8(blue);
-            return 3;
+            return sendPixel(pixel);
         }
 
-        return sendPixel(pixel);
+        if(! serverFormat().compare(clientFormat(), true /* skip alpha */))
+        {
+            pixel = clientFormat().convertFrom(serverFormat(), pixel);
+        }
+
+        auto ptr = reinterpret_cast<const uint8_t*>(& pixel);
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        if(! serverFormat().leastSignificant())
+            ptr++;
+#else
+        if(serverFormat().leastSignificant())
+            ptr++;
+#endif
+        sendRaw(ptr, 3);
+        return 3;
     }
 
     int RFB::EncoderStream::sendRunLength(uint32_t length)

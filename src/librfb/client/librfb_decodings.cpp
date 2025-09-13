@@ -76,18 +76,24 @@ namespace LTSM
 
     int RFB::DecoderStream::recvCPixel(void)
     {
-        if(clientFormat().bitsPerPixel() == 32)
+        if(clientFormat().bitsPerPixel() != 32)
         {
-            auto colr = recvInt8();
-            auto colg = recvInt8();
-            auto colb = recvInt8();
-#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
-            std::swap(colr, colb);
-#endif
-            return clientFormat().pixel(Color(colr, colg, colb));
+            return recvPixel();
         }
 
-        return recvPixel();
+        uint32_t pixel = 0;
+        auto ptr = reinterpret_cast<uint8_t*>(& pixel);
+
+#if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+        if(! clientFormat().leastSignificant())
+            ptr++;
+#else
+        if(clientFormat().leastSignificant())
+            ptr++;
+#endif
+
+        recvRaw(ptr, 3);
+        return pixel;
     }
 
     size_t RFB::DecoderStream::recvRunLength(void)

@@ -119,20 +119,16 @@ namespace LTSM
         uint32_t amask(void) const;
 
         const uint16_t & rmax(void) const { return redMax; }
-
         const uint16_t & gmax(void) const { return greenMax; }
-
         const uint16_t & bmax(void) const { return blueMax; }
-
         const uint16_t & amax(void) const { return alphaMax; }
 
         const uint8_t & rshift(void) const { return redShift; }
-
         const uint8_t & gshift(void) const { return greenShift; }
-
         const uint8_t & bshift(void) const { return blueShift; }
-
         const uint8_t & ashift(void) const { return alphaShift; }
+
+        bool leastSignificant(void) const { return redShift == 0 || blueShift == 0 || greenShift == 0; }
 
         uint8_t red(int pixel) const;
         uint8_t green(int pixel) const;
