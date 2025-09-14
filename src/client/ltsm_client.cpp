@@ -1322,22 +1322,16 @@ namespace LTSM
         else
         if(status == 1)
         {
-        // 3. server reply
-            if(0 == err)
-            {
+            // 3. server reply
+            if(! nsz.isEmpty())
                 pushEventWindowResize(nsz);
-            }
-            else
+
+            if(err)
             {
                 Application::error("%s: status: %d, error code: %d", __FUNCTION__, status, err);
 
-                if(nsz.isEmpty())
-                {
-                    throw sdl_error(NS_FuncName);
-                }
-
-                pushEventWindowResize(nsz);
-                primarySize.reset();
+                //if(! nsz.isEmpty())
+                //    primarySize.reset();
             }
         }
     }
@@ -1664,22 +1658,18 @@ namespace LTSM
 
     void Vnc2SDL::clientRecvLtsmHandshakeEvent(int flags)
     {
-        if(! sendOptions)
-        {
-            std::vector<std::string> names;
-            int group = 0;
+        std::vector<std::string> names;
+        int group = 0;
 
 #ifdef __UNIX__
-            if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
-            {
-                names = extXkb->getNames();
-                group = extXkb->getLayoutGroup();
-            }
-#endif
-            sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
-                                      (0 <= group && group < names.size() ? names[group] : ""));
-            sendOptions = true;
+        if(auto extXkb = static_cast<const XCB::ModuleXkb*>(XCB::RootDisplay::getExtensionConst(XCB::Module::XKB)))
+        {
+            names = extXkb->getNames();
+            group = extXkb->getLayoutGroup();
         }
+#endif
+        sendSystemClientVariables(clientOptions(), clientEnvironments(), names,
+                                      (0 <= group && group < names.size() ? names[group] : ""));
     }
 
 #ifdef __UNIX__
@@ -1821,7 +1811,14 @@ namespace LTSM
 
     void Vnc2SDL::systemLoginSuccess(const JsonObject & jo)
     {
-        if(! jo.getBoolean("action", false))
+        if(jo.getBoolean("action", false))
+        {
+            if(! primarySize.isEmpty() && primarySize != windowSize)
+            {
+                sendSetDesktopSize(primarySize);
+            }
+        }
+        else
         {
             auto error = jo.getString("error");
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "login",

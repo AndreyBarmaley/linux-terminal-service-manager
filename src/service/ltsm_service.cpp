@@ -1210,7 +1210,7 @@ namespace LTSM::Manager
                 {
                     Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
                                         __FUNCTION__, "online", ptr->displayNum, static_cast<uint32_t>(ptr->onlineTimeLimitSec), onlinedSec.count());
-                    displayShutdown(ptr, true);
+                    emitShutdownConnector(ptr->displayNum);
                     continue;
                 }
 
@@ -1287,7 +1287,7 @@ namespace LTSM::Manager
                 auto res = pidStatus.second.get();
                 ptr->pid2 = 0;
                 Application::notice("%s: helper ended, display: %" PRId32 ", ret: %" PRId32,
-                                        __FUNCTION__, ptr->displayNum, pidStatus.second.get());
+                                        "sessionsEndedAction", ptr->displayNum, pidStatus.second.get());
                 this->displayShutdown(ptr, true);
             }
 

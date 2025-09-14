@@ -103,7 +103,6 @@ namespace LTSM
         bool windowAccel = true;
         bool xcbNoDamage = false;
         bool useXkb = true;
-        bool sendOptions = false;
         bool alwaysRunning = false;
         bool serverExtDesktopSizeNego = false;
         bool capslockEnable = true;

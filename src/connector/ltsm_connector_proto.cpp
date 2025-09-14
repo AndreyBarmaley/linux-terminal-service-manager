@@ -152,10 +152,10 @@ namespace LTSM::Connector
     {
         if(display == displayNum())
         {
+            Application::notice("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
             xcbDisableMessages(true);
             waitUpdateProcess();
             rfbMessagesShutdown();
-            Application::notice("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
         }
     }
 
@@ -195,6 +195,9 @@ namespace LTSM::Connector
 
             for(const auto & skey : jo.keys())
             {
+                if(skey == "keyname_hex8")
+                    continue;
+
                 try
                 {
                     _keymap.emplace(std::stoi(skey, nullptr, 0), jo.getInteger(skey));
