@@ -1258,41 +1258,49 @@ namespace LTSM::Manager
         }
     }
 
-    void DBusAdaptor::sessionsEndedAction(void)
+    std::forward_list<XvfbSessionPtr> DBusAdaptor::findEndedSessions(void)
     {
-        std::scoped_lock guard{ lockSessions, lockRunning };
+        std::forward_list<XvfbSessionPtr> res;
+        std::scoped_lock guard1{ lockSessions };
 
-        // childEnded
-        if(childsRunning.empty())
+        for(const auto & ptr : sessions)
         {
-            return;
-        }
+            if(! ptr)
+                continue;
 
-        childsRunning.remove_if([this](auto & pidStatus)
-        {
-            if(pidStatus.second.wait_for(std::chrono::milliseconds(3)) != std::future_status::ready)
-            {
-                return false;
-            }
+            std::scoped_lock guard2{ lockRunning };
 
-            // find child
-            auto it = std::find_if(this->sessions.begin(), this->sessions.end(), [pid2 = pidStatus.first](auto & ptr)
+            auto success = childsRunning.remove_if([pid2 = ptr->pid2](auto & pidStatus)
             {
-                return ptr && ptr->pid2 == pid2;
+                if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready)
+                {
+                    return false;
+                }
+
+                if(pid2 != pidStatus.first)
+                {
+                    return false;
+                }
+
+                Application::notice("%s: helper ended, pid: %" PRId32 ", ret: %" PRId32,
+                                        "findEndedSessions", pid2, pidStatus.second.get());
+                return true;
             });
 
-            if(it != this->sessions.end() && *it)
-            {
-                auto & ptr = *it;
-                auto res = pidStatus.second.get();
-                ptr->pid2 = 0;
-                Application::notice("%s: helper ended, display: %" PRId32 ", ret: %" PRId32,
-                                        "sessionsEndedAction", ptr->displayNum, pidStatus.second.get());
-                this->displayShutdown(ptr, true);
-            }
-
-            return true;
-        });
+            if(success)
+                res.push_front( ptr );
+        }
+        
+        return res;
+    }
+    
+    void DBusAdaptor::sessionsEndedAction(void)
+    {
+        for(const auto & ptr: findEndedSessions())
+        {
+            ptr->pid2 = 0;
+            displayShutdown(ptr, true);
+        }
     }
 
     void DBusAdaptor::sessionsCheckConnectedAction(void)

@@ -299,6 +299,7 @@ namespace LTSM::Manager
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
                              bool token);
+        std::forward_list< XvfbSessionPtr > findEndedSessions(void);
 
         std::forward_list < std::string > getAllowLogins(void) const;
 
