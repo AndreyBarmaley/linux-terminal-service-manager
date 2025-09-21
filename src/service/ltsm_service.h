@@ -188,6 +188,7 @@ namespace LTSM::Manager
         std::atomic < uint64_t > statusFlags{0};
 
         int loginFailures = 0;
+        int connectorFailures = 0;
 
         uint16_t width = 0;
         uint16_t height = 0;

@@ -1315,10 +1315,16 @@ namespace LTSM::Manager
             }
             else
             {
+                ptr->connectorFailures++;
                 // not reply
                 Application::warning("connector not reply, display: %" PRId32 ", connector id: %" PRId32, ptr->displayNum, ptr->connectorId);
-                // complete shutdown
-                busConnectorTerminated(ptr->displayNum, -1);
+
+                if(3 < ptr->connectorFailures) {
+                    busConnectorTerminated(ptr->displayNum, -1);
+                } else {
+                    // reset error
+                    ptr->resetStatus(Flags::SessionStatus::CheckConnection);
+                }
             }
         }
     }
@@ -2314,6 +2320,7 @@ namespace LTSM::Manager
         if(auto xvfb = findDisplaySession(display))
         {
             xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
+            xvfb->connectorFailures = 0;
         }
         else
         {

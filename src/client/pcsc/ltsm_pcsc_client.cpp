@@ -574,7 +574,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb)
 
     auto sendBuffer = sb.read(sendLength);
     Application::debug(DebugType::Pcsc, "%s: << handle: 0x%016" PRIx64 ", dwProtocol: %" PRIu64 ", pciLength: %" PRIu64 ", send size: %" PRIu32 ", recv size: %" PRIu32,
-                      __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
+                      __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, static_cast<uint32_t>(recvLength));
 
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),

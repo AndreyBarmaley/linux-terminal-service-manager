@@ -7,7 +7,7 @@
     },
     "ltsm_connector": {
 	"debug:level": "info",
-	"debug:types": [ "all" ],
+	"debug:types": [ "app", "dbus", "input" ],
 	"debug:target": "syslog",
 	"debug:syslog": "local6"
     },
