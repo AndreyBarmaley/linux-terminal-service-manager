@@ -122,9 +122,9 @@ namespace LTSM
             }
         };
 
-        typedef CK_MECHANISM_TYPE MechType;
-        typedef std::vector<MechType> MechList;
-        typedef std::unique_ptr<MechInfo> MechInfoPtr;
+        using MechType = CK_MECHANISM_TYPE;
+        using MechList = std::vector<MechType>;
+        using MechInfoPtr = std::unique_ptr<MechInfo>;
 
         /// SlotInfo
         struct SlotInfo : CK_SLOT_INFO
@@ -147,8 +147,8 @@ namespace LTSM
             bool flagRemovableDevice(void) const;
         };
 
-        typedef CK_SLOT_ID SlotId;
-        typedef std::unique_ptr<SlotInfo> SlotInfoPtr;
+        using SlotId = CK_SLOT_ID;
+        using SlotInfoPtr = std::unique_ptr<SlotInfo>;
 
         /// TokenInfo
         struct TokenInfo : CK_TOKEN_INFO
@@ -188,7 +188,7 @@ namespace LTSM
             bool flagTokenInitialized(void) const;
         };
 
-        typedef std::unique_ptr<TokenInfo> TokenInfoPtr;
+        using TokenInfoPtr = std::unique_ptr<TokenInfo>;
 
         enum SessionState
         {
@@ -216,7 +216,7 @@ namespace LTSM
             bool flagSerialSession(void) const;
         };
 
-        typedef std::unique_ptr<SessionInfo> SessionInfoPtr;
+        using SessionInfoPtr = std::unique_ptr<SessionInfo>;
 
         /// LibraryInfo
         struct LibraryInfo : CK_INFO
@@ -236,21 +236,21 @@ namespace LTSM
             std::string getDescription(void) const;
         };
 
-        typedef std::unique_ptr<LibraryInfo> LibraryInfoPtr;
+        using LibraryInfoPtr = std::unique_ptr<LibraryInfo>;
 
         class Slot;
-        typedef std::list<Slot> SlotList;
+        using SlotList = std::list<Slot>;
 
         class Session;
-        typedef std::unique_ptr<Session> SessionPtr;
+        using SessionPtr = std::unique_ptr<Session>;
 
         class Library;
-        typedef std::shared_ptr<Library> LibraryPtr;
+        using LibraryPtr = std::shared_ptr<Library>;
 
-        typedef CK_OBJECT_CLASS ObjectClass;
-        typedef CK_OBJECT_HANDLE ObjectHandle;
-        typedef std::vector<ObjectHandle> ObjectList;
-        typedef std::vector<uint8_t> RawData;
+        using ObjectClass = CK_OBJECT_CLASS;
+        using ObjectHandle = CK_OBJECT_HANDLE;
+        using ObjectList = std::vector<ObjectHandle>;
+        using RawData = std::vector<uint8_t>;
 
         struct RawDataRef : std::pair<const uint8_t*, size_t>
         {
@@ -280,7 +280,7 @@ namespace LTSM
             bool operator==(const RawDataRef &) const;
         };
 
-        typedef RawDataRef ObjectIdRef;
+        using ObjectIdRef = RawDataRef;
 
         class Date
         {

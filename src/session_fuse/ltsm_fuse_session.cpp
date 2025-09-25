@@ -117,7 +117,7 @@ namespace LTSM
         }
     };
 
-    typedef std::pair<ino_t, ino_t> LinkInfo;
+    using LinkInfo = std::pair<ino_t, ino_t>;
 
     struct FuseSession
     {

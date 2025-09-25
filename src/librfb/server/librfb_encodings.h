@@ -98,7 +98,7 @@ namespace LTSM
             }
         };
 
-        typedef std::pair<XCB::Region, BinaryBuf> EncodingRet;
+        using EncodingRet = std::pair<XCB::Region, BinaryBuf>;
 
         /// EncodingBase
         class EncodingBase

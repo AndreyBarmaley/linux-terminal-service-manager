@@ -821,5 +821,9 @@ namespace LTSM
     {
         const std::scoped_lock guard{ serverLock };
         clientRegion = reg;
+
+        // serverScreenUpdateRequest
+        if(enable)
+            damageRegion.join(reg);
     }
 }

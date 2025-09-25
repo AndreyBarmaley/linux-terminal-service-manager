@@ -78,7 +78,7 @@ namespace Gss
         ~Credential();
     };
 
-    typedef std::unique_ptr<Credential> CredentialPtr;
+    using CredentialPtr = std::unique_ptr<Credential>;
 
     struct Security
     {
@@ -93,7 +93,7 @@ namespace Gss
         ~Security();
     };
 
-    typedef std::unique_ptr<Security> SecurityPtr;
+    using SecurityPtr = std::unique_ptr<Security>;
 
     struct ErrorCodes
     {

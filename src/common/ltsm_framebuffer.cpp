@@ -128,7 +128,9 @@ namespace LTSM
 
     uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
     {
-        return max1 ? (col1 * max2) / max1 : 0;
+        // count2: max2 + 1 (zero)
+        // count1: max1 + 1 (zero)
+        return max1 ? (col1 * (max2 + 1)) / (max1 + 1) : 0;
     }
 
     uint32_t convertPixelFromTo(uint32_t pixel, const PixelFormat & pf1, const PixelFormat & pf2)

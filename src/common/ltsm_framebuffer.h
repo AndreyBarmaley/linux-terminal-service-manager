@@ -170,7 +170,7 @@ namespace LTSM
         const uint32_t & length(void) const { return second; }
     };
 
-    typedef std::list<PixelLength> PixelLengthList;
+    using PixelLengthList = std::list<PixelLength>;
 
     class FrameBuffer
     {

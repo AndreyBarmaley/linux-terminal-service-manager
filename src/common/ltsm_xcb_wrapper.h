@@ -55,7 +55,7 @@ namespace LTSM
 {
     namespace XCB
     {
-        typedef std::shared_ptr<xcb_connection_t> ConnectionShared;
+        using ConnectionShared = std::shared_ptr<xcb_connection_t>;
 
         struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
         {
@@ -142,7 +142,7 @@ namespace LTSM
             uint8_t bytePerPixel(void) const { return bpp >> 3; }
         };
 
-        typedef std::unique_ptr<PixmapBase> PixmapInfoReply;
+        using PixmapInfoReply = std::unique_ptr<PixmapBase>;
 
         struct ShmId
         {
@@ -166,7 +166,7 @@ namespace LTSM
             const xcb_shm_seg_t & operator()(void) const { return id; };
         };
 
-        typedef std::shared_ptr<ShmId> ShmIdShared;
+        using ShmIdShared = std::shared_ptr<ShmId>;
 
         struct PixmapSHM : PixmapBase
         {
@@ -263,7 +263,7 @@ namespace LTSM
             RandrScreenInfo() = default;
         };
 
-        typedef std::vector<uint8_t> AuthCookie;
+        using AuthCookie = std::vector<uint8_t>;
 
         struct SelectionIncrMode
         {
@@ -302,7 +302,7 @@ namespace LTSM
             ~FixesRegionId();
         };
 
-        typedef std::unique_ptr<FixesRegionId> FixesRegionIdPtr;
+        using FixesRegionIdPtr = std::unique_ptr<FixesRegionId>;
 
         struct ModuleFixes : ModuleExtension
         {

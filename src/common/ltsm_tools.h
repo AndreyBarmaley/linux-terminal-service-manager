@@ -113,8 +113,8 @@ namespace LTSM
         inline gid_t gid(void) const { return st.gr_gid; }
     };
 
-    typedef std::unique_ptr<UserInfo> UserInfoPtr;
-    typedef std::unique_ptr<GroupInfo> GroupInfoPtr;
+    using UserInfoPtr = std::unique_ptr<UserInfo>;
+    using GroupInfoPtr = std::unique_ptr<GroupInfo>;
 
     namespace Tools
     {

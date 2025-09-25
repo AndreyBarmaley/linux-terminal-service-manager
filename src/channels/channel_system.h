@@ -276,7 +276,7 @@ namespace LTSM
             bool isMode(ConnectorMode cm) const { return mode == cm; }
         };
 
-        typedef std::unique_ptr<ConnectorBase> ConnectorBasePtr;
+        using ConnectorBasePtr = std::unique_ptr<ConnectorBase>;
 
         // ConnectorFD_R
         class ConnectorFD_R : public ConnectorBase
