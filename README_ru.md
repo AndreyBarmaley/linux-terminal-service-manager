@@ -7,6 +7,7 @@ Linux Terminal Service Manager (LTSM) это набор программ для 
   - system libs: gnutls, xcb, zlib  
 
 # Демо доступ
+Вы можете подключиться через HTML5 [прямо сейчас](https://ltsm-soft.ru/novnc)
 ```
 vncviewer 62.109.12.152
 logins: demo1, demo2, demo3, demo4

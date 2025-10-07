@@ -16,6 +16,7 @@ main dependencies:
 [![OpenHub Rating](https://openhub.net/p/linux-terminal-service-manager/widgets/project_thin_badge?format=gif)](https://openhub.net/p/linux-terminal-service-manager)
 
 # Demo access
+You can connect via HTML5 [right now](https://ltsm-soft.ru/novnc)
 ```
 --- vnc
 vncviewer 62.109.12.152
