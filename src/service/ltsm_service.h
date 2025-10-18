@@ -40,24 +40,21 @@
 #include "ltsm_service_adaptor.h"
 #include "ltsm_json_wrapper.h"
 
-namespace LTSM::Manager
-{
-    struct service_error : public std::runtime_error
-    {
+namespace LTSM::Manager {
+    struct service_error : public std::runtime_error {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// PamService
-    class PamService
-    {
-    protected:
+    class PamService {
+      protected:
         std::string service;
         pam_handle_t* pamh = nullptr;
         int status = PAM_SUCCESS;
 
         virtual struct pam_conv* pamConv(void) = 0;
 
-    public:
+      public:
         PamService(const std::string & name) : service(name) {}
 
         virtual ~PamService();
@@ -70,20 +67,21 @@ namespace LTSM::Manager
     };
 
     /// PamAuthenticate
-    class PamAuthenticate : public PamService
-    {
+    class PamAuthenticate : public PamService {
         static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
 
         std::string login;
         std::string password;
-        struct pam_conv pamc { pam_conv_func, this };
+        struct pam_conv pamc {
+            pam_conv_func, this
+        };
         bool authenticateSuccess = false;
 
-    protected:
+      protected:
         struct pam_conv* pamConv(void) override;
         virtual char* onPamPrompt(int, const char*) const;
 
-    public:
+      public:
         PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
             : PamService(service), login(user), password(pass) {}
 
@@ -94,13 +92,12 @@ namespace LTSM::Manager
     };
 
     /// PamSession
-    class PamSession : public PamAuthenticate
-    {
+    class PamSession : public PamAuthenticate {
         bool sessionOpenned = false;
 
-    protected:
+      protected:
 
-    public:
+      public:
         PamSession(const std::string & service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
                     user, pass) {}
 
@@ -120,10 +117,8 @@ namespace LTSM::Manager
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
-    namespace Flags
-    {
-        enum AllowChannel : size_t
-        {
+    namespace Flags {
+        enum AllowChannel : size_t {
             TransferFiles = (1 << 1),
             RedirectPrinter = (1 << 2),
             RedirectAudio = (1 << 3),
@@ -132,8 +127,7 @@ namespace LTSM::Manager
             RemoteFilesUse = (1 << 6)
         };
 
-        enum SessionStatus : size_t
-        {
+        enum SessionStatus : size_t {
             CheckConnection = (1 << 24)
         };
     }
@@ -152,12 +146,11 @@ namespace LTSM::Manager
     using system_time_point = std::chrono::system_clock::time_point;
 
     /// XvfbSession
-    struct XvfbSession
-    {
-        std::unordered_map < std::string, std::string > environments;
-        std::unordered_map < std::string, std::string > options;
+    struct XvfbSession {
+        std::unordered_map<std::string, std::string> environments;
+        std::unordered_map<std::string, std::string> options;
 
-        std::forward_list < std::string > allowTransfer;
+        std::forward_list<std::string> allowTransfer;
 
         std::filesystem::path xauthfile;
 
@@ -169,7 +162,7 @@ namespace LTSM::Manager
         std::string conntype;
         std::string encryption;
         std::string layout;
-        std::vector < uint8_t > mcookie;
+        std::vector<uint8_t> mcookie;
 
         system_time_point tpStart;
         system_time_point tpOnline;
@@ -181,11 +174,11 @@ namespace LTSM::Manager
         int pid2 = 0; // session pid
         int connectorId = 0; // connector pid
 
-        std::atomic < uint32_t > startTimeLimitSec{0};
-        std::atomic < uint32_t > onlineTimeLimitSec{0};
-        std::atomic < uint32_t > offlineTimeLimitSec{0};
+        std::atomic<uint32_t> startTimeLimitSec{0};
+        std::atomic<uint32_t> onlineTimeLimitSec{0};
+        std::atomic<uint32_t> offlineTimeLimitSec{0};
 
-        std::atomic < uint64_t > statusFlags{0};
+        std::atomic<uint64_t> statusFlags{0};
 
         int loginFailures = 0;
         int connectorFailures = 0;
@@ -195,42 +188,36 @@ namespace LTSM::Manager
         uint8_t depth = 0;
 
         PidStatus idleActionStatus;
-        std::unique_ptr < PamSession > pam;
+        std::unique_ptr<PamSession> pam;
 
-        std::atomic < SessionMode > mode{ SessionMode::Login };
+        std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
-        inline bool checkStatus(uint64_t st) const
-        {
+        inline bool checkStatus(uint64_t st) const {
             return statusFlags & st;
         }
 
-        inline void setStatus(uint64_t st)
-        {
+        inline void setStatus(uint64_t st) {
             statusFlags |= st;
         }
 
-        inline void resetStatus(uint64_t st)
-        {
+        inline void resetStatus(uint64_t st) {
             statusFlags &= ~st;
         }
 
-        inline std::chrono::seconds sessionStartedSec(void) const
-        {
+        inline std::chrono::seconds sessionStartedSec(void) const {
             return system_time_point() == tpStart ? std::chrono::seconds(0) :
-            std::chrono::duration_cast < std::chrono::seconds > (std::chrono::system_clock::now() - tpStart);
+                   std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpStart);
         }
 
-        inline std::chrono::seconds sessionOnlinedSec(void) const
-        {
+        inline std::chrono::seconds sessionOnlinedSec(void) const {
             return mode != SessionMode::Connected ? std::chrono::seconds(0) :
-            std::chrono::duration_cast < std::chrono::seconds > (std::chrono::system_clock::now() - tpOnline);
+                   std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOnline);
         }
 
-        inline std::chrono::seconds sessionOfflinedSec(void) const
-        {
+        inline std::chrono::seconds sessionOfflinedSec(void) const {
             return mode != SessionMode::Disconnected ? std::chrono::seconds(0) :
-            std::chrono::duration_cast < std::chrono::seconds > (std::chrono::system_clock::now() - tpOffline);
+                   std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOffline);
         }
 
         XvfbSession() = default;
@@ -239,16 +226,15 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-    using XvfbSessionPtr = std::shared_ptr < XvfbSession >;
-    using TransferRejectFunc = std::function < void(int display, const std::vector < FileNameSize> &) >;
+    using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
+    using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
 
-    class XvfbSessions
-    {
-    protected:
-        std::vector < XvfbSessionPtr > sessions;
+    class XvfbSessions {
+      protected:
+        std::vector<XvfbSessionPtr> sessions;
         mutable std::mutex lockSessions;
 
-    public:
+      public:
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
@@ -256,53 +242,54 @@ namespace LTSM::Manager
         XvfbSessionPtr findUserSession(const std::string & username);
         XvfbSessionPtr registryNewSession(int min, int max);
         void removeDisplaySession(int display);
-        std::forward_list < XvfbSessionPtr > findTimepointLimitSessions(void);
-        std::forward_list < XvfbSessionPtr > getOnlineSessions(void);
+        std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void);
+        std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
 
         std::string toJsonString(void) const;
     };
 
-    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces < Service_adaptor >, public XvfbSessions
-    {
-        std::forward_list < PidStatus > childsRunning;
+    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
+        std::forward_list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
         std::unique_ptr < Tools::BaseTimer > timer1, timer2, timer3;
-        std::atomic < bool > loginsDisable = false;
+        std::atomic<bool> loginsDisable = false;
 
         pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
-                                    std::list < std::string >);
+                                    std::list <std::string>);
         void waitPidBackgroundSafe(pid_t pid);
 
-        bool sessionRunZenity(XvfbSessionPtr, std::initializer_list < std::string >);
+        bool sessionRunZenity(XvfbSessionPtr, std::initializer_list <std::string>);
         void sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
-        void transferFilesRequestCommunication(XvfbSessionPtr, std::filesystem::path zenity, std::vector < FileNameSize > files,
+        void transferFilesRequestCommunication(XvfbSessionPtr, std::filesystem::path zenity, std::vector<FileNameSize> files,
                                                TransferRejectFunc emitTransferReject, PidStatus zenityResult);
 
         void checkStartConfig(void);
         bool createXauthDir(void);
 
-        int start(void) override { return 0; }
+        int start(void) override {
+            return 0;
+        }
 
-    protected:
+      protected:
         void closeSystemSession(XvfbSessionPtr);
-        std::filesystem::path createXauthFile(int display, const std::vector < uint8_t > & mcookie);
+        std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
         bool createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
         XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
                                                 UserInfoPtr userInfo);
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
         void runSessionScript(XvfbSessionPtr, const std::string & cmd);
-        bool waitXvfbStarting(int display, const std::vector < uint8_t > &, uint32_t waitms) const;
+        bool waitXvfbStarting(int display, const std::vector<uint8_t> &, uint32_t waitms) const;
         bool checkXvfbSocket(int display) const;
         void removeXvfbSocket(int display) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
                              bool token);
-        std::forward_list< XvfbSessionPtr > findEndedSessions(void);
+        std::forward_list<XvfbSessionPtr> findEndedSessions(void);
 
-        std::forward_list < std::string > getAllowLogins(void) const;
+        std::forward_list<std::string> getAllowLogins(void) const;
 
         void sessionsTimeLimitAction(void);
         void sessionsEndedAction(void);
@@ -310,7 +297,7 @@ namespace LTSM::Manager
 
         void childEndedEvent(void);
 
-    public:
+      public:
         DBusAdaptor(sdbus::IConnection &, const std::string & confile);
         ~DBusAdaptor();
 
@@ -319,7 +306,7 @@ namespace LTSM::Manager
         // ApplicationJsonConfig interface
         void configReloadedEvent(void) override;
 
-    private: /* virtual dbus methods */
+      private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
         void busShutdownService(void) override;
         int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
@@ -344,11 +331,11 @@ namespace LTSM::Manager
         void busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
         void busSetSessionEnvironments(const int32_t & display,
-                                       const std::map < std::string, std::string > & map) override;
+                                       const std::map<std::string, std::string> & map) override;
         void busSetSessionOptions(const int32_t & display,
-                                  const std::map < std::string, std::string > & map) override;
+                                  const std::map<std::string, std::string> & map) override;
         void busSetSessionKeyboardLayouts(const int32_t & display,
-                                          const std::vector < std::string > & layouts) override;
+                                          const std::vector<std::string> & layouts) override;
         void busSendMessage(const int32_t & display, const std::string & message) override;
         void busSendNotify(const int32_t & display, const std::string & summary,
                            const std::string & body, const uint8_t & icontype, const uint8_t & urgency) override;
@@ -356,12 +343,12 @@ namespace LTSM::Manager
         bool busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
                               const std::string & server, const std::string & smode, const std::string & speed) override;
         bool busDestroyChannel(const int32_t & display, const uint8_t & channel) override;
-        bool busTransferFilesRequest(const int32_t & display, const std::vector < FileNameSize > & files) override;
+        bool busTransferFilesRequest(const int32_t & display, const std::vector<FileNameSize> & files) override;
         bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
                                     const uint32_t & filesz, const std::string & dstfile) override;
 
         void helperWidgetStartedAction(const int32_t & display) override;
-        std::vector < std::string > helperGetUsersList(const int32_t & display) override;
+        std::vector<std::string> helperGetUsersList(const int32_t & display) override;
         void helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
                                            const std::string & password, const bool & action) override;
 
@@ -395,12 +382,11 @@ namespace LTSM::Manager
         void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
     };
 
-    class SystemService
-    {
+    class SystemService {
         bool isBackground = false;
         std::string config;
 
-    public:
+      public:
         SystemService(int argc, const char** argv);
 
         int start(void);

@@ -33,8 +33,7 @@
 #include <QScopedPointer>
 #include <QTableWidgetItem>
 
-struct XvfbInfo
-{
+struct XvfbInfo {
     int display = -1;
     int pid1 = 0;
     int pid2 = 0;
@@ -54,8 +53,7 @@ struct XvfbInfo
 
 Q_DECLARE_METATYPE(XvfbInfo);
 
-struct RowItem : QTableWidgetItem
-{
+struct RowItem : QTableWidgetItem {
     RowItem(const XvfbInfo &, const QString &);
     RowItem(const XvfbInfo &, const QIcon &, const QString &);
 
@@ -63,16 +61,14 @@ struct RowItem : QTableWidgetItem
     int display(void) const;
 };
 
-namespace Ui
-{
+namespace Ui {
     class LTSM_Sessions;
 }
 
-class LTSM_Sessions : public QDialog
-{
+class LTSM_Sessions : public QDialog {
     Q_OBJECT
 
-protected slots:
+  protected slots:
     void tableReload(void);
     void disconnectClicked(void);
     void logoffClicked(void);
@@ -87,11 +83,11 @@ protected slots:
     void changeSessionPolicy(void);
     void changeSessionDuration(void);
 
-public:
+  public:
     explicit LTSM_Sessions(QWidget* parent = 0);
     ~LTSM_Sessions();
 
-private:
+  private:
     Ui::LTSM_Sessions* ui;
     QScopedPointer<QDBusInterface> dbusInterfacePtr;
     const RowItem* selectedRow;

@@ -35,25 +35,22 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_sockets.h"
 
-namespace Ui
-{
+namespace Ui {
     class LoginWindow;
 }
 
 class Pkcs11Client;
 struct Pkcs11Token;
 
-namespace LTSM::LoginHelper
-{
+namespace LTSM::LoginHelper {
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
     using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
 
-    class DBusProxy : public QObject, public sdbus::ProxyInterfaces<LTSM::Manager::Service_proxy>
-    {
+    class DBusProxy : public QObject, public sdbus::ProxyInterfaces<LTSM::Manager::Service_proxy> {
         Q_OBJECT
 
-    private:
+      private:
         int displayNum;
 
         // dbus virtual signals
@@ -94,7 +91,7 @@ namespace LTSM::LoginHelper
 
         void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
-    protected:
+      protected:
         // dbus virtual signals
         void onLoginFailure(const int32_t & display, const std::string & msg) override;
         void onLoginSuccess(const int32_t & display, const std::string & userName,
@@ -106,11 +103,11 @@ namespace LTSM::LoginHelper
         void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override;
         void onShutdownConnector(const int32_t & display) override;
 
-    public:
+      public:
         DBusProxy(int display);
         ~DBusProxy();
 
-    signals:
+      signals:
         void loginFailureNotify(const QString &);
         void loginSuccessNotify(const QString &);
         void loginPasswordChangedNotify(const QString, const QString &, bool);
@@ -119,17 +116,18 @@ namespace LTSM::LoginHelper
         void widgetStartedNotify(void);
     };
 
-    class LoginWindow : public QMainWindow, public ApplicationJsonConfig, protected XCB::RootDisplay
-    {
+    class LoginWindow : public QMainWindow, public ApplicationJsonConfig, protected XCB::RootDisplay {
         Q_OBJECT
 
-    public:
+      public:
         explicit LoginWindow(QWidget * parent = 0);
         ~LoginWindow();
 
-        int start(void) override { return 0; }
+        int start(void) override {
+            return 0;
+        }
 
-    protected slots:
+      protected slots:
         void loginClicked(void);
         void domainIndexChanged(int);
         void usernameIndexChanged(int);
@@ -147,7 +145,7 @@ namespace LTSM::LoginHelper
 
         void tokensChanged(void);
 
-    protected:
+      protected:
         virtual void showEvent(QShowEvent*) override;
         virtual void timerEvent(QTimerEvent*) override;
         virtual void mouseMoveEvent(QMouseEvent*) override;
@@ -160,7 +158,7 @@ namespace LTSM::LoginHelper
 
         void switchLoginMode(void);
 
-    private:
+      private:
         Ui::LoginWindow* ui;
         QString dateFormat;
         QString prefferedLogin;

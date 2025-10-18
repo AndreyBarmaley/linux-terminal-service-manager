@@ -37,17 +37,15 @@
 #include "ltsm_sdl_wrapper.h"
 
 #ifdef LTSM_WITH_X11
- #include "librfb_x11client.h"
+#include "librfb_x11client.h"
 #else
- #include "librfb_winclient.h"
+#include "librfb_winclient.h"
 #endif
 
 #define LTSM_VNC2SDL_VERSION 20250816
 
-namespace LTSM
-{
-    struct ColorCursor
-    {
+namespace LTSM {
+    struct ColorCursor {
         std::vector<uint8_t> pixels;
         std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> surface { nullptr, SDL_FreeSurface };
         std::unique_ptr<SDL_Cursor, void(*)(SDL_Cursor*)> cursor { nullptr, SDL_FreeCursor };
@@ -92,9 +90,9 @@ namespace LTSM
         int frameRate = 16;
         int windowFlags = SDL_WINDOW_SHOWN; // | SDL_WINDOW_RESIZABLE;
 
-//        BinaryBuf clipboardBufRemote;
-//        BinaryBuf clipboardBufLocal;
-//        std::mutex clipboardLock;
+        //        BinaryBuf clipboardBufRemote;
+        //        BinaryBuf clipboardBufLocal;
+        //        std::mutex clipboardLock;
 
         XCB::Size primarySize;
         SDL_Event sdlEvent;
@@ -109,7 +107,7 @@ namespace LTSM
         bool audioEnable = false;
         bool pcscEnable = false;
 
-    protected:
+      protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat &) override;
@@ -142,16 +140,16 @@ namespace LTSM
         void parseCommand(std::string_view cmd, std::string_view arg);
         void loadConfig(const std::filesystem::path &);
 
-    public:
+      public:
         Vnc2SDL(int argc, const char** argv);
 
         void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
-                                         const std::vector<RFB::ScreenInfo> &) override;
+                                                const std::vector<RFB::ScreenInfo> &) override;
         void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
         //void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
         void clientRecvRichCursorEvent(const XCB::Region & reg, std::vector<uint8_t> && pixels,
-                             std::vector<uint8_t> && mask) override;
+                                       std::vector<uint8_t> && mask) override;
         void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) override;
         void clientRecvBellEvent(void) override;
 
@@ -164,8 +162,7 @@ namespace LTSM
         const char* pkcs11Library(void) const override;
         bool createChannelAllow(const Channel::ConnectorType &, const std::string &,
                                 const Channel::ConnectorMode &) const override;
-        bool clientLtsmSupported(void) const override
-        {
+        bool clientLtsmSupported(void) const override {
             return ltsmSupport;
         }
 

@@ -29,40 +29,32 @@
 #include "librfb_ffmpeg.h"
 #include "ffmpeg_tools.h"
 
-namespace LTSM
-{
-    namespace FFMPEG
-    {
+namespace LTSM {
+    namespace FFMPEG {
         std::array<char, 1024> errbuf;
         std::array<char, 1024> logbuf;
 
-        const char* error(int errnum)
-        {
+        const char* error(int errnum) {
             std::fill(errbuf.begin(), errbuf.end(), 0);
             return 0 > av_strerror(errnum, errbuf.data(), errbuf.size() - 1) ? "error not found" : errbuf.data();
         }
 
-        void logCallback(void* avcl, int lvl, const char* fmt, va_list vl)
-        {
-            if(av_log_get_level() < lvl)
-            {
+        void logCallback(void* avcl, int lvl, const char* fmt, va_list vl) {
+            if(av_log_get_level() < lvl) {
                 return;
             }
 
-            if(int len = vsnprintf(logbuf.data(), logbuf.size(), fmt, vl); 0 < len)
-            {
+            if(int len = vsnprintf(logbuf.data(), logbuf.size(), fmt, vl); 0 < len) {
                 AVClass* avc = avcl ? *(AVClass**) avcl : nullptr;
                 const char* name = avc ? avc->item_name(avcl) : nullptr;
                 const char* type = "ffmpeg debug";
 
                 // remove endl
-                if(1 < len)
-                {
+                if(1 < len) {
                     len--;
                 }
 
-                switch(lvl)
-                {
+                switch(lvl) {
                     case AV_LOG_PANIC:
                     case AV_LOG_FATAL:
                     case AV_LOG_ERROR:
@@ -92,16 +84,14 @@ namespace LTSM
 
 #ifdef LTSM_ENCODING_FFMPEG
     // EncodingFFmpeg
-    RFB::EncodingFFmpeg::EncodingFFmpeg(int type) : EncodingBase(type)
-    {
+    RFB::EncodingFFmpeg::EncodingFFmpeg(int type) : EncodingBase(type) {
         av_log_set_level(AV_LOG_QUIET);
         av_log_set_callback(FFMPEG::logCallback);
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
 
-        switch(type)
-        {
+        switch(type) {
             case RFB::ENCODING_FFMPEG_H264:
                 codec = avcodec_find_encoder(AV_CODEC_ID_H264);
                 break;
@@ -118,18 +108,15 @@ namespace LTSM
                 break;
         }
 
-        if(! codec)
-        {
+        if(! codec) {
             Application::error("%s: %s failed, type: %d, encoding: %s", __FUNCTION__, "avcodec_find_encoder", type,
                                encodingName(type));
             throw ffmpeg_error(NS_FuncName);
         }
     }
 
-    const char* RFB::EncodingFFmpeg::getTypeName(void) const
-    {
-        switch(getType())
-        {
+    const char* RFB::EncodingFFmpeg::getTypeName(void) const {
+        switch(getType()) {
             case RFB::ENCODING_FFMPEG_H264:
                 return "FFMPEG_H264";
 
@@ -146,63 +133,59 @@ namespace LTSM
         return "FFMPEG_UNKNOWN";
     }
 
-/*
-    void RFB::EncodingFFmpeg::setDebug(int val)
-    {
-        // encoding:debug
-        switch(val)
+    /*
+        void RFB::EncodingFFmpeg::setDebug(int val)
         {
-            case 0:
-                av_log_set_level(AV_LOG_QUIET);
-                break;
+            // encoding:debug
+            switch(val)
+            {
+                case 0:
+                    av_log_set_level(AV_LOG_QUIET);
+                    break;
 
-            case 1:
-                av_log_set_level(AV_LOG_ERROR);
-                break;
+                case 1:
+                    av_log_set_level(AV_LOG_ERROR);
+                    break;
 
-            case 2:
-                av_log_set_level(AV_LOG_WARNING);
-                break;
+                case 2:
+                    av_log_set_level(AV_LOG_WARNING);
+                    break;
 
-            case 3:
-                av_log_set_level(AV_LOG_INFO);
-                break;
+                case 3:
+                    av_log_set_level(AV_LOG_INFO);
+                    break;
 
-            case 4:
-                av_log_set_level(AV_LOG_VERBOSE);
-                break;
+                case 4:
+                    av_log_set_level(AV_LOG_VERBOSE);
+                    break;
 
-            case 5:
-                av_log_set_level(AV_LOG_DEBUG);
-                break;
+                case 5:
+                    av_log_set_level(AV_LOG_DEBUG);
+                    break;
 
-            default:
-                av_log_set_level(AV_LOG_TRACE);
-                break;
+                default:
+                    av_log_set_level(AV_LOG_TRACE);
+                    break;
+            }
         }
-    }
-*/
+    */
 
-    void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz)
-    {
+    void RFB::EncodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
         std::scoped_lock guard{ lockUpdate };
 
-        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
-        {
+        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height)) {
             initContext(nsz);
         }
     }
 
-    void RFB::EncodingFFmpeg::initContext(const XCB::Size & csz)
-    {
+    void RFB::EncodingFFmpeg::initContext(const XCB::Size & csz) {
         packet.reset();
         frame.reset();
         swsctx.reset();
         avcctx.reset();
         avcctx.reset(avcodec_alloc_context3(codec));
 
-        if(! avcctx)
-        {
+        if(! avcctx) {
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_alloc_context3");
             throw ffmpeg_error(NS_FuncName);
         }
@@ -210,19 +193,16 @@ namespace LTSM
         avcctx->delay = 0;
         //avcctx->bit_rate = xxxx;
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(56, 13, 100)
-        avcctx->framerate = (AVRational)
-        {
+        avcctx->framerate = (AVRational) {
             fps, 1
         };
 
 #endif
-        avcctx->time_base = (AVRational)
-        {
+        avcctx->time_base = (AVRational) {
             1, fps
         };
 
-        switch(codec->id)
-        {
+        switch(codec->id) {
             case AV_CODEC_ID_H264:
                 av_opt_set(avcctx.get(), "preset", "veryfast", AV_OPT_SEARCH_CHILDREN);
                 av_opt_set(avcctx.get(), "tune", "zerolatency", AV_OPT_SEARCH_CHILDREN);
@@ -257,16 +237,14 @@ namespace LTSM
 
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
-        if(0 > ret)
-        {
+        if(0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
         frame.reset(av_frame_alloc());
 
-        if(! frame)
-        {
+        if(! frame) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -283,8 +261,7 @@ namespace LTSM
         frame->pts = 0;
         ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
 
-        if(0 > ret)
-        {
+        if(0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -301,16 +278,12 @@ namespace LTSM
                           csz.height);
     }
 
-    void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb)
-    {
+    void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         std::scoped_lock guard{ lockUpdate };
 
-        if(! avcctx)
-        {
+        if(! avcctx) {
             initContext(fb.region().toSize());
-        }
-        else if(fb.width() != avcctx->width || fb.height() != avcctx->height)
-        {
+        } else if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
             Application::warning("%s: incorrect region size: [%lu, %lu]", __FUNCTION__, fb.width(), fb.height());
             initContext(fb.region().toSize());
         }
@@ -321,19 +294,16 @@ namespace LTSM
         frame->pts = pts++;
         int ret = 0;
 
-        if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret)
-        {
+        if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
-        if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret)
-        {
+        if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
                                ret);
 
-            if(ret != EAGAIN)
-            {
+            if(ret != EAGAIN) {
                 throw ffmpeg_error(NS_FuncName);
             }
         }
@@ -342,14 +312,11 @@ namespace LTSM
         st->sendHeader(getType(), fb.region());
 
         // send region
-        if(ret == 0)
-        {
+        if(ret == 0) {
             st->sendIntBE32(packet->size);
             Application::trace(DebugType::Enc, "%s: packet size: %d", __FUNCTION__, packet->size);
             st->sendRaw(packet->data, packet->size);
-        }
-        else
-        {
+        } else {
             st->sendIntBE32(0);
         }
 
@@ -360,90 +327,88 @@ namespace LTSM
 
 #ifdef LTSM_DECODING_FFMPEG
     // DecodingFFmpeg
-    RFB::DecodingFFmpeg::DecodingFFmpeg(int type) : DecodingBase(type)
-    {
+    RFB::DecodingFFmpeg::DecodingFFmpeg(int type) : DecodingBase(type) {
         av_log_set_level(AV_LOG_QUIET);
         av_log_set_callback(FFMPEG::logCallback);
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
 #endif
 
-        switch(type)
-        {
+        switch(type) {
 #ifdef LTSM_DECODING_H264
+
             case RFB::ENCODING_FFMPEG_H264:
                 codec = avcodec_find_decoder(AV_CODEC_ID_H264);
                 break;
 #endif
 #ifdef LTSM_DECODING_VP8
+
             case RFB::ENCODING_FFMPEG_VP8:
                 codec = avcodec_find_decoder(AV_CODEC_ID_VP8);
                 break;
 #endif
 #ifdef LTSM_DECODING_AV1
+
             case RFB::ENCODING_FFMPEG_AV1:
                 codec = avcodec_find_decoder(AV_CODEC_ID_AV1);
                 break;
 #endif
+
             default:
                 break;
         }
 
-        if(! codec)
-        {
+        if(! codec) {
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_find_encoder");
             throw ffmpeg_error(NS_FuncName);
         }
     }
 
-/*
-    void RFB::DecodingFFmpeg::setDebug(int val)
-    {
-        // encoding:debug
-        switch(val)
+    /*
+        void RFB::DecodingFFmpeg::setDebug(int val)
         {
-            case 0:
-                av_log_set_level(AV_LOG_QUIET);
-                break;
+            // encoding:debug
+            switch(val)
+            {
+                case 0:
+                    av_log_set_level(AV_LOG_QUIET);
+                    break;
 
-            case 1:
-                av_log_set_level(AV_LOG_ERROR);
-                break;
+                case 1:
+                    av_log_set_level(AV_LOG_ERROR);
+                    break;
 
-            case 2:
-                av_log_set_level(AV_LOG_WARNING);
-                break;
+                case 2:
+                    av_log_set_level(AV_LOG_WARNING);
+                    break;
 
-            case 3:
-                av_log_set_level(AV_LOG_INFO);
-                break;
+                case 3:
+                    av_log_set_level(AV_LOG_INFO);
+                    break;
 
-            case 4:
-                av_log_set_level(AV_LOG_VERBOSE);
-                break;
+                case 4:
+                    av_log_set_level(AV_LOG_VERBOSE);
+                    break;
 
-            case 5:
-                av_log_set_level(AV_LOG_DEBUG);
-                break;
+                case 5:
+                    av_log_set_level(AV_LOG_DEBUG);
+                    break;
 
-            default:
-                av_log_set_level(AV_LOG_TRACE);
-                break;
+                default:
+                    av_log_set_level(AV_LOG_TRACE);
+                    break;
+            }
         }
-    }
-*/
-    void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz)
-    {
+    */
+    void RFB::DecodingFFmpeg::resizedEvent(const XCB::Size & nsz) {
         std::scoped_lock guard{ lockUpdate };
 
-        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height))
-        {
+        if(avcctx && (avcctx->width != nsz.width || avcctx->height != nsz.height)) {
             initContext(nsz);
         }
     }
 
-    void RFB::DecodingFFmpeg::initContext(const XCB::Size & csz)
-    {
+    void RFB::DecodingFFmpeg::initContext(const XCB::Size & csz) {
         rgbdata.reset();
         rgb.reset();
         packet.reset();
@@ -452,8 +417,7 @@ namespace LTSM
         avcctx.reset();
         avcctx.reset(avcodec_alloc_context3(codec));
 
-        if(! avcctx)
-        {
+        if(! avcctx) {
             Application::error("%s: %s failed", __FUNCTION__, "avcodec_alloc_context3");
             throw ffmpeg_error(NS_FuncName);
         }
@@ -463,8 +427,7 @@ namespace LTSM
         // avcctx->flags |= AV_CODEC_FLAG_TRUNCATED;
         // }
 
-        avcctx->time_base = (AVRational)
-        {
+        avcctx->time_base = (AVRational) {
             1, 25
         };
 
@@ -475,16 +438,14 @@ namespace LTSM
         avcctx->extradata = nullptr;
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
-        if(0 > ret)
-        {
+        if(0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
         frame.reset(av_frame_alloc());
 
-        if(! frame)
-        {
+        if(! frame) {
             Application::error("%s: %s failed", __FUNCTION__, "av_frame_alloc");
             throw ffmpeg_error(NS_FuncName);
         }
@@ -501,8 +462,7 @@ namespace LTSM
         frame->pts = 0;
         ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
 
-        if(0 > ret)
-        {
+        if(0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -515,12 +475,9 @@ namespace LTSM
         int bpp;
         uint32_t rmask, gmask, bmask, amask;
 
-        if(Tools::AV_PixelFormatEnumToMasks(avPixelFormat, & bpp, & rmask, & gmask, & bmask, & amask, false))
-        {
+        if(Tools::AV_PixelFormatEnumToMasks(avPixelFormat, & bpp, & rmask, & gmask, & bmask, & amask, false)) {
             pf = PixelFormat(bpp, rmask, gmask, bmask, amask);
-        }
-        else
-        {
+        } else {
             Application::error("%s: unknown pixel format: %s, id: %d", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat),
                                (int) avPixelFormat);
             throw ffmpeg_error(NS_FuncName);
@@ -530,8 +487,7 @@ namespace LTSM
                                     frame->width, frame->height, avPixelFormat, SWS_BILINEAR, nullptr, nullptr, nullptr));
         packet.reset(av_packet_alloc());
 
-        if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret)
-        {
+        if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
@@ -544,8 +500,7 @@ namespace LTSM
         rgbdata.reset((uint8_t*) av_malloc(ret));
 
         if(ret = av_image_fill_arrays(rgb->data, rgb->linesize, rgbdata.get(),
-                                      (AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret)
-        {
+                                      (AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -554,35 +509,30 @@ namespace LTSM
                           csz.height);
     }
 
-    void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg)
-    {
+    void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         Application::debug(DebugType::Enc, "%s: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
-                               reg.y, reg.width, reg.height);
+                           reg.y, reg.width, reg.height);
 
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
 
-        if(0 == len)
-        {
+        if(0 == len) {
             return;
         }
 
-        if(reg.toSize() != cli.clientSize())
-        {
+        if(reg.toSize() != cli.clientSize()) {
             Application::warning("%s: incorrect region size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.width, reg.height);
             return;
         }
 
         // The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE larger than the actual read bytes
-        if(len % AV_INPUT_BUFFER_PADDING_SIZE)
-        {
+        if(len % AV_INPUT_BUFFER_PADDING_SIZE) {
             buf.resize(buf.size() + AV_INPUT_BUFFER_PADDING_SIZE - (len % AV_INPUT_BUFFER_PADDING_SIZE), 0);
         }
 
         std::scoped_lock guard{ lockUpdate };
 
-        if(! avcctx)
-        {
+        if(! avcctx) {
             initContext(reg);
         }
 
@@ -592,21 +542,17 @@ namespace LTSM
         bool haveFrame = false;
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
 
-        if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret)
-        {
+        if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
             Application::error("%s: %d %d", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
-        do
-        {
+        do {
             ret = avcodec_receive_frame(avcctx.get(), frame.get());
-        }
-        while(ret == AVERROR(EAGAIN));
+        } while(ret == AVERROR(EAGAIN));
 
-        if(0 > ret)
-        {
+        if(0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
@@ -616,8 +562,7 @@ namespace LTSM
 #else
         int gotFrame = 0;
 
-        if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret)
-        {
+        if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
             Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
@@ -626,20 +571,17 @@ namespace LTSM
         haveFrame = (gotFrame != 0);
 #endif
 
-        if(haveFrame)
-        {
-            int heightResult = sws_scale(swsctx.get(), (uint8_t const* const*) frame->data,
+        if(haveFrame) {
+            int heightResult = sws_scale(swsctx.get(), (uint8_t const * const*) frame->data,
                                          frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
 
-            if(heightResult < 0)
-            {
+            if(heightResult < 0) {
                 Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
                                    heightResult);
                 throw ffmpeg_error(NS_FuncName);
             }
 
-            if(heightResult == avcctx->height)
-            {
+            if(heightResult == avcctx->height) {
                 cli.updateRawPixels(XCB::Region(0, 0, avcctx->width, avcctx->height), rgb->data[0], rgb->linesize[0], pf);
             }
 

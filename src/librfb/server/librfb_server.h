@@ -33,34 +33,29 @@
 #include "librfb_encodings.h"
 #include "ltsm_xcb_wrapper.h"
 
-namespace LTSM
-{
-    struct XcbFrameBuffer
-    {
+namespace LTSM {
+    struct XcbFrameBuffer {
         XCB::PixmapInfoReply reply;
         FrameBuffer fb;
     };
 
-    class ClientEncodings
-    {
+    class ClientEncodings {
         std::list<int> encs = { RFB::ENCODING_RAW };
 
-    public:
+      public:
         ClientEncodings() = default;
         ~ClientEncodings() = default;
-        
+
         void setPriority(const std::vector<int> &);
         bool isPresent(int) const;
         int findPriorityFrom(std::initializer_list<int>) const;
     };
 
-    namespace RFB
-    {
+    namespace RFB {
         int serverSelectCompatibleEncoding(const ClientEncodings & clientEncodings);
 
         /// ServerEncoder
-        class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip
-        {
+        class ServerEncoder : public ChannelListener, public EncoderStream, public ExtClip {
             std::forward_list<uint32_t> cursorSended;
             ClientEncodings clientEncodings;
             std::string clientAuthName;
@@ -91,7 +86,7 @@ namespace LTSM
             bool clientBigEndian = false;
             bool continueUpdatesProcessed = false;
 
-        protected:
+          protected:
             friend class EncodingBase;
             friend class EncodingRaw;
             friend class EncodingRRE;
@@ -100,8 +95,7 @@ namespace LTSM
             friend class EncodingZlib;
             friend class EncodingFFmpeg;
 
-            const EncodingBase* getEncoder(void) const
-            {
+            const EncodingBase* getEncoder(void) const {
                 return encoder.get();
             }
 
@@ -151,7 +145,9 @@ namespace LTSM
             void sendContinuousUpdates(bool enable);
             bool sendUpdateSafe(const XCB::Region &);
             void sendEncodingLtsmSupported(void);
-            bool serverSide(void) const override { return true; }
+            bool serverSide(void) const override {
+                return true;
+            }
 
             void recvPixelFormat(void);
             void recvSetEncodings(void);
@@ -164,7 +160,7 @@ namespace LTSM
 
             void cursorFailed(uint32_t);
 
-        public:
+          public:
             ServerEncoder(int sockfd = 0);
 
             // EncoderStream interface
@@ -192,9 +188,15 @@ namespace LTSM
 
             std::pair<std::string, std::string> authInfo(void) const;
 
-            virtual int remoteClientVersion(void) const { return 0; }
-            virtual std::string remoteClientAddress(void) const { return ""; }
-            virtual bool noVncMode(void) const { return false; }
+            virtual int remoteClientVersion(void) const {
+                return 0;
+            }
+            virtual std::string remoteClientAddress(void) const {
+                return "";
+            }
+            virtual bool noVncMode(void) const {
+                return false;
+            }
 
             virtual void encoderInitEvent(EncodingBase*) { /* empty */ }
 

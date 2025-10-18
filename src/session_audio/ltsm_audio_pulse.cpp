@@ -36,25 +36,21 @@
 
 using namespace std::chrono_literals;
 
-namespace LTSM
-{
+namespace LTSM {
     /// WaitNotify
-    const void* WaitNotify::wait(int id)
-    {
+    const void* WaitNotify::wait(int id) {
         std::unique_lock<std::mutex> lk{ lock };
         cv.wait(lk, [ &] { return waitId < 0 || waitId == id; });
         return waitData;
     }
 
-    void WaitNotify::reset(void)
-    {
+    void WaitNotify::reset(void) {
         std::lock_guard<std::mutex> lk{ lock };
         waitId = -1;
         waitData = nullptr;
     }
 
-    void WaitNotify::notify(int id, const void* ptr)
-    {
+    void WaitNotify::notify(int id, const void* ptr) {
         std::lock_guard<std::mutex> lk{ lock };
         waitId = id;
         waitData = ptr;
@@ -62,14 +58,11 @@ namespace LTSM
     }
 
     /// PulseAudio
-    namespace PulseAudio
-    {
+    namespace PulseAudio {
         const size_t pcmReserveSize = 32 * 1024;
 
-        uint16_t formatBits(const pa_sample_format_t & fmt)
-        {
-            switch(fmt)
-            {
+        uint16_t formatBits(const pa_sample_format_t & fmt) {
+            switch(fmt) {
                 case PA_SAMPLE_S16LE:
                     return 16;
 
@@ -86,10 +79,8 @@ namespace LTSM
             return 0;
         }
 
-        const char* sourceStateName(const pa_source_state_t & st)
-        {
-            switch(st)
-            {
+        const char* sourceStateName(const pa_source_state_t & st) {
+            switch(st) {
                 case PA_SOURCE_INVALID_STATE:
                     return "INVALID";
 
@@ -109,10 +100,8 @@ namespace LTSM
             return "UNKNOWN";
         }
 
-        const char* streamStateName(const pa_stream_state_t & st)
-        {
-            switch(st)
-            {
+        const char* streamStateName(const pa_stream_state_t & st) {
+            switch(st) {
                 case PA_STREAM_UNCONNECTED:
                     return "UNCONNECTED";
 
@@ -135,10 +124,8 @@ namespace LTSM
             return "UNKNOWN";
         }
 
-        const char* contextStateName(const pa_context_state_t & st)
-        {
-            switch(st)
-            {
+        const char* contextStateName(const pa_context_state_t & st) {
+            switch(st) {
                 case PA_CONTEXT_UNCONNECTED:
                     return "UNCONNECTED";
 
@@ -167,165 +154,133 @@ namespace LTSM
             return "UNKNOWN";
         }
 
-        void PulseAudio::BaseStream::contextStateCallback(pa_context* ctx, void* userData)
-        {
+        void PulseAudio::BaseStream::contextStateCallback(pa_context* ctx, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextStateEvent(pa_context_get_state(ctx));
             }
         }
 
-        void PulseAudio::BaseStream::streamStateCallback(pa_stream* stream, void* userData)
-        {
+        void PulseAudio::BaseStream::streamStateCallback(pa_stream* stream, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamStateEvent(pa_stream_get_state(stream));
             }
         }
 
-        void PulseAudio::BaseStream::streamSuspendedCallback(pa_stream* stream, void* userData)
-        {
+        void PulseAudio::BaseStream::streamSuspendedCallback(pa_stream* stream, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamSuspendedEvent(pa_stream_is_suspended(stream));
             }
         }
 
-        void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData)
-        {
+        void PulseAudio::BaseStream::sourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->sourceInfoEvent(info, eol);
             }
         }
 
         // notify
-        void PulseAudio::BaseStream::contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData)
-        {
+        void PulseAudio::BaseStream::contextServerInfoCallback(pa_context* ctx, const pa_server_info* info, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextServerInfoNotify(info);
             }
         }
 
-        void PulseAudio::BaseStream::contextDrainCallback(pa_context* ctx, void* userData)
-        {
+        void PulseAudio::BaseStream::contextDrainCallback(pa_context* ctx, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextDrainNotify();
             }
         }
 
-        void PulseAudio::BaseStream::contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData)
-        {
+        void PulseAudio::BaseStream::contextLoadModuleCallback(pa_context* ctx, uint32_t idx, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextLoadModuleNotify(idx);
             }
         }
 
-        void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData)
-        {
+        void PulseAudio::BaseStream::contextSourceInfoCallback(pa_context* ctx, const pa_source_info* info, int eol, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->contextSourceInfoNotify(info, eol);
             }
         }
 
-        void PulseAudio::BaseStream::streamCorkCallback(pa_stream* stream, int success, void* userData)
-        {
+        void PulseAudio::BaseStream::streamCorkCallback(pa_stream* stream, int success, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamCorkNotify(success);
             }
         }
 
-        void PulseAudio::BaseStream::streamTriggerCallback(pa_stream* stream, int success, void* userData)
-        {
+        void PulseAudio::BaseStream::streamTriggerCallback(pa_stream* stream, int success, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamTriggerNotify(success);
             }
         }
 
-        void PulseAudio::BaseStream::streamFlushCallback(pa_stream* stream, int success, void* userData)
-        {
+        void PulseAudio::BaseStream::streamFlushCallback(pa_stream* stream, int success, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamFlushNotify(success);
             }
         }
 
-        void PulseAudio::BaseStream::streamDrainCallback(pa_stream* stream, int success, void* userData)
-        {
+        void PulseAudio::BaseStream::streamDrainCallback(pa_stream* stream, int success, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamDrainNotify(success);
             }
         }
 
-        void PulseAudio::BaseStream::streamOverflowCallback(pa_stream* stream, void* userData)
-        {
+        void PulseAudio::BaseStream::streamOverflowCallback(pa_stream* stream, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamOverflowEvent();
             }
         }
 
-        void PulseAudio::BaseStream::streamUnderflowCallback(pa_stream* stream, void* userData)
-        {
+        void PulseAudio::BaseStream::streamUnderflowCallback(pa_stream* stream, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<BaseStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<BaseStream*>(userData)) {
                 pulseAudio->streamUnderflowEvent(pa_stream_get_underflow_index(stream));
             }
         }
 
 #ifdef LTSM_CLIENT
-        void PulseAudio::InputStream::streamWriteCallback(pa_stream* stream, const size_t nbytes, void* userData)
-        {
+        void PulseAudio::InputStream::streamWriteCallback(pa_stream* stream, const size_t nbytes, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<InputStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<InputStream*>(userData)) {
                 pulseAudio->streamWriteEvent(nbytes);
             }
         }
 
 #else
-        void PulseAudio::OutputStream::streamReadCallback(pa_stream* stream, const size_t nbytes, void* userData)
-        {
+        void PulseAudio::OutputStream::streamReadCallback(pa_stream* stream, const size_t nbytes, void* userData) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-            if(auto pulseAudio = static_cast<OutputStream*>(userData))
-            {
+            if(auto pulseAudio = static_cast<OutputStream*>(userData)) {
                 pulseAudio->streamReadEvent(nbytes);
             }
         }
@@ -335,14 +290,12 @@ namespace LTSM
 
     // BaseStream
     PulseAudio::BaseStream::BaseStream(const std::string & contextName, const pa_sample_format_t & fmt, uint32_t rate,
-                                       uint8_t channels)
-    {
+                                       uint8_t channels) {
         audioSpec.format = fmt;
         audioSpec.rate = rate;
         audioSpec.channels = channels;
 
-        if(0 == pa_sample_spec_valid( & audioSpec))
-        {
+        if(0 == pa_sample_spec_valid(& audioSpec)) {
             Application::error("%s: %s failed, format: `%s', rate: %" PRIu32 ", channels: %" PRIu8,
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
@@ -350,38 +303,32 @@ namespace LTSM
 
         loop.reset(pa_mainloop_new());
 
-        if(! loop)
-        {
+        if(! loop) {
             Application::error("%s: %s failed", __FUNCTION__, "pa_mainloop_new");
             throw audio_error(NS_FuncName);
         }
 
         pa_mainloop_api* api = pa_mainloop_get_api(loop.get());
 
-        if(! api)
-        {
+        if(! api) {
             Application::error("%s: %s failed", __FUNCTION__, "pa_mainloop_get_api");
             throw audio_error(NS_FuncName);
         }
 
         ctx.reset(pa_context_new(api, contextName.c_str()));
 
-        if(! ctx)
-        {
+        if(! ctx) {
             Application::error("%s: %s failed", __FUNCTION__, "pa_context_new");
             throw audio_error(NS_FuncName);
         }
     }
 
-    PulseAudio::BaseStream::~BaseStream()
-    {
+    PulseAudio::BaseStream::~BaseStream() {
         waitNotify.reset();
     }
 
-    void PulseAudio::BaseStream::contextDisconnect(void)
-    {
-        if(pa_context_get_state(ctx.get()) != PA_CONTEXT_UNCONNECTED)
-        {
+    void PulseAudio::BaseStream::contextDisconnect(void) {
+        if(pa_context_get_state(ctx.get()) != PA_CONTEXT_UNCONNECTED) {
             Application::debug(DebugType::Audio, "%s", __FUNCTION__);
             pa_context_disconnect(ctx.get());
         }
@@ -390,15 +337,12 @@ namespace LTSM
         pa_context_set_event_callback(ctx.get(), nullptr, nullptr);
     }
 
-    void PulseAudio::BaseStream::streamDisconnect(void)
-    {
-        if(! stream)
-        {
+    void PulseAudio::BaseStream::streamDisconnect(void) {
+        if(! stream) {
             return;
         }
 
-        if(pa_stream_get_state(stream.get()) != PA_STREAM_UNCONNECTED)
-        {
+        if(pa_stream_get_state(stream.get()) != PA_STREAM_UNCONNECTED) {
             Application::info("%s", __FUNCTION__);
             pa_stream_drop(stream.get());
             pa_stream_disconnect(stream.get());
@@ -417,12 +361,10 @@ namespace LTSM
         pa_stream_set_event_callback(stream.get(), nullptr, nullptr);
     }
 
-    bool PulseAudio::BaseStream::initContext(void)
-    {
+    bool PulseAudio::BaseStream::initContext(void) {
         pa_context_set_state_callback(ctx.get(), & contextStateCallback, this);
 
-        if(0 > pa_context_connect(ctx.get(), nullptr, PA_CONTEXT_NOFLAGS, nullptr))
-        {
+        if(0 > pa_context_connect(ctx.get(), nullptr, PA_CONTEXT_NOFLAGS, nullptr)) {
             Application::warning("%s: %s failed", __FUNCTION__, "pa_context_connect");
             return false;
         }
@@ -430,16 +372,14 @@ namespace LTSM
         // wait conntext ready
         waitNotify.wait(WaitOp::ContextState);
 
-        if(PA_CONTEXT_FAILED == pa_context_get_state(ctx.get()))
-        {
+        if(PA_CONTEXT_FAILED == pa_context_get_state(ctx.get())) {
             Application::error("%s: %s failed", __FUNCTION__, "context state");
             return false;
         }
 
         serverInfo = contextServerInfoWait();
 
-        if(! serverInfo)
-        {
+        if(! serverInfo) {
             Application::error("%s: %s failed", __FUNCTION__, "server info");
             return false;
         }
@@ -448,8 +388,7 @@ namespace LTSM
         // init stream
         stream.reset(pa_stream_new(ctx.get(), streamName(), & audioSpec, nullptr));
 
-        if(! stream)
-        {
+        if(! stream) {
             Application::error("%s: %s failed", __FUNCTION__, "pa_stream_new");
             return false;
         }
@@ -461,18 +400,15 @@ namespace LTSM
         return true;
     }
 
-    void PulseAudio::BaseStream::contextLoadModuleNotify(uint32_t idx)
-    {
+    void PulseAudio::BaseStream::contextLoadModuleNotify(uint32_t idx) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
         waitNotify.notify(WaitOp::ContextLoadModule, reinterpret_cast<void*>(idx));
     }
 
-    uint32_t PulseAudio::BaseStream::contextLoadModuleWait(const std::string & name, const std::string & args)
-    {
+    uint32_t PulseAudio::BaseStream::contextLoadModuleWait(const std::string & name, const std::string & args) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_context_load_module(ctx.get(), name.c_str(), args.c_str(), & contextLoadModuleCallback, this))
-        {
+        if(auto op = pa_context_load_module(ctx.get(), name.c_str(), args.c_str(), & contextLoadModuleCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextLoadModule);
             pa_operation_unref(op);
             return reinterpret_cast<uint64_t>(ret);
@@ -481,18 +417,15 @@ namespace LTSM
         return PA_INVALID_INDEX;
     }
 
-    void PulseAudio::BaseStream::contextSourceInfoNotify(const pa_source_info* info, int eol)
-    {
+    void PulseAudio::BaseStream::contextSourceInfoNotify(const pa_source_info* info, int eol) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
         waitNotify.notify(WaitOp::ContextSourceInfo, info);
     }
 
-    bool PulseAudio::BaseStream::sourceInfo(const std::string & name)
-    {
+    bool PulseAudio::BaseStream::sourceInfo(const std::string & name) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & sourceInfoCallback, this))
-        {
+        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & sourceInfoCallback, this)) {
             pa_operation_unref(op);
             return true;
         }
@@ -500,12 +433,10 @@ namespace LTSM
         return false;
     }
 
-    const pa_source_info* PulseAudio::BaseStream::contextSourceInfoWait(const std::string & name)
-    {
+    const pa_source_info* PulseAudio::BaseStream::contextSourceInfoWait(const std::string & name) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & contextSourceInfoCallback, this))
-        {
+        if(auto op = pa_context_get_source_info_by_name(ctx.get(), name.c_str(), & contextSourceInfoCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextSourceInfo);
             pa_operation_unref(op);
             return (const pa_source_info*) ret;
@@ -514,18 +445,15 @@ namespace LTSM
         return nullptr;
     }
 
-    void PulseAudio::BaseStream::contextServerInfoNotify(const pa_server_info* info)
-    {
+    void PulseAudio::BaseStream::contextServerInfoNotify(const pa_server_info* info) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
         waitNotify.notify(WaitOp::ContextServerInfo, info);
     }
 
-    const pa_server_info* PulseAudio::BaseStream::contextServerInfoWait(void)
-    {
+    const pa_server_info* PulseAudio::BaseStream::contextServerInfoWait(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_context_get_server_info(ctx.get(), & contextServerInfoCallback, this))
-        {
+        if(auto op = pa_context_get_server_info(ctx.get(), & contextServerInfoCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::ContextServerInfo);
             pa_operation_unref(op);
             return (const pa_server_info*) ret;
@@ -534,40 +462,33 @@ namespace LTSM
         return nullptr;
     }
 
-    void PulseAudio::BaseStream::contextDrainNotify(void)
-    {
+    void PulseAudio::BaseStream::contextDrainNotify(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
         waitNotify.notify(WaitOp::ContextDrain, nullptr);
     }
 
-    void PulseAudio::BaseStream::contextDrainWait(void)
-    {
+    void PulseAudio::BaseStream::contextDrainWait(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_context_drain(ctx.get(), & contextDrainCallback, this))
-        {
+        if(auto op = pa_context_drain(ctx.get(), & contextDrainCallback, this)) {
             waitNotify.wait(WaitOp::ContextDrain);
             pa_operation_unref(op);
         }
     }
 
-    void PulseAudio::BaseStream::streamCorkNotify(int success)
-    {
+    void PulseAudio::BaseStream::streamCorkNotify(int success) {
         Application::debug(DebugType::Audio, "%s: success: %d", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamCork, success ? this : nullptr);
     }
 
-    bool PulseAudio::BaseStream::streamCorkWait(bool pause)
-    {
+    bool PulseAudio::BaseStream::streamCorkWait(bool pause) {
         Application::debug(DebugType::Audio, "%s: pause %s", __FUNCTION__, (pause ? "true" : "false"));
 
-        if(pa_stream_is_corked(stream.get()) == pause)
-        {
+        if(pa_stream_is_corked(stream.get()) == pause) {
             return true;
         }
 
-        if(auto op = pa_stream_cork(stream.get(), pause ? 1 : 0, & streamCorkCallback, this))
-        {
+        if(auto op = pa_stream_cork(stream.get(), pause ? 1 : 0, & streamCorkCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamCork);
             pa_operation_unref(op);
             return ret;
@@ -576,18 +497,15 @@ namespace LTSM
         return false;
     }
 
-    void PulseAudio::BaseStream::streamTriggerNotify(int success)
-    {
+    void PulseAudio::BaseStream::streamTriggerNotify(int success) {
         Application::debug(DebugType::Audio, "%s: success: %d", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamTrigger, success ? this : nullptr);
     }
 
-    bool PulseAudio::BaseStream::streamTriggerWait(void)
-    {
+    bool PulseAudio::BaseStream::streamTriggerWait(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_stream_trigger(stream.get(), & streamTriggerCallback, this))
-        {
+        if(auto op = pa_stream_trigger(stream.get(), & streamTriggerCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamTrigger);
             pa_operation_unref(op);
             return ret;
@@ -596,18 +514,15 @@ namespace LTSM
         return false;
     }
 
-    void PulseAudio::BaseStream::streamFlushNotify(int success)
-    {
+    void PulseAudio::BaseStream::streamFlushNotify(int success) {
         Application::debug(DebugType::Audio, "%s: success: %d", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamFlush, success ? this : nullptr);
     }
 
-    bool PulseAudio::BaseStream::streamFlushWait(void)
-    {
+    bool PulseAudio::BaseStream::streamFlushWait(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_stream_flush(stream.get(), & streamFlushCallback, this))
-        {
+        if(auto op = pa_stream_flush(stream.get(), & streamFlushCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamFlush);
             pa_operation_unref(op);
             return ret;
@@ -616,18 +531,15 @@ namespace LTSM
         return false;
     }
 
-    void PulseAudio::BaseStream::streamDrainNotify(int success)
-    {
+    void PulseAudio::BaseStream::streamDrainNotify(int success) {
         Application::debug(DebugType::Audio, "%s: success: %d", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamDrain, success ? this : nullptr);
     }
 
-    bool PulseAudio::BaseStream::streamDrainWait(void)
-    {
+    bool PulseAudio::BaseStream::streamDrainWait(void) {
         Application::debug(DebugType::Audio, "%s", __FUNCTION__);
 
-        if(auto op = pa_stream_drain(stream.get(), & streamDrainCallback, this))
-        {
+        if(auto op = pa_stream_drain(stream.get(), & streamDrainCallback, this)) {
             auto ret = waitNotify.wait(WaitOp::StreamDrain);
             pa_operation_unref(op);
             return ret;
@@ -636,108 +548,86 @@ namespace LTSM
         return false;
     }
 
-    void PulseAudio::BaseStream::contextStateEvent(const pa_context_state_t & state)
-    {
-        if(PA_CONTEXT_FAILED == state)
-        {
+    void PulseAudio::BaseStream::contextStateEvent(const pa_context_state_t & state) {
+        if(PA_CONTEXT_FAILED == state) {
             Application::error("%s: state: %s", __FUNCTION__, contextStateName(state));
-        }
-        else
-        {
+        } else {
             Application::info("%s: state: %s", __FUNCTION__, contextStateName(state));
         }
 
-        if(state == PA_CONTEXT_FAILED || state == PA_CONTEXT_READY)
-        {
+        if(state == PA_CONTEXT_FAILED || state == PA_CONTEXT_READY) {
             waitNotify.notify(WaitOp::ContextState, & state);
         }
     }
 
-    void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol)
-    {
+    void PulseAudio::BaseStream::sourceInfoEvent(const pa_source_info* info, int eol) {
         // Application::info("%s: state: %s", __FUNCTION__, sourceStateName(state));
     }
 
-    void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state)
-    {
+    void PulseAudio::BaseStream::streamStateEvent(const pa_stream_state_t & state) {
         Application::info("%s: state: %s", __FUNCTION__, streamStateName(state));
 
-        if(state == PA_STREAM_READY || state == PA_STREAM_FAILED)
-        {
+        if(state == PA_STREAM_READY || state == PA_STREAM_FAILED) {
             waitNotify.notify(WaitOp::StreamState, & state);
         }
     }
 
-    void PulseAudio::BaseStream::streamSuspendedEvent(int state)
-    {
+    void PulseAudio::BaseStream::streamSuspendedEvent(int state) {
         Application::info("%s: state: %d", __FUNCTION__, state);
     }
 
-    void PulseAudio::BaseStream::streamOverflowEvent(void)
-    {
+    void PulseAudio::BaseStream::streamOverflowEvent(void) {
         Application::info("%s: ", __FUNCTION__);
     }
 
-    void PulseAudio::BaseStream::streamUnderflowEvent(int64_t index)
-    {
+    void PulseAudio::BaseStream::streamUnderflowEvent(int64_t index) {
         Application::info("%s: index: %" PRId64, __FUNCTION__, index);
     }
 
-    bool PulseAudio::BaseStream::streamSuspended(void) const
-    {
+    bool PulseAudio::BaseStream::streamSuspended(void) const {
         return 1 == pa_stream_is_suspended(stream.get());
     }
 
-    bool PulseAudio::BaseStream::streamPaused(void) const
-    {
+    bool PulseAudio::BaseStream::streamPaused(void) const {
         return 1 == pa_stream_is_corked(stream.get());
     }
 
-    void PulseAudio::BaseStream::streamPause(void)
-    {
+    void PulseAudio::BaseStream::streamPause(void) {
         streamCorkWait(true);
     }
 
-    void PulseAudio::BaseStream::streamUnPause(void)
-    {
+    void PulseAudio::BaseStream::streamUnPause(void) {
         streamCorkWait(false);
     }
 
-    void PulseAudio::BaseStream::streamDrain(void)
-    {
+    void PulseAudio::BaseStream::streamDrain(void) {
         streamDrainWait();
     }
 
-    void PulseAudio::BaseStream::streamFlush(void)
-    {
+    void PulseAudio::BaseStream::streamFlush(void) {
         streamFlushWait();
     }
 
 #ifdef LTSM_CLIENT
     PulseAudio::InputStream::InputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels)
-        : BaseStream("ltsm_client", fmt, rate, channels)
-    {
+        : BaseStream("ltsm_client", fmt, rate, channels) {
         pcm.reserve(pcmReserveSize);
         // loop
-        thread = std::thread([loop = loop.get()]()
-        {
+        thread = std::thread([loop = loop.get()]() {
             std::this_thread::sleep_for(5ms);
             pa_mainloop_run(loop, nullptr);
         });
     }
 
-    PulseAudio::InputStream::~InputStream()
-    {
+    PulseAudio::InputStream::~InputStream() {
         streamDisconnect();
         contextDisconnect();
 
-        if(loop)
-        {
+        if(loop) {
             pa_mainloop_quit(loop.get(), 0);
         }
 
-        if(thread.joinable())
-        {
+        if(thread.joinable()) {
             thread.join();
         }
     }
@@ -764,8 +654,7 @@ namespace LTSM
                 сервер выберет максимально возможную настройку фрагмента, чтобы минимизировать количество необходимых пробуждений и максимально повысить безопасность выпадения.
                 Это может превышать 2 секунды буферизации. Для приложений с низкой задержкой или приложений, где задержка имеет значение, вы должны указать здесь правильное значение.
     */
-    void PulseAudio::InputStream::setLatencyMs(uint32_t ms)
-    {
+    void PulseAudio::InputStream::setLatencyMs(uint32_t ms) {
         pa_buffer_attr bufferAttr = { UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX };
         const pa_usec_t latency = 1000 * ms;
         bufferAttr.maxlength = pa_usec_to_bytes(latency, & audioSpec);
@@ -774,26 +663,22 @@ namespace LTSM
         Application::debug(DebugType::Audio, "%s: latency: %" PRIu32 "ms, buffer max length: %" PRIu32 ", target length: %" PRIu32,
                            __FUNCTION__, ms, bufferAttr.maxlength, bufferAttr.tlength);
 
-        if(auto op = pa_stream_set_buffer_attr(stream.get(), & bufferAttr, nullptr, nullptr))
-        {
+        if(auto op = pa_stream_set_buffer_attr(stream.get(), & bufferAttr, nullptr, nullptr)) {
             pa_operation_unref(op);
         }
     }
 
-    bool PulseAudio::InputStream::streamConnect(bool paused, const pa_buffer_attr* attr)
-    {
+    bool PulseAudio::InputStream::streamConnect(bool paused, const pa_buffer_attr* attr) {
         pa_stream_set_write_callback(stream.get(), & streamWriteCallback, this);
         Application::info("%s: connect to: `%s'", __FUNCTION__, serverInfo->default_sink_name);
         const pa_buffer_attr bufferAttr = { .maxlength = UINT32_MAX, .tlength = 2048, .prebuf = UINT32_MAX, .minreq = UINT32_MAX, .fragsize = UINT32_MAX };
 
         if(0 != pa_stream_connect_playback(stream.get(), serverInfo->default_sink_name, attr ? attr : & bufferAttr,
                                            pa_stream_flags_t(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_ADJUST_LATENCY | PA_STREAM_AUTO_TIMING_UPDATE), nullptr,
-                                           nullptr))
-        {
+                                           nullptr)) {
             // old pulse audio servers don't like the ADJUST_LATENCY flag
             if(0 != pa_stream_connect_playback(stream.get(), serverInfo->default_sink_name, attr ? attr : & bufferAttr,
-                                               pa_stream_flags_t(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE), nullptr, nullptr))
-            {
+                                               pa_stream_flags_t(PA_STREAM_INTERPOLATE_TIMING | PA_STREAM_AUTO_TIMING_UPDATE), nullptr, nullptr)) {
                 Application::error("%s: %s failed", __FUNCTION__, "pa_stream_connect_playback");
                 return false;
             }
@@ -802,16 +687,13 @@ namespace LTSM
         // wait ready state
         waitNotify.wait(WaitOp::StreamState);
 
-        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get()))
-        {
+        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get())) {
             Application::error("%s: %s failed", __FUNCTION__, "stream state");
             return false;
         }
 
-        if(paused)
-        {
-            if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr))
-            {
+        if(paused) {
+            if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr)) {
                 pa_operation_unref(op);
             }
         }
@@ -819,70 +701,56 @@ namespace LTSM
         return true;
     }
 
-    void PulseAudio::InputStream::streamWriteSilent(size_t len)
-    {
+    void PulseAudio::InputStream::streamWriteSilent(size_t len) {
         Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
         std::vector<uint8_t> buf(len, 0);
         streamWriteData(buf.data(), buf.size());
     }
 
-    size_t PulseAudio::InputStream::streamWriteableSize(void) const
-    {
+    size_t PulseAudio::InputStream::streamWriteableSize(void) const {
         return pa_stream_writable_size(stream.get());
     }
 
-    void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len)
-    {
+    void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len) {
         Application::info("%s: data size: %lu", __FUNCTION__, len);
         std::scoped_lock guard{ lock };
         pcm.insert(pcm.end(), ptr, ptr + len);
         auto writableSize = pa_stream_writable_size(stream.get());
 
-        if((writableSize << 2) < pcm.size())
-        {
+        if((writableSize << 2) < pcm.size()) {
             // unpaused
-            if(auto op = pa_stream_cork(stream.get(), 0, nullptr, nullptr))
-            {
+            if(auto op = pa_stream_cork(stream.get(), 0, nullptr, nullptr)) {
                 pa_operation_unref(op);
             }
 
             // triggered
-            if(auto op = pa_stream_trigger(stream.get(), nullptr, nullptr))
-            {
+            if(auto op = pa_stream_trigger(stream.get(), nullptr, nullptr)) {
                 pa_operation_unref(op);
             }
         }
     }
 
-    void PulseAudio::InputStream::streamWriteEvent(const size_t & nbytes)
-    {
+    void PulseAudio::InputStream::streamWriteEvent(const size_t & nbytes) {
         pa_usec_t usec = 0;
         int neg = 0;
 
-        if(0 != pa_stream_get_latency(stream.get(), & usec, & neg))
-        {
+        if(0 != pa_stream_get_latency(stream.get(), & usec, & neg)) {
             Application::warning("%s: %s failed", __FUNCTION__, "pa_stream_get_latency");
         }
 
         std::scoped_lock guard{ lock };
 
-        if(pcm.empty())
-        {
-            if(! streamPaused())
-            {
-                if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr))
-                {
+        if(pcm.empty()) {
+            if(! streamPaused()) {
+                if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr)) {
                     pa_operation_unref(op);
                 }
             }
-        }
-        else if(auto len = std::min(nbytes, pcm.size()))
-        {
+        } else if(auto len = std::min(nbytes, pcm.size())) {
             Application::info("%s: request: %lu, last: %lu, write: %lu, latency: %8d, neg: %d", __FUNCTION__, nbytes, pcm.size(), len,
                               usec, neg);
 
-            if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE))
-            {
+            if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE)) {
                 Application::error("%s: %s failed", __FUNCTION__, "pa_stream_write");
                 throw audio_error(NS_FuncName);
             }
@@ -891,45 +759,38 @@ namespace LTSM
         }
     }
 
-    size_t PulseAudio::InputStream::streamBufferSize(void) const
-    {
+    size_t PulseAudio::InputStream::streamBufferSize(void) const {
         std::scoped_lock guard{ lock };
         return pcm.size();
     }
 
-    void PulseAudio::InputStream::streamPlayImmediatly(void)
-    {
+    void PulseAudio::InputStream::streamPlayImmediatly(void) {
         streamTriggerWait();
     }
 
 #else
 
     /// PulseAudio::OutputStream
-    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, ReadEventFunc && func)
-        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(std::move(func))
-    {
+    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func)
+        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(func) {
         // loop
-        thread = std::thread( & pa_mainloop_run, loop.get(), nullptr);
+        thread = std::thread(& pa_mainloop_run, loop.get(), nullptr);
     }
 
-    PulseAudio::OutputStream::~OutputStream()
-    {
+    PulseAudio::OutputStream::~OutputStream() {
         streamDisconnect();
         contextDisconnect();
 
-        if(loop)
-        {
+        if(loop) {
             pa_mainloop_quit(loop.get(), 0);
         }
 
-        if(thread.joinable())
-        {
+        if(thread.joinable()) {
             thread.join();
         }
     }
 
-    bool PulseAudio::OutputStream::streamConnect(bool paused, const pa_buffer_attr* attr)
-    {
+    bool PulseAudio::OutputStream::streamConnect(bool paused, const pa_buffer_attr* attr) {
         pa_stream_set_read_callback(stream.get(), & streamReadCallback, this);
         monitorName = std::string(serverInfo->default_sink_name).append(".monitor");
         Application::info("%s: connect to: `%s'", __FUNCTION__, serverInfo->default_sink_name);
@@ -937,8 +798,7 @@ namespace LTSM
         const pa_buffer_attr bufferAttr = { .maxlength = fragsz, .tlength = UINT32_MAX, .prebuf = UINT32_MAX, .minreq = UINT32_MAX, .fragsize = fragsz };
 
         if(0 != pa_stream_connect_record(stream.get(), monitorName.c_str(), attr ? attr : & bufferAttr,
-                                         PA_STREAM_ADJUST_LATENCY))
-        {
+                                         PA_STREAM_ADJUST_LATENCY)) {
             Application::error("%s: %s failed", __FUNCTION__, "pa_stream_connect_record");
             return false;
         }
@@ -946,16 +806,13 @@ namespace LTSM
         // wait ready state
         waitNotify.wait(WaitOp::StreamState);
 
-        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get()))
-        {
+        if(PA_STREAM_FAILED == pa_stream_get_state(stream.get())) {
             Application::error("%s: %s failed", __FUNCTION__, "stream state");
             return false;
         }
 
-        if(paused)
-        {
-            if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr))
-            {
+        if(paused) {
+            if(auto op = pa_stream_cork(stream.get(), 1, nullptr, nullptr)) {
                 pa_operation_unref(op);
             }
         }
@@ -963,22 +820,17 @@ namespace LTSM
         return true;
     }
 
-    void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes)
-    {
+    void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes) {
         Application::debug(DebugType::Audio, "%s: bytes: %lu", __FUNCTION__, nbytes);
         const uint8_t* streamData = nullptr;
         size_t streamBytes = 0;
 
-        if(0 == pa_stream_peek(stream.get(), (const void**) & streamData, & streamBytes))
-        {
-            if(streamBytes)
-            {
+        if(0 == pa_stream_peek(stream.get(), (const void**) & streamData, & streamBytes)) {
+            if(streamBytes) {
                 readEventCb(streamData, streamBytes);
                 pa_stream_drop(stream.get());
             }
-        }
-        else
-        {
+        } else {
             Application::error("%s: %s failed", __FUNCTION__, "pa_stream_peek");
         }
     }

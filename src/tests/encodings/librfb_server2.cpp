@@ -37,12 +37,10 @@
 
 using namespace std::chrono_literals;
 
-namespace LTSM
-{
+namespace LTSM {
     // ServerEncoder
     RFB::ServerEncoderBuf::ServerEncoderBuf(const FrameBuffer* fb)
-        : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat())
-    {
+        : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat()) {
         LTSM::Application::info("%s: dsz: %lu, %lu", NS_FuncName.c_str(), dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
         socket = std::make_unique<EncoderWrapper>(&bufData, this);
@@ -50,116 +48,88 @@ namespace LTSM
         streamIn = streamOut = socket.get();
     }
 
-    void RFB::ServerEncoderBuf::sendFlush(void)
-    {   
-        try
-        {
+    void RFB::ServerEncoderBuf::sendFlush(void) {
+        try {
             streamOut->sendFlush();
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
-    void RFB::ServerEncoderBuf::sendRaw(const void* ptr, size_t len)
-    {   
-        try
-        {
+    void RFB::ServerEncoderBuf::sendRaw(const void* ptr, size_t len) {
+        try {
             streamOut->sendRaw(ptr, len);
             netStatTx += len;
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
-    void RFB::ServerEncoderBuf::recvRaw(void* ptr, size_t len) const
-    {   
-        try
-        {
+    void RFB::ServerEncoderBuf::recvRaw(void* ptr, size_t len) const {
+        try {
             streamIn->recvRaw(ptr, len);
             netStatRx += len;
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
     }
 
-    bool RFB::ServerEncoderBuf::hasInput(void) const
-    {
-        try
-        {
+    bool RFB::ServerEncoderBuf::hasInput(void) const {
+        try {
             return streamIn->hasInput();
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return false;
     }
 
-    size_t RFB::ServerEncoderBuf::hasData(void) const
-    {
-        try
-        {
+    size_t RFB::ServerEncoderBuf::hasData(void) const {
+        try {
             return streamIn->hasData();
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
     }
 
-    uint8_t RFB::ServerEncoderBuf::peekInt8(void) const
-    {
-        try
-        {
+    uint8_t RFB::ServerEncoderBuf::peekInt8(void) const {
+        try {
             return streamIn->peekInt8();
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
     }
 
-    XCB::Size RFB::ServerEncoderBuf::displaySize(void) const
-    {
+    XCB::Size RFB::ServerEncoderBuf::displaySize(void) const {
         return dsz;
     }
 
-    const std::vector<uint8_t> & RFB::ServerEncoderBuf::getBuffer(void) const
-    {
+    const std::vector<uint8_t> & RFB::ServerEncoderBuf::getBuffer(void) const {
         return bufData;
     }
 
-    void RFB::ServerEncoderBuf::resetBuffer(void)
-    {
+    void RFB::ServerEncoderBuf::resetBuffer(void) {
         bufData.clear();
     }
 
-/*
-    bool RFB::ServerEncoderBuf::isUpdateProcessed(void) const
-    {
-        return encoder;
-    }
+    /*
+        bool RFB::ServerEncoderBuf::isUpdateProcessed(void) const
+        {
+            return encoder;
+        }
 
-    void RFB::ServerEncoderBuf::waitUpdateProcess(void)
-    {
-        while(isUpdateProcessed())
-            std::this_thread::sleep_for(5ms);
-    }
-*/
+        void RFB::ServerEncoderBuf::waitUpdateProcess(void)
+        {
+            while(isUpdateProcessed())
+                std::this_thread::sleep_for(5ms);
+        }
+    */
 
-    void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb)
-    {
+    void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb) {
         auto & reg = fb.region();
 
         Application::debug(DebugType::App, "%s: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
@@ -177,34 +147,27 @@ namespace LTSM
         sendFlush();
     }
 
-    void RFB::ServerEncoderBuf::setEncodingDebug(int v)
-    {
+    void RFB::ServerEncoderBuf::setEncodingDebug(int v) {
         //if(encoder)
         //    encoder->setDebug(v);
     }
 
-    void RFB::ServerEncoderBuf::setEncodingThreads(int threads)
-    {
-        if(threads < 1)
+    void RFB::ServerEncoderBuf::setEncodingThreads(int threads) {
+        if(threads < 1) {
             threads = 1;
-        else
-        if(std::thread::hardware_concurrency() < threads)
-        {
+        } else if(std::thread::hardware_concurrency() < threads) {
             threads = std::thread::hardware_concurrency();
             Application::error("%s: encoding threads incorrect, fixed to hardware concurrency: %d", __FUNCTION__, threads);
         }
 
-        if(encoder)
-        {
+        if(encoder) {
             Application::info("%s: using encoding threads: %d", __FUNCTION__, threads);
             encoder->setThreads(threads);
         }
     }
 
-    bool RFB::ServerEncoderBuf::serverSetClientEncoding(int type)
-    {
-        switch(type)
-        {
+    bool RFB::ServerEncoderBuf::serverSetClientEncoding(int type) {
+        switch(type) {
             case RFB::ENCODING_ZLIB:
                 encoder = std::make_unique<EncodingZlib>();
                 return true;
@@ -230,7 +193,7 @@ namespace LTSM
                 return true;
 
 #ifdef LTSM_ENCODING_FFMPEG
-        
+
             case RFB::ENCODING_FFMPEG_H264:
             case RFB::ENCODING_FFMPEG_VP8:
             case RFB::ENCODING_FFMPEG_AV1:
@@ -251,6 +214,7 @@ namespace LTSM
                 encoder = std::make_unique<EncodingTJPG>();
                 return true;
 #endif
+
             default:
                 break;
         }

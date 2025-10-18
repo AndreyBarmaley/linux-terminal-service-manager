@@ -30,14 +30,11 @@
 #include "ltsm_librfb.h"
 #include "ltsm_sockets.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
+namespace LTSM {
+    namespace RFB {
         /// DecoderStream
-        class DecoderStream : public NetworkStream
-        {
-        public:
+        class DecoderStream : public NetworkStream {
+          public:
             int recvPixel(void);
             int recvCPixel(void);
             size_t recvRunLength(void);
@@ -54,109 +51,92 @@ namespace LTSM
             virtual void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
-            virtual std::string clientPrefferedEncoding(void) const
-            {
+            virtual std::string clientPrefferedEncoding(void) const {
                 return "";
             }
         };
 
         /// DecoderWrapper
-        class DecoderWrapper : public DecoderStream
-        {
-        protected:
+        class DecoderWrapper : public DecoderStream {
+          protected:
             NetworkStream* stream = nullptr;
             DecoderStream* owner = nullptr;
 
-        public:
+          public:
             DecoderWrapper(NetworkStream* ns, DecoderStream* st) : stream(ns), owner(st) {}
 
             DecoderWrapper(const DecoderWrapper &) = delete;
             DecoderWrapper & operator=(const DecoderWrapper &) = delete;
 
 #ifdef LTSM_WITH_GNUTLS
-            void setupTLS(gnutls::session* ses) const override
-            {
+            void setupTLS(gnutls::session* ses) const override {
                 stream->setupTLS(ses);
             }
 
 #endif
 
-            bool hasInput(void) const override
-            {
+            bool hasInput(void) const override {
                 return stream->hasInput();
             }
 
-            size_t hasData(void) const override
-            {
+            size_t hasData(void) const override {
                 return stream->hasData();
             }
 
-            uint8_t peekInt8(void) const override
-            {
+            uint8_t peekInt8(void) const override {
                 return stream->peekInt8();
             }
 
-            void sendRaw(const void* ptr, size_t len) override
-            {
+            void sendRaw(const void* ptr, size_t len) override {
                 stream->sendRaw(ptr, len);
             }
 
-            void recvRaw(void* ptr, size_t len) const override
-            {
+            void recvRaw(void* ptr, size_t len) const override {
                 stream->recvRaw(ptr, len);
             }
 
-            const PixelFormat & serverFormat(void) const override
-            {
+            const PixelFormat & serverFormat(void) const override {
                 return owner->serverFormat();
             }
 
-            const PixelFormat & clientFormat(void) const override
-            {
+            const PixelFormat & clientFormat(void) const override {
                 return owner->clientFormat();
             }
 
-            void setPixel(const XCB::Point & pt, uint32_t pixel) override
-            {
+            void setPixel(const XCB::Point & pt, uint32_t pixel) override {
                 owner->setPixel(pt, pixel);
             }
 
-            void fillPixel(const XCB::Region & rt, uint32_t pixel) override
-            {
+            void fillPixel(const XCB::Region & rt, uint32_t pixel) override {
                 owner->fillPixel(rt, pixel);
             }
 
             void updateRawPixels(const XCB::Region & wrt, const void* data, uint32_t pitch,
-                                 const PixelFormat & pf) override
-            {
+                                 const PixelFormat & pf) override {
                 owner->updateRawPixels(wrt, data, pitch, pf);
             }
 
             void updateRawPixels2(const XCB::Region & wrt, const void* data, uint8_t depth,
-                                  uint32_t pitch, uint32_t sdlFormat) override
-            {
+                                  uint32_t pitch, uint32_t sdlFormat) override {
                 owner->updateRawPixels2(wrt, data, depth, pitch, sdlFormat);
             }
 
-            XCB::Size clientSize(void) const override
-            {
+            XCB::Size clientSize(void) const override {
                 return owner->clientSize();
             }
 
-            std::string clientPrefferedEncoding(void) const override
-            {
+            std::string clientPrefferedEncoding(void) const override {
                 return owner->clientPrefferedEncoding();
             }
         };
 
         /// DecodingBase
-        class DecodingBase
-        {
-        protected:
+        class DecodingBase {
+          protected:
             const int type = 0;
             int threads = 4;
 
-        public:
+          public:
             DecodingBase(int v);
             virtual ~DecodingBase() = default;
 
@@ -170,73 +150,65 @@ namespace LTSM
         };
 
         /// DecodingRaw
-        class DecodingRaw : public DecodingBase
-        {
-        public:
+        class DecodingRaw : public DecodingBase {
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingRaw() : DecodingBase(ENCODING_RAW) {}
         };
 
         /// DecodingRRE
-        class DecodingRRE : public DecodingBase
-        {
-        public:
+        class DecodingRRE : public DecodingBase {
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingRRE(bool co) : DecodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
-            bool isCoRRE(void) const
-            {
+            bool isCoRRE(void) const {
                 return getType() == ENCODING_CORRE;
             }
         };
 
         /// DecodingHexTile
-        class DecodingHexTile : public DecodingBase
-        {
+        class DecodingHexTile : public DecodingBase {
             int bgColor = -1;
             int fgColor = -1;
 
-        protected:
+          protected:
             void updateRegionColors(DecoderStream &, const XCB::Region &);
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingHexTile(bool zlib) : DecodingBase(zlib ? ENCODING_ZLIBHEX : ENCODING_HEXTILE) {}
 
-            bool isZlibHex(void) const
-            {
+            bool isZlibHex(void) const {
                 return getType() == ENCODING_ZLIBHEX;
             }
         };
 
         /// DecodingTRLE
-        class DecodingTRLE : public DecodingBase
-        {
+        class DecodingTRLE : public DecodingBase {
             std::unique_ptr<ZLib::InflateStream> zlib;
 
-        protected:
+          protected:
             void updateSubRegion(DecoderStream &, const XCB::Region &);
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingTRLE(bool zlib);
 
-            bool isZRLE(void) const
-            {
+            bool isZRLE(void) const {
                 return getType() == ENCODING_ZRLE;
             }
         };
 
         /// DecodingZlib
-        class DecodingZlib : public DecodingBase
-        {
+        class DecodingZlib : public DecodingBase {
             std::unique_ptr<ZLib::InflateStream> zlib;
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 
             DecodingZlib();
@@ -246,11 +218,10 @@ namespace LTSM
 
 #ifdef LTSM_DECODING_LZ4
         /// DecodingLZ4
-        class DecodingLZ4 : public DecodingBase
-        {
+        class DecodingLZ4 : public DecodingBase {
             std::list<std::thread> jobs;
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
             void waitUpdateComplete(void) override;
 
@@ -259,11 +230,10 @@ namespace LTSM
 #endif
 #ifdef LTSM_DECODING_TJPG
         /// DecodingTJPG
-        class DecodingTJPG : public DecodingBase
-        {
+        class DecodingTJPG : public DecodingBase {
             std::list<std::thread> jobs;
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
             void waitUpdateComplete(void) override;
 
@@ -272,14 +242,13 @@ namespace LTSM
 #endif
 #ifdef LTSM_DECODING_QOI
         /// DecodingQOI
-        class DecodingQOI : public DecodingBase
-        {
+        class DecodingQOI : public DecodingBase {
             std::list<std::thread> jobs;
 
-        protected:
+          protected:
             BinaryBuf decodeBGRx(const std::vector<uint8_t> &, const XCB::Size & rsz, const PixelFormat &, uint32_t pitch) const;
 
-        public:
+          public:
             void updateRegion(DecoderStream &, const XCB::Region &) override;
             void waitUpdateComplete(void) override;
 

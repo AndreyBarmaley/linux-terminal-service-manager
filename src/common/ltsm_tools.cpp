@@ -59,66 +59,55 @@
 #include "ltsm_application.h"
 
 #ifdef __WIN32__
-int getuid(void)
-{
+int getuid(void) {
     return 0;
 }
 
-int getgid(void)
-{
+int getgid(void) {
     return 0;
 }
 #endif
 
-namespace LTSM
-{
+namespace LTSM {
 #ifdef __UNIX__
     //// UserInfo
-    UserInfo::UserInfo(const std::string & name)
-    {
+    UserInfo::UserInfo(const std::string & name) {
         auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
         buf = std::make_unique<char[]>(buflen);
         struct passwd* res = nullptr;
 
-        if(int ret = getpwnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0)
-        {
+        if(int ret = getpwnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
-        if(! res)
-        {
+        if(! res) {
             Application::warning("%s: user not found: `%s'", __FUNCTION__, name.c_str());
             throw std::runtime_error(__FUNCTION__);
         }
     }
 
-    UserInfo::UserInfo(uid_t uid)
-    {
+    UserInfo::UserInfo(uid_t uid) {
         auto buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
         buf = std::make_unique<char[]>(buflen);
         struct passwd* res = nullptr;
 
-        if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0)
-        {
+        if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
-        
-        if(! res)
-        {
+
+        if(! res) {
             Application::warning("%s: uid not found: %d", __FUNCTION__, uid);
             throw std::runtime_error(__FUNCTION__);
         }
     }
 
-    std::vector<gid_t> UserInfo::groups(void) const
-    {
+    std::vector<gid_t> UserInfo::groups(void) const {
         int ngroups = 0;
         getgrouplist(st.pw_name, st.pw_gid, nullptr, & ngroups);
 
-        if(0 < ngroups)
-        {
+        if(0 < ngroups) {
             std::vector<gid_t> res(ngroups, st.pw_gid);
             getgrouplist(st.pw_name, st.pw_gid, res.data(), & ngroups);
             res.resize(ngroups);
@@ -129,54 +118,53 @@ namespace LTSM
     }
 
     /// GroupInfo
-    GroupInfo::GroupInfo(gid_t gid)
-    {
+    GroupInfo::GroupInfo(gid_t gid) {
         auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-        if(buflen < 4096) buflen = 4096;
+
+        if(buflen < 4096) {
+            buflen = 4096;
+        }
+
         buf = std::make_unique<char[]>(buflen);
         struct group* res = nullptr;
 
-        if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0)
-        {
+        if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
-        if(! res)
-        {
+        if(! res) {
             Application::warning("%s: gid not found: %d", __FUNCTION__, gid);
             throw std::runtime_error(__FUNCTION__);
         }
     }
 
-    GroupInfo::GroupInfo(const std::string & name)
-    {
+    GroupInfo::GroupInfo(const std::string & name) {
         auto buflen = sysconf(_SC_GETGR_R_SIZE_MAX);
-        if(buflen < 4096) buflen = 4096;
+
+        if(buflen < 4096) {
+            buflen = 4096;
+        }
+
         buf = std::make_unique<char[]>(buflen);
         struct group* res = nullptr;
 
-        if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0)
-        {
+        if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
-        if(! res)
-        {
+        if(! res) {
             Application::warning("%s: group not found: `%s'", __FUNCTION__, name.c_str());
             throw std::runtime_error(__FUNCTION__);
         }
     }
 
-    std::forward_list<std::string> GroupInfo::members(void) const
-    {
-        if(auto ptr = st.gr_mem)
-        {
+    std::forward_list<std::string> GroupInfo::members(void) const {
+        if(auto ptr = st.gr_mem) {
             std::forward_list<std::string> res;
 
-            while(const char* memb = *ptr)
-            {
+            while(const char* memb = *ptr) {
                 res.emplace_front(memb);
                 ptr++;
             }
@@ -187,122 +175,88 @@ namespace LTSM
         return {};
     }
 
-    UserInfoPtr Tools::getUidInfo(uid_t uid)
-    {
-        try
-        {
+    UserInfoPtr Tools::getUidInfo(uid_t uid) {
+        try {
             return std::make_unique<UserInfo>(uid);
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
         return nullptr;
     }
 
-    UserInfoPtr Tools::getUserInfo(const std::string & user)
-    {
-        try
-        {
+    UserInfoPtr Tools::getUserInfo(const std::string & user) {
+        try {
             return std::make_unique<UserInfo>(user);
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
         return nullptr;
     }
 
-    uid_t Tools::getUserUid(const std::string & user)
-    {
-        try
-        {
+    uid_t Tools::getUserUid(const std::string & user) {
+        try {
             return UserInfo(user).uid();
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
         return 0;
     }
 
-    std::string Tools::getUserLogin(uid_t uid)
-    {
-        try
-        {
+    std::string Tools::getUserLogin(uid_t uid) {
+        try {
             return UserInfo(uid).user();
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
         return "";
     }
 
-    std::string Tools::getUserHome(const std::string & user)
-    {
-        try
-        {
+    std::string Tools::getUserHome(const std::string & user) {
+        try {
             return UserInfo(user).home();
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
         return "";
     }
 
-    GroupInfoPtr Tools::getGidInfo(gid_t gid)
-    {
-        try
-        {
+    GroupInfoPtr Tools::getGidInfo(gid_t gid) {
+        try {
             return std::make_unique<GroupInfo>(gid);
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: gid not found: %d", __FUNCTION__, (int) gid);
         return nullptr;
     }
 
-    GroupInfoPtr Tools::getGroupInfo(const std::string & group)
-    {
-        try
-        {
+    GroupInfoPtr Tools::getGroupInfo(const std::string & group) {
+        try {
             return std::make_unique<GroupInfo>(group);
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: group not found: `%s'", __FUNCTION__, group.c_str());
         return nullptr;
     }
 
-    gid_t Tools::getGroupGid(const std::string & group)
-    {
-        try
-        {
+    gid_t Tools::getGroupGid(const std::string & group) {
+        try {
             return GroupInfo(group).gid();
-        }
-        catch(const std::exception &)
-        {
+        } catch(const std::exception &) {
         }
 
         Application::warning("%s: group not found: `%s'", __FUNCTION__, group.c_str());
         return 0;
     }
 
-    std::forward_list<std::string> Tools::getSystemUsers(uid_t uidMin, uid_t uidMax)
-    {
-        if(uidMin > uidMax)
-        {
+    std::forward_list<std::string> Tools::getSystemUsers(uid_t uidMin, uid_t uidMax) {
+        if(uidMin > uidMax) {
             std::swap(uidMin, uidMax);
         }
 
@@ -318,15 +272,12 @@ namespace LTSM
 
         setpwent();
 
-        while(0 == getpwent_r(& st, buf.get(), buflen, & res))
-        {
-            if(! res)
-            {
+        while(0 == getpwent_r(& st, buf.get(), buflen, & res)) {
+            if(! res) {
                 break;
             }
 
-            if(uidMin <= res->pw_uid && res->pw_uid <= uidMax)
-            {
+            if(uidMin <= res->pw_uid && res->pw_uid <= uidMax) {
                 logins.emplace_front(res->pw_name);
             }
         }
@@ -335,38 +286,32 @@ namespace LTSM
         return logins;
     }
 
-    std::string Tools::getHostname(void)
-    {
+    std::string Tools::getHostname(void) {
         std::array<char, 256> buf = {};
 
-        if(0 != gethostname(buf.data(), buf.size() - 1))
-        {
-            Application::warning( "%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
+        if(0 != gethostname(buf.data(), buf.size() - 1)) {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
             return "localhost";
         }
 
         return buf.data();
     }
 
-    bool Tools::checkUnixSocket(const std::filesystem::path & path)
-    {
+    bool Tools::checkUnixSocket(const std::filesystem::path & path) {
         std::error_code err;
 
         // check present
-        if(std::filesystem::is_socket(path, err))
-        {
+        if(std::filesystem::is_socket(path, err)) {
             int socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 
-            if(0 < socket_fd)
-            {
+            if(0 < socket_fd) {
                 // check open
                 struct sockaddr_un sockaddr;
                 std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
                 sockaddr.sun_family = AF_UNIX;
                 const std::string & native = path.native();
 
-                if(native.size() > sizeof(sockaddr.sun_path) - 1)
-                {
+                if(native.size() > sizeof(sockaddr.sun_path) - 1) {
                     Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
                 }
 
@@ -380,41 +325,34 @@ namespace LTSM
         return false;
     }
 
-    bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode)
-    {
-        if(0 != chown(path.c_str(), uid, gid))
-        {
+    bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode) {
+        if(0 != chown(path.c_str(), uid, gid)) {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
             return false;
         }
 
-        if(mode && 0 != chmod(path.c_str(), mode))
-        {
+        if(mode && 0 != chmod(path.c_str(), mode)) {
             Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
-                    __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
             return false;
         }
 
         return true;
     }
 
-    bool Tools::fileReadable(const std::filesystem::path & path)
-    {
+    bool Tools::fileReadable(const std::filesystem::path & path) {
         return 0 == access(path.c_str(), R_OK);
     }
 
 #endif // __UNIX__
 
-    std::list<std::string> Tools::readDir(const std::filesystem::path & path, bool recurse)
-    {
+    std::list<std::string> Tools::readDir(const std::filesystem::path & path, bool recurse) {
         std::list<std::string> res;
         std::error_code err;
 
-        for(auto const & entry : std::filesystem::directory_iterator{path, err})
-        {
-            if(recurse && entry.is_directory())
-            {
+        for(auto const & entry : std::filesystem::directory_iterator{path, err}) {
+            if(recurse && entry.is_directory()) {
                 res.splice(res.end(), readDir(entry.path(), true));
             }
 
@@ -428,21 +366,20 @@ namespace LTSM
         return res;
     }
 
-    std::filesystem::path Tools::resolveSymLink(const std::filesystem::path & path)
-    {
+    std::filesystem::path Tools::resolveSymLink(const std::filesystem::path & path) {
         std::error_code err;
         return std::filesystem::exists(path, err) && std::filesystem::is_symlink(path, err) ?
                resolveSymLink(std::filesystem::read_symlink(path, err)) : path;
     }
 
-    std::wstring Tools::string2wstring(const std::string & str)
-    {
-/*
-        using convert_type = std::codecvt_utf8<wchar_t>;
-        std::wstring_convert<convert_type, wchar_t> converter;
-        return converter.from_bytes(str.begin(), str.end());
-*/
+    std::wstring Tools::string2wstring(const std::string & str) {
+        /*
+                using convert_type = std::codecvt_utf8<wchar_t>;
+                std::wstring_convert<convert_type, wchar_t> converter;
+                return converter.from_bytes(str.begin(), str.end());
+        */
         auto len = std::mbstowcs(nullptr, str.c_str(), 0);
+
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
             Application::error("%s: %s failed, error: %d", __FUNCTION__, "mbstowcs", errno);
@@ -454,14 +391,14 @@ namespace LTSM
         return res;
     }
 
-    std::string Tools::wstring2string(const std::wstring & wstr)
-    {
-/*
-        using convert_type = std::codecvt_utf8<wchar_t>;
-        std::wstring_convert<convert_type, wchar_t> converter;
-        return converter.to_bytes(wstr);
-*/
+    std::string Tools::wstring2string(const std::wstring & wstr) {
+        /*
+                using convert_type = std::codecvt_utf8<wchar_t>;
+                std::wstring_convert<convert_type, wchar_t> converter;
+                return converter.to_bytes(wstr);
+        */
         auto len = std::wcstombs(nullptr, wstr.c_str(), 0);
+
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
             Application::error("%s: %s failed, error: %d", __FUNCTION__, "wcstombs", errno);
@@ -473,23 +410,18 @@ namespace LTSM
         return res;
     }
 
-    std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr)
-    {
+    std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr) {
         std::vector<uint8_t> res;
 
-        if(arr.data() && arr.size())
-        {
+        if(arr.data() && arr.size()) {
             res.resize(::compressBound(arr.size()));
             uLong dstsz = res.size();
             int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz,
                                  reinterpret_cast<const Bytef*>(arr.data()), arr.size());
 
-            if(ret == Z_OK)
-            {
+            if(ret == Z_OK) {
                 res.resize(dstsz);
-            }
-            else
-            {
+            } else {
                 res.clear();
                 Application::error("%s: %s failed, error: %d", __FUNCTION__, "compress", ret);
             }
@@ -498,30 +430,24 @@ namespace LTSM
         return res;
     }
 
-    std::vector<uint8_t> Tools::zlibUncompress(const ByteArray & arr, size_t real)
-    {
+    std::vector<uint8_t> Tools::zlibUncompress(const ByteArray & arr, size_t real) {
         std::vector<uint8_t> res;
 
-        if(arr.data() && arr.size())
-        {
+        if(arr.data() && arr.size()) {
             res.resize(real ? real : arr.size() * 7);
             uLong dstsz = res.size();
             int ret = Z_BUF_ERROR;
 
             while(Z_BUF_ERROR ==
-                    (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                        reinterpret_cast<const Bytef*>(arr.data()), arr.size())))
-            {
+                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
+                                      reinterpret_cast<const Bytef*>(arr.data()), arr.size()))) {
                 dstsz = res.size() * 2;
                 res.resize(dstsz);
             }
 
-            if(ret == Z_OK)
-            {
+            if(ret == Z_OK) {
                 res.resize(dstsz);
-            }
-            else
-            {
+            } else {
                 res.clear();
                 Application::error("%s: %s failed, error: %d", __FUNCTION__, "uncompress", ret);
             }
@@ -530,71 +456,58 @@ namespace LTSM
         return res;
     }
 
-    char base64EncodeChar(char v)
-    {
+    char base64EncodeChar(char v) {
         // 0 <=> 25
-        if(v <= ('Z' - 'A'))
-        {
+        if(v <= ('Z' - 'A')) {
             return v + 'A';
         }
 
         // 26 <=> 51
-        if(v <= (26 + ('z' - 'a')))
-        {
+        if(v <= (26 + ('z' - 'a'))) {
             return v + 'a' - 26;
         }
 
         // 52 <=> 61
-        if(v <= (52 + ('9' - '0')))
-        {
+        if(v <= (52 + ('9' - '0'))) {
             return v + '0' - 52;
         }
 
-        if(v == 62)
-        {
+        if(v == 62) {
             return '+';
         }
 
-        if(v == 63)
-        {
+        if(v == 63) {
             return '/';
         }
 
         return 0;
     }
 
-    uint8_t base64DecodeChar(char v)
-    {
-        if(v == '+')
-        {
+    uint8_t base64DecodeChar(char v) {
+        if(v == '+') {
             return 62;
         }
 
-        if(v == '/')
-        {
+        if(v == '/') {
             return 63;
         }
 
-        if('0' <= v && v <= '9')
-        {
+        if('0' <= v && v <= '9') {
             return v - '0' + 52;
         }
 
-        if('A' <= v && v <= 'Z')
-        {
+        if('A' <= v && v <= 'Z') {
             return v - 'A';
         }
 
-        if('a' <= v && v <= 'z')
-        {
+        if('a' <= v && v <= 'z') {
             return v - 'a' + 26;
         }
 
         return 0;
     }
 
-    std::string Tools::base64Encode(const ByteArray & arr)
-    {
+    std::string Tools::base64Encode(const ByteArray & arr) {
         size_t len = 4 * arr.size() / 3 + 1;
 
         std::string res;
@@ -603,8 +516,7 @@ namespace LTSM
         auto beg = arr.data();
         auto end = beg + arr.size();
 
-        while(beg < end)
-        {
+        while(beg < end) {
             auto next1 = beg + 1;
             auto next2 = beg + 2;
 
@@ -625,22 +537,23 @@ namespace LTSM
         return res;
     }
 
-    std::vector<uint8_t> Tools::base64Decode(const std::string & str)
-    {
+    std::vector<uint8_t> Tools::base64Decode(const std::string & str) {
         std::vector<uint8_t> res;
 
-        if(0 < str.length() && 0 == (str.length() % 4))
-        {
+        if(0 < str.length() && 0 == (str.length() % 4)) {
             size_t len = 3 * str.length() / 4;
 
-            if(str[str.length() - 1] == '=') { len--; }
+            if(str[str.length() - 1] == '=') {
+                len--;
+            }
 
-            if(str[str.length() - 2] == '=') { len--; }
+            if(str[str.length() - 2] == '=') {
+                len--;
+            }
 
             res.reserve(len);
 
-            for(size_t ii = 0; ii < str.length(); ii += 4)
-            {
+            for(size_t ii = 0; ii < str.length(); ii += 4) {
                 uint32_t sxtet_a = base64DecodeChar(str[ii]);
                 uint32_t sxtet_b = base64DecodeChar(str[ii + 1]);
                 uint32_t sxtet_c = base64DecodeChar(str[ii + 2]);
@@ -648,23 +561,26 @@ namespace LTSM
 
                 uint32_t triple = (sxtet_a << 18) + (sxtet_b << 12) + (sxtet_c << 6) + sxtet_d;
 
-                if(res.size() < len) { res.push_back((triple >> 16) & 0xFF); }
+                if(res.size() < len) {
+                    res.push_back((triple >> 16) & 0xFF);
+                }
 
-                if(res.size() < len) { res.push_back((triple >> 8) & 0xFF); }
+                if(res.size() < len) {
+                    res.push_back((triple >> 8) & 0xFF);
+                }
 
-                if(res.size() < len) { res.push_back(triple & 0xFF); }
+                if(res.size() < len) {
+                    res.push_back(triple & 0xFF);
+                }
             }
-        }
-        else
-        {
+        } else {
             Application::error("%s: %s failed", __FUNCTION__, "base64");
         }
 
         return res;
     }
 
-    std::vector<uint8_t> Tools::randomBytes(size_t bytesCount)
-    {
+    std::vector<uint8_t> Tools::randomBytes(size_t bytesCount) {
         std::vector<uint8_t> res;
         res.reserve(bytesCount);
 
@@ -672,89 +588,81 @@ namespace LTSM
         std::mt19937 rng(dev());
         std::uniform_int_distribution<std::mt19937::result_type> byte255(0, 255);
 
-        while(bytesCount--)
+        while(bytesCount--) {
             res.push_back(byte255(rng));
+        }
 
         return res;
     }
 
-    std::string Tools::randomHexString(size_t len)
-    {
-        auto buf = randomBytes( len );
+    std::string Tools::randomHexString(size_t len) {
+        auto buf = randomBytes(len);
         return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
     }
 
-    std::string Tools::quotedString(std::string_view str)
-    {
+    std::string Tools::quotedString(std::string_view str) {
         // quoted input values
         std::ostringstream os;
         os << std::quoted(str);
         return os.str();
     }
 
-    std::string Tools::prettyFuncName(std::string_view name)
-    {
+    std::string Tools::prettyFuncName(std::string_view name) {
         auto end = std::find(name.begin(), name.end(), '(');
         auto beg = end != name.end() ? end : end = std::prev(name.end());
 
-        while(beg != name.begin() && ! std::isspace(*beg))
+        while(beg != name.begin() && ! std::isspace(*beg)) {
             beg = std::prev(beg);
+        }
 
         return std::string{std::next(beg), end};
     }
 
-    std::string Tools::fileToString(const std::filesystem::path & file)
-    {
+    std::string Tools::fileToString(const std::filesystem::path & file) {
         std::error_code err;
 
-        if(! std::filesystem::exists(file, err))
-        {
+        if(! std::filesystem::exists(file, err)) {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
-    	    return {};
-	}
+            return {};
+        }
 
-        if(auto ifs = std::ifstream(file))
-	{
-	    std::string content;
-	    content.reserve(256);
+        if(auto ifs = std::ifstream(file)) {
+            std::string content;
+            content.reserve(256);
 
-	    std::copy(std::istreambuf_iterator<char>(ifs),
-		std::istreambuf_iterator<char>(), std::back_inserter(content));
+            std::copy(std::istreambuf_iterator<char>(ifs),
+                      std::istreambuf_iterator<char>(), std::back_inserter(content));
 
-	    // remove endl
-            while(content.size() && std::iscntrl(content.back()))
+            // remove endl
+            while(content.size() && std::iscntrl(content.back())) {
                 content.pop_back();
+            }
 
-	    return content;
-	}
+            return content;
+        }
 
         Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
-	return {};
+        return {};
     }
 
-    std::string Tools::getTimeZone(void)
-    {
+    std::string Tools::getTimeZone(void) {
         const std::filesystem::path localtime{"/etc/localtime"};
         std::string str;
         std::error_code err;
 
-        if(auto env = std::getenv("TZ"))
-        {
+        if(auto env = std::getenv("TZ")) {
             str.assign(env);
         }
+
 #ifdef __UNIX__
-        else if(std::filesystem::is_symlink(localtime, err))
-        {
+        else if(std::filesystem::is_symlink(localtime, err)) {
             auto path = std::filesystem::read_symlink(localtime, err);
 
-            if(! err)
-            {
+            if(! err) {
                 auto tz = path.parent_path().filename() / path.filename();
                 str.append(tz.native());
             }
-        }
-        else
-        {
+        } else {
             time_t ts;
             struct tm tt;
 
@@ -762,18 +670,17 @@ namespace LTSM
             std::fill_n(buf, sizeof(buf), 0);
 
             ::localtime_r(&ts, &tt);
-            ::strftime(buf, sizeof(buf)-1, "%Z", &tt);
+            ::strftime(buf, sizeof(buf) -1, "%Z", &tt);
             str.assign(buf);
         }
+
 #endif
 
         return str;
     }
 
-    std::string Tools::lower(std::string_view val)
-    {
-        if(! val.empty())
-        {
+    std::string Tools::lower(std::string_view val) {
+        if(! val.empty()) {
             std::string str;
             std::transform(val.begin(), val.end(), std::back_inserter(str), ::tolower);
             return str;
@@ -782,49 +689,46 @@ namespace LTSM
         return "";
     }
 
-    std::string Tools::join(const std::list<std::string> & cont, std::string_view sep)
-    {
+    std::string Tools::join(const std::list<std::string> & cont, std::string_view sep) {
         return join(cont.begin(), cont.end(), sep);
     }
 
-    std::string Tools::join(const std::vector<std::string> & cont, std::string_view sep)
-    {
+    std::string Tools::join(const std::vector<std::string> & cont, std::string_view sep) {
         return join(cont.begin(), cont.end(), sep);
     }
 
-    std::string Tools::replace(std::string_view src, std::string_view pred, std::string_view val)
-    {
+    std::string Tools::replace(std::string_view src, std::string_view pred, std::string_view val) {
         std::string res{src.begin(), src.end()};
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(pred))) { res.replace(pos, pred.size(), val); }
+        while(std::string::npos != (pos = res.find(pred))) {
+            res.replace(pos, pred.size(), val);
+        }
 
         return res;
     }
 
-    std::filesystem::path Tools::x11UnixPath(int display)
-    {
+    std::filesystem::path Tools::x11UnixPath(int display) {
         std::filesystem::path path{"/tmp/.X11-unix/X"};
         path += std::to_string(display);
         return path;
     }
 
-    std::string Tools::replace(std::string_view src, std::string_view pred, int val)
-    {
+    std::string Tools::replace(std::string_view src, std::string_view pred, int val) {
         return replace(src, pred, std::to_string(val));
     }
 
-    std::list<std::string> Tools::split(std::string_view str, std::string_view sep)
-    {
+    std::list<std::string> Tools::split(std::string_view str, std::string_view sep) {
         std::list<std::string> list;
         auto itbeg = str.begin();
 
-        for(;;)
-        {
+        for(;;) {
             auto itend = std::search(itbeg, str.end(), sep.begin(), sep.end());
             list.emplace_back(itbeg, itend);
 
-            if(itend >= str.end()) { break; }
+            if(itend >= str.end()) {
+                break;
+            }
 
             itbeg = itend;
             std::advance(itbeg, sep.size());
@@ -833,81 +737,68 @@ namespace LTSM
         return list;
     }
 
-    std::list<std::string> Tools::split(std::string_view str, int sep)
-    {
+    std::list<std::string> Tools::split(std::string_view str, int sep) {
         return split(str, std::string(1, static_cast<char>(sep)));
     }
 
-    std::string Tools::runcmd(const std::string & cmd)
-    {
+    std::string Tools::runcmd(const std::string & cmd) {
         std::array<char, 128> buffer;
         std::fill(buffer.begin(), buffer.end(), 0);
         std::unique_ptr<FILE, int(*)(FILE*)> pipe{popen(cmd.c_str(), "r"), pclose};
         std::string result;
 
-        if(!pipe)
-        {
+        if(! pipe) {
             Application::error("popen failed: `%s'", cmd.c_str());
             return result;
         }
 
-        while(!std::feof(pipe.get()))
-        {
-            if(std::fgets(buffer.data(), buffer.size(), pipe.get()))
-            {
+        while(! std::feof(pipe.get())) {
+            if(std::fgets(buffer.data(), buffer.size(), pipe.get())) {
                 result.append(buffer.data());
             }
         }
 
         // remove endl
-        while(result.size() && std::iscntrl(result.back()))
-        {
+        while(result.size() && std::iscntrl(result.back())) {
             result.pop_back();
         }
 
         return result;
     }
 
-    Tools::StringFormat::StringFormat(std::string_view str)
-    {
+    Tools::StringFormat::StringFormat(std::string_view str) {
         append(str);
     }
 
-    Tools::StringFormat & Tools::StringFormat::arg(std::string_view val)
-    {
+    Tools::StringFormat & Tools::StringFormat::arg(std::string_view val) {
         auto it1 = begin();
         auto it2 = end();
 
-        while(true)
-        {
+        while(true) {
             it1 = std::find(it1, end(), '%');
 
-            if(it1 == end() || it1 + 1 == end())
-            {
+            if(it1 == end() || it1 + 1 == end()) {
                 cur++;
                 return *this;
             }
 
-            if(std::isdigit(*(it1 + 1)))
-            {
-                it2 = std::find_if(it1 + 1, end(), [](int ch)
-                {
+            if(std::isdigit(*(it1 + 1))) {
+                it2 = std::find_if(it1 + 1, end(), [](int ch) {
                     return ! std::isdigit(ch);
                 });
 
                 int argc = 0;
 
-                try
-                {
+                try {
                     argc = std::stoi(substr(std::distance(begin(), it1 + 1), it2 - it1 - 1));
-                }
-                catch(const std::invalid_argument &)
-                {
+                } catch(const std::invalid_argument &) {
                     Application::error("format failed: `%s', arg: `%.*s'", this->c_str(), static_cast<int>(val.size()), val.data());
                     return *this;
                 }
 
-                if(cur == argc) { break; }
+                if(cur == argc) {
+                    break;
+                }
             }
 
             it1++;
@@ -917,15 +808,12 @@ namespace LTSM
         return arg(val);
     }
 
-    Tools::StringFormat & Tools::StringFormat::arg(int val)
-    {
+    Tools::StringFormat & Tools::StringFormat::arg(int val) {
         return arg(std::to_string(val));
     }
 
-    Tools::StringFormat & Tools::StringFormat::arg(double val, int prec)
-    {
-        if(prec)
-        {
+    Tools::StringFormat & Tools::StringFormat::arg(double val, int prec) {
+        if(prec) {
             std::ostringstream os;
             os << std::fixed << std::setprecision(prec) << val;
             return arg(os.str());
@@ -934,26 +822,24 @@ namespace LTSM
         return arg(std::to_string(val));
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, std::string_view val)
-    {
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, std::string_view val) {
         std::string res(begin(), end());
         size_t pos = std::string::npos;
 
-        while(std::string::npos != (pos = res.find(id))) { res.replace(pos, id.size(), val); }
+        while(std::string::npos != (pos = res.find(id))) {
+            res.replace(pos, id.size(), val);
+        }
 
         std::swap(*this, res);
         return *this;
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, int val)
-    {
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, int val) {
         return replace(id, std::to_string(val));
     }
 
-    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, double val, int prec)
-    {
-        if(prec)
-        {
+    Tools::StringFormat & Tools::StringFormat::replace(std::string_view id, double val, int prec) {
+        if(prec) {
             std::ostringstream os;
             os << std::fixed << std::setprecision(prec) << val;
             return replace(id, os.str());
@@ -962,28 +848,23 @@ namespace LTSM
         return replace(id, std::to_string(val));
     }
 
-    std::string Tools::hex(int value, int width)
-    {
+    std::string Tools::hex(int value, int width) {
         std::ostringstream stream;
         stream << "0x" << std::setw(width) << std::setfill('0') << std::nouppercase << std::hex << value;
         return stream.str();
     }
 
-    std::string Tools::escaped(std::string_view str, bool quote)
-    {
+    std::string Tools::escaped(std::string_view str, bool quote) {
         std::ostringstream os;
 
         // start quote
-        if(quote)
-        {
+        if(quote) {
             os << "\"";
         }
 
         // variants: \\, \", \/, \t, \n, \r, \f, \b
-        for(const auto & ch : str)
-        {
-            switch(ch)
-            {
+        for(const auto & ch : str) {
+            switch(ch) {
                 case '\\':
                     os << "\\\\";
                     break;
@@ -1023,34 +904,30 @@ namespace LTSM
         }
 
         // end quote
-        if(quote)
-        {
+        if(quote) {
             os << "\"";
         }
 
         return os.str();
     }
 
-    std::string Tools::unescaped(std::string_view val)
-    {
+    std::string Tools::unescaped(std::string_view val) {
         std::string str(val.begin(), val.end());
 
-        if(str.size() < 2)
-        {
+        if(str.size() < 2) {
             return str;
         }
 
         // variants: \\, \", \/, \t, \n, \r, \f, \b
-        for(auto it = str.begin(); it != str.end(); ++it)
-        {
+        for(auto it = str.begin(); it != str.end(); ++it) {
             auto itn = std::next(it);
 
-            if(itn == str.end()) { break; }
+            if(itn == str.end()) {
+                break;
+            }
 
-            if(*it == '\\')
-            {
-                switch(*itn)
-                {
+            if(*it == '\\') {
+                switch(*itn) {
                     case '\\':
                         str.erase(itn);
                         break;
@@ -1099,24 +976,19 @@ namespace LTSM
         return str;
     }
 
-    uint32_t Tools::crc32b(std::string_view str)
-    {
+    uint32_t Tools::crc32b(std::string_view str) {
         return crc32b((const uint8_t*) str.data(), str.size());
     }
 
-    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size)
-    {
+    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size) {
         return crc32b(ptr, size, 0xEDB88320);
     }
 
-    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic)
-    {
-        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [=](uint64_t crc, auto val)
-        {
+    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic) {
+        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [ = ](uint64_t crc, auto val) {
             crc ^= val;
 
-            for(int bit = 0; bit < 8; ++bit)
-            {
+            for(int bit = 0; bit < 8; ++bit) {
                 uint32_t mask = crc & 1 ? 0xFFFFFFFF : 0;
                 crc = (crc >> 1) ^ (magic & mask);
             }
@@ -1128,75 +1000,63 @@ namespace LTSM
     }
 
     // StreamBits
-    bool Tools::StreamBits::empty(void) const
-    {
+    bool Tools::StreamBits::empty(void) const {
         return vecbuf.empty() ||
                (vecbuf.size() == 1 && bitpos == 7);
     }
 
-    const std::vector<uint8_t> & Tools::StreamBits::toVector(void) const
-    {
+    const std::vector<uint8_t> & Tools::StreamBits::toVector(void) const {
         return vecbuf;
     }
 
     // StreamBitsPack
-    Tools::StreamBitsPack::StreamBitsPack(size_t rez)
-    {
+    Tools::StreamBitsPack::StreamBitsPack(size_t rez) {
         bitpos = 7;
         vecbuf.reserve(rez);
     }
 
-    void Tools::StreamBitsPack::pushBit(bool v)
-    {
-        if(bitpos == 7)
-        {
+    void Tools::StreamBitsPack::pushBit(bool v) {
+        if(bitpos == 7) {
             vecbuf.push_back(0);
         }
 
-        if(v)
-        {
+        if(v) {
             const uint8_t mask = 1 << bitpos;
             vecbuf.back() |= mask;
         }
 
-        if(bitpos == 0)
-        {
+        if(bitpos == 0) {
             bitpos = 7;
-        }
-        else
-        {
+        } else {
             bitpos--;
         }
     }
 
-    void Tools::StreamBitsPack::pushAlign(void)
-    {
+    void Tools::StreamBitsPack::pushAlign(void) {
         bitpos = 7;
     }
 
-    void Tools::StreamBitsPack::pushValue(int val, size_t field)
-    {
+    void Tools::StreamBitsPack::pushValue(int val, size_t field) {
         // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
         size_t mask = 1ul << (field - 1);
 
-        while(mask)
-        {
+        while(mask) {
             pushBit(val & mask);
             mask >>= 1;
         }
     }
 
     // StreamBitsUnpack
-    Tools::StreamBitsUnpack::StreamBitsUnpack(std::vector<uint8_t> && v, size_t counts, size_t field)
-    {
+    Tools::StreamBitsUnpack::StreamBitsUnpack(std::vector<uint8_t> && v, size_t counts, size_t field) {
         // check size
         size_t bits = field * counts;
         size_t len = bits >> 3;
 
-        if((len << 3) < bits) { len++; }
+        if((len << 3) < bits) {
+            len++;
+        }
 
-        if(len < v.size())
-        {
+        if(len < v.size()) {
             Application::error("%s: %s", __FUNCTION__, "incorrect data size");
             throw std::out_of_range(NS_FuncName);
         }
@@ -1205,10 +1065,8 @@ namespace LTSM
         bitpos = (len << 3) - bits;
     }
 
-    bool Tools::StreamBitsUnpack::popBit(void)
-    {
-        if(vecbuf.empty())
-        {
+    bool Tools::StreamBitsUnpack::popBit(void) {
+        if(vecbuf.empty()) {
             Application::error("%s: %s", __FUNCTION__, "empty data");
             throw std::invalid_argument(NS_FuncName);
         }
@@ -1216,30 +1074,24 @@ namespace LTSM
         uint8_t mask = 1 << bitpos;
         bool res = vecbuf.back() & mask;
 
-        if(bitpos == 7)
-        {
+        if(bitpos == 7) {
             vecbuf.pop_back();
             bitpos = 0;
-        }
-        else
-        {
+        } else {
             bitpos++;
         }
 
         return res;
     }
 
-    int Tools::StreamBitsUnpack::popValue(size_t field)
-    {
+    int Tools::StreamBitsUnpack::popValue(size_t field) {
         // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
         size_t mask1 = 1 << (field - 1);
         size_t mask2 = 1;
         int val = 0;
 
-        while(mask1)
-        {
-            if(popBit())
-            {
+        while(mask1) {
+            if(popBit()) {
                 val |= mask2;
             }
 
@@ -1250,14 +1102,11 @@ namespace LTSM
         return val;
     }
 
-    int Tools::maskShifted(uint32_t mask)
-    {
+    int Tools::maskShifted(uint32_t mask) {
         int res = 0;
 
-        if(mask)
-        {
-            while((mask & 1) == 0)
-            {
+        if(mask) {
+            while((mask & 1) == 0) {
                 mask = mask >> 1;
                 res = res + 1;
             }
@@ -1266,12 +1115,9 @@ namespace LTSM
         return res;
     }
 
-    uint32_t Tools::maskMaxValue(uint32_t mask)
-    {
-        if(mask)
-        {
-            while((mask & 1) == 0)
-            {
+    uint32_t Tools::maskMaxValue(uint32_t mask) {
+        if(mask) {
+            while((mask & 1) == 0) {
                 mask = mask >> 1;
             }
 
@@ -1281,79 +1127,74 @@ namespace LTSM
         return 0;
     }
 
-    int Tools::maskCountBits(uint32_t mask)
-    {
+    int Tools::maskCountBits(uint32_t mask) {
         int res = 0;
 
         uint32_t itr = 0x80000000;
-        while(itr)
-        {
-            if(mask & itr) { ++res; }
+
+        while(itr) {
+            if(mask & itr) {
+                ++res;
+            }
+
             itr >>= 1;
         }
 
         return res;
     }
 
-    std::vector<uint32_t> Tools::maskUnpackBits(uint32_t mask)
-    {
+    std::vector<uint32_t> Tools::maskUnpackBits(uint32_t mask) {
         std::vector<uint32_t> res;
         res.reserve(32);
 
         const uint32_t end = 0x80000000;
         uint32_t itr = 1;
 
-        while(true)
-        {
-            if(mask & itr) { res.push_back(itr); }
-            if(itr == end) break;
+        while(true) {
+            if(mask & itr) {
+                res.push_back(itr);
+            }
+
+            if(itr == end) {
+                break;
+            }
+
             itr <<= 1;
         }
 
         return res;
     }
 
-    bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file, bool append)
-    {
+    bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file, bool append) {
         std::ofstream ofs(file, std::ofstream::out | std::ios::binary | (append ? std::ofstream::app : std::ofstream::trunc));
 
-        if(ofs.is_open())
-        {
+        if(ofs.is_open()) {
             ofs.write((const char*) buf, len);
             ofs.close();
             return true;
-        }
-        else
-        {
+        } else {
             Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "write", file.c_str());
         }
 
         return false;
     }
 
-    std::vector<uint8_t> Tools::fileToBinaryBuf(const std::filesystem::path & file)
-    {
+    std::vector<uint8_t> Tools::fileToBinaryBuf(const std::filesystem::path & file) {
         std::vector<uint8_t> buf;
         std::error_code err;
 
-        if(std::filesystem::exists(file, err))
-        {
+        if(std::filesystem::exists(file, err)) {
             std::ifstream ifs(file, std::ios::binary);
 
-            if(ifs.is_open())
-            {
+            if(ifs.is_open()) {
                 auto fsz = std::filesystem::file_size(file);
                 buf.resize(fsz);
                 ifs.read((char*) buf.data(), buf.size());
                 ifs.close();
-            }
-            else
-            {
+            } else {
                 Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
             }
-        }
-        else
-        {
+        } else {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
         }
 

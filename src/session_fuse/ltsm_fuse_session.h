@@ -30,15 +30,13 @@
 #include "ltsm_fuse.h"
 #include "ltsm_fuse_adaptor.h"
 
-namespace LTSM
-{
+namespace LTSM {
     struct FuseSession;
 
-    class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor>
-    {
+    class FuseSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Fuse_adaptor> {
         std::forward_list<std::unique_ptr<FuseSession>> childs;
 
-    public:
+      public:
         FuseSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~FuseSessionBus();
 

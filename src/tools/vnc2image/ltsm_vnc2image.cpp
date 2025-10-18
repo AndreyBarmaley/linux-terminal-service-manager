@@ -31,72 +31,51 @@
 
 using namespace std::chrono_literals;
 
-namespace LTSM
-{
+namespace LTSM {
     //
-    void connectorHelp(const char* prog)
-    {
+    void connectorHelp(const char* prog) {
         std::cout << "version: " << LTSM_VNC2IMAGE_VERSION << std::endl;
         std::cout << "usage: " << prog <<
-                  " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]"
+                     " --host <localhost> [--port 5900] [--password <pass>] [--timeout 100 (ms)] --image <screenshot.png> [--notls] [--debug]"
                   << std::endl;
     }
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
-        : Application("ltsm_vnc2image")
-    {
+        : Application("ltsm_vnc2image") {
         Application::setDebug(DebugTarget::Console, DebugLevel::Info);
 
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
-            {
+        for(int it = 1; it < argc; ++it) {
+            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
                 connectorHelp(argv[0]);
                 throw 0;
-            }
-            else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--host") && it + 1 < argc) {
                 host.assign(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--image") && it + 1 < argc) {
                 filename.assign(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--password") && it + 1 < argc) {
                 password.assign(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc) {
                 port = std::stoi(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--timeout") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--timeout") && it + 1 < argc) {
                 timeout = std::stoi(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--notls"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--notls")) {
                 notls = true;
-            }
-            else if(0 == std::strcmp(argv[it], "--debug"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--debug")) {
                 Application::setDebugLevel(DebugLevel::Debug);
             }
         }
     }
 
-    int Vnc2Image::start(void)
-    {
+    int Vnc2Image::start(void) {
         auto ipaddr = TCPSocket::resolvHostname(host);
         int sockfd = TCPSocket::connect(ipaddr, port);
 
-        if(0 > sockfd)
-        {
+        if(0 > sockfd) {
             return -1;
         }
 
@@ -109,131 +88,106 @@ namespace LTSM
         rfbsec.tlsAnonMode = true;
 
         // process rfb message background
-        try
-        {
-            if(rfbHandshake(rfbsec))
-            {
+        try {
+            if(rfbHandshake(rfbsec)) {
                 rfbMessagesLoop();
             }
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
     }
 
-    void Vnc2Image::decoderInitEvent(RFB::DecodingBase* decoder)
-    {
+    void Vnc2Image::decoderInitEvent(RFB::DecodingBase* decoder) {
         decoder->setThreads(1);
         tp = std::chrono::steady_clock::now();
     }
 
-    void Vnc2Image::clientRecvFBUpdateEvent(void)
-    {
-        if(std::chrono::steady_clock::time_point() == tp)
-            return;
-
-        if(0 < timeout &&
-                std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp)
-        {
+    void Vnc2Image::clientRecvFBUpdateEvent(void) {
+        if(std::chrono::steady_clock::time_point() == tp) {
             return;
         }
 
-        if(! filename.empty() && fbPtr)
-        {
+        if(0 < timeout &&
+           std::chrono::milliseconds(timeout) > std::chrono::steady_clock::now() - tp) {
+            return;
+        }
+
+        if(! filename.empty() && fbPtr) {
             PNG::save(*fbPtr, filename);
         }
 
         RFB::ClientDecoder::rfbMessagesShutdown();
     }
 
-    XCB::Size Vnc2Image::clientSize(void) const
-    {
+    XCB::Size Vnc2Image::clientSize(void) const {
         return fbPtr->region().toSize();
     }
 
-    void Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz)
-    {
+    void Vnc2Image::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
         // receive server pixel format
         auto format = PixelFormat(pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), 0);
         fbPtr = std::make_unique<FrameBuffer>(XCB::Region(0, 0, wsz.width, wsz.height), format);
     }
 
-    void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel)
-    {
+    void Vnc2Image::setPixel(const XCB::Point & dst, uint32_t pixel) {
         fbPtr->setPixel(dst, pixel);
     }
 
-    void Vnc2Image::fillPixel(const XCB::Region & dst, uint32_t pixel)
-    {
+    void Vnc2Image::fillPixel(const XCB::Region & dst, uint32_t pixel) {
         fbPtr->fillPixel(dst, pixel);
     }
 
-    void Vnc2Image::updateRawPixels(const XCB::Region & reg, const void* ptr, uint32_t pitch, const PixelFormat & pf)
-    {
+    void Vnc2Image::updateRawPixels(const XCB::Region & reg, const void* ptr, uint32_t pitch, const PixelFormat & pf) {
         FrameBuffer fb((uint8_t*) ptr, XCB::Region{0, 0, reg.width, reg.height}, pf, pitch);
         fbPtr->blitRegion(fb, fb.region(), reg.topLeft());
 
-/*
-        if(reg.width == 1024)
-        {
-            PNG::save(fb, Tools::joinToString("test_", reg.y, ".png"));
-        }
-*/
+        /*
+                if(reg.width == 1024)
+                {
+                    PNG::save(fb, Tools::joinToString("test_", reg.y, ".png"));
+                }
+        */
     }
 
-    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat)
-    {
+    void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
         // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
         Application::warning("%s: not implemented", __FUNCTION__);
     }
 
-    const PixelFormat & Vnc2Image::clientFormat(void) const
-    {
+    const PixelFormat & Vnc2Image::clientFormat(void) const {
         return fbPtr->pixelFormat();
     }
 
-    uint16_t Vnc2Image::extClipboardLocalTypes(void) const
-    {
+    uint16_t Vnc2Image::extClipboardLocalTypes(void) const {
         return 0;
     }
 
-    std::vector<uint8_t> Vnc2Image::extClipboardLocalData(uint16_t type) const
-    {
+    std::vector<uint8_t> Vnc2Image::extClipboardLocalData(uint16_t type) const {
         return {};
     }
 
-    void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type)
-    {
+    void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type) {
     }
 
-    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf)
-    {
+    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
     }
 
-    void Vnc2Image::extClipboardSendEvent(const std::vector<uint8_t> & buf)
-    {
+    void Vnc2Image::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
     }
 }
 
-int main(int argc, const char** argv)
-{
+int main(int argc, const char** argv) {
     int res = 0;
 
-    try
-    {
+    try {
         LTSM::Vnc2Image app(argc, argv);
         res = app.start();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
-    }
-    catch(int val)
-    {
+    } catch(int val) {
         res = val;
     }
 

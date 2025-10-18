@@ -33,19 +33,16 @@
 #include "ltsm_application.h"
 
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
- #include "ltsm_audio_openal.h"
+#include "ltsm_audio_openal.h"
 #endif
 
 #ifdef LTSM_WITH_PLAYBACK_PULSE
- #include "ltsm_audio_pulse.h"
+#include "ltsm_audio_pulse.h"
 #endif
 
-namespace LTSM
-{
-    namespace Channel
-    {
-        namespace Connector
-        {
+namespace LTSM {
+    namespace Channel {
+        namespace Connector {
             // channel_system.cpp
             void loopWriter(ConnectorBase*, Remote2Local*);
             void loopReader(ConnectorBase*, Local2Remote*);
@@ -57,13 +54,11 @@ using namespace std::chrono_literals;
 
 // createClientAudioConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioConnector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
-{
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
     Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
-    if(mode == ConnectorMode::Unknown)
-    {
+    if(mode == ConnectorMode::Unknown) {
         Application::error("%s: %s, mode: %s", __FUNCTION__, "audio mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncName);
     }
@@ -74,43 +69,34 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 /// ConnectorClientAudio
 LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), cid(ch)
-{
+    : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
     Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
 
-LTSM::Channel::ConnectorClientAudio::~ConnectorClientAudio()
-{
+LTSM::Channel::ConnectorClientAudio::~ConnectorClientAudio() {
     setRunning(false);
 }
 
-int LTSM::Channel::ConnectorClientAudio::error(void) const
-{
+int LTSM::Channel::ConnectorClientAudio::error(void) const {
     return 0;
 }
 
-uint8_t LTSM::Channel::ConnectorClientAudio::channel(void) const
-{
+uint8_t LTSM::Channel::ConnectorClientAudio::channel(void) const {
     return cid;
 }
 
-void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed)
-{
+void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed) {
 }
 
-void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
-{
+void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv) {
     Application::debug(DebugType::Audio, "%s: size: %lu", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
-    if(last.empty())
-    {
+    if(last.empty()) {
         sb.reset(recv.data(), recv.size());
-    }
-    else
-    {
+    } else {
         std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
@@ -120,10 +106,8 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
     const uint8_t* beginPacket = nullptr;
     const uint8_t* endPacket = nullptr;
 
-    try
-    {
-        while(2 < sb.last())
-        {
+    try {
+        while(2 < sb.last()) {
             // audio stream format:
             // <CMD16> - audio cmd
             // <DATA> - audio data
@@ -132,55 +116,39 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             auto audioCmd = sb.readIntLE16();
             Application::debug(DebugType::Audio, "%s: cmd: 0x%" PRIx16, __FUNCTION__, audioCmd);
 
-            if(AudioOp::Init == audioCmd)
-            {
-                if(! audioOpInit(sb))
-                {
+            if(AudioOp::Init == audioCmd) {
+                if(! audioOpInit(sb)) {
                     throw channel_error(NS_FuncName);
                 }
-            }
-            else if(AudioOp::Data == audioCmd)
-            {
+            } else if(AudioOp::Data == audioCmd) {
                 audioOpData(sb);
-            }
-            else if(AudioOp::Silent == audioCmd)
-            {
+            } else if(AudioOp::Silent == audioCmd) {
                 audioOpSilent(sb);
-            }
-            else
-            {
+            } else {
                 Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "audio", audioCmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }
 
-        if(sb.last())
-        {
+        if(sb.last()) {
             throw std::underflow_error(NS_FuncName);
         }
-    }
-    catch(const std::underflow_error & err)
-    {
+    } catch(const std::underflow_error & err) {
         Application::warning("%s: underflow data: %lu, func: %s", __FUNCTION__, sb.last(), err.what());
 
-        if(beginPacket)
-        {
+        if(beginPacket) {
             last.assign(beginPacket, endPacket);
-        }
-        else
-        {
+        } else {
             last.swap(recv);
         }
     }
 }
 
-bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
-{
+bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     // audio format:
     // <VER16> - proto ver
     // <NUM16> - encodings
-    if(4 > sb.last())
-    {
+    if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -189,13 +157,11 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     Application::info("%s: server proto version: %" PRIu16 ", encodings count: %" PRIu16, __FUNCTION__, audioVer, numEnc);
     formats.clear();
 
-    if(numEnc * 10 > sb.last())
-    {
+    if(numEnc * 10 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
-    while(0 < numEnc)
-    {
+    while(0 < numEnc) {
         auto type = sb.readIntLE16();
         auto channels = sb.readIntLE16();
         auto samplePerSec = sb.readIntLE32(); // 44100, 22050, other
@@ -207,24 +173,18 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     std::string error;
 #ifdef LTSM_WITH_OPUS
 
-    if(! format)
-    {
-        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt)
-        {
+    if(! format) {
+        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt) {
             return fmt.type == AudioEncoding::OPUS;
         });
 
-        if(it != formats.end())
-        {
+        if(it != formats.end()) {
             format = std::addressof(*it);
 
-            try
-            {
+            try {
                 decoder = std::make_unique<AudioDecoder::Opus>(format->samplePerSec, format->channels, format->bitsPerSample);
                 Application::info("%s: select encoding: `%s'", __FUNCTION__, "OPUS");
-            }
-            catch(const std::exception &)
-            {
+            } catch(const std::exception &) {
                 format = nullptr;
             }
         }
@@ -232,20 +192,15 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
 
 #endif
 
-    if(! format)
-    {
-        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt)
-        {
+    if(! format) {
+        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt) {
             return fmt.type == AudioEncoding::PCM;
         });
 
-        if(it != formats.end())
-        {
+        if(it != formats.end()) {
             format = std::addressof(*it);
             Application::info("%s: select encoding: `%s'", __FUNCTION__, "PCM");
-        }
-        else
-        {
+        } else {
             error.assign("PCM format not found");
         }
     }
@@ -254,8 +209,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     StreamBuf reply(32);
     reply.writeIntLE16(AudioOp::Init);
 
-    if(! format)
-    {
+    if(! format) {
         reply.writeIntLE16(error.size());
         reply.write(error);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
@@ -263,32 +217,29 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     }
 
     Application::info("%s: audio format: channels: %" PRIu16 ", samples: %" PRIu32 ", bits: %" PRIu16,
-        __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
+                      __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
 
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
-    try
-    {
+
+    try {
         player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
-    }
-    catch(const std::exception &)
-    {
+    } catch(const std::exception &) {
         error.assign("openal failed");
     }
+
 #endif
 
 #ifdef LTSM_WITH_PLAYBACK_PULSE
-    try
-    {
+
+    try {
         player = std::make_unique<PulseAudio::Playback>("LTSM_client", "LTSM Audio Input", *format);
-    }
-    catch(const std::exception &)
-    {
+    } catch(const std::exception &) {
         error.assign("pulseaudio failed");
     }
+
 #endif
 
-    if(! player)
-    {
+    if(! player) {
         reply.writeIntLE16(error.size());
         reply.write(error);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
@@ -305,10 +256,8 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb)
     return true;
 }
 
-void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
-{
-    if(4 > sb.last())
-    {
+void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb) {
+    if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -319,35 +268,29 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     player->streamWrite(buf.data(), buf.size());
 }
 
-void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb)
-{
-    if(4 > sb.last())
-    {
+void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
+    if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "%s: data size: %" PRIu32, __FUNCTION__, len);
 
-    if(len > sb.last())
-    {
+    if(len > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
-    if(decoder)
-    {
-        if(decoder->decode(sb.data(), len))
-        {
+    if(decoder) {
+        if(decoder->decode(sb.data(), len)) {
             Application::debug(DebugType::Audio, "%s: decode size: %lu", __FUNCTION__, decoder->size());
 
-            if(auto env = getenv("LTSM_AUDIO_SAVE"))
+            if(auto env = getenv("LTSM_AUDIO_SAVE")) {
                 Tools::binaryToFile(decoder->data(), decoder->size(), env, true);
+            }
 
             player->streamWrite(decoder->data(), decoder->size());
         }
-    }
-    else
-    {
+    } else {
         player->streamWrite(sb.data(), len);
     }
 

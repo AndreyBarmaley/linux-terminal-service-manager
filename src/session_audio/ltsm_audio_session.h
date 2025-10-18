@@ -36,10 +36,8 @@
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
 
-namespace LTSM
-{
-    struct AudioClient
-    {
+namespace LTSM {
+    struct AudioClient {
         std::string socketPath;
 
         std::unique_ptr<PulseAudio::OutputStream> pulse;
@@ -49,18 +47,17 @@ namespace LTSM
         std::thread thread;
         std::atomic<bool> shutdown{false};
 
-        AudioClient(const std::string & );
+        AudioClient(const std::string &);
         ~AudioClient();
 
         void pcmDataNotify(const uint8_t* ptr, size_t len);
         bool socketInitialize(void);
     };
 
-    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor>
-    {
+    class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
         std::forward_list<AudioClient> clients;
 
-    public:
+      public:
         AudioSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~AudioSessionBus();
 

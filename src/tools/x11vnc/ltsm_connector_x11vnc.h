@@ -30,13 +30,10 @@
 
 #include "librfb_x11server.h"
 
-namespace LTSM
-{
-    namespace Connector
-    {
+namespace LTSM {
+    namespace Connector {
         /* Connector::VNC */
-        class X11VNC : public RFB::X11Server
-        {
+        class X11VNC : public RFB::X11Server {
             std::unordered_map<uint32_t, int> keymap;
 
             const JsonObject* _config = nullptr;
@@ -47,7 +44,7 @@ namespace LTSM
             std::atomic<int> _display{0};
             std::atomic<bool> _xcbDisable{true};
 
-        protected:
+          protected:
             // rfb server encoding
             const PixelFormat & serverFormat(void) const override;
             std::forward_list<std::string> serverDisabledEncodings(void) const override;
@@ -62,15 +59,14 @@ namespace LTSM
             int rfbUserKeycode(uint32_t) const override;
 
             void serverHandshakeVersionEvent(void) override;
-            size_t frameRateOption(void) const override
-            {
+            size_t frameRateOption(void) const override {
                 return 16;
             }
 
             bool xcbConnect(void);
             bool loadKeymap(void);
 
-        public:
+          public:
             X11VNC(int fd, const JsonObject & jo);
         };
     }

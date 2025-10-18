@@ -30,12 +30,9 @@
 
 #include "librfb_server.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
-        class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient
-        {
+namespace LTSM {
+    namespace RFB {
+        class X11Server : protected XCB::RootDisplay, public RFB::ServerEncoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
             std::vector<uint8_t> clientClipboard;
 
             XCB::Region clientRegion;
@@ -57,7 +54,7 @@ namespace LTSM
             mutable uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
-        protected:
+          protected:
             // root display
             void xcbFixesCursorChangedEvent(void) override;
             void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
@@ -78,7 +75,7 @@ namespace LTSM
 
             // encoder stream
             XCB::Size displaySize(void) const override;
-            
+
             // server encoder
             void serverScreenUpdateRequest(void) override;
             void serverScreenUpdateRequest(const XCB::Region &) override;
@@ -118,7 +115,7 @@ namespace LTSM
 
             void sendUpdateRichCursor(void);
 
-        public:
+          public:
             X11Server(int fd = -1) : ServerEncoder(fd) {}
 
             int rfbCommunication(void);

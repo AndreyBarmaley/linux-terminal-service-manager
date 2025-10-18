@@ -32,10 +32,8 @@
 
 #define LTSM_VNC2IMAGE_VERSION 20220829
 
-namespace LTSM
-{
-    class Vnc2Image : public Application, protected RFB::ClientDecoder
-    {
+namespace LTSM {
+    class Vnc2Image : public Application, protected RFB::ClientDecoder {
         std::chrono::steady_clock::time_point tp;
         std::unique_ptr<FrameBuffer> fbPtr;
 
@@ -46,7 +44,7 @@ namespace LTSM
         int timeout = 0;
         bool notls = false;
 
-    protected:
+      protected:
         void setPixel(const XCB::Point &, uint32_t pixel) override;
         void fillPixel(const XCB::Region &, uint32_t pixel) override;
         void updateRawPixels(const XCB::Region &, const void*, uint32_t pitch, const PixelFormat & pf) override;
@@ -63,7 +61,7 @@ namespace LTSM
 
         int startSocket(std::string_view host, int port) const;
 
-    public:
+      public:
         Vnc2Image(int argc, const char** argv);
 
         void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;

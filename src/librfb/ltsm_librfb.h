@@ -29,15 +29,12 @@
 
 #include "ltsm_framebuffer.h"
 
-namespace LTSM
-{
-    struct rfb_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct rfb_error : public std::runtime_error {
         explicit rfb_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace RFB
-    {
+    namespace RFB {
         // RFB protocol constant
         const int VERSION_MAJOR = 3;
         const int VERSION_MINOR = 8;
@@ -129,8 +126,7 @@ namespace LTSM
         const int ENCODING_LTSM_QOI = 0x514F4900;
         const int PROTOCOL_LTSM = 119;
 
-        struct ScreenInfo
-        {
+        struct ScreenInfo {
             uint32_t id = 0;
             uint16_t posx = 0;
             uint16_t posy = 0;
@@ -151,8 +147,7 @@ namespace LTSM
         std::string encodingOpts(int type);
 
         /// SecurityInfo
-        struct SecurityInfo
-        {
+        struct SecurityInfo {
             std::string passwdFile;
             std::string tlsPriority{"NORMAL:+ANON-ECDH:+ANON-DH"};
             std::string caFile;

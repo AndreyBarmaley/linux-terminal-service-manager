@@ -34,17 +34,14 @@
 #include "librfb_x11server.h"
 #include "ltsm_connector.h"
 
-namespace LTSM::Connector
-{
-    struct proto_error : public std::runtime_error
-    {
+namespace LTSM::Connector {
+    struct proto_error : public std::runtime_error {
         explicit proto_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     using TupleFileSize = sdbus::Struct<std::string, uint32_t>;
 
-    class ConnectorLtsm : public DBusProxy, protected RFB::X11Server
-    {
+    class ConnectorLtsm : public DBusProxy, protected RFB::X11Server {
         PixelFormat _serverPf;
         std::unordered_map<uint32_t, int> _keymap;
 
@@ -62,10 +59,10 @@ namespace LTSM::Connector
         uid_t _shmUid = 0;
         int _ltsmClientVersion = 0;
 
-    protected:
+      protected:
         // rfb server encoding
         const PixelFormat & serverFormat(void) const override;
-        void serverFrameBufferModifyEvent(FrameBuffer & ) const override;
+        void serverFrameBufferModifyEvent(FrameBuffer &) const override;
         std::forward_list<std::string> serverDisabledEncodings(void) const override;
 
         // x11server
@@ -90,7 +87,7 @@ namespace LTSM::Connector
         void onSendBellSignal(const int32_t & display) override;
 
         // connector
-        void serverScreenUpdateRequest(const XCB::Region & ) override;
+        void serverScreenUpdateRequest(const XCB::Region &) override;
 
         void onLoginFailure(const int32_t & display, const std::string & msg) override;
         void onCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
@@ -110,27 +107,27 @@ namespace LTSM::Connector
         void serverSecurityInitEvent(void) override;
         void serverConnectedEvent(void) override;
         void serverMainLoopEvent(void) override;
-        void serverDisplayResizedEvent(const XCB::Size & ) override;
+        void serverDisplayResizedEvent(const XCB::Size &) override;
         void serverEncodingsEvent(void) override;
 
         // rfb channel client
         bool isUserSession(void) const override;
-        void systemChannelError(const JsonObject & ) override;
-        void systemTransferFiles(const JsonObject & ) override;
-        void systemClientVariables(const JsonObject & ) override;
-        void systemKeyboardChange(const JsonObject & ) override;
-        void systemKeyboardEvent(const JsonObject & ) override;
+        void systemChannelError(const JsonObject &) override;
+        void systemTransferFiles(const JsonObject &) override;
+        void systemClientVariables(const JsonObject &) override;
+        void systemKeyboardChange(const JsonObject &) override;
+        void systemKeyboardEvent(const JsonObject &) override;
         void systemCursorFailed(const JsonObject & jo) override;
 
         bool noVncMode(void) const override;
         int remoteClientVersion(void) const override;
         std::string remoteClientAddress(void) const override;
 
-    protected:
+      protected:
         void loadKeymap(const std::string & file);
         void transferFilesPartial(std::list<TupleFileSize> files);
 
-    public:
+      public:
         ConnectorLtsm(const JsonObject & jo) : DBusProxy(jo, ConnectorType::LTSM) {}
         ~ConnectorLtsm();
 

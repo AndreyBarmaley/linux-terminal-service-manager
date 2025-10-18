@@ -28,23 +28,19 @@
 
 #include "SDL.h"
 
-namespace LTSM
-{
+namespace LTSM {
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_ARGB32;
 #else
     inline static const int TEXTURE_FMT = SDL_PIXELFORMAT_BGRA32;
 #endif
 
-    struct sdl_error : public std::runtime_error
-    {
+    struct sdl_error : public std::runtime_error {
         explicit sdl_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace SDL
-    {
-        struct Texture : std::shared_ptr<SDL_Texture>
-        {
+    namespace SDL {
+        struct Texture : std::shared_ptr<SDL_Texture> {
             Texture(SDL_Texture* ptr = nullptr)
                 : std::shared_ptr<SDL_Texture>(ptr, SDL_DestroyTexture) {}
 
@@ -56,8 +52,7 @@ namespace LTSM
             void updateRect(const SDL_Rect*, const void* pixels, int pitch);
         };
 
-        struct Surface : std::shared_ptr<SDL_Surface>
-        {
+        struct Surface : std::shared_ptr<SDL_Surface> {
             Surface(SDL_Surface* ptr = nullptr)
                 : std::shared_ptr<SDL_Surface>(ptr, SDL_FreeSurface) {}
 
@@ -66,69 +61,58 @@ namespace LTSM
             int height(void) const;
         };
 
-        struct GenericEvent
-        {
+        struct GenericEvent {
             const SDL_Event* ptr;
 
             GenericEvent(const SDL_Event* ev) : ptr(ev) {}
 
-            bool isValid(void) const
-            {
+            bool isValid(void) const {
                 return ptr;
             }
 
-            int type(void) const
-            {
+            int type(void) const {
                 return ptr ? ptr->type : 0;
             }
 
-            const SDL_KeyboardEvent* key(void) const
-            {
+            const SDL_KeyboardEvent* key(void) const {
                 return ptr ? & ptr->key : nullptr;
             }
 
-            const SDL_MouseMotionEvent* motion(void) const
-            {
+            const SDL_MouseMotionEvent* motion(void) const {
                 return ptr ? & ptr->motion : nullptr;
             }
 
-            const SDL_MouseButtonEvent* button(void) const
-            {
+            const SDL_MouseButtonEvent* button(void) const {
                 return ptr ? & ptr->button : nullptr;
             }
 
-            const SDL_MouseWheelEvent* wheel(void) const
-            {
+            const SDL_MouseWheelEvent* wheel(void) const {
                 return ptr ? & ptr->wheel : nullptr;
             }
 
-            const SDL_WindowEvent* window(void) const
-            {
+            const SDL_WindowEvent* window(void) const {
                 return ptr ? & ptr->window : nullptr;
             }
 
-            const SDL_DropEvent* drop(void) const
-            {
+            const SDL_DropEvent* drop(void) const {
                 return ptr ? & ptr->drop : nullptr;
             }
 
-            const SDL_UserEvent* user(void) const
-            {
+            const SDL_UserEvent* user(void) const {
                 return ptr ? & ptr->user : nullptr;
             }
         };
 
-        class Window
-        {
+        class Window {
             std::unique_ptr<SDL_Window, void(*)(SDL_Window*)> _window{ nullptr, SDL_DestroyWindow };
             std::unique_ptr<SDL_Renderer, void(*)(SDL_Renderer*)> _renderer{ nullptr, SDL_DestroyRenderer };
             std::unique_ptr<SDL_Texture, void(*)(SDL_Texture*)> _display{ nullptr, SDL_DestroyTexture };
             SDL_Event _event;
             bool _accel = false;
 
-        protected:
+          protected:
 
-        public:
+          public:
             Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w = 0, int winsz_h = 0, int flags = 0,
                    bool accel = true);
             ~Window();
@@ -139,25 +123,22 @@ namespace LTSM
             uint32_t pixelFormat(void) const;
             std::pair<int, int> geometry(void) const;
 
-            SDL_Texture* display(void)
-            {
+            SDL_Texture* display(void) {
                 return _display.get();
             }
 
-            SDL_Renderer* render(void)
-            {
+            SDL_Renderer* render(void) {
                 return _renderer.get();
             }
 
-            SDL_Window* get(void)
-            {
+            SDL_Window* get(void) {
                 return _window.get();
             }
 
             void renderClear(const SDL_Color*, SDL_Texture* target = nullptr);
             void renderColor(const SDL_Color*, const SDL_Rect*, SDL_Texture* target = nullptr);
             void renderTexture(SDL_Texture* source, const SDL_Rect* srcrt = nullptr, SDL_Texture* target = nullptr,
-                                      const SDL_Rect* dstrt = nullptr);
+                               const SDL_Rect* dstrt = nullptr);
 
             void renderReset(SDL_Texture* target = nullptr);
             void renderPresent(bool sync = true);

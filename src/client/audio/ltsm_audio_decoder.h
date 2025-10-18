@@ -32,13 +32,10 @@
 #include "opus/opus.h"
 #endif
 
-namespace LTSM
-{
-    namespace AudioDecoder
-    {
-        class BaseDecoder
-        {
-        public:
+namespace LTSM {
+    namespace AudioDecoder {
+        class BaseDecoder {
+          public:
             BaseDecoder() = default;
             virtual ~BaseDecoder() = default;
 
@@ -49,16 +46,13 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_OPUS
-        struct OpusDeleter
-        {
-            void operator()(OpusDecoder* st)
-            {
+        struct OpusDeleter {
+            void operator()(OpusDecoder* st) {
                 opus_decoder_destroy(st);
             }
         };
 
-        class Opus : public BaseDecoder
-        {
+        class Opus : public BaseDecoder {
             std::unique_ptr<OpusDecoder, OpusDeleter> ctx;
 
             std::vector<uint8_t> tmp;
@@ -66,7 +60,7 @@ namespace LTSM
 
             const size_t sampleLength;
 
-        public:
+          public:
             Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample);
 
             bool decode(const uint8_t* ptr, size_t len) override;

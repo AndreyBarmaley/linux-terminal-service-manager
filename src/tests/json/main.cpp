@@ -10,25 +10,23 @@
 
 using namespace LTSM;
 
-class Test1App : public Application
-{
+class Test1App : public Application {
     JsonObject  config;
 
-public:
-    Test1App(const char* ident, int argc, const char** argv) : Application(ident)
-    {
+  public:
+    Test1App(const char* ident, int argc, const char** argv) : Application(ident) {
         const char* file = 1 < argc ? argv[1] : "test.json";
 
         JsonContentFile jsonFile(file);
 
-        if(! jsonFile.isValid() || ! jsonFile.isObject())
+        if(! jsonFile.isValid() || ! jsonFile.isObject()) {
             throw std::invalid_argument("json parse error");
+        }
 
         config = jsonFile.toObject();
     }
 
-    int start(void) override
-    {
+    int start(void) override {
         auto arr1 = config.getArray("test:array");
         auto obj1 = config.getObject("test:object");
 
@@ -115,20 +113,16 @@ public:
         std::cout << jarr.toString() << std::endl;
 
         JsonObjectStream jos;
-        std::cout << "json stream: " << jos.push("key1", "string").push("key11",teststr).push("key2", 456).push("key3", 3.147).push("key4", true).push("key5").flush() << std::endl;
+        std::cout << "json stream: " << jos.push("key1", "string").push("key11", teststr).push("key2", 456).push("key3", 3.147).push("key4", true).push("key5").flush() << std::endl;
         return 0;
     }
 };
 
-int main(int argc, const char** argv)
-{
-    try
-    {
+int main(int argc, const char** argv) {
+    try {
         Test1App test1("Test1", argc, argv);
         return test1.start();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         std::cerr << "exception: " << err.what() << std::endl;
     }
 }

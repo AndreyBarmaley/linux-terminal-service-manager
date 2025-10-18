@@ -23,8 +23,7 @@
 #ifndef _LTSM_GLOBALS_
 #define _LTSM_GLOBALS_
 
-namespace LTSM
-{
+namespace LTSM {
     inline static const char* dbus_manager_service_name = "ltsm.manager.service";
     inline static const char* dbus_manager_service_path = "/ltsm/manager/service";
 
@@ -48,8 +47,7 @@ namespace LTSM
 
     inline static const int service_version = 20250922;
 
-    inline bool platformBigEndian(void)
-    {
+    inline bool platformBigEndian(void) {
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         return true;
 #else
@@ -57,8 +55,7 @@ namespace LTSM
 #endif
     }
 
-    namespace NotifyParams
-    {
+    namespace NotifyParams {
         enum IconType { Information, Warning, Error, Question };
         enum UrgencyLevel { Low = 0, Normal = 1, Critical = 2 };
     };

@@ -30,59 +30,53 @@
 
 using namespace std::chrono_literals;
 
-namespace LTSM
-{
+namespace LTSM {
     template<typename JobResult>
-    class ParallelsJobs
-    {
+    class ParallelsJobs {
         using JobFuture = std::future<JobResult>;
         using JobList = std::list<JobFuture>;
 
         JobList jobs;
         const int tnum;
 
-    public:
-        explicit ParallelsJobs(int num = std::thread::hardware_concurrency()) : tnum(num)
-        {
+      public:
+        explicit ParallelsJobs(int num = std::thread::hardware_concurrency()) : tnum(num) {
         }
 
-        ~ParallelsJobs()
-        {
-            for(auto & job: jobs)
-                if(job.valid()) job.wait();
+        ~ParallelsJobs() {
+            for(auto & job : jobs)
+                if(job.valid()) {
+                    job.wait();
+                }
         }
 
-        void addJob(JobFuture && job)
-        {
-            while(! jobs.empty())
-            {
-                auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job)
-                {
+        void addJob(JobFuture && job) {
+            while(! jobs.empty()) {
+                auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job) {
                     return job.wait_for(1us) != std::future_status::ready;
                 });
 
-                if(busy < tnum)
+                if(busy < tnum) {
                     break;
+                }
             }
 
             jobs.emplace_back(std::move(job));
         }
 
-        JobList & waitAll(void)
-        {
-            for(auto & job: jobs)
+        JobList & waitAll(void) {
+            for(auto & job : jobs) {
                 job.wait();
+            }
 
             return jobs;
         }
 
-        JobList & jobList(void)
-        {
+        JobList & jobList(void) {
             return jobs;
         }
-        
-        void clear(void)
-        {
+
+        void clear(void) {
             waitAll().clear();
         }
     };

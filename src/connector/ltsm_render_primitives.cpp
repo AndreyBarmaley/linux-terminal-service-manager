@@ -23,41 +23,31 @@
 
 #include "ltsm_render_primitives.h"
 
-namespace LTSM::Connector
-{
-    XCB::Region RenderPrimitive::xcbRegion(void) const
-    {
+namespace LTSM::Connector {
+    XCB::Region RenderPrimitive::xcbRegion(void) const {
         return tupleRegionToXcbRegion(_region);
     }
 
-    Color RenderColored::toColor(void) const
-    {
+    Color RenderColored::toColor(void) const {
         return tupleColorToColor(_color);
     }
 
-    void RenderRect::renderTo(FrameBuffer & fb) const
-    {
+    void RenderRect::renderTo(FrameBuffer & fb) const {
         XCB::Region section;
 
-        if(XCB::Region::intersection(fb.region(), xcbRegion(), & section))
-        {
-            if(_fill)
-            {
+        if(XCB::Region::intersection(fb.region(), xcbRegion(), & section)) {
+            if(_fill) {
                 fb.fillColor(section - fb.region().topLeft(), toColor());
-            }
-            else
-            {
+            } else {
                 fb.drawRect(section - fb.region().topLeft(), toColor());
             }
         }
     }
 
-    void RenderText::renderTo(FrameBuffer & fb) const
-    {
+    void RenderText::renderTo(FrameBuffer & fb) const {
         const XCB::Region reg = xcbRegion();
 
-        if(XCB::Region::intersects(fb.region(), reg))
-        {
+        if(XCB::Region::intersects(fb.region(), reg)) {
             fb.renderText(_text, toColor(), reg.topLeft() - fb.region().topLeft());
         }
     }

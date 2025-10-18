@@ -31,13 +31,10 @@
 #include "ltsm_librfb.h"
 #include "librfb_encodings.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
+namespace LTSM {
+    namespace RFB {
         /// ServerEncoder
-        class ServerEncoderBuf : public EncoderStream
-        {
+        class ServerEncoderBuf : public EncoderStream {
             std::vector<int>    clientEncodings;
 
             BinaryBuf           bufData;
@@ -57,7 +54,7 @@ namespace LTSM
             bool                clientTrueColor = true;
             bool                clientBigEndian = false;
 
-        protected:
+          protected:
             friend class EncodingBase;
             friend class EncodingRaw;
             friend class EncodingRRE;
@@ -87,12 +84,18 @@ namespace LTSM
             void                recvSetContinuousUpdates(void);
             void                recvSetDesktopSize(void);
 
-        public:
+          public:
             ServerEncoderBuf(const FrameBuffer*);
 
-            const PixelFormat & clientFormat(void) const override { return clientPf; }
-            const PixelFormat & serverFormat(void) const override { return serverPf; }
-            bool                clientIsBigEndian(void) const override { return clientBigEndian; }
+            const PixelFormat & clientFormat(void) const override {
+                return clientPf;
+            }
+            const PixelFormat & serverFormat(void) const override {
+                return serverPf;
+            }
+            bool                clientIsBigEndian(void) const override {
+                return clientBigEndian;
+            }
 
             void                sendFrameBufferUpdate(const FrameBuffer &);
 

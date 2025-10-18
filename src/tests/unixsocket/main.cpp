@@ -19,40 +19,44 @@
 using namespace std::chrono_literals;
 using namespace LTSM;
 
-int main()
-{
+int main() {
     auto path = "test2.sock";
 
     auto fd0 = UnixSocket::listen(path);
-    if(0 == fd0)
-    {
+
+    if(0 == fd0) {
         std::cerr << "listen socket failed" << std::endl;
         return -1;
     }
+
     std::cout << "listen socket: " << fd0 << std::endl;
 
     // accept
-    std::future<int> job = std::async(std::launch::async, [=](){ return accept(fd0, nullptr, nullptr); });
+    std::future<int> job = std::async(std::launch::async, [ = ]() {
+        return accept(fd0, nullptr, nullptr);
+    });
     std::this_thread::sleep_for(100ms);
 
     auto fd2 = UnixSocket::connect(path);
-    if(0 == fd2)
-    {
+
+    if(0 == fd2) {
         std::cerr << "client socket failed" << std::endl;
         return -1;
     }
+
     std::cout << "client socket: " << fd2 << std::endl;
 
 
     // wait server socket
     while(job.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
+
     auto fd1 = job.get();
 
-    if(0 == fd1)
-    {
+    if(0 == fd1) {
         std::cerr << "server socket failed" << std::endl;
         return -1;
     }
+
     std::cout << "server socket: " << fd1 << std::endl;
 
     // close listen
@@ -89,8 +93,10 @@ int main()
 
     // zlib part1
     auto zlib1 = std::make_unique<ZLib::DeflateStream>();
-    for(int it = 0; it < 100; it++)
+
+    for(int it = 0; it < 100; it++) {
         zlib1->sendIntLE64(0x1234567898765432);
+    }
 
     auto buf1 = zlib1->deflateFlush();
     sock1.sendIntBE32(buf1.size()).sendData(buf1).sendFlush();
@@ -101,15 +107,16 @@ int main()
     zlib2->appendData(buf2);
 
     std::cout << "test1 zlib socket::sendInt64LE/recvInt64LE" << std::endl;
-    for(int it = 0; it < 100; it++)
-    {
+
+    for(int it = 0; it < 100; it++) {
         auto val = zlib2->recvIntLE64();
         assert(val == 0x1234567898765432);
     }
 
     // zlib part1
-    for(int it = 0; it < 100; it++)
+    for(int it = 0; it < 100; it++) {
         zlib1->sendIntBE16(it);
+    }
 
     buf1 = zlib1->deflateFlush();
     sock1.sendIntBE32(buf1.size()).sendData(buf1).sendFlush();
@@ -119,8 +126,8 @@ int main()
     zlib2->appendData(buf2);
 
     std::cout << "test2 zlib socket::sendInt16BE/recvInt16BE" << std::endl;
-    for(int it = 0; it < 100; it++)
-    {
+
+    for(int it = 0; it < 100; it++) {
         auto val = zlib2->recvIntBE16();
         assert(val == it);
     }
@@ -133,33 +140,36 @@ int main()
 
     auto tls1 = std::make_unique<TLS::Stream>(& sock1);
     bool srvMode = true;
-    std::future<bool> job2 = std::async(std::launch::async, [&](){ return tls1->initAnonHandshake(priority, srvMode, 0); });
+    std::future<bool> job2 = std::async(std::launch::async, [&]() {
+        return tls1->initAnonHandshake(priority, srvMode, 0);
+    });
     std::this_thread::sleep_for(10ms);
 
     auto tls2 = std::make_unique<TLS::Stream>(& sock2);
-    if(! tls2->initAnonHandshake(priority, ! srvMode, 0))
-    {
+
+    if(! tls2->initAnonHandshake(priority, ! srvMode, 0)) {
         std::cerr << "tls2 init failed" << std::endl;
         return -1;
     }
 
     // wait init tls1
     while(job2.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready);
-    if(! job2.get())
-    {
+
+    if(! job2.get()) {
         std::cerr << "tls1 init failed" << std::endl;
         return -1;
     }
 
 
-    for(int it = 0; it < 100; it++)
+    for(int it = 0; it < 100; it++) {
         tls1->sendIntLE64(0x1234567898765432);
+    }
 
     tls1->sendFlush();
 
     std::cout << "tls socket::sendInt64LE/recvInt64LE" << std::endl;
-    for(int it = 0; it < 100; it++)
-    {
+
+    for(int it = 0; it < 100; it++) {
         auto val = tls2->recvIntLE64();
         assert(val == 0x1234567898765432);
     }

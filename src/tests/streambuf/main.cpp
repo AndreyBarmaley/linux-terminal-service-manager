@@ -10,19 +10,18 @@
 
 using namespace LTSM;
 
-class RandomBuf : public BinaryBuf
-{
-public:
-    RandomBuf(size_t len) : BinaryBuf(len)
-    {
+class RandomBuf : public BinaryBuf {
+  public:
+    RandomBuf(size_t len) : BinaryBuf(len) {
         std::ifstream ifs("/dev/urandom", std::ifstream::in | std::ifstream::binary);
-        if(! ifs.read(reinterpret_cast<char*>(data()), size()))
+
+        if(! ifs.read(reinterpret_cast<char*>(data()), size())) {
             throw std::runtime_error("read failed");
+        }
     }
 };
 
-void testStreamBufInterface(const BinaryBuf & buf)
-{
+void testStreamBufInterface(const BinaryBuf & buf) {
     std::cout << "== test StreamBufRef interface" << std::endl;
 
     StreamBufRef sb(buf.data(), buf.size());
@@ -36,12 +35,14 @@ void testStreamBufInterface(const BinaryBuf & buf)
     std::cout << "passed" << std::endl;
 
     std::cout << "test ::readInt8: ";
-    for(auto v : buf)
+
+    for(auto v : buf) {
         assert(v == sb.readInt8());
+    }
+
     std::cout << "passed" << std::endl;
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
         BinaryBuf res(buf.size());
 
@@ -53,8 +54,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
 
         std::cout << "test ::read/last: ";
@@ -65,8 +65,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
 
         std::cout << "test ::skip/last: ";
@@ -79,63 +78,66 @@ void testStreamBufInterface(const BinaryBuf & buf)
 
     std::cout << "== test StreamBuf interface" << std::endl;
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
         StreamBuf sb2(buf.size());
 
         std::cout << "test ::readInt8/writeInt8: ";
-        while(sb.last())
+
+        while(sb.last()) {
             sb2.writeInt8(sb.readInt8());
+        }
 
         assert(sb2.rawbuf().crc32b() == buf.crc32b());
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 2);
         StreamBuf sb2(bufsz);
 
         std::cout << "test ::readInt16/writeInt16: ";
-        while(2 < sb.last())
+
+        while(2 < sb.last()) {
             sb2.writeInt16(sb.readInt16());
+        }
 
         assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 4);
         StreamBuf sb2(bufsz);
 
         std::cout << "test ::readInt32/writeInt32: ";
-        while(4 < sb.last())
+
+        while(4 < sb.last()) {
             sb2.writeInt32(sb.readInt32());
+        }
 
         assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         sb.reset(buf.data(), buf.size());
         size_t bufsz = buf.size() - (buf.size() % 8);
         StreamBuf sb2(bufsz);
 
         std::cout << "test ::readInt64/writeInt64: ";
-        while(8 < sb.last())
+
+        while(8 < sb.last()) {
             sb2.writeInt64(sb.readInt64());
+        }
 
         assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         StreamBuf sb2(buf);
 
         std::cout << "test ::read/last: ";
@@ -146,8 +148,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         StreamBuf sb2(buf);
 
         std::cout << "test ::skip/tell/last: ";
@@ -160,8 +161,7 @@ void testStreamBufInterface(const BinaryBuf & buf)
     }
 }
 
-void testRawPtrInterface(const BinaryBuf & buf)
-{
+void testRawPtrInterface(const BinaryBuf & buf) {
     uint8_t tmp[100] = {};
     RawPtr ptr(tmp);
 
@@ -174,8 +174,7 @@ void testRawPtrInterface(const BinaryBuf & buf)
     assert(Tools::crc32b(ptr.data(), len) == Tools::crc32b(buf.data(), len));
     std::cout << "passed" << std::endl;
 
-    if(true)
-    {
+    if(true) {
         StreamBuf sb;
         sb << ptr;
 
@@ -185,8 +184,7 @@ void testRawPtrInterface(const BinaryBuf & buf)
         std::cout << "passed" << std::endl;
     }
 
-    if(true)
-    {
+    if(true) {
         StreamBufRef sb(buf.data(), buf.size());
         sb >> ptr;
 
@@ -196,8 +194,7 @@ void testRawPtrInterface(const BinaryBuf & buf)
     }
 }
 
-void testByteOrderInterface(const BinaryBuf & buf)
-{
+void testByteOrderInterface(const BinaryBuf & buf) {
     StreamBuf sb;
 
     // LE/LE
@@ -269,8 +266,7 @@ void testByteOrderInterface(const BinaryBuf & buf)
     std::cout << "passed" << std::endl;
 }
 
-int main()
-{
+int main() {
     RandomBuf buf(335);
 
     std::cout << "fill random, buf size: " << buf.size() << ", crc32b: " << Tools::hex(buf.crc32b()) << std::endl;

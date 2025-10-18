@@ -26,12 +26,10 @@
 #include "ltsm_application.h"
 #include "ltsm_audio_encoder.h"
 
-namespace LTSM
-{
+namespace LTSM {
 #ifdef LTSM_WITH_OPUS
     AudioEncoder::Opus::Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample, uint16_t frames)
-        : framesCount(frames), sampleLength(audioChannels * (bitsPerSample >> 3))
-    {
+        : framesCount(frames), sampleLength(audioChannels * (bitsPerSample >> 3)) {
         const size_t reserveSize = 256 * 1024;
         last.reserve(reserveSize);
         int error = OPUS_OK;
@@ -39,8 +37,7 @@ namespace LTSM
                                       OPUS_APPLICATION_AUDIO /* OPUS_APPLICATION_RESTRICTED_LOWDELAY OPUS_APPLICATION_VOIP OPUS_APPLICATION_AUDIO */,
                                       & error));
 
-        if(! ctx || error != OPUS_OK)
-        {
+        if(! ctx || error != OPUS_OK) {
             Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__,
                                "opus_encoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
@@ -56,27 +53,23 @@ namespace LTSM
         */
     }
 
-    bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len)
-    {
+    bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len) {
         Application::debug(DebugType::Audio, "%s: data size: %lu", __FUNCTION__, len);
 
-        if(len)
-        {
+        if(len) {
             last.insert(last.end(), ptr, ptr + len);
         }
 
         const size_t samplesCount = last.size() / sampleLength;
 
-        if(framesCount > samplesCount)
-        {
+        if(framesCount > samplesCount) {
             return false;
         }
 
         auto src = reinterpret_cast<const opus_int16*>(last.data());
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
-        if(nBytes < 0)
-        {
+        if(nBytes < 0) {
             Application::error("%s: %s failed, error: %d", __FUNCTION__, "opus_encode", nBytes);
             return false;
         }
@@ -86,15 +79,12 @@ namespace LTSM
         return 0 < encodeSize;
     }
 
-    const uint8_t* AudioEncoder::Opus::data(void) const
-    {
+    const uint8_t* AudioEncoder::Opus::data(void) const {
         return tmp.data();
     }
 
-    size_t AudioEncoder::Opus::size(void) const
-    {
-        if(encodeSize > tmp.size())
-        {
+    size_t AudioEncoder::Opus::size(void) const {
+        if(encodeSize > tmp.size()) {
             Application::error("%s: out of range, size: %lu, buf: %lu", __FUNCTION__, encodeSize, tmp.size());
             throw audio_error(NS_FuncName);
         }

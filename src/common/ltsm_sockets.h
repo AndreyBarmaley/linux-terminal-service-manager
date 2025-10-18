@@ -54,33 +54,36 @@
 
 #define LTSM_SOCKETS_VERSION 20250320
 
-namespace LTSM
-{
-    struct network_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct network_error : public std::runtime_error {
         explicit network_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// @brief: network stream interface
-    class NetworkStream : protected ByteOrderInterface
-    {
+    class NetworkStream : protected ByteOrderInterface {
         std::chrono::steady_clock::time_point tp;
 
-    protected:
+      protected:
         bool showStatistic = true;
         mutable size_t bytesIn = 0;
         mutable size_t bytesOut = 0;
 
-    protected:
-        inline void getRaw(void* ptr, size_t len) const override { recvRaw(ptr, len); };
+      protected:
+        inline void getRaw(void* ptr, size_t len) const override {
+            recvRaw(ptr, len);
+        };
 
-        inline void putRaw(const void* ptr, size_t len) override { sendRaw(ptr, len); };
+        inline void putRaw(const void* ptr, size_t len) override {
+            sendRaw(ptr, len);
+        };
 
-    public:
+      public:
         NetworkStream();
         virtual ~NetworkStream();
 
-        void useStatistic(bool f) { showStatistic = f; }
+        void useStatistic(bool f) {
+            showStatistic = f;
+        }
 
         static bool hasInput(int fd, int timeoutMS = 1);
         static size_t hasData(int fd);
@@ -90,17 +93,35 @@ namespace LTSM
 
 #endif
 
-        inline NetworkStream & sendIntBE16(uint16_t x) { putIntBE16(x); return *this; }
+        inline NetworkStream & sendIntBE16(uint16_t x) {
+            putIntBE16(x);
+            return *this;
+        }
 
-        inline NetworkStream & sendIntBE32(uint32_t x) { putIntBE32(x); return *this; }
+        inline NetworkStream & sendIntBE32(uint32_t x) {
+            putIntBE32(x);
+            return *this;
+        }
 
-        inline NetworkStream & sendIntBE64(uint64_t x) { putIntBE64(x); return *this; }
+        inline NetworkStream & sendIntBE64(uint64_t x) {
+            putIntBE64(x);
+            return *this;
+        }
 
-        inline NetworkStream & sendIntLE16(uint16_t x) { putIntLE16(x); return *this; }
+        inline NetworkStream & sendIntLE16(uint16_t x) {
+            putIntLE16(x);
+            return *this;
+        }
 
-        inline NetworkStream & sendIntLE32(uint32_t x) { putIntLE32(x); return *this; }
+        inline NetworkStream & sendIntLE32(uint32_t x) {
+            putIntLE32(x);
+            return *this;
+        }
 
-        inline NetworkStream & sendIntLE64(uint64_t x) { putIntLE64(x); return *this; }
+        inline NetworkStream & sendIntLE64(uint64_t x) {
+            putIntLE64(x);
+            return *this;
+        }
 
         NetworkStream & sendInt8(uint8_t);
         NetworkStream & sendInt16(uint16_t);
@@ -118,17 +139,29 @@ namespace LTSM
         virtual size_t hasData(void) const = 0;
         virtual uint8_t peekInt8(void) const = 0;
 
-        inline uint16_t recvIntBE16(void) const { return getIntBE16(); }
+        inline uint16_t recvIntBE16(void) const {
+            return getIntBE16();
+        }
 
-        inline uint32_t recvIntBE32(void) const { return getIntBE32(); }
+        inline uint32_t recvIntBE32(void) const {
+            return getIntBE32();
+        }
 
-        inline uint64_t recvIntBE64(void) const { return getIntBE64(); }
+        inline uint64_t recvIntBE64(void) const {
+            return getIntBE64();
+        }
 
-        inline uint16_t recvIntLE16(void) const { return getIntLE16(); }
+        inline uint16_t recvIntLE16(void) const {
+            return getIntLE16();
+        }
 
-        inline uint32_t recvIntLE32(void) const { return getIntLE32(); }
+        inline uint32_t recvIntLE32(void) const {
+            return getIntLE32();
+        }
 
-        inline uint64_t recvIntLE64(void) const { return getIntLE64(); }
+        inline uint64_t recvIntLE64(void) const {
+            return getIntLE64();
+        }
 
         uint8_t recvInt8(void) const;
         uint16_t recvInt16(void) const;
@@ -149,12 +182,11 @@ namespace LTSM
     };
 
     /// @brief: socket stream
-    class SocketStream : public NetworkStream
-    {
-    protected:
+    class SocketStream : public NetworkStream {
+      protected:
         int sock;
 
-    public:
+      public:
         explicit SocketStream(int fd = 0, bool statistic = true);
         ~SocketStream();
 
@@ -164,7 +196,9 @@ namespace LTSM
 #ifdef LTSM_WITH_GNUTLS
         void setupTLS(gnutls::session*) const override;
 #endif
-        void setSocket(int fd) { sock = fd; }
+        void setSocket(int fd) {
+            sock = fd;
+        }
 
         bool hasInput(void) const override;
         size_t hasData(void) const override;
@@ -173,20 +207,21 @@ namespace LTSM
         void sendRaw(const void*, size_t) override;
         void recvRaw(void*, size_t) const override;
 
-        int fd(void) const { return sock; }
+        int fd(void) const {
+            return sock;
+        }
         void reset(void);
     };
 
     /// @brief: inetd stream
-    class InetStream : public NetworkStream
-    {
-    protected:
+    class InetStream : public NetworkStream {
+      protected:
         int fdin = -1;
         int fdout = -1;
 
         void inetFdClose(void);
 
-    public:
+      public:
         InetStream();
 
 #ifdef LTSM_WITH_GNUTLS
@@ -201,19 +236,18 @@ namespace LTSM
     };
 
     /// @brief: proxy socket: stdin/stdout to local socket
-    class ProxySocket : protected InetStream
-    {
-    protected:
+    class ProxySocket : protected InetStream {
+      protected:
         std::atomic<bool> loopTransmission{false};
         std::thread loopThread;
         int bridgeSock = -1;
         int clientSock = -1;
         std::filesystem::path socketPath;
 
-    protected:
+      protected:
         bool transmitDataIteration(void);
 
-    public:
+      public:
         ProxySocket() = default;
         ~ProxySocket();
 
@@ -228,8 +262,7 @@ namespace LTSM
         void proxyShutdown(void);
     };
 
-    namespace TCPSocket
-    {
+    namespace TCPSocket {
         int connect(const std::string & ipaddr, uint16_t port);
         std::string resolvHostname(const std::string & hostname);
 #ifdef __UNIX__
@@ -242,8 +275,7 @@ namespace LTSM
     }
 
 #ifdef __UNIX__
-    namespace UnixSocket
-    {
+    namespace UnixSocket {
         int connect(const std::filesystem::path &);
         int listen(const std::filesystem::path &, int conn = 5);
         int accept(int fd);
@@ -251,29 +283,24 @@ namespace LTSM
 #endif
 
 #ifdef LTSM_WITH_GNUTLS
-    struct gnutls_error : public std::runtime_error
-    {
+    struct gnutls_error : public std::runtime_error {
         explicit gnutls_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
     /// transport layer security
-    namespace TLS
-    {
+    namespace TLS {
         std::vector<uint8_t> randomKey(size_t);
         std::vector<uint8_t> encryptDES(const std::vector<uint8_t> & crypt, std::string_view key);
 
-        class Session : public gnutls::session
-        {
-        public:
+        class Session : public gnutls::session {
+          public:
 #if GNUTLS_VERSION_NUMBER < 0x030603
-            static gnutls_session_t ptr(gnutls::session* sess)
-            {
+            static gnutls_session_t ptr(gnutls::session* sess) {
                 return sess->*(& Session::s);
             }
 
 #else
-            static gnutls_session_t ptr(gnutls::session* sess)
-            {
+            static gnutls_session_t ptr(gnutls::session* sess) {
                 return sess->ptr();
             }
 
@@ -284,9 +311,8 @@ namespace LTSM
         };
 
         /// @brief: tls stream
-        class Stream : public NetworkStream
-        {
-        private:
+        class Stream : public NetworkStream {
+          private:
             bool startHandshake(void);
             const NetworkStream* layer = nullptr;
 
@@ -296,7 +322,7 @@ namespace LTSM
 
             mutable int peek = -1;
 
-        public:
+          public:
             explicit Stream(const NetworkStream*);
 
             bool hasInput(void) const override;
@@ -314,15 +340,13 @@ namespace LTSM
                                    const std::string & keyFile, const std::string & crlFile, int debug);
         };
 
-        class AnonSession : public Stream
-        {
-        public:
+        class AnonSession : public Stream {
+          public:
             AnonSession(const NetworkStream*, const std::string & priority, bool serverMode = true, int debug = 3);
         };
 
-        class X509Session : public Stream
-        {
-        public:
+        class X509Session : public Stream {
+          public:
             X509Session(const NetworkStream*, const std::string & cafile, const std::string & cert, const std::string & key,
                         const std::string & crl, const std::string & priority, bool serverMode = true, int debug = 3);
         };
@@ -331,25 +355,22 @@ namespace LTSM
 #endif // LTSM_WITH_GNUTLS
 
 #ifdef LTSM_WITH_GSSAPI
-    struct gssapi_error : public std::runtime_error
-    {
+    struct gssapi_error : public std::runtime_error {
         explicit gssapi_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace GssApi
-    {
-        class BaseLayer : public NetworkStream
-        {
+    namespace GssApi {
+        class BaseLayer : public NetworkStream {
             BinaryBuf sndbuf;
             mutable StreamBuf rcvbuf;
 
-        protected:
+          protected:
             NetworkStream* layer = nullptr;
 
             std::vector<uint8_t> recvLayer(void) const;
             void sendLayer(const void*, size_t);
 
-        public:
+          public:
             // NetworkStream interface
             bool hasInput(void) const override;
             size_t hasData(void) const override;
@@ -362,16 +383,19 @@ namespace LTSM
         };
 
         /// @brief: gss api server layer
-        class Server : public BaseLayer, public Gss::ServiceContext
-        {
-        protected:
+        class Server : public BaseLayer, public Gss::ServiceContext {
+          protected:
             // Gss::ServiceContext interface
             void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
-            std::vector<uint8_t> recvToken(void) const override { return recvLayer(); }
+            std::vector<uint8_t> recvToken(void) const override {
+                return recvLayer();
+            }
 
-            void sendToken(const void* buf, size_t len) override { sendLayer(buf, len); }
+            void sendToken(const void* buf, size_t len) override {
+                sendLayer(buf, len);
+            }
 
-        public:
+          public:
             Server(NetworkStream* st) : BaseLayer(st, 4096) {}
 
             bool checkServiceCredential(std::string_view service) const;
@@ -379,16 +403,19 @@ namespace LTSM
         };
 
         /// @brief: gss api client layer
-        class Client : public BaseLayer, public Gss::ClientContext
-        {
-        protected:
+        class Client : public BaseLayer, public Gss::ClientContext {
+          protected:
             // Gss::ServiceContext interface
             void error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const override;
-            std::vector<uint8_t> recvToken(void) const override { return recvLayer(); }
+            std::vector<uint8_t> recvToken(void) const override {
+                return recvLayer();
+            }
 
-            void sendToken(const void* buf, size_t len) override { sendLayer(buf, len); }
+            void sendToken(const void* buf, size_t len) override {
+                sendLayer(buf, len);
+            }
 
-        public:
+          public:
             Client(NetworkStream* st) : BaseLayer(st, 4096) {}
 
             bool checkUserCredential(std::string_view) const;
@@ -398,20 +425,17 @@ namespace LTSM
 
 #endif // LTSM_WITH_GSSAPI
 
-    struct zlib_error : public std::runtime_error
-    {
+    struct zlib_error : public std::runtime_error {
         explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace ZLib
-    {
-        class DeflateBase
-        {
-        protected:
+    namespace ZLib {
+        class DeflateBase {
+          protected:
             z_stream zs{};
             std::array<uint8_t, 1024> tmp;
 
-        public:
+          public:
             explicit DeflateBase(int level = Z_BEST_COMPRESSION);
             virtual ~DeflateBase();
 
@@ -422,12 +446,11 @@ namespace LTSM
         };
 
         /// @brief: zlib compress output stream only
-        class DeflateStream : public DeflateBase, public NetworkStream
-        {
-        protected:
+        class DeflateStream : public DeflateBase, public NetworkStream {
+          protected:
             std::vector<uint8_t> bb;
 
-        public:
+          public:
             explicit DeflateStream(int level = Z_BEST_COMPRESSION);
 
             std::vector<uint8_t> deflateFlush(void);
@@ -436,19 +459,18 @@ namespace LTSM
             size_t hasData(void) const override;
             void sendRaw(const void*, size_t) override;
 
-        private:
+          private:
             void recvRaw(void*, size_t) const override;
             uint8_t peekInt8(void) const override;
         };
 
         /// @brief: zlib compress input stream only
-        class InflateBase
-        {
-        protected:
+        class InflateBase {
+          protected:
             z_stream zs{};
             std::array<uint8_t, 1024> tmp;
 
-        public:
+          public:
             InflateBase();
             virtual ~InflateBase();
 
@@ -459,12 +481,11 @@ namespace LTSM
             std::vector<uint8_t> inflateData(const void* buf, size_t len, int flushPolicy = Z_NO_FLUSH);
         };
 
-        class InflateStream : public InflateBase, public NetworkStream
-        {
-        protected:
+        class InflateStream : public InflateBase, public NetworkStream {
+          protected:
             StreamBuf sb;
 
-        public:
+          public:
             InflateStream();
 
             void appendData(const std::vector<uint8_t> &);
@@ -474,7 +495,7 @@ namespace LTSM
             void recvRaw(void*, size_t) const override;
             uint8_t peekInt8(void) const override;
 
-        private:
+          private:
             void sendRaw(const void*, size_t) override;
         };
     } // Zlib

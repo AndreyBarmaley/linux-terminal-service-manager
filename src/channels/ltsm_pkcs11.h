@@ -26,12 +26,9 @@
 
 #define LTSM_PKCS11_VERSION 20240723
 
-namespace LTSM
-{
-    namespace Pkcs11Op
-    {
-        enum
-        {
+namespace LTSM {
+    namespace Pkcs11Op {
+        enum {
             Init = 0xFC01,
             GetSlots = 0xFC02,
             GetSlotMechanisms = 0xFC03,

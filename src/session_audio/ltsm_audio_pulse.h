@@ -38,17 +38,15 @@
 #include "pulse/mainloop.h"
 #include "pulse/introspect.h"
 
-namespace LTSM
-{
-    class WaitNotify
-    {
+namespace LTSM {
+    class WaitNotify {
         std::mutex lock;
         std::condition_variable cv;
 
         const void* waitData = nullptr;
         int waitId = 0;
 
-    public:
+      public:
         WaitNotify() = default;
 
         void reset(void);
@@ -56,41 +54,33 @@ namespace LTSM
         void notify(int id, const void*);
     };
 
-    namespace PulseAudio
-    {
+    namespace PulseAudio {
         enum WaitOp { ContextServerInfo = 0xAB01, ContextDrain = 0xAB02, ContextLoadModule = 0xAB03, ContextSourceInfo = 0xAB04, ContextState = 0xAB05,
                       StreamState = 0xAB11, StreamCork = 0xAB12, StreamTrigger = 0xAB13, StreamFlush = 0xAB14, StreamDrain = 0xAB15
                     };
 
-        struct MainLoopDeleter
-        {
-            void operator()(pa_mainloop * loop)
-            {
+        struct MainLoopDeleter {
+            void operator()(pa_mainloop * loop) {
                 pa_mainloop_free(loop);
             }
         };
 
-        struct ContextDeleter
-        {
-            void operator()(pa_context * ctx)
-            {
+        struct ContextDeleter {
+            void operator()(pa_context * ctx) {
                 pa_context_unref(ctx);
             }
         };
 
-        struct StreamDeleter
-        {
-            void operator()(pa_stream * st)
-            {
+        struct StreamDeleter {
+            void operator()(pa_stream * st) {
                 pa_stream_unref(st);
             }
         };
 
         uint16_t formatBits(const pa_sample_format_t &);
 
-        class BaseStream
-        {
-        protected:
+        class BaseStream {
+          protected:
             pa_sample_spec audioSpec = { .format = PA_SAMPLE_S16LE, .rate = 44100, .channels = 2 };
 
             WaitNotify waitNotify;
@@ -99,9 +89,9 @@ namespace LTSM
             std::unique_ptr<pa_context, ContextDeleter> ctx;
             std::unique_ptr<pa_stream, StreamDeleter> stream;
 
-            const pa_server_info * serverInfo = nullptr;
+            const pa_server_info* serverInfo = nullptr;
 
-        protected:
+          protected:
             static void contextStateCallback(pa_context * ctx, void* userData);
             static void streamStateCallback(pa_stream * stream, void* userData);
             static void streamSuspendedCallback(pa_stream * stream, void* userData);
@@ -123,14 +113,14 @@ namespace LTSM
             void contextDrainNotify(void);
             void contextDrainWait(void);
 
-            void contextServerInfoNotify(const pa_server_info * );
-            const pa_server_info * contextServerInfoWait(void);
+            void contextServerInfoNotify(const pa_server_info*);
+            const pa_server_info* contextServerInfoWait(void);
 
             void contextLoadModuleNotify(uint32_t idx);
             uint32_t contextLoadModuleWait(const std::string & name, const std::string & args);
 
             void contextSourceInfoNotify(const pa_source_info * info, int eol);
-            const pa_source_info * contextSourceInfoWait(const std::string & name);
+            const pa_source_info* contextSourceInfoWait(const std::string & name);
 
             void streamCorkNotify(int success);
             bool streamCorkWait(bool);
@@ -151,7 +141,7 @@ namespace LTSM
             virtual void streamOverflowEvent(void);
             virtual void streamUnderflowEvent(int64_t index);
 
-        public:
+          public:
             BaseStream() = default;
             virtual ~BaseStream();
 
@@ -178,24 +168,22 @@ namespace LTSM
         };
 
 #ifdef LTSM_CLIENT
-        class InputStream : public BaseStream
-        {
+        class InputStream : public BaseStream {
             std::thread thread;
 
             std::vector<uint8_t> pcm;
             mutable std::mutex lock;
 
-        protected:
+          protected:
             static void streamWriteCallback(pa_stream * stream, const size_t nbytes, void* userData);
             virtual void streamWriteEvent(const size_t &);
 
-        public:
+          public:
             InputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels);
             ~InputStream();
 
 
-            const char* streamName(void) const override
-            {
+            const char* streamName(void) const override {
                 return "LTSM Audio Input";
             }
 
@@ -215,22 +203,20 @@ namespace LTSM
 #else
         using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
 
-        class OutputStream : public BaseStream
-        {
+        class OutputStream : public BaseStream {
             std::thread thread;
             std::string monitorName;
             ReadEventFunc readEventCb;
 
-        protected:
+          protected:
             static void streamReadCallback(pa_stream * stream, const size_t nbytes, void* userData);
             void streamReadEvent(const size_t &);
 
-        public:
-            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, ReadEventFunc &&);
+          public:
+            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, const ReadEventFunc &);
             ~OutputStream();
 
-            const char* streamName(void) const override
-            {
+            const char* streamName(void) const override {
                 return "LTSM Audio Output";
             }
 

@@ -29,21 +29,18 @@
 #include "ltsm_audio.h"
 
 #ifdef __APPLE__
- #include <OpenAL/al.h>
- #include <OpenAL/alc.h>
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
 #else
- #include <AL/al.h>
- #include <AL/alc.h>
+#include <AL/al.h>
+#include <AL/alc.h>
 #endif
 
-namespace LTSM
-{
-    namespace OpenAL
-    {
+namespace LTSM {
+    namespace OpenAL {
         const char* alcErrorName(ALCenum);
 
-        class Playback : public AudioPlayer
-        {
+        class Playback : public AudioPlayer {
             std::unique_ptr<ALCdevice, ALCboolean(*)(ALCdevice*)> dev{ nullptr, alcCloseDevice };
             std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, alcDestroyContext };
 
@@ -53,12 +50,12 @@ namespace LTSM
             ALenum fmtFormat = 0;
             ALsizei fmtFrequency = 0;
 
-        protected:
+          protected:
             ALint getBuffersProcessed(void) const;
             ALint getBuffersQueued(void) const;
             ALuint findFreeBufferId(void) const;
 
-        public:
+          public:
             Playback(const AudioFormat &, ALuint autoPlayAfterSec = 0);
             ~Playback();
 

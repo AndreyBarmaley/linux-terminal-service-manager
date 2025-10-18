@@ -31,10 +31,8 @@
 
 #include "ltsm_compat.h"
 
-namespace PcscLite
-{
-    enum
-    {
+namespace PcscLite {
+    enum {
         EstablishContext = 0x01,
         ReleaseContext = 0x02,
         ListReaders = 0x03,
@@ -58,18 +56,14 @@ namespace PcscLite
     };
 }
 
-namespace LTSM
-{
-    namespace PcscOp
-    {
-        enum
-        {
+namespace LTSM {
+    namespace PcscOp {
+        enum {
             Init = 0xFD01
         };
     }
 
-    struct pcsc_error : public std::runtime_error
-    {
+    struct pcsc_error : public std::runtime_error {
         explicit pcsc_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }

@@ -34,26 +34,22 @@
 #include "ltsm_sockets.h"
 #include "ltsm_pkcs11_wrapper.h"
 
-struct Pkcs11Token
-{
+struct Pkcs11Token {
     uint64_t slotId;
 
     LTSM::PKCS11::SlotInfo slotInfo;
     LTSM::PKCS11::TokenInfo tokenInfo;
 
-    bool operator== (const Pkcs11Token & st) const
-    {
+    bool operator== (const Pkcs11Token & st) const {
         return tokenInfo.getModel() == st.tokenInfo.getModel() &&
                tokenInfo.getSerialNumber() == st.tokenInfo.getSerialNumber();
     }
 
-    bool operator< (const Pkcs11Token & st) const
-    {
+    bool operator< (const Pkcs11Token & st) const {
         auto model1 = tokenInfo.getModel();
         auto model2 = st.tokenInfo.getModel();
 
-        if(model1 == model2)
-        {
+        if(model1 == model2) {
             return tokenInfo.getSerialNumber() < st.tokenInfo.getSerialNumber();
         }
 
@@ -61,8 +57,7 @@ struct Pkcs11Token
     }
 };
 
-struct Pkcs11Mech
-{
+struct Pkcs11Mech {
     uint64_t mechId;
     uint64_t minKey;
     uint64_t maxKey;
@@ -70,14 +65,12 @@ struct Pkcs11Mech
     std::string name;
 };
 
-struct Pkcs11Cert
-{
+struct Pkcs11Cert {
     std::vector<uint8_t> objectId;
     std::vector<uint8_t> objectValue;
 };
 
-class Pkcs11Client : public QThread
-{
+class Pkcs11Client : public QThread {
     Q_OBJECT
 
     LTSM::SocketStream sock;
@@ -88,7 +81,7 @@ class Pkcs11Client : public QThread
 
     std::list<Pkcs11Token> tokens;
 
-public:
+  public:
     Pkcs11Client(int displayNum, QObject*);
     ~Pkcs11Client();
 
@@ -101,12 +94,12 @@ public:
     std::vector<uint8_t> decryptData(uint64_t slotId, const std::string & pin, const std::vector<uint8_t> & certId,
                                      const void* data, size_t len, uint64_t mechType = CKM_RSA_PKCS);
 
-protected:
+  protected:
     void run(void) override;
 
     bool updateTokens(void);
 
-signals:
+  signals:
     void pkcs11Error(const QString &);
     void pkcs11Shutdown(void);
     void pkcs11TokensChanged(void);

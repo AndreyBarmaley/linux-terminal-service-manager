@@ -39,35 +39,30 @@
 #include "ui_ltsm_sessions.h"
 
 RowItem::RowItem(const XvfbInfo & info, const QString & label)
-    : QTableWidgetItem(label)
-{
+    : QTableWidgetItem(label) {
     QVariant var;
     var.setValue(info);
     setData(Qt::UserRole, var);
 }
 
 RowItem::RowItem(const XvfbInfo & info, const QIcon & icon, const QString & label)
-    : QTableWidgetItem(icon, label)
-{
+    : QTableWidgetItem(icon, label) {
     QVariant var;
     var.setValue(info);
     setData(Qt::UserRole, var);
 }
 
-XvfbInfo RowItem::xvfbInfo(void) const
-{
+XvfbInfo RowItem::xvfbInfo(void) const {
     auto var = data(Qt::UserRole);
     return qvariant_cast<XvfbInfo>(var);
 }
 
-int RowItem::display(void) const
-{
+int RowItem::display(void) const {
     return xvfbInfo().display;
 }
 
 LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
-    QDialog(parent), ui(new Ui::LTSM_Sessions), selectedRow(nullptr)
-{
+    QDialog(parent), ui(new Ui::LTSM_Sessions), selectedRow(nullptr) {
     ui->setupUi(this);
     ui->tableWidget->setColumnCount(6);
     ui->tableWidget->setHorizontalHeaderLabels(QStringList() << tr("User", "HeaderLabel") << tr("Display",
@@ -76,8 +71,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     sdl2x11.setFile(QDir(QCoreApplication::applicationDirPath()).filePath("LTSM_sdl2x11"));
 
-    if(! sdl2x11.exists())
-    {
+    if(! sdl2x11.exists()) {
         ui->pushButtonShow->setEnabled(false);
         ui->pushButtonShow->setToolTip(QString(tr("utility not found: %1")).arg(sdl2x11.fileName()));
     }
@@ -87,14 +81,13 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     const char* interface = "LTSM.Manager.Service";
     dbusInterfacePtr.reset(new QDBusInterface(service, path, interface, QDBusConnection::systemBus()));
 
-    if(! dbusInterfacePtr->isValid())
-    {
+    if(! dbusInterfacePtr->isValid()) {
         dbusInterfacePtr.reset();
         QMessageBox::critical(this, "LTSM_sessions",
                               QString(tr("<b>DBus interface not found!</b><br><br>service: %1<br>path: %2<br>interface: %3")).arg(service).arg(
                                   path).arg(interface),
                               QMessageBox::Ok);
-        throw -1;
+        throw - 1;
     }
 
     tableReload();
@@ -110,15 +103,12 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
     connect(ui->pushButtonDisconnect, SIGNAL(clicked()), this, SLOT(disconnectClicked()));
 }
 
-LTSM_Sessions::~LTSM_Sessions()
-{
+LTSM_Sessions::~LTSM_Sessions() {
     delete ui;
 }
 
-void LTSM_Sessions::customContextMenu(QPoint pos)
-{
-    if(selectedRow)
-    {
+void LTSM_Sessions::customContextMenu(QPoint pos) {
+    if(selectedRow) {
         auto envDisplay = qgetenv("DISPLAY");
         auto myDisplay = envDisplay.size() && envDisplay[0] == ':' ? envDisplay.remove(0, 1).toInt() : 0;
         QMenu * menu = new QMenu(this);
@@ -139,8 +129,7 @@ void LTSM_Sessions::customContextMenu(QPoint pos)
         menu->addAction(setSessionDurationAction);
         menu->addAction(setSessionPolicyAction);
 
-        if(myDisplay == selectedRow->display())
-        {
+        if(myDisplay == selectedRow->display()) {
             showAction->setDisabled(true);
             disconnectAction->setDisabled(true);
             logoutAction->setDisabled(true);
@@ -159,17 +148,14 @@ void LTSM_Sessions::customContextMenu(QPoint pos)
     }
 }
 
-void LTSM_Sessions::showInformation(void)
-{
-    if(selectedRow)
-    {
+void LTSM_Sessions::showInformation(void) {
+    if(selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         QString content;
         QTextStream ts(& content);
         QString status = tr("login", "XvfbStatus");
 
-        switch(xvfb.mode)
-        {
+        switch(xvfb.mode) {
             case 1:
                 status = tr("online", "XvfbStatus");
                 break;
@@ -184,8 +170,7 @@ void LTSM_Sessions::showInformation(void)
 
         QString policy = tr("authlock", "XvfbStatus");
 
-        switch(xvfb.policy)
-        {
+        switch(xvfb.policy) {
             case 1:
                 policy = tr("authtake", "XvfbStatus");
                 break;
@@ -199,70 +184,61 @@ void LTSM_Sessions::showInformation(void)
         }
 
         ts <<
-           "display: " << xvfb.display << "<br>" <<
-           "user: " << xvfb.user << "<br>" <<
-           "address: " << xvfb.remoteaddr << "<br>" <<
-           "pid1: " << xvfb.pid1 << "<br>" <<
-           "pid2: " << xvfb.pid2 << "<br>" <<
-           "width: " << xvfb.width << "<br>" <<
-           "height: " << xvfb.height << "<br>" <<
-           "uid: " << xvfb.uid << "<br>" <<
-           "gid: " << xvfb.gid << "<br>" <<
-           "status: " << status << "<br>" <<
-           "session duration: " << xvfb.durationLimit << "<br>" <<
-           "session policy: " << policy << "<br>" <<
-           "connection: " << xvfb.conntype << "<br>" <<
-           "encryption: " << xvfb.encryption << "<br>";
+        "display: " << xvfb.display << "<br>" <<
+        "user: " << xvfb.user << "<br>" <<
+        "address: " << xvfb.remoteaddr << "<br>" <<
+        "pid1: " << xvfb.pid1 << "<br>" <<
+        "pid2: " << xvfb.pid2 << "<br>" <<
+        "width: " << xvfb.width << "<br>" <<
+        "height: " << xvfb.height << "<br>" <<
+        "uid: " << xvfb.uid << "<br>" <<
+        "gid: " << xvfb.gid << "<br>" <<
+        "status: " << status << "<br>" <<
+        "session duration: " << xvfb.durationLimit << "<br>" <<
+        "session policy: " << policy << "<br>" <<
+        "connection: " << xvfb.conntype << "<br>" <<
+        "encryption: " << xvfb.encryption << "<br>";
         QMessageBox::information(this, tr("Session Info"), ts.readAll(), QMessageBox::Ok);
     }
 }
 
-void LTSM_Sessions::changeSessionDuration(void)
-{
-    if(selectedRow)
-    {
+void LTSM_Sessions::changeSessionDuration(void) {
+    if(selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
         int duration = QInputDialog::getInt(this, QString(tr("Change session duration for: %1")).arg(xvfb.user), tr("seconds:"),
                                             xvfb.durationLimit, 0, 2147483647, 1, & change);
 
-        if(change)
-        {
+        if(change) {
             dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionDurationLimitSec", xvfb.display,
                                    static_cast<quint32>(duration));
         }
     }
 }
 
-void LTSM_Sessions::changeSessionPolicy(void)
-{
-    if(selectedRow)
-    {
+void LTSM_Sessions::changeSessionPolicy(void) {
+    if(selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         bool change = false;
         QString policy = QInputDialog::getItem(this, QString(tr("Change session policy for: %1")).arg(xvfb.user), "",
                                                QStringList() << tr("authlock", "XvfbPolicy") << tr("authtake", "XvfbPolicy") << tr("authshare", "XvfbPolicy"),
                                                xvfb.policy, false, & change);
 
-        if(change)
-        {
+        if(change) {
             dbusInterfacePtr->call(QDBus::CallMode::Block, "busSetSessionPolicy", xvfb.display, policy);
         }
     }
 }
 
-void LTSM_Sessions::itemDoubleClicked(QTableWidgetItem* item)
-{
+void LTSM_Sessions::itemDoubleClicked(QTableWidgetItem* item) {
     showInformation();
 }
 
-void LTSM_Sessions::tableReload(void)
-{
+void LTSM_Sessions::tableReload(void) {
     selectedRow = nullptr;
     int row = ui->tableWidget->rowCount();
 
-    while(0 < row--)
-    {
+    while(0 < row--) {
         ui->tableWidget->removeRow(row);
     }
 
@@ -272,14 +248,11 @@ void LTSM_Sessions::tableReload(void)
     ui->pushButtonShow->setEnabled(false);
     auto res = dbusInterfacePtr->call(QDBus::CallMode::Block, "busGetSessionsJson");
 
-    if(! res.arguments().isEmpty())
-    {
+    if(! res.arguments().isEmpty()) {
         auto jsonDoc = QJsonDocument::fromJson(res.arguments().front().toString().toUtf8());
 
-        if(! jsonDoc.isEmpty() && jsonDoc.isArray())
-        {
-            for(const auto & val : jsonDoc.array())
-            {
+        if(! jsonDoc.isEmpty() && jsonDoc.isArray()) {
+            for(const auto & val : jsonDoc.array()) {
                 auto obj = val.toObject();
                 XvfbInfo info;
                 info.display = obj.value("displaynum").toInt();
@@ -300,8 +273,7 @@ void LTSM_Sessions::tableReload(void)
                 row = ui->tableWidget->rowCount();
                 ui->tableWidget->insertRow(row);
 
-                if(0 < info.mode)
-                {
+                if(0 < info.mode) {
                     ui->tableWidget->setItem(row, 0, new RowItem(info,
                                              QIcon(1 == info.mode ? ":/ltsm/ltsm_online.png" : ":/ltsm/ltsm_offline.png"), info.user));
                     ui->tableWidget->setItem(row, 1, new RowItem(info, QString::number(info.display)));
@@ -316,91 +288,72 @@ void LTSM_Sessions::tableReload(void)
     }
 }
 
-void LTSM_Sessions::displayRemovedCallback(int display)
-{
+void LTSM_Sessions::displayRemovedCallback(int display) {
     tableReload();
 }
 
-void LTSM_Sessions::sessionChangedCallback(int display)
-{
+void LTSM_Sessions::sessionChangedCallback(int display) {
     tableReload();
 }
 
-void LTSM_Sessions::disconnectClicked(void)
-{
-    if(dbusInterfacePtr->isValid() && selectedRow)
-    {
+void LTSM_Sessions::disconnectClicked(void) {
+    if(dbusInterfacePtr->isValid() && selectedRow) {
         dbusInterfacePtr->call(QDBus::CallMode::Block, "busShutdownConnector", selectedRow->display());
     }
 }
 
-void LTSM_Sessions::logoffClicked(void)
-{
-    if(dbusInterfacePtr->isValid() && selectedRow)
-    {
+void LTSM_Sessions::logoffClicked(void) {
+    if(dbusInterfacePtr->isValid() && selectedRow) {
         dbusInterfacePtr->call(QDBus::CallMode::Block, "busShutdownDisplay", selectedRow->display());
     }
 }
 
-void LTSM_Sessions::sendmsgClicked(void)
-{
-    if(dbusInterfacePtr->isValid() && selectedRow)
-    {
+void LTSM_Sessions::sendmsgClicked(void) {
+    if(dbusInterfacePtr->isValid() && selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         bool send = false;
         auto message = QInputDialog::getMultiLineText(this, QString(tr("Send message to: %1")).arg(xvfb.user), "", QString(),
                        & send);
 
-        if(send)
-        {
+        if(send) {
             dbusInterfacePtr->call(QDBus::CallMode::Block, "busSendMessage", xvfb.display, message);
         }
     }
 }
 
-void LTSM_Sessions::showClicked(void)
-{
-    if(selectedRow)
-    {
+void LTSM_Sessions::showClicked(void) {
+    if(selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         QStringList args;
         args << "--title" << QString("\"Display:%1 (%2)\"").arg(xvfb.display).arg(xvfb.user) << "--auth" << xvfb.authfile <<
-             "--display" << QString::number(xvfb.display);
+                "--display" << QString::number(xvfb.display);
         process.start(sdl2x11.absoluteFilePath(), args, QIODevice::NotOpen);
         ui->pushButtonShow->setEnabled(false);
     }
 }
 
-void LTSM_Sessions::itemSelectionChanged(void)
-{
-    if(ui->tableWidget->selectedItems().isEmpty())
-    {
+void LTSM_Sessions::itemSelectionChanged(void) {
+    if(ui->tableWidget->selectedItems().isEmpty()) {
         selectedRow = nullptr;
         ui->pushButtonDisconnect->setEnabled(false);
         ui->pushButtonLogoff->setEnabled(false);
         ui->pushButtonSendMsg->setEnabled(false);
         ui->pushButtonShow->setEnabled(false);
-    }
-    else
-    {
+    } else {
         selectedRow = dynamic_cast<RowItem*>(ui->tableWidget->currentItem());
     }
 
-    if(selectedRow)
-    {
+    if(selectedRow) {
         auto xvfb = selectedRow->xvfbInfo();
         auto envDisplay = qgetenv("DISPLAY");
         auto myDisplay = envDisplay.size() && envDisplay[0] == ':' ? envDisplay.remove(0, 1).toInt() : 0;
 
-        if(myDisplay != xvfb.display)
-        {
+        if(myDisplay != xvfb.display) {
             ui->pushButtonDisconnect->setEnabled(xvfb.mode != 2);
             ui->pushButtonLogoff->setEnabled(true);
             ui->pushButtonSendMsg->setEnabled(true);
             ui->pushButtonShow->setEnabled(sdl2x11.exists() && QProcess::NotRunning == process.state());
-        }
-        else
-        {
+        } else {
             ui->pushButtonDisconnect->setEnabled(false);
             ui->pushButtonLogoff->setEnabled(false);
             ui->pushButtonSendMsg->setEnabled(false);

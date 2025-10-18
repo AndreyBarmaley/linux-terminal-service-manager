@@ -26,14 +26,11 @@
 #include "ltsm_application.h"
 #include "ltsm_audio_decoder.h"
 
-namespace LTSM
-{
+namespace LTSM {
 #ifdef LTSM_WITH_OPUS
     AudioDecoder::Opus::Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample)
-        : sampleLength(audioChannels * (bitsPerSample >> 3))
-    {
-        if(bitsPerSample != sizeof(opus_int16) * 8)
-        {
+        : sampleLength(audioChannels * (bitsPerSample >> 3)) {
+        if(bitsPerSample != sizeof(opus_int16) * 8) {
             Application::error("%s: %s failed", __FUNCTION__, "bitsPerSample");
             throw audio_error(NS_FuncName);
         }
@@ -41,34 +38,29 @@ namespace LTSM
         int error = OPUS_OK;
         ctx.reset(opus_decoder_create(samplesPerSec, audioChannels, & error));
 
-        if(! ctx || error != OPUS_OK)
-        {
+        if(! ctx || error != OPUS_OK) {
             Application::error("%s: %s failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__,
                                "opus_decoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
         }
     }
 
-    bool AudioDecoder::Opus::decode(const uint8_t* ptr, size_t len)
-    {
+    bool AudioDecoder::Opus::decode(const uint8_t* ptr, size_t len) {
         int frames = opus_decoder_get_nb_samples(ctx.get(), ptr, len);
 
-        if(0 > frames)
-        {
+        if(0 > frames) {
             Application::error("%s: %s failed, error: %d, data size: %lu", __FUNCTION__, "opus_decoder_get_nb_samples", frames, len);
             throw audio_error(NS_FuncName);
         }
 
-        if(0 == frames)
-        {
+        if(0 == frames) {
             return false;
         }
 
-        tmp.resize(frames* sampleLength);
+        tmp.resize(frames * sampleLength);
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 
-        if(nSamples < 0)
-        {
+        if(nSamples < 0) {
             Application::error("%: %s failed, error: %d", __FUNCTION__, "opus_decode", nSamples);
             return false;
         }
@@ -77,15 +69,12 @@ namespace LTSM
         return true;
     }
 
-    const uint8_t* AudioDecoder::Opus::data(void) const
-    {
+    const uint8_t* AudioDecoder::Opus::data(void) const {
         return tmp.data();
     }
 
-    size_t AudioDecoder::Opus::size(void) const
-    {
-        if(decodeSize > tmp.size())
-        {
+    size_t AudioDecoder::Opus::size(void) const {
+        if(decodeSize > tmp.size()) {
             Application::error("%s: out of range, size: %lu, buf: %lu", __FUNCTION__, decodeSize, tmp.size());
             throw audio_error(NS_FuncName);
         }
