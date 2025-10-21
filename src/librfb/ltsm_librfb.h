@@ -24,6 +24,7 @@
 #ifndef _LTSM_LIBRFB_
 #define _LTSM_LIBRFB_
 
+#include <vector>
 #include <exception>
 #include <functional>
 
@@ -164,6 +165,35 @@ namespace LTSM {
             bool authVenCrypt = false;
             bool authKrb5 = false;
             bool tlsAnonMode = false;
+        };
+    }
+
+    namespace Tools {
+            struct StreamBits {
+            std::vector<uint8_t> vecbuf;
+            size_t bitpos = 0;
+
+            bool empty(void) const;
+            const std::vector<uint8_t> & toVector(void) const;
+
+            StreamBits() = default;
+            StreamBits(std::vector<uint8_t> && v) : vecbuf(std::move(v)) {}
+            virtual ~StreamBits() = default;
+        };
+
+        struct StreamBitsPack : StreamBits {
+            explicit StreamBitsPack(size_t rez = 32);
+
+            void pushBit(bool v);
+            void pushValue(int val, size_t field);
+            void pushAlign(void);
+        };
+
+        struct StreamBitsUnpack : StreamBits {
+            StreamBitsUnpack(std::vector<uint8_t> &&, size_t counts, size_t field);
+
+            bool popBit(void);
+            int popValue(size_t field);
         };
     }
 }

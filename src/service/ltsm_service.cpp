@@ -2153,7 +2153,7 @@ namespace LTSM::Manager {
             if(std::filesystem::exists(dstfile, err)) {
                 Application::error("%s: file present and skipping, path: `%s'", __FUNCTION__, dstfile.c_str());
                 busSendNotify(xvfb->displayNum, "Transfer Skipping",
-                              Tools::StringFormat("such a file exists: %1").arg(dstfile.c_str()),
+                              Tools::joinToString("such a file exists: ", dstfile),
                               NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
                 continue;
             }
@@ -2178,7 +2178,7 @@ namespace LTSM::Manager {
 
             // check lost conn
             if(xvfb->mode != SessionMode::Connected) {
-                busSendNotify(xvfb->displayNum, "Transfer Error", Tools::StringFormat("transfer connection is lost"),
+                busSendNotify(xvfb->displayNum, "Transfer Error", "transfer connection is lost",
                               NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
                 error = true;
                 std::filesystem::remove(tmpfile, fserr);
@@ -2211,8 +2211,8 @@ namespace LTSM::Manager {
         if(! error) {
             Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
             busSendNotify(xvfb->displayNum, "Transfer Complete",
-                          Tools::StringFormat("new file added: <a href=\"file://%1\">%2</a>").
-                          arg(dstfile).arg(std::filesystem::path(dstfile).filename().c_str()),
+                          Tools::joinToString("new file added: <a href=\"file://", dstfile, "\">", 
+                                                std::filesystem::path(dstfile).filename(), "</a>"),
                           NotifyParams::Information, NotifyParams::UrgencyLevel::Normal);
         }
     }
@@ -2775,8 +2775,7 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPrinter)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "printer");
-            busSendNotify(xvfb->displayNum, "Channel Disabled",
-                          Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("printer"),
+            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }
@@ -2899,8 +2898,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectAudio)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "audio");
-            busSendNotify(xvfb->displayNum, "Channel Disabled",
-                          Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("audio"),
+            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }
@@ -2991,8 +2989,7 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startSaneListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectScanner)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "scanner");
-            busSendNotify(xvfb->displayNum, "Channel Disabled",
-                          Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("scanner"),
+            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }
@@ -3115,8 +3112,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPcsc)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "pcsc");
-            busSendNotify(xvfb->displayNum, "Channel Disabled",
-                          Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("pcsc"),
+            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }
@@ -3327,8 +3323,7 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "fuse");
-            busSendNotify(xvfb->displayNum, "Channel Disabled",
-                          Tools::StringFormat("redirect %1 is blocked, contact the administrator").arg("fuse"),
+            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
             return false;
         }

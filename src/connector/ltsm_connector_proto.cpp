@@ -509,7 +509,7 @@ namespace LTSM::Connector {
                 if(fmax && fsize > fmax) {
                     Application::warning("%s: file size exceeds and skipped, file: %s", __FUNCTION__, fname.c_str());
                     busSendNotify(displayNum(), "Transfer Skipped",
-                                  Tools::StringFormat("the file size exceeds, the allowed limit: %1M, file: %2").arg(prettyMb).arg(fname),
+                                  Tools::joinToString("the file size exceeds, the allowed limit: ", prettyMb, "M, file: ", fname),
                                   NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
                     continue;
                 }

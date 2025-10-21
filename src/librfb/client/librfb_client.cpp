@@ -261,7 +261,7 @@ namespace LTSM {
     bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec) {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
-        auto version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
+        auto version = Tools::joinToString("RFB 00", RFB::VERSION_MAJOR, ".00", RFB::VERSION_MINOR, "\n");
         std::string magick = recvString(12);
 
         if(magick.empty()) {

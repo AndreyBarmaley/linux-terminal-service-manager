@@ -23,6 +23,7 @@
 
 #include <algorithm>
 
+#include "ltsm_application.h"
 #include "ltsm_tools.h"
 #include "ltsm_librfb.h"
 
@@ -212,5 +213,107 @@ namespace LTSM {
         }
 
         return "";
+    }
+
+    // StreamBits
+    bool Tools::StreamBits::empty(void) const {
+        return vecbuf.empty() ||
+               (vecbuf.size() == 1 && bitpos == 7);
+    }
+
+    const std::vector<uint8_t> & Tools::StreamBits::toVector(void) const {
+        return vecbuf;
+    }
+
+    // StreamBitsPack
+    Tools::StreamBitsPack::StreamBitsPack(size_t rez) {
+        bitpos = 7;
+        vecbuf.reserve(rez);
+    }
+
+    void Tools::StreamBitsPack::pushBit(bool v) {
+        if(bitpos == 7) {
+            vecbuf.push_back(0);
+        }
+
+        if(v) {
+            const uint8_t mask = 1 << bitpos;
+            vecbuf.back() |= mask;
+        }
+
+        if(bitpos == 0) {
+            bitpos = 7;
+        } else {
+            bitpos--;
+        }
+    }
+
+    void Tools::StreamBitsPack::pushAlign(void) {
+        bitpos = 7;
+    }
+
+    void Tools::StreamBitsPack::pushValue(int val, size_t field) {
+        // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
+        size_t mask = 1ul << (field - 1);
+
+        while(mask) {
+            pushBit(val & mask);
+            mask >>= 1;
+        }
+    }
+
+    // StreamBitsUnpack
+    Tools::StreamBitsUnpack::StreamBitsUnpack(std::vector<uint8_t> && v, size_t counts, size_t field) : StreamBits(std::move(v)) {
+        // check size
+        size_t bits = field * counts;
+        size_t len = bits >> 3;
+
+        if((len << 3) < bits) {
+            len++;
+        }
+
+        if(len < toVector().size()) {
+            Application::error("%s: %s", __FUNCTION__, "incorrect data size");
+            throw std::out_of_range(NS_FuncName);
+        }
+
+        bitpos = (len << 3) - bits;
+    }
+
+    bool Tools::StreamBitsUnpack::popBit(void) {
+        if(vecbuf.empty()) {
+            Application::error("%s: %s", __FUNCTION__, "empty data");
+            throw std::invalid_argument(NS_FuncName);
+        }
+
+        uint8_t mask = 1 << bitpos;
+        bool res = vecbuf.back() & mask;
+
+        if(bitpos == 7) {
+            vecbuf.pop_back();
+            bitpos = 0;
+        } else {
+            bitpos++;
+        }
+
+        return res;
+    }
+
+    int Tools::StreamBitsUnpack::popValue(size_t field) {
+        // field 1: mask 0x0001, field 2: mask 0x0010, field 4: mask 0x1000
+        size_t mask1 = 1 << (field - 1);
+        size_t mask2 = 1;
+        int val = 0;
+
+        while(mask1) {
+            if(popBit()) {
+                val |= mask2;
+            }
+
+            mask1 >>= 1;
+            mask2 <<= 1;
+        }
+
+        return val;
     }
 }

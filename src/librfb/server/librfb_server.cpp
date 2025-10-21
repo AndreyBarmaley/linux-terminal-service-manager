@@ -328,15 +328,15 @@ namespace LTSM {
 
     int RFB::ServerEncoder::serverHandshakeVersion(void) {
         // RFB 6.1.1 version
-        int protover = 38;
-        auto version = Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(RFB::VERSION_MINOR);
+        int protover = RFB::VERSION_MAJOR * 10 + RFB::VERSION_MINOR;
+        auto version = Tools::joinToString("RFB 00", RFB::VERSION_MAJOR, ".00", RFB::VERSION_MINOR, "\n");
         sendString(version).sendFlush();
         std::string magick = recvString(12);
         Application::debug(DebugType::Rfb, "%s: handshake version %s", __FUNCTION__, magick.c_str());
 
-        if(magick == Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(3)) {
+        if(magick == "RFB 003.003\n") {
             protover = 33;
-        } else if(magick == Tools::StringFormat("RFB 00%1.00%2\n").arg(RFB::VERSION_MAJOR).arg(7)) {
+        } else if(magick == "RFB 003.007\n") {
             protover = 37;
         } else if(magick != version) {
             Application::error("%s: handshake failure, unknown magic: %s", __FUNCTION__, magick.c_str());
@@ -399,104 +399,107 @@ namespace LTSM {
 
         sendFlush();
 
-        if(protover != 33) {
-            int clientSecurity = recvInt8();
-            Application::debug(DebugType::Rfb, "%s, client security: 0x%02x", __FUNCTION__, clientSecurity);
+        // unsupported
+        if(protover == 33) {
+            return true;
+        }
 
-            if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
-                // RFB 6.1.3 security result
-                if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
-                    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-                }
+        int clientSecurity = recvInt8();
+        Application::debug(DebugType::Rfb, "%s, client security: 0x%02x", __FUNCTION__, clientSecurity);
+
+        if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
+            // RFB 6.1.3 security result
+            if(clientSecurity == RFB::SECURITY_TYPE_NONE && secInfo.authNone) {
+                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+            }
 
 #ifdef LTSM_WITH_GNUTLS
-                else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
-                    if(secInfo.passwdFile.empty()) {
-                        Application::error("%s: passwd file not defined", __FUNCTION__);
-                        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                        return false;
-                    }
-
-                    std::error_code err;
-
-                    if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                        Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
-                                           secInfo.passwdFile.c_str(), getuid());
-                        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                        return false;
-                    }
-
-                    if(! authVncInit(secInfo.passwdFile)) {
-                        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                        return false;
-                    }
-
-                    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-                } else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
-                    if(! authVenCryptInit(secInfo)) {
-                        sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
-                        return false;
-                    }
-
-                    sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+            else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
+                if(secInfo.passwdFile.empty()) {
+                    Application::error("%s: passwd file not defined", __FUNCTION__);
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
+                    return false;
                 }
+
+                std::error_code err;
+
+                if(! std::filesystem::exists(secInfo.passwdFile, err)) {
+                    Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+                                       secInfo.passwdFile.c_str(), getuid());
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
+                    return false;
+                }
+
+                if(! authVncInit(secInfo.passwdFile)) {
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
+                    return false;
+                }
+
+                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+            } else if(clientSecurity == RFB::SECURITY_TYPE_VENCRYPT && secInfo.authVenCrypt) {
+                if(! authVenCryptInit(secInfo)) {
+                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
+                    return false;
+                }
+
+                sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+            }
 
 #endif
 #ifdef LTSM_WITH_GSSAPI
-                else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
-                    try {
-                        auto krb = std::make_unique<GssApi::Server>(socket.get());
-                        Application::info("%s: kerberos service: `%s'", __FUNCTION__, secInfo.krb5Service.c_str());
+            else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
+                try {
+                    auto krb = std::make_unique<GssApi::Server>(socket.get());
+                    Application::info("%s: kerberos service: `%s'", __FUNCTION__, secInfo.krb5Service.c_str());
 
-                        if(krb->handshakeLayer(secInfo.krb5Service)) {
-                            auto remoteName = Gss::displayName(krb->securityContext()->name);
-                            std::unique_ptr<JsonObject> jo;
+                    if(krb->handshakeLayer(secInfo.krb5Service)) {
+                        auto remoteName = Gss::displayName(krb->securityContext()->name);
+                        std::unique_ptr<JsonObject> jo;
 
-                            if(auto len = krb->recvIntBE32(); 0 < len) {
-                                auto raw = krb->recvData(len);
-                                jo = std::make_unique<JsonObject>(JsonContentString(std::string(raw.begin(), raw.end())).toObject());
-                            }
-
-                            // stop kerbero session
-                            krb.reset();
-                            Application::info("%s: kerberos auth: %s, remote: %s", __FUNCTION__, "success", remoteName.c_str());
-
-                            if(auto pos = remoteName.find("@"); pos != std::string::npos) {
-                                clientAuthName = remoteName.substr(0, pos);
-                                clientAuthDomain = remoteName.substr(pos + 1);
-                            } else {
-                                clientAuthName = remoteName;
-                            }
-
-                            // check json info
-                            if(jo) {
-                                auto tls = jo->getBoolean("continue:tls", false);
-
-                                if(tls && ! authVenCryptInit(secInfo)) {
-                                    return false;
-                                }
-                            }
-
-                            sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
-                            return true;
+                        if(auto len = krb->recvIntBE32(); 0 < len) {
+                            auto raw = krb->recvData(len);
+                            jo = std::make_unique<JsonObject>(JsonContentString(std::string(raw.begin(), raw.end())).toObject());
                         }
-                    } catch(const std::exception & err) {
-                        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-                    }
 
-                    const std::string err("security kerberos failed");
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                    Application::error("%s: error: %s", __FUNCTION__, err.c_str());
-                    return false;
+                        // stop kerbero session
+                        krb.reset();
+                        Application::info("%s: kerberos auth: %s, remote: %s", __FUNCTION__, "success", remoteName.c_str());
+
+                        if(auto pos = remoteName.find("@"); pos != std::string::npos) {
+                            clientAuthName = remoteName.substr(0, pos);
+                            clientAuthDomain = remoteName.substr(pos + 1);
+                        } else {
+                            clientAuthName = remoteName;
+                        }
+
+                        // check json info
+                        if(jo) {
+                            auto tls = jo->getBoolean("continue:tls", false);
+
+                            if(tls && ! authVenCryptInit(secInfo)) {
+                                return false;
+                            }
+                        }
+
+                        sendIntBE32(RFB::SECURITY_RESULT_OK).sendFlush();
+                        return true;
+                    }
+                } catch(const std::exception & err) {
+                    LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
                 }
+
+                const std::string err("security kerberos failed");
+                sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+                return false;
+            }
 
 #endif
-                else {
-                    const std::string err("no matching security types");
-                    sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                    Application::error("%s: error: %s", __FUNCTION__, err.c_str());
-                    return false;
-                }
+            else {
+                const std::string err("no matching security types");
+                sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
+                Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+                return false;
             }
         }
 
@@ -1247,9 +1250,8 @@ namespace LTSM {
         sendIntBE32(cursorId);
 
         // cursor rgba data
-        if(std::none_of(cursorSended.begin(), cursorSended.end(), [&](auto & curid) {
-        return curid == cursorId;
-    })) {
+        if(std::none_of(cursorSended.begin(), cursorSended.end(),
+            [&cursorId](auto & curid) { return curid == cursorId; })) {
             auto zlib = Tools::zlibCompress(rawPtr);
             // raw size
             sendIntBE32(rawPtr.size());

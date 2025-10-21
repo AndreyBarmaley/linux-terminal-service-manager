@@ -178,48 +178,12 @@ namespace LTSM {
         std::string base64Encode(const ByteArray &);
         std::vector<uint8_t> base64Decode(const std::string &);
 
-        class StringFormat : public std::string {
-            int cur = 1;
-
-          public:
-            explicit StringFormat(std::string_view);
-
-            StringFormat & arg(std::string_view);
-            StringFormat & arg(int);
-            StringFormat & arg(double, int prec);
-
-            StringFormat & replace(std::string_view, int);
-            StringFormat & replace(std::string_view, std::string_view);
-            StringFormat & replace(std::string_view, double, int prec);
-
-            const std::string & to_string(void) const {
-                return *this;
-            }
-        };
-
-        struct StreamBits {
-            std::vector<uint8_t> vecbuf;
-            size_t bitpos = 0;
-
-            bool empty(void) const;
-            const std::vector<uint8_t> & toVector(void) const;
-        };
-
-        struct StreamBitsPack : StreamBits {
-            explicit StreamBitsPack(size_t rez = 32);
-
-            void pushBit(bool v);
-            void pushValue(int val, size_t field);
-            void pushAlign(void);
-        };
-
-        struct StreamBitsUnpack : StreamBits {
-            StreamBitsUnpack(std::vector<uint8_t> &&, size_t counts, size_t field);
-
-            bool popBit(void);
-            int popValue(size_t field);
-        };
-
+#if __cplusplus >= 202002L
+        template<typename Iterator>
+        inline Iterator nextToEnd(Iterator it1, size_t count, Iterator it2) {
+            return std::ranges::next(it1, count, it2);
+        }
+#else
         template<typename Iterator>
         Iterator nextToEnd(Iterator it1, size_t count, Iterator it2) {
             if(it1 == it2) {
@@ -237,6 +201,7 @@ namespace LTSM {
 
             return it1;
         }
+#endif
 
         std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);

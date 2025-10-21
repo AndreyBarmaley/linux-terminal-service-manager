@@ -939,7 +939,7 @@ namespace LTSM {
             return 0;
         }
 
-        std::string cmd = Tools::runcmd(Tools::StringFormat("%1 %2 %3").arg(cvt).arg(sz.width).arg(sz.height));
+        std::string cmd = Tools::runcmd(Tools::joinToString(cvt, " ", sz.width, " ", sz.height));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
         params.remove_if([](auto & val) {
             return val.empty();
@@ -1003,7 +1003,7 @@ namespace LTSM {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
         }
 
-        auto name = Tools::StringFormat("%1x%2_%3").arg(mode_info.width).arg(mode_info.height).arg(vertRef);
+        auto name = Tools::joinToString(mode_info.width, "x", mode_info.height, "_", vertRef);
         mode_info.name_len = name.size();
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen, mode_info, name.size(), name.data());
 
