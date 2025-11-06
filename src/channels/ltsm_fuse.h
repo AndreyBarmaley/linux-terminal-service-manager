@@ -30,12 +30,9 @@
 
 #include "ltsm_compat.h"
 
-namespace LTSM
-{
-    namespace FuseOp
-    {
-        enum
-        {
+namespace LTSM {
+    namespace FuseOp {
+        enum {
             Init = 0xFF01,
             Quit = 0xFF02,
             GetAttr = 0xFF03,
@@ -56,8 +53,7 @@ namespace LTSM
         };
     }
 
-    struct fuse_error : public std::runtime_error
-    {
+    struct fuse_error : public std::runtime_error {
         explicit fuse_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }

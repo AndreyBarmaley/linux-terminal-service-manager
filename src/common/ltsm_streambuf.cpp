@@ -29,87 +29,71 @@
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
-namespace LTSM
-{
-    bool ByteArray::operator== (const ByteArray & ba) const
-    {
+namespace LTSM {
+    bool ByteArray::operator== (const ByteArray & ba) const {
         return ba.size() == size() && 0 == std::memcmp(ba.data(), data(), size());
     }
 
-    bool ByteArray::operator!= (const ByteArray & ba) const
-    {
+    bool ByteArray::operator!= (const ByteArray & ba) const {
         return ba.size() != size() || 0 != std::memcmp(ba.data(), data(), size());
     }
 
-    std::string ByteArray::hexString(std::string_view sep, bool prefix) const
-    {
+    std::string ByteArray::hexString(std::string_view sep, bool prefix) const {
         return Tools::buffer2hexstring(data(), data() + size(), 2, sep, prefix);
     }
 
-    std::string ByteArray::toString(void) const
-    {
+    std::string ByteArray::toString(void) const {
         return std::string(data(), data() + size());
     }
 
-    uint32_t ByteArray::crc32b(void) const
-    {
+    uint32_t ByteArray::crc32b(void) const {
         return Tools::crc32b(data(), size());
     }
 
     /* BinaryBuf */
-    BinaryBuf & BinaryBuf::append(std::string_view s)
-    {
+    BinaryBuf & BinaryBuf::append(std::string_view s) {
         insert(end(), s.begin(), s.end());
         return *this;
     }
 
-    BinaryBuf & BinaryBuf::append(const uint8_t* ptr, size_t len)
-    {
+    BinaryBuf & BinaryBuf::append(const uint8_t* ptr, size_t len) {
         insert(end(), ptr, ptr + len);
         return *this;
     }
 
-    BinaryBuf & BinaryBuf::append(const std::vector<uint8_t> & b)
-    {
+    BinaryBuf & BinaryBuf::append(const std::vector<uint8_t> & b) {
         insert(end(), b.begin(), b.end());
         return *this;
     }
 
-    BinaryBuf BinaryBuf::copy(void) const
-    {
+    BinaryBuf BinaryBuf::copy(void) const {
         return BinaryBuf(begin(), end());
     }
 
-    size_t BinaryBuf::size(void) const
-    {
+    size_t BinaryBuf::size(void) const {
         return std::vector<uint8_t>::size();
     }
 
-    uint8_t* BinaryBuf::data(void)
-    {
+    uint8_t* BinaryBuf::data(void) {
         return std::vector<uint8_t>::data();
     }
 
-    const uint8_t* BinaryBuf::data(void) const
-    {
+    const uint8_t* BinaryBuf::data(void) const {
         return std::vector<uint8_t>::data();
     }
 
     /* ByteOrderInterface */
-    uint8_t ByteOrderInterface::getInt8(void) const
-    {
+    uint8_t ByteOrderInterface::getInt8(void) const {
         uint8_t v;
         getRaw(& v, 1);
         return v;
     }
 
-    void ByteOrderInterface::putInt8(uint8_t v)
-    {
+    void ByteOrderInterface::putInt8(uint8_t v) {
         putRaw(& v, 1);
     }
 
-    uint16_t ByteOrderInterface::getIntLE16(void) const
-    {
+    uint16_t ByteOrderInterface::getIntLE16(void) const {
         uint16_t v;
         getRaw(& v, 2);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
@@ -119,8 +103,7 @@ namespace LTSM
 #endif
     }
 
-    uint32_t ByteOrderInterface::getIntLE32(void) const
-    {
+    uint32_t ByteOrderInterface::getIntLE32(void) const {
         uint32_t v;
         getRaw(& v, 4);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
@@ -130,8 +113,7 @@ namespace LTSM
 #endif
     }
 
-    uint64_t ByteOrderInterface::getIntLE64(void) const
-    {
+    uint64_t ByteOrderInterface::getIntLE64(void) const {
         uint64_t v;
         getRaw(& v, 8);
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
@@ -141,8 +123,7 @@ namespace LTSM
 #endif
     }
 
-    uint16_t ByteOrderInterface::getIntBE16(void) const
-    {
+    uint16_t ByteOrderInterface::getIntBE16(void) const {
         uint16_t v;
         getRaw(& v, 2);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -152,8 +133,7 @@ namespace LTSM
 #endif
     }
 
-    uint32_t ByteOrderInterface::getIntBE32(void) const
-    {
+    uint32_t ByteOrderInterface::getIntBE32(void) const {
         uint32_t v;
         getRaw(& v, 4);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -163,8 +143,7 @@ namespace LTSM
 #endif
     }
 
-    uint64_t ByteOrderInterface::getIntBE64(void) const
-    {
+    uint64_t ByteOrderInterface::getIntBE64(void) const {
         uint64_t v;
         getRaw(& v, 8);
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -174,48 +153,42 @@ namespace LTSM
 #endif
     }
 
-    void ByteOrderInterface::putIntLE16(uint16_t v)
-    {
+    void ByteOrderInterface::putIntLE16(uint16_t v) {
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         v = swap16(v);
 #endif
         putRaw(& v, 2);
     }
 
-    void ByteOrderInterface::putIntLE32(uint32_t v)
-    {
+    void ByteOrderInterface::putIntLE32(uint32_t v) {
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         v = swap32(v);
 #endif
         putRaw(& v, 4);
     }
 
-    void ByteOrderInterface::putIntLE64(uint64_t v)
-    {
+    void ByteOrderInterface::putIntLE64(uint64_t v) {
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
         v = swap64(v);
 #endif
         putRaw(& v, 8);
     }
 
-    void ByteOrderInterface::putIntBE16(uint16_t v)
-    {
+    void ByteOrderInterface::putIntBE16(uint16_t v) {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         v = swap16(v);
 #endif
         putRaw(& v, 2);
     }
 
-    void ByteOrderInterface::putIntBE32(uint32_t v)
-    {
+    void ByteOrderInterface::putIntBE32(uint32_t v) {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         v = swap32(v);
 #endif
         putRaw(& v, 4);
     }
 
-    void ByteOrderInterface::putIntBE64(uint64_t v)
-    {
+    void ByteOrderInterface::putIntBE64(uint64_t v) {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
         v = swap64(v);
 #endif
@@ -223,57 +196,47 @@ namespace LTSM
     }
 
     /* MemoryStream */
-    bool MemoryStream::bigendian(void) const
-    {
+    bool MemoryStream::bigendian(void) const {
         return platformBigEndian();
     }
 
-    uint16_t MemoryStream::readInt16(void) const
-    {
+    uint16_t MemoryStream::readInt16(void) const {
         return bigendian() ? readIntBE16() : readIntLE16();
     }
 
-    uint32_t MemoryStream::readInt32(void) const
-    {
+    uint32_t MemoryStream::readInt32(void) const {
         return bigendian() ? readIntBE32() : readIntLE32();
     }
 
-    uint64_t MemoryStream::readInt64(void) const
-    {
+    uint64_t MemoryStream::readInt64(void) const {
         return bigendian() ? readIntBE64() : readIntLE64();
     }
 
-    void MemoryStream::readTo(void* ptr, size_t len) const
-    {
+    void MemoryStream::readTo(void* ptr, size_t len) const {
         getRaw(ptr, len);
     }
 
-    const MemoryStream & MemoryStream::operator>>(uint8_t & v) const
-    {
+    const MemoryStream & MemoryStream::operator>>(uint8_t & v) const {
         v = readInt8();
         return *this;
     }
 
-    const MemoryStream & MemoryStream::operator>>(uint16_t & v) const
-    {
+    const MemoryStream & MemoryStream::operator>>(uint16_t & v) const {
         v = readInt16();
         return *this;
     }
 
-    const MemoryStream & MemoryStream::operator>>(uint32_t & v) const
-    {
+    const MemoryStream & MemoryStream::operator>>(uint32_t & v) const {
         v = readInt32();
         return *this;
     }
 
-    const MemoryStream & MemoryStream::operator>>(uint64_t & v) const
-    {
+    const MemoryStream & MemoryStream::operator>>(uint64_t & v) const {
         v = readInt64();
         return *this;
     }
 
-    const MemoryStream & MemoryStream::operator>>(std::vector<uint8_t> & v) const
-    {
+    const MemoryStream & MemoryStream::operator>>(std::vector<uint8_t> & v) const {
         auto len = last();
         auto begin = v.size();
         v.resize(begin + len);
@@ -281,116 +244,91 @@ namespace LTSM
         return *this;
     }
 
-    MemoryStream & MemoryStream::writeInt16(uint16_t v)
-    {
-        if(bigendian())
-        {
+    MemoryStream & MemoryStream::writeInt16(uint16_t v) {
+        if(bigendian()) {
             writeIntBE16(v);
-        }
-        else
-        {
+        } else {
             writeIntLE16(v);
         }
 
         return *this;
     }
 
-    MemoryStream & MemoryStream::writeInt32(uint32_t v)
-    {
-        if(bigendian())
-        {
+    MemoryStream & MemoryStream::writeInt32(uint32_t v) {
+        if(bigendian()) {
             writeIntBE32(v);
-        }
-        else
-        {
+        } else {
             writeIntLE32(v);
         }
 
         return *this;
     }
 
-    MemoryStream & MemoryStream::writeInt64(uint64_t v)
-    {
-        if(bigendian())
-        {
+    MemoryStream & MemoryStream::writeInt64(uint64_t v) {
+        if(bigendian()) {
             writeIntBE64(v);
-        }
-        else
-        {
+        } else {
             writeIntLE64(v);
         }
 
         return *this;
     }
 
-    MemoryStream & MemoryStream::write(const void* ptr, size_t len)
-    {
+    MemoryStream & MemoryStream::write(const void* ptr, size_t len) {
         putRaw(ptr, len);
         return *this;
     }
 
-    MemoryStream & MemoryStream::write(std::string_view v)
-    {
+    MemoryStream & MemoryStream::write(std::string_view v) {
         putRaw(v.data(), v.size());
         return *this;
     }
 
-    MemoryStream & MemoryStream::write(const std::vector<uint8_t> & v)
-    {
+    MemoryStream & MemoryStream::write(const std::vector<uint8_t> & v) {
         putRaw(v.data(), v.size());
         return *this;
     }
 
-    MemoryStream & MemoryStream::fill(size_t len, char c)
-    {
-        while(len--)
-        {
+    MemoryStream & MemoryStream::fill(size_t len, char c) {
+        while(len--) {
             writeInt8(c);
         }
 
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const uint8_t & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const uint8_t & v) {
         writeInt8(v);
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const uint16_t & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const uint16_t & v) {
         writeInt16(v);
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const uint32_t & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const uint32_t & v) {
         writeInt32(v);
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const uint64_t & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const uint64_t & v) {
         writeInt64(v);
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const std::string_view & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const std::string_view & v) {
         putRaw(v.data(), v.size());
         return *this;
     }
 
-    MemoryStream & MemoryStream::operator<<(const std::vector<uint8_t> & v)
-    {
+    MemoryStream & MemoryStream::operator<<(const std::vector<uint8_t> & v) {
         putRaw(v.data(), v.size());
         return *this;
     }
 
-    std::string MemoryStream::readString(size_t len) const
-    {
-        if(len == 0)
-        {
+    std::string MemoryStream::readString(size_t len) const {
+        if(len == 0) {
             len = last();
         }
 
@@ -400,36 +338,29 @@ namespace LTSM
     }
 
     /* StreamBufRef */
-    StreamBufRef::StreamBufRef(const void* ptr, size_t len)
-    {
-        if(ptr)
-        {
+    StreamBufRef::StreamBufRef(const void* ptr, size_t len) {
+        if(ptr) {
             it1 = reinterpret_cast<const uint8_t*>(ptr);
             it2 = it1 + len;
         }
     }
 
-    StreamBufRef::StreamBufRef(StreamBufRef && sb) noexcept : it1(std::move(sb.it1)), it2(std::move(sb.it2))
-    {
+    StreamBufRef::StreamBufRef(StreamBufRef && sb) noexcept : it1(std::move(sb.it1)), it2(std::move(sb.it2)) {
     }
 
-    StreamBufRef & StreamBufRef::operator=(StreamBufRef && sb) noexcept
-    {
+    StreamBufRef & StreamBufRef::operator=(StreamBufRef && sb) noexcept {
         it1 = std::move(sb.it1);
         it2 = std::move(sb.it2);
         return *this;
     }
 
-    void StreamBufRef::reset(const void* ptr, size_t len)
-    {
+    void StreamBufRef::reset(const void* ptr, size_t len) {
         it1 = reinterpret_cast<const uint8_t*>(ptr);
         it2 = it1 + len;
     }
 
-    void StreamBufRef::getRaw(void* ptr, size_t len) const
-    {
-        if(last() < len)
-        {
+    void StreamBufRef::getRaw(void* ptr, size_t len) const {
+        if(last() < len) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
@@ -439,22 +370,18 @@ namespace LTSM
         it1 = std::next(it1, len);
     }
 
-    void StreamBufRef::putRaw(const void* ptr, size_t len)
-    {
+    void StreamBufRef::putRaw(const void* ptr, size_t len) {
         Application::error("%s: %s", __FUNCTION__, "disabled");
         throw streambuf_error(NS_FuncName);
     }
 
-    BinaryBuf StreamBufRef::read(size_t len) const
-    {
-        if(last() < len)
-        {
+    BinaryBuf StreamBufRef::read(size_t len) const {
+        if(last() < len) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
-        if(len == 0)
-        {
+        if(len == 0) {
             len = last();
         }
 
@@ -463,10 +390,8 @@ namespace LTSM
         return BinaryBuf(it0, len);
     }
 
-    void StreamBufRef::skip(size_t len) const
-    {
-        if(last() < len)
-        {
+    void StreamBufRef::skip(size_t len) const {
+        if(last() < len) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
@@ -474,15 +399,12 @@ namespace LTSM
         it1 = std::next(it1, len);
     }
 
-    size_t StreamBufRef::last(void) const
-    {
+    size_t StreamBufRef::last(void) const {
         return std::distance(it1, it2);
     }
 
-    uint8_t StreamBufRef::peek(void) const
-    {
-        if(it1 == it2)
-        {
+    uint8_t StreamBufRef::peek(void) const {
+        if(it1 == it2) {
             Application::error("%s: %s", __FUNCTION__, "end stream");
             throw std::out_of_range(NS_FuncName);
         }
@@ -490,120 +412,102 @@ namespace LTSM
         return *it1;
     }
 
-    uint16_t StreamBufRef::peekIntLE16(void) const
-    {
+    uint16_t StreamBufRef::peekIntLE16(void) const {
         uint16_t ret = getIntLE16();
         it1 = std::prev(it1, 2);
 
         return ret;
     }
 
-    uint16_t StreamBufRef::peekIntBE16(void) const
-    {
+    uint16_t StreamBufRef::peekIntBE16(void) const {
         uint16_t ret = getIntBE16();
         it1 = std::prev(it1, 2);
 
         return ret;
     }
 
-    uint32_t StreamBufRef::peekIntLE32(void) const
-    {
+    uint32_t StreamBufRef::peekIntLE32(void) const {
         uint32_t ret = getIntLE32();
         it1 = std::prev(it1, 4);
 
         return ret;
     }
 
-    uint32_t StreamBufRef::peekIntBE32(void) const
-    {
+    uint32_t StreamBufRef::peekIntBE32(void) const {
         uint32_t ret = getIntBE32();
         it1 = std::prev(it1, 4);
 
         return ret;
     }
 
-    uint64_t StreamBufRef::peekIntLE64(void) const
-    {
+    uint64_t StreamBufRef::peekIntLE64(void) const {
         uint64_t ret = getIntLE64();
         it1 = std::prev(it1, 8);
 
         return ret;
     }
 
-    uint64_t StreamBufRef::peekIntBE64(void) const
-    {
+    uint64_t StreamBufRef::peekIntBE64(void) const {
         uint64_t ret = getIntBE64();
         it1 = std::prev(it1, 8);
 
         return ret;
     }
 
-    const uint8_t* StreamBufRef::data(void) const
-    {
+    const uint8_t* StreamBufRef::data(void) const {
         return it1;
     }
 
     /* StreamBuf */
-    StreamBuf::StreamBuf(size_t reserve)
-    {
+    StreamBuf::StreamBuf(size_t reserve) {
         vec.reserve(reserve);
         it = vec.begin();
     }
 
-    StreamBuf::StreamBuf(const std::vector<uint8_t> & v)
-    {
+    StreamBuf::StreamBuf(const std::vector<uint8_t> & v) {
         vec.assign(v.begin(), v.end());
         it = vec.begin();
     }
 
-    StreamBuf::StreamBuf(std::vector<uint8_t> && v) noexcept
-    {
+    StreamBuf::StreamBuf(std::vector<uint8_t> && v) noexcept {
         vec.swap(v);
         it = vec.begin();
     }
 
-    StreamBuf::StreamBuf(StreamBuf && sb) noexcept
-    {
+    StreamBuf::StreamBuf(StreamBuf && sb) noexcept {
         vec.swap(sb.vec);
         std::swap(it, sb.it);
     }
 
-    StreamBuf & StreamBuf::operator=(StreamBuf && sb) noexcept
-    {
+    StreamBuf & StreamBuf::operator=(StreamBuf && sb) noexcept {
         it = std::move(sb.it);
         vec = std::move(sb.vec);
         return *this;
     }
 
-    StreamBuf::StreamBuf(const StreamBuf & sb)
-    {
+    StreamBuf::StreamBuf(const StreamBuf & sb) {
         vec.assign(sb.vec.begin(), sb.vec.end());
         it = std::next(vec.begin(), sb.tell());
     }
 
-    StreamBuf & StreamBuf::operator=(const StreamBuf & sb)
-    {
+    StreamBuf & StreamBuf::operator=(const StreamBuf & sb) {
         vec.assign(sb.vec.begin(), sb.vec.end());
         it = std::next(vec.begin(), sb.tell());
         return *this;
     }
 
-    void StreamBuf::reset(void)
-    {
+    void StreamBuf::reset(void) {
         vec.clear();
         it = vec.begin();
     }
 
-    void StreamBuf::reset(const std::vector<uint8_t> & v)
-    {
+    void StreamBuf::reset(const std::vector<uint8_t> & v) {
         vec.assign(v.begin(), v.end());
         it = vec.begin();
     }
 
-    void StreamBuf::getRaw(void* ptr, size_t len) const
-    {
-        if(last() < len)
-        {
+    void StreamBuf::getRaw(void* ptr, size_t len) const {
+        if(last() < len) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
@@ -613,8 +517,7 @@ namespace LTSM
         it = std::next(it, len);
     }
 
-    void StreamBuf::putRaw(const void* ptr, size_t len)
-    {
+    void StreamBuf::putRaw(const void* ptr, size_t len) {
         auto offset = std::distance(vec.begin(), it);
         auto src = static_cast<const uint8_t*>(ptr);
         auto vsz = vec.size();
@@ -624,16 +527,13 @@ namespace LTSM
         it = Tools::nextToEnd(vec.begin(), offset, vec.end());
     }
 
-    BinaryBuf StreamBuf::read(size_t len) const
-    {
-        if(len > last())
-        {
+    BinaryBuf StreamBuf::read(size_t len) const {
+        if(len > last()) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
-        if(len == 0)
-        {
+        if(len == 0) {
             len = last();
         }
 
@@ -642,10 +542,8 @@ namespace LTSM
         return BinaryBuf(it0, it);
     }
 
-    void StreamBuf::skip(size_t len) const
-    {
-        if(len > last())
-        {
+    void StreamBuf::skip(size_t len) const {
+        if(len > last()) {
             Application::error("%s: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
@@ -653,22 +551,18 @@ namespace LTSM
         it = std::next(it, len);
     }
 
-    size_t StreamBuf::last(void) const
-    {
+    size_t StreamBuf::last(void) const {
         auto const_it = static_cast<BinaryBuf::const_iterator>(it);
         return std::distance(const_it, vec.end());
     }
 
-    size_t StreamBuf::tell(void) const
-    {
+    size_t StreamBuf::tell(void) const {
         auto const_it = static_cast<BinaryBuf::const_iterator>(it);
         return std::distance(vec.begin(), const_it);
     }
 
-    uint8_t StreamBuf::peek(void) const
-    {
-        if(it == vec.end())
-        {
+    uint8_t StreamBuf::peek(void) const {
+        if(it == vec.end()) {
             Application::error("%s: %s", __FUNCTION__, "end stream");
             throw std::out_of_range(NS_FuncName);
         }
@@ -676,32 +570,24 @@ namespace LTSM
         return *it;
     }
 
-    const uint8_t* StreamBuf::data(void) const
-    {
+    const uint8_t* StreamBuf::data(void) const {
         return std::addressof(*it);
     }
 
-    BinaryBuf & StreamBuf::rawbuf(void)
-    {
+    BinaryBuf & StreamBuf::rawbuf(void) {
         return vec;
     }
 
-    const BinaryBuf & StreamBuf::rawbuf(void) const
-    {
+    const BinaryBuf & StreamBuf::rawbuf(void) const {
         return vec;
     }
 
-    void StreamBuf::shrink(void)
-    {
-        if(vec.size())
-        {
-            if(it == vec.end())
-            {
+    void StreamBuf::shrink(void) {
+        if(vec.size()) {
+            if(it == vec.end()) {
                 vec.clear();
                 it = vec.begin();
-            }
-            else if(vec.size() > 10 * last())
-            {
+            } else if(vec.size() > 10 * last()) {
                 std::vector<uint8_t> tmp(it, vec.end());
                 vec.swap(tmp);
                 it = vec.begin();
@@ -710,46 +596,37 @@ namespace LTSM
     }
 
     // DescriptorStream
-    DescriptorStream::DescriptorStream(int fd0, bool autoclose) : fd(fd0), autoClose(autoclose)
-    {
+    DescriptorStream::DescriptorStream(int fd0, bool autoclose) : fd(fd0), autoClose(autoclose) {
     }
 
-    DescriptorStream::~DescriptorStream()
-    {
-        if(autoClose && 0 < fd)
-        {
+    DescriptorStream::~DescriptorStream() {
+        if(autoClose && 0 < fd) {
             ::close(fd);
         }
     }
 
-    void DescriptorStream::readFromTo(int fd, void* ptr, ssize_t len)
-    {
-        while(true)
-        {
+    void DescriptorStream::readFromTo(int fd, void* ptr, ssize_t len) {
+        while(true) {
             ssize_t real = ::read(fd, ptr, len);
 
-            if(len == real)
-            {
+            if(len == real) {
                 break;
             }
 
-            if(0 < real && real < len)
-            {
+            if(0 < real && real < len) {
                 ptr = static_cast<uint8_t*>(ptr) + real;
                 len -= real;
                 continue;
             }
 
             // eof
-            if(0 == real)
-            {
+            if(0 == real) {
                 Application::warning("%s: %s", __FUNCTION__, "end stream");
                 throw streambuf_error(NS_FuncName);
             }
 
             // error
-            if(EAGAIN == errno || EINTR == errno)
-            {
+            if(EAGAIN == errno || EINTR == errno) {
                 continue;
             }
 
@@ -758,34 +635,28 @@ namespace LTSM
         }
     }
 
-    void DescriptorStream::writeFromTo(const void* ptr, ssize_t len, int fd)
-    {
-        while(true)
-        {
+    void DescriptorStream::writeFromTo(const void* ptr, ssize_t len, int fd) {
+        while(true) {
             ssize_t real = ::write(fd, ptr, len);
 
-            if(len == real)
-            {
+            if(len == real) {
                 break;
             }
 
-            if(0 < real && real < len)
-            {
+            if(0 < real && real < len) {
                 ptr = static_cast<const uint8_t*>(ptr) + real;
                 len -= real;
                 continue;
             }
 
             // eof
-            if(0 == real)
-            {
+            if(0 == real) {
                 Application::warning("%s: %s", __FUNCTION__, "end stream");
                 throw streambuf_error(NS_FuncName);
             }
 
             // error
-            if(EAGAIN == errno || EINTR == errno)
-            {
+            if(EAGAIN == errno || EINTR == errno) {
                 continue;
             }
 
@@ -794,23 +665,19 @@ namespace LTSM
         }
     }
 
-    void DescriptorStream::readTo(void* ptr, ssize_t len) const
-    {
+    void DescriptorStream::readTo(void* ptr, ssize_t len) const {
         readFromTo(fd, ptr, len);
     }
 
-    void DescriptorStream::writeFrom(const void* ptr, ssize_t len) const
-    {
+    void DescriptorStream::writeFrom(const void* ptr, ssize_t len) const {
         writeFromTo(ptr, len, fd);
     }
 
-    void DescriptorStream::getRaw(void* ptr, size_t len) const
-    {
+    void DescriptorStream::getRaw(void* ptr, size_t len) const {
         readFromTo(fd, ptr, len);
     }
 
-    void DescriptorStream::putRaw(const void* ptr, size_t len)
-    {
+    void DescriptorStream::putRaw(const void* ptr, size_t len) {
         writeFromTo(ptr, len, fd);
     }
 }

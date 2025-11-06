@@ -31,47 +31,39 @@
 
 #include "ltsm_compat.h"
 
-namespace LTSM
-{
-    namespace AudioOp
-    {
-        enum
-        {
+namespace LTSM {
+    namespace AudioOp {
+        enum {
             Init = 0xFE01,
             Data = 0xFE02,
             Silent = 0xFE03
         };
     }
 
-    namespace AudioEncoding
-    {
-        enum
-        {
+    namespace AudioEncoding {
+        enum {
             PCM = 0,
             OPUS = 1,
             AAC = 2
         };
     }
 
-    struct AudioFormat
-    {
+    struct AudioFormat {
         uint16_t type = 0;
         uint16_t channels = 0;
         uint32_t samplePerSec = 0;
         uint16_t bitsPerSample = 0;
     };
 
-    class AudioPlayer
-    {
-    public:
+    class AudioPlayer {
+      public:
         AudioPlayer() = default;
         virtual ~AudioPlayer() = default;
 
         virtual bool streamWrite(const uint8_t*, size_t) const = 0;
     };
 
-    struct audio_error : public std::runtime_error
-    {
+    struct audio_error : public std::runtime_error {
         explicit audio_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 }

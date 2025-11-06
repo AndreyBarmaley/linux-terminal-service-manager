@@ -15,16 +15,13 @@
 
 using namespace LTSM;
 
-struct Image
-{
+struct Image {
     std::unique_ptr<FrameBuffer> fb;
 
-    Image(std::filesystem::path file)
-    {
+    Image(std::filesystem::path file) {
         std::unique_ptr<SDL_Surface, decltype(SDL_FreeSurface)*> sf{IMG_Load(file.c_str()), SDL_FreeSurface};
 
-        if(sf)
-        {
+        if(sf) {
             SDL_PixelFormat* pf = sf->format;
             auto fb24 = FrameBuffer((uint8_t*) sf->pixels, XCB::Region(0, 0, sf->w, sf->h), PixelFormat(pf->BitsPerPixel, pf->Rmask, pf->Gmask, pf->Bmask, pf->Amask), sf->pitch);
             fb = std::make_unique<FrameBuffer>(XCB::Size(fb24.width(), fb24.height()), BGRA32);
@@ -35,72 +32,68 @@ struct Image
     }
 };
 
-class EncodingTest : public Application
-{
+class EncodingTest : public Application {
     std::unique_ptr<RFB::ServerEncoderBuf> srv;
     std::list<Image> images;
     std::string imagesPath;
     int useThreads = 1;
 
-public:
-    EncodingTest(const std::string & folder, int threadNum) : Application("encoding-test"), imagesPath(folder), useThreads(threadNum)
-    {
+  public:
+    EncodingTest(const std::string & folder, int threadNum) : Application("encoding-test"), imagesPath(folder), useThreads(threadNum) {
     }
 
-    int start(void)
-    {
+    int start(void) {
         std::list<std::thread> jobs;
 
-        if(std::filesystem::is_directory(imagesPath))
-        {
-            for(auto const & dirEntry : std::filesystem::directory_iterator{imagesPath})
-            {
-                jobs.emplace_back(std::thread([this, file = dirEntry.path()]()
-                {
+        if(std::filesystem::is_directory(imagesPath)) {
+            for(auto const & dirEntry : std::filesystem::directory_iterator{imagesPath}) {
+                jobs.emplace_back(std::thread([this, file = dirEntry.path()]() {
                     images.emplace_back(std::move(file));
                 }));
             }
         }
 
-        for(auto & job: jobs)
-            if(job.joinable()) job.join();
+        for(auto & job : jobs)
+            if(job.joinable()) {
+                job.join();
+            }
 
-        if(! images.empty())
-        {
-/*
-            auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE,
-#ifdef LTSM_ENCODING_FFMPEG
-                RFB::ENCODING_FFMPEG_H264,
-#endif
-#ifdef LTSM_ENCODING
-                RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG,
-#endif
-                RFB::ENCODING_ZLIB, RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
-*/
+        if(! images.empty()) {
+            /*
+                        auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE,
+            #ifdef LTSM_ENCODING_FFMPEG
+                            RFB::ENCODING_FFMPEG_H264,
+            #endif
+            #ifdef LTSM_ENCODING
+                            RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG,
+            #endif
+                            RFB::ENCODING_ZLIB, RFB::ENCODING_TRLE, RFB::ENCODING_ZRLE };
+            */
             auto encodings = {
-                RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG };
+                RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG
+            };
 
             auto & pf = images.front().fb->pixelFormat();
 
             srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
             Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
-                __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
+                              __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 
-            for(auto type: encodings)
-            {
+            for(auto type : encodings) {
                 srv->serverSetClientEncoding(type);
                 srv->setEncodingDebug(0);
                 srv->setEncodingThreads(useThreads);
 
                 auto tp = std::chrono::steady_clock::now();
 
-                for(const auto & img: images)
+                for(const auto & img : images) {
                     srv->sendFrameBufferUpdate(*img.fb);
+                }
 
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-                Application::info("%s: encoding: %s, time: %dms, stream sz: %dMb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size()/(1024*1024));
+                Application::info("%s: encoding: %s, time: %dms, stream sz: %dMb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
 
                 srv->resetBuffer();
             }
@@ -110,51 +103,39 @@ public:
     }
 };
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     auto hardwareThreads = std::thread::hardware_concurrency();
     int threadNum = hardwareThreads;
     std::string folder = "images";
 
-    for(int it = 1; it < argc; ++it)
-    {
-        if(0 == std::strcmp(argv[it], "--thread") && it + 1 < argc)
-        {
-            try
-            {
+    for(int it = 1; it < argc; ++it) {
+        if(0 == std::strcmp(argv[it], "--thread") && it + 1 < argc) {
+            try {
                 threadNum = std::stoi(argv[it + 1]);
-            }
-            catch(const std::invalid_argument &)
-            {
+            } catch(const std::invalid_argument &) {
                 std::cerr << "incorrect threads number" << std::endl;
             }
+
             it = it + 1;
-        }
-        else
-        if(0 == std::strcmp(argv[it], "--images") && it + 1 < argc)
-        {
+        } else if(0 == std::strcmp(argv[it], "--images") && it + 1 < argc) {
             folder.assign(argv[it + 1]);
             it = it + 1;
-        }
-        else
-        {
+        } else {
             std::cout << "usage: " << argv[0] << " --thread <num>" << " --images <folder>" << std::endl;
             return 0;
         }
     }
 
-    if(threadNum < 0 || hardwareThreads < threadNum)
+    if(threadNum < 0 || hardwareThreads < threadNum) {
         threadNum = hardwareThreads;
+    }
 
     int res = 0;
     SDL_Init(SDL_INIT_TIMER);
 
-    try
-    {
+    try {
         res = EncodingTest(folder, threadNum).start();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("exception: %s", err.what());
     }
 

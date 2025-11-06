@@ -35,15 +35,13 @@
 #include "ltsm_xcb_wrapper.h"
 #endif
 
-namespace LTSM
-{
-    enum ExtClipCaps
-    {
+namespace LTSM {
+    enum ExtClipCaps {
         TypeText = 1 << 0,
         TypeRtf  = 1 << 1,
         TypeHtml = 1 << 2,
         TypeDib  = 1 << 3,
-        TypeFiles= 1 << 4,
+        TypeFiles = 1 << 4,
         Type5    = 1 << 5,
         Type6    = 1 << 6,
         Type7    = 1 << 7,
@@ -56,14 +54,13 @@ namespace LTSM
         Type14   = 1 << 14,
         Type15   = 1 << 15,
         OpCaps   = 1 << 24,
-        OpRequest= 1 << 25,
+        OpRequest = 1 << 25,
         OpPeek   = 1 << 26,
         OpNotify = 1 << 27,
-        OpProvide= 1 << 28
+        OpProvide = 1 << 28
     };
 
-    struct ExtClipTypes
-    {
+    struct ExtClipTypes {
         int flags = 0;
         uint32_t textSize = 0;
         uint32_t rtfSize  = 0;
@@ -72,32 +69,30 @@ namespace LTSM
         uint32_t fileSize = 0;
     };
 
-    namespace RFB
-    {
+    namespace RFB {
         class ServerEncoder;
 
         /// ExtClip
-        class ExtClip
-        {
-        protected:
+        class ExtClip {
+          protected:
             int remoteExtClipboardFlags = 0;
             uint32_t remoteExtClipTypeTextSz = 0;
             uint32_t remoteExtClipTypeRtfSz  = 0;
             uint32_t remoteExtClipTypeHtmlSz = 0;
             uint32_t remoteExtClipTypeDibSz  = 0;
-            uint32_t remoteExtClipTypeFilesSz= 0;
-    
+            uint32_t remoteExtClipTypeFilesSz = 0;
+
             int localExtClipboardFlags = 0;
             uint32_t localExtClipTypeTextSz = 0;
             uint32_t localExtClipTypeRtfSz  = 0;
             uint32_t localExtClipTypeHtmlSz = 0;
             uint32_t localExtClipTypeDibSz  = 0;
-            uint32_t localExtClipTypeFilesSz= 0;
-            
+            uint32_t localExtClipTypeFilesSz = 0;
+
             std::mutex localProvide;
             uint32_t localProvideTypes = 0;
 
-        protected:
+          protected:
             void recvExtClipboardCapsContinue(uint32_t flags, StreamBuf && sb);
             void recvExtClipboardRequest(uint32_t flags);
             void recvExtClipboardPeek(void);
@@ -115,7 +110,7 @@ namespace LTSM
             virtual void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) = 0;
             virtual void extClipboardSendEvent(const std::vector<uint8_t> & buf) = 0;
 
-        public:
+          public:
             ExtClip() = default;
             virtual ~ExtClip() = default;
 

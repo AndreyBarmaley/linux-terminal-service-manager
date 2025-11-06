@@ -28,7 +28,7 @@
 #include <exception>
 
 #if __GNUC__ < 9
- #define LTSM_CENTOS7
+#define LTSM_CENTOS7
 #endif
 
 #if not defined(__APPLE__) && not defined(LTSM_CENTOS7)
@@ -41,10 +41,8 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_parallels_jobs.h"
 
-namespace LTSM
-{
-    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPixel(bpp), bytePixel(bpp >> 3)
-    {
+namespace LTSM {
+    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPixel(bpp), bytePixel(bpp >> 3) {
         redMax = Tools::maskMaxValue(rmask);
         greenMax = Tools::maskMaxValue(gmask);
         blueMax = Tools::maskMaxValue(bmask);
@@ -57,57 +55,46 @@ namespace LTSM
 
     PixelFormat::PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift)
         : redMax(rmax), greenMax(gmax), blueMax(bmax), alphaMax(amax), redShift(rshift), greenShift(gshift), blueShift(bshift), alphaShift(ashift),
-          bitsPixel(bpp), bytePixel(bpp >> 3)
-    {
+          bitsPixel(bpp), bytePixel(bpp >> 3) {
     }
 
-    uint32_t PixelFormat::rmask(void) const
-    {
+    uint32_t PixelFormat::rmask(void) const {
         return static_cast<uint32_t>(redMax) << redShift;
     }
 
-    uint32_t PixelFormat::gmask(void) const
-    {
+    uint32_t PixelFormat::gmask(void) const {
         return static_cast<uint32_t>(greenMax) << greenShift;
     }
 
-    uint32_t PixelFormat::bmask(void) const
-    {
+    uint32_t PixelFormat::bmask(void) const {
         return static_cast<uint32_t>(blueMax) << blueShift;
     }
 
-    uint32_t PixelFormat::amask(void) const
-    {
+    uint32_t PixelFormat::amask(void) const {
         return static_cast<uint32_t>(alphaMax) << alphaShift;
     }
 
-    uint8_t PixelFormat::red(int pixel) const
-    {
+    uint8_t PixelFormat::red(int pixel) const {
         return (pixel >> redShift) & redMax;
     }
 
-    uint8_t PixelFormat::green(int pixel) const
-    {
+    uint8_t PixelFormat::green(int pixel) const {
         return (pixel >> greenShift) & greenMax;
     }
 
-    uint8_t PixelFormat::blue(int pixel) const
-    {
+    uint8_t PixelFormat::blue(int pixel) const {
         return (pixel >> blueShift) & blueMax;
     }
 
-    uint8_t PixelFormat::alpha(int pixel) const
-    {
+    uint8_t PixelFormat::alpha(int pixel) const {
         return (pixel >> alphaShift) & alphaMax;
     }
 
-    Color PixelFormat::color(int pixel) const
-    {
+    Color PixelFormat::color(int pixel) const {
         return Color(red(pixel), green(pixel), blue(pixel), alpha(pixel));
     }
 
-    uint32_t PixelFormat::pixel(const Color & col) const
-    {
+    uint32_t PixelFormat::pixel(const Color & col) const {
         uint32_t a = col.x;
         uint32_t r = col.r;
         uint32_t g = col.g;
@@ -117,8 +104,7 @@ namespace LTSM
         g = (g * greenMax) >> 8;
         b = (b * blueMax) >> 8;
 
-        if(alphaMax)
-        {
+        if(alphaMax) {
             a = (a * alphaMax) >> 8;
             return (a << alphaShift) | (r << redShift) | (g << greenShift) | (b << blueShift);
         }
@@ -126,28 +112,24 @@ namespace LTSM
         return (r << redShift) | (g << greenShift) | (b << blueShift);
     }
 
-    uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2)
-    {
+    uint32_t convertMax(uint8_t col1, uint16_t max1, uint16_t max2) {
         // count2: max2 + 1 (zero)
         // count1: max1 + 1 (zero)
         return max1 ? (col1 * (max2 + 1)) / (max1 + 1) : 0;
     }
 
-    uint32_t convertPixelFromTo(uint32_t pixel, const PixelFormat & pf1, const PixelFormat & pf2)
-    {
-        if(pf2.compare(pf1, true))
-        {
-            if(pf2.amax() == pf1.amax() && pf2.ashift() == pf1.ashift())
+    uint32_t convertPixelFromTo(uint32_t pixel, const PixelFormat & pf1, const PixelFormat & pf2) {
+        if(pf2.compare(pf1, true)) {
+            if(pf2.amax() == pf1.amax() && pf2.ashift() == pf1.ashift()) {
                 return pixel;
+            }
 
-            if(0 == pf2.amax() && 0 != pf1.amax())
-            {
+            if(0 == pf2.amax() && 0 != pf1.amax()) {
                 uint32_t amask = static_cast<uint32_t>(pf1.amax()) << pf1.ashift();
                 return ~amask & pixel;
             }
 
-            if(0 != pf2.amax() && 0 == pf1.amax())
-            {
+            if(0 != pf2.amax() && 0 == pf1.amax()) {
                 uint32_t amask = static_cast<uint32_t>(pf2.amax()) << pf2.ashift();
                 return amask | pixel;
             }
@@ -160,18 +142,15 @@ namespace LTSM
         return (a << pf2.ashift()) | (r << pf2.rshift()) | (g << pf2.gshift()) | (b << pf2.bshift());
     }
 
-    uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const
-    {
+    uint32_t PixelFormat::convertFrom(const PixelFormat & pf, uint32_t pixel) const {
         return convertPixelFromTo(pixel, pf, *this);
     }
 
-    uint32_t PixelFormat::convertTo(uint32_t pixel, const PixelFormat & pf) const
-    {
+    uint32_t PixelFormat::convertTo(uint32_t pixel, const PixelFormat & pf) const {
         return convertPixelFromTo(pixel, *this, pf);
     }
 
-    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1)
-    {
+    fbinfo_t::fbinfo_t(const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), allocated(1) {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
         pitch = std::max(pitch1, pitch2);
         size_t length = pitch * static_cast<size_t>(fbsz.height);
@@ -179,86 +158,77 @@ namespace LTSM
         std::fill(buffer, buffer + length, 0);
     }
 
-    fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), buffer(ptr)
-    {
+    fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), buffer(ptr) {
         uint32_t pitch1 = fmt.bytePerPixel() * fbsz.width;
         pitch = std::max(pitch1, pitch2);
     }
 
-    fbinfo_t::~fbinfo_t()
-    {
-        if(allocated)
-        {
+    fbinfo_t::~fbinfo_t() {
+        if(allocated) {
             delete [] buffer;
         }
     }
 
-    int PixelMapPalette::findColorIndex(const uint32_t & col) const
-    {
+    int PixelMapPalette::findColorIndex(const uint32_t & col) const {
 #if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::find_if(cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
+        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
+            return pair.first == col;
+        });
 #else
-        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair){ return pair.first == col; });
+        auto it = std::find_if(std::execution::par, cbegin(), cend(), [&](auto & pair) {
+            return pair.first == col;
+        });
 #endif
         return it != cend() ? (*it).second : -1;
     }
 
-    int PixelMapWeight::maxWeightPixel(void) const
-    {
+    int PixelMapWeight::maxWeightPixel(void) const {
 #if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2)
-        {
+        auto it = std::max_element(cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #else
-        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2)
-        {
+        auto it = std::max_element(std::execution::par, cbegin(), cend(), [](auto & p1, auto & p2) {
             return p1.second < p2.second;
         });
 #endif
         return it != cend() ? (*it).first : 0;
     }
 
-    FrameBuffer FrameBuffer::copyRegionFormat(const XCB::Region & reg, const PixelFormat & pf) const
-    {
+    FrameBuffer FrameBuffer::copyRegionFormat(const XCB::Region & reg, const PixelFormat & pf) const {
         FrameBuffer res(reg.toSize(), pf, 0 /* pitch auto */);
         res.blitRegion(*this, reg, XCB::Point(0, 0));
 
         return res;
     }
 
-    FrameBuffer FrameBuffer::copyRegion(const XCB::Region & reg) const
-    {
+    FrameBuffer FrameBuffer::copyRegion(const XCB::Region & reg) const {
         FrameBuffer res(reg.toSize(), pixelFormat(), reg.width == width() ? pitchSize() : 0 /* auto */);
         res.blitRegion(*this, reg, XCB::Point(0, 0));
 
         return res;
     }
 
-    void FrameBuffer::setPixelRow(const XCB::Point & pos, uint32_t pixel, size_t length)
-    {
+    void FrameBuffer::setPixelRow(const XCB::Point & pos, uint32_t pixel, size_t length) {
         assertm(0 <= pos.x && 0 <= pos.y, "invalid position");
         assertm(pos.x < fbreg.width && pos.y < fbreg.height, "position out of range");
 
-        void* offset = pitchData(pos.y) + (pos.x* bytePerPixel());
+        void* offset = pitchData(pos.y) + (pos.x * bytePerPixel());
         // fix out of range
         length = std::min(length, static_cast<size_t>(fbreg.width - pos.x));
 
         assertm(length <= static_cast<size_t>(fbreg.width) - pos.x, "position out of range");
 
-        switch(bitsPerPixel())
-        {
+        switch(bitsPerPixel()) {
             case 32:
-                if(auto ptr = static_cast<uint32_t*>(offset))
-                {
+                if(auto ptr = static_cast<uint32_t*>(offset)) {
                     std::fill(ptr, ptr + length, pixel);
                 }
 
                 break;
 
             case 24:
-                if(auto ptr = static_cast<uint8_t*>(offset))
-                {
+                if(auto ptr = static_cast<uint8_t*>(offset)) {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                     uint8_t v1 = pixel;
                     uint8_t v2 = pixel >> 8;
@@ -269,8 +239,7 @@ namespace LTSM
                     uint8_t v3 = pixel;
 #endif
 
-                    while(length--)
-                    {
+                    while(length--) {
                         *ptr++ = v1;
                         *ptr++ = v2;
                         *ptr++ = v3;
@@ -280,16 +249,14 @@ namespace LTSM
                 break;
 
             case 16:
-                if(auto ptr = static_cast<uint16_t*>(offset))
-                {
+                if(auto ptr = static_cast<uint16_t*>(offset)) {
                     std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
                 }
 
                 break;
 
             case 8:
-                if(auto ptr = static_cast<uint8_t*>(offset))
-                {
+                if(auto ptr = static_cast<uint8_t*>(offset)) {
                     std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
                 }
 
@@ -301,98 +268,87 @@ namespace LTSM
         }
     }
 
-    void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat* fmt)
-    {
+    void FrameBuffer::setPixel(const XCB::Point & pos, uint32_t pixel, const PixelFormat* fmt) {
         auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
         setPixelRow(pos, raw, 1);
     }
 
-    void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat* fmt)
-    {
+    void FrameBuffer::fillPixel(const XCB::Region & reg0, uint32_t pixel, const PixelFormat* fmt) {
         XCB::Region reg;
 
-        if(XCB::Region::intersection(region(), reg0, & reg))
-        {
+        if(XCB::Region::intersection(region(), reg0, & reg)) {
             auto raw = fmt ? pixelFormat().convertFrom(*fmt, pixel) : pixel;
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-            {
+
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
                 ParallelsJobs<void> jobs;
 
-                for(int yy = 0; yy < reg.height; ++yy)
-                {
+                for(int yy = 0; yy < reg.height; ++yy) {
                     jobs.addJob(std::async(std::launch::async,
-                            &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
+                                           &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
                 }
 
                 return;
             }
+
 #endif
-            for(int yy = 0; yy < reg.height; ++yy)
-            {
+
+            for(int yy = 0; yy < reg.height; ++yy) {
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
             }
         }
     }
 
-    void FrameBuffer::setColor(const XCB::Point & pos, const Color & col)
-    {
+    void FrameBuffer::setColor(const XCB::Point & pos, const Color & col) {
         auto raw = pixelFormat().pixel(col);
         setPixelRow(pos, raw, 1);
     }
 
-    void FrameBuffer::fillColor(const XCB::Region & reg0, const Color & col)
-    {
+    void FrameBuffer::fillColor(const XCB::Region & reg0, const Color & col) {
         XCB::Region reg;
 
-        if(XCB::Region::intersection(region(), reg0, & reg))
-        {
+        if(XCB::Region::intersection(region(), reg0, & reg)) {
             auto raw = pixelFormat().pixel(col);
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-            {
+
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
                 ParallelsJobs<void> jobs;
 
-                for(int yy = 0; yy < reg.height; ++yy)
-                {
+                for(int yy = 0; yy < reg.height; ++yy) {
                     jobs.addJob(std::async(std::launch::async,
-                            &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
+                                           &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, yy), raw, reg.width));
                 }
 
                 return;
             }
+
 #endif
 
-            for(int yy = 0; yy < reg.height; ++yy)
-            {
+            for(int yy = 0; yy < reg.height; ++yy) {
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, reg.width);
             }
         }
     }
 
-    void FrameBuffer::drawRect(const XCB::Region & reg0, const Color & col)
-    {
+    void FrameBuffer::drawRect(const XCB::Region & reg0, const Color & col) {
         XCB::Region reg;
 
-        if(XCB::Region::intersection(region(), reg0, & reg))
-        {
+        if(XCB::Region::intersection(region(), reg0, & reg)) {
             auto raw = pixelFormat().pixel(col);
 
 #ifdef LTSM_WITH_FB_PARALLELS
-            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-            {
+
+            if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
                 ParallelsJobs<void> jobs;
 
                 jobs.addJob(std::async(std::launch::async,
-                        &FrameBuffer::setPixelRow, this, reg.topLeft(), raw, reg.width));
+                                       &FrameBuffer::setPixelRow, this, reg.topLeft(), raw, reg.width));
                 jobs.addJob(std::async(std::launch::async,
-                        &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width));
-                jobs.addJob(std::async(std::launch::async, [&reg, &raw, this]()
-                {
-                    for(int yy = 1; yy < reg.height - 1; ++yy)
-                    {
+                                       &FrameBuffer::setPixelRow, this, reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width));
+                jobs.addJob(std::async(std::launch::async, [&reg, &raw, this]() {
+                    for(int yy = 1; yy < reg.height - 1; ++yy) {
                         setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, 1);
                         setPixelRow(reg.topLeft() + XCB::Point(reg.width - 1, yy), raw, 1);
                     }
@@ -400,40 +356,34 @@ namespace LTSM
 
                 return;
             }
+
 #endif
             setPixelRow(reg.topLeft(), raw, reg.width);
             setPixelRow(reg.topLeft() + XCB::Point(0, reg.height - 1), raw, reg.width);
 
-            for(int yy = 1; yy < reg.height - 1; ++yy)
-            {
+            for(int yy = 1; yy < reg.height - 1; ++yy) {
                 setPixelRow(reg.topLeft() + XCB::Point(0, yy), raw, 1);
                 setPixelRow(reg.topLeft() + XCB::Point(reg.width - 1, yy), raw, 1);
             }
         }
     }
 
-    uint32_t FrameBuffer::rawPixel(const void* ptr, int bpp, bool BigEndian)
-    {
-        switch(bpp)
-        {
+    uint32_t FrameBuffer::rawPixel(const void* ptr, int bpp, bool BigEndian) {
+        switch(bpp) {
             case 32:
                 return *static_cast<const uint32_t*>(ptr);
 
-            case 24:
-            {
+            case 24: {
                 auto buf = static_cast<const uint8_t*>(ptr);
                 uint32_t res = 0;
 
-                if(BigEndian)
-                {
+                if(BigEndian) {
                     res |= buf[0];
                     res <<= 8;
                     res |= buf[1];
                     res <<= 8;
                     res |= buf[2];
-                }
-                else
-                {
+                } else {
                     res |= buf[2];
                     res <<= 8;
                     res |= buf[1];
@@ -458,8 +408,7 @@ namespace LTSM
         throw std::invalid_argument(NS_FuncName);
     }
 
-    uint32_t FrameBuffer::pixel(const XCB::Point & pos) const
-    {
+    uint32_t FrameBuffer::pixel(const XCB::Point & pos) const {
         assertm(0 <= pos.x && 0 <= pos.y, "invalid position");
         assertm(pos.x < fbreg.width && pos.y < fbreg.height, "position out of range");
 
@@ -467,273 +416,234 @@ namespace LTSM
         return rawPixel(ptr, bitsPerPixel(), platformBigEndian());
     }
 
-    void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos)
-    {
+    void FrameBuffer::blitRegion(const FrameBuffer & fb, const XCB::Region & reg, const XCB::Point & pos) {
         XCB::Region dst;
 
-        if(! XCB::Region::intersection(XCB::Region(pos, reg.toSize()), region(), & dst))
+        if(! XCB::Region::intersection(XCB::Region(pos, reg.toSize()), region(), & dst)) {
             return;
+        }
 
-        auto rowCopy = [&fb, &reg, &dst, this](int row)
-        {
+        auto rowCopy = [&fb, &reg, &dst, this](int row) {
             auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
             size_t length = dst.width * fb.bytePerPixel();
             std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x * bytePerPixel());
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-        {
+
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
             ParallelsJobs<void> jobs;
 
-            if(pixelFormat() != fb.pixelFormat())
-            {
-                for(auto & subdst: dst.divideCounts(2, 2))
-                {
-                    jobs.addJob(std::async(std::launch::async, [subdst, off = subdst.topLeft() - dst.topLeft(), &fb, &reg, this]()
-                    {
-                        for(auto coord = subdst.coordBegin(); coord.isValid(); ++coord)
-                        {
+            if(pixelFormat() != fb.pixelFormat()) {
+                for(auto & subdst : dst.divideCounts(2, 2)) {
+                    jobs.addJob(std::async(std::launch::async, [subdst, off = subdst.topLeft() - dst.topLeft(), &fb, &reg, this]() {
+                        for(auto coord = subdst.coordBegin(); coord.isValid(); ++coord) {
                             setPixel(subdst.topLeft() + coord, fb.pixel(reg.topLeft() + off + coord), & fb.pixelFormat());
                         }
                     }));
                 }
-            }
-            else
-            {
-                for(int row = 0; row < dst.height; ++row)
-                {
+            } else {
+                for(int row = 0; row < dst.height; ++row) {
                     jobs.addJob(std::async(std::launch::async, rowCopy, row));
                 }
             }
 
             return;
         }
+
 #endif
 
-        if(pixelFormat() != fb.pixelFormat())
-        {
-            for(auto coord = dst.coordBegin(); coord.isValid(); ++coord)
-            {
+        if(pixelFormat() != fb.pixelFormat()) {
+            for(auto coord = dst.coordBegin(); coord.isValid(); ++coord) {
                 setPixel(dst.topLeft() + coord, fb.pixel(reg.topLeft() + coord), & fb.pixelFormat());
             }
-        }
-        else
-        {
-            for(int row = 0; row < dst.height; ++row)
-            {
+        } else {
+            for(int row = 0; row < dst.height; ++row) {
                 rowCopy(row);
             }
         }
     }
 
-    PixelLengthList FrameBuffer::toRLE(const XCB::Region & reg) const
-    {
-        auto regionProcessed = [this](XCB::Region reg)
-        {
+    PixelLengthList FrameBuffer::toRLE(const XCB::Region & reg) const {
+        auto regionProcessed = [this](XCB::Region reg) {
             PixelLengthList res;
 
-            for(uint16_t py = 0; py < reg.height; ++py)
-            {
+            for(uint16_t py = 0; py < reg.height; ++py) {
                 const uint8_t* pitch = pitchData(reg.y + py);
 
-                for(uint16_t px = 0; px < reg.width; ++px)
-                {
+                for(uint16_t px = 0; px < reg.width; ++px) {
                     auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                     auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
 
-                    if(res.size() && res.back().pixel() == pix)
-                    {
+                    if(res.size() && res.back().pixel() == pix) {
                         res.back().second++;
-                    }
-                    else
-                    {
+                    } else {
                         res.emplace_back(pix, 1);
                     }
                 }
             }
-            
+
             return res;
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-        {
+
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
             PixelLengthList list;
             ParallelsJobs<PixelLengthList> jobs;
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
-            for(auto & subreg: reg.divideBlocks(bsz))
-            {
+            for(auto & subreg : reg.divideBlocks(bsz)) {
                 jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
             }
 
-            for(auto & job: jobs.jobList())
-            {
+            for(auto & job : jobs.jobList()) {
                 list.splice(list.end(), job.get());
             }
-            
+
             return list;
         }
+
 #endif
         return regionProcessed(reg);
     }
 
-    ColorMap FrameBuffer::colourMap(void) const
-    {
+    ColorMap FrameBuffer::colourMap(void) const {
         const PixelFormat & fmt = pixelFormat();
 
-        auto regionProcessed = [&fmt, this](XCB::Region reg)
-        {
+        auto regionProcessed = [&fmt, this](XCB::Region reg) {
             ColorMap res;
 
-            for(uint16_t py = 0; py < reg.height; ++py)
-            {
+            for(uint16_t py = 0; py < reg.height; ++py) {
                 const uint8_t* pitch = pitchData(reg.y + py);
 
-                for(uint16_t px = 0; px < reg.width; ++px)
-                {
+                for(uint16_t px = 0; px < reg.width; ++px) {
                     auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                     auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
                     res.emplace(fmt.red(pix), fmt.green(pix), fmt.blue(pix));
                 }
             }
-            
+
             return res;
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 1024 < (fbreg.width * fbreg.height))
-        {
+
+        if(2 < std::thread::hardware_concurrency() && 1024 < (fbreg.width * fbreg.height)) {
             ColorMap map;
             ParallelsJobs<ColorMap> jobs;
             auto bsz = XCB::Size(fbreg.width, fbreg.height / 4);
 
-            for(auto & subreg: fbreg.divideBlocks(bsz))
-            {
+            for(auto & subreg : fbreg.divideBlocks(bsz)) {
                 jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
             }
 
-            for(auto & job: jobs.jobList())
-            {
- #ifdef LTSM_WITH_STD_MAP
+            for(auto & job : jobs.jobList()) {
+#ifdef LTSM_WITH_STD_MAP
                 map.merge(job.get());
- #else
+#else
                 auto ret = job.get();
                 map.insert(ret.begin(), ret.end());
- #endif
+#endif
             }
-            
+
             return map;
         }
+
 #endif
         return regionProcessed(fbreg);
     }
 
-    PixelMapPalette FrameBuffer::pixelMapPalette(const XCB::Region & reg) const
-    {
+    PixelMapPalette FrameBuffer::pixelMapPalette(const XCB::Region & reg) const {
         PixelMapPalette map;
 
-        auto regionProcessed = [this](XCB::Region reg)
-        {
+        auto regionProcessed = [this](XCB::Region reg) {
             PixelMapPalette res;
 
-            for(uint16_t py = 0; py < reg.height; ++py)
-            {
+            for(uint16_t py = 0; py < reg.height; ++py) {
                 const uint8_t* pitch = pitchData(reg.y + py);
 
-                for(uint16_t px = 0; px < reg.width; ++px)
-                {
+                for(uint16_t px = 0; px < reg.width; ++px) {
                     auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                     res.try_emplace(rawPixel(ptr, bitsPerPixel(), platformBigEndian()), 0);
                 }
             }
-            
+
             return res;
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-        {
+
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
             ParallelsJobs<PixelMapPalette> jobs;
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
-            for(auto & subreg: reg.divideBlocks(bsz))
-            {
+            for(auto & subreg : reg.divideBlocks(bsz)) {
                 jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
             }
 
-            for(auto & job: jobs.jobList())
-            {
- #ifdef LTSM_WITH_STD_MAP
+            for(auto & job : jobs.jobList()) {
+#ifdef LTSM_WITH_STD_MAP
                 map.merge(job.get());
- #else
+#else
                 auto ret = job.get();
                 map.insert(ret.begin(), ret.end());
- #endif
+#endif
             }
-        }
-        else
-        {
+        } else {
             map = regionProcessed(reg);
         }
+
 #else
         map = regionProcessed(reg);
 #endif // LTSM_WITH_FB_PARALLELS
 
         int index = 0;
-        for(auto & pair: map)
-        {
+
+        for(auto & pair : map) {
             pair.second = index++;
         }
 
         return map;
     }
 
-    PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const
-    {
-        auto regionProcessed = [this](XCB::Region reg)
-        {
+    PixelMapWeight FrameBuffer::pixelMapWeight(const XCB::Region & reg) const {
+        auto regionProcessed = [this](XCB::Region reg) {
             PixelMapWeight res;
 
-            for(uint16_t py = 0; py < reg.height; ++py)
-            {
+            for(uint16_t py = 0; py < reg.height; ++py) {
                 const uint8_t* pitch = pitchData(reg.y + py);
 
-                for(uint16_t px = 0; px < reg.width; ++px)
-                {
+                for(uint16_t px = 0; px < reg.width; ++px) {
                     auto ptr = pitch + ((reg.x + px) * bytePerPixel());
                     auto pix = rawPixel(ptr, bitsPerPixel(), platformBigEndian());
                     auto ret = res.try_emplace(pix, 1);
-                    if(! ret.second)
-                    {
+
+                    if(! ret.second) {
                         ret.first->second += 1;
                     }
                 }
             }
-            
+
             return res;
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
-        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height))
-        {
+
+        if(2 < std::thread::hardware_concurrency() && 1024 < (reg.width * reg.height)) {
             PixelMapWeight map;
             ParallelsJobs<PixelMapWeight> jobs;
             auto bsz = XCB::Size(reg.width, reg.height / 4);
 
-            for(auto & subreg: reg.divideBlocks(bsz))
-            {
+            for(auto & subreg : reg.divideBlocks(bsz)) {
                 jobs.addJob(std::async(std::launch::async, regionProcessed, subreg));
             }
 
-            for(auto & job: jobs.jobList())
-            {
-                for(auto & pair: job.get())
-                {
+            for(auto & job : jobs.jobList()) {
+                for(auto & pair : job.get()) {
                     auto ret = map.try_emplace(pair.first, pair.second);
-                    if(! ret.second)
-                    {
+
+                    if(! ret.second) {
                         ret.first->second += pair.second;
                     }
                 }
@@ -741,80 +651,82 @@ namespace LTSM
 
             return map;
         }
+
 #endif
         return regionProcessed(reg);
     }
 
-    bool FrameBuffer::allOfPixel(uint32_t pix, const XCB::Region & reg) const
-    {
+    bool FrameBuffer::allOfPixel(uint32_t pix, const XCB::Region & reg) const {
         // fast check
-        if(1024 < (reg.width * reg.height))
-        {
-            if(pix != pixel(XCB::Point(reg.width-1, 0)))
+        if(1024 < (reg.width * reg.height)) {
+            if(pix != pixel(XCB::Point(reg.width - 1, 0))) {
                 return false;
+            }
 
-            if(pix != pixel(XCB::Point(reg.width-1, 0)))
+            if(pix != pixel(XCB::Point(reg.width - 1, 0))) {
                 return false;
+            }
 
-            if(pix != pixel(XCB::Point(0, reg.height-1)))
+            if(pix != pixel(XCB::Point(0, reg.height - 1))) {
                 return false;
+            }
 
-            if(pix != pixel(XCB::Point(reg.width-1, reg.height-1)))
+            if(pix != pixel(XCB::Point(reg.width - 1, reg.height - 1))) {
                 return false;
+            }
 
-            if(pix != pixel(XCB::Point(reg.width / 2, reg.height / 2)))
+            if(pix != pixel(XCB::Point(reg.width / 2, reg.height / 2))) {
                 return false;
-        }
-
-        for(uint16_t py = 0; py < reg.height; ++py)
-        {
-            const uint8_t* pitch = pitchData(reg.y + py);
-
-            for(uint16_t px = 0; px < reg.width; ++px)
-            {
-                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
-                if(pix != rawPixel(ptr, bitsPerPixel(), platformBigEndian())) { return false; }
             }
         }
-            
+
+        for(uint16_t py = 0; py < reg.height; ++py) {
+            const uint8_t* pitch = pitchData(reg.y + py);
+
+            for(uint16_t px = 0; px < reg.width; ++px) {
+                auto ptr = pitch + ((reg.x + px) * bytePerPixel());
+
+                if(pix != rawPixel(ptr, bitsPerPixel(), platformBigEndian())) {
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 
-    bool FrameBuffer::renderChar(int ch, const Color & col, const XCB::Point & pos)
-    {
-        if(! std::isprint(ch))
-        {
+    bool FrameBuffer::renderChar(int ch, const Color & col, const XCB::Point & pos) {
+        if(! std::isprint(ch)) {
             return false;
         }
 
         size_t offsetx = ch * _systemfont.width * _systemfont.height >> 3;
 
-        if(offsetx >= sizeof(_systemfont.data))
-        {
+        if(offsetx >= sizeof(_systemfont.data)) {
             return false;
         }
 
         bool res = false;
 
-        for(int yy = 0; yy < _systemfont.height; ++yy)
-        {
-            if(pos.y + yy < 0) { continue; }
+        for(int yy = 0; yy < _systemfont.height; ++yy) {
+            if(pos.y + yy < 0) {
+                continue;
+            }
 
             size_t offsety = yy * _systemfont.width >> 3;
 
-            if(offsetx + offsety >= sizeof(_systemfont.data))
-            {
+            if(offsetx + offsety >= sizeof(_systemfont.data)) {
                 continue;
             }
 
             int line = *(_systemfont.data + offsetx + offsety);
 
-            for(int xx = 0; xx < _systemfont.width; ++xx)
-            {
-                if(pos.x + xx < 0) { continue; }
+            for(int xx = 0; xx < _systemfont.width; ++xx) {
+                if(pos.x + xx < 0) {
+                    continue;
+                }
 
-                if(0x80 & (line << xx))
-                {
+                if(0x80 & (line << xx)) {
                     setColor(pos + XCB::Point(xx, yy), col);
                     res = true;
                 }
@@ -824,89 +736,75 @@ namespace LTSM
         return res;
     }
 
-    void FrameBuffer::renderText(const std::string & str, const Color & col, const XCB::Point & pos)
-    {
+    void FrameBuffer::renderText(const std::string & str, const Color & col, const XCB::Point & pos) {
 #ifdef LTSM_WITH_FB_PARALLELS
         ParallelsJobs<bool> jobs;
 
-        for(auto it = str.cbegin(); it != str.cend(); ++it)
-        {
-            jobs.addJob(std::async(std::launch::async, 
-                &FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it) * _systemfont.width, pos.y)));
+        for(auto it = str.cbegin(); it != str.cend(); ++it) {
+            jobs.addJob(std::async(std::launch::async,
+                                   &FrameBuffer::renderChar, this, *it, col, XCB::Point(pos.x + std::distance(str.cbegin(), it) * _systemfont.width, pos.y)));
         }
+
 #else
         int offset = 0;
-        for(const auto & ch : str)
-        {
+
+        for(const auto & ch : str) {
             renderChar(ch, col, XCB::Point(pos.x + offset, pos.y));
             offset += _systemfont.width;
         }
+
 #endif
     }
 
-    Color FrameBuffer::color(const XCB::Point & pos) const
-    {
+    Color FrameBuffer::color(const XCB::Point & pos) const {
         return pixelFormat().color(pixel(pos));
     }
 
-    const uint8_t & FrameBuffer::bitsPerPixel(void) const
-    {
+    const uint8_t & FrameBuffer::bitsPerPixel(void) const {
         return pixelFormat().bitsPerPixel();
     }
 
-    const uint8_t & FrameBuffer::bytePerPixel(void) const
-    {
+    const uint8_t & FrameBuffer::bytePerPixel(void) const {
         return pixelFormat().bytePerPixel();
     }
 
-    const uint16_t & FrameBuffer::width(void) const
-    {
+    const uint16_t & FrameBuffer::width(void) const {
         return fbreg.width;
     }
 
-    const uint16_t & FrameBuffer::height(void) const
-    {
+    const uint16_t & FrameBuffer::height(void) const {
         return fbreg.height;
     }
 
-    uint8_t* FrameBuffer::pitchData(size_t row) const
-    {
+    uint8_t* FrameBuffer::pitchData(size_t row) const {
         uint32_t col = 0;
 
-        if(! owner)
-        {
+        if(! owner) {
             col = bytePerPixel() * fbreg.x;
             row = fbreg.y + row;
         }
 
-        return fbptr->buffer + (fbptr->pitch* row) + col;
+        return fbptr->buffer + (fbptr->pitch * row) + col;
     }
 
-    size_t FrameBuffer::pitchSize(void) const
-    {
+    size_t FrameBuffer::pitchSize(void) const {
         return owner ? fbptr->pitch : bytePerPixel() * fbreg.width;
     }
 
-    RawPtr<uint8_t> FrameBuffer::rawPtr(void) const
-    {
+    RawPtr<uint8_t> FrameBuffer::rawPtr(void) const {
         return RawPtr<uint8_t>(pitchData(0), pitchSize() * height());
     }
 } // LTSM
 
 #ifdef LTSM_WITH_PNG
 #include <png.h>
-namespace PNG
-{
-    bool save(const LTSM::FrameBuffer & fb, const std::string & file)
-    {
-        if(fb.pixelFormat().amask() && fb.pixelFormat() != RGBA32)
-        {
+namespace PNG {
+    bool save(const LTSM::FrameBuffer & fb, const std::string & file) {
+        if(fb.pixelFormat().amask() && fb.pixelFormat() != RGBA32) {
             LTSM::FrameBuffer back(LTSM::XCB::Size(fb.width(), fb.height()), RGBA32);
             back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
             return save(back, file);
-        }
-        else if(fb.pixelFormat() != RGB24)
-        {
+        } else if(fb.pixelFormat() != RGB24) {
             LTSM::FrameBuffer back(LTSM::XCB::Size(fb.width(), fb.height()), RGB24);
             back.blitRegion(fb, fb.region(), LTSM::XCB::Point(0, 0));
             return save(back, file);
@@ -915,15 +813,13 @@ namespace PNG
         // write png
         png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
 
-        if (!png_ptr)
-        {
+        if(! png_ptr) {
             return false;
         }
 
         png_infop info_ptr = png_create_info_struct(png_ptr);
 
-        if (!info_ptr)
-        {
+        if(! info_ptr) {
             return false;
         }
 
@@ -936,8 +832,7 @@ namespace PNG
                      PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
         png_write_info(png_ptr, info_ptr);
 
-        for(size_t row = 0; row < fb.height(); row++)
-        {
+        for(size_t row = 0; row < fb.height(); row++) {
             png_write_row(png_ptr, fb.pitchData(row));
         }
 

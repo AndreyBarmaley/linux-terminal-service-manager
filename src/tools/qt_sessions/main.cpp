@@ -24,12 +24,10 @@
 #include <QApplication>
 #include <QTranslator>
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     int res = 0;
 
-    try
-    {
+    try {
         QApplication a(argc, argv);
         QTranslator t;
         t.load(QLocale(), QLatin1String("ltsm_sessions"), QLatin1String("_"), QLatin1String(":/i18n"));
@@ -37,9 +35,7 @@ int main(int argc, char* argv[])
         LTSM_Sessions w;
         w.show();
         res = a.exec();
-    }
-    catch(int e)
-    {
+    } catch(int e) {
         res = e;
     }
 

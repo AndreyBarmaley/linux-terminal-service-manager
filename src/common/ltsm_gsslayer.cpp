@@ -27,44 +27,57 @@
 
 using namespace LTSM;
 
-namespace Gss
-{
-    int apiVersion(void)
-    {
+namespace Gss {
+    int apiVersion(void) {
         return 20250507;
     }
 
-    const char* nameTypeName(const NameType & type)
-    {
-        switch(type)
-        {
-            case NameType::NoName: return "NoName";
-            case NameType::NoOid: return "NoOid";
-            case NameType::NtAnonymous: return "NtAnonymous";
-            case NameType::NtExportName: return "NtExportName";
-            case NameType::NtHostService: return "NtHostService";
-            case NameType::NtMachineUid: return "NtMachineUid";
-            case NameType::NtStringUid: return "NtStringUid";
-            case NameType::NtUserName: return "NtUserName";
-        }
-        
-        return "unknown";
-    }
-    
-    const char* credUsageName(const CredentialUsage & usage)
-    {
-        switch(usage)
-        {
-            case CredentialUsage::Initiate: return "initiate";
-            case CredentialUsage::Accept:   return "accept";
-            case CredentialUsage::Both:     return "both";
+    const char* nameTypeName(const NameType & type) {
+        switch(type) {
+            case NameType::NoName:
+                return "NoName";
+
+            case NameType::NoOid:
+                return "NoOid";
+
+            case NameType::NtAnonymous:
+                return "NtAnonymous";
+
+            case NameType::NtExportName:
+                return "NtExportName";
+
+            case NameType::NtHostService:
+                return "NtHostService";
+
+            case NameType::NtMachineUid:
+                return "NtMachineUid";
+
+            case NameType::NtStringUid:
+                return "NtStringUid";
+
+            case NameType::NtUserName:
+                return "NtUserName";
         }
 
         return "unknown";
     }
 
-    std::string error2str(OM_uint32 code1, OM_uint32 code2)
-    {
+    const char* credUsageName(const CredentialUsage & usage) {
+        switch(usage) {
+            case CredentialUsage::Initiate:
+                return "initiate";
+
+            case CredentialUsage::Accept:
+                return "accept";
+
+            case CredentialUsage::Both:
+                return "both";
+        }
+
+        return "unknown";
+    }
+
+    std::string error2str(OM_uint32 code1, OM_uint32 code2) {
         OM_uint32 ctx, stat;
         gss_buffer_desc msg1, msg2;
 
@@ -82,13 +95,11 @@ namespace Gss
         return os.str();
     }
 
-    gss_name_t importName(std::string_view name, const NameType & type, ErrorCodes* err)
-    {
+    gss_name_t importName(std::string_view name, const NameType & type, ErrorCodes* err) {
         OM_uint32 stat;
         gss_OID oid = GSS_C_NO_OID;
 
-        switch(type)
-        {
+        switch(type) {
             case NameType::NoName:
                 oid = (gss_OID) GSS_C_NO_NAME;
                 break;
@@ -127,13 +138,11 @@ namespace Gss
 
         auto ret = gss_import_name(& stat, & buf, oid, & res);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             return res;
         }
 
-        if(err)
-        {
+        if(err) {
             err->func = "gss_import_name";
             err->code1 = ret;
             err->code2 = stat;
@@ -143,20 +152,16 @@ namespace Gss
         return nullptr;
     }
 
-    std::string displayName(const gss_name_t & name, ErrorCodes* err)
-    {
+    std::string displayName(const gss_name_t & name, ErrorCodes* err) {
         OM_uint32 stat;
         gss_buffer_desc buf;
         std::string res;
 
         auto ret = gss_display_name(& stat, name, & buf, nullptr);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             res.assign((char*) buf.value, (char*) buf.value + buf.length);
-        }
-        else if(err)
-        {
+        } else if(err) {
             err->func = "gss_display_name";
             err->code1 = ret;
             err->code2 = stat;
@@ -166,20 +171,16 @@ namespace Gss
         return res;
     }
 
-    std::string canonicalizeName(const gss_name_t & name1, const gss_OID & mech, ErrorCodes* err)
-    {
+    std::string canonicalizeName(const gss_name_t & name1, const gss_OID & mech, ErrorCodes* err) {
         OM_uint32 stat;
         gss_name_t name2 = nullptr;
         std::string res;
 
         auto ret = gss_canonicalize_name(& stat, name1, mech, & name2);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             res = displayName(name2, err);
-        }
-        else if(err)
-        {
+        } else if(err) {
             err->func = "gss_canonicalize_name";
             err->code1 = ret;
             err->code2 = stat;
@@ -189,20 +190,16 @@ namespace Gss
         return res;
     }
 
-    std::string oidName(const gss_OID & oid, ErrorCodes* err)
-    {
+    std::string oidName(const gss_OID & oid, ErrorCodes* err) {
         OM_uint32 stat;
         gss_buffer_desc buf;
 
         auto ret = gss_oid_to_str(& stat, oid, & buf);
         std::string res;
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             res.assign((char*) buf.value, (char*) buf.value + buf.length);
-        }
-        else if(err)
-        {
+        } else if(err) {
             err->func = "gss_display_name";
             err->code1 = ret;
             err->code2 = stat;
@@ -228,10 +225,8 @@ namespace Gss
         return res;
     }
 
-    const char* flagName(const ContextFlag & flag)
-    {
-        switch(flag)
-        {
+    const char* flagName(const ContextFlag & flag) {
+        switch(flag) {
             case ContextFlag::Delegate:
                 return "delegate";
 
@@ -266,8 +261,7 @@ namespace Gss
         return "unknown";
     }
 
-    std::list<ContextFlag> exportFlags(int flags)
-    {
+    std::list<ContextFlag> exportFlags(int flags) {
         auto all = { ContextFlag::Delegate, ContextFlag::Mutual, ContextFlag::Replay, ContextFlag::Sequence, ContextFlag::Confidential,
                      ContextFlag::Integrity, ContextFlag::Anonymous, ContextFlag::Protection, ContextFlag::Transfer
                    };
@@ -275,13 +269,14 @@ namespace Gss
         std::list<ContextFlag> res;
 
         for(const auto & v : all)
-            if(flags & v) { res.push_front(v); }
+            if(flags & v) {
+                res.push_front(v);
+            }
 
         return res;
     }
 
-    std::list<std::string> nameMechs(const gss_name_t & name, ErrorCodes* err)
-    {
+    std::list<std::string> nameMechs(const gss_name_t & name, ErrorCodes* err) {
         std::list<std::string> res;
 
         OM_uint32 stat;
@@ -289,20 +284,15 @@ namespace Gss
 
         auto ret = gss_inquire_mechs_for_name(& stat, name, & mech_types);
 
-        if(ret == GSS_S_COMPLETE)
-        {
-            for(int it = 0; it < mech_types->count; ++it)
-            {
+        if(ret == GSS_S_COMPLETE) {
+            for(int it = 0; it < mech_types->count; ++it) {
                 auto name = oidName(& mech_types->elements[it]);
 
-                if(! name.empty())
-                {
+                if(! name.empty()) {
                     res.emplace_back(std::move(name));
                 }
             }
-        }
-        else if(err)
-        {
+        } else if(err) {
             err->func = "gss_inquire_mechs_for_name";
             err->code1 = ret;
             err->code2 = stat;
@@ -312,8 +302,7 @@ namespace Gss
         return res;
     }
 
-    std::list<std::string> mechNames(const gss_OID & oid, ErrorCodes* err)
-    {
+    std::list<std::string> mechNames(const gss_OID & oid, ErrorCodes* err) {
         std::list<std::string> res;
 
         OM_uint32 stat;
@@ -321,20 +310,15 @@ namespace Gss
 
         auto ret = gss_inquire_names_for_mech(& stat, oid, & mech_names);
 
-        if(ret == GSS_S_COMPLETE)
-        {
-            for(int it = 0; it < mech_names->count; ++it)
-            {
+        if(ret == GSS_S_COMPLETE) {
+            for(int it = 0; it < mech_names->count; ++it) {
                 auto name = oidName(& mech_names->elements[it]);
 
-                if(! name.empty())
-                {
+                if(! name.empty()) {
                     res.emplace_back(std::move(name));
                 }
             }
-        }
-        else if(err)
-        {
+        } else if(err) {
             err->func = "gss_inquire_names_for_mech";
             err->code1 = ret;
             err->code2 = stat;
@@ -345,52 +329,43 @@ namespace Gss
     }
 
     // Credential
-    Credential::~Credential()
-    {
-        if(mechs)
-        {
+    Credential::~Credential() {
+        if(mechs) {
             OM_uint32 stat = 0;
             gss_release_oid_set(& stat, & mechs);
         }
 
-        if(cred)
-        {
+        if(cred) {
             OM_uint32 stat = 0;
             gss_release_cred(& stat, & cred);
         }
 
-        if(name)
-        {
+        if(name) {
             OM_uint32 stat = 0;
             gss_release_name(& stat, & name);
         }
     }
 
     // Security
-    Security::~Security()
-    {
-        if(sec)
-        {
+    Security::~Security() {
+        if(sec) {
             OM_uint32 stat = 0;
             gss_delete_sec_context(& stat, & sec, GSS_C_NO_BUFFER);
         }
 
-        if(name)
-        {
+        if(name) {
             OM_uint32 stat = 0;
             gss_release_name(& stat, & name);
         }
     }
 
-    CredentialPtr acquireCredential(std::string_view service, const NameType & type, const CredentialUsage & usage, ErrorCodes* err)
-    {
+    CredentialPtr acquireCredential(std::string_view service, const NameType & type, const CredentialUsage & usage, ErrorCodes* err) {
         Application::debug(DebugType::Gss, "%s: service: `%.*s', type: `%s', usage: `%s'",
-                __FUNCTION__, static_cast<int>(service.size()), service.data(), nameTypeName(type), credUsageName(usage));
+                           __FUNCTION__, static_cast<int>(service.size()), service.data(), nameTypeName(type), credUsageName(usage));
 
         auto name = importName(service, type, err);
 
-        if(! name)
-        {
+        if(! name) {
             return nullptr;
         }
 
@@ -400,13 +375,11 @@ namespace Gss
         OM_uint32 stat;
         auto ret = gss_acquire_cred(& stat, res->name, 0, GSS_C_NULL_OID_SET, usage, & res->cred, & res->mechs, & res->timerec);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             return res;
         }
 
-        if(err)
-        {
+        if(err) {
             err->func = "gss_acquire_cred";
             err->code1 = ret;
             err->code2 = stat;
@@ -415,14 +388,12 @@ namespace Gss
         return nullptr;
     }
 
-    CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view password, ErrorCodes* err)
-    {
+    CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view password, ErrorCodes* err) {
         Application::debug(DebugType::Gss, "%s: username: `%.*s'", __FUNCTION__, static_cast<int>(username.size()), username.data());
 
         auto name = importName(username, Gss::NameType::NtUserName, err);
 
-        if(! name)
-        {
+        if(! name) {
             return nullptr;
         }
 
@@ -434,13 +405,11 @@ namespace Gss
         OM_uint32 stat;
         auto ret = gss_acquire_cred_with_password(& stat, res->name, & pass, 0, GSS_C_NULL_OID_SET, Gss::CredentialUsage::Initiate, & res->cred, & res->mechs, & res->timerec);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             return res;
         }
 
-        if(err)
-        {
+        if(err) {
             err->func = "gss_acquire_cred_with_password";
             err->code1 = ret;
             err->code2 = stat;
@@ -449,21 +418,17 @@ namespace Gss
         return nullptr;
     }
 
-    CredentialPtr acquireUserCredential(std::string_view username, ErrorCodes* err)
-    {
+    CredentialPtr acquireUserCredential(std::string_view username, ErrorCodes* err) {
         return acquireCredential(username.data(), Gss::NameType::NtUserName, Gss::CredentialUsage::Initiate, err);
     }
 
-    CredentialPtr acquireServiceCredential(std::string_view service, ErrorCodes* err)
-    {
+    CredentialPtr acquireServiceCredential(std::string_view service, ErrorCodes* err) {
         return acquireCredential(service.data(), Gss::NameType::NtHostService, Gss::CredentialUsage::Accept, err);
     }
 
     // BaseContext
-    std::vector<uint8_t> BaseContext::recvMessage(void)
-    {
-        if(! ctx)
-        {
+    std::vector<uint8_t> BaseContext::recvMessage(void) {
+        if(! ctx) {
             throw std::invalid_argument("context is null");
         }
 
@@ -478,12 +443,9 @@ namespace Gss
         auto ret = gss_unwrap(& stat, ctx->sec, & in_buf, & out_buf, nullptr, nullptr);
         std::vector<uint8_t> res;
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             res.assign((uint8_t*) out_buf.value, (uint8_t*) out_buf.value + out_buf.length);
-        }
-        else
-        {
+        } else {
             error(__FUNCTION__, "gss_unwrap", ret, stat);
             res.clear();
         }
@@ -492,10 +454,8 @@ namespace Gss
         return res;
     }
 
-    bool BaseContext::sendMessage(const void* buf, size_t len, bool encrypt)
-    {
-        if(! ctx)
-        {
+    bool BaseContext::sendMessage(const void* buf, size_t len, bool encrypt) {
+        if(! ctx) {
             throw std::invalid_argument("context is null");
         }
 
@@ -508,12 +468,9 @@ namespace Gss
         auto ret = gss_wrap(& stat, ctx->sec, encrypt, GSS_C_QOP_DEFAULT, & in_buf, nullptr, & out_buf);
         bool res = true;
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             sendToken(out_buf.value, out_buf.length);
-        }
-        else
-        {
+        } else {
             error(__FUNCTION__, "gss_wrap", ret, stat);
             res = false;
         }
@@ -522,10 +479,8 @@ namespace Gss
         return res;
     }
 
-    bool BaseContext::recvMIC(const void* msg, size_t msgsz)
-    {
-        if(! ctx)
-        {
+    bool BaseContext::recvMIC(const void* msg, size_t msgsz) {
+        if(! ctx) {
             throw std::invalid_argument("context is null");
         }
 
@@ -540,8 +495,7 @@ namespace Gss
 
         auto ret = gss_verify_mic(& stat, ctx->sec, & in_buf, & out_buf, nullptr);
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             return true;
         }
 
@@ -549,10 +503,8 @@ namespace Gss
         return false;
     }
 
-    bool BaseContext::sendMIC(const void* msg, size_t msgsz)
-    {
-        if(! ctx)
-        {
+    bool BaseContext::sendMIC(const void* msg, size_t msgsz) {
+        if(! ctx) {
             throw std::invalid_argument("context is null");
         }
 
@@ -565,12 +517,9 @@ namespace Gss
         auto ret = gss_get_mic(& stat, ctx->sec, GSS_C_QOP_DEFAULT, & in_buf, & out_buf);
         bool res = true;
 
-        if(ret == GSS_S_COMPLETE)
-        {
+        if(ret == GSS_S_COMPLETE) {
             sendToken(out_buf.value, out_buf.length);
-        }
-        else
-        {
+        } else {
             error(__FUNCTION__, "gss_get_mic", ret, stat);
             res = false;
         }
@@ -580,8 +529,7 @@ namespace Gss
     }
 
     // ServiceContext
-    bool ServiceContext::acceptClient(CredentialPtr ptr)
-    {
+    bool ServiceContext::acceptClient(CredentialPtr ptr) {
         Application::debug(DebugType::Gss, "%s", __FUNCTION__);
 
         ctx = std::make_unique<Security>();
@@ -589,8 +537,7 @@ namespace Gss
         OM_uint32 stat;
         OM_uint32 ret = GSS_S_CONTINUE_NEEDED;
 
-        while(ret == GSS_S_CONTINUE_NEEDED)
-        {
+        while(ret == GSS_S_CONTINUE_NEEDED) {
             // recv token
             auto buf = recvToken();
 
@@ -600,17 +547,14 @@ namespace Gss
             ret = gss_accept_sec_context(& stat, & ctx->sec, ptr ? ptr->cred : GSS_C_NO_CREDENTIAL, & recv_tok, GSS_C_NO_CHANNEL_BINDINGS,
                                          & ctx->name, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec, nullptr);
 
-            if(0 < send_tok.length)
-            {
+            if(0 < send_tok.length) {
                 sendToken(send_tok.value, send_tok.length);
                 gss_release_buffer(& stat, & send_tok);
             }
         }
 
-        if(ret == GSS_S_COMPLETE)
-        {
-            if(ptr)
-            {
+        if(ret == GSS_S_COMPLETE) {
+            if(ptr) {
                 ctx->cred = std::move(ptr);
             }
 
@@ -624,15 +568,13 @@ namespace Gss
     }
 
     // ClientContext
-    bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr)
-    {
+    bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr) {
         Application::debug(DebugType::Gss, "%s: service: `%.*s', mutual: %d", __FUNCTION__, static_cast<int>(service.size()), service.data(), static_cast<int>(mutual));
 
         ErrorCodes err;
         auto name = importName(service, NameType::NtHostService, & err);
 
-        if(! name)
-        {
+        if(! name) {
             error(__FUNCTION__, err.func, err.code1, err.code2);
             return false;
         }
@@ -646,8 +588,7 @@ namespace Gss
 
         int flags = GSS_C_REPLAY_FLAG;
 
-        if(mutual)
-        {
+        if(mutual) {
             flags |= GSS_C_MUTUAL_FLAG;
         }
 
@@ -656,33 +597,27 @@ namespace Gss
 
         OM_uint32 ret = GSS_S_CONTINUE_NEEDED;
 
-        while(ret == GSS_S_CONTINUE_NEEDED)
-        {
+        while(ret == GSS_S_CONTINUE_NEEDED) {
             ret = gss_init_sec_context(& stat, ptr ? ptr->cred : GSS_C_NO_CREDENTIAL, & ctx->sec, ctx->name, GSS_C_NULL_OID, flags,
                                        0, input_chan_bindings, & recv_tok, & ctx->mech, & send_tok, & ctx->supported, & ctx->timerec);
 
-            if(0 < send_tok.length)
-            {
+            if(0 < send_tok.length) {
                 sendToken(send_tok.value, send_tok.length);
 
-                if(send_tok.value != service.data())
-                {
+                if(send_tok.value != service.data()) {
                     gss_release_buffer(& stat, & send_tok);
                 }
             }
 
-            if(ret == GSS_S_CONTINUE_NEEDED)
-            {
+            if(ret == GSS_S_CONTINUE_NEEDED) {
                 buf = recvToken();
                 recv_tok.length = buf.size();
                 recv_tok.value = buf.data();
             }
         }
 
-        if(ret == GSS_S_COMPLETE)
-        {
-            if(ptr)
-            {
+        if(ret == GSS_S_COMPLETE) {
+            if(ptr) {
                 ctx->cred = std::move(ptr);
             }
 

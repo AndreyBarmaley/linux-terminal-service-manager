@@ -30,25 +30,20 @@
 #include "pulse/simple.h"
 #include "ltsm_audio.h"
 
-namespace LTSM
-{
-    namespace PulseAudio
-    {
-        struct SimpleDeleter
-        {
-            void operator()(pa_simple* ctx)
-            {
+namespace LTSM {
+    namespace PulseAudio {
+        struct SimpleDeleter {
+            void operator()(pa_simple* ctx) {
                 pa_simple_free(ctx);
             }
         };
 
-        class Simple
-        {
-        protected:
+        class Simple {
+          protected:
             pa_sample_spec audioSpec = { .format = PA_SAMPLE_S16LE, .rate = 44100, .channels = 2 };
             std::unique_ptr<pa_simple, SimpleDeleter> ctx;
 
-        public:
+          public:
             Simple() = default;
             virtual ~Simple() = default;
 
@@ -56,9 +51,8 @@ namespace LTSM
             pa_usec_t getLatency(void) const;
         };
 
-        class Playback : public Simple, public AudioPlayer
-        {
-        public:
+        class Playback : public Simple, public AudioPlayer {
+          public:
             Playback(const std::string & appName, const std::string & streamName,
                      const AudioFormat &, const pa_buffer_attr* attr = nullptr);
 
@@ -66,9 +60,8 @@ namespace LTSM
             bool streamDrain(void) const;
         };
 
-        class Record : public Simple
-        {
-        public:
+        class Record : public Simple {
+          public:
             Record(const std::string & appName, const std::string & streamName, const pa_sample_format_t &,
                    uint32_t rate, uint8_t channels, const pa_buffer_attr* attr = nullptr);
 

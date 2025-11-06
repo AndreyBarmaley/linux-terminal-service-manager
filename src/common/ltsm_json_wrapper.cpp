@@ -33,70 +33,56 @@
 #include "ltsm_application.h"
 #include "ltsm_json_wrapper.h"
 
-namespace LTSM
-{
-    struct json_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct json_error : public std::runtime_error {
         explicit json_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    JsmnToken::JsmnToken()
-    {
+    JsmnToken::JsmnToken() {
         jsmntok_t::type = JSMN_PRIMITIVE;
         jsmntok_t::start = -1;
         jsmntok_t::end = -1;
         jsmntok_t::size = 0;
     }
 
-    const int & JsmnToken::counts(void) const
-    {
+    const int & JsmnToken::counts(void) const {
         return jsmntok_t::size;
     }
 
-    const int & JsmnToken::start(void) const
-    {
+    const int & JsmnToken::start(void) const {
         return jsmntok_t::start;
     }
 
-    const int & JsmnToken::end(void) const
-    {
+    const int & JsmnToken::end(void) const {
         return jsmntok_t::end;
     }
 
-    bool JsmnToken::isKey(void) const
-    {
+    bool JsmnToken::isKey(void) const {
         return isString() && counts() == 1;
     }
 
-    bool JsmnToken::isValue(void) const
-    {
+    bool JsmnToken::isValue(void) const {
         return isPrimitive() || isObject() || isArray() || (isString() && counts() == 0);
     }
 
-    bool JsmnToken::isPrimitive(void) const
-    {
+    bool JsmnToken::isPrimitive(void) const {
         return jsmntok_t::type == JSMN_PRIMITIVE;
     }
 
-    bool JsmnToken::isString(void) const
-    {
+    bool JsmnToken::isString(void) const {
         return jsmntok_t::type == JSMN_STRING;
     }
 
-    bool JsmnToken::isArray(void) const
-    {
+    bool JsmnToken::isArray(void) const {
         return jsmntok_t::type == JSMN_ARRAY;
     }
 
-    bool JsmnToken::isObject(void) const
-    {
+    bool JsmnToken::isObject(void) const {
         return jsmntok_t::type == JSMN_OBJECT;
     }
 
-    const char* JsmnToken::typeString(void) const
-    {
-        switch(jsmntok_t::type)
-        {
+    const char* JsmnToken::typeString(void) const {
+        switch(jsmntok_t::type) {
             case JSMN_PRIMITIVE:
                 return "primitive";
 
@@ -116,10 +102,8 @@ namespace LTSM
         return "unknown";
     }
 
-    const char* jsonTypeString(const JsonType & type)
-    {
-        switch(type)
-        {
+    const char* jsonTypeString(const JsonType & type) {
+        switch(type) {
             case JsonType::Null:
                 return "null";
 
@@ -146,363 +130,291 @@ namespace LTSM
     }
 
     /* JsonValue */
-    bool JsonValue::isNull(void) const
-    {
+    bool JsonValue::isNull(void) const {
         return getType() == JsonType::Null;
     }
 
-    bool JsonValue::isBoolean(void) const
-    {
+    bool JsonValue::isBoolean(void) const {
         return getType() == JsonType::Boolean;
     }
 
-    bool JsonValue::isInteger(void) const
-    {
+    bool JsonValue::isInteger(void) const {
         return getType() == JsonType::Integer;
     }
 
-    bool JsonValue::isDouble(void) const
-    {
+    bool JsonValue::isDouble(void) const {
         return getType() == JsonType::Double;
     }
 
-    bool JsonValue::isString(void) const
-    {
+    bool JsonValue::isString(void) const {
         return getType() == JsonType::String;
     }
 
-    bool JsonValue::isObject(void) const
-    {
+    bool JsonValue::isObject(void) const {
         return getType() == JsonType::Object;
     }
 
-    bool JsonValue::isArray(void) const
-    {
+    bool JsonValue::isArray(void) const {
         return getType() == JsonType::Array;
     }
 
-    JsonArray & operator<< (JsonArray & jv, int st)
-    {
+    JsonArray & operator<< (JsonArray & jv, int st) {
         jv.addInteger(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const char* st)
-    {
+    JsonArray & operator<< (JsonArray & jv, const char* st) {
         jv.addString(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const std::string_view & st)
-    {
+    JsonArray & operator<< (JsonArray & jv, const std::string_view & st) {
         jv.addString(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const std::string & st)
-    {
+    JsonArray & operator<< (JsonArray & jv, const std::string & st) {
         jv.addString(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, double st)
-    {
+    JsonArray & operator<< (JsonArray & jv, double st) {
         jv.addDouble(st);
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, bool st)
-    {
+    JsonArray & operator<< (JsonArray & jv, bool st) {
         jv.addBoolean(st);
         return jv;
     }
 
 
-    const JsonValue & operator>> (const JsonValue & jv, int & val)
-    {
+    const JsonValue & operator>> (const JsonValue & jv, int & val) {
         val = jv.getInteger();
         return jv;
     }
 
-    const JsonValue & operator>> (const JsonValue & jv, std::string & val)
-    {
+    const JsonValue & operator>> (const JsonValue & jv, std::string & val) {
         val = jv.getString();
         return jv;
     }
 
-    const JsonValue & operator>> (const JsonValue & jv, double & val)
-    {
+    const JsonValue & operator>> (const JsonValue & jv, double & val) {
         val = jv.getDouble();
         return jv;
     }
 
-    const JsonValue & operator>> (const JsonValue & jv, bool & val)
-    {
+    const JsonValue & operator>> (const JsonValue & jv, bool & val) {
         val = jv.getBoolean();
         return jv;
     }
 
     /* JsonNull */
-    JsonType JsonNull::getType(void) const
-    {
+    JsonType JsonNull::getType(void) const {
         return JsonType::Null;
     }
 
-    std::string JsonNull::toString(void) const
-    {
+    std::string JsonNull::toString(void) const {
         return "null";
     }
 
-    int JsonNull::getInteger(void) const
-    {
+    int JsonNull::getInteger(void) const {
         return 0;
     }
 
-    std::string JsonNull::getString(void) const
-    {
+    std::string JsonNull::getString(void) const {
         return "";
     }
 
-    double JsonNull::getDouble(void) const
-    {
+    double JsonNull::getDouble(void) const {
         return 0;
     }
 
-    bool JsonNull::getBoolean(void) const
-    {
+    bool JsonNull::getBoolean(void) const {
         return false;
     }
 
     /* JsonPrimitive */
-    std::string JsonPrimitive::toString(void) const
-    {
+    std::string JsonPrimitive::toString(void) const {
         return getString();
     }
 
     /* JsonString */
-    JsonType JsonString::getType(void) const
-    {
+    JsonType JsonString::getType(void) const {
         return JsonType::String;
     }
 
-    int JsonString::getInteger(void) const
-    {
+    int JsonString::getInteger(void) const {
         auto content = getString();
         int res = 0;
 
-        try
-        {
+        try {
             res = std::stoi(content, nullptr, 0);
-        }
-        catch(const std::invalid_argument &)
-        {
+        } catch(const std::invalid_argument &) {
             Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
         }
 
         return res;
     }
 
-    std::string JsonString::getString(void) const
-    {
+    std::string JsonString::getString(void) const {
         return std::any_cast<std::string>(value);
     }
 
-    double JsonString::getDouble(void) const
-    {
+    double JsonString::getDouble(void) const {
         auto content = getString();
         double res = 0;
 
-        try
-        {
+        try {
             res = std::stod(content, nullptr);
-        }
-        catch(const std::invalid_argument &)
-        {
+        } catch(const std::invalid_argument &) {
             Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
         }
 
         return res;
     }
 
-    bool JsonString::getBoolean(void) const
-    {
+    bool JsonString::getBoolean(void) const {
         auto content = getString();
 
-        if(startsWith(content, "fals"))
-        {
+        if(startsWith(content, "fals")) {
             return false;
         }
 
-        if(startsWith(content, "true"))
-        {
+        if(startsWith(content, "true")) {
             return true;
         }
 
         int res = 0;
 
-        try
-        {
+        try {
             res = std::stoi(content, nullptr, 0);
-        }
-        catch(const std::invalid_argument &)
-        {
+        } catch(const std::invalid_argument &) {
             Application::error("%s: not boolean: `%s'", __FUNCTION__, content.c_str());
         }
 
         return res;
     }
 
-    std::string JsonString::toString(void) const
-    {
+    std::string JsonString::toString(void) const {
         return Tools::escaped(getString(), true);
     }
 
     /* JsonDouble */
-    JsonType JsonDouble::getType(void) const
-    {
+    JsonType JsonDouble::getType(void) const {
         return JsonType::Double;
     }
 
-    double JsonDouble::getDouble(void) const
-    {
+    double JsonDouble::getDouble(void) const {
         return std::any_cast<double>(value);
     }
 
-    int JsonDouble::getInteger(void) const
-    {
+    int JsonDouble::getInteger(void) const {
         return getDouble();
     }
 
-    std::string JsonDouble::getString(void) const
-    {
+    std::string JsonDouble::getString(void) const {
         return std::to_string(getDouble());
     }
 
-    bool JsonDouble::getBoolean(void) const
-    {
+    bool JsonDouble::getBoolean(void) const {
         return getDouble();
     }
 
     /* JsonInteger */
-    JsonType JsonInteger::getType(void) const
-    {
+    JsonType JsonInteger::getType(void) const {
         return JsonType::Integer;
     }
 
-    int JsonInteger::getInteger(void) const
-    {
+    int JsonInteger::getInteger(void) const {
         return std::any_cast<int>(value);
     }
 
-    std::string JsonInteger::getString(void) const
-    {
+    std::string JsonInteger::getString(void) const {
         return std::to_string(getInteger());
     }
 
-    double JsonInteger::getDouble(void) const
-    {
+    double JsonInteger::getDouble(void) const {
         return getInteger();
     }
 
-    bool JsonInteger::getBoolean(void) const
-    {
+    bool JsonInteger::getBoolean(void) const {
         return getInteger();
     }
 
     /* JsonBoolean */
-    JsonType JsonBoolean::getType(void) const
-    {
+    JsonType JsonBoolean::getType(void) const {
         return JsonType::Boolean;
     }
 
-    bool JsonBoolean::getBoolean(void) const
-    {
+    bool JsonBoolean::getBoolean(void) const {
         return std::any_cast<bool>(value);
     }
 
-    int JsonBoolean::getInteger(void) const
-    {
+    int JsonBoolean::getInteger(void) const {
         return getBoolean() ? 1 : 0;
     }
 
-    std::string JsonBoolean::getString(void) const
-    {
+    std::string JsonBoolean::getString(void) const {
         return getBoolean() ? "true" : "false";
     }
 
-    double JsonBoolean::getDouble(void) const
-    {
+    double JsonBoolean::getDouble(void) const {
         return getInteger();
     }
 
     /* JsonValuePtr */
-    JsonValuePtr::JsonValuePtr() : std::unique_ptr<JsonValue>(std::make_unique<JsonNull>())
-    {
+    JsonValuePtr::JsonValuePtr() : std::unique_ptr<JsonValue>(std::make_unique<JsonNull>()) {
     }
 
-    JsonValuePtr::JsonValuePtr(int v) : std::unique_ptr<JsonValue>(std::make_unique<JsonInteger>(v))
-    {
+    JsonValuePtr::JsonValuePtr(int v) : std::unique_ptr<JsonValue>(std::make_unique<JsonInteger>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(bool v) : std::unique_ptr<JsonValue>(std::make_unique<JsonBoolean>(v))
-    {
+    JsonValuePtr::JsonValuePtr(bool v) : std::unique_ptr<JsonValue>(std::make_unique<JsonBoolean>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(double v) : std::unique_ptr<JsonValue>(std::make_unique<JsonDouble>(v))
-    {
+    JsonValuePtr::JsonValuePtr(double v) : std::unique_ptr<JsonValue>(std::make_unique<JsonDouble>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(std::string_view v) : std::unique_ptr<JsonValue>(std::make_unique<JsonString>(v))
-    {
+    JsonValuePtr::JsonValuePtr(std::string_view v) : std::unique_ptr<JsonValue>(std::make_unique<JsonString>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(JsonArray && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(std::move(v)))
-    {
+    JsonValuePtr::JsonValuePtr(JsonArray && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(std::move(v))) {
     }
 
-    JsonValuePtr::JsonValuePtr(JsonObject && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(std::move(v)))
-    {
+    JsonValuePtr::JsonValuePtr(JsonObject && v) noexcept : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(std::move(v))) {
     }
 
-    JsonValuePtr::JsonValuePtr(const JsonArray & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(v))
-    {
+    JsonValuePtr::JsonValuePtr(const JsonArray & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonArray>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(const JsonObject & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(v))
-    {
+    JsonValuePtr::JsonValuePtr(const JsonObject & v) : std::unique_ptr<JsonValue>(std::make_unique<JsonObject>(v)) {
     }
 
-    JsonValuePtr::JsonValuePtr(JsonValue* v)
-    {
+    JsonValuePtr::JsonValuePtr(JsonValue* v) {
         reset(v);
     }
 
-    JsonValuePtr::JsonValuePtr(const JsonValuePtr & v)
-    {
+    JsonValuePtr::JsonValuePtr(const JsonValuePtr & v) {
         assign(v);
     }
 
-    JsonValuePtr::JsonValuePtr(JsonValuePtr && v) noexcept
-    {
+    JsonValuePtr::JsonValuePtr(JsonValuePtr && v) noexcept {
         swap(v);
     }
 
-    JsonValuePtr & JsonValuePtr::operator=(const JsonValuePtr & v)
-    {
+    JsonValuePtr & JsonValuePtr::operator=(const JsonValuePtr & v) {
         assign(v);
         return *this;
     }
 
-    JsonValuePtr & JsonValuePtr::operator=(JsonValuePtr && v) noexcept
-    {
+    JsonValuePtr & JsonValuePtr::operator=(JsonValuePtr && v) noexcept {
         swap(v);
         return *this;
     }
 
-    void JsonValuePtr::assign(const JsonValuePtr & v)
-    {
-        switch(v->getType())
-        {
+    void JsonValuePtr::assign(const JsonValuePtr & v) {
+        switch(v->getType()) {
             default:
             case JsonType::Null:
                 reset(new JsonNull());
@@ -535,20 +447,16 @@ namespace LTSM
     }
 
     /* JsonObject */
-    JsonObject::JsonObject(const JsonObject & jo)
-    {
+    JsonObject::JsonObject(const JsonObject & jo) {
         content.insert(jo.content.begin(), jo.content.end());
     }
 
-    JsonObject::JsonObject(JsonObject && jo) noexcept
-    {
+    JsonObject::JsonObject(JsonObject && jo) noexcept {
         content.swap(jo.content);
     }
 
-    JsonObject & JsonObject::operator=(const JsonObject & jo)
-    {
-        if(this != & jo)
-        {
+    JsonObject & JsonObject::operator=(const JsonObject & jo) {
+        if(this != & jo) {
             content.clear();
             content.insert(jo.content.begin(), jo.content.end());
         }
@@ -556,176 +464,147 @@ namespace LTSM
         return *this;
     }
 
-    JsonObject & JsonObject::operator=(JsonObject && jo) noexcept
-    {
+    JsonObject & JsonObject::operator=(JsonObject && jo) noexcept {
         content.swap(jo.content);
         return *this;
     }
 
-    bool JsonObject::isValid(void) const
-    {
+    bool JsonObject::isValid(void) const {
         return ! content.empty();
     }
 
-    size_t JsonObject::size(void) const
-    {
+    size_t JsonObject::size(void) const {
         return content.size();
     }
 
-    void JsonObject::clear(void)
-    {
+    void JsonObject::clear(void) {
         return content.clear();
     }
 
-    JsonType JsonObject::getType(void) const
-    {
+    JsonType JsonObject::getType(void) const {
         return JsonType::Object;
     }
 
-    int JsonObject::getInteger(void) const
-    {
+    int JsonObject::getInteger(void) const {
         return 0;
     }
 
-    std::string JsonObject::getString(void) const
-    {
+    std::string JsonObject::getString(void) const {
         return Tools::escaped(toString(), false);
     }
 
-    double JsonObject::getDouble(void) const
-    {
+    double JsonObject::getDouble(void) const {
         return 0;
     }
 
-    bool JsonObject::getBoolean(void) const
-    {
+    bool JsonObject::getBoolean(void) const {
         return false;
     }
 
-    bool JsonObject::hasKey(std::string_view key) const
-    {
+    bool JsonObject::hasKey(std::string_view key) const {
         return getValue(key);
     }
 
-    std::list<std::string> JsonObject::keys(void) const
-    {
+    std::list<std::string> JsonObject::keys(void) const {
         std::list<std::string> res;
 
-        for(const auto & [key, value] : content)
-        {
+        for(const auto & [key, value] : content) {
             res.push_back(key);
         }
 
         return res;
     }
 
-    bool JsonObject::isNull(std::string_view key) const
-    {
+    bool JsonObject::isNull(std::string_view key) const {
         const JsonValue* jv = getValue(key);
-        return !jv || jv->isNull();
+        return ! jv || jv->isNull();
     }
 
-    bool JsonObject::isBoolean(std::string_view key) const
-    {
+    bool JsonObject::isBoolean(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isBoolean();
     }
 
-    bool JsonObject::isInteger(std::string_view key) const
-    {
+    bool JsonObject::isInteger(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isInteger();
     }
 
-    bool JsonObject::isDouble(std::string_view key) const
-    {
+    bool JsonObject::isDouble(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isDouble();
     }
 
-    bool JsonObject::isString(std::string_view key) const
-    {
+    bool JsonObject::isString(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isString();
     }
 
-    bool JsonObject::isObject(std::string_view key) const
-    {
+    bool JsonObject::isObject(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isObject();
     }
 
-    bool JsonObject::isArray(std::string_view key) const
-    {
+    bool JsonObject::isArray(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv && jv->isArray();
     }
 
-    const JsonValue* JsonObject::getValue(std::string_view key) const
-    {
+    const JsonValue* JsonObject::getValue(std::string_view key) const {
         auto it = content.find(std::string(key));
         return it != content.end() ? (*it).second.get() : nullptr;
     }
 
-    JsonType JsonObject::getType(std::string_view key) const
-    {
+    JsonType JsonObject::getType(std::string_view key) const {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getType() : JsonType::Null;
     }
 
-    int JsonObject::getInteger(std::string_view key, int def) const
-    {
+    int JsonObject::getInteger(std::string_view key, int def) const {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getInteger() : def;
     }
 
-    std::string JsonObject::getString(std::string_view key, std::string_view def) const
-    {
+    std::string JsonObject::getString(std::string_view key, std::string_view def) const {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getString() : std::string(def.data(), def.size());
     }
 
-    double JsonObject::getDouble(std::string_view key, double def) const
-    {
+    double JsonObject::getDouble(std::string_view key, double def) const {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getDouble() : def;
     }
 
-    bool JsonObject::getBoolean(std::string_view key, bool def) const
-    {
+    bool JsonObject::getBoolean(std::string_view key, bool def) const {
         const JsonValue* jv = getValue(key);
         return jv ? jv->getBoolean() : def;
     }
 
-    void JsonObject::removeKey(const std::string & key)
-    {
+    void JsonObject::removeKey(const std::string & key) {
         content.erase(key);
     }
 
-    const JsonObject* JsonObject::getObject(std::string_view key) const
-    {
+    const JsonObject* JsonObject::getObject(std::string_view key) const {
         auto jv = dynamic_cast<const JsonObject*>(getValue(key));
         return jv;
     }
 
-    const JsonArray* JsonObject::getArray(std::string_view key) const
-    {
+    const JsonArray* JsonObject::getArray(std::string_view key) const {
         auto jv = dynamic_cast<const JsonArray*>(getValue(key));
         return jv;
     }
 
-    std::string JsonObject::toString(void) const
-    {
+    std::string JsonObject::toString(void) const {
         std::ostringstream os;
         os << "{ ";
 
-        for(auto it = content.begin(); it != content.end(); ++it)
-        {
-            if((*it).second)
-            {
+        for(auto it = content.begin(); it != content.end(); ++it) {
+            if((*it).second) {
                 os << Tools::escaped((*it).first, true) << ": " << (*it).second->toString();
 
-                if(std::next(it) != content.end()) { os << ", "; }
+                if(std::next(it) != content.end()) {
+                    os << ", ";
+                }
             }
         }
 
@@ -733,110 +612,80 @@ namespace LTSM
         return os.str();
     }
 
-    void JsonObject::addNull(const std::string & key)
-    {
+    void JsonObject::addNull(const std::string & key) {
         auto it = content.find(key);
 
-        if(it != content.end())
-        {
+        if(it != content.end()) {
             (*it).second = JsonValuePtr();
-        }
-        else
-        {
+        } else {
             content.emplace(key, JsonValuePtr());
         }
     }
 
-    void JsonObject::addInteger(const std::string & key, const int & val)
-    {
+    void JsonObject::addInteger(const std::string & key, const int & val) {
         addValue<int>(key, val);
     }
 
-    void JsonObject::addString(const std::string & key, const std::wstring & val)
-    {
+    void JsonObject::addString(const std::string & key, const std::wstring & val) {
         addValue<std::string_view>(key, Tools::wstring2string(val));
     }
 
-    void JsonObject::addString(const std::string & key, std::string_view val)
-    {
+    void JsonObject::addString(const std::string & key, std::string_view val) {
         addValue<std::string_view>(key, val);
     }
 
-    void JsonObject::addDouble(const std::string & key, const double & val)
-    {
+    void JsonObject::addDouble(const std::string & key, const double & val) {
         addValue<double>(key, val);
     }
 
-    void JsonObject::addBoolean(const std::string & key, const bool & val)
-    {
+    void JsonObject::addBoolean(const std::string & key, const bool & val) {
         addValue<bool>(key, val);
     }
 
-    void JsonObject::addArray(const std::string & key, JsonArray && val)
-    {
+    void JsonObject::addArray(const std::string & key, JsonArray && val) {
         addValue<JsonArray>(key, val);
     }
 
-    void JsonObject::addArray(const std::string & key, const JsonArray & val)
-    {
+    void JsonObject::addArray(const std::string & key, const JsonArray & val) {
         addValue<JsonArray>(key, val);
     }
 
-    void JsonObject::addObject(const std::string & key, JsonObject && val)
-    {
+    void JsonObject::addObject(const std::string & key, JsonObject && val) {
         addValue<JsonObject>(key, val);
     }
 
-    void JsonObject::addObject(const std::string & key, const JsonObject & val)
-    {
+    void JsonObject::addObject(const std::string & key, const JsonObject & val) {
         addValue<JsonObject>(key, val);
     }
 
-    void JsonObject::swap(JsonObject && jo) noexcept
-    {
+    void JsonObject::swap(JsonObject && jo) noexcept {
         content.swap(jo.content);
     }
 
-    void JsonObject::join(const JsonObject & jo)
-    {
-        for(const auto & [key, valptr] : jo.content)
-        {
-            if(valptr->isArray())
-            {
+    void JsonObject::join(const JsonObject & jo) {
+        for(const auto & [key, valptr] : jo.content) {
+            if(valptr->isArray()) {
                 auto it = content.find(key);
 
-                if(it != content.end() && (*it).second->isArray())
-                {
+                if(it != content.end() && (*it).second->isArray()) {
                     static_cast<JsonArray*>((*it).second.get())->join(static_cast<const JsonArray &>(*valptr.get()));
-                }
-                else
-                {
+                } else {
                     content.emplace(key, valptr);
                 }
-            }
-            else if(valptr->isObject())
-            {
+            } else if(valptr->isObject()) {
                 auto it = content.find(key);
 
-                if(it != content.end() && (*it).second->isArray())
-                {
+                if(it != content.end() && (*it).second->isArray()) {
                     static_cast<JsonObject*>((*it).second.get())->join(static_cast<const JsonObject &>(*valptr.get()));
-                }
-                else
-                {
+                } else {
                     content.emplace(key, valptr);
                 }
-            }
-            else
-            {
+            } else {
                 auto it = content.find(key);
 
-                if(it != content.end())
-                {
+                if(it != content.end()) {
                     (*it).second = valptr;
-                }
-                else
-                {
+                } else {
                     content.emplace(key, valptr);
                 }
             }
@@ -844,208 +693,166 @@ namespace LTSM
     }
 
     /* JsonArray */
-    int JsonArray::getInteger(void) const
-    {
+    int JsonArray::getInteger(void) const {
         return 0;
     }
 
-    std::string JsonArray::getString(void) const
-    {
+    std::string JsonArray::getString(void) const {
         return Tools::escaped(toString(), false);
     }
 
-    double JsonArray::getDouble(void) const
-    {
+    double JsonArray::getDouble(void) const {
         return 0;
     }
 
-    bool JsonArray::getBoolean(void) const
-    {
+    bool JsonArray::getBoolean(void) const {
         return false;
     }
 
-    JsonArray::JsonArray(const JsonArray & ja)
-    {
+    JsonArray::JsonArray(const JsonArray & ja) {
         content.assign(ja.content.begin(), ja.content.end());
     }
 
-    JsonArray::JsonArray(JsonArray && ja) noexcept
-    {
+    JsonArray::JsonArray(JsonArray && ja) noexcept {
         content.swap(ja.content);
     }
 
-    JsonArray & JsonArray::operator=(const JsonArray & ja)
-    {
+    JsonArray & JsonArray::operator=(const JsonArray & ja) {
         content.assign(ja.content.begin(), ja.content.end());
         return *this;
     }
 
-    JsonArray & JsonArray::operator=(JsonArray && ja) noexcept
-    {
+    JsonArray & JsonArray::operator=(JsonArray && ja) noexcept {
         content.swap(ja.content);
         return *this;
     }
 
-    size_t JsonArray::size(void) const
-    {
+    size_t JsonArray::size(void) const {
         return content.size();
     }
 
-    void JsonArray::clear(void)
-    {
+    void JsonArray::clear(void) {
         return content.clear();
     }
 
-    JsonType JsonArray::getType(void) const
-    {
+    JsonType JsonArray::getType(void) const {
         return JsonType::Array;
     }
 
-    int JsonArray::getInteger(size_t index) const
-    {
+    int JsonArray::getInteger(size_t index) const {
         return isValid(index) ? content[index]->getInteger() : 0;
     }
 
-    std::string JsonArray::getString(size_t index) const
-    {
+    std::string JsonArray::getString(size_t index) const {
         return isValid(index) ? content[index]->getString() : "";
     }
 
-    double JsonArray::getDouble(size_t index) const
-    {
+    double JsonArray::getDouble(size_t index) const {
         return isValid(index) ? content[index]->getDouble() : 0;
     }
 
-    bool JsonArray::getBoolean(size_t index) const
-    {
+    bool JsonArray::getBoolean(size_t index) const {
         return isValid(index) ? content[index]->getBoolean() : false;
     }
 
-    bool JsonArray::isValid(void) const
-    {
+    bool JsonArray::isValid(void) const {
         return ! content.empty();
     }
 
-    bool JsonArray::isValid(size_t index) const
-    {
+    bool JsonArray::isValid(size_t index) const {
         return index < content.size();
     }
 
-    const JsonValue* JsonArray::getValue(size_t index) const
-    {
+    const JsonValue* JsonArray::getValue(size_t index) const {
         return index < content.size() ? content[index].get() : nullptr;
     }
 
-    const JsonObject* JsonArray::getObject(size_t index) const
-    {
+    const JsonObject* JsonArray::getObject(size_t index) const {
         auto jo = dynamic_cast<const JsonObject*>(getValue(index));
         return jo;
     }
 
-    const JsonArray* JsonArray::getArray(size_t index) const
-    {
+    const JsonArray* JsonArray::getArray(size_t index) const {
         auto ja = dynamic_cast<const JsonArray*>(getValue(index));
         return ja;
     }
 
-    std::string JsonArray::toString(void) const
-    {
+    std::string JsonArray::toString(void) const {
         std::ostringstream os;
         os << "[ ";
 
-        for(auto it = content.begin(); it != content.end(); ++it)
-        {
+        for(auto it = content.begin(); it != content.end(); ++it) {
             os << (*it)->toString();
 
-            if(std::next(it) != content.end()) { os << ", "; }
+            if(std::next(it) != content.end()) {
+                os << ", ";
+            }
         }
 
         os << " ]";
         return os.str();
     }
 
-    void JsonArray::addInteger(const int & val)
-    {
+    void JsonArray::addInteger(const int & val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addString(const std::wstring & val)
-    {
+    void JsonArray::addString(const std::wstring & val) {
         content.emplace_back(Tools::wstring2string(val));
     }
 
-    void JsonArray::addString(std::string_view val)
-    {
+    void JsonArray::addString(std::string_view val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addDouble(const double & val)
-    {
+    void JsonArray::addDouble(const double & val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addBoolean(const bool & val)
-    {
+    void JsonArray::addBoolean(const bool & val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addArray(JsonArray && val)
-    {
+    void JsonArray::addArray(JsonArray && val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addArray(const JsonArray & val)
-    {
+    void JsonArray::addArray(const JsonArray & val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addObject(JsonObject && val)
-    {
+    void JsonArray::addObject(JsonObject && val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::addObject(const JsonObject & val)
-    {
+    void JsonArray::addObject(const JsonObject & val) {
         content.emplace_back(val);
     }
 
-    void JsonArray::swap(JsonArray & ja) noexcept
-    {
+    void JsonArray::swap(JsonArray & ja) noexcept {
         content.swap(ja.content);
     }
 
-    void JsonArray::join(const JsonArray & ja)
-    {
-        if(content.size() <= ja.content.size())
-        {
+    void JsonArray::join(const JsonArray & ja) {
+        if(content.size() <= ja.content.size()) {
             content = ja.content;
             return;
         }
 
-        for(int pos = 0; pos < ja.content.size(); ++pos)
-        {
+        for(int pos = 0; pos < ja.content.size(); ++pos) {
             auto & ptr1 = content[pos];
             auto & ptr2 = ja.content[pos];
 
-            if(ptr2->isArray())
-            {
-                if(ptr1->isArray())
-                {
+            if(ptr2->isArray()) {
+                if(ptr1->isArray()) {
                     static_cast<JsonArray*>(ptr1.get())->join(static_cast<const JsonArray &>(*ptr2.get()));
-                }
-                else
-                {
+                } else {
                     ptr1.assign(ptr2);
                 }
-            }
-            else if(ptr2->isObject())
-            {
-                if(ptr1->isObject())
-                {
+            } else if(ptr2->isObject()) {
+                if(ptr1->isObject()) {
                     static_cast<JsonObject*>(ptr1.get())->join(static_cast<const JsonObject &>(*ptr2.get()));
-                }
-                else
-                {
+                } else {
                     ptr1.assign(ptr2);
                 }
             }
@@ -1053,48 +860,37 @@ namespace LTSM
     }
 
     /* JsonContent */
-    jsmntok_t* JsonContent::toJsmnTok(void)
-    {
+    jsmntok_t* JsonContent::toJsmnTok(void) {
         return size() ? reinterpret_cast<jsmntok_t*>(& front()) : nullptr;
     }
 
-    bool JsonContent::isValid(void) const
-    {
+    bool JsonContent::isValid(void) const {
         return size();
     }
 
-    bool JsonContent::parseString(std::string_view str)
-    {
+    bool JsonContent::parseString(std::string_view str) {
         return parseBinary(str.data(), str.size());
     }
 
-    bool JsonContent::parseBinary(const char* str, size_t len)
-    {
+    bool JsonContent::parseBinary(const char* str, size_t len) {
         int counts = 0;
 
-        do
-        {
+        do {
             jsmn_parser parser;
             jsmn_init(& parser);
             resize(size() + 128, JsmnToken());
             counts = jsmn_parse(& parser, str, len, toJsmnTok(), size());
-        }
-        while(counts == JSMN_ERROR_NOMEM);
+        } while(counts == JSMN_ERROR_NOMEM);
 
-        if(counts == JSMN_ERROR_INVAL)
-        {
+        if(counts == JSMN_ERROR_INVAL) {
             Application::error("%s: %s, `%.*s'", __FUNCTION__, "invalid character inside JSON content", (int) len, str);
             clear();
             return false;
-        }
-        else if(counts == JSMN_ERROR_PART)
-        {
+        } else if(counts == JSMN_ERROR_PART) {
             Application::error("%s: %s, `%.*s'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", (int) len, str);
             clear();
             return false;
-        }
-        else if(counts < 0)
-        {
+        } else if(counts < 0) {
             Application::error("%s: %s", __FUNCTION__, "unknown error");
             clear();
             return false;
@@ -1105,79 +901,66 @@ namespace LTSM
         return true;
     }
 
-    bool JsonContent::readFile(const std::filesystem::path & file)
-    {
+    bool JsonContent::readFile(const std::filesystem::path & file) {
         auto str = Tools::fileToString(file);
 
-        if(! str.empty())
-        {
+        if(! str.empty()) {
             return parseBinary(str.data(), str.size());
         }
 
         return false;
     }
 
-    std::string_view JsonContent::stringToken(const JsmnToken & tok) const
-    {
-        if(0 <= tok.start() && tok.start() < tok.end())
-        {
+    std::string_view JsonContent::stringToken(const JsmnToken & tok) const {
+        if(0 <= tok.start() && tok.start() < tok.end()) {
             return std::string_view(content.data() + tok.start(), tok.end() - tok.start());
         }
 
         return {};
     }
 
-    bool JsonContent::isArray(void) const
-    {
+    bool JsonContent::isArray(void) const {
         return isValid() && front().isArray();
     }
 
-    bool JsonContent::isObject(void) const
-    {
+    bool JsonContent::isObject(void) const {
         return isValid() && front().isObject();
     }
 
-    int JsonContent::pushValuesToArray(const const_iterator & it, JsonArray & arr) const
-    {
+    int JsonContent::pushValuesToArray(const const_iterator & it, JsonArray & arr) const {
         int counts = (*it).counts();
         int skip = 1;
         auto itval = Tools::nextToEnd(it, skip, end());
 
-        while(counts-- && itval != end())
-        {
+        while(counts-- && itval != end()) {
             auto [ptr, count] = getValueFromIter(itval);
 
-            if(ptr)
-            {
+            if(ptr) {
                 arr.content.emplace_back(std::move(ptr));
             }
 
             skip += count;
             itval = Tools::nextToEnd(it, skip, end());
         }
-        
+
         return skip;
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValueArray(const const_iterator & it) const
-    {
+    JsonContent::getValueArray(const const_iterator & it) const {
         JsonArray arr;
         int skip = pushValuesToArray(it, arr);
         return std::make_pair(JsonValuePtr(std::move(arr)), skip);
     }
 
-    int JsonContent::pushValuesToObject(const const_iterator & it, JsonObject & obj) const
-    {
+    int JsonContent::pushValuesToObject(const const_iterator & it, JsonObject & obj) const {
         int counts = (*it).counts();
         int skip = 1;
         auto itkey = Tools::nextToEnd(it, skip, end());
         auto itval = Tools::nextToEnd(itkey, 1, end());
 
-        while(counts-- && itval != end())
-        {
-            if(!(*itkey).isKey())
-            {
+        while(counts-- && itval != end()) {
+            if(!(*itkey).isKey()) {
                 auto str = stringToken(*itkey);
                 Application::error("%s: not key, index: %lu, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), static_cast<int>(str.size()), str.data());
             }
@@ -1185,16 +968,12 @@ namespace LTSM
             auto key = Tools::unescaped(stringToken(*itkey));
             auto [ptr, count] = getValueFromIter(itval);
 
-            if(ptr)
-            {
+            if(ptr) {
                 auto it = obj.content.find(key);
 
-                if(it != obj.content.end())
-                {
+                if(it != obj.content.end()) {
                     (*it).second = std::move(ptr);
-                }
-                else
-                {
+                } else {
                     obj.content.emplace(key, std::move(ptr));
                 }
             }
@@ -1208,47 +987,36 @@ namespace LTSM
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValueObject(const const_iterator & it) const
-    {
+    JsonContent::getValueObject(const const_iterator & it) const {
         JsonObject obj;
         int skip = pushValuesToObject(it, obj);
         return std::make_pair(JsonValuePtr(std::move(obj)), skip);
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValuePrimitive(const const_iterator & it) const
-    {
+    JsonContent::getValuePrimitive(const const_iterator & it) const {
         auto val = stringToken(*it);
 
-        if(! (*it).isValue())
-        {
+        if(!(*it).isValue()) {
             Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
         }
 
         size_t dotpos = val.find(".");
 
-        try
-        {
-            if(std::string::npos != dotpos)
-            {
+        try {
+            if(std::string::npos != dotpos) {
                 double vald = std::stod(std::string(val));
                 return std::make_pair(JsonValuePtr(vald), 1);
-            }
-            else
-            {
+            } else {
                 int vali = std::stoi(std::string(val), nullptr, 0);
                 return std::make_pair(JsonValuePtr(vali), 1);
             }
-        }
-        catch(const std::invalid_argument &)
-        {
-            if(startsWith(Tools::lower(val), "fals"))
-            {
+        } catch(const std::invalid_argument &) {
+            if(startsWith(Tools::lower(val), "fals")) {
                 return std::make_pair(JsonValuePtr(false), 1);
             }
 
-            if(startsWith(Tools::lower(val), "true"))
-            {
+            if(startsWith(Tools::lower(val), "true")) {
                 return std::make_pair(JsonValuePtr(true), 1);
             }
         }
@@ -1257,39 +1025,32 @@ namespace LTSM
     }
 
     std::pair<JsonValuePtr, int>
-    JsonContent::getValueFromIter(const const_iterator & it) const
-    {
+    JsonContent::getValueFromIter(const const_iterator & it) const {
         const JsmnToken & tok = *it;
 
-        if(tok.isArray())
-        {
+        if(tok.isArray()) {
             return getValueArray(it);
         }
 
-        if(tok.isObject())
-        {
+        if(tok.isObject()) {
             return getValueObject(it);
         }
 
-        if(tok.isPrimitive())
-        {
+        if(tok.isPrimitive()) {
             return getValuePrimitive(it);
         }
 
         auto val = stringToken(tok);
 
-        if(! tok.isValue())
-        {
+        if(! tok.isValue()) {
             Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
     }
 
-    JsonObject JsonContent::toObject(void) const
-    {
-        if(! isObject())
-        {
+    JsonObject JsonContent::toObject(void) const {
+        if(! isObject()) {
             Application::error("%s: not json object", __FUNCTION__);
             throw json_error(NS_FuncName);
         }
@@ -1300,10 +1061,8 @@ namespace LTSM
         return res;
     }
 
-    JsonArray JsonContent::toArray(void) const
-    {
-        if(! isArray())
-        {
+    JsonArray JsonContent::toArray(void) const {
+        if(! isArray()) {
             Application::error("%s: not json array", __FUNCTION__);
             throw json_error(NS_FuncName);
         }
@@ -1315,55 +1074,51 @@ namespace LTSM
     }
 
     /* JsonContentFile */
-    JsonContentFile::JsonContentFile(const std::filesystem::path & file)
-    {
+    JsonContentFile::JsonContentFile(const std::filesystem::path & file) {
         readFile(file);
     }
 
     /* JsonContentString */
-    JsonContentString::JsonContentString(std::string_view str)
-    {
+    JsonContentString::JsonContentString(std::string_view str) {
         parseString(str);
     }
 
     /* JsonObjectStream */
-    JsonObjectStream::JsonObjectStream()
-    {
+    JsonObjectStream::JsonObjectStream() {
         os << "{";
     }
 
-    JsonObjectStream & JsonObjectStream::push(std::string_view key)
-    {
-        if(comma) { os << ","; }
+    JsonObjectStream & JsonObjectStream::push(std::string_view key) {
+        if(comma) {
+            os << ",";
+        }
 
         os << std::quoted(key) << ":" << "null";
         comma = true;
         return *this;
     }
 
-    json_plain JsonObjectStream::flush(void)
-    {
+    json_plain JsonObjectStream::flush(void) {
         os << "}";
         return json_plain(os.str());
     }
 
     /* JsonArrayStream */
-    JsonArrayStream::JsonArrayStream()
-    {
+    JsonArrayStream::JsonArrayStream() {
         os << "[";
     }
 
-    JsonArrayStream & JsonArrayStream::push(void)
-    {
-        if(comma) { os << ","; }
+    JsonArrayStream & JsonArrayStream::push(void) {
+        if(comma) {
+            os << ",";
+        }
 
         os << "null";
         comma = true;
         return *this;
     }
 
-    json_plain JsonArrayStream::flush(void)
-    {
+    json_plain JsonArrayStream::flush(void) {
         os << "]";
         return json_plain(os.str());
     }

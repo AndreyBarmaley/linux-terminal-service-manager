@@ -33,15 +33,12 @@
 
 #include "ltsm_compat.h"
 
-namespace LTSM
-{
-    struct ldap_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct ldap_error : public std::runtime_error {
         explicit ldap_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    struct LdapResult
-    {
+    struct LdapResult {
         std::shared_ptr<char[]> _dn;
         std::unique_ptr<char[], void(*)(void*)> _attr;
         std::unique_ptr<berval*, void(*)(berval**)> _vals;
@@ -52,15 +49,14 @@ namespace LTSM
         int valuesCount(void) const;
         std::string_view valueString(void) const;
         std::list<std::string_view> valueListString(void) const;
-        
+
         bool hasValue(const char* ptr, size_t len) const;
     };
 
-    class LdapWrapper
-    {
+    class LdapWrapper {
         LDAP* ldap = nullptr;
 
-    public:
+      public:
         LdapWrapper();
         ~LdapWrapper();
 

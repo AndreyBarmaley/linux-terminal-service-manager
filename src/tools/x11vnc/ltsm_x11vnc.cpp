@@ -35,21 +35,18 @@
 #include "ltsm_x11vnc.h"
 #include "ltsm_connector_x11vnc.h"
 
-namespace LTSM
-{
+namespace LTSM {
     //
-    void connectorHelp(const char* prog)
-    {
+    void connectorHelp(const char* prog) {
         std::cout << "version: " << LTSM_X11VNC_VERSION << std::endl;
         std::cout << "usage: " << prog <<
-                  " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]"
+                     " [--display :0] --authfile <file> --passwdfile <file> [--keymapfile <file>] [--debug <info|debug>] [--inetd] [--noauth] [--notls] [--threads 2] [--port 5900] [--syslog] [--background] [--nodamage] [+DesktopResized] [+ClipBoard]"
                   << std::endl;
     }
 
     /* X11Vnc */
     X11Vnc::X11Vnc(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_x11vnc")
-    {
+        : ApplicationJsonConfig("ltsm_x11vnc") {
         configSetInteger("display", 0);
         configSetInteger("port", 5900);
         configSetInteger("threads", 2);
@@ -62,184 +59,130 @@ namespace LTSM
         configSetBoolean("DesktopResized", false);
         configSetBoolean("ClipBoard", false);
 
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h"))
-            {
+        for(int it = 1; it < argc; ++it) {
+            if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
                 connectorHelp(argv[0]);
                 throw 0;
-            }
-            else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--display") && it + 1 < argc) {
                 auto str = argv[it + 1];
 
-                if(str[0] == ':')
-                {
+                if(str[0] == ':') {
                     configSetInteger("display", std::stoi(str + 1));
-                }
-                else
-                {
+                } else {
                     configSetInteger("display", std::stoi(str));
                 }
 
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--authfile") && it + 1 < argc) {
                 configSetString("authfile", argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--passwdfile") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--passwdfile") && it + 1 < argc) {
                 configSetString("passwdfile", argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--keymapfile") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--keymapfile") && it + 1 < argc) {
                 configSetString("keymapfile", argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--debug") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--debug") && it + 1 < argc) {
                 configSetString("debug", argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--threads") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--threads") && it + 1 < argc) {
                 auto str = argv[it + 1];
                 configSetInteger("threads", std::stoi(str[0] == ':' ? str + 1 : str));
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--port") && it + 1 < argc) {
                 configSetInteger("port", std::stoi(argv[it + 1]));
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--noauth"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--noauth")) {
                 configSetBoolean("noauth", true);
-            }
-            else if(0 == std::strcmp(argv[it], "--inetd"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--inetd")) {
                 configSetBoolean("inetd", true);
-            }
-            else if(0 == std::strcmp(argv[it], "--notls"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--notls")) {
                 configSetBoolean("notls", true);
-            }
-            else if(0 == std::strcmp(argv[it], "--syslog"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--syslog")) {
                 configSetBoolean("syslog", true);
-            }
-            else if(0 == std::strcmp(argv[it], "--background"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--background")) {
                 configSetBoolean("background", true);
-            }
-            else if(0 == std::strcmp(argv[it], "--nodamage"))
-            {
+            } else if(0 == std::strcmp(argv[it], "--nodamage")) {
                 configSetBoolean("nodamage", true);
-            }
-            else if(0 == std::strcmp(argv[it], "+DesktopResized"))
-            {
+            } else if(0 == std::strcmp(argv[it], "+DesktopResized")) {
                 configSetBoolean("DesktopResized", true);
-            }
-            else if(0 == std::strcmp(argv[it], "+ClipBoard"))
-            {
+            } else if(0 == std::strcmp(argv[it], "+ClipBoard")) {
                 configSetBoolean("ClipBoard", true);
             }
         }
 
         bool error = false;
 
-        if(configGetBoolean("inetd"))
-        {
+        if(configGetBoolean("inetd")) {
             configSetBoolean("syslog", true);
         }
 
         Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::None);
 
-        if(configGetBoolean("syslog"))
-        {
+        if(configGetBoolean("syslog")) {
             Application::setDebugTarget(LTSM::DebugTarget::Syslog);
             auto debug = configGetString("debug");
 
-            if(! debug.empty())
-            {
+            if(! debug.empty()) {
                 Application::setDebugLevel(debug);
             }
         }
 
-        if(1)
-        {
+        if(1) {
             std::string file = configGetString("authfile");
 
-            if(! file.empty() && ! std::filesystem::exists(file))
-            {
+            if(! file.empty() && ! std::filesystem::exists(file)) {
                 Application::warning("authfile not found: `%s'", file.c_str());
             }
         }
 
-        if(! configGetBoolean("noauth"))
-        {
+        if(! configGetBoolean("noauth")) {
             std::string file = configGetString("passwdfile");
 
-            if(file.empty())
-            {
+            if(file.empty()) {
                 Application::error("error: %s", "passwdfile not defined");
                 error = true;
-            }
-            else if(! std::filesystem::exists(file))
-            {
+            } else if(! std::filesystem::exists(file)) {
                 Application::error("passwdfile not found: `%s'", file.c_str());
                 error = true;
             }
         }
 
-        if(error)
-        {
+        if(error) {
             std::cout << std::endl;
             connectorHelp(argv[0]);
             throw 0;
         }
     }
 
-    int X11Vnc::startSocket(int port) const
-    {
+    int X11Vnc::startSocket(int port) const {
         int fd = TCPSocket::listen(port);
 
-        if(fd < 0)
-        {
+        if(fd < 0) {
             return -1;
         }
 
         Application::info("listen inet port: %d", port);
         signal(SIGCHLD, SIG_IGN);
 
-        while(int sock = TCPSocket::accept(fd))
-        {
-            if(0 > sock)
-            {
+        while(int sock = TCPSocket::accept(fd)) {
+            if(0 > sock) {
                 return -1;
             }
 
             // child
-            if(0 == fork())
-            {
-                if(configGetBoolean("syslog"))
-                {
+            if(0 == fork()) {
+                if(configGetBoolean("syslog")) {
                     Application::setDebugTarget(DebugTarget::Quiet);
                 }
 
                 close(fd);
                 int res = EXIT_FAILURE;
 
-                try
-                {
+                try {
                     auto connector = std::make_unique<Connector::X11VNC>(sock, config());
                     res = connector->rfbCommunication();
-                }
-                catch(const std::exception & err)
-                {
+                } catch(const std::exception & err) {
                     Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
                 }
 
@@ -255,29 +198,23 @@ namespace LTSM
         return 0;
     }
 
-    int X11Vnc::startInetd(void) const
-    {
+    int X11Vnc::startInetd(void) const {
         int res = EXIT_FAILURE;
 
-        try
-        {
+        try {
             auto connector = std::make_unique<Connector::X11VNC>(-1, config());
             res = connector->rfbCommunication();
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         }
 
         return res;
     }
 
-    int X11Vnc::start(void)
-    {
+    int X11Vnc::start(void) {
         Application::info("x11vnc version: %d", LTSM_X11VNC_VERSION);
 
-        if(configGetBoolean("background") && fork())
-        {
+        if(configGetBoolean("background") && fork()) {
             return 0;
         }
 
@@ -286,22 +223,16 @@ namespace LTSM
     }
 }
 
-int main(int argc, const char** argv)
-{
+int main(int argc, const char** argv) {
     int res = 0;
 
-    try
-    {
+    try {
         LTSM::X11Vnc app(argc, argv);
         res = app.start();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         LTSM::Application::info("program: %s", "terminate...");
-    }
-    catch(int val)
-    {
+    } catch(int val) {
         res = val;
     }
 

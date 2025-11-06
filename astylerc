@@ -1,0 +1,17 @@
+-A1
+-S
+-N
+-Y
+-f
+--pad-oper
+--pad-comma
+--pad-include
+--pad-negation
+--unpad-paren
+--unpad-brackets
+--align-pointer=type
+--align-reference=middle
+--add-braces
+--keep-one-line-blocks
+--convert-tabs
+--squeeze-ws

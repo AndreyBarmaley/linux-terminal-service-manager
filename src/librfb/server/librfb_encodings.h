@@ -36,14 +36,11 @@
 #endif
 
 
-namespace LTSM
-{
-    namespace RFB
-    {
+namespace LTSM {
+    namespace RFB {
         /// EncoderStream
-        class EncoderStream : public NetworkStream
-        {
-        public:
+        class EncoderStream : public NetworkStream {
+          public:
             int sendHeader(int type, const XCB::Region &);
             int sendPixelRaw(uint32_t pixel, uint8_t bpp, bool be);
             int sendPixel(uint32_t pixel);
@@ -58,13 +55,12 @@ namespace LTSM
         };
 
         /// EncoderWrapper
-        class EncoderWrapper : public EncoderStream
-        {
-        protected:
+        class EncoderWrapper : public EncoderStream {
+          protected:
             BinaryBuf* buffer = nullptr;
             EncoderStream* owner = nullptr;
 
-        public:
+          public:
             EncoderWrapper(BinaryBuf* bb, EncoderStream* st) : buffer(bb), owner(st) {}
 
             EncoderWrapper(const EncoderWrapper &) = delete;
@@ -77,23 +73,19 @@ namespace LTSM
             void sendRaw(const void* ptr, size_t len) override;
             void recvRaw(void* ptr, size_t len) const override;
 
-            const PixelFormat & serverFormat(void) const override
-            {
+            const PixelFormat & serverFormat(void) const override {
                 return owner->serverFormat();
             }
 
-            const PixelFormat & clientFormat(void) const override
-            {
+            const PixelFormat & clientFormat(void) const override {
                 return owner->clientFormat();
             }
 
-            bool clientIsBigEndian(void) const override
-            {
+            bool clientIsBigEndian(void) const override {
                 return owner->clientIsBigEndian();
             }
 
-            XCB::Size displaySize(void) const override
-            {
+            XCB::Size displaySize(void) const override {
                 return owner->displaySize();
             }
         };
@@ -101,9 +93,8 @@ namespace LTSM
         using EncodingRet = std::pair<XCB::Region, BinaryBuf>;
 
         /// EncodingBase
-        class EncodingBase
-        {
-        protected:
+        class EncodingBase {
+          protected:
             const int type = 0;
             int threads = 2;
 
@@ -111,13 +102,15 @@ namespace LTSM
 
             static std::list<XCB::RegionPixel> rreProcessing(const XCB::Region &, const FrameBuffer &, int skipPixel);
 
-        public:
+          public:
             EncodingBase(int v);
             virtual ~EncodingBase() = default;
 
             virtual void sendFrameBuffer(EncoderStream*, const FrameBuffer &) = 0;
             virtual void resizedEvent(const XCB::Size &) { /* empty */ }
-            virtual bool setEncodingOptions(const std::forward_list<std::string> &) { return false; }
+            virtual bool setEncodingOptions(const std::forward_list<std::string> &) {
+                return false;
+            }
             virtual const char* getTypeName(void) const = 0;
 
             int getType(void) const;
@@ -125,45 +118,45 @@ namespace LTSM
         };
 
         /// EncodingRaw
-        class EncodingRaw : public EncodingBase
-        {
+        class EncodingRaw : public EncodingBase {
             BinaryBuf buf;
 
-        protected:
+          protected:
             std::pair<XCB::Region, BinaryBuf> sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &,
                     const FrameBuffer &, int jobId);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "Raw"; }
+            const char* getTypeName(void) const override {
+                return "Raw";
+            }
 
             EncodingRaw() : EncodingBase(ENCODING_RAW) {}
         };
 
         /// EncodingRRE
-        class EncodingRRE : public EncodingBase
-        {
-        protected:
+        class EncodingRRE : public EncodingBase {
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRects(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                            const std::list<XCB::RegionPixel> &);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return getType() == ENCODING_CORRE ? "CoRRE": "RRE"; }
+            const char* getTypeName(void) const override {
+                return getType() == ENCODING_CORRE ? "CoRRE" : "RRE";
+            }
 
             EncodingRRE(bool co) : EncodingBase(co ? ENCODING_CORRE : ENCODING_RRE) {}
 
-            bool isCoRRE(void) const
-            {
+            bool isCoRRE(void) const {
                 return getType() == ENCODING_CORRE;
             }
         };
 
         /// EncodingHexTile
-        class EncodingHexTile : public EncodingBase
-        {
-        protected:
+        class EncodingHexTile : public EncodingBase {
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRegionForeground(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, int back,
                                       const std::list<XCB::RegionPixel> &);
@@ -171,19 +164,20 @@ namespace LTSM
                                    const std::list<XCB::RegionPixel> &);
             void sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "HexTile"; }
+            const char* getTypeName(void) const override {
+                return "HexTile";
+            }
 
             EncodingHexTile(void) : EncodingBase(ENCODING_HEXTILE) {}
         };
 
         /// EncodingTRLE
-        class EncodingTRLE : public EncodingBase
-        {
+        class EncodingTRLE : public EncodingBase {
             std::unique_ptr<ZLib::DeflateStream> zlib;
 
-        protected:
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             void sendRegionPacked(EncoderStream*, const XCB::Region &, const FrameBuffer &, int jobId, size_t field,
                                   const PixelMapPalette &);
@@ -192,31 +186,33 @@ namespace LTSM
                                    const PixelLengthList &);
             void sendRegionRaw(EncoderStream*, const XCB::Region &, const FrameBuffer &);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE"; }
+            const char* getTypeName(void) const override {
+                return getType() == ENCODING_ZRLE ? "ZRLE" : "TRLE";
+            }
 
             EncodingTRLE(bool zlib);
 
-            bool isZRLE(void) const
-            {
+            bool isZRLE(void) const {
                 return getType() == ENCODING_ZRLE;
             }
         };
 
         /// EncodingZlib
-        class EncodingZlib : public EncodingBase
-        {
+        class EncodingZlib : public EncodingBase {
             std::unique_ptr<ZLib::DeflateStream> zlib;
             BinaryBuf buf;
             int zlevel;
 
-        protected:
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "ZLib"; }
+            const char* getTypeName(void) const override {
+                return "ZLib";
+            }
 
             EncodingZlib(int lev = Z_BEST_SPEED);
             bool setEncodingOptions(const std::forward_list<std::string> &) override;
@@ -225,30 +221,32 @@ namespace LTSM
 #ifdef LTSM_ENCODING
 
         /// EncodingLZ4
-        class EncodingLZ4 : public EncodingBase
-        {
-        protected:
+        class EncodingLZ4 : public EncodingBase {
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "LZ4"; }
+            const char* getTypeName(void) const override {
+                return "LZ4";
+            }
 
             EncodingLZ4() : EncodingBase(ENCODING_LTSM_LZ4) {}
         };
 
         /// EncodingTJPG
-        class EncodingTJPG : public EncodingBase
-        {
+        class EncodingTJPG : public EncodingBase {
             int jpegQuality = 85;
             int jpegSamp = TJSAMP_420;
 
-        protected:
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "TJPG"; }
+            const char* getTypeName(void) const override {
+                return "TJPG";
+            }
 
             EncodingTJPG() : EncodingBase(ENCODING_LTSM_TJPG) {}
             EncodingTJPG(int qual, int samp) : EncodingBase(ENCODING_LTSM_TJPG), jpegQuality(qual), jpegSamp(samp) {}
@@ -257,15 +255,16 @@ namespace LTSM
         };
 
         /// EncodingQOI
-        class EncodingQOI : public EncodingBase
-        {
-        protected:
+        class EncodingQOI : public EncodingBase {
+          protected:
             EncodingRet sendRegion(EncoderStream*, const XCB::Point &, const XCB::Region &, const FrameBuffer &, int jobId);
             BinaryBuf encodeBGRx(const FrameBuffer &, const XCB::Region &, const PixelFormat &) const;
 
-        public:
+          public:
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
-            const char* getTypeName(void) const override { return "QOI"; }
+            const char* getTypeName(void) const override {
+                return "QOI";
+            }
 
             EncodingQOI() : EncodingBase(ENCODING_LTSM_QOI) {}
         };

@@ -27,14 +27,12 @@
 #include "ltsm_application.h"
 #define LTSM_X11VNC_VERSION 20220920
 
-namespace LTSM
-{
-    class X11Vnc : public ApplicationJsonConfig
-    {
+namespace LTSM {
+    class X11Vnc : public ApplicationJsonConfig {
         int startInetd(void) const;
         int startSocket(int port) const;
 
-    public:
+      public:
         X11Vnc(int argc, const char** argv);
 
         int start(void);

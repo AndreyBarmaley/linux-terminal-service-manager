@@ -51,37 +51,37 @@
 #include "ltsm_tools.h"
 #include "ltsm_xcb_types.h"
 
-namespace LTSM
-{
-    namespace XCB
-    {
+namespace LTSM {
+    namespace XCB {
         using ConnectionShared = std::shared_ptr<xcb_connection_t>;
 
-        struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>
-        {
+        struct GenericError : std::unique_ptr<xcb_generic_error_t, void(*)(void*)> {
             explicit GenericError(xcb_generic_error_t* err = nullptr)
                 : std::unique_ptr<xcb_generic_error_t, void(*)(void*)>(err, std::free) {}
         };
 
-        struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>
-        {
+        struct GenericEvent : std::unique_ptr<xcb_generic_event_t, void(*)(void*)> {
             explicit GenericEvent(xcb_generic_event_t* ev = nullptr)
                 : std::unique_ptr<xcb_generic_event_t, void(*)(void*)>(ev, std::free) {}
 
-            const xcb_generic_error_t* toerror(void) const { return reinterpret_cast<const xcb_generic_error_t*>(get()); }
+            const xcb_generic_error_t* toerror(void) const {
+                return reinterpret_cast<const xcb_generic_error_t*>(get());
+            }
         };
 
         template<typename ReplyType>
-        struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)>
-        {
+        struct GenericReply : std::unique_ptr<ReplyType, void(*)(void*)> {
             explicit GenericReply(ReplyType* ptr) : std::unique_ptr<ReplyType, void(*)(void*)>(ptr, std::free) {}
         };
 
-        struct PropertyReply : GenericReply<xcb_get_property_reply_t>
-        {
-            uint32_t length(void) { return xcb_get_property_value_length(get()); }
+        struct PropertyReply : GenericReply<xcb_get_property_reply_t> {
+            uint32_t length(void) {
+                return xcb_get_property_value_length(get());
+            }
 
-            void* value(void) { return xcb_get_property_value(get()); }
+            void* value(void) {
+                return xcb_get_property_value(get());
+            }
 
             PropertyReply(xcb_get_property_reply_t* ptr) : GenericReply<xcb_get_property_reply_t>(ptr) {}
 
@@ -89,40 +89,32 @@ namespace LTSM
         };
 
         template<typename ReplyType>
-        struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError>
-        {
+        struct ReplyError : std::pair<GenericReply<ReplyType>, GenericError> {
             ReplyError(ReplyType* ptr, xcb_generic_error_t* err)
-                : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err)
-            {
+                : std::pair<GenericReply<ReplyType>, GenericError>(ptr, err) {
             }
 
-            const GenericReply<ReplyType> & reply(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::first; }
+            const GenericReply<ReplyType> & reply(void) const {
+                return std::pair<GenericReply<ReplyType>, GenericError>::first;
+            }
 
-            const GenericError & error(void) const { return std::pair<GenericReply<ReplyType>, GenericError>::second; }
+            const GenericError & error(void) const {
+                return std::pair<GenericReply<ReplyType>, GenericError>::second;
+            }
         };
 
-        template<typename Reply, typename Cookie>
-        ReplyError<Reply> getReply1(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
-        {
-            xcb_generic_error_t* error = nullptr;
-            Reply* reply = func(conn, cookie, & error);
-            return ReplyError<Reply>(reply, error);
-        }
-
-#define getReplyFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
-#define getReplyUncheckedFunc1(NAME,conn,...) getReply1<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME##_unchecked(conn,##__VA_ARGS__))
 #define NULL_KEYCODE 0
 
-        template<typename Reply, typename Cookie>
-        ReplyError<Reply> getReply2(std::function<Reply*(xcb_connection_t*, Cookie, xcb_generic_error_t**)> func, xcb_connection_t* conn, Cookie cookie)
-        {
-            return getReply1<Reply, Cookie>(func, conn, cookie);
+        template<typename Reply, typename Cookie, typename Func>
+        ReplyError<Reply> getReply3(const Func & func, xcb_connection_t* conn, const Cookie & cookie) {
+            xcb_generic_error_t* error = nullptr;
+            Reply* reply = func(conn, cookie, & error);
+            return ReplyError{reply, error};
         }
 
-#define getReplyFunc2(NAME,conn,...) getReply2<NAME##_reply_t,NAME##_cookie_t>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
+#define getReplyFunc2(NAME,conn,...) getReply3<NAME##_reply_t,NAME##_cookie_t,decltype(NAME##_reply)*>(NAME##_reply,conn,NAME(conn,##__VA_ARGS__))
 
-        struct PixmapBase
-        {
+        struct PixmapBase {
             uint32_t rmask = 0;
             uint32_t gmask = 0;
             uint32_t bmask = 0;
@@ -137,15 +129,18 @@ namespace LTSM
 
             PixmapBase(uint32_t rm, uint32_t gm, uint32_t bm, uint8_t pp) : rmask(rm), gmask(gm), bmask(bm), bpp(pp) {}
 
-            uint8_t bitsPerPixel(void) const { return bpp; }
+            uint8_t bitsPerPixel(void) const {
+                return bpp;
+            }
 
-            uint8_t bytePerPixel(void) const { return bpp >> 3; }
+            uint8_t bytePerPixel(void) const {
+                return bpp >> 3;
+            }
         };
 
         using PixmapInfoReply = std::unique_ptr<PixmapBase>;
 
-        struct ShmId
-        {
+        struct ShmId {
             std::weak_ptr<xcb_connection_t> conn;
             int shm = -1;
             uint8_t* addr = nullptr;
@@ -161,48 +156,63 @@ namespace LTSM
 
             void reset(void);
 
-            explicit operator bool(void) const { return ! conn.expired() && 0 < id; };
+            explicit operator bool(void) const {
+                return ! conn.expired() && 0 < id;
+            };
 
-            const xcb_shm_seg_t & operator()(void) const { return id; };
+            const xcb_shm_seg_t & operator()(void) const {
+                return id;
+            };
         };
 
         using ShmIdShared = std::shared_ptr<ShmId>;
 
-        struct PixmapSHM : PixmapBase
-        {
+        struct PixmapSHM : PixmapBase {
             ShmIdShared shm;
             size_t len = 0;
 
-            uint8_t* data(void) override { return shm ? shm->addr : nullptr; }
+            uint8_t* data(void) override {
+                return shm ? shm->addr : nullptr;
+            }
 
-            const uint8_t* data(void) const override { return shm ? shm->addr : nullptr; }
+            const uint8_t* data(void) const override {
+                return shm ? shm->addr : nullptr;
+            }
 
-            size_t size(void) const override { return len; }
+            size_t size(void) const override {
+                return len;
+            }
 
             PixmapSHM() = default;
             PixmapSHM(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, const ShmIdShared & sh, size_t sz)
                 : PixmapBase(rmask, gmask, bmask, bpp), shm(sh), len(sz) {}
         };
 
-        struct PixmapBuffer : PixmapBase
-        {
+        struct PixmapBuffer : PixmapBase {
             std::vector<uint8_t> pixels;
 
-            uint8_t* data(void) override { return pixels.data(); }
+            uint8_t* data(void) override {
+                return pixels.data();
+            }
 
-            const uint8_t* data(void) const override { return pixels.data(); }
+            const uint8_t* data(void) const override {
+                return pixels.data();
+            }
 
-            size_t size(void) const override { return pixels.size(); }
+            size_t size(void) const override {
+                return pixels.size();
+            }
 
             PixmapBuffer() = default;
             PixmapBuffer(uint32_t rmask, uint32_t gmask, uint32_t bmask, uint8_t bpp, size_t res = 0)
-                : PixmapBase(rmask, gmask, bmask, bpp) { pixels.reserve(res); }
+                : PixmapBase(rmask, gmask, bmask, bpp) {
+                pixels.reserve(res);
+            }
         };
 
 #define ReplyCursor ReplyError<xcb_xfixes_get_cursor_image_reply_t>
 
-        struct CursorImage : ReplyCursor
-        {
+        struct CursorImage : ReplyCursor {
             uint32_t* data(void);
             const uint32_t* data(void) const;
             size_t size(void) const;
@@ -210,11 +220,9 @@ namespace LTSM
             CursorImage(ReplyCursor && rc) : ReplyCursor(std::move(rc)) {}
         };
 
-        union xkb_notify_event_t
-        {
+        union xkb_notify_event_t {
             /* All XKB events share these fields. */
-            struct
-            {
+            struct {
                 uint8_t response_type;
                 uint8_t xkb_type;
                 uint16_t sequence;
@@ -227,8 +235,7 @@ namespace LTSM
             xcb_xkb_state_notify_event_t state_notify;
         };
 
-        struct RandrOutputInfo
-        {
+        struct RandrOutputInfo {
             bool connected = false;
             xcb_randr_crtc_t crtc = 0;
             uint32_t mm_width = 0;
@@ -238,8 +245,7 @@ namespace LTSM
             RandrOutputInfo() = default;
         };
 
-        struct RandrCrtcInfo
-        {
+        struct RandrCrtcInfo {
             xcb_randr_mode_t mode = 0;
             xcb_timestamp_t timestamp = 0;
             int16_t x = 0;
@@ -252,8 +258,7 @@ namespace LTSM
             RandrCrtcInfo() = default;
         };
 
-        struct RandrScreenInfo
-        {
+        struct RandrScreenInfo {
             xcb_timestamp_t timestamp = 0;
             xcb_timestamp_t config_timestamp = 0;
             uint16_t sizeID = 0;
@@ -265,8 +270,7 @@ namespace LTSM
 
         using AuthCookie = std::vector<uint8_t>;
 
-        struct SelectionIncrMode
-        {
+        struct SelectionIncrMode {
             xcb_window_t requestor = 0;
             uint32_t size = 0;
             uint16_t sequence = 0;
@@ -277,8 +281,7 @@ namespace LTSM
         // Module
         enum class Module { SHM, DAMAGE, WINDAMAGE, XFIXES, WINFIXES, RANDR, TEST, XKB, SELECTION_COPY, SELECTION_PASTE };
 
-        struct ModuleExtension
-        {
+        struct ModuleExtension {
             std::weak_ptr<xcb_connection_t> conn;
             Module type;
             const xcb_query_extension_reply_t* ext = nullptr;
@@ -287,14 +290,15 @@ namespace LTSM
 
             virtual ~ModuleExtension() = default;
 
-            bool isModule(const Module & mod) const { return mod == type; }
+            bool isModule(const Module & mod) const {
+                return mod == type;
+            }
 
             bool isEventType(const GenericEvent &, int) const;
             bool isEventError(const GenericEvent &, uint16_t* opcode = nullptr) const;
         };
 
-        struct FixesRegionId
-        {
+        struct FixesRegionId {
             std::weak_ptr<xcb_connection_t> conn;
             xcb_xfixes_region_t xid = 0;
 
@@ -304,8 +308,7 @@ namespace LTSM
 
         using FixesRegionIdPtr = std::unique_ptr<FixesRegionId>;
 
-        struct ModuleFixes : ModuleExtension
-        {
+        struct ModuleFixes : ModuleExtension {
             explicit ModuleFixes(const ConnectionShared &);
 
             FixesRegionIdPtr createRegion(const xcb_rectangle_t &) const;
@@ -318,8 +321,7 @@ namespace LTSM
             std::vector<xcb_rectangle_t> fetchRegions(const xcb_xfixes_region_t &) const;
         };
 
-        struct ModuleWindowFixes : public ModuleFixes
-        {
+        struct ModuleWindowFixes : public ModuleFixes {
             xcb_window_t win = 0;
 
             explicit ModuleWindowFixes(const ConnectionShared &, xcb_drawable_t win);
@@ -329,13 +331,11 @@ namespace LTSM
             std::string getCursorName(const xcb_cursor_t &) const;
         };
 
-        struct ModuleDamage : ModuleExtension
-        {
+        struct ModuleDamage : ModuleExtension {
             explicit ModuleDamage(const ConnectionShared &);
         };
 
-        struct ModuleWindowDamage : public ModuleDamage
-        {
+        struct ModuleWindowDamage : public ModuleDamage {
             xcb_drawable_t win = 0;
             xcb_damage_damage_t xid = 0;
 
@@ -350,8 +350,7 @@ namespace LTSM
             bool subtrackRegion(const Region &) const;
         };
 
-        struct ModuleTest : ModuleExtension
-        {
+        struct ModuleTest : ModuleExtension {
             xcb_window_t screen = 0;
             mutable std::array<xcb_keycode_t, 16> keycodes;
 
@@ -368,14 +367,15 @@ namespace LTSM
         };
 
         /// SelectionSource interface
-        class SelectionSource
-        {
-        public:
+        class SelectionSource {
+          public:
             virtual std::vector<xcb_atom_t> selectionSourceTargets(void) const = 0;
 
             virtual size_t selectionSourceSize(xcb_atom_t) const = 0;
             virtual std::vector<uint8_t> selectionSourceData(xcb_atom_t, size_t offset, uint32_t length) const = 0;
-            virtual bool selectionSourceReady(xcb_atom_t) const { return true; }
+            virtual bool selectionSourceReady(xcb_atom_t) const {
+                return true;
+            }
 
             virtual void selectionSourceLock(xcb_atom_t) const {}
             virtual void selectionSourceUnlock(xcb_atom_t) const {}
@@ -384,16 +384,14 @@ namespace LTSM
             virtual ~SelectionSource() = default;
         };
 
-        struct WindowRequest
-        {
+        struct WindowRequest {
             xcb_selection_request_event_t ev;
             size_t offset;
 
             WindowRequest(const xcb_selection_request_event_t & r) : ev(r), offset(0) {}
         };
 
-        class ModulePasteSelection : public ModuleExtension
-        {
+        class ModulePasteSelection : public ModuleExtension {
             const SelectionSource* source = nullptr;
 
             // destinations
@@ -412,17 +410,21 @@ namespace LTSM
 
             xcb_timestamp_t selectionTime = 0;
 
-        protected:
+          protected:
             void discardRequestor(const ConnectionShared &, const xcb_selection_request_event_t &);
             bool removeRequestors(xcb_window_t win);
 
             void eventRequestDebug(const ConnectionShared &, const xcb_selection_request_event_t*, bool warn = false) const;
             void sendNotifyEvent(const ConnectionShared &, const xcb_selection_request_event_t*, xcb_atom_t) const;
 
-            inline void sendNotifyDiscard(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const { sendNotifyEvent(ptr, ev, XCB_ATOM_NONE); }
-            inline void eventRequestWarning(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const { eventRequestDebug(ptr, ev, true); }
+            inline void sendNotifyDiscard(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const {
+                sendNotifyEvent(ptr, ev, XCB_ATOM_NONE);
+            }
+            inline void eventRequestWarning(const ConnectionShared & ptr, const xcb_selection_request_event_t* ev) const {
+                eventRequestDebug(ptr, ev, true);
+            }
 
-        public:
+          public:
             ModulePasteSelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t = XCB_ATOM_NONE /* default: CLIPBOARD */);
             ~ModulePasteSelection();
 
@@ -433,13 +435,14 @@ namespace LTSM
             void selectionClearEvent(const xcb_selection_clear_event_t*);
             void selectionRequestEvent(const xcb_selection_request_event_t*);
 
-            void setSkipRequestor(xcb_window_t win) { skipRequestorWin = win; }
+            void setSkipRequestor(xcb_window_t win) {
+                skipRequestorWin = win;
+            }
         };
 
         /// SelectionRecipient interface
-        class SelectionRecipient
-        {
-        public:
+        class SelectionRecipient {
+          public:
             virtual void selectionReceiveData(xcb_atom_t, const uint8_t* ptr, uint32_t len) const = 0;
             virtual void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const = 0;
             virtual void selectionChangedEvent(void) const = 0;
@@ -448,19 +451,16 @@ namespace LTSM
             virtual ~SelectionRecipient() = default;
         };
 
-        struct WindowSource
-        {
+        struct WindowSource {
             xcb_selection_notify_event_t ev;
             std::vector<uint8_t> buf;
 
-            WindowSource(const xcb_selection_notify_event_t & r, size_t sz) : ev(r)
-            {
+            WindowSource(const xcb_selection_notify_event_t & r, size_t sz) : ev(r) {
                 buf.reserve(sz);
             }
         };
 
-        class ModuleCopySelection : public ModuleExtension
-        {
+        class ModuleCopySelection : public ModuleExtension {
             const SelectionRecipient* recipient = nullptr;
 
             // incr source
@@ -480,15 +480,17 @@ namespace LTSM
             // xfixes input win
             xcb_window_t xfixesWin = XCB_WINDOW_NONE;
 
-        protected:
+          protected:
             void eventNotifyDebug(const ConnectionShared &, const xcb_selection_notify_event_t*, bool warn = false) const;
-            inline void eventNotifyWarning(const ConnectionShared & ptr, const xcb_selection_notify_event_t* ev) const { eventNotifyDebug(ptr, ev, true); }
+            inline void eventNotifyWarning(const ConnectionShared & ptr, const xcb_selection_notify_event_t* ev) const {
+                eventNotifyDebug(ptr, ev, true);
+            }
 
             void xfixesSetSelectionOwnerEvent(const xcb_xfixes_selection_notify_event_t*);
             void xfixesSelectionWindowDestroyEvent(const xcb_xfixes_selection_notify_event_t*);
             void xfixesSelectionClientCloseEvent(const xcb_xfixes_selection_notify_event_t*);
 
-        public:
+          public:
             ModuleCopySelection(const ConnectionShared &, const xcb_screen_t &, xcb_atom_t = XCB_ATOM_NONE /* default: CLIPBOARD */);
             ~ModuleCopySelection();
 
@@ -499,12 +501,13 @@ namespace LTSM
             void selectionNotifyEvent(const xcb_selection_notify_event_t*);
             void xfixesSelectionNotifyEvent(const xcb_xfixes_selection_notify_event_t*);
 
-            const xcb_window_t & selectionWindow(void) const { return selectionWin; }
+            const xcb_window_t & selectionWindow(void) const {
+                return selectionWin;
+            }
         };
 
         /// ModuleRandr
-        struct ModuleRandr : ModuleExtension
-        {
+        struct ModuleRandr : ModuleExtension {
             xcb_window_t screen;
 
             explicit ModuleRandr(const ConnectionShared &, xcb_window_t);
@@ -533,15 +536,13 @@ namespace LTSM
             bool crtcDisconnect(const xcb_randr_crtc_t &) const;
         };
 
-        struct ModuleShm : ModuleExtension
-        {
+        struct ModuleShm : ModuleExtension {
             explicit ModuleShm(const ConnectionShared &);
 
             ShmIdShared createShm(size_t shmsz, int mode, bool readOnly, uid_t owner = 0) const;
         };
 
-        struct ModuleXkb : ModuleExtension
-        {
+        struct ModuleXkb : ModuleExtension {
             std::unique_ptr<struct xkb_context, decltype(xkb_context_unref)*> ctx;
             std::unique_ptr<struct xkb_keymap, decltype(xkb_keymap_unref)*> map;
             std::unique_ptr<struct xkb_state, decltype(xkb_state_unref)*> state;
@@ -559,8 +560,7 @@ namespace LTSM
         };
 
 #ifdef LTSM_WITH_XCB_ERRORS
-        struct ErrorContext
-        {
+        struct ErrorContext {
             xcb_errors_context_t* ctx = nullptr;
 
             explicit ErrorContext(xcb_connection_t*);
@@ -571,19 +571,18 @@ namespace LTSM
 
 #endif
 
-        class Connector
-        {
-        protected:
+        class Connector {
+          protected:
             ConnectionShared _conn;
             const xcb_setup_t* _setup = nullptr;
 
 #ifdef LTSM_WITH_XCB_ERRORS
             std::unique_ptr<ErrorContext> _error;
 #endif
-        protected:
+          protected:
             void extendedError(const xcb_generic_error_t* error, const char* func, const char* name) const;
 
-        public:
+          public:
             Connector() = default;
             virtual ~Connector() = default;
 
@@ -637,9 +636,8 @@ namespace LTSM
 
         enum InitModules { All = 0xFFFF, Shm = 0x0001, Damage = 0x0002, XFixes = 0x0004, RandR = 0x0008, Test = 0x0010, Xkb = 0x0020, SelCopy = 0x0040, SelPaste = 0x0080 };
 
-        class RootDisplay : public Connector
-        {
-        protected:
+        class RootDisplay : public Connector {
+          protected:
             std::unique_ptr<ModuleShm> _modShm;
             std::unique_ptr<ModuleWindowFixes> _modWinFixes;
             std::unique_ptr<ModuleWindowDamage> _modWinDamage;
@@ -655,7 +653,7 @@ namespace LTSM
 
             mutable std::shared_mutex _lockGeometry;
 
-        protected:
+          protected:
 
             const ModuleExtension* getExtensionConst(const Module &) const;
             bool createFullScreenDamage(void);
@@ -667,7 +665,7 @@ namespace LTSM
             bool isRandrNotify(const GenericEvent &, const xcb_randr_notify_t &) const;
             bool isXkbNotify(const GenericEvent & ev, int notify) const;
 
-        public:
+          public:
             RootDisplay() = default;
             RootDisplay(int displayNum, const AuthCookie* = nullptr);
 

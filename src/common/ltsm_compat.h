@@ -26,33 +26,28 @@
 
 #include <string>
 
-namespace LTSM
-{
-    inline std::string view2string(std::string_view view)
-    {
+namespace LTSM {
+    inline std::string view2string(std::string_view view) {
         return std::string(view.begin(), view.end());
     }
 
     template<typename Iter>
-    inline std::string_view string2view(Iter it1, Iter it2)
-    {
+    inline std::string_view string2view(Iter it1, Iter it2) {
 #if __cplusplus >= 202002L
-        return std::string_view{it1, it2};
+        return std::string_view {it1, it2};
 #else
-        return std::string_view{std::addressof(*it1), (size_t) (it2 - it1) };
+        return std::string_view {std::addressof(*it1), (size_t)(it2 - it1) };
 #endif
     }
 
-    inline bool startsWith(std::string_view str, std::string_view pred)
-    {
-	return pred.size() <= str.size() &&
-	    str.substr(0, pred.size()) == pred;
+    inline bool startsWith(std::string_view str, std::string_view pred) {
+        return pred.size() <= str.size() &&
+               str.substr(0, pred.size()) == pred;
     }
 
-    inline bool endsWith(std::string_view str, std::string_view pred)
-    {
-	return pred.size() <= str.size() &&
-	    str.substr(str.size() - pred.size(), pred.size()) == pred;
+    inline bool endsWith(std::string_view str, std::string_view pred) {
+        return pred.size() <= str.size() &&
+               str.substr(str.size() - pred.size(), pred.size()) == pred;
     }
 }
 

@@ -35,17 +35,15 @@
 #include "ltsm_service_proxy.h"
 #include "ltsm_render_primitives.h"
 
-namespace LTSM::Connector
-{
+namespace LTSM::Connector {
     using RenderPrimitivePtr = std::unique_ptr<RenderPrimitive>;
 
     std::string homeRuntime(void);
 
     enum class ConnectorType { VNC, LTSM, RDP };
 
-    class DBusProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy>
-    {
-    protected:
+    class DBusProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy> {
+      protected:
         std::list<RenderPrimitivePtr> _renderPrimitives;
 
         std::string _conntype;
@@ -59,14 +57,14 @@ namespace LTSM::Connector
         std::chrono::time_point<std::chrono::steady_clock> _idleSessionTp;
         uint32_t _idleTimeoutSec = 0;
 
-    private:
+      private:
         // dbus virtual signals
         void onLoginFailure(const int32_t & display, const std::string & msg) override {}
 
         void onHelperSetLoginPassword(const int32_t & display, const std::string & login,
                                       const std::string & pass, const bool & autologin) override {}
 
-        void onHelperSetTimezone(const int32_t & display, const std::string & ) override {}
+        void onHelperSetTimezone(const int32_t & display, const std::string &) override {}
 
         void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override {}
 
@@ -75,7 +73,7 @@ namespace LTSM::Connector
         void onDisplayRemoved(const int32_t & display) override {}
 
         void onCreateChannel(const int32_t & display, const std::string &, const std::string &,
-                             const std::string &, const std::string &, const std::string & ) override {}
+                             const std::string &, const std::string &, const std::string &) override {}
 
         void onDestroyChannel(const int32_t & display, const uint8_t & channel) override {};
 
@@ -83,7 +81,7 @@ namespace LTSM::Connector
                               const std::string &, const std::string &, const std::string &, const uint8_t &, const uint32_t &) override {}
 
         void onDestroyListener(const int32_t & display, const std::string &,
-                               const std::string & ) override {}
+                               const std::string &) override {}
 
         void onTransferAllow(const int32_t & display, const std::string & filepath,
                              const std::string & tmpfile, const std::string & dstdir) override {}
@@ -97,7 +95,7 @@ namespace LTSM::Connector
 
         void onSessionIdleTimeout(const int32_t & display, const std::string & userName) override {}
 
-    protected:
+      protected:
         // dbus virtual signals
         void onPingConnector(const int32_t & display) override;
         void onClearRenderPrimitives(const int32_t & display) override;
@@ -107,33 +105,32 @@ namespace LTSM::Connector
         void onAddRenderText(const int32_t & display, const std::string & text,
                              const TuplePosition & pos, const TupleColor & color) override;
 
-        void renderPrimitivesToFB(FrameBuffer & ) const;
+        void renderPrimitivesToFB(FrameBuffer &) const;
 
-        virtual void serverScreenUpdateRequest(const XCB::Region & ) = 0;
+        virtual void serverScreenUpdateRequest(const XCB::Region &) = 0;
 
         int displayNum(void) const;
         bool xcbConnect(int screen, XCB::RootDisplay &);
         void xcbDisableMessages(bool f);
         bool xcbAllowMessages(void) const;
 
-    public:
+      public:
         DBusProxy(const JsonObject &, const ConnectorType &);
         virtual ~DBusProxy();
 
         virtual int communication(void) = 0;
 
-        std::string checkFileOption(const std::string & ) const;
+        std::string checkFileOption(const std::string &) const;
         const std::string & connectorType(void) const;
 
         void checkIdleTimeout(void);
     };
 
     /* Connector::Service */
-    class Service : public ApplicationJsonConfig
-    {
+    class Service : public ApplicationJsonConfig {
         std::string _type;
 
-    public:
+      public:
         Service(int argc, const char** argv);
 
         int start(void);

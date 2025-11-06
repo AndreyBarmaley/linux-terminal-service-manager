@@ -30,12 +30,9 @@
 #include "librfb_client.h"
 #include "ltsm_xcb_wrapper.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
-        class X11Client : public XCB::RootDisplay, public ClientDecoder, public XCB::SelectionSource, public XCB::SelectionRecipient
-        {
+namespace LTSM {
+    namespace RFB {
+        class X11Client : public XCB::RootDisplay, public ClientDecoder, public XCB::SelectionSource, public XCB::SelectionRecipient {
             std::vector<uint8_t> clientClipboard;
 
             mutable std::mutex clientLock;
@@ -43,7 +40,7 @@ namespace LTSM
             mutable uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
-        protected:
+          protected:
 
             // selection source
             std::vector<xcb_atom_t> selectionSourceTargets(void) const override;
@@ -68,7 +65,7 @@ namespace LTSM
             // x11 event
             void xcbDisplayConnectedEvent(void) override;
 
-        public:
+          public:
             X11Client();
         };
     }

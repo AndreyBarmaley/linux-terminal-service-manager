@@ -18,24 +18,20 @@
 
 using namespace LTSM;
 
-class FakeStream : public RFB::EncoderStream
-{
+class FakeStream : public RFB::EncoderStream {
     PixelFormat pf;
     size_t write = 0;
 
-public:
-    FakeStream(const XCB::RootDisplay* xcb)
-    {
-        if(! xcb)
-        {
+  public:
+    FakeStream(const XCB::RootDisplay* xcb) {
+        if(! xcb) {
             Application::error("%s: xcb failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
 
         auto visual = xcb->visual();
-        
-        if(! visual)
-        {
+
+        if(! visual) {
             Application::error("%s: xcb visual failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
@@ -43,37 +39,54 @@ public:
         pf = PixelFormat(xcb->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
     }
 
-    const size_t & writeBytes(void) const { return write; }
+    const size_t & writeBytes(void) const {
+        return write;
+    }
 
     // RFB::EncoderStream interface
-    const PixelFormat & serverFormat(void) const override { return pf; }
-    const PixelFormat & clientFormat(void) const override { return pf; }
-    bool clientIsBigEndian(void) const override { return false; }
-    XCB::Size displaySize(void) const override { return {0,0}; }
+    const PixelFormat & serverFormat(void) const override {
+        return pf;
+    }
+    const PixelFormat & clientFormat(void) const override {
+        return pf;
+    }
+    bool clientIsBigEndian(void) const override {
+        return false;
+    }
+    XCB::Size displaySize(void) const override {
+        return {0, 0};
+    }
 
     // NetworkStream interface
-    void sendRaw(const void* ptr, size_t len) override { write += len; }
+    void sendRaw(const void* ptr, size_t len) override {
+        write += len;
+    }
 
-private:
+  private:
     // NetworkStream interface
-    bool hasInput(void) const override { throw std::runtime_error("unsupported"); }
-    size_t hasData(void) const override { throw std::runtime_error("unsupported"); }
-    uint8_t peekInt8(void) const override { throw std::runtime_error("unsupported"); }
-    void recvRaw(void* ptr, size_t len) const override { throw std::runtime_error("unsupported"); }
+    bool hasInput(void) const override {
+        throw std::runtime_error("unsupported");
+    }
+    size_t hasData(void) const override {
+        throw std::runtime_error("unsupported");
+    }
+    uint8_t peekInt8(void) const override {
+        throw std::runtime_error("unsupported");
+    }
+    void recvRaw(void* ptr, size_t len) const override {
+        throw std::runtime_error("unsupported");
+    }
 };
 
-class EncodingTest : public Application
-{
+class EncodingTest : public Application {
     std::unique_ptr<XCB::RootDisplay> xcb;
 
-public:
+  public:
     EncodingTest()
-        : Application("x11enc")
-    {
+        : Application("x11enc") {
         xcb = std::make_unique<XCB::RootDisplay>(-1);
 
-        if(!xcb)
-        {
+        if(! xcb) {
             Application::warning("xcb failed");
             throw std::runtime_error(NS_FuncName);
         }
@@ -81,32 +94,30 @@ public:
         xcb->extensionDisable(XCB::Module::DAMAGE);
     }
 
-    int start(void)
-    {
+    int start(void) {
         auto win = xcb->root();
         auto dsz = xcb->size();
-        auto reg = XCB::Region{{0,0}, dsz};
+        auto reg = XCB::Region{{0, 0}, dsz};
         auto bpp = xcb->bitsPerPixel() >> 3;
         auto pitch = dsz.width * bpp;
 
-        if(auto align8 = pitch % 8)
+        if(auto align8 = pitch % 8) {
             pitch += 8 - align8;
+        }
 
         Application::info("%s: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
 
-        if(int err = xcb->hasError())
-        {
+        if(int err = xcb->hasError()) {
             Application::error("xcb error: %d", err);
             return err;
         }
 
         auto stream = std::make_unique<FakeStream>(xcb.get());
 
-        if(auto pixmapReply = xcb->copyRootImageRegion(reg, shmId))
-        {
+        if(auto pixmapReply = xcb->copyRootImageRegion(reg, shmId)) {
             const FrameBuffer fb(pixmapReply->data(), reg, stream->serverFormat());
 
             auto tp1 = std::chrono::steady_clock::now();
@@ -139,16 +150,12 @@ public:
 [info] start: toRLE:           3           3           8           9
 */
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     int res = 0;
 
-    try
-    {
+    try {
         res = EncodingTest().start();
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("exception: %s", err.what());
     }
 

@@ -29,12 +29,9 @@
 
 #include "librfb_client.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
-        class WinClient : public ClientDecoder
-        {
+namespace LTSM {
+    namespace RFB {
+        class WinClient : public ClientDecoder {
             std::vector<uint8_t> clientClipboard;
 
             mutable std::mutex clientLock;
@@ -42,7 +39,7 @@ namespace LTSM
             mutable uint16_t clipLocalTypes = 0;
             uint16_t clipRemoteTypes = 0;
 
-        protected:
+          protected:
 
             // ext clipboard
             uint16_t extClipboardLocalTypes(void) const override;
@@ -53,7 +50,7 @@ namespace LTSM
 
             void clientRecvCutTextEvent(std::vector<uint8_t> &&) override;
 
-        public:
+          public:
             WinClient();
         };
     }

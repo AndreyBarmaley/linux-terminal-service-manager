@@ -55,17 +55,13 @@ extern "C" {
 #include "librfb_decodings.h"
 #endif
 
-namespace LTSM
-{
-    struct ffmpeg_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct ffmpeg_error : public std::runtime_error {
         explicit ffmpeg_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    struct AVCodecContextDeleter
-    {
-        void operator()(AVCodecContext* ctx)
-        {
+    struct AVCodecContextDeleter {
+        void operator()(AVCodecContext* ctx) {
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(61, 19, 100)
             avcodec_close(ctx); // deprecated
 #endif
@@ -77,44 +73,34 @@ namespace LTSM
         }
     };
 
-    struct SwsContextDeleter
-    {
-        void operator()(SwsContext* ctx)
-        {
+    struct SwsContextDeleter {
+        void operator()(SwsContext* ctx) {
             sws_freeContext(ctx);
         }
     };
 
-    struct SwrContextDeleter
-    {
-        void operator()(SwrContext* ctx)
-        {
+    struct SwrContextDeleter {
+        void operator()(SwrContext* ctx) {
             swr_free(& ctx);
         }
     };
 
-    struct AVFrameDeleter
-    {
-        void operator()(AVFrame* ptr)
-        {
+    struct AVFrameDeleter {
+        void operator()(AVFrame* ptr) {
             av_frame_free(& ptr);
         }
     };
 
-    struct AVPacketDeleter
-    {
-        void operator()(AVPacket* ptr)
-        {
+    struct AVPacketDeleter {
+        void operator()(AVPacket* ptr) {
             av_packet_free(& ptr);
         }
     };
 
-    namespace RFB
-    {
+    namespace RFB {
 #ifdef LTSM_ENCODING_FFMPEG
         /// EncodingFFmpeg
-        class EncodingFFmpeg : public EncodingBase
-        {
+        class EncodingFFmpeg : public EncodingBase {
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
             std::unique_ptr<SwsContext, SwsContextDeleter> swsctx;
             std::unique_ptr<AVFrame, AVFrameDeleter> frame;
@@ -133,10 +119,10 @@ namespace LTSM
             int fps = 25;
             int pts = 0;
 
-        protected:
+          protected:
             void initContext(const XCB::Size &);
 
-        public:
+          public:
             void resizedEvent(const XCB::Size &) override;
             void sendFrameBuffer(EncoderStream*, const FrameBuffer &) override;
 
@@ -150,8 +136,7 @@ namespace LTSM
 
 #ifdef LTSM_DECODING_FFMPEG
         /// DecodingFFmpeg
-        class DecodingFFmpeg : public DecodingBase
-        {
+        class DecodingFFmpeg : public DecodingBase {
             PixelFormat pf;
 
             std::unique_ptr<AVCodecContext, AVCodecContextDeleter> avcctx;
@@ -169,10 +154,10 @@ namespace LTSM
 
             std::mutex lockUpdate;
 
-        protected:
+          protected:
             void initContext(const XCB::Size &);
 
-        public:
+          public:
             void resizedEvent(const XCB::Size &) override;
             void updateRegion(DecoderStream &, const XCB::Region &) override;
 

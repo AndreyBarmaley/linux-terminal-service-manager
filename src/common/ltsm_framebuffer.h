@@ -32,55 +32,44 @@
 #include "ltsm_xcb_types.h"
 #include "ltsm_streambuf.h"
 
-namespace LTSM
-{
-    struct Color
-    {
+namespace LTSM {
+    struct Color {
         uint8_t r, g, b, x;
 
         Color() : r(0), g(0), b(0), x(0) {}
         Color(uint8_t cr, uint8_t cg, uint8_t cb, uint8_t ca = 0) : r(cr), g(cg), b(cb), x(ca) {}
 
-        int toARGB(void) const
-        {
+        int toARGB(void) const {
             return (static_cast<int>(x) << 24) | (static_cast<int>(r) << 16) | (static_cast<int>(g) << 8) | b;
         }
 
-        bool operator== (const Color & col) const
-        {
+        bool operator== (const Color & col) const {
             return r == col.r && g == col.g && b == col.b && x == col.x;
         }
 
-        bool operator!= (const Color & col) const
-        {
+        bool operator!= (const Color & col) const {
             return r != col.r || g != col.g || b != col.b || x != col.x;
         }
     };
 
-    struct HasherColor
-    {
-        size_t operator()(const Color & col) const
-        {
+    struct HasherColor {
+        size_t operator()(const Color & col) const {
             return std::hash<size_t>()(col.toARGB());
         }
     };
 
-    struct ColorMap : INTSET<Color, HasherColor>
-    {
+    struct ColorMap : INTSET<Color, HasherColor> {
     };
 
-    struct PixelMapPalette : INTMAP<uint32_t /* pixel */, uint32_t /* index */>
-    {
+    struct PixelMapPalette : INTMAP<uint32_t /* pixel */, uint32_t /* index */> {
         int findColorIndex(const uint32_t &) const;
     };
 
-    struct PixelMapWeight : INTMAP<uint32_t /* pixel */, uint32_t /* weight */>
-    {
+    struct PixelMapWeight : INTMAP<uint32_t /* pixel */, uint32_t /* weight */> {
         int maxWeightPixel(void) const;
     };
 
-    class PixelFormat
-    {
+    class PixelFormat {
         uint16_t redMax = 0;
         uint16_t greenMax = 0;
         uint16_t blueMax = 0;
@@ -94,20 +83,18 @@ namespace LTSM
         uint8_t bitsPixel = 0;
         uint8_t bytePixel = 0;
 
-    public:
+      public:
         PixelFormat() = default;
         PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask);
         PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift);
 
-        bool operator!= (const PixelFormat & pf) const
-        {
+        bool operator!= (const PixelFormat & pf) const {
             return bitsPerPixel() != pf.bitsPerPixel() ||
                    redMax != pf.redMax || greenMax != pf.greenMax || blueMax != pf.blueMax || alphaMax != pf.alphaMax ||
                    redShift != pf.redShift || greenShift != pf.greenShift || blueShift != pf.blueShift || alphaShift != pf.alphaShift;
         }
 
-        bool compare(const PixelFormat & pf, bool skipAlpha) const
-        {
+        bool compare(const PixelFormat & pf, bool skipAlpha) const {
             return bitsPerPixel() == pf.bitsPerPixel() &&
                    redMax == pf.redMax && greenMax == pf.greenMax && blueMax == pf.blueMax && (skipAlpha ? true : alphaMax == pf.alphaMax) &&
                    redShift == pf.redShift && greenShift == pf.greenShift && blueShift == pf.blueShift && (skipAlpha ? true : alphaShift == pf.alphaShift);
@@ -118,17 +105,35 @@ namespace LTSM
         uint32_t bmask(void) const;
         uint32_t amask(void) const;
 
-        const uint16_t & rmax(void) const { return redMax; }
-        const uint16_t & gmax(void) const { return greenMax; }
-        const uint16_t & bmax(void) const { return blueMax; }
-        const uint16_t & amax(void) const { return alphaMax; }
+        const uint16_t & rmax(void) const {
+            return redMax;
+        }
+        const uint16_t & gmax(void) const {
+            return greenMax;
+        }
+        const uint16_t & bmax(void) const {
+            return blueMax;
+        }
+        const uint16_t & amax(void) const {
+            return alphaMax;
+        }
 
-        const uint8_t & rshift(void) const { return redShift; }
-        const uint8_t & gshift(void) const { return greenShift; }
-        const uint8_t & bshift(void) const { return blueShift; }
-        const uint8_t & ashift(void) const { return alphaShift; }
+        const uint8_t & rshift(void) const {
+            return redShift;
+        }
+        const uint8_t & gshift(void) const {
+            return greenShift;
+        }
+        const uint8_t & bshift(void) const {
+            return blueShift;
+        }
+        const uint8_t & ashift(void) const {
+            return alphaShift;
+        }
 
-        bool leastSignificant(void) const { return redShift == 0 || blueShift == 0 || greenShift == 0; }
+        bool leastSignificant(void) const {
+            return redShift == 0 || blueShift == 0 || greenShift == 0;
+        }
 
         uint8_t red(int pixel) const;
         uint8_t green(int pixel) const;
@@ -141,13 +146,16 @@ namespace LTSM
         uint32_t convertFrom(const PixelFormat & pf, uint32_t pixel) const;
         uint32_t convertTo(uint32_t pixel, const PixelFormat & pf) const;
 
-        const uint8_t & bitsPerPixel(void) const { return bitsPixel; }
+        const uint8_t & bitsPerPixel(void) const {
+            return bitsPixel;
+        }
 
-        const uint8_t & bytePerPixel(void) const { return bytePixel; }
+        const uint8_t & bytePerPixel(void) const {
+            return bytePixel;
+        }
     };
 
-    struct fbinfo_t
-    {
+    struct fbinfo_t {
         PixelFormat format;
         uint8_t* buffer = nullptr;
         uint32_t pitch = 0;
@@ -161,27 +169,29 @@ namespace LTSM
         fbinfo_t & operator=(const fbinfo_t &) = delete;
     };
 
-    struct PixelLength : std::pair<uint32_t /* pixel */, uint32_t /* length */>
-    {
+    struct PixelLength : std::pair<uint32_t /* pixel */, uint32_t /* length */> {
         PixelLength(uint32_t pixel, uint32_t length) : std::pair<uint32_t, uint32_t>(pixel, length) {}
 
-        const uint32_t & pixel(void) const { return first; }
+        const uint32_t & pixel(void) const {
+            return first;
+        }
 
-        const uint32_t & length(void) const { return second; }
+        const uint32_t & length(void) const {
+            return second;
+        }
     };
 
     using PixelLengthList = std::list<PixelLength>;
 
-    class FrameBuffer
-    {
+    class FrameBuffer {
         std::shared_ptr<fbinfo_t> fbptr;
         XCB::Region fbreg;
         bool owner;
 
-    protected:
+      protected:
         FrameBuffer() : owner(false) {}
 
-    public:
+      public:
         FrameBuffer(const XCB::Region & reg, const FrameBuffer & fb)
             : fbptr(fb.fbptr), fbreg(reg.topLeft() + fb.fbreg.topLeft(), reg.toSize()), owner(false) {}
 
@@ -191,7 +201,9 @@ namespace LTSM
         FrameBuffer(uint8_t* p, const XCB::Region & reg, const PixelFormat & fmt, uint16_t pitch = 0)
             : fbptr(std::make_shared<fbinfo_t>(p, reg.toSize(), fmt, pitch)), fbreg(reg), owner(true) {}
 
-        XCB::PointIterator coordBegin(void) const { return XCB::PointIterator(0, 0, fbreg.toSize()); }
+        XCB::PointIterator coordBegin(void) const {
+            return XCB::PointIterator(0, 0, fbreg.toSize());
+        }
 
         void setPixelRow(const XCB::Point &, uint32_t pixel, size_t length);
 
@@ -224,9 +236,13 @@ namespace LTSM
 
         RawPtr<uint8_t> rawPtr(void)const;
 
-        const XCB::Region & region(void) const { return fbreg; }
+        const XCB::Region & region(void) const {
+            return fbreg;
+        }
 
-        const PixelFormat & pixelFormat(void) const { return fbptr->format; }
+        const PixelFormat & pixelFormat(void) const {
+            return fbptr->format;
+        }
 
         Color color(const XCB::Point &) const;
         const uint8_t & bitsPerPixel(void) const;
@@ -287,8 +303,7 @@ namespace LTSM
 #endif
 
 #ifdef LTSM_WITH_PNG
-namespace PNG
-{
+namespace PNG {
     bool save(const LTSM::FrameBuffer & fb, const std::string & file);
 }
 

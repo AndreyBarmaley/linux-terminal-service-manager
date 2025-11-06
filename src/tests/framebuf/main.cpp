@@ -12,14 +12,15 @@
 
 using namespace LTSM;
 
-int rand2(int min, int max)
-{
-    if(min > max) std::swap(min, max);
+int rand2(int min, int max) {
+    if(min > max) {
+        std::swap(min, max);
+    }
+
     return min + std::rand() / (RAND_MAX + 1.0) * (max - min + 1);
 }
 
-XCB::RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pixelFormat)
-{
+XCB::RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pixelFormat) {
     uint8_t cr = rand2(0, 255);
     uint8_t cg = rand2(0, 255);
     uint8_t cb = rand2(0, 255);
@@ -30,14 +31,13 @@ XCB::RegionPixel regionPixelRandom(const XCB::Size & wsz, const PixelFormat & pi
     return XCB::RegionPixel(reg, pixelFormat.pixel(col));
 }
 
-FrameBuffer generate(const PixelFormat & pf)
-{
+FrameBuffer generate(const PixelFormat & pf) {
     FrameBuffer back(XCB::Size(640, 480), pf);
     back.fillColor(back.region(), Color());
 
     std::cout << "generate 1000 regions" << std::endl;
-    for(int it = 0; it < 1000; ++it)
-    {
+
+    for(int it = 0; it < 1000; ++it) {
         auto rp = regionPixelRandom(back.region(), back.pixelFormat());
         back.fillPixel(rp.region(), rp.pixel());
     }
@@ -46,8 +46,7 @@ FrameBuffer generate(const PixelFormat & pf)
     return back;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     std::cout << "sizeof PixelFormat " << sizeof(LTSM::PixelFormat) << std::endl;
     std::cout << "sizeof FrameBuffer " << sizeof(LTSM::FrameBuffer) << std::endl;
     std::cout << "sizeof Region " << sizeof(LTSM::XCB::Region) << std::endl;
@@ -65,8 +64,7 @@ int main(int argc, char** argv)
     FrameBuffer back(XCB::Size(640, 480), RGB24);
     int index = 0;
 
-    for(const auto & pf : formats)
-    {
+    for(const auto & pf : formats) {
         std::cout << "test framebuffer: " << index++ << std::endl;
         auto tmp = generate(pf);
         back.blitRegion(tmp, tmp.region(), XCB::Point(0, 0));

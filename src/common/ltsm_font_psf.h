@@ -3,8 +3,7 @@
 #define _LTSM_PSF_FONT_
 
 /// @private
-const struct
-{
+const struct {
     int width;
     int height;
     unsigned char data[4096];

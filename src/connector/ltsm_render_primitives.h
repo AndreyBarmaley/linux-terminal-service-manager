@@ -32,31 +32,27 @@
 #include "ltsm_framebuffer.h"
 #include "ltsm_xcb_types.h"
 
-namespace LTSM::Connector
-{
+namespace LTSM::Connector {
     enum class RenderType { RenderRect, RenderText };
 
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
     using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
 
-    inline Color tupleColorToColor(const TupleColor & tc)
-    {
+    inline Color tupleColorToColor(const TupleColor & tc) {
         uint8_t r, g, b;
         std::tie(r, g, b) = tc;
         return Color{r, g, b, 0};
     }
 
-    inline XCB::Region tupleRegionToXcbRegion(const TupleRegion & tr)
-    {
+    inline XCB::Region tupleRegionToXcbRegion(const TupleRegion & tr) {
         int16_t x, y;
         uint16_t width, height;
         std::tie(x, y, width, height) = tr;
         return XCB::Region{x, y, width, height};
     }
 
-    struct RenderPrimitive
-    {
+    struct RenderPrimitive {
         const RenderType _type;
         TupleRegion _region;
 
@@ -64,11 +60,10 @@ namespace LTSM::Connector
         virtual ~RenderPrimitive() {}
 
         XCB::Region xcbRegion(void) const;
-        virtual void renderTo(FrameBuffer & ) const = 0;
+        virtual void renderTo(FrameBuffer &) const = 0;
     };
 
-    struct RenderColored : RenderPrimitive
-    {
+    struct RenderColored : RenderPrimitive {
         TupleColor _color;
 
         RenderColored(const RenderType & rt, const TupleRegion & tr, const TupleColor & col)
@@ -77,24 +72,22 @@ namespace LTSM::Connector
         Color toColor(void) const;
     };
 
-    struct RenderRect : RenderColored
-    {
+    struct RenderRect : RenderColored {
         bool _fill;
 
         RenderRect(const TupleRegion & tr, const TupleColor & col, bool f)
             : RenderColored(RenderType::RenderRect, tr, col), _fill(f) {}
 
-        void renderTo(FrameBuffer & ) const;
+        void renderTo(FrameBuffer &) const;
     };
 
-    struct RenderText : RenderColored
-    {
+    struct RenderText : RenderColored {
         std::string _text;
 
         RenderText(const std::string & str, const TupleRegion & tr, const TupleColor & col)
             : RenderColored(RenderType::RenderText, tr, col), _text(str) {}
 
-        void renderTo(FrameBuffer & ) const;
+        void renderTo(FrameBuffer &) const;
     };
 
     using RenderPrimitivePtr = std::unique_ptr<RenderPrimitive>;

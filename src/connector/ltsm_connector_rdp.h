@@ -32,17 +32,14 @@
 #include "freerdp/freerdp.h"
 #include "freerdp/listener.h"
 
-namespace LTSM::Connector
-{
+namespace LTSM::Connector {
     struct FreeRdpCallback;
 
-    struct rdp_error : public std::runtime_error
-    {
+    struct rdp_error : public std::runtime_error {
         explicit rdp_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected ProxySocket
-    {
+    class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected ProxySocket {
         std::atomic<bool> helperStartedFlag{false};
         std::atomic<bool> loopShutdownFlag{false};
         std::atomic<bool> updatePartFlag{true};
@@ -50,7 +47,7 @@ namespace LTSM::Connector
         PixelFormat serverFormat;
         XCB::Region damageRegion;
 
-    protected:
+      protected:
         // dbus virtual signals
         void onLoginSuccess(const int32_t & display, const std::string & userName,
                             const uint32_t & userUid) override;
@@ -59,16 +56,16 @@ namespace LTSM::Connector
         void onHelperWidgetStarted(const int32_t & display) override;
 
         // connector
-        void serverScreenUpdateRequest(const XCB::Region & ) override;
+        void serverScreenUpdateRequest(const XCB::Region &) override;
 
         // root display
         void xcbDamageNotifyEvent(const xcb_rectangle_t &) override;
         void xcbRandrScreenChangedEvent(const XCB::Size &, const xcb_randr_notify_event_t &) override;
         void xcbXkbGroupChangedEvent(int) override;
 
-        bool updateEvent(const XCB::Region & );
-        bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply & );
-        bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply & );
+        bool updateEvent(const XCB::Region &);
+        bool updateBitmapPlanar(const XCB::Region &, const XCB::PixmapInfoReply &);
+        bool updateBitmapInterleaved(const XCB::Region &, const XCB::PixmapInfoReply &);
         void desktopResizeEvent(freerdp_peer &, uint16_t, uint16_t);
         void disconnectedEvent(void);
 
@@ -77,14 +74,14 @@ namespace LTSM::Connector
         bool channelsInit(void);
         void channelsFree(void);
 
-    public:
-        ConnectorRdp(const JsonObject & );
+      public:
+        ConnectorRdp(const JsonObject &);
         ~ConnectorRdp();
 
         int communication(void) override;
         bool createX11Session(uint8_t depth);
-        void setEncryptionInfo(const std::string & );
-        void setAutoLogin(const std::string &, const std::string & );
+        void setEncryptionInfo(const std::string &);
+        void setAutoLogin(const std::string &, const std::string &);
 
         // freerdp callback func
         static BOOL cbServerPostConnect(freerdp_peer * client);

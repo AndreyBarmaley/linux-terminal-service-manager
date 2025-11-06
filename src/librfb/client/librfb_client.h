@@ -31,13 +31,10 @@
 #include "librfb_extclip.h"
 #include "librfb_decodings.h"
 
-namespace LTSM
-{
-    namespace RFB
-    {
+namespace LTSM {
+    namespace RFB {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, protected DecoderStream, public ExtClip
-        {
+        class ClientDecoder : public ChannelClient, protected DecoderStream, public ExtClip {
             PixelFormat serverPf;
 
             std::unique_ptr<NetworkStream> socket; /// socket layer
@@ -60,7 +57,7 @@ namespace LTSM
 
             int serverLtsmVersion = 0;
 
-        protected:
+          protected:
             friend class DecodingRaw;
             friend class DecodingRRE;
             friend class DecodingHexTile;
@@ -102,8 +99,7 @@ namespace LTSM
 
             void recvDecodingLtsm(const XCB::Region &);
             void recvChannelSystem(const std::vector<uint8_t> &) override;
-            bool isUserSession(void) const override
-            {
+            bool isUserSession(void) const override {
                 return true;
             }
 
@@ -116,7 +112,7 @@ namespace LTSM
             void setInetStreamMode(void);
             void updateRegion(int type, const XCB::Region &);
 
-        public:
+          public:
             ClientDecoder() = default;
 
             bool rfbHandshake(const SecurityInfo &);
@@ -138,7 +134,7 @@ namespace LTSM
             virtual void clientRecvLtsmDataEvent(const std::vector<uint8_t> &) { /* empty */ }
 
             virtual void clientRecvDecodingDesktopSizeEvent(int status, int err, const XCB::Size & sz,
-                                                            const std::vector<RFB::ScreenInfo> &) { /* empty */ }
+                    const std::vector<RFB::ScreenInfo> &) { /* empty */ }
 
             virtual void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) { /* empty */ }
             virtual void clientRecvFBUpdateEvent(void) { /* empty */ }
@@ -149,33 +145,27 @@ namespace LTSM
             virtual void clientRecvLtsmCursorEvent(const XCB::Region & reg, uint32_t cursorId, std::vector<uint8_t> && pixels) { /* empty */ }
             virtual void displayResizeEvent(const XCB::Size &);
             //
-            virtual bool clientLtsmSupported(void) const
-            {
+            virtual bool clientLtsmSupported(void) const {
                 return false;
             }
 
-            inline int remoteLtsmVersion(void) const
-            {
+            inline int remoteLtsmVersion(void) const {
                 return serverLtsmVersion;
             }
 
             virtual void decoderInitEvent(DecodingBase*) { /* empty */ }
         };
 
-        class ClientDecoderSocket : public ClientDecoder
-        {
-        public:
-            ClientDecoderSocket(int sd)
-            {
+        class ClientDecoderSocket : public ClientDecoder {
+          public:
+            ClientDecoderSocket(int sd) {
                 setSocketStreamMode(sd);
             }
         };
 
-        class ClientDecoderInet : public ClientDecoder
-        {
-        public:
-            ClientDecoderInet()
-            {
+        class ClientDecoderInet : public ClientDecoder {
+          public:
+            ClientDecoderInet() {
                 setInetStreamMode();
             }
         };

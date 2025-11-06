@@ -26,36 +26,28 @@
 #include "ltsm_application.h"
 #include "ltsm_sdl_wrapper.h"
 
-namespace LTSM
-{
-    bool SDL::Surface::isValid(void) const
-    {
+namespace LTSM {
+    bool SDL::Surface::isValid(void) const {
         return get();
     }
 
-    int SDL::Surface::width(void) const
-    {
+    int SDL::Surface::width(void) const {
         return get() ? get()->w : 0;
     }
 
-    int SDL::Surface::height(void) const
-    {
+    int SDL::Surface::height(void) const {
         return get() ? get()->h : 0;
     }
 
-    bool SDL::Texture::isValid(void) const
-    {
+    bool SDL::Texture::isValid(void) const {
         return get();
     }
 
-    int SDL::Texture::width(void) const
-    {
-        if(get())
-        {
+    int SDL::Texture::width(void) const {
+        if(get()) {
             int width = 0;
 
-            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr))
-            {
+            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -66,14 +58,11 @@ namespace LTSM
         return 0;
     }
 
-    int SDL::Texture::height(void) const
-    {
-        if(isValid())
-        {
+    int SDL::Texture::height(void) const {
+        if(isValid()) {
             int height = 0;
 
-            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height))
-            {
+            if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -84,35 +73,28 @@ namespace LTSM
         return 0;
     }
 
-    void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, int pitch)
-    {
-        if(isValid())
-        {
-            if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch))
-            {
+    void SDL::Texture::updateRect(const SDL_Rect* rect, const void* pixels, int pitch) {
+        if(isValid()) {
+            if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
         }
     }
 
-    SDL::Window::Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags, bool accel)
-    {
-        if(winsz_w <= 0)
-        {
+    SDL::Window::Window(const std::string & title, int rendsz_w, int rendsz_h, int winsz_w, int winsz_h, int flags, bool accel) {
+        if(winsz_w <= 0) {
             winsz_w = rendsz_w;
         }
 
-        if(winsz_h <= 0)
-        {
+        if(winsz_h <= 0) {
             winsz_h = rendsz_h;
         }
 
         // SDL part
         _window.reset(SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winsz_w, winsz_h, flags));
 
-        if(! _window)
-        {
+        if(! _window) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateWindow", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -120,23 +102,20 @@ namespace LTSM
         _accel = accel;
         _renderer.reset(SDL_CreateRenderer(_window.get(), -1, accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE));
 
-        if(accel && ! _renderer)
-        {
+        if(accel && ! _renderer) {
             _accel = false;
             _renderer.reset(SDL_CreateRenderer(_window.get(), -1, SDL_RENDERER_SOFTWARE));
             Application::warning("%s: %s hardware accel failed, switch to software", __FUNCTION__, "SDL_CreateRenderTexture");
         }
 
-        if(! _renderer)
-        {
+        if(! _renderer) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRender", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
 
         _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, rendsz_w, rendsz_h));
 
-        if(! _display)
-        {
+        if(! _display) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -147,22 +126,19 @@ namespace LTSM
         renderReset();
     }
 
-    SDL::Window::~Window()
-    {
+    SDL::Window::~Window() {
         _display.reset();
         _renderer.reset();
         _window.reset();
     }
 
-    bool SDL::Window::resize(int newsz_w, int newsz_h)
-    {
+    bool SDL::Window::resize(int newsz_w, int newsz_h) {
         newsz_w = std::max(newsz_w, 640);
         newsz_h = std::max(newsz_h, 480);
         int winsz_w, winsz_h;
         SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
 
-        if(winsz_w != newsz_w && winsz_h != newsz_h)
-        {
+        if(winsz_w != newsz_w && winsz_h != newsz_h) {
             int dispsz_w = newsz_w;
             int dispsz_h = newsz_h;
             SDL_SetWindowSize(_window.get(), newsz_w, newsz_h);
@@ -170,16 +146,14 @@ namespace LTSM
             _renderer.reset();
             _renderer.reset(SDL_CreateRenderer(_window.get(), -1, (_accel ? SDL_RENDERER_ACCELERATED : SDL_RENDERER_SOFTWARE)));
 
-            if(! _renderer)
-            {
+            if(! _renderer) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateRenderer", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
 
             _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h));
 
-            if(! _display)
-            {
+            if(! _display) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -194,12 +168,10 @@ namespace LTSM
         return false;
     }
 
-    std::pair<int, int> SDL::Window::geometry(void) const
-    {
+    std::pair<int, int> SDL::Window::geometry(void) const {
         int width, height;
 
-        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, & width, & height))
-        {
+        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, & width, & height)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -207,12 +179,10 @@ namespace LTSM
         return std::make_pair(width, height);
     }
 
-    uint32_t SDL::Window::pixelFormat(void) const
-    {
+    uint32_t SDL::Window::pixelFormat(void) const {
         uint32_t format;
 
-        if(0 != SDL_QueryTexture(_display.get(), & format, nullptr, nullptr, nullptr))
-        {
+        if(0 != SDL_QueryTexture(_display.get(), & format, nullptr, nullptr, nullptr)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -220,96 +190,76 @@ namespace LTSM
         return format;
     }
 
-    void SDL::Window::renderReset(SDL_Texture* target)
-    {
-        if(target)
-        {
+    void SDL::Window::renderReset(SDL_Texture* target) {
+        if(target) {
             int access;
 
-            if(0 != SDL_QueryTexture(target, nullptr, & access, nullptr, nullptr))
-            {
+            if(0 != SDL_QueryTexture(target, nullptr, & access, nullptr, nullptr)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
 
-            if(access != SDL_TEXTUREACCESS_TARGET)
-            {
+            if(access != SDL_TEXTUREACCESS_TARGET) {
                 Application::error("%s: not target texture", __FUNCTION__);
                 throw sdl_error(NS_FuncName);
             }
         }
 
-        if(0 != SDL_SetRenderTarget(_renderer.get(), target))
-        {
+        if(0 != SDL_SetRenderTarget(_renderer.get(), target)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_SetRenderTarget", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
     }
 
-    void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target)
-    {
+    void SDL::Window::renderClear(const SDL_Color* col, SDL_Texture* target) {
         renderReset(target ? target : _display.get());
 
-        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a))
-        {
+        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
 
-        if(0 != SDL_RenderClear(_renderer.get()))
-        {
+        if(0 != SDL_RenderClear(_renderer.get())) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderClear", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
     }
 
-    void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target)
-    {
+    void SDL::Window::renderColor(const SDL_Color* col, const SDL_Rect* rt, SDL_Texture* target) {
         renderReset(target ? target : _display.get());
 
-        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a))
-        {
+        if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
 
-        if(rt->w == 1 && rt->h == 1)
-        {
-            if(0 != SDL_RenderDrawPoint(_renderer.get(), rt->x, rt->y))
-            {
+        if(rt->w == 1 && rt->h == 1) {
+            if(0 != SDL_RenderDrawPoint(_renderer.get(), rt->x, rt->y)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderDrawPoint", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
-        }
-        else if(0 != SDL_RenderFillRect(_renderer.get(), rt))
-        {
+        } else if(0 != SDL_RenderFillRect(_renderer.get(), rt)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderFillRect", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
     }
 
-    void SDL::Window::renderTexture(SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt)
-    {
-        if(source)
-        {
+    void SDL::Window::renderTexture(SDL_Texture* source, const SDL_Rect* srcrt, SDL_Texture* target, const SDL_Rect* dstrt) {
+        if(source) {
             renderReset(target ? target : _display.get());
 
-            if(0 != SDL_RenderCopy(_renderer.get(), source, srcrt, dstrt))
-            {
+            if(0 != SDL_RenderCopy(_renderer.get(), source, srcrt, dstrt)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
         }
     }
 
-    void SDL::Window::renderPresent(bool sync)
-    {
+    void SDL::Window::renderPresent(bool sync) {
         renderReset();
 
-        if(sync)
-        {
-            if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr))
-            {
+        if(sync) {
+            if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr)) {
                 Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -318,29 +268,24 @@ namespace LTSM
         SDL_RenderPresent(_renderer.get());
     }
 
-    bool SDL::Window::isValid(void) const
-    {
+    bool SDL::Window::isValid(void) const {
         return _window && _renderer && _display;
     }
 
-    SDL::GenericEvent SDL::Window::pollEvent(void)
-    {
+    SDL::GenericEvent SDL::Window::pollEvent(void) {
         return GenericEvent(SDL_PollEvent(& _event) ? & _event : nullptr);
     }
 
-    SDL::Texture SDL::Window::createTexture(int width, int height, uint32_t format) const
-    {
+    SDL::Texture SDL::Window::createTexture(int width, int height, uint32_t format) const {
         return Texture(SDL_CreateTexture(_renderer.get(), format, SDL_TEXTUREACCESS_STATIC, width, height));
     }
 
-    std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const
-    {
+    std::pair<int, int> SDL::Window::scaleCoord(int posx, int posy) const {
         std::pair<int, int> res(0, 0);
         int winsz_w, winsz_h, rendsz_w, rendsz_h;
         SDL_GetWindowSize(_window.get(), &winsz_w, &winsz_h);
 
-        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, &rendsz_w, &rendsz_h))
-        {
+        if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, &rendsz_w, &rendsz_h)) {
             Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -354,15 +299,13 @@ namespace LTSM
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
-    struct XKSymScancode
-    {
+    struct XKSymScancode {
         int xksym;
         SDL_Scancode scancode;
     };
 
     // extern keymap from SDL_x11keyboard.c
-    std::initializer_list<XKSymScancode> sdlKeyMap =
-    {
+    std::initializer_list<XKSymScancode> sdlKeyMap = {
         { XK_Return, SDL_SCANCODE_RETURN }, { XK_Escape, SDL_SCANCODE_ESCAPE },
         { XK_BackSpace, SDL_SCANCODE_BACKSPACE }, { XK_Tab, SDL_SCANCODE_TAB },
         { XK_Caps_Lock, SDL_SCANCODE_CAPSLOCK }, { XK_F1, SDL_SCANCODE_F1 },
@@ -418,11 +361,9 @@ namespace LTSM
         { XK_bracketleft, SDL_SCANCODE_LEFTBRACKET }, { XK_bracketright, SDL_SCANCODE_RIGHTBRACKET }
     };
 
-    int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode)
-    {
+    int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
         auto it = std::find_if(sdlKeyMap.begin(), sdlKeyMap.end(),
-                               [&](auto & pair)
-        {
+        [&](auto & pair) {
             return pair.scancode == scancode;
         });
 

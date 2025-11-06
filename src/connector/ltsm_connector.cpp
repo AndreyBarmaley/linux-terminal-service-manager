@@ -54,11 +54,9 @@
 
 using namespace std::chrono_literals;
 
-namespace LTSM::Connector
-{
+namespace LTSM::Connector {
     //
-    void connectorHelp(const char* prog)
-    {
+    void connectorHelp(const char* prog) {
 #ifdef LTSM_WITH_RDP
         auto proto = { "LTSM", "VNC" /* deprecated */, "RDP", "AUTO" };
 #else
@@ -71,44 +69,34 @@ namespace LTSM::Connector
 
     /* Service */
     Service::Service(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_connector"), _type("auto")
-    {
-        for(int it = 1; it < argc; ++it)
-        {
-            if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc)
-            {
+        : ApplicationJsonConfig("ltsm_connector"), _type("auto") {
+        for(int it = 1; it < argc; ++it) {
+            if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc) {
                 _type = Tools::lower(argv[it + 1]);
                 it = it + 1;
-            }
-            else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc)
-            {
+            } else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc) {
                 readConfig(argv[it + 1]);
                 it = it + 1;
-            }
-            else
-            {
+            } else {
                 connectorHelp(argv[0]);
                 throw 0;
             }
         }
 
-        if(! config().isValid())
-        {
+        if(! config().isValid()) {
             Application::error("%s: %s failed", "Connector", "config");
             throw std::invalid_argument("Connector");
         }
     }
 
-    int autoDetectType(void)
-    {
+    int autoDetectType(void) {
         auto fd = fileno(stdin);
         struct pollfd fds = {};
         fds.fd = fd;
         fds.events = POLLIN;
 
         // has input
-        if(0 < poll( & fds, 1, 1))
-        {
+        if(0 < poll(& fds, 1, 1)) {
             int val = std::fgetc(stdin);
             std::ungetc(val, stdin);
             return val;
@@ -117,20 +105,17 @@ namespace LTSM::Connector
         return -1;
     }
 
-    std::string homeRuntime(void)
-    {
+    std::string homeRuntime(void) {
         std::string home("/tmp");
 
-        if(auto info = Tools::getUidInfo(getuid()); info->home() != nullptr)
-        {
+        if(auto info = Tools::getUidInfo(getuid()); info->home() != nullptr) {
             home.assign(info->home());
         }
 
         return home;
     }
 
-    int Service::start(void)
-    {
+    int Service::start(void) {
         // signals
         signal(SIGPIPE, SIG_IGN);
 
@@ -139,8 +124,7 @@ namespace LTSM::Connector
         auto home = homeRuntime();
         Application::debug(DebugType::App, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
 
-        if(0 != chdir(home.c_str()))
-        {
+        if(0 != chdir(home.c_str())) {
             Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
 
@@ -149,29 +133,23 @@ namespace LTSM::Connector
 #ifdef LTSM_WITH_RDP
 
         // protocol up
-        if(_type == "auto")
-        {
-            if(int first = autoDetectType(); first == 0x03)
-            {
+        if(_type == "auto") {
+            if(int first = autoDetectType(); first == 0x03) {
                 connector = std::make_unique<ConnectorRdp>(config());
             }
-        }
-        else if(_type == "rdp")
-        {
+        } else if(_type == "rdp") {
             connector = std::make_unique<ConnectorRdp>(config());
         }
 
 #endif
 
-        if(! connector)
-        {
+        if(! connector) {
             connector = std::make_unique<ConnectorLtsm>(config());
         }
 
         int res = 0;
 
-        try
-        {
+        try {
 #ifdef WITH_SYSTEMD
             sd_notify(0, "READY=1");
 #endif
@@ -179,9 +157,7 @@ namespace LTSM::Connector
 #ifdef WITH_SYSTEMD
             sd_notify(0, "STOPPING=1");
 #endif
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
@@ -198,37 +174,39 @@ namespace LTSM::Connector
         :
         ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
 #endif
-          _config(jo)
-    {
+          _config(jo) {
         _remoteaddr.assign("local");
 
-        switch(type)
-        {
-            case ConnectorType::RDP: _conntype = "rdp"; break;
-            case ConnectorType::VNC: _conntype = "vnc"; break;
-            case ConnectorType::LTSM: _conntype = "ltsm"; break;
+        switch(type) {
+            case ConnectorType::RDP:
+                _conntype = "rdp";
+                break;
+
+            case ConnectorType::VNC:
+                _conntype = "vnc";
+                break;
+
+            case ConnectorType::LTSM:
+                _conntype = "ltsm";
+                break;
         }
 
-        if(auto env = std::getenv("REMOTE_ADDR"))
-        {
+        if(auto env = std::getenv("REMOTE_ADDR")) {
             _remoteaddr.assign(env);
         }
 
         registerProxy();
     }
 
-    DBusProxy::~DBusProxy()
-    {
+    DBusProxy::~DBusProxy() {
         unregisterProxy();
     }
 
-    const std::string & DBusProxy::connectorType(void) const
-    {
+    const std::string & DBusProxy::connectorType(void) const {
         return _conntype;
     }
 
-    bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay)
-    {
+    bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
         Application::info("%s: display: %d", __FUNCTION__, screen);
         std::string xauthFile = busDisplayAuthFile(screen);
         Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(),
@@ -237,23 +215,18 @@ namespace LTSM::Connector
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
         // wait display starting
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &socketPath ]()
-        {
+        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &socketPath ]() {
             return Tools::checkUnixSocket(socketPath);
         });
 
-        if(! waitSocket)
-        {
+        if(! waitSocket) {
             Application::error("%s: checkUnixSocket failed, `%s'", __FUNCTION__, socketPath.c_str());
             return false;
         }
 
-        try
-        {
+        try {
             xcbDisplay.displayReconnect(screen);
-        }
-        catch(const std::exception & err)
-        {
+        } catch(const std::exception & err) {
             Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             return false;
         }
@@ -265,13 +238,11 @@ namespace LTSM::Connector
         Application::debug(DebugType::App, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
                            displaySz.height, xcbDisplay.depth());
 
-        if(0 != color)
-        {
+        if(0 != color) {
             xcbDisplay.fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
         }
 
-        if(! defaultSz.isEmpty() && displaySz != defaultSz)
-        {
+        if(! defaultSz.isEmpty() && displaySz != defaultSz) {
             xcbDisplay.setRandrScreenSize(defaultSz);
         }
 
@@ -279,28 +250,23 @@ namespace LTSM::Connector
         return true;
     }
 
-    int DBusProxy::displayNum(void) const
-    {
+    int DBusProxy::displayNum(void) const {
         return _xcbDisplayNum;
     }
 
-    void DBusProxy::xcbDisableMessages(bool f)
-    {
+    void DBusProxy::xcbDisableMessages(bool f) {
         _xcbDisable = f;
     }
 
-    bool DBusProxy::xcbAllowMessages(void) const
-    {
+    bool DBusProxy::xcbAllowMessages(void) const {
         return ! _xcbDisable;
     }
 
-    std::string DBusProxy::checkFileOption(const std::string & param) const
-    {
+    std::string DBusProxy::checkFileOption(const std::string & param) const {
         auto fileName = _config.getString(param);
         std::error_code err;
 
-        if(! fileName.empty() && ! std::filesystem::exists(fileName, err))
-        {
+        if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                fileName.c_str(), getuid());
             fileName.clear();
@@ -309,16 +275,12 @@ namespace LTSM::Connector
         return fileName;
     }
 
-    void DBusProxy::onClearRenderPrimitives(const int32_t & display)
-    {
-        if(display == displayNum())
-        {
+    void DBusProxy::onClearRenderPrimitives(const int32_t & display) {
+        if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
-            for(const auto & ptr : _renderPrimitives)
-            {
-                if(auto prim = ptr.get())
-                {
+            for(const auto & ptr : _renderPrimitives) {
+                if(auto prim = ptr.get()) {
                     serverScreenUpdateRequest(prim->xcbRegion());
                 }
             }
@@ -328,10 +290,8 @@ namespace LTSM::Connector
     }
 
     void DBusProxy::onAddRenderRect(const int32_t & display,
-            const TupleRegion & rect, const TupleColor & color, const bool & fill)
-    {
-        if(display == displayNum())
-        {
+                                    const TupleRegion & rect, const TupleColor & color, const bool & fill) {
+        if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
@@ -340,10 +300,8 @@ namespace LTSM::Connector
     }
 
     void DBusProxy::onAddRenderText(const int32_t & display, const std::string & text,
-            const TuplePosition & pos, const TupleColor & color)
-    {
-        if(display == displayNum())
-        {
+                                    const TuplePosition & pos, const TupleColor & color) {
+        if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
 
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
@@ -354,36 +312,28 @@ namespace LTSM::Connector
         }
     }
 
-    void DBusProxy::onPingConnector(const int32_t & display)
-    {
-        if(display == displayNum())
-        {
+    void DBusProxy::onPingConnector(const int32_t & display) {
+        if(display == displayNum()) {
             Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
-                __FUNCTION__, display);
+                               __FUNCTION__, display);
 
-            std::thread([this, display]()
-            {
+            std::thread([this, display]() {
                 this->busConnectorAlive(display);
             }).detach();
         }
     }
 
-    void DBusProxy::renderPrimitivesToFB(FrameBuffer & fb) const
-    {
-        for(const auto & ptr : _renderPrimitives)
-        {
-            if(auto prim = static_cast<const RenderRect*>(ptr.get()))
-            {
+    void DBusProxy::renderPrimitivesToFB(FrameBuffer & fb) const {
+        for(const auto & ptr : _renderPrimitives) {
+            if(auto prim = static_cast<const RenderRect*>(ptr.get())) {
                 prim->renderTo(fb);
             }
         }
     }
 
-    void DBusProxy::checkIdleTimeout(void)
-    {
+    void DBusProxy::checkIdleTimeout(void) {
         if(_idleTimeoutSec &&
-            _idleTimeoutSec < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _idleSessionTp).count())
-        {
+           _idleTimeoutSec < std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - _idleSessionTp).count()) {
             busSessionIdleTimeout(displayNum());
             _idleSessionTp = std::chrono::steady_clock::now();
         }
@@ -392,26 +342,18 @@ namespace LTSM::Connector
 
 using namespace LTSM;
 
-int main(int argc, const char** argv)
-{
+int main(int argc, const char** argv) {
     int res = 0;
     Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
 
-    try
-    {
+    try {
         Connector::Service app(argc, argv);
         res = app.start();
-    }
-    catch(const sdbus::Error & err)
-    {
+    } catch(const sdbus::Error & err) {
         Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-    }
-    catch(int val)
-    {
+    } catch(int val) {
         res = val;
     }
 

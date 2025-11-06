@@ -41,11 +41,9 @@
 #include "ltsm_application.h"
 #include "ltsm_pcsc_adaptor.h"
 
-namespace PcscLite
-{
+namespace PcscLite {
     // origin READER_STATE: PCSC/src/eventhandler.h
-    struct ReaderState
-    {
+    struct ReaderState {
         char name[MAX_READERNAME];///< reader name
         uint32_t event = 0; ///< number of card events
         uint32_t state = 0; ///< SCARD_* bit field
@@ -59,59 +57,50 @@ namespace PcscLite
     };
 }
 
-namespace LTSM
-{
+namespace LTSM {
     class PcscSessionBus;
 
-    struct WaitStatus
-    {
+    struct WaitStatus {
         std::future<uint32_t> job;
         std::atomic<bool> stopped{true};
         std::atomic<bool> canceled{true};
 
-        void reset(void)
-        {
+        void reset(void) {
             stopped = true;
             canceled = true;
         }
 
-        void start(void)
-        {
+        void start(void) {
             stopped = false;
             canceled = false;
         }
 
-        void stop(void)
-        {
+        void stop(void) {
             stopped = true;
 
-            if(job.valid())
-            {
+            if(job.valid()) {
                 job.get();
             }
         }
 
-        void cancel(void)
-        {
+        void cancel(void) {
             canceled = true;
 
-            if(job.valid())
-            {
+            if(job.valid()) {
                 job.get();
             }
         }
     };
 
     using binary_buf = std::vector<uint8_t>;
- 
-    class PcscRemote
-    {
+
+    class PcscRemote {
         SocketStream sock;
         std::mutex sockLock;
 
-    protected:
+      protected:
 
-    public:
+      public:
         PcscRemote(int fd) : sock(fd, false) {}
 
         std::tuple<uint64_t, uint32_t> sendEstablishedContext(const int32_t & id, const uint32_t & scope);
@@ -132,8 +121,12 @@ namespace LTSM
         std::list<std::string> sendListReaders(const int32_t & id, const uint64_t & context);
     };
 
-    class PcscLocal
-    {
+    class PcscLocal;
+
+    using ClientCancelFunc = std::function<uint64_t(uint32_t)>;
+    using ClientShutdownFunc = std::function<void(const PcscLocal*)>;
+
+    class PcscLocal {
         SocketStream sock;
         PcscLite::ReaderState* reader = nullptr;
 
@@ -147,9 +140,10 @@ namespace LTSM
         uint32_t handle = 0;
 
         std::weak_ptr<PcscRemote> remote;
-        std::function<uint64_t(uint32_t)> clientCanceledCb;
 
-    protected:
+        ClientCancelFunc clientCanceledCb;
+
+      protected:
         void replyError(uint32_t len, uint32_t err);
 
         bool proxyEstablishContext(void);
@@ -177,30 +171,39 @@ namespace LTSM
         uint32_t syncReaders(bool* changed = nullptr);
         uint32_t waitReadersStatusChanged(uint32_t timeout);
 
-    public:
+      public:
         PcscLocal(int fd, const std::shared_ptr<PcscRemote> &, PcscSessionBus* sessionBus);
         ~PcscLocal();
 
-        inline int id(void) const { return sock.fd(); }
+        inline int id(void) const {
+            return sock.fd();
+        }
 
-        const uint64_t & proxyContext(void) const { return remoteContext; }
-        const uint64_t & proxyHandle(void) const { return remoteHandle; }
+        const uint64_t & proxyContext(void) const {
+            return remoteContext;
+        }
+        const uint64_t & proxyHandle(void) const {
+            return remoteHandle;
+        }
 
-        const uint32_t & localContext(void) const { return context; }
-        const uint32_t & localHandle(void) const { return handle; }
+        const uint32_t & localContext(void) const {
+            return context;
+        }
+        const uint32_t & localHandle(void) const {
+            return handle;
+        }
 
         void canceledAction(void);
     };
 
-    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor>
-    {
+    class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor> {
         std::forward_list<PcscLocal> clients;
         std::mutex clientsLock;
 
         std::shared_ptr<PcscRemote> remote;
         std::filesystem::path pcscSocketPath;
 
-    public:
+      public:
         PcscSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~PcscSessionBus();
 

@@ -30,17 +30,13 @@
 
 #include "ltsm_compat.h"
 
-namespace LTSM
-{
-    struct xcb_error : public std::runtime_error
-    {
+namespace LTSM {
+    struct xcb_error : public std::runtime_error {
         explicit xcb_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    namespace XCB
-    {
-        struct Point
-        {
+    namespace XCB {
+        struct Point {
             int16_t x = -1;
             int16_t y = -1;
 
@@ -49,17 +45,26 @@ namespace LTSM
             Point() = default;
             ~Point() = default;
 
-            inline bool isValid(void) const { return 0 <= x && 0 <= y; }
+            inline bool isValid(void) const {
+                return 0 <= x && 0 <= y;
+            }
 
-            inline Point operator+(const Point & pt) const { return Point(x + pt.x, y + pt.y); }
-            inline Point operator-(const Point & pt) const { return Point(x - pt.x, y - pt.y); }
+            inline Point operator+(const Point & pt) const {
+                return Point(x + pt.x, y + pt.y);
+            }
+            inline Point operator-(const Point & pt) const {
+                return Point(x - pt.x, y - pt.y);
+            }
 
-            inline bool operator==(const Point & pt) const { return pt.x == x && pt.y == y; }
-            inline bool operator!=(const Point & pt) const { return pt.x != x || pt.y != y; }
+            inline bool operator==(const Point & pt) const {
+                return pt.x == x && pt.y == y;
+            }
+            inline bool operator!=(const Point & pt) const {
+                return pt.x != x || pt.y != y;
+            }
         };
 
-        struct Size
-        {
+        struct Size {
             uint16_t width = 0;
             uint16_t height = 0;
 
@@ -68,16 +73,24 @@ namespace LTSM
             Size() = default;
             ~Size() = default;
 
-            inline bool isEmpty(void) const { return width == 0 || height == 0; }
+            inline bool isEmpty(void) const {
+                return width == 0 || height == 0;
+            }
 
-            void reset(void) { width = 0; height = 0; }
+            void reset(void) {
+                width = 0;
+                height = 0;
+            }
 
-            inline bool operator==(const Size & sz) const { return sz.width == width && sz.height == height; }
-            inline bool operator!=(const Size & sz) const { return sz.width != width || sz.height != height; }
+            inline bool operator==(const Size & sz) const {
+                return sz.width == width && sz.height == height;
+            }
+            inline bool operator!=(const Size & sz) const {
+                return sz.width != width || sz.height != height;
+            }
         };
 
-        struct PointIterator : Point
-        {
+        struct PointIterator : Point {
             const Size limit;
             PointIterator(int16_t px, int16_t py, const Size & sz) : Point(px, py), limit(sz) {}
 
@@ -87,27 +100,38 @@ namespace LTSM
             PointIterator & operator++(void);
             PointIterator & operator--(void);
 
-            bool isValid(void) const { return Point::isValid() && x < limit.width && y < limit.height; }
+            bool isValid(void) const {
+                return Point::isValid() && x < limit.width && y < limit.height;
+            }
 
             bool isBeginLine(void) const;
             bool isEndLine(void) const;
         };
 
-        struct Region : Point, Size
-        {
+        struct Region : Point, Size {
             Region() = default;
             ~Region() = default;
 
             Region(const Point & pt, const Size & sz) : Point(pt), Size(sz) {}
             Region(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh) : Point(rx, ry), Size(rw, rh) {}
 
-            inline const Point & topLeft(void) const { return *this; }
-            inline const Size & toSize(void) const { return *this; }
+            inline const Point & topLeft(void) const {
+                return *this;
+            }
+            inline const Size & toSize(void) const {
+                return *this;
+            }
 
-            PointIterator coordBegin(void) const { return PointIterator(0, 0, toSize()); }
+            PointIterator coordBegin(void) const {
+                return PointIterator(0, 0, toSize());
+            }
 
-            inline bool operator== (const Region & rt) const { return rt.topLeft() == topLeft() && rt.toSize() == toSize(); }
-            inline bool operator!= (const Region & rt) const { return rt.topLeft() != topLeft() || rt.toSize() != toSize(); }
+            inline bool operator== (const Region & rt) const {
+                return rt.topLeft() == topLeft() && rt.toSize() == toSize();
+            }
+            inline bool operator!= (const Region & rt) const {
+                return rt.topLeft() != topLeft() || rt.toSize() != toSize();
+            }
 
             void reset(void);
 
@@ -130,27 +154,32 @@ namespace LTSM
             std::list<Region> divideCounts(uint16_t cols, uint16_t rows) const;
         };
 
-        inline Region operator+ (const Region & reg, const Point & pt) { return Region(reg.topLeft() + pt, reg.toSize()); }
-        inline Region operator- (const Region & reg, const Point & pt) { return Region(reg.topLeft() - pt, reg.toSize()); }
+        inline Region operator+ (const Region & reg, const Point & pt) {
+            return Region(reg.topLeft() + pt, reg.toSize());
+        }
+        inline Region operator- (const Region & reg, const Point & pt) {
+            return Region(reg.topLeft() - pt, reg.toSize());
+        }
 
-        struct HasherRegion
-        {
-            size_t operator()(const Region & reg) const
-            {
+        struct HasherRegion {
+            size_t operator()(const Region & reg) const {
                 return std::hash<uint64_t>()((static_cast<uint64_t>(reg.x) << 48) | (static_cast<uint64_t>(reg.y) << 32) |
                                              (static_cast<uint64_t>(reg.width) << 16) | static_cast<uint64_t>(reg.height));
             }
         };
 
-        struct RegionPixel : std::pair<Region, uint32_t>
-        {
+        struct RegionPixel : std::pair<Region, uint32_t> {
             RegionPixel(const Region & reg, uint32_t pixel) : std::pair<XCB::Region, uint32_t>(reg, pixel) {}
 
             RegionPixel() = default;
 
-            const uint32_t & pixel(void) const { return second; }
+            const uint32_t & pixel(void) const {
+                return second;
+            }
 
-            const Region & region(void) const { return first; }
+            const Region & region(void) const {
+                return first;
+            }
         };
     }
 }

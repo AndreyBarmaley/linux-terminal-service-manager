@@ -32,12 +32,9 @@
 #include "ltsm_application.h"
 #include "ltsm_pkcs11_wrapper.h"
 
-namespace LTSM
-{
-    namespace Channel
-    {
-        namespace Connector
-        {
+namespace LTSM {
+    namespace Channel {
+        namespace Connector {
             // channel_system.cpp
             void loopWriter(ConnectorBase*, Remote2Local*);
             void loopReader(ConnectorBase*, Local2Remote*);
@@ -49,13 +46,11 @@ using namespace std::chrono_literals;
 
 // createClientPkcs11Connector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(uint8_t channel,
-        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender)
-{
+        const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
     Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
-    if(mode == ConnectorMode::Unknown)
-    {
+    if(mode == ConnectorMode::Unknown) {
         Application::error("%s: %s, mode: %s", __FUNCTION__, "pkcs11 mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncName);
     }
@@ -66,43 +61,34 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11C
 /// ConnectorClientPkcs11
 LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch)
-{
+    : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
     Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
 
-LTSM::Channel::ConnectorClientPkcs11::~ConnectorClientPkcs11()
-{
+LTSM::Channel::ConnectorClientPkcs11::~ConnectorClientPkcs11() {
     setRunning(false);
 }
 
-int LTSM::Channel::ConnectorClientPkcs11::error(void) const
-{
+int LTSM::Channel::ConnectorClientPkcs11::error(void) const {
     return 0;
 }
 
-uint8_t LTSM::Channel::ConnectorClientPkcs11::channel(void) const
-{
+uint8_t LTSM::Channel::ConnectorClientPkcs11::channel(void) const {
     return cid;
 }
 
-void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed)
-{
+void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed) {
 }
 
-void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv)
-{
+void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv) {
     Application::debug(DebugType::Pkcs11, "%s: size: %lu", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
-    if(last.empty())
-    {
+    if(last.empty()) {
         sb.reset(recv.data(), recv.size());
-    }
-    else
-    {
+    } else {
         std::copy(recv.begin(), recv.end(), std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
@@ -112,10 +98,8 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
     const uint8_t* beginPacket = nullptr;
     const uint8_t* endPacket = nullptr;
 
-    try
-    {
-        while(2 < sb.last())
-        {
+    try {
+        while(2 < sb.last()) {
             // pkcs11 stream format:
             // <CMD16> - audio cmd
             // <DATA> - audio data
@@ -124,63 +108,42 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             auto pkcs11Cmd = sb.readIntLE16();
             Application::debug(DebugType::Pkcs11, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
 
-            if(Pkcs11Op::Init == pkcs11Cmd)
-            {
+            if(Pkcs11Op::Init == pkcs11Cmd) {
                 pkcs11Init(sb);
-            }
-            else if(Pkcs11Op::GetSlots == pkcs11Cmd)
-            {
+            } else if(Pkcs11Op::GetSlots == pkcs11Cmd) {
                 pkcs11GetSlots(sb);
-            }
-            else if(Pkcs11Op::GetSlotMechanisms == pkcs11Cmd)
-            {
+            } else if(Pkcs11Op::GetSlotMechanisms == pkcs11Cmd) {
                 pkcs11GetSlotMechanisms(sb);
-            }
-            else if(Pkcs11Op::GetSlotCertificates == pkcs11Cmd)
-            {
+            } else if(Pkcs11Op::GetSlotCertificates == pkcs11Cmd) {
                 pkcs11GetSlotCertificates(sb);
-            }
-            else if(Pkcs11Op::SignData == pkcs11Cmd)
-            {
+            } else if(Pkcs11Op::SignData == pkcs11Cmd) {
                 pkcs11SignData(sb);
-            }
-            else if(Pkcs11Op::DecryptData == pkcs11Cmd)
-            {
+            } else if(Pkcs11Op::DecryptData == pkcs11Cmd) {
                 pkcs11DecryptData(sb);
-            }
-            else
-            {
+            } else {
                 Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }
 
-        if(sb.last())
-        {
+        if(sb.last()) {
             throw std::underflow_error(NS_FuncName);
         }
-    }
-    catch(const std::underflow_error &)
-    {
+    } catch(const std::underflow_error &) {
         Application::warning("%s: underflow data: %lu", __FUNCTION__, sb.last());
 
-        if(beginPacket)
-        {
+        if(beginPacket) {
             last.assign(beginPacket, endPacket);
-        }
-        else
-        {
+        } else {
             last.swap(recv);
         }
     }
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
-{
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     // pkcs11 format:
     // <VER16> - proto ver
-    if(2 > sb.last())
-    {
+    if(2 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -193,12 +156,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     // <DATA> library info struct
     reply.writeIntLE16(Pkcs11Op::Init);
 
-    try
-    {
+    try {
         pkcs11 = PKCS11::loadLibrary(owner->pkcs11Library());
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
@@ -224,10 +184,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb)
     return true;
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & sb)
-{
-    if(1 > sb.last())
-    {
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & sb) {
+    if(1 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -247,12 +205,10 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
     PKCS11::SlotInfo slotInfo;
     PKCS11::TokenInfo tokenInfo;
 
-    for(const auto & slot : slots)
-    {
+    for(const auto & slot : slots) {
         reply.writeIntLE64(slot.slotId());
 
-        if(slot.getSlotInfo(slotInfo))
-        {
+        if(slot.getSlotInfo(slotInfo)) {
             reply.writeInt8(1);
             reply.write(slotInfo.slotDescription, 64);
             reply.write(slotInfo.manufacturerID, 32);
@@ -261,14 +217,11 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
             reply.writeInt8(slotInfo.hardwareVersion.minor);
             reply.writeInt8(slotInfo.firmwareVersion.major);
             reply.writeInt8(slotInfo.firmwareVersion.minor);
-        }
-        else
-        {
+        } else {
             reply.writeInt8(0);
         }
 
-        if(slot.getTokenInfo(tokenInfo))
-        {
+        if(slot.getTokenInfo(tokenInfo)) {
             reply.writeInt8(1);
             reply.write(tokenInfo.label, 32);
             reply.write(tokenInfo.manufacturerID, 32);
@@ -290,9 +243,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
             reply.writeInt8(tokenInfo.firmwareVersion.major);
             reply.writeInt8(tokenInfo.firmwareVersion.minor);
             reply.write(tokenInfo.utcTime, 16);
-        }
-        else
-        {
+        } else {
             reply.writeInt8(0);
         }
     }
@@ -301,10 +252,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
     return true;
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamBufRef & sb)
-{
-    if(8 > sb.last())
-    {
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamBufRef & sb) {
+    if(8 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -323,10 +272,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     auto mechs = slot.getMechanisms();
     reply.writeIntLE16(mechs.size());
 
-    for(const auto & mech : mechs)
-    {
-        if(auto mechInfo = slot.getMechInfo(mech))
-        {
+    for(const auto & mech : mechs) {
+        if(auto mechInfo = slot.getMechInfo(mech)) {
             reply.writeIntLE64(mech);
             reply.writeIntLE64(mechInfo->ulMinKeySize);
             reply.writeIntLE64(mechInfo->ulMaxKeySize);
@@ -334,9 +281,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
             std::string mechName = PKCS11::mechStringEx(mech);
             reply.writeIntLE16(mechName.size());
             reply.write(mechName);
-        }
-        else
-        {
+        } else {
             reply.writeIntLE16(0);
         }
     }
@@ -345,10 +290,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
     return true;
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const StreamBufRef & sb)
-{
-    if(9 > sb.last())
-    {
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const StreamBufRef & sb) {
+    if(9 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -360,12 +303,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     reply.reset();
     std::unique_ptr<const PKCS11::Session> sess;
 
-    try
-    {
+    try {
         sess = std::make_unique<const PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE16(0);
@@ -381,8 +321,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     auto certs = sess->getCertificates(true /* havePulicPrivateKeys */);
     reply.writeIntLE16(certs.size());
 
-    for(const auto & handle : certs)
-    {
+    for(const auto & handle : certs) {
         auto objInfo = sess->getObjectInfo(handle, { CKA_VALUE });
         auto rawId = objInfo.getId();
         reply.writeIntLE16(rawId.size());
@@ -396,10 +335,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     return true;
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & sb)
-{
-    if(18 > sb.last())
-    {
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & sb) {
+    if(18 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -413,23 +350,20 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     auto mechType = sb.readIntLE64();
     auto pinLen = sb.readIntLE16();
 
-    if(pinLen > sb.last())
-    {
+    if(pinLen > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
     auto pin = sb.readString(pinLen);
     auto certLen = sb.readIntLE16();
 
-    if(certLen > sb.last())
-    {
+    if(certLen > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
     auto certId = sb.read(certLen);
 
-    if(4 > sb.last())
-    {
+    if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -438,12 +372,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     reply.reset();
     std::unique_ptr<PKCS11::Session> sess;
 
-    try
-    {
+    try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);
@@ -460,10 +391,8 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     return true;
 }
 
-bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef & sb)
-{
-    if(18 > sb.last())
-    {
+bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef & sb) {
+    if(18 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -477,23 +406,20 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     auto mechType = sb.readIntLE64();
     auto pinLen = sb.readIntLE16();
 
-    if(pinLen > sb.last())
-    {
+    if(pinLen > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
     auto pin = sb.readString(pinLen);
     auto certLen = sb.readIntLE16();
 
-    if(certLen > sb.last())
-    {
+    if(certLen > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
     auto certId = sb.read(certLen);
 
-    if(4 > sb.last())
-    {
+    if(4 > sb.last()) {
         throw std::underflow_error(NS_FuncName);
     }
 
@@ -502,12 +428,9 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     reply.reset();
     std::unique_ptr<PKCS11::Session> sess;
 
-    try
-    {
+    try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
-    }
-    catch(const std::exception & err)
-    {
+    } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);

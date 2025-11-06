@@ -31,12 +31,10 @@
 #include <string>
 #include <list>
 
-namespace Gss
-{
+namespace Gss {
     int apiVersion(void);
 
-    enum class NameType
-    {
+    enum class NameType {
         NoName,
         NoOid,
         NtAnonymous,
@@ -47,15 +45,13 @@ namespace Gss
         NtUserName
     };
 
-    enum CredentialUsage
-    {
+    enum CredentialUsage {
         Initiate = GSS_C_INITIATE, ///< Identifies applications that only initiate security contexts
         Accept = GSS_C_ACCEPT, ///< Identifies applications that only accept security contexts
         Both = GSS_C_BOTH ///< Identifies applications that can initiate or accept security contexts
     };
 
-    enum ContextFlag
-    {
+    enum ContextFlag {
         Delegate = GSS_C_DELEG_FLAG, ///< delegated credentials are available by means of the delegated_cred_handle parameter
         Mutual = GSS_C_MUTUAL_FLAG, ///< a remote peer asked for mutual authentication
         Replay = GSS_C_REPLAY_FLAG, ///< replay of protected messages will be detected
@@ -67,8 +63,7 @@ namespace Gss
         Transfer = GSS_C_TRANS_FLAG ///< the resultant security context may be transferred to other processes by means of a call to gss_export_sec_context(3GSS)
     };
 
-    struct Credential
-    {
+    struct Credential {
         gss_name_t name = nullptr;
         gss_cred_id_t cred = nullptr;
         gss_OID_set mechs = nullptr;
@@ -80,8 +75,7 @@ namespace Gss
 
     using CredentialPtr = std::unique_ptr<Credential>;
 
-    struct Security
-    {
+    struct Security {
         CredentialPtr cred;
         gss_name_t name = nullptr;
         gss_ctx_id_t sec = nullptr;
@@ -95,8 +89,7 @@ namespace Gss
 
     using SecurityPtr = std::unique_ptr<Security>;
 
-    struct ErrorCodes
-    {
+    struct ErrorCodes {
         const char* func = nullptr;
         OM_uint32 code1 = 0;
         OM_uint32 code2 = 0;
@@ -117,12 +110,11 @@ namespace Gss
     std::list<std::string> nameMechs(const gss_name_t &, ErrorCodes* = nullptr);
 
     /// BaseContext
-    class BaseContext
-    {
-    protected:
+    class BaseContext {
+      protected:
         SecurityPtr ctx;
 
-    public:
+      public:
         BaseContext() = default;
         virtual ~BaseContext() = default;
 
@@ -139,9 +131,13 @@ namespace Gss
         bool recvMIC(const void*, size_t);
         bool sendMIC(const void*, size_t);
 
-        Security* securityContext(void) { return ctx.get(); }
+        Security* securityContext(void) {
+            return ctx.get();
+        }
 
-        const Security* securityContext(void) const { return ctx.get(); }
+        const Security* securityContext(void) const {
+            return ctx.get();
+        }
     };
 
     CredentialPtr acquireCredential(std::string_view name, const NameType &, const CredentialUsage &, ErrorCodes* = nullptr);
@@ -151,18 +147,16 @@ namespace Gss
     CredentialPtr acquireServiceCredential(std::string_view service, ErrorCodes* = nullptr);
 
     /// ServiceContext
-    class ServiceContext : public BaseContext
-    {
-    public:
+    class ServiceContext : public BaseContext {
+      public:
         ServiceContext() = default;
 
         bool acceptClient(CredentialPtr);
     };
 
     /// ClientContext
-    class ClientContext : public BaseContext
-    {
-    public:
+    class ClientContext : public BaseContext {
+      public:
         ClientContext() = default;
 
         bool connectService(std::string_view service, bool mutual, CredentialPtr cred = nullptr);

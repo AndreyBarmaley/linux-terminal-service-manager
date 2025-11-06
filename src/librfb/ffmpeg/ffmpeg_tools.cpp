@@ -23,15 +23,14 @@
 #include "ltsm_application.h"
 #include "ffmpeg_tools.h"
 
-namespace LTSM
-{
+namespace LTSM {
 
-    bool Tools::AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug)
-    {
-        switch(format)
-        {
+    bool Tools::AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug) {
+        switch(format) {
             case AV_PIX_FMT_RGB24:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB24"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB24");
+                }
 
                 *bpp = 24;
                 *amask = 0;
@@ -44,7 +43,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_BGR24:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR24"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR24");
+                }
 
                 *bpp = 24;
                 *amask = 0;
@@ -57,7 +58,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_RGB0:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB0"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGB0");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -75,7 +78,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_0BGR:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0BGR"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0BGR");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -93,7 +98,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_BGR0:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR0"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGR0");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -111,7 +118,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_0RGB:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0RGB"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_0RGB");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -129,7 +138,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_RGBA:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGBA"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_RGBA");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -147,7 +158,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_ABGR:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ABGR"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ABGR");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -165,7 +178,9 @@ namespace LTSM
                 return true;
 
             case AV_PIX_FMT_BGRA:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGRA"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_BGRA");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -184,7 +199,9 @@ namespace LTSM
 
 
             case AV_PIX_FMT_ARGB:
-                if(debug) { Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ARGB"); }
+                if(debug) {
+                    Application::info("%s: %s", __FUNCTION__, "AV_PIX_FMT_ARGB");
+                }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 *bpp = 32;
@@ -208,10 +225,8 @@ namespace LTSM
         return false;
     }
 
-    AVPixelFormat Tools::AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug)
-    {
-        if(debug)
-        {
+    AVPixelFormat Tools::AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug) {
+        if(debug) {
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
             bool bigEndian = false;
 #else
@@ -221,8 +236,7 @@ namespace LTSM
                               __FUNCTION__, bpp, rmask, gmask, bmask, amask, (int) bigEndian);
         }
 
-        if(24 == bpp)
-        {
+        if(24 == bpp) {
             if(amask == 0 && rmask == 0x00FF0000 && gmask == 0x0000FF00 && bmask == 0x000000FF)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 return AV_PIX_FMT_BGR24;
@@ -238,9 +252,7 @@ namespace LTSM
 #else
                 return AV_PIX_FMT_BGR24;
 #endif
-        }
-        else if(32 == bpp)
-        {
+        } else if(32 == bpp) {
             if(rmask == 0xFF000000 && gmask == 0x00FF0000 && bmask == 0x0000FF00 && amask == 0)
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
                 return AV_PIX_FMT_0BGR;

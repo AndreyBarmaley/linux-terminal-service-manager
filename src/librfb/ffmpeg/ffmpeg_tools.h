@@ -34,10 +34,8 @@ extern "C" {
 
 #endif
 
-namespace LTSM
-{
-    namespace Tools
-    {
+namespace LTSM {
+    namespace Tools {
         bool AV_PixelFormatEnumToMasks(AVPixelFormat format, int* bpp, uint32_t* rmask, uint32_t* gmask, uint32_t* bmask, uint32_t* amask, bool debug);
         AVPixelFormat AV_PixelFormatEnumFromMasks(int bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask, bool debug);
     }
