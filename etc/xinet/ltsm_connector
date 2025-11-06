@@ -7,8 +7,8 @@ service rfb
   wait            = no
   user            = ltsm-xvfb
   groups          = yes
-  server          = /usr/local/sbin/LTSM_connector --config /etc/ltsm/ltsm_connector.json
-  server_args     = --type ltsm
+  server          = /usr/local/sbin/LTSM_connector
+  server_args     = --type ltsm --config /etc/ltsm/ltsm_connector.json
 }
 
 service ms-wbt-server
@@ -20,6 +20,6 @@ service ms-wbt-server
   wait            = no
   user            = ltsm-xvfb
   groups          = yes
-  server          = /usr/local/sbin/LTSM_connector --config /etc/ltsm/ltsm_connector.json
-  server_args     = --type rdp
+  server          = /usr/local/sbin/LTSM_connector
+  server_args     = --type rdp --config /etc/ltsm/ltsm_connector.json
 }
