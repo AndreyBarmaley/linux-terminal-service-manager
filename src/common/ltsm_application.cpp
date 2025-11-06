@@ -136,7 +136,7 @@ namespace LTSM {
     }
 
     void setDebugSyslogFacility(std::string_view name) {
-        if(startsWith(name, "local")) {
+        if(5 < name.size() && startsWith(name, "local")) {
             switch(name[5]) {
                 case '0':
                     facility = LOG_LOCAL0;
@@ -623,9 +623,14 @@ namespace LTSM {
 #endif
 
     // ApplicationJsonConfig
+    ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident)
+        : ApplicationLog(ident) {
+        readDefaultConfig();
+    }
+
     ApplicationJsonConfig::ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & fconf)
         : ApplicationLog(ident) {
-        if(fconf.empty() || ! std::filesystem::exists(fconf)) {
+        if(fconf.empty()) {
             readDefaultConfig();
         } else {
             readConfig(fconf);

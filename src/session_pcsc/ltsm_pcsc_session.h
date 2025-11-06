@@ -207,7 +207,7 @@ namespace LTSM {
         PcscSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~PcscSessionBus();
 
-        int start(void) override;
+        int start(void);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;

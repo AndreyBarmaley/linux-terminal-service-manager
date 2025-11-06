@@ -868,11 +868,7 @@ namespace LTSM {
         return size();
     }
 
-    bool JsonContent::parseString(std::string_view str) {
-        return parseBinary(str.data(), str.size());
-    }
-
-    bool JsonContent::parseBinary(const char* str, size_t len) {
+    bool JsonContent::parse(const char* str, size_t len) {
         int counts = 0;
 
         do {
@@ -896,16 +892,33 @@ namespace LTSM {
             return false;
         }
 
-        content.assign(str, len);
         resize(counts);
         return true;
+    }
+
+    bool JsonContent::parseString(std::string && str) {
+        if(parse(str.data(), str.size())) {
+            content.swap(str);
+            return true;
+        }
+
+        return false;
+    }
+
+    bool JsonContent::parseBinary(const char* str, size_t len) {
+        if(parse(str, len)) {
+            content.assign(str, len);
+            return true;
+        }
+
+        return false;
     }
 
     bool JsonContent::readFile(const std::filesystem::path & file) {
         auto str = Tools::fileToString(file);
 
         if(! str.empty()) {
-            return parseBinary(str.data(), str.size());
+            return parseString(std::move(str));
         }
 
         return false;
@@ -1080,7 +1093,11 @@ namespace LTSM {
 
     /* JsonContentString */
     JsonContentString::JsonContentString(std::string_view str) {
-        parseString(str);
+        parseBinary(str.data(), str.size());
+    }
+
+    JsonContentString::JsonContentString(std::string && str) {
+        parseString(std::move(str));
     }
 
     /* JsonObjectStream */

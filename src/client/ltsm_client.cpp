@@ -1674,16 +1674,14 @@ int main(int argc, const char** argv)
     auto argEnd = argv + argc;
 
     if((argBeg == argEnd && ! std::filesystem::is_regular_file(localcfg)) ||
-    std::any_of(argBeg, argEnd, [](std::string_view arg) {
-    return arg == "--help" || arg == "-h";
-})) {
+    std::any_of(argBeg, argEnd,
+        [](std::string_view arg) { return arg == "--help" || arg == "-h"; })) {
         printHelp(argv[0]);
         return 0;
     }
 
-    if(auto it = std::find_if(argBeg, argEnd, [](std::string_view arg) {
-    return arg == "--save";
-}); it != argEnd) {
+    if(auto it = std::find_if(argBeg, argEnd,
+        [](std::string_view arg) { return arg == "--save"; }); it != argEnd) {
         std::string_view path = localcfg;
 
         if(auto it2 = std::next(it); it2 != argEnd) {

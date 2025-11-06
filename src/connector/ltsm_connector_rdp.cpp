@@ -183,7 +183,7 @@ namespace LTSM::Connector {
 
             if(! freerdp_peer_context_new(peer)) {
                 Application::error("%s: failed", "freerdp_peer_context_new");
-                throw EXIT_FAILURE;
+                throw rdp_error(NS_FuncName);
             }
 
             Application::debug(DebugType::App, "peer context: %p", peer);
@@ -257,7 +257,7 @@ namespace LTSM::Connector {
 
             if(1 != peer->Initialize(peer)) {
                 Application::error("%s: failed", "peer->Initialize");
-                throw EXIT_FAILURE;
+                throw rdp_error(NS_FuncName);
             }
         }
 
@@ -325,7 +325,7 @@ namespace LTSM::Connector {
         }
     };
 
-    ConnectorRdp::ConnectorRdp(const JsonObject & jo) : DBusProxy(jo, ConnectorType::RDP) {
+    ConnectorRdp::ConnectorRdp(const std::filesystem::path & confile, bool debug) : DBusProxy(ConnectorType::RDP, confile, debug) {
     }
 
     ConnectorRdp::~ConnectorRdp() {
@@ -352,7 +352,7 @@ namespace LTSM::Connector {
         proxyStartEventLoop();
         // create FreeRdpCallback
         Application::info("%s: %s", __FUNCTION__, "create freerdp context");
-        freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), _remoteaddr, _config, this);
+        freeRdp = std::make_unique<FreeRdpCallback>(proxyClientSocket(), _remoteaddr, config(), this);
         auto freeRdpThread = std::thread([ptr = freeRdp.get()] { FreeRdpCallback::enterEventLoop(ptr); });
         damageRegion.assign(0, 0, 0, 0);
         // rdp session not activated trigger
@@ -363,7 +363,7 @@ namespace LTSM::Connector {
             }
         });
 
-        bool nodamage = _config.getBoolean("xcb:nodamage", false);
+        bool nodamage = config().getBoolean("rdp:xcb:nodamage", false);
 
         // all ok
         while(! loopShutdownFlag) {
@@ -518,7 +518,7 @@ namespace LTSM::Connector {
 
         if(newDisplay < 0) {
             Application::error("%s: %s failed", __FUNCTION__, "user session request");
-            throw std::runtime_error(NS_FuncName);
+            throw rdp_error(NS_FuncName);
         }
 
         if(newDisplay != oldDisplay) {
@@ -527,7 +527,7 @@ namespace LTSM::Connector {
 
             if(! xcbConnect(newDisplay, *this)) {
                 Application::error("%s: %s failed", __FUNCTION__, "xcb connect");
-                throw std::runtime_error(NS_FuncName);
+                throw rdp_error(NS_FuncName);
             }
 
             busShutdownDisplay(oldDisplay);

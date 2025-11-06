@@ -177,6 +177,8 @@ namespace LTSM::Manager {
         std::atomic<uint32_t> startTimeLimitSec{0};
         std::atomic<uint32_t> onlineTimeLimitSec{0};
         std::atomic<uint32_t> offlineTimeLimitSec{0};
+        std::atomic<uint32_t> idleTimeLimitSec{0};
+        std::atomic<bool> idleDisconnect{false};
 
         std::atomic<uint64_t> statusFlags{0};
 
@@ -269,10 +271,6 @@ namespace LTSM::Manager {
         void checkStartConfig(void);
         bool createXauthDir(void);
 
-        int start(void) override {
-            return 0;
-        }
-
       protected:
         void closeSystemSession(XvfbSessionPtr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
@@ -298,7 +296,7 @@ namespace LTSM::Manager {
         void childEndedEvent(void);
 
       public:
-        DBusAdaptor(sdbus::IConnection &, const std::string & confile);
+        DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
         void shutdownService(void);
@@ -329,6 +327,7 @@ namespace LTSM::Manager {
         void busSetSessionDurationLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) override;
+        void busSetSessionIdleLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionPolicy(const int32_t & display, const std::string & policy) override;
         void busSetSessionEnvironments(const int32_t & display,
                                        const std::map<std::string, std::string> & map) override;
@@ -382,15 +381,7 @@ namespace LTSM::Manager {
         void stopPkcs11Listener(XvfbSessionPtr, const std::string & clientUrl);
     };
 
-    class SystemService {
-        bool isBackground = false;
-        std::string config;
-
-      public:
-        SystemService(int argc, const char** argv);
-
-        int start(void);
-    };
+    int startService(int argc, const char** argv);
 }
 
 #endif // _LTSM_SERVICE_

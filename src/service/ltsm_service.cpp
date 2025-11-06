@@ -368,6 +368,12 @@ namespace LTSM::Manager {
             jos.push("offlined:sec", sessionOfflinedSec().count());
         }
 
+        jos.push("session:started:timeout", static_cast<uint32_t>(startTimeLimitSec));
+        jos.push("session:online:timeout", static_cast<uint32_t>(onlineTimeLimitSec));
+        jos.push("session:offline:timeout", static_cast<uint32_t>(offlineTimeLimitSec));
+        jos.push("session:idle:timeout", static_cast<uint32_t>(idleTimeLimitSec));
+        jos.push("session:idle:disconnect", static_cast<bool>(idleDisconnect));
+
         return jos.flush();
     }
 
@@ -922,7 +928,7 @@ namespace LTSM::Manager {
     }; // RunAs
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::string & confile)
+    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
         , AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
@@ -1415,6 +1421,8 @@ namespace LTSM::Manager {
 
         sess->tpStart = std::chrono::system_clock::now();
         sess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        sess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
+        sess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
         // generate session key
         sess->mcookie = Tools::randomBytes(128);
@@ -1652,9 +1660,9 @@ namespace LTSM::Manager {
         }
 
         // simple cursor
-        if(configHasKey("display:cursor")) {
-            runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", configGetString("display:cursor") });
-        }
+        //if(configHasKey("display:cursor")) {
+        //    runSessionCommandSafe(xvfb, "/usr/bin/xsetroot", { "-cursor_name", configGetString("display:cursor") });
+        //}
 
         // runas login helper
         xvfb->pid2 = runSessionCommandSafe(xvfb, configGetString("helper:path"), Tools::split(helperArgs, 0x20));
@@ -1779,6 +1787,8 @@ namespace LTSM::Manager {
         newSess->mode = SessionMode::Started;
         newSess->tpStart = std::chrono::system_clock::now();
         newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        newSess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
+        newSess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
         if(! configGetBoolean("transfer:file:disabled", false)) {
             newSess->setStatus(Flags::AllowChannel:: TransferFiles);
@@ -1978,7 +1988,7 @@ namespace LTSM::Manager {
         if(auto ptr = findDisplaySession(display)) {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
-            if(configGetBoolean("session:idle:disconnect", false)) {
+            if(ptr->idleDisconnect) {
                 std::thread([this, xvfb = std::move(ptr)]() {
                     std::this_thread::sleep_for(10ms);
                     this->emitShutdownConnector(xvfb->displayNum);
@@ -2467,9 +2477,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        if(std::none_of(users.begin(), users.end(), [&](auto & val) {
-        return val == login;
-    })) {
+        if(std::none_of(users.begin(), users.end(),
+            [&](auto & val) { return val == login; })) {
             Application::error("%s: %s, display: %" PRId32 ", user: %s",
                                __FUNCTION__, "login not found", xvfb->displayNum, login.c_str());
             emitLoginFailure(xvfb->displayNum, "login not found");
@@ -3504,6 +3513,16 @@ namespace LTSM::Manager {
         }
     }
 
+    void DBusAdaptor::busSetSessionIdleLimitSec(const int32_t & display, const uint32_t & limit) {
+        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+
+        if(auto xvfb = findDisplaySession(display)) {
+            xvfb->idleTimeLimitSec = limit;
+        } else {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        }
+    }
+
     void DBusAdaptor::busSetSessionPolicy(const int32_t & display, const std::string & policy) {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", policy: %s", __FUNCTION__, display, policy.c_str());
 
@@ -3582,16 +3601,14 @@ namespace LTSM::Manager {
 
         auto modes = { "ro", "rw", "wo" };
 
-        if(std::none_of(modes.begin(), modes.end(), [&](auto & val) {
-        return cmode == val;
-    })) {
+        if(std::none_of(modes.begin(), modes.end(),
+            [&](auto & val) { return cmode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "client", cmode.c_str());
             return false;
         }
 
-        if(std::none_of(modes.begin(), modes.end(), [&](auto & val) {
-        return smode == val;
-    })) {
+        if(std::none_of(modes.begin(), modes.end(),
+            [&](auto & val) { return smode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "server", smode.c_str());
             return false;
         }
@@ -3647,30 +3664,30 @@ namespace LTSM::Manager {
         return true;
     }
 
-    /* SystemService */
-    SystemService::SystemService(int argc, const char** argv) {
+    /* Manager::startService */
+    int startService(int argc, const char** argv) {
+        bool isBackground = false;
+        std::filesystem::path confile;
+
         for(int it = 1; it < argc; ++it) {
             if(0 == std::strcmp(argv[it], "--background")) {
                 isBackground = true;
             } else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc) {
-                config.assign(argv[it + 1]);
+                confile.assign(argv[it + 1]);
                 it = it + 1;
             } else {
                 std::cout << "usage: " << argv[0] << " [--config file] [--background]" << std::endl;
-                throw 0;
+                return EXIT_SUCCESS;
             }
-        }
-
-    }
-
-    int SystemService::start(void) {
-        if(isBackground && fork()) {
-            return 0;
         }
 
         if(0 < getuid()) {
             std::cerr << "need root privileges" << std::endl;
             return EXIT_FAILURE;
+        }
+
+        if(isBackground && fork()) {
+            return EXIT_SUCCESS;
         }
 
 #ifdef SDBUS_2_0_API
@@ -3705,8 +3722,8 @@ namespace LTSM::Manager {
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, config);
-        Application::notice("%s: service started, uid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getpid(), LTSM::service_version);
+        serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
+        Application::notice("%s: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef WITH_SYSTEMD
         sd_notify(0, "READY=1");
@@ -3728,14 +3745,11 @@ int main(int argc, const char** argv) {
     int res = 0;
 
     try {
-        LTSM::Manager::SystemService app(argc, argv);
-        res = app.start();
+        res = LTSM::Manager::startService(argc, argv);
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
         LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-    } catch(int val) {
-        res = val;
     }
 
     return res;

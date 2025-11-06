@@ -166,7 +166,7 @@ namespace LTSM {
             return ltsmSupport;
         }
 
-        int start(void) override;
+        int start(void);
         bool isAlwaysRunning(void) const;
     };
 }

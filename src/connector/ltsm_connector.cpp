@@ -67,28 +67,6 @@ namespace LTSM::Connector {
                   Tools::join(proto.begin(), proto.end(), "|") << ">" << std::endl;
     }
 
-    /* Service */
-    Service::Service(int argc, const char** argv)
-        : ApplicationJsonConfig("ltsm_connector"), _type("auto") {
-        for(int it = 1; it < argc; ++it) {
-            if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc) {
-                _type = Tools::lower(argv[it + 1]);
-                it = it + 1;
-            } else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc) {
-                readConfig(argv[it + 1]);
-                it = it + 1;
-            } else {
-                connectorHelp(argv[0]);
-                throw 0;
-            }
-        }
-
-        if(! config().isValid()) {
-            Application::error("%s: %s failed", "Connector", "config");
-            throw std::invalid_argument("Connector");
-        }
-    }
-
     int autoDetectType(void) {
         auto fd = fileno(stdin);
         struct pollfd fds = {};
@@ -115,66 +93,15 @@ namespace LTSM::Connector {
         return home;
     }
 
-    int Service::start(void) {
-        // signals
-        signal(SIGPIPE, SIG_IGN);
-
-        Application::info("%s: runtime version: %d", __FUNCTION__, LTSM::service_version);
-
-        auto home = homeRuntime();
-        Application::debug(DebugType::App, "%s: uid: %d, gid: %d, working dir: `%s'", __FUNCTION__, getuid(), getgid(), home.c_str());
-
-        if(0 != chdir(home.c_str())) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
-        }
-
-        std::unique_ptr<DBusProxy> connector;
-
-#ifdef LTSM_WITH_RDP
-
-        // protocol up
-        if(_type == "auto") {
-            if(int first = autoDetectType(); first == 0x03) {
-                connector = std::make_unique<ConnectorRdp>(config());
-            }
-        } else if(_type == "rdp") {
-            connector = std::make_unique<ConnectorRdp>(config());
-        }
-
-#endif
-
-        if(! connector) {
-            connector = std::make_unique<ConnectorLtsm>(config());
-        }
-
-        int res = 0;
-
-        try {
-#ifdef WITH_SYSTEMD
-            sd_notify(0, "READY=1");
-#endif
-            res = connector->communication();
-#ifdef WITH_SYSTEMD
-            sd_notify(0, "STOPPING=1");
-#endif
-        } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-            // terminated connection: exit normal
-            res = EXIT_SUCCESS;
-        }
-
-        return res;
-    }
-
     /* DBusProxy */
-    DBusProxy::DBusProxy(const JsonObject & jo, const ConnectorType & type)
+    DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
+        : ApplicationJsonConfig("ltsm_connector", confile),
 #ifdef SDBUS_2_0_API
-        : ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path}),
+        ProxyInterfaces(sdbus::createSystemBusConnection(), sdbus::ServiceName {LTSM::dbus_manager_service_name}, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
-        :
-        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path),
+        ProxyInterfaces(sdbus::createSystemBusConnection(), LTSM::dbus_manager_service_name, LTSM::dbus_manager_service_path)
 #endif
-          _config(jo) {
+    {
         _remoteaddr.assign("local");
 
         switch(type) {
@@ -193,6 +120,10 @@ namespace LTSM::Connector {
 
         if(auto env = std::getenv("REMOTE_ADDR")) {
             _remoteaddr.assign(env);
+        }
+
+        if(debug) {
+            Application::setDebugLevel(DebugLevel::Debug);
         }
 
         registerProxy();
@@ -231,20 +162,15 @@ namespace LTSM::Connector {
             return false;
         }
 
-        auto defaultSz = XCB::Size(_config.getInteger("default:width", 0),
-                                   _config.getInteger("default:height", 0));
-        auto displaySz = xcbDisplay.size();
-        int color = _config.getInteger("display:solid", 0x4e7db7);
-        Application::debug(DebugType::App, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
-                           displaySz.height, xcbDisplay.depth());
+//        auto defaultSz = XCB::Size(config().getInteger("default:width", 0),
+//                                   config().getInteger("default:height", 0));
+//        auto displaySz = xcbDisplay.size();
+//        Application::debug(DebugType::App, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
+//                           displaySz.height, xcbDisplay.depth());
 
-        if(0 != color) {
-            xcbDisplay.fillBackground((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
-        }
-
-        if(! defaultSz.isEmpty() && displaySz != defaultSz) {
-            xcbDisplay.setRandrScreenSize(defaultSz);
-        }
+//        if(! defaultSz.isEmpty() && displaySz != defaultSz) {
+//            xcbDisplay.setRandrScreenSize(defaultSz);
+//        }
 
         _xcbDisplayNum = screen;
         return true;
@@ -263,7 +189,7 @@ namespace LTSM::Connector {
     }
 
     std::string DBusProxy::checkFileOption(const std::string & param) const {
-        auto fileName = _config.getString(param);
+        auto fileName = config().getString(param);
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
@@ -338,24 +264,92 @@ namespace LTSM::Connector {
             _idleSessionTp = std::chrono::steady_clock::now();
         }
     }
+
+    /* Connector::startService */
+    int startService(int argc, const char** argv) {
+        std::string type{"auto"};
+        std::filesystem::path confile;
+        bool debug = false;
+        
+        for(int it = 1; it < argc; ++it) {
+            if(0 == std::strcmp(argv[it], "--type") && it + 1 < argc) {
+                type = Tools::lower(argv[it + 1]);
+                it = it + 1;
+            } else if(0 == std::strcmp(argv[it], "--config") && it + 1 < argc) {
+                confile.assign(argv[it + 1]);
+                it = it + 1;
+            } else if(0 == std::strcmp(argv[it], "--debug")) {
+                debug = true;
+            } else {
+                connectorHelp(argv[0]);
+                return EXIT_SUCCESS;
+            }
+        }
+
+        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+
+        // signals
+        signal(SIGPIPE, SIG_IGN);
+        Application::notice("%s: uid: %d, gid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
+
+        auto home = homeRuntime();
+
+        if(0 != chdir(home.c_str())) {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
+        } else {
+            Application::info("%s: working dir: `%s'", __FUNCTION__, home.c_str());
+        }
+
+        std::unique_ptr<DBusProxy> connector;
+
+#ifdef LTSM_WITH_RDP
+
+        // protocol up
+        if(type == "auto") {
+            if(int first = autoDetectType(); first == 0x03) {
+                connector = std::make_unique<ConnectorRdp>(confile, debug);
+            }
+        } else if(type == "rdp") {
+            connector = std::make_unique<ConnectorRdp>(confile, debug);
+        }
+
+#endif
+
+        if(! connector) {
+            connector = std::make_unique<ConnectorLtsm>(confile, debug);
+        }
+
+        int res = 0;
+
+        try {
+#ifdef WITH_SYSTEMD
+            sd_notify(0, "READY=1");
+#endif
+            res = connector->communication();
+#ifdef WITH_SYSTEMD
+            sd_notify(0, "STOPPING=1");
+#endif
+        } catch(const std::exception & err) {
+            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            // terminated connection: exit normal
+            res = EXIT_SUCCESS;
+        }
+
+        return res;
+    }
+
 } // namespace LTSM::Connector
 
 using namespace LTSM;
 
 int main(int argc, const char** argv) {
-    int res = 0;
-    Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
-
     try {
-        Connector::Service app(argc, argv);
-        res = app.start();
+        return Connector::startService(argc, argv);
     } catch(const sdbus::Error & err) {
         Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
         Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-    } catch(int val) {
-        res = val;
     }
 
-    return res;
+    return EXIT_FAILURE;
 }

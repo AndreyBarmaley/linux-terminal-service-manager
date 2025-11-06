@@ -128,7 +128,7 @@ namespace LTSM::Connector {
         void transferFilesPartial(std::list<TupleFileSize> files);
 
       public:
-        ConnectorLtsm(const JsonObject & jo) : DBusProxy(jo, ConnectorType::LTSM) {}
+        ConnectorLtsm(const std::filesystem::path & confile, bool debug) : DBusProxy(ConnectorType::LTSM, confile, debug) {}
         ~ConnectorLtsm();
 
         int communication(void) override;

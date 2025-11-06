@@ -40,7 +40,7 @@
 #include "jsmn/jsmn.h"
 #include "ltsm_global.h"
 
-#define LTSM_JSON_WRAPPER 20250912
+#define LTSM_JSON_WRAPPER 20251106
 
 namespace LTSM {
 
@@ -496,10 +496,12 @@ namespace LTSM {
         std::pair<JsonValuePtr, int> getValuePrimitive(const const_iterator &) const;
         std::pair<JsonValuePtr, int> getValueFromIter(const const_iterator &) const;
 
+        bool parse(const char*, size_t);
+
       public:
         JsonContent() = default;
 
-        bool parseString(std::string_view);
+        bool parseString(std::string &&);
         bool parseBinary(const char*, size_t);
         bool readFile(const std::filesystem::path &);
 
@@ -515,6 +517,7 @@ namespace LTSM {
     /* JsonContentString */
     class JsonContentString : public JsonContent {
       public:
+        explicit JsonContentString(std::string &&);
         explicit JsonContentString(std::string_view);
     };
 
@@ -557,7 +560,9 @@ namespace LTSM {
                 os << ",";
             }
 
-            if constexpr(std::is_pointer_v<T> && sizeof(std::remove_pointer_t<T>) == 1) {
+            if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
+                os << std::quoted(key) << ":" << std::quoted(val);
+            } else if constexpr(std::is_pointer<T>::value && sizeof(std::remove_reference<T>) == 1) {
                 os << std::quoted(key) << ":" << std::quoted(val ? val : "");
             } else if constexpr(std::is_same_v<T, bool>) {
                 os << std::quoted(key) << ":" << (val ? "true" : "false");
@@ -597,7 +602,9 @@ namespace LTSM {
                 os << ",";
             }
 
-            if constexpr(std::is_pointer_v<T> && sizeof(std::remove_pointer_t<T>) == 1) {
+            if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
+                os << std::quoted(val);
+            } else if constexpr(std::is_pointer<T>::value && sizeof(std::remove_reference<T>) == 1) {
                 os << std::quoted(val ? val : "");
             } else if constexpr(std::is_same_v<T, bool>) {
                 os << (val ? "true" : "false");

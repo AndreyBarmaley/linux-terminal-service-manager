@@ -373,41 +373,43 @@ namespace LTSM {
     }
 
     std::wstring Tools::string2wstring(const std::string & str) {
-        /*
-                using convert_type = std::codecvt_utf8<wchar_t>;
-                std::wstring_convert<convert_type, wchar_t> converter;
-                return converter.from_bytes(str.begin(), str.end());
-        */
+#if __cplusplus >= 202002L
         auto len = std::mbstowcs(nullptr, str.c_str(), 0);
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("%s: %s failed, error: %d", __FUNCTION__, "mbstowcs", errno);
+            Application::error("%s: %s failed", __FUNCTION__, "mbstowcs");
             return {};
         }
 
         std::wstring res(len, L'\0');
         std::mbstowcs(res.data(), str.c_str(), len);
         return res;
+#else
+        using convert_type = std::codecvt_utf8<wchar_t>;
+        std::wstring_convert<convert_type, wchar_t> converter;
+        return converter.from_bytes(str);
+#endif
     }
 
     std::string Tools::wstring2string(const std::wstring & wstr) {
-        /*
-                using convert_type = std::codecvt_utf8<wchar_t>;
-                std::wstring_convert<convert_type, wchar_t> converter;
-                return converter.to_bytes(wstr);
-        */
+#if __cplusplus >= 202002L
         auto len = std::wcstombs(nullptr, wstr.c_str(), 0);
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("%s: %s failed, error: %d", __FUNCTION__, "wcstombs", errno);
+            Application::error("%s: %s failed", __FUNCTION__, "wcstombs");
             return {};
         }
 
         std::string res(len, '\0');
         std::wcstombs(res.data(), wstr.c_str(), len);
         return res;
+#else
+        using convert_type = std::codecvt_utf8<wchar_t>;
+        std::wstring_convert<convert_type, wchar_t> converter;
+        return converter.to_bytes(wstr);
+#endif
     }
 
     std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr) {
@@ -663,7 +665,7 @@ namespace LTSM {
                 str.append(tz.native());
             }
         } else {
-            time_t ts;
+            time_t ts = 0;
             struct tm tt;
 
             char buf[16];

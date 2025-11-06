@@ -924,9 +924,8 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
                            remotePoint.c_str(), fuseSocket.c_str());
 
-        if(std::any_of(childs.begin(), childs.end(), [ &](auto & ptr) {
-        return ptr->localPoint == localPoint;
-    })) {
+        if(std::any_of(childs.begin(), childs.end(),
+            [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
             Application::error("%s: point busy, point: `%s'", __FUNCTION__, localPoint.c_str());
             return false;
         }

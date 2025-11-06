@@ -483,7 +483,7 @@ namespace LTSM::LoginHelper {
         }
 
         // verify certs chain
-        if(auto certVerify = configGetBoolean("pkcs11:ca:verify", true)) {
+        if(configGetBoolean("pkcs11:ca:verify", true)) {
             auto listErrors = QSslCertificate::verify(QList<QSslCertificate>() << ssl);
 
             if(listErrors.size()) {
@@ -497,7 +497,7 @@ namespace LTSM::LoginHelper {
         }
 
         // check cert expires
-        if(auto certExpires = configGetBoolean("pkcs11:cert:expires", true)) {
+        if(configGetBoolean("pkcs11:cert:expires", true)) {
             if(ssl.expiryDate() < QDateTime::currentDateTime()) {
                 setLabelError("certificate expired");
                 Application::warning("%s: %s failed, error: %s", __FUNCTION__, "cert verify", "expired date");

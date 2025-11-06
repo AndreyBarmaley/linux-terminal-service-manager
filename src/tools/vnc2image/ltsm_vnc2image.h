@@ -67,7 +67,7 @@ namespace LTSM {
         void clientRecvPixelFormatEvent(const PixelFormat &, const XCB::Size &) override;
         void clientRecvFBUpdateEvent(void) override;
 
-        int start(void) override;
+        int start(void);
     };
 }
 

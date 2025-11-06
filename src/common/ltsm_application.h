@@ -94,8 +94,6 @@ namespace LTSM {
 #ifdef __UNIX__
         static int forkMode(void);
 #endif
-
-        virtual int start(void) = 0;
     };
 
 #ifdef LTSM_WITH_JSON
@@ -137,7 +135,8 @@ namespace LTSM {
         void readDefaultConfig(void);
 
       public:
-        ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & file = "");
+        explicit ApplicationJsonConfig(std::string_view ident);
+        ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & file);
 
         bool readConfig(const std::filesystem::path &);
 

@@ -123,10 +123,6 @@ namespace LTSM::LoginHelper {
         explicit LoginWindow(QWidget * parent = 0);
         ~LoginWindow();
 
-        int start(void) override {
-            return 0;
-        }
-
       protected slots:
         void loginClicked(void);
         void domainIndexChanged(int);

@@ -265,9 +265,8 @@ namespace LTSM {
     bool AudioSessionBus::connectChannel(const std::string & clientSocket) {
         Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
 
-        if(std::any_of(clients.begin(), clients.end(), [ &](auto & cli) {
-        return cli.socketPath == clientSocket && ! ! cli.sock;
-    })) {
+        if(std::any_of(clients.begin(), clients.end(),
+            [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
             Application::error("%s: socket busy, path: `%s'", __FUNCTION__, clientSocket.c_str());
             return false;
         }
@@ -278,7 +277,7 @@ namespace LTSM {
 
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket) {
         Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
-        clients.remove_if([ &](auto & cli) {
+        clients.remove_if([&clientSocket](auto & cli) {
             return cli.socketPath == clientSocket;
         });
     }

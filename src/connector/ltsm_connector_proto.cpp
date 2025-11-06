@@ -56,8 +56,8 @@ namespace LTSM::Connector {
 
         Application::info("%s: remote addr: %s", __FUNCTION__, _remoteaddr.c_str());
 
-        _x11NoDamage = _config.getBoolean("vnc:xcb:nodamage", false);
-        _frameRate = _config.getInteger("vnc:frame:rate", 16);
+        _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
+        _frameRate = config().getInteger("vnc:frame:rate", 16);
 
         if(_frameRate <= 0) {
             Application::warning("%s: invalid value for: `%s'", __FUNCTION__, "vnc:frame:rate");
@@ -117,7 +117,9 @@ namespace LTSM::Connector {
             }
         }
 
-        _idleTimeoutSec = _config.getInteger("session:idle:timeout", 0);
+        auto json = JsonContentString(busGetSessionJson(newDisplay)).toObject();
+
+        _idleTimeoutSec = json.getInteger("session:idle:timeout", 0);
         _idleSessionTp = std::chrono::steady_clock::now();
         _userSession = true;
 
@@ -206,18 +208,18 @@ namespace LTSM::Connector {
         _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
         // load keymap
-        if(_config.hasKey("vnc:keymap:file")) {
-            loadKeymap(_config.getString("vnc:keymap:file"));
+        if(config().hasKey("vnc:keymap:file")) {
+            loadKeymap(config().getString("vnc:keymap:file"));
         }
     }
 
     std::forward_list<std::string> ConnectorLtsm::serverDisabledEncodings(void) const {
-        return _config.getStdListForward<std::string>("vnc:encoding:blacklist");
+        return config().getStdListForward<std::string>("vnc:encoding:blacklist");
     }
 
     void ConnectorLtsm::serverEncodingSelectedEvent(void) {
-        setEncodingThreads(_config.getInteger("vnc:encoding:threads", 2));
-        setEncodingDebug(_config.getInteger("vnc:encoding:debug", 0));
+        setEncodingThreads(config().getInteger("vnc:encoding:threads", 2));
+        setEncodingDebug(config().getInteger("vnc:encoding:debug", 0));
     }
 
     void ConnectorLtsm::serverMainLoopEvent(void) {
@@ -267,21 +269,21 @@ namespace LTSM::Connector {
         RFB::SecurityInfo secInfo;
         secInfo.authNone = true;
         secInfo.authVnc = false;
-        secInfo.authVenCrypt = ! _config.getBoolean("vnc:gnutls:disable", false);
-        secInfo.tlsPriority = _config.getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
-        secInfo.tlsAnonMode = _config.getBoolean("vnc:gnutls:anonmode", true);
-        secInfo.caFile = _config.getString("vnc:gnutls:cafile");
-        secInfo.certFile = _config.getString("vnc:gnutls:certfile");
-        secInfo.keyFile = _config.getString("vnc:gnutls:keyfile");
-        secInfo.crlFile = _config.getString("vnc:gnutls:crlfile");
-        secInfo.tlsDebug = _config.getInteger("vnc:gnutls:debug", 0);
+        secInfo.authVenCrypt = ! config().getBoolean("vnc:gnutls:disable", false);
+        secInfo.tlsPriority = config().getString("vnc:gnutls:priority", "NORMAL:+ANON-ECDH:+ANON-DH");
+        secInfo.tlsAnonMode = config().getBoolean("vnc:gnutls:anonmode", true);
+        secInfo.caFile = config().getString("vnc:gnutls:cafile");
+        secInfo.certFile = config().getString("vnc:gnutls:certfile");
+        secInfo.keyFile = config().getString("vnc:gnutls:keyfile");
+        secInfo.crlFile = config().getString("vnc:gnutls:crlfile");
+        secInfo.tlsDebug = config().getInteger("vnc:gnutls:debug", 0);
 #ifdef LTSM_WITH_GSSAPI
-        secInfo.authKrb5 = ! _config.getBoolean("vnc:kerberos:disable", false);
-        secInfo.krb5Service = _config.getString("vnc:kerberos:service", "TERMSRV");
+        secInfo.authKrb5 = ! config().getBoolean("vnc:kerberos:disable", false);
+        secInfo.krb5Service = config().getString("vnc:kerberos:service", "TERMSRV");
 #endif
 
         if(secInfo.authKrb5) {
-            auto keytab = _config.getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
+            auto keytab = config().getString("vnc:kerberos:keytab", "/etc/ltsm/termsrv.keytab");
 
             if(keytab.empty()) {
                 secInfo.authKrb5 = false;
@@ -295,7 +297,7 @@ namespace LTSM::Connector {
                 Application::info("%s: set KRB5_KTNAME=`%s'", __FUNCTION__, keytab.c_str());
                 setenv("KRB5_KTNAME", keytab.c_str(), 1);
 
-                if(auto debug = _config.getString("vnc:kerberos:trace"); ! debug.empty()) {
+                if(auto debug = config().getString("vnc:kerberos:trace"); ! debug.empty()) {
                     Application::info("%s: set KRB5_TRACE=`%s'", __FUNCTION__, debug.c_str());
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
@@ -310,7 +312,7 @@ namespace LTSM::Connector {
     }
 
     bool ConnectorLtsm::rfbClipboardEnable(void) const {
-        return _config.getBoolean("vnc:clipboard");
+        return config().getBoolean("vnc:clipboard");
     }
 
     bool ConnectorLtsm::rfbDesktopResizeEnabled(void) const {
@@ -473,7 +475,7 @@ namespace LTSM::Connector {
             Application::debug(DebugType::App, "%s: files count: %s", __FUNCTION__, fa->size());
 
             // check transfer disabled
-            if(_config.getBoolean("transfer:file:disabled", false)) {
+            if(config().getBoolean("transfer:file:disabled", false)) {
                 Application::error("%s: administrative disable", __FUNCTION__);
                 busSendNotify(displayNum(), "Transfer Disable", "transfer is blocked, contact the administrator",
                               NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
@@ -483,8 +485,8 @@ namespace LTSM::Connector {
             size_t fmax = 0;
             size_t prettyMb = 0;
 
-            if(_config.hasKey("transfer:file:max")) {
-                fmax = _config.getInteger("transfer:file:max");
+            if(config().hasKey("transfer:file:max")) {
+                fmax = config().getInteger("transfer:file:max");
                 prettyMb = fmax / (1024 * 1024);
             }
 
@@ -662,7 +664,7 @@ namespace LTSM::Connector {
 
     bool ConnectorLtsm::noVncMode(void) const {
         return _remoteaddr == "127.0.0.1" &&
-               _config.getBoolean("vnc:novnc:allow", false);
+               config().getBoolean("vnc:novnc:allow", false);
     }
 
     std::string ConnectorLtsm::remoteClientAddress(void) const {

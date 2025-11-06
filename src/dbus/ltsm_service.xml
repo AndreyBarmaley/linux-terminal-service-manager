@@ -67,6 +67,10 @@
             <arg type="i" name="display" direction="in" />
             <arg type="u" name="limit" direction="in" />
         </method>
+        <method name="busSetSessionIdleLimitSec">
+            <arg type="i" name="display" direction="in" />
+            <arg type="u" name="limit" direction="in" />
+        </method>
         <method name="busSetSessionPolicy">
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="policy" direction="in" />

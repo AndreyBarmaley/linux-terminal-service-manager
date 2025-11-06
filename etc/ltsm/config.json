@@ -1,39 +1,4 @@
 {
-    "vnc:encoding:debug": 0,
-    "vnc:encoding:threads": 4,
-    "vnc:encoding:blacklist": [ "zlib" ],
-    "vnc:gnutls:disable": false,
-    "vnc:gnutls:debug": 3,
-    "vnc:gnutls:anonmode": true,
-    "vnc:gnutls:priority": "NORMAL:+ANON-ECDH:+ANON-DH",
-    "vnc:gnutls:cafile": "/etc/ltsm/cacerts.pem",
-    "vnc:gnutls:crlfile": "/etc/ltsm/server.crl",
-    "vnc:gnutls:certfile": "/etc/ltsm/server.crt",
-    "vnc:gnutls:keyfile": "/etc/ltsm/server.key",
-    "#vnc:keymap:file": "/etc/ltsm/keymap_vnc.json",
-    "#vnc:xcb:nodamage": false,
-    "vnc:clipboard": true,
-    "vnc:novnc:allow": false,
-
-    "vnc:kerberos:disable": false,
-    "vnc:kerberos:service": "TERMSRV",
-    "vnc:kerberos:keytab": "/etc/ltsm/termsrv.keytab",
-    "#vnc:kerberos:trace": "/var/tmp/ltsm_krb5.trace",
-
-    "rdp:wlog:level": "error",
-    "rdp:security:rdp": true,
-    "rdp:security:tls": true,
-    "rdp:security:nla": false,
-    "rdp:tls:level": 1,
-    "rdp:encryption:level": "compatible",
-    "rdp:server:certfile": "/etc/ltsm/server.crt",
-    "rdp:server:keyfile": "/etc/ltsm/server.key",
-    "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
-
-    "transfer:file:disabled": false,
-    "transfer:file:max": 100000000,
-    "#transfer:group:only": "transfer-allow",
-
     "channel:printer:disabled": false,
     "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
     "channel:audio:disabled": false,
@@ -72,8 +37,6 @@
 
     "display:min": 55,
     "display:max": 99,
-    "display:solid": "0x4e7db7",
-    "display:cursor": "left_ptr",
 
     "xauth:file": "/var/run/ltsm/auth_%{display}",
 

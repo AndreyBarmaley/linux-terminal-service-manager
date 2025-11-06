@@ -42,14 +42,12 @@ namespace LTSM::Connector {
 
     enum class ConnectorType { VNC, LTSM, RDP };
 
-    class DBusProxy : public sdbus::ProxyInterfaces<Manager::Service_proxy> {
+    class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
       protected:
         std::list<RenderPrimitivePtr> _renderPrimitives;
 
         std::string _conntype;
         std::string _remoteaddr;
-
-        const JsonObject & _config;
 
         std::atomic<int> _xcbDisplayNum{0};
         std::atomic<bool> _xcbDisable{true};
@@ -115,7 +113,7 @@ namespace LTSM::Connector {
         bool xcbAllowMessages(void) const;
 
       public:
-        DBusProxy(const JsonObject &, const ConnectorType &);
+        DBusProxy(const ConnectorType &, const std::filesystem::path & confile, bool debug);
         virtual ~DBusProxy();
 
         virtual int communication(void) = 0;
@@ -126,15 +124,8 @@ namespace LTSM::Connector {
         void checkIdleTimeout(void);
     };
 
-    /* Connector::Service */
-    class Service : public ApplicationJsonConfig {
-        std::string _type;
-
-      public:
-        Service(int argc, const char** argv);
-
-        int start(void);
-    };
+    /* Connector::startService */
+    int startService(int argc, const char** argv);
 }
 
 #endif // _LTSM_CONNECTOR_

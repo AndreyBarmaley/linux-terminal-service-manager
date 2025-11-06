@@ -26,7 +26,7 @@ class Test1App : public Application {
         config = jsonFile.toObject();
     }
 
-    int start(void) override {
+    int start(void) {
         auto arr1 = config.getArray("test:array");
         auto obj1 = config.getObject("test:object");
 
@@ -106,14 +106,20 @@ class Test1App : public Application {
 
         std::cout << obj.toString() << std::endl;
 
-        std::string teststr("errtert");
+        std::string teststr1("errtert");
+        std::string_view teststr2{"errtert"};
 
         JsonArray jarr;
-        jarr << "test1" << "test2" << "test3" << "test4" << teststr;
+        jarr << "test1" << "test2" << "test3" << "test4" << teststr1 << teststr2;
         std::cout << jarr.toString() << std::endl;
 
         JsonObjectStream jos;
-        std::cout << "json stream: " << jos.push("key1", "string").push("key11", teststr).push("key2", 456).push("key3", 3.147).push("key4", true).push("key5").flush() << std::endl;
+        jos.push("hostname", "localhost");
+        jos.push("ipaddr", "127.0.0.1");
+        auto str = jos.push("key1", "string").push("teststr1", teststr1).push("teststr2", teststr2).push("key2", 456).push("key3", 3.147).push("key4", true).push("key5").flush();
+        std::cout << "json stream: " << str << std::endl;
+
+        //opts->toStdMap<std::string>()
         return 0;
     }
 };

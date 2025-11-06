@@ -61,7 +61,7 @@ namespace LTSM {
         AudioSessionBus(sdbus::IConnection &, bool debug = false);
         virtual ~AudioSessionBus();
 
-        int start(void) override;
+        int start(void);
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;

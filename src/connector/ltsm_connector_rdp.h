@@ -75,7 +75,7 @@ namespace LTSM::Connector {
         void channelsFree(void);
 
       public:
-        ConnectorRdp(const JsonObject &);
+        ConnectorRdp(const std::filesystem::path & confile, bool debug);
         ~ConnectorRdp();
 
         int communication(void) override;
