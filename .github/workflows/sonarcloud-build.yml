@@ -134,7 +134,7 @@ jobs:
           sudo ./LTSM_service &
           sleep 5
           echo "run socat connector"
-          socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/config.json --type ltsm" &
+          socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/ltsm_connector.json --type ltsm" &
           sleep 5
           echo "get vnc screenshot"
           ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
