@@ -23,7 +23,6 @@
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
     "helper:path": "/usr/libexec/ltsm/LTSM_helper",
-    "helper:args": "",
 
     "login:failures_count": 3,
     "session:kill:stop": false,

@@ -45,6 +45,19 @@ namespace LTSM::Manager {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
+    using StdoutBuf = std::vector<uint8_t>;
+    using StatusStdout = std::pair<int, StdoutBuf>;
+    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
+    using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
+    using FileNameSize = sdbus::Struct<std::string, uint32_t>;
+    using TuplePosition = sdbus::Struct<int16_t, int16_t>;
+    using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
+    using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
+    using ArgsList = std::list<std::string>;
+    using EnvList = std::forward_list<std::string>;
+
+    using system_time_point = std::chrono::system_clock::time_point;
+
     /// PamService
     class PamService {
       protected:
@@ -110,7 +123,7 @@ namespace LTSM::Manager {
         bool refreshCreds(void);
         bool setCreds(const Cred &);
 
-        std::forward_list<std::string> getEnvList(void);
+        EnvList getEnvList(void);
     };
 
     enum class SessionMode : int { Started = 0, Connected = 1, Disconnected = 2, Login = 3, Shutdown = 4 };
@@ -134,16 +147,6 @@ namespace LTSM::Manager {
 
     SessionPolicy sessionPolicy(const std::string &);
 
-    using StdoutBuf = std::vector<uint8_t>;
-    using StatusStdout = std::pair<int, StdoutBuf>;
-    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
-    using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
-    using FileNameSize = sdbus::Struct<std::string, uint32_t>;
-    using TuplePosition = sdbus::Struct<int16_t, int16_t>;
-    using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
-    using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
-
-    using system_time_point = std::chrono::system_clock::time_point;
 
     /// XvfbSession
     struct XvfbSession {
@@ -226,6 +229,7 @@ namespace LTSM::Manager {
         ~XvfbSession();
 
         std::string toJsonString(void) const;
+        std::unordered_map<std::string, std::string> getEnvironments(const EnvList & envs = {}) const;
     };
 
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
@@ -258,10 +262,10 @@ namespace LTSM::Manager {
         std::atomic<bool> loginsDisable = false;
 
         pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
-                                    std::list <std::string>);
+                                    const ArgsList &, const EnvList &);
         void waitPidBackgroundSafe(pid_t pid);
 
-        bool sessionRunZenity(XvfbSessionPtr, std::initializer_list <std::string>);
+        bool sessionRunZenity(XvfbSessionPtr, const ArgsList &);
         void sessionRunSetxkbmapLayout(XvfbSessionPtr);
 
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
@@ -274,7 +278,6 @@ namespace LTSM::Manager {
       protected:
         void closeSystemSession(XvfbSessionPtr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
-        bool createSessionConnInfo(XvfbSessionPtr, bool destroy = false);
         XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
                                                 UserInfoPtr userInfo);
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
@@ -286,7 +289,6 @@ namespace LTSM::Manager {
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
                              bool token);
         std::forward_list<XvfbSessionPtr> findEndedSessions(void);
-
         std::forward_list<std::string> getAllowLogins(void) const;
 
         void sessionsTimeLimitAction(void);

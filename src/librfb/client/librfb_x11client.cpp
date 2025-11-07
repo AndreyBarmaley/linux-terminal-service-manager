@@ -144,9 +144,8 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
-                    if(std::any_of(beg, end, [&](auto & trgt) {
-                    return atom == trgt;
-                })) {
+                    if(std::any_of(beg, end,
+                        [&](auto & trgt) { return atom == trgt; })) {
                         return copy->convertSelection(atom, *this);
                     }
                 }
@@ -173,10 +172,10 @@ namespace LTSM {
         Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32, __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return false;
+        if(std::none_of(targets.begin(), targets.end(),
+            [&](auto & trgt) { return atom == trgt; })) {
+            return false;
+        }
 
         if(extClipboardRemoteCaps()) {
             uint16_t requestType = ExtClip::x11AtomToType(atom);
@@ -213,10 +212,10 @@ namespace LTSM {
         Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32, __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return 0;
+        if(std::none_of(targets.begin(), targets.end(),
+            [&](auto & trgt) { return atom == trgt; })) {
+            return 0;
+        }
 
         const std::scoped_lock guard{ clientLock };
         return clientClipboard.size();
@@ -227,10 +226,10 @@ namespace LTSM {
 
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return {};
+        if(std::none_of(targets.begin(), targets.end(),
+            [&](auto & trgt) { return atom == trgt; })) {
+            return {};
+        }
 
         const std::scoped_lock guard{ clientLock };
 
