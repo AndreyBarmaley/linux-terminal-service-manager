@@ -145,6 +145,7 @@ jobs:
           echo "::endgroup::"
           echo "::group::x11 tests"
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
+          sleep 1
           xsetroot -solid "#4e7db7"
           ./LTSM_test_framebuf2
           ./LTSM_test_xrandr
