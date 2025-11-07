@@ -225,7 +225,7 @@ namespace LTSM {
             }
 
             // <UID16> - proto
-            auto protoVer = fuse->sock->recvIntLE16();
+            [[maybe_unused]] auto protoVer = fuse->sock->recvIntLE16();
             // <UID32> - remote uid
             fuse->remoteUid = fuse->sock->recvIntLE32();
             // <GID32> - remote gid

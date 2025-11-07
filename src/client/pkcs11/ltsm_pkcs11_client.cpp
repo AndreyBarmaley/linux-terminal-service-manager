@@ -299,7 +299,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     // <SLOT64> - slot id
     auto slotId = sb.readIntLE64();
     // <PAIR8> - have public/private pair
-    bool havePublicPrivateKeys = sb.readInt8();
+    [[maybe_unused]] bool havePublicPrivateKeys = sb.readInt8();
     reply.reset();
     std::unique_ptr<const PKCS11::Session> sess;
 

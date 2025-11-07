@@ -153,8 +153,6 @@ namespace LTSM::Manager {
         std::unordered_map<std::string, std::string> environments;
         std::unordered_map<std::string, std::string> options;
 
-        std::forward_list<std::string> allowTransfer;
-
         std::filesystem::path xauthfile;
 
         UserInfoPtr userInfo;

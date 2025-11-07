@@ -179,6 +179,15 @@ namespace LTSM::LoginHelper {
 
         loginTimeSec = configGetInteger("login:timeout:sec");
 
+        if(auto env = getenv("LTSM_SESSION_TEST")) {
+            try {
+                if(auto sid = std::stoi(env); sid == displayNum) {
+                    loginTimeSec = 600;
+                }
+            } catch(...) {
+            }
+        }
+
         timerOneSec = startTimer(std::chrono::seconds(1));
         timer200ms = startTimer(std::chrono::milliseconds(200));
         timerReloadUsers = startTimer(std::chrono::minutes(3));

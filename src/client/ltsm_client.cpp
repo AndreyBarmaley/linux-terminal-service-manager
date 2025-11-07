@@ -843,7 +843,7 @@ namespace LTSM {
                     }
 
                     int mouseX, mouseY;
-                    auto state = SDL_GetMouseState(& mouseX, & mouseY);
+                    [[maybe_unused]] auto state = SDL_GetMouseState(& mouseX, & mouseY);
 
                     // press/release up/down
                     sendPointerEvent(SDL_BUTTON(0 < we->y ? SDL_BUTTON_X1 : SDL_BUTTON_X2), mouseX, mouseY);
@@ -1667,7 +1667,12 @@ int main(int argc, const char** argv)
 #ifdef __WIN32__
     auto localcfg = Tools::replace(usercfgdef, "$LOCALAPPDATA", getenv("LOCALAPPDATA"));
 #else
-    auto localcfg = Tools::replace(usercfgdef, "$HOME", getenv("HOME"));
+    auto home = getenv("HOME");
+    if(! home) {
+        std::cerr << "HOME environment not found" << std::endl;
+        return EXIT_FAILURE;
+    }
+    auto localcfg = Tools::replace(usercfgdef, "$HOME", home);
 #endif
 
     auto argBeg = argv + 1;

@@ -1394,7 +1394,7 @@ namespace LTSM {
     bool PcscLocal::proxyGetVersion(void) {
         const uint32_t versionMajor = sock.recvInt32();
         const uint32_t versionMinor = sock.recvInt32();
-        const uint32_t ret = sock.recvInt32();
+        [[maybe_unused]] const uint32_t ret = sock.recvInt32();
 
         Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " >> protocol version: %" PRIu32 ".%" PRIu32,
                            __FUNCTION__, id(), versionMajor, versionMinor);
@@ -1480,7 +1480,7 @@ namespace LTSM {
         if(PcscLite::apiVersion < 43) {
             // old protocol: 4.2
             const uint32_t timeout = sock.recvInt32();
-            const uint32_t ret = sock.recvInt32();
+            [[maybe_unused]] const uint32_t ret = sock.recvInt32();
             Application::debug(DebugType::Pcsc, "%s: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
                                __FUNCTION__, id(), context, timeout);
             waitStatusChanged.stop();
@@ -1507,8 +1507,8 @@ namespace LTSM {
 
         if(PcscLite::apiVersion < 43) {
             // old protocol: 4.2
-            const uint32_t timeout = sock.recvInt32();
-            const uint32_t ret = sock.recvInt32();
+            [[maybe_unused]] const uint32_t timeout = sock.recvInt32();
+            [[maybe_unused]] const uint32_t ret = sock.recvInt32();
         } else {
             // new protocol: 4.4, empty params
         }

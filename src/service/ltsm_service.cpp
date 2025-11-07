@@ -1073,7 +1073,7 @@ namespace LTSM::Manager {
                     continue;
                 }
 
-                uint32_t lastSecOnlined = ptr->onlineTimeLimitSec - onlinedSec.count();
+                lastSecOnlined = ptr->onlineTimeLimitSec - onlinedSec.count();
             }
 
             // check offline timepoint
@@ -2117,7 +2117,7 @@ namespace LTSM::Manager {
                 continue;
             }
 
-            xvfb->allowTransfer.emplace_front(filepath);
+            //xvfb->allowTransfer.emplace_front(filepath);
             emitTransferAllow(xvfb->displayNum, filepath, tmpname, dstdir);
         }
     }
@@ -2147,7 +2147,7 @@ namespace LTSM::Manager {
             std::this_thread::sleep_for(350ms);
         }
 
-        xvfb->allowTransfer.remove(tmpfile);
+        //xvfb->allowTransfer.remove(tmpfile);
 
         if(error) {
             return;

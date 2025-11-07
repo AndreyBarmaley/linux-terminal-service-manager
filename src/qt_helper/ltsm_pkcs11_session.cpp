@@ -109,7 +109,7 @@ void Pkcs11Client::run(void) {
     }
 
     // proto version
-    auto ver = sock.recvIntLE16();
+    [[maybe_unused]] auto ver = sock.recvIntLE16();
     // library info
     PKCS11::LibraryInfo info;
     info.cryptokiVersion.major = sock.recvInt8();

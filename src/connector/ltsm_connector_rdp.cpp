@@ -878,7 +878,7 @@ namespace LTSM::Connector {
     BOOL ConnectorRdp::cbServerClientCapabilities(freerdp_peer* peer) {
         Application::info("%s: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
-        auto context = static_cast<ServerContext*>(peer->context);
+        [[maybe_unused]] auto context = static_cast<ServerContext*>(peer->context);
         //auto connector = context->conrdp;
         //peer->settings->ColorDepth = static_cast<XCB::RootDisplay*>(connector)->bitsPerPixel();
         //peer->settings->ColorDepth = 32;
@@ -1039,7 +1039,7 @@ namespace LTSM::Connector {
                 return FALSE;
             }
 
-            auto rootWin = xcbDisplay->root();
+            [[maybe_unused]] auto rootWin = xcbDisplay->root();
             uint32_t keysym = static_cast<uint32_t>(flags) << 16 | code;
 
             // local keymap priority "rdp:keymap:file"
@@ -1092,7 +1092,7 @@ namespace LTSM::Connector {
                 return FALSE;
             }
 
-            auto rootWin = xcbDisplay->root();
+            [[maybe_unused]] auto rootWin = xcbDisplay->root();
 
             // left button
             if(flags & PTR_FLAGS_BUTTON1) {
