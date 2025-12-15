@@ -2089,7 +2089,7 @@ namespace LTSM::Manager {
             return;
         }
 
-        for(const auto & info : files) {
+        for(const auto & info: files) {
             auto tmpname = std::filesystem::path(connectorHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
             Application::debug(DebugType::App, "%s: transfer file request, display: %" PRId32 ", select dir: `%s', tmp name: `%s'",

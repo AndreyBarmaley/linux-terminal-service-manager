@@ -523,22 +523,6 @@ namespace LTSM {
         if(auto ptr = conn.lock()) {
             xcb_test_fake_input(ptr.get(), pressed ? XCB_KEY_PRESS : XCB_KEY_RELEASE, keycode, XCB_CURRENT_TIME, screen, 0, 0, 0);
             xcb_flush(ptr.get());
-
-            auto it = std::find(keycodes.begin(), keycodes.end(), keycode);
-
-            if(pressed) {
-                if(it != keycodes.end()) {
-                    return;
-                }
-
-                it = std::find(keycodes.begin(), keycodes.end(), NULL_KEYCODE);
-
-                if(it != keycodes.end()) {
-                    *it = keycode;
-                }
-            } else if(it != keycodes.end()) {
-                *it = NULL_KEYCODE;
-            }
         }
     }
 

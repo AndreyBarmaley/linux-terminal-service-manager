@@ -40,8 +40,8 @@ namespace LTSM {
         std::unique_ptr<char, void(*)(void*)> clientClipboard{ nullptr, SDL_free };
 
       public:
-        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h)
-            : XCB::RootDisplay(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h) {
+        SDL2X11(int display, const std::string & title, int winsz_w, int winsz_h, bool accel)
+            : XCB::RootDisplay(display), SDL::Window(title.c_str(), width(), height(), winsz_w, winsz_h, 0, accel) {
         }
 
         /*
@@ -80,9 +80,8 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 std::for_each(beg, end, [&](auto & atom) {
-                    if(std::any_of(targets.begin(), targets.end(), [&](auto & trgt) {
-                    return atom == trgt;
-                })) {
+                    if(std::any_of(targets.begin(), targets.end(),
+                        [&](auto & trgt) { return atom == trgt; })) {
                         return copy->convertSelection(atom, *this);
                     }
                 });
@@ -109,10 +108,10 @@ namespace LTSM {
         size_t selectionSourceSize(xcb_atom_t atom) const override {
             auto targets = selectionSourceTargets();
 
-            if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-            return atom == trgt;
-        }))
-            return 0;
+            if(std::none_of(targets.begin(), targets.end(),
+                [&](auto & trgt) { return atom == trgt; })) {
+                return 0;
+            }
 
             return clientClipboard ? SDL_strlen(clientClipboard.get()) : 0;
         }
@@ -120,10 +119,10 @@ namespace LTSM {
         std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
             auto targets = selectionSourceTargets();
 
-            if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-            return atom == trgt;
-        }))
-            return {};
+            if(std::none_of(targets.begin(), targets.end(),
+                [&](auto & trgt) { return atom == trgt; })) {
+                return {};
+            }
 
             if(clientClipboard) {
                 auto len = SDL_strlen(clientClipboard.get());
@@ -149,6 +148,12 @@ namespace LTSM {
             switch(ev.type()) {
                 case SDL_TEXTINPUT:
                     // handleTextInput: ev.text
+                    break;
+
+                case SDL_WINDOWEVENT:
+                    if(ev.window()->event == SDL_WINDOWEVENT_EXPOSED) {
+                        renderPresent(false);
+                    }
                     break;
 
                 case SDL_KEYUP:
@@ -278,7 +283,7 @@ namespace LTSM {
 
 int printHelp(const char* prog) {
     std::cout << "usage: " << prog <<
-                 " --auth <xauthfile> --title <title> --display <num> --scale <width>x<height> [--debug] [--syslog]" << std::endl;
+                 " --display <num> [--auth <xauthfile>] [--title <title>] [--scale <width>x<height>] [--accel] [--debug] [--syslog]" << std::endl;
     return EXIT_SUCCESS;
 }
 
@@ -286,6 +291,7 @@ int main(int argc, const char** argv) {
     int display = -1;
     int winsz_w = 0;
     int winsz_h = 0;
+    bool accel = false;
     std::string xauth;
     std::string geometry;
     std::string title = "SDL2X11";
@@ -312,6 +318,8 @@ int main(int argc, const char** argv) {
         for(int it = 1; it < argc; ++it) {
             if(0 == std::strcmp(argv[it], "--debug")) {
                 LTSM::Application::setDebugLevel(LTSM::DebugLevel::Debug);
+            } else if(0 == std::strcmp(argv[it], "--accel")) {
+                accel = true;
             } else if(0 == std::strcmp(argv[it], "--syslog")) {
                 LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog);
             } else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc) {
@@ -346,7 +354,7 @@ int main(int argc, const char** argv) {
         }
     }
 
-    if(argc < 2 || display < 0 || xauth.empty()) {
+    if(argc < 2 || display < 0) {
         return printHelp(argv[0]);
     }
 
@@ -355,7 +363,7 @@ int main(int argc, const char** argv) {
     }
 
     try {
-        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h);
+        LTSM::SDL2X11 app(display, title, winsz_w, winsz_h, accel);
         return app.start();
     } catch(const std::exception & err) {
         std::cerr << "exception: " << err.what() << std::endl;
