@@ -1,5 +1,5 @@
-project(LTSM_test_xrandr)
-set(CUR_TARGET LTSM_test_xrandr)
+project(ltsm_test_xrandr)
+set(CUR_TARGET ltsm_test_xrandr)
 
 CommonDefaults(NONE)
 

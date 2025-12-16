@@ -1,5 +1,5 @@
-project(LTSM_test_framebuf)
-set(CUR_TARGET LTSM_test_framebuf)
+project(ltsm_test_framebuf)
+set(CUR_TARGET ltsm_test_framebuf)
 
 CommonDefaults(PNG)
 

@@ -1,5 +1,5 @@
-project(LTSM_test_streambuf)
-set(CUR_TARGET LTSM_test_streambuf)
+project(ltsm_test_streambuf)
+set(CUR_TARGET ltsm_test_streambuf)
 
 CommonDefaults(NONE)
 

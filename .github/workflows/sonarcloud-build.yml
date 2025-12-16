@@ -102,10 +102,10 @@ jobs:
           openssl req -x509 -newkey rsa:1024 -subj '/C=RU/ST=Public/L=Irkutsk/O=Org/OU=Unit/CN=ltsm-docker/emailAddress=public.irkutsk@gmail.com' -nodes -days 1 -keyout ${{github.workspace}}/etc/ltsm/server.key -out ${{github.workspace}}/etc/ltsm/server.crt
           echo "copy ltsm files"
           chmod +x ${{github.workspace}}/etc/ltsm/xclients
-          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|/usr/bin/Xvfb|/usr/bin/Xorg|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
           echo "change groups"
-          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/config.json
-          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/config.json
+          sed -i -e 's|-screen 0 %{width}x%{height}x24|-config ltsm.conf -quiet|' ${{github.workspace}}/etc/ltsm/ltsm_service.json
+          sed -i -e "s|/usr/libexec/ltsm|${{github.workspace}}|" ${{github.workspace}}/etc/ltsm/ltsm_service.json
           sed -i -e 's|ltsm-dbus|adm|' ${{github.workspace}}/etc/dbus-1/ltsm.manager.service.conf
           echo "copy configs"
           sudo cp -r ${{github.workspace}}/etc/ltsm /etc
@@ -121,21 +121,21 @@ jobs:
         shell: bash
         run: |
           echo "::group::run tests"
-          ./LTSM_test_framebuf
-          ./LTSM_test_streambuf
-          ./LTSM_test_unixsocket
-          ./LTSM_test_json ./src/tests/json/test.json
-          ./LTSM_test_encodings --images src/tests/encodings/images
+          ./ltsm_test_framebuf
+          ./ltsm_test_streambuf
+          ./ltsm_test_unixsocket
+          ./ltsm_test_json ./src/tests/json/test.json
+          ./ltsm_test_encodings --images src/tests/encodings/images
           echo "::endgroup::"
           echo "::group::test services"
           echo "run ltsm service"
-          sudo ./LTSM_service &
+          sudo ./ltsm_service &
           sleep 5
           echo "run socat connector"
-          socat TCP4-LISTEN:5907,reuseaddr EXEC:"./LTSM_connector --config /etc/ltsm/ltsm_connector.json --type ltsm" &
+          socat TCP4-LISTEN:5907,reuseaddr EXEC:"./ltsm_connector --config /etc/ltsm/ltsm_connector.json --type ltsm" &
           sleep 5
           echo "get vnc screenshot"
-          ./LTSM_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
+          ./ltsm_vnc2image --host 127.0.0.1 --port 5907 --timeout 300
           sleep 5
           grep -i ltsm /var/log/syslog
           echo "send shutdown service"
@@ -147,9 +147,9 @@ jobs:
           /usr/bin/Xorg :55 -config ltsm.conf -nolisten tcp -quiet > /dev/null 2>&1 &
           sleep 1
           xsetroot -solid "#4e7db7"
-          ./LTSM_test_framebuf2
-          ./LTSM_test_xrandr
-          ./LTSM_test_x11enc --fps 10 --count 10 --threads 4
+          ./ltsm_test_framebuf2
+          ./ltsm_test_xrandr
+          ./ltsm_test_x11enc --fps 10 --count 10 --threads 4
           echo "::endgroup::"
           echo "::group::ltsm logs"
           echo "::endgroup::"

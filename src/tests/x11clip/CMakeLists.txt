@@ -1,5 +1,5 @@
-project(LTSM_test_x11clip)
-set(CUR_TARGET LTSM_test_x11clip)
+project(ltsm_test_x11clip)
+set(CUR_TARGET ltsm_test_x11clip)
 
 CommonDefaults(NONE)
 

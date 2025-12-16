@@ -1431,16 +1431,57 @@ namespace LTSM::Manager {
         }
 
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
-        std::string xvfbBin = configGetString("xvfb:path");
-        std::string xvfbArgs = configGetString("xvfb:args");
-        // xvfb args
-        xvfbArgs = Tools::replace(xvfbArgs, "%{display}", sess->displayNum);
-        xvfbArgs = Tools::replace(xvfbArgs, "%{depth}", sess->depth);
-        xvfbArgs = Tools::replace(xvfbArgs, "%{width}", sess->width);
-        xvfbArgs = Tools::replace(xvfbArgs, "%{height}", sess->height);
-        xvfbArgs = Tools::replace(xvfbArgs, "%{authfile}", sess->xauthfile.native());
 
-        Application::debug(DebugType::App, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), xvfbArgs.c_str());
+        std::string xvfbBin = configGetString("xvfb:path", "/usr/bin/Xvfb");
+        ArgsList xvfbArgs;
+
+        const bool useXorg = std::filesystem::path(xvfbBin).filename() == "Xorg";
+        const char* ltsmX11 = "/etc/X11/ltsm.conf";
+
+        if(useXorg &&
+            ! std::filesystem::exists(ltsmX11)) {
+            Application::warning("%s: path not found: `%s'", __FUNCTION__, ltsmX11);
+        }
+
+        if(configHasKey("xvfb:args")) {
+            xvfbArgs = config().getStdList<std::string>("xvfb:args");
+        } else {
+            // default options for Xvfb/Xorg
+            xvfbArgs.emplace_back(":%{display}");
+            xvfbArgs.emplace_back("-nolisten");
+            xvfbArgs.emplace_back("tcp");
+            if(useXorg) {
+                xvfbArgs.emplace_back("-config");
+                xvfbArgs.emplace_back("ltsm.conf");
+                xvfbArgs.emplace_back("-quiet");
+            } else {
+                xvfbArgs.emplace_back("-screen");
+                xvfbArgs.emplace_back("0");
+                xvfbArgs.emplace_back("%{width}x%{height}x24");
+            }
+            xvfbArgs.emplace_back("-auth");
+            xvfbArgs.emplace_back("%{authfile}");
+            xvfbArgs.emplace_back("+extension");
+            xvfbArgs.emplace_back("DAMAGE");
+            xvfbArgs.emplace_back("+extension");
+            xvfbArgs.emplace_back("MIT-SHM");
+            xvfbArgs.emplace_back("+extension");
+            xvfbArgs.emplace_back("RANDR");
+            xvfbArgs.emplace_back("+extension");
+            xvfbArgs.emplace_back("XFIXES");
+            xvfbArgs.emplace_back("+extension");
+            xvfbArgs.emplace_back("XTEST");
+        }
+
+        for(auto & arg: xvfbArgs) {
+            arg = Tools::replace(arg, "%{display}", sess->displayNum);
+            arg = Tools::replace(arg, "%{depth}", sess->depth);
+            arg = Tools::replace(arg, "%{width}", sess->width);
+            arg = Tools::replace(arg, "%{height}", sess->height);
+            arg = Tools::replace(arg, "%{authfile}", sess->xauthfile.native());
+        }
+
+        Application::debug(DebugType::App, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), Tools::join(xvfbArgs.begin(), xvfbArgs.end(), " ").c_str());
 
         try {
             sess->pid1 = Application::forkMode();
@@ -1468,12 +1509,11 @@ namespace LTSM::Manager {
             // redirect stdout, atderr
             redirectStdoutStderrTo(true, true, logFile.native());
             // create argv
-            ArgsList list = Tools::split(xvfbArgs, 0x20);
             std::vector<const char*> argv;
-            argv.reserve(list.size() + 2);
+            argv.reserve(xvfbArgs.size() + 2);
             argv.push_back(xvfbBin.c_str());
 
-            for(const auto & str : list) {
+            for(const auto & str : xvfbArgs) {
                 argv.push_back(str.c_str());
             }
 
@@ -1613,7 +1653,7 @@ namespace LTSM::Manager {
         Tools::setFileOwner(socketPath, xvfb->userInfo->uid(), groupAuthGid);
 
         auto sessionBin = configGetString("session:path", "/etc/ltsm/xclients");
-        auto xsession = Tools::joinToString("XSESSION=", configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper"));
+        auto xsession = Tools::joinToString("XSESSION=", configGetString("helper:path", "/usr/libexec/ltsm/ltsm_helper"));
 
         // runas login helper
         xvfb->pid2 = runSessionCommandSafe(xvfb, sessionBin, {}, { std::move(xsession) });

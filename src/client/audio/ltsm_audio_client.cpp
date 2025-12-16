@@ -232,7 +232,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 #ifdef LTSM_WITH_PLAYBACK_PULSE
 
     try {
-        player = std::make_unique<PulseAudio::Playback>("LTSM_client", "LTSM Audio Input", *format);
+        player = std::make_unique<PulseAudio::Playback>("ltsm_client", "LTSM Audio Input", *format);
     } catch(const std::exception &) {
         error.assign("pulseaudio failed");
     }

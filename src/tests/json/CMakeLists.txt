@@ -1,5 +1,5 @@
-project(LTSM_test_json)
-set(CUR_TARGET LTSM_test_json)
+project(ltsm_test_json)
+set(CUR_TARGET ltsm_test_json)
 
 CommonDefaults(JSON)
 

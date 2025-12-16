@@ -1,3 +1,3 @@
 [D-BUS Service]
 Name=ltsm.session.pcsc
-Exec=/usr/libexec/ltsm/LTSM_session_pcsc
+Exec=/usr/libexec/ltsm/ltsm_session_pcsc

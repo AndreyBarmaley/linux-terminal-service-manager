@@ -48,7 +48,7 @@ namespace LTSM {
     const auto librtdef = "/usr/lib64/librtpkcs11ecp.so";
     const auto printdef = "cmd:///usr/bin/lpr";
     const auto krb5def = "TERMSRV@remotehost.name";
-    const auto windowTitle = "LTSM_client";
+    const auto windowTitle = "LTSM Client";
 #ifdef __WIN32__
     const auto usercfgdef = "$LOCALAPPDATA\\ltsm\\client.cfg";
 #else

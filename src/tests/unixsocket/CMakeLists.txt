@@ -1,5 +1,5 @@
-project(LTSM_test_unixsocket)
-set(CUR_TARGET LTSM_test_unixsocket)
+project(ltsm_test_unixsocket)
+set(CUR_TARGET ltsm_test_unixsocket)
 
 CommonDefaults(GNUTLS)
 

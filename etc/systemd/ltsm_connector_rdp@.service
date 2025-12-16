@@ -5,7 +5,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=-/usr/local/sbin/LTSM_connector --type rdp
+ExecStart=-/usr/local/sbin/ltsm_connector --type rdp
 User=ltsm-xvfb
 Group=ltsm-auth
 StandardInput=socket

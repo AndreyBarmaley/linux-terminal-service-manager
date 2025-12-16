@@ -86,8 +86,8 @@ if(LTSM_BUILD_SERVER)
     set(LTSM_SERVER_BUILD_SESSION_PCSC ON CACHE BOOL "server: build session pcsc")
 
     if(LTSM_SERVER_BUILD_SERVICE)
-        project(LTSM_service)
-        set(CUR_TARGET LTSM_service)
+        project(ltsm_service)
+        set(CUR_TARGET ltsm_service)
 
         CommonDefaults(SDBUS JSON SYSTEMD)
 
@@ -105,8 +105,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_CONNECTOR)
-        project(LTSM_connector)
-        set(CUR_TARGET LTSM_connector)
+        project(ltsm_connector)
+        set(CUR_TARGET ltsm_connector)
 
         CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER)
 
@@ -131,8 +131,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_HELPER)
-        project(LTSM_helper)
-        set(CUR_TARGET LTSM_helper)
+        project(ltsm_helper)
+        set(CUR_TARGET ltsm_helper)
 
         set(LTSM_HELPER_PKCS11_AUTH ON CACHE BOOL "helper: pkcs11 auth")
 
@@ -167,8 +167,8 @@ if(LTSM_BUILD_SERVER)
     set(CMAKE_AUTOUIC OFF)
 
     if(LTSM_SERVER_BUILD_CUPS)
-        project(LTSM_cups_backend)
-        set(CUR_TARGET LTSM_cups_backend)
+        project(ltsm_cups_backend)
+        set(CUR_TARGET ltsm_cups_backend)
 
         CommonDefaults(SYSTEMD)
 
@@ -184,8 +184,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_PCSC)
-        project(LTSM_session_pcsc)
-        set(CUR_TARGET LTSM_session_pcsc)
+        project(ltsm_session_pcsc)
+        set(CUR_TARGET ltsm_session_pcsc)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 
@@ -200,8 +200,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_FUSE)
-        project(LTSM_session_fuse)
-        set(CUR_TARGET LTSM_session_fuse)
+        project(ltsm_session_fuse)
+        set(CUR_TARGET ltsm_session_fuse)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 
@@ -216,8 +216,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SESSION_AUDIO)
-        project(LTSM_session_audio)
-        set(CUR_TARGET LTSM_session_audio)
+        project(ltsm_session_audio)
+        set(CUR_TARGET ltsm_session_audio)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 
@@ -255,8 +255,8 @@ if(NOT LTSM_SERVER_BUILD_CONNECTOR)
 endif()
 
 if(LTSM_BUILD_CLIENT)
-    project(LTSM_client)
-    set(CUR_TARGET LTSM_client)
+    project(ltsm_client)
+    set(CUR_TARGET ltsm_client)
 
     if(NOT MINGW)
         set(LTSM_CLIENT_PKCS11_AUTH ON CACHE BOOL "client: pkcs11 auth")
@@ -307,8 +307,8 @@ endif()
 
 if(LTSM_BUILD_TOOLS)
     # vnc2image
-    project(LTSM_vnc2image)
-    set(CUR_TARGET LTSM_vnc2image)
+    project(ltsm_vnc2image)
+    set(CUR_TARGET ltsm_vnc2image)
 
     CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI)
 
@@ -322,8 +322,8 @@ if(LTSM_BUILD_TOOLS)
     set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
     # x112vnc
-    project(LTSM_x11vnc)
-    set(CUR_TARGET LTSM_x11vnc)
+    project(ltsm_x11vnc)
+    set(CUR_TARGET ltsm_x11vnc)
 
     CommonDefaults(GNUTLS GSSAPI JSON ENCODER)
 
@@ -337,8 +337,8 @@ if(LTSM_BUILD_TOOLS)
     set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
     # sdl2x11
-    project(LTSM_libsdl2x11)
-    set(CUR_TARGET LTSM_sdl2x11)
+    project(ltsm_libsdl2x11)
+    set(CUR_TARGET ltsm_sdl2x11)
 
     CommonDefaults(SDL)
 

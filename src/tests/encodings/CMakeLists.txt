@@ -1,5 +1,5 @@
-project(LTSM_test_encodings)
-set(CUR_TARGET LTSM_test_encodings)
+project(ltsm_test_encodings)
+set(CUR_TARGET ltsm_test_encodings)
 
 CommonDefaults(FFMPEG ENCODER JSON)
 

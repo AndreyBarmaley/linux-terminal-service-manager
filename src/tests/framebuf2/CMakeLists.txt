@@ -1,5 +1,5 @@
-project(LTSM_test_framebuf2)
-set(CUR_TARGET LTSM_test_framebuf2)
+project(ltsm_test_framebuf2)
+set(CUR_TARGET ltsm_test_framebuf2)
 
 CommonDefaults(FFMPEG ENCODER JSON)
 

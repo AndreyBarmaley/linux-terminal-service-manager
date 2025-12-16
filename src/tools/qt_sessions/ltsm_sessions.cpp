@@ -69,7 +69,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
             "HeaderLabel") << tr("Status", "HeaderLabel") << tr("RemoteAddr", "HeaderLabel") << tr("Pid",
                     "HeaderLabel") << tr("Uid", "HeaderLabel"));
     ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    sdl2x11.setFile(QDir(QCoreApplication::applicationDirPath()).filePath("LTSM_sdl2x11"));
+    sdl2x11.setFile(QDir(QCoreApplication::applicationDirPath()).filePath("ltsm_sdl2x11"));
 
     if(! sdl2x11.exists()) {
         ui->pushButtonShow->setEnabled(false);
@@ -83,7 +83,7 @@ LTSM_Sessions::LTSM_Sessions(QWidget* parent) :
 
     if(! dbusInterfacePtr->isValid()) {
         dbusInterfacePtr.reset();
-        QMessageBox::critical(this, "LTSM_sessions",
+        QMessageBox::critical(this, "ltsm_sessions",
                               QString(tr("<b>DBus interface not found!</b><br><br>service: %1<br>path: %2<br>interface: %3")).arg(service).arg(
                                   path).arg(interface),
                               QMessageBox::Ok);
