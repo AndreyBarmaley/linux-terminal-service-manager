@@ -22,7 +22,7 @@
     "access:uid:max": 9999,
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
-    "helper:path": "/usr/libexec/ltsm/LTSM_helper",
+    "helper:path": "/usr/libexec/ltsm/ltsm_helper",
 
     "login:failures_count": 3,
     "session:kill:stop": false,
@@ -38,9 +38,6 @@
     "display:max": 99,
 
     "xauth:file": "/var/run/ltsm/auth_%{display}",
-
-    "xvfb:path": "/usr/bin/Xvfb",
-    "xvfb:args": ":%{display} -nolisten tcp -screen 0 %{width}x%{height}x24 -auth %{authfile} +extension DAMAGE +extension MIT-SHM +extension RANDR +extension XFIXES +extension XTEST",
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",

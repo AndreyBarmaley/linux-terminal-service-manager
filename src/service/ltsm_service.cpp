@@ -1421,6 +1421,27 @@ namespace LTSM::Manager {
         sess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
         sess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
+        // check xvfbBin
+        std::string xvfbBin;
+        ArgsList xvfbArgs;
+
+        const char* ltsmX11 = "/etc/X11/ltsm.conf";
+        const char* ltsmXorg = "/usr/bin/Xorg";
+        const char* ltsmXvfb = "/usr/bin/Xvfb";
+
+        if(configHasKey("xvfb:path")) {
+            xvfbBin = configGetString("xvfb:path");
+        } else if(std::filesystem::exists(ltsmXorg) && std::filesystem::exists(ltsmX11)) {
+            xvfbBin.assign(ltsmXorg);
+        } else {
+            xvfbBin.assign(ltsmXvfb);
+        }
+
+        if(! std::filesystem::exists(xvfbBin)) {
+            Application::error("%s: path not found: `%s'", __FUNCTION__, xvfbBin.c_str());
+            return nullptr;
+        }
+
         // generate session key
         sess->mcookie = Tools::randomBytes(128);
         // session xauthfile
@@ -1432,16 +1453,7 @@ namespace LTSM::Manager {
 
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
 
-        std::string xvfbBin = configGetString("xvfb:path", "/usr/bin/Xvfb");
-        ArgsList xvfbArgs;
-
         const bool useXorg = std::filesystem::path(xvfbBin).filename() == "Xorg";
-        const char* ltsmX11 = "/etc/X11/ltsm.conf";
-
-        if(useXorg &&
-            ! std::filesystem::exists(ltsmX11)) {
-            Application::warning("%s: path not found: `%s'", __FUNCTION__, ltsmX11);
-        }
 
         if(configHasKey("xvfb:args")) {
             xvfbArgs = config().getStdList<std::string>("xvfb:args");
