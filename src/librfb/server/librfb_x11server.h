@@ -97,7 +97,7 @@ namespace LTSM {
             virtual bool xcbAllowMessages(void) const = 0;
             virtual void xcbDisableMessages(bool) = 0;
             virtual bool xcbNoDamageOption(void) const = 0;
-            virtual size_t frameRateOption(void) const = 0;
+            virtual uint32_t frameRateOption(void) const = 0;
 
             virtual bool rfbClipboardEnable(void) const = 0;
             virtual bool rfbDesktopResizeEnabled(void) const = 0;

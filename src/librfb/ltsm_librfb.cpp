@@ -176,9 +176,7 @@ namespace LTSM {
             ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI
         };
 
-        return std::any_of(types.begin(), types.end(), [ = ](auto & enc) {
-            return enc == type;
-        });
+        return std::ranges::any_of(types, [=](auto & enc) { return enc == type; });
     }
 
     int RFB::encodingType(std::string_view name) {

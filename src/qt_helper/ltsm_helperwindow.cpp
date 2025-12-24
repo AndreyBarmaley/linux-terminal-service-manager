@@ -565,9 +565,8 @@ namespace LTSM::LoginHelper {
             auto der = ssl.toDer();
 
             if(auto res = ldap->search(LDAP_SCOPE_SUBTREE, { "userCertificate" }, "userCertificate;binary=*"); res.size()) {
-                if(auto it = std::find_if(res.begin(), res.end(), [& der](auto & st) {
-                return st.hasValue((const char*) der.data(), der.size());
-                }); it != res.end()) {
+                if(auto it = std::ranges::find_if(res, [&der](auto & st) {
+                    return st.hasValue((const char*) der.data(), der.size()); }); it != res.end()) {
                     if(res = ldap->search(LDAP_SCOPE_BASE, { "uid" }, nullptr, it->dn()); res.size())
                         login = view2string(res.front().valueString());
                 }

@@ -42,27 +42,19 @@ namespace LTSM {
     // ClintEncodings
     void ClientEncodings::setPriority(const std::vector<int> & priorities) {
         encs.remove_if([&](auto & enc) {
-            return std::any_of(priorities.begin(), priorities.end(),
-            [&](auto & val) {
-                return val == enc;
-            });
+            return std::ranges::any_of(priorities, [&](auto & val) { return val == enc; });
         });
 
         encs.insert(encs.begin(), priorities.begin(), priorities.end());
     }
 
     bool ClientEncodings::isPresent(int type) const {
-        return std::any_of(encs.begin(), encs.end(), [ = ](auto & val) {
-            return val == type;
-        });
+        return std::ranges::any_of(encs, [=](auto & val) { return val == type; });
     }
 
     int ClientEncodings::findPriorityFrom(std::initializer_list<int> priorities) const {
         for(const auto & enc : encs) {
-            if(std::any_of(priorities.begin(), priorities.end(),
-            [&](auto & val) {
-            return val == enc;
-        })) {
+            if(std::ranges::any_of(priorities,[&](auto & val) { return val == enc; })) {
                 return enc;
             }
         }
@@ -717,9 +709,7 @@ namespace LTSM {
             if(! disabledEncodings.empty()) {
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
 
-                if(std::any_of(disabledEncodings.begin(), disabledEncodings.end(), [&](auto & str) {
-                return enclower == Tools::lower(str);
-                })) {
+                if(std::ranges::any_of(disabledEncodings, [&](auto & str) { return enclower == Tools::lower(str); })) {
                     Application::warning("%s: request encodings: %s (disabled)", __FUNCTION__, RFB::encodingName(encoding));
                     continue;
                 }
@@ -1057,8 +1047,7 @@ namespace LTSM {
                 auto clevels = { ENCODING_COMPRESS1, ENCODING_COMPRESS2, ENCODING_COMPRESS3, ENCODING_COMPRESS4, ENCODING_COMPRESS5, ENCODING_COMPRESS6, ENCODING_COMPRESS7, ENCODING_COMPRESS8, ENCODING_COMPRESS9 };
                 int zlevel = Z_BEST_SPEED;
 
-                if(auto it = std::find_if(clevels.begin(), clevels.end(),
-                [this](auto & enc) {
+                if(auto it = std::ranges::find_if(clevels, [this](auto & enc) {
                 return this->isClientSupportedEncoding(enc);
                 }); it != clevels.end()) {
                     zlevel = ENCODING_COMPRESS1 - *it + Z_BEST_SPEED;
@@ -1250,8 +1239,7 @@ namespace LTSM {
         sendIntBE32(cursorId);
 
         // cursor rgba data
-        if(std::none_of(cursorSended.begin(), cursorSended.end(),
-            [&cursorId](auto & curid) { return curid == cursorId; })) {
+        if(std::ranges::none_of(cursorSended, [&cursorId](auto & curid) { return curid == cursorId; })) {
             auto zlib = Tools::zlibCompress(rawPtr);
             // raw size
             sendIntBE32(rawPtr.size());

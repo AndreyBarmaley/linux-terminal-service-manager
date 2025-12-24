@@ -241,9 +241,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
 
         try {
             // check numbers
-            if(std::any_of(octets.begin(), octets.end(), [](auto & val) {
-            return 255 < std::stoi(val);
-            })) {
+            if(std::ranges::any_of(octets, [](auto & val) { return 255 < std::stoi(val); })) {
                 error = true;
             }
         } catch(const std::exception & err) {
@@ -279,7 +277,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
 /// ChannelClient
 LTSM::Channel::ConnectorBase* LTSM::ChannelClient::findChannel(uint8_t channel) {
     const std::scoped_lock guard{lockch};
-    auto it = std::find_if(channels.begin(), channels.end(), [ = ](auto & ptr) {
+    auto it = std::ranges::find_if(channels, [=](auto & ptr) {
         return ptr && ptr->channel() == channel;
     });
 
@@ -288,7 +286,7 @@ LTSM::Channel::ConnectorBase* LTSM::ChannelClient::findChannel(uint8_t channel) 
 
 LTSM::Channel::Planned* LTSM::ChannelClient::findPlanned(uint8_t channel) {
     const std::scoped_lock guard{lockpl};
-    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [ = ](auto & st) {
+    auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
         return st.channel == channel;
     });
 
@@ -442,7 +440,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
 
     // move planed to running
     const std::scoped_lock guard{lockpl};
-    auto it = std::find_if(channelsPlanned.begin(), channelsPlanned.end(), [ = ](auto & st) {
+    auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
         return st.channel == channel;
     });
 
@@ -898,7 +896,7 @@ void LTSM::ChannelClient::destroyChannel(uint8_t channel) {
     std::thread([this, channel] {
         const std::scoped_lock guard{this->lockch};
 
-        auto it = std::find_if(this->channels.begin(), this->channels.end(), [ = ](auto & ptr) {
+        auto it = std::ranges::find_if(this->channels, [=](auto & ptr) {
             return ptr && ptr->channel() == channel;
         });
 
@@ -1044,9 +1042,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
     try {
         const std::scoped_lock guard{lockls};
 
-        if(std::any_of(listeners.begin(), listeners.end(), [&](auto & ptr) {
-        return ptr->getServerUrl() == serverOpts.url;
-        })) {
+        if(std::ranges::any_of(listeners, [&](auto & ptr) { return ptr->getServerUrl() == serverOpts.url; })) {
             Application::debug(DebugType::Channels, "%s: listen present, url: %s", __FUNCTION__, serverOpts.url.c_str());
             return true;
         }
@@ -1069,7 +1065,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
 
 void LTSM::ChannelListener::destroyListener(const std::string & clientUrl, const std::string & serverUrl) {
     const std::scoped_lock guard{lockls};
-    auto it = std::find_if(listeners.begin(), listeners.end(), [&](auto & ptr) {
+    auto it = std::ranges::find_if(listeners, [&](auto & ptr) {
         return ptr && ptr->getClientUrl() == clientUrl;
     });
 

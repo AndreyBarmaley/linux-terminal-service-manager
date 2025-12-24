@@ -817,7 +817,7 @@ namespace LTSM {
     }
 
     const LinkInfo* FuseSession::findLink(fuse_ino_t inode) const {
-        auto it = std::find_if(symlinks.begin(), symlinks.end(), [ &](auto & st) {
+        auto it = std::ranges::find_if(symlinks, [&](auto & st) {
             return st.first == inode;
         });
 
@@ -924,8 +924,7 @@ namespace LTSM {
         Application::debug(DebugType::Dbus, "%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
                            remotePoint.c_str(), fuseSocket.c_str());
 
-        if(std::any_of(childs.begin(), childs.end(),
-            [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
+        if(std::ranges::any_of(childs, [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
             Application::error("%s: point busy, point: `%s'", __FUNCTION__, localPoint.c_str());
             return false;
         }

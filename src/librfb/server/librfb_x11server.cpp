@@ -258,7 +258,9 @@ namespace LTSM {
                 const std::scoped_lock guard{ serverLock };
                 // fix out of screen
                 damageRegion = serverRegion.intersected(damageRegion.align(4));
-                damageRegion = clientRegion.intersected(damageRegion);
+                if(clientRegion != serverRegion) {
+                    damageRegion = clientRegion.intersected(damageRegion);
+                }
 
                 if(! sendUpdateSafe(damageRegion)) {
                     rfbMessagesShutdown();
@@ -273,8 +275,9 @@ namespace LTSM {
                 damageRegion.reset();
 
                 // update timepoint
-                auto frameRate = frameRateOption();
-                delayTimeout = frameRate ? 1000 / frameRate : 0;
+                if(auto frameRate = frameRateOption()) {
+                    delayTimeout = 1000 / frameRate;
+                }
             }
         } // main loop
 
@@ -453,9 +456,7 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
-                    if(std::any_of(beg, end, [&](auto & trgt) {
-                    return atom == trgt;
-                })) {
+                    if(std::ranges::any_of(beg, end, [&](auto & trgt) { return atom == trgt; })) {
                         return copy->convertSelection(atom, *this);
                     }
                 }
@@ -479,10 +480,9 @@ namespace LTSM {
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return false;
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+            return false;
+        }
 
         if(extClipboardRemoteCaps()) {
             uint16_t requestType = ExtClip::x11AtomToType(atom);
@@ -518,10 +518,9 @@ namespace LTSM {
     size_t RFB::X11Server::selectionSourceSize(xcb_atom_t atom) const {
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return 0;
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+            return 0;
+        }
 
         const std::scoped_lock guard{ serverLock };
         return clientClipboard.size();
@@ -530,10 +529,9 @@ namespace LTSM {
     std::vector<uint8_t> RFB::X11Server::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) {
-        return atom == trgt;
-    }))
-        return {};
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+            return {};
+        }
 
         const std::scoped_lock guard{ serverLock };
 

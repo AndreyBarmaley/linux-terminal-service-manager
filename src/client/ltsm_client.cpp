@@ -288,9 +288,8 @@ namespace LTSM {
             }
         }
 
-        if(auto it = std::find_if(argBeg, argEnd, [](std::string_view arg) {
-        return arg == "--load";
-    }); it != argEnd) {
+        if(auto it = std::ranges::find_if(argBeg, argEnd, [](std::string_view arg) {
+            return arg == "--load"; }); it != argEnd) {
             if(it = std::next(it); it != argEnd) {
                 loadConfig(*it);
             }
@@ -439,9 +438,7 @@ namespace LTSM {
 
             auto encodings = ClientDecoder::supportedEncodings(extClipboardLocalCaps());
 
-            if(std::none_of(encodings.begin(), encodings.end(), [&](auto & str) {
-            return Tools::lower(RFB::encodingName(str)) == prefferedEncoding;
-            })) {
+            if(std::ranges::none_of(encodings, [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; })) {
                 Application::warning("%s: incorrect encoding: %s", __FUNCTION__,
                                      prefferedEncoding.c_str());
                 prefferedEncoding.clear();
@@ -1006,7 +1003,7 @@ namespace LTSM {
             if(ke->keysym.sym == 0x40000000 && ! capslockEnable) {
                 auto mod = SDL_GetModState();
                 SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
-                Application::notice("%s: CAPS reset", __FUNCTION__);
+                Application::debug(DebugType::App, "%s: CAPS reset", __FUNCTION__);
                 return true;
             }
 
@@ -1605,9 +1602,7 @@ namespace LTSM {
             allowEncoding.emplace_front("opus");
 #endif
 
-            if(std::any_of(allowEncoding.begin(), allowEncoding.end(), [&](auto & enc) {
-            return enc == audioEncoding;
-        })) {
+            if(std::ranges::any_of(allowEncoding, [&](auto & enc) { return enc == audioEncoding; })) {
                 jo.push("redirect:audio", audioEncoding);
             } else {
                 Application::warning("%s: unsupported audio: %s", __FUNCTION__, audioEncoding.c_str());
@@ -1638,9 +1633,7 @@ namespace LTSM {
     bool Vnc2SDL::createChannelAllow(const Channel::ConnectorType & type, const std::string & content,
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
-            if(! std::any_of(shareFolders.begin(), shareFolders.end(), [&](auto & val) {
-            return val == content;
-        })) {
+            if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {
                 Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "share", content.c_str());
                 return false;
             }
@@ -1679,13 +1672,12 @@ int main(int argc, const char** argv)
     auto argEnd = argv + argc;
 
     if((argBeg == argEnd && ! std::filesystem::is_regular_file(localcfg)) ||
-    std::any_of(argBeg, argEnd,
-        [](std::string_view arg) { return arg == "--help" || arg == "-h"; })) {
+        std::ranges::any_of(argBeg, argEnd, [](std::string_view arg) { return arg == "--help" || arg == "-h"; })) {
         printHelp(argv[0]);
         return 0;
     }
 
-    if(auto it = std::find_if(argBeg, argEnd,
+    if(auto it = std::ranges::find_if(argBeg, argEnd,
         [](std::string_view arg) { return arg == "--save"; }); it != argEnd) {
         std::string_view path = localcfg;
 

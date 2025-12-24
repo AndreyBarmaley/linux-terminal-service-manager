@@ -59,7 +59,7 @@ namespace LTSM {
             int rfbUserKeycode(uint32_t) const override;
 
             void serverHandshakeVersionEvent(void) override;
-            size_t frameRateOption(void) const override {
+            uint32_t frameRateOption(void) const override {
                 return 16;
             }
 

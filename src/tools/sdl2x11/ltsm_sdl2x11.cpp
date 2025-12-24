@@ -80,8 +80,7 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 std::for_each(beg, end, [&](auto & atom) {
-                    if(std::any_of(targets.begin(), targets.end(),
-                        [&](auto & trgt) { return atom == trgt; })) {
+                    if(std::ranges::any_of(targets, [&](auto & trgt) { return atom == trgt; })) {
                         return copy->convertSelection(atom, *this);
                     }
                 });
@@ -108,8 +107,7 @@ namespace LTSM {
         size_t selectionSourceSize(xcb_atom_t atom) const override {
             auto targets = selectionSourceTargets();
 
-            if(std::none_of(targets.begin(), targets.end(),
-                [&](auto & trgt) { return atom == trgt; })) {
+            if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
                 return 0;
             }
 
@@ -119,8 +117,7 @@ namespace LTSM {
         std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
             auto targets = selectionSourceTargets();
 
-            if(std::none_of(targets.begin(), targets.end(),
-                [&](auto & trgt) { return atom == trgt; })) {
+            if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
                 return {};
             }
 

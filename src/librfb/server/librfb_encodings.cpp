@@ -447,8 +447,7 @@ namespace LTSM {
             int back = map.maxWeightPixel();
             std::list<XCB::RegionPixel> goods = rreProcessing(reg, fb, back);
             // all other color
-            bool foreground = std::all_of(goods.begin(), goods.end(),
-            [col = goods.front().second](auto & pair) {
+            bool foreground = std::ranges::all_of(goods, [col = goods.front().second](auto & pair) {
                 return pair.pixel() == col;
             });
 

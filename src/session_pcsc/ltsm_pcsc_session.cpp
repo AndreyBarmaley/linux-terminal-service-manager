@@ -48,8 +48,7 @@ namespace PcscLite {
 
     ReaderState* findReaderState(const std::string & name) {
         std::scoped_lock guard{ readersLock };
-        auto it = std::find_if(readers.begin(), readers.end(),
-        [ &](auto & rd) {
+        auto it = std::ranges::find_if(readers, [&](auto & rd) {
             return 0 == name.compare(rd.name);
         });
 
@@ -83,8 +82,7 @@ namespace PcscLite {
                 continue;
             }
 
-            auto it = std::find_if(names.begin(), names.end(),
-            [&rd](auto & name) {
+            auto it = std::ranges::find_if(names, [&rd](auto & name) {
                 return 0 == name.compare(rd.name);
             });
 
@@ -1603,8 +1601,7 @@ namespace LTSM {
         std::scoped_lock guard{ PcscLite::readersLock };
 
         for(const auto & name : names) {
-            auto it = std::find_if(PcscLite::readers.begin(), PcscLite::readers.end(),
-            [&name](auto & rd) {
+            auto it = std::ranges::find_if(PcscLite::readers, [&name](auto & rd) {
                 return 0 == name.compare(rd.name);
             });
 
@@ -1612,8 +1609,7 @@ namespace LTSM {
             if(it == PcscLite::readers.end()) {
                 Application::debug(DebugType::Pcsc, "%s: added reader, name: `%s'", __FUNCTION__, name.c_str());
                 // find unused slot
-                auto rd = std::find_if(PcscLite::readers.begin(), PcscLite::readers.end(),
-                [](auto & rd) {
+                auto rd = std::ranges::find_if(PcscLite::readers, [](auto & rd) {
                     return 0 == rd.name[0];
                 });
 
@@ -1720,7 +1716,7 @@ namespace LTSM {
 
     uint64_t PcscSessionBus::clientCanceledNotify(uint32_t ctx) {
         const std::scoped_lock guard{ clientsLock };
-        auto it = std::find_if(clients.begin(), clients.end(), [&ctx](auto & cl) {
+        auto it = std::ranges::find_if(clients, [&ctx](auto & cl) {
             return 0 <= cl.id() && cl.localContext() == ctx;
         });
 

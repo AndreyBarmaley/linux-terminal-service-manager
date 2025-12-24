@@ -180,9 +180,7 @@ class X11Test : public XCB::RootDisplay {
         auto modes2 = getRandrOutputModes(curout);
 
         for(auto info : modes) {
-            if(std::any_of(modes2.begin(), modes2.end(), [&](auto & id) {
-            return id == info.id;
-        })) {
+            if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
                 Application::info("mode 0x%08x, width: %d, height: %d, clock: %d", info.id, info.width, info.height, info.dot_clock);
             }
         }

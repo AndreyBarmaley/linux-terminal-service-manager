@@ -693,7 +693,7 @@ namespace LTSM::Connector {
         while(it1 != vec.end()) {
             // calc blocks
             size_t totalSize = 0;
-            auto it2 = std::find_if(it1, vec.end(), [ &](auto & st) {
+            auto it2 = std::ranges::find_if(it1, vec.end(), [&](auto & st) {
                 if(totalSize + (st.cbCompMainBodySize + hdrsz) > freeRdp->peer->settings->MultifragMaxRequestSize) {
                     return true;
                 }

@@ -665,7 +665,7 @@ namespace LTSM {
     }
 
     PKCS11::RawDataRef PKCS11::ObjectInfo::getRawData(const CK_ATTRIBUTE_TYPE & type) const {
-        auto it = std::find_if(attrs.begin(), attrs.end(), [&](auto & attr) {
+        auto it = std::ranges::find_if(attrs, [&](auto & attr) {
             return attr.type == type;
         });
 
@@ -686,7 +686,7 @@ namespace LTSM {
     }
 
     bool PKCS11::ObjectInfo::getBool(const CK_ATTRIBUTE_TYPE & type) const {
-        auto it = std::find_if(attrs.begin(), attrs.end(), [&](auto & attr) {
+        auto it = std::ranges::find_if(attrs, [&](auto & attr) {
             return attr.type == type;
         });
 

@@ -174,7 +174,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 #ifdef LTSM_WITH_OPUS
 
     if(! format) {
-        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt) {
+        auto it = std::ranges::find_if(formats, [](auto & fmt) {
             return fmt.type == AudioEncoding::OPUS;
         });
 
@@ -193,7 +193,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 #endif
 
     if(! format) {
-        auto it = std::find_if(formats.begin(), formats.end(), [](auto & fmt) {
+        auto it = std::ranges::find_if(formats, [](auto & fmt) {
             return fmt.type == AudioEncoding::PCM;
         });
 

@@ -402,7 +402,7 @@ namespace LTSM::Manager {
 
     XvfbSessionPtr XvfbSessions::findUserSession(const std::string & username) {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::find_if(sessions.begin(), sessions.end(), [&](auto & ptr) {
+        auto it = std::ranges::find_if(sessions, [&](auto & ptr) {
             return ptr &&
                    (ptr->mode == SessionMode::Started || ptr->mode == SessionMode::Connected || ptr->mode == SessionMode::Disconnected) &&
                    username == ptr->userInfo->user();
@@ -413,7 +413,7 @@ namespace LTSM::Manager {
 
     XvfbSessionPtr XvfbSessions::findDisplaySession(int screen) {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::find_if(sessions.begin(), sessions.end(), [& screen](auto & ptr) {
+        auto it = std::ranges::find_if(sessions, [&screen](auto & ptr) {
             return ptr && ptr->displayNum == screen;
         });
 
@@ -448,7 +448,7 @@ namespace LTSM::Manager {
 
     void XvfbSessions::removeDisplaySession(int screen) {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::find_if(sessions.begin(), sessions.end(), [& screen](auto & ptr) {
+        auto it = std::ranges::find_if(sessions, [&screen](auto & ptr) {
             return ptr && ptr->displayNum == screen;
         });
 
@@ -466,16 +466,13 @@ namespace LTSM::Manager {
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) {
-            return ptr && ptr->displayNum == freeDisplay;
-        })) {
+            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
                 break;
             }
         }
 
         if(freeDisplay <= max) {
-            auto it = std::find_if(sessions.begin(), sessions.end(),
-            [](auto & ptr) {
+            auto it = std::ranges::find_if(sessions, [](auto & ptr) {
                 return ! ptr;
             });
 
@@ -618,11 +615,9 @@ namespace LTSM::Manager {
         }
 
         for(auto fd : pids) {
-            if(std::any_of(exclude.begin(), exclude.end(), [&](auto & val) {
-            return val == fd;
-        }))
-            continue;
-
+            if(std::ranges::any_of(exclude, [&](auto & val) { return val == fd; })) {
+                continue;
+            }
             close(fd);
         }
     }
@@ -1361,7 +1356,7 @@ namespace LTSM::Manager {
     XvfbSessionPtr DBusAdaptor::runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
             UserInfoPtr userInfo) {
         std::scoped_lock guard{ lockSessions };
-        auto its = std::find_if(sessions.begin(), sessions.end(), [](auto & ptr) {
+        auto its = std::ranges::find_if(sessions, [](auto & ptr) {
             return ! ptr;
         });
 
@@ -1375,9 +1370,7 @@ namespace LTSM::Manager {
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) {
-            return ptr && ptr->displayNum == freeDisplay;
-        })) {
+            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
                 break;
             }
         }
@@ -2248,9 +2241,7 @@ namespace LTSM::Manager {
             if(auto groupInfo = Tools::getGroupInfo(configGetString("transfer:group:only"))) {
                 auto gids = xvfb->userInfo->groups();
 
-                if(std::none_of(gids.begin(), gids.end(), [&](auto & gid) {
-                return gid == groupInfo->gid();
-                })) {
+                if(std::ranges::none_of(gids, [&](auto & gid) { return gid == groupInfo->gid(); })) {
                     Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
                     busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
                                   NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
@@ -2478,8 +2469,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        if(std::none_of(users.begin(), users.end(),
-            [&](auto & val) { return val == login; })) {
+        if(std::ranges::none_of(users, [&](auto & val) { return val == login; })) {
             Application::error("%s: %s, display: %" PRId32 ", user: %s",
                                __FUNCTION__, "login not found", xvfb->displayNum, login.c_str());
             emitLoginFailure(xvfb->displayNum, "login not found");
@@ -3593,14 +3583,12 @@ namespace LTSM::Manager {
 
         auto modes = { "ro", "rw", "wo" };
 
-        if(std::none_of(modes.begin(), modes.end(),
-            [&](auto & val) { return cmode == val; })) {
+        if(std::ranges::none_of(modes, [&](auto & val) { return cmode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "client", cmode.c_str());
             return false;
         }
 
-        if(std::none_of(modes.begin(), modes.end(),
-            [&](auto & val) { return smode == val; })) {
+        if(std::ranges::none_of(modes, [&](auto & val) { return smode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "server", smode.c_str());
             return false;
         }

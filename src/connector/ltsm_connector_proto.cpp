@@ -329,7 +329,7 @@ namespace LTSM::Connector {
         }
     }
 
-    size_t ConnectorLtsm::frameRateOption(void) const {
+    uint32_t ConnectorLtsm::frameRateOption(void) const {
         return _frameRate;
     }
 
@@ -372,7 +372,7 @@ namespace LTSM::Connector {
             auto names = keyboard->getStdVector<std::string>("layouts");
             busSetSessionKeyboardLayouts(displayNum(), names);
             auto layout = keyboard->getString("current");
-            auto it = std::find_if(names.begin(), names.end(), [ &](auto & str) {
+            auto it = std::ranges::find_if(names, [&](auto & str) {
                 return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
             });
 
@@ -448,7 +448,7 @@ namespace LTSM::Connector {
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
                 Application::debug(DebugType::App, "%s: layout: %s", __FUNCTION__, layout.c_str());
                 auto names = xkb->getNames();
-                auto it = std::find_if(names.begin(), names.end(), [ &](auto & str) {
+                auto it = std::ranges::find_if(names, [&](auto & str) {
                     return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
                 });
 
@@ -500,9 +500,7 @@ namespace LTSM::Connector {
                 std::string fname = jo2->getString("file");
                 size_t fsize = jo2->getInteger("size");
 
-                if(std::any_of(_transferPlanned.begin(), _transferPlanned.end(), [ &](auto & st) {
-                return fname == std::get<0>(st);
-                })) {
+                if(std::ranges::any_of(_transferPlanned, [&](auto & st) { return fname == std::get<0>(st); })) {
                     Application::warning("%s: found planned and skipped, file: %s", __FUNCTION__, fname.c_str());
                     continue;
                 }
@@ -583,7 +581,7 @@ namespace LTSM::Connector {
 
         if(display == displayNum()) {
             std::scoped_lock<std::mutex> guard{_lockTransfer};
-            auto it = std::find_if(_transferPlanned.begin(), _transferPlanned.end(), [ &](auto & st) {
+            auto it = std::ranges::find_if(_transferPlanned, [&](auto & st) {
                 return filepath == std::get<0>(st);
             });
 

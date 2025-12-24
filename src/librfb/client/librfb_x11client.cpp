@@ -144,10 +144,7 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
-                    if(std::any_of(beg, end,
-                        [&](auto & trgt) { return atom == trgt; })) {
-                        return copy->convertSelection(atom, *this);
-                    }
+                    if(std::ranges::any_of(beg, end, [&](auto & trgt) { return atom == trgt; })) { return copy->convertSelection(atom, *this); }
                 }
             }
         }
@@ -172,8 +169,7 @@ namespace LTSM {
         Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32, __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(),
-            [&](auto & trgt) { return atom == trgt; })) {
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
             return false;
         }
 
@@ -212,8 +208,7 @@ namespace LTSM {
         Application::debug(DebugType::X11Cli, "%s, atom: 0x%08" PRIx32, __FUNCTION__, atom);
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(),
-            [&](auto & trgt) { return atom == trgt; })) {
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
             return 0;
         }
 
@@ -226,8 +221,7 @@ namespace LTSM {
 
         auto targets = selectionSourceTargets();
 
-        if(std::none_of(targets.begin(), targets.end(),
-            [&](auto & trgt) { return atom == trgt; })) {
+        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
             return {};
         }
 

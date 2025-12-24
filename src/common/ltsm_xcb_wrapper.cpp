@@ -1034,9 +1034,7 @@ namespace LTSM {
         auto modes = getOutputModes(output);
 
         // mode present
-        if(std::any_of(modes.begin(), modes.end(), [&](auto & val) {
-        return val == mode;
-    })) {
+        if(std::ranges::any_of(modes, [&](auto & val) { return val == mode; })) {
             return true;
         }
 
@@ -1062,9 +1060,7 @@ namespace LTSM {
         auto modes = getOutputModes(output);
 
         // mode not found
-        if(std::none_of(modes.begin(), modes.end(), [&](auto & val) {
-        return val == mode;
-    })) {
+        if(std::ranges::none_of(modes, [&](auto & val) { return val == mode; })) {
             return true;
         }
 
@@ -1092,9 +1088,7 @@ namespace LTSM {
             for(const auto & output : outputs) {
                 auto modes = getOutputModes(output);
 
-                if(std::none_of(modes.begin(), modes.end(), [&](auto & val) {
-                return mode == val;
-            })) {
+                if(std::ranges::none_of(modes, [&](auto & val) { return mode == val; })) {
                     Application::error("%s: output mode not found, mode: %" PRIu32 ", output: %" PRIu32, __FUNCTION__, mode, output);
                     return false;
                 }
@@ -1177,8 +1171,7 @@ namespace LTSM {
         }
 
         auto screenSizes = getScreenSizes();
-        auto its = std::find_if(screenSizes.begin(), screenSizes.end(),
-        [&](auto & ss) {
+        auto its = std::ranges::find_if(screenSizes, [&](auto & ss) {
             return ss.width == szw && ss.height == szh;
         });
 
@@ -1189,8 +1182,7 @@ namespace LTSM {
         if(its == screenSizes.end()) {
             // add new mode
             auto outputs = getOutputs();
-            auto ito = std::find_if(outputs.begin(), outputs.end(),
-            [this](auto & id) {
+            auto ito = std::ranges::find_if(outputs, [this](auto & id) {
                 auto info = this->getOutputInfo(id);
                 return info && info->connected;
             });
@@ -1215,8 +1207,7 @@ namespace LTSM {
 
             // fixed size
             auto modes = getModesInfo();
-            auto itm = std::find_if(modes.begin(), modes.end(),
-            [ = ](auto & val) {
+            auto itm = std::ranges::find_if(modes, [=](auto & val) {
                 return val.id == mode;
             });
 
@@ -1232,8 +1223,7 @@ namespace LTSM {
 
             // rescan info
             screenSizes = getScreenSizes();
-            its = std::find_if(screenSizes.begin(), screenSizes.end(),
-            [&](auto & ss) {
+            its = std::ranges::find_if(screenSizes, [&](auto & ss) {
                 return ss.width == szw && ss.height == szh;
             });
 
@@ -1695,8 +1685,7 @@ namespace LTSM {
             return;
         }
 
-        auto it = std::find_if(requestsIncr.begin(), requestsIncr.end(),
-        [ = ](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
             return req.ev.requestor == ev->window && req.ev.property == ev->atom && req.ev.time < ev->time;
         });
 
@@ -1844,9 +1833,7 @@ namespace LTSM {
         }
 
         // target not found
-        if(std::none_of(targets.begin(), targets.end(), [&](auto & atom) {
-        return atom == ev->target;
-    })) {
+        if(std::ranges::none_of(targets, [&](auto & atom) { return atom == ev->target; })) {
             sendNotifyDiscard(ptr, ev);
             eventRequestWarning(ptr, ev);
             Application::warning("%s: invalid request, unknown %s atom", __FUNCTION__, "target");
@@ -1862,8 +1849,7 @@ namespace LTSM {
 
         eventRequestDebug(ptr, ev);
 
-        auto it = std::find_if(requestsIncr.begin(), requestsIncr.end(),
-        [ = ](auto & req) {
+        auto it = std::ranges::find_if(requestsIncr, [=](auto & req) {
             return req.ev.requestor == ev->requestor && req.ev.selection == ev->selection &&
                    req.ev.target == ev->target && req.ev.property == ev->property;
         });
@@ -3138,7 +3124,7 @@ namespace LTSM {
             auto & monitor = monitors[it];
             auto modes = _modRandr->getModesInfo();
 
-            auto itm = std::find_if(modes.begin(), modes.end(), [&](auto & info) {
+            auto itm = std::ranges::find_if(modes, [&](auto & info) {
                 return info.width == monitor.width && info.height == monitor.height;
             });
 

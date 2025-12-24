@@ -48,7 +48,7 @@ namespace LTSM::Connector {
         std::list<TupleFileSize> _transferPlanned;
         std::mutex _lockTransfer;
 
-        std::atomic<uint32_t> _frameRate{16};
+        std::atomic<uint32_t> _frameRate{10};
         std::atomic<bool> _loginWidgetStarted{false};
         std::atomic<bool> _userSession{false};
         std::atomic<bool> _x11NoDamage{false};
@@ -69,7 +69,7 @@ namespace LTSM::Connector {
         bool xcbNoDamageOption(void) const override;
         void xcbDisableMessages(bool) override;
         bool xcbAllowMessages(void) const override;
-        size_t frameRateOption(void) const override;
+        uint32_t frameRateOption(void) const override;
 
         bool rfbClipboardEnable(void) const override;
         bool rfbDesktopResizeEnabled(void) const override;

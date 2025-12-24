@@ -173,9 +173,7 @@ namespace LTSM {
     }
 
     void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
-        bool sampleNotSilent = std::any_of(ptr, ptr + len, [](auto & val) {
-            return val != 0;
-        });
+        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) { return val != 0; });
 
         if(sampleNotSilent) {
             if(! encoder) {
@@ -265,8 +263,7 @@ namespace LTSM {
     bool AudioSessionBus::connectChannel(const std::string & clientSocket) {
         Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
 
-        if(std::any_of(clients.begin(), clients.end(),
-            [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
+        if(std::ranges::any_of(clients, [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
             Application::error("%s: socket busy, path: `%s'", __FUNCTION__, clientSocket.c_str());
             return false;
         }
