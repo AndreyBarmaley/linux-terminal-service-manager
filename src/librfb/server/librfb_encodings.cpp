@@ -781,7 +781,10 @@ namespace LTSM {
         for(const auto & str : encopts) {
             // parce zlevel
             if(startsWith(str, "zlev")) {
-                if(auto it = str.find(':'); it != str.npos && ++it != str.npos) {
+                if(auto it = str.find(':'); it != str.npos) {
+                    if(++it == str.npos) {
+                        continue;
+                    }
                     try {
                         zlevel = std::stoi(str.substr(it));
 
@@ -887,7 +890,10 @@ namespace LTSM {
         for(const auto & str : encopts) {
             // parce quality
             if(startsWith(str, "qual")) {
-                if(auto it = str.find(':'); it != str.npos && ++it != str.npos) {
+                if(auto it = str.find(':'); it != str.npos) {
+                    if(++it == str.npos) {
+                        continue;
+                    }
                     try {
                         jpegQuality = std::stoi(str.substr(it));
 
@@ -902,40 +908,42 @@ namespace LTSM {
 
                     Application::info("%s: set quality: %d", __FUNCTION__, jpegQuality);
                 }
-            } else
-
+            } else if(startsWith(str, "samp")) {
                 // parce sample
-                if(startsWith(str, "samp")) {
-                    if(auto it = str.find(':'); it != str.npos && ++it != str.npos) {
-                        if(0 == str.compare(it, 3, "420")) {
-                            jpegSamp = TJSAMP_420;
-                            fullscreenUpdate = true;
-                        } else if(0 == str.compare(it, 3, "422")) {
-                            jpegSamp = TJSAMP_422;
-                            fullscreenUpdate = true;
-                        } else if(0 == str.compare(it, 3, "440")) {
-                            jpegSamp = TJSAMP_440;
-                            fullscreenUpdate = true;
-                        } else if(0 == str.compare(it, 3, "444")) {
-                            jpegSamp = TJSAMP_444;
-                            fullscreenUpdate = true;
-                        }
+                if(auto it = str.find(':'); it != str.npos) {
+                    if(++it == str.npos) {
+                        continue;
+                    }
+
+                    if(0 == str.compare(it, 3, "420")) {
+                        jpegSamp = TJSAMP_420;
+                        fullscreenUpdate = true;
+                    } else if(0 == str.compare(it, 3, "422")) {
+                        jpegSamp = TJSAMP_422;
+                        fullscreenUpdate = true;
+                    } else if(0 == str.compare(it, 3, "440")) {
+                        jpegSamp = TJSAMP_440;
+                        fullscreenUpdate = true;
+                    } else if(0 == str.compare(it, 3, "444")) {
+                        jpegSamp = TJSAMP_444;
+                        fullscreenUpdate = true;
+                    }
 
 #ifndef LTSM_CENTOS7
-                        else if(0 == str.compare(it, 3, "411")) {
-                            jpegSamp = TJSAMP_411;
-                            fullscreenUpdate = true;
-                        }
+                    else if(0 == str.compare(it, 3, "411")) {
+                        jpegSamp = TJSAMP_411;
+                        fullscreenUpdate = true;
+                    }
 
 #endif
-                        else if(0 == str.compare(it, 4, "gray")) {
-                            jpegSamp = TJSAMP_GRAY;
-                            fullscreenUpdate = true;
-                        }
-
-                        Application::info("%s: set sample: %s", __FUNCTION__, str.substr(it).c_str());
+                    else if(0 == str.compare(it, 4, "gray")) {
+                        jpegSamp = TJSAMP_GRAY;
+                        fullscreenUpdate = true;
                     }
+
+                    Application::info("%s: set sample: %s", __FUNCTION__, str.substr(it).c_str());
                 }
+            }
         }
 
         return fullscreenUpdate;

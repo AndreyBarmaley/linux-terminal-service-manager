@@ -132,7 +132,7 @@ class X11Test : public XCB::RootDisplay {
         auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
         auto sizes = randr->getScreenSizes();
 
-        if(std::ranges::any_of(sizes.begin(), [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
+        if(std::ranges::any_of(sizes, [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
             Application::warning("mode present, size: %d, %d", nsz.width, nsz.height);
             return false;
         }
