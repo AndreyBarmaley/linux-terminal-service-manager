@@ -353,9 +353,7 @@ namespace LTSM {
         }
     };
 
-    JsonArray & operator<< (JsonArray &, const char*);
-    JsonArray & operator<< (JsonArray &, const std::string &);
-    JsonArray & operator<< (JsonArray &, const std::string_view &);
+    JsonArray & operator<< (JsonArray &, std::string_view);
     //
     JsonArray & operator<< (JsonArray &, int);
     JsonArray & operator<< (JsonArray &, double);

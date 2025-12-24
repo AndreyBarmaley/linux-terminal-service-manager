@@ -309,7 +309,7 @@ namespace LTSM {
                 struct sockaddr_un sockaddr;
                 std::memset(&sockaddr, 0, sizeof(struct sockaddr_un));
                 sockaddr.sun_family = AF_UNIX;
-                const std::string & native = path.native();
+                const auto & native = path.native();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1) {
                     Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
@@ -539,7 +539,7 @@ namespace LTSM {
         return res;
     }
 
-    std::vector<uint8_t> Tools::base64Decode(const std::string & str) {
+    std::vector<uint8_t> Tools::base64Decode(std::string_view str) {
         std::vector<uint8_t> res;
 
         if(0 < str.length() && 0 == (str.length() % 4)) {
@@ -691,14 +691,6 @@ namespace LTSM {
         return "";
     }
 
-    std::string Tools::join(const std::list<std::string> & cont, std::string_view sep) {
-        return join(cont.begin(), cont.end(), sep);
-    }
-
-    std::string Tools::join(const std::vector<std::string> & cont, std::string_view sep) {
-        return join(cont.begin(), cont.end(), sep);
-    }
-
     std::string Tools::replace(std::string_view src, std::string_view pred, std::string_view val) {
         std::string res{src.begin(), src.end()};
         size_t pos = std::string::npos;
@@ -711,9 +703,7 @@ namespace LTSM {
     }
 
     std::filesystem::path Tools::x11UnixPath(int display) {
-        std::filesystem::path path{"/tmp/.X11-unix/X"};
-        path += std::to_string(display);
-        return path;
+        return std::filesystem::path{"/tmp"} / ".X11-unix" / std::string("X").append(std::to_string(display));
     }
 
     std::string Tools::replace(std::string_view src, std::string_view pred, int val) {
@@ -750,7 +740,7 @@ namespace LTSM {
         std::string result;
 
         if(! pipe) {
-            Application::error("popen failed: `%s'", cmd.c_str());
+            Application::error("%s: popen failed: `%s'", __FUNCTION__, cmd.c_str());
             return result;
         }
 

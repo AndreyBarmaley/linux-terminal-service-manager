@@ -751,7 +751,7 @@ namespace LTSM::Manager {
             signal(SIGHUP, SIG_IGN);
 
             Application::info("%s: pid: %" PRId32 ", cmd: `%s %s'",
-                              __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params.begin(), params.end(), " ").c_str());
+                              __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params, " ").c_str());
 
             if(! switchToUser(*xvfb->userInfo)) {
                 runChildFailure(-1);
@@ -926,7 +926,7 @@ namespace LTSM::Manager {
             }
 
             Application::info("%s: request for: %s, display: %" PRId32 ", cmd: `%s %s'",
-                              __FUNCTION__, xvfb->userInfo->user(), xvfb->displayNum, cmd.c_str(), Tools::join(params.begin(), params.end(), " ").c_str());
+                              __FUNCTION__, xvfb->userInfo->user(), xvfb->displayNum, cmd.c_str(), Tools::join(params, " ").c_str());
 
             if(! std::filesystem::is_directory(xvfb->userInfo->home(), err)) {
                 Application::error("%s: %s, path: `%s', uid: %" PRId32,
@@ -1493,7 +1493,7 @@ namespace LTSM::Manager {
             arg = Tools::replace(arg, "%{authfile}", sess->xauthfile.native());
         }
 
-        Application::debug(DebugType::App, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), Tools::join(xvfbArgs.begin(), xvfbArgs.end(), " ").c_str());
+        Application::debug(DebugType::App, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), Tools::join(xvfbArgs, " ").c_str());
 
         try {
             sess->pid1 = Application::forkMode();
@@ -2575,7 +2575,7 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::busSetSessionKeyboardLayouts(const int32_t & display, const std::vector<std::string> & layouts) {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", layouts: [%s]",
-                           __FUNCTION__, display, Tools::join(layouts.begin(), layouts.end(), ",").c_str());
+                           __FUNCTION__, display, Tools::join(layouts, ",").c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
             if(layouts.empty()) {

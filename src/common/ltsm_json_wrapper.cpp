@@ -163,17 +163,7 @@ namespace LTSM {
         return jv;
     }
 
-    JsonArray & operator<< (JsonArray & jv, const char* st) {
-        jv.addString(st);
-        return jv;
-    }
-
-    JsonArray & operator<< (JsonArray & jv, const std::string_view & st) {
-        jv.addString(st);
-        return jv;
-    }
-
-    JsonArray & operator<< (JsonArray & jv, const std::string & st) {
+    JsonArray & operator<< (JsonArray & jv, std::string_view st) {
         jv.addString(st);
         return jv;
     }
@@ -246,15 +236,14 @@ namespace LTSM {
 
     int JsonString::getInteger(void) const {
         auto content = getString();
-        int res = 0;
 
         try {
-            res = std::stoi(content, nullptr, 0);
+            return std::stoi(content, nullptr, 0);
         } catch(const std::invalid_argument &) {
             Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
         }
 
-        return res;
+        return 0;
     }
 
     std::string JsonString::getString(void) const {
@@ -263,15 +252,14 @@ namespace LTSM {
 
     double JsonString::getDouble(void) const {
         auto content = getString();
-        double res = 0;
 
         try {
-            res = std::stod(content, nullptr);
+            return std::stod(content, nullptr);
         } catch(const std::invalid_argument &) {
             Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
         }
 
-        return res;
+        return 0;
     }
 
     bool JsonString::getBoolean(void) const {
@@ -285,15 +273,13 @@ namespace LTSM {
             return true;
         }
 
-        int res = 0;
-
         try {
-            res = std::stoi(content, nullptr, 0);
+            return static_cast<bool>(std::stoi(content, nullptr, 0));
         } catch(const std::invalid_argument &) {
             Application::error("%s: not boolean: `%s'", __FUNCTION__, content.c_str());
         }
 
-        return res;
+        return false;
     }
 
     std::string JsonString::toString(void) const {

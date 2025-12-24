@@ -285,7 +285,7 @@ namespace LTSM {
         MemoryStream & operator<<(const uint16_t &);
         MemoryStream & operator<<(const uint32_t &);
         MemoryStream & operator<<(const uint64_t &);
-        MemoryStream & operator<<(const std::string_view &);
+        MemoryStream & operator<<(std::string_view);
         MemoryStream & operator<<(const std::vector<uint8_t> &);
 
         /// @brief: fixed data from array

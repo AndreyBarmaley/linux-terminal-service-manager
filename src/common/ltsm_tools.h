@@ -176,7 +176,7 @@ namespace LTSM {
         std::vector<uint8_t> zlibUncompress(const ByteArray &, size_t real = 0);
 
         std::string base64Encode(const ByteArray &);
-        std::vector<uint8_t> base64Decode(const std::string &);
+        std::vector<uint8_t> base64Decode(std::string_view);
 
 #if __cplusplus >= 202002L
         template<typename Iterator>
@@ -228,8 +228,10 @@ namespace LTSM {
             return os.str();
         }
 
-        std::string join(const std::list<std::string> &, std::string_view sep = "");
-        std::string join(const std::vector<std::string> &, std::string_view sep = "");
+        template<typename Container>
+        std::string join(const Container & cont, std::string_view sep = "") {
+            return join(cont.begin(), cont.end(), sep);
+        }
 
         std::string lower(std::string_view);
         std::string runcmd(const std::string &);

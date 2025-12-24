@@ -952,21 +952,21 @@ namespace LTSM {
 
             mode_info.dot_clock = clock * 1000000;
             it = std::next(it);
-            mode_info.width = std::stod(*it);
+            mode_info.width = std::stoi(*it);
             it = std::next(it);
-            mode_info.hsync_start = std::stod(*it);
+            mode_info.hsync_start = std::stoi(*it);
             it = std::next(it);
-            mode_info.hsync_end = std::stod(*it);
+            mode_info.hsync_end = std::stoi(*it);
             it = std::next(it);
-            mode_info.htotal = std::stod(*it);
+            mode_info.htotal = std::stoi(*it);
             it = std::next(it);
-            mode_info.height = std::stod(*it);
+            mode_info.height = std::stoi(*it);
             it = std::next(it);
-            mode_info.vsync_start = std::stod(*it);
+            mode_info.vsync_start = std::stoi(*it);
             it = std::next(it);
-            mode_info.vsync_end = std::stod(*it);
+            mode_info.vsync_end = std::stoi(*it);
             it = std::next(it);
-            mode_info.vtotal = std::stod(*it);
+            mode_info.vtotal = std::stoi(*it);
             it = std::next(it);
         } catch(const std::exception &) {
             Application::error("%s: unknown format outputs from cvt", __FUNCTION__);
@@ -1566,7 +1566,7 @@ namespace LTSM {
         }
 
         // set _wm_name
-        const std::string name("LTSM_SELECTION_PASTE");
+        std::string_view name{"LTSM_SELECTION_PASTE"};
 
         xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, selectionWin,
                             Atom::wmName, Atom::utf8String, 8, name.size(), name.data());
@@ -1939,7 +1939,7 @@ namespace LTSM {
         }
 
         // set _wm_name
-        const std::string name("LTSM_SELECTION_COPY");
+        std::string_view name{"LTSM_SELECTION_COPY"};
 
         xcb_change_property(ptr.get(), XCB_PROP_MODE_REPLACE, selectionWin,
                             Atom::wmName, Atom::utf8String, 8, name.size(), name.data());

@@ -84,22 +84,22 @@ namespace LTSM::Connector {
         void setAutoLogin(const std::string &, const std::string &);
 
         // freerdp callback func
-        static BOOL cbServerPostConnect(freerdp_peer * client);
-        static BOOL cbServerActivate(freerdp_peer * client);
-        static BOOL cbServerAuthenticate(freerdp_peer * client, const char** user, const char** domain,
+        static BOOL cbServerPostConnect(freerdp_peer* client);
+        static BOOL cbServerActivate(freerdp_peer* client);
+        static BOOL cbServerAuthenticate(freerdp_peer* client, const char** user, const char** domain,
                                          const char** password);
-        static BOOL cbServerSynchronizeEvent(rdpInput * input, UINT32 flags);
-        static BOOL cbServerKeyboardEvent(rdpInput * input, UINT16 flags, UINT16 code);
-        static BOOL cbServerMouseEvent(rdpInput * input, UINT16 flags, UINT16 x, UINT16 y);
-        static BOOL cbServerRefreshRect(rdpContext * context, BYTE count, const RECTANGLE_16 * areas);
-        static BOOL cbServerSuppressOutput(rdpContext * context, BYTE allow, const RECTANGLE_16 * area);
-        static BOOL cbServerRefreshRequest(freerdp_peer * client);
+        static BOOL cbServerSynchronizeEvent(rdpInput* input, UINT32 flags);
+        static BOOL cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code);
+        static BOOL cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+        static BOOL cbServerRefreshRect(rdpContext* context, BYTE count, const RECTANGLE_16* areas);
+        static BOOL cbServerSuppressOutput(rdpContext* context, BYTE allow, const RECTANGLE_16* area);
+        static BOOL cbServerRefreshRequest(freerdp_peer* client);
 
-        static BOOL cbServerClose(freerdp_peer * client);
-        static void cbServerDisconnect(freerdp_peer * client);
-        static BOOL cbServerCapabilities(freerdp_peer * client);
-        static BOOL cbServerAdjustMonitorsLayout(freerdp_peer * client);
-        static BOOL cbServerClientCapabilities(freerdp_peer * client);
+        static BOOL cbServerClose(freerdp_peer* client);
+        static void cbServerDisconnect(freerdp_peer* client);
+        static BOOL cbServerCapabilities(freerdp_peer* client);
+        static BOOL cbServerAdjustMonitorsLayout(freerdp_peer* client);
+        static BOOL cbServerClientCapabilities(freerdp_peer* client);
     };
 }
 
