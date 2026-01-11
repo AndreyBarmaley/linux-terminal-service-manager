@@ -29,6 +29,10 @@
 #include <string>
 #include <filesystem>
 
+#ifdef LTSM_WITH_AUDIT
+#include <libaudit.h>
+#endif
+
 #ifdef LTSM_WITH_JSON
 #include "ltsm_json_wrapper.h"
 #endif
@@ -169,6 +173,21 @@ namespace LTSM {
         virtual void configReloadedEvent(void) {}
     };
 
+#endif
+
+#ifdef LTSM_WITH_AUDIT
+    class AuditLog {
+      int fd = -1;
+
+      public:
+        AuditLog();
+        ~AuditLog();
+
+        AuditLog(const AuditLog &) = delete;
+        AuditLog& operator=(const AuditLog &) = delete;
+
+        void auditUserMessage(int type, const char* msg, const char* hostname, const char* addr, const char* tty, bool success) const;
+    };
 #endif
 }
 

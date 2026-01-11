@@ -424,12 +424,12 @@ namespace LTSM::Connector {
 
         if(nodamage) {
             damageRegion = XCB::RootDisplay::region();
-        } else if(! damageRegion.empty()) {
+        } else if(! damageRegion.isEmpty()) {
             // fix out of screen
             damageRegion = XCB::RootDisplay::region().intersected(damageRegion.align(4));
         }
 
-        if(! damageRegion.empty() && freeRdp->context && freeRdp->context->activated) {
+        if(! damageRegion.isEmpty() && freeRdp->context && freeRdp->context->activated) {
             updatePartFlag = true;
 
             try {

@@ -43,9 +43,9 @@ namespace LTSM {
             Point(int16_t px, int16_t py) : x(px), y(py) {}
 
             Point() = default;
-            ~Point() = default;
+            virtual ~Point() = default;
 
-            inline bool isValid(void) const {
+            virtual bool isValid(void) const {
                 return 0 <= x && 0 <= y;
             }
 
@@ -71,13 +71,13 @@ namespace LTSM {
             Size(uint16_t sw, uint16_t sh) : width(sw), height(sh) {}
 
             Size() = default;
-            ~Size() = default;
+            virtual ~Size() = default;
 
             inline bool isEmpty(void) const {
                 return width == 0 || height == 0;
             }
 
-            void reset(void) {
+            virtual void reset(void) {
                 width = 0;
                 height = 0;
             }
@@ -100,7 +100,7 @@ namespace LTSM {
             PointIterator & operator++(void);
             PointIterator & operator--(void);
 
-            bool isValid(void) const {
+            bool isValid(void) const override {
                 return Point::isValid() && x < limit.width && y < limit.height;
             }
 
@@ -133,7 +133,7 @@ namespace LTSM {
                 return rt.topLeft() != topLeft() || rt.toSize() != toSize();
             }
 
-            void reset(void);
+            void reset(void) override;
 
             void assign(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
             void assign(const Region &);
@@ -141,8 +141,7 @@ namespace LTSM {
             void join(int16_t rx, int16_t ry, uint16_t rw, uint16_t rh);
             void join(const Region &);
 
-            bool empty(void) const;
-            bool invalid(void) const;
+            bool isValid(void) const override;
 
             Region intersected(const Region &) const;
             Region align(size_t) const;

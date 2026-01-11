@@ -41,9 +41,13 @@
 #include <iostream>
 #include <algorithm>
 
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
 #include <systemd/sd-daemon.h>
+#endif
+
+#ifdef LTSM_WITH_AUDIT
+#include <libaudit.h>
 #endif
 
 #include "ltsm_fuse.h"
@@ -956,6 +960,24 @@ namespace LTSM::Manager {
 
     }; // RunAs
 
+#ifdef LTSM_WITH_AUDIT
+    void AuditService::auditServiceStart(void) const {
+        auditUserMessage(AUDIT_SERVICE_START, "service started", nullptr, nullptr, nullptr, 1);
+    }
+
+    void AuditService::auditServiceStop(void) const {
+        auditUserMessage(AUDIT_SERVICE_STOP, "service stopped", nullptr, nullptr, nullptr, 1);
+    }
+
+    void AuditService::auditSessionStart(bool success) const {
+        auditUserMessage(AUDIT_USER_START, "session started", nullptr, nullptr, nullptr, static_cast<int>(success));
+    }
+
+    void AuditService::auditSessionStop(bool success) const {
+        auditUserMessage(AUDIT_USER_END, "session stopped", nullptr, nullptr, nullptr, static_cast<int>(success));
+    }
+#endif
+
     /* DBusAdaptor */
     DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
@@ -965,8 +987,17 @@ namespace LTSM::Manager {
         , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
         , XvfbSessions(300) {
+        //
         checkStartConfig();
-        createXauthDir();
+        createRuntimeDir();
+
+        //
+        saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
+        audioRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "audio" / "%{user}").native();
+        pcscRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "pcsc" / "%{user}").native();
+        pkcs11RuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
+        fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").native();
+        cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").native();
 
         // registry
         registerAdaptor();
@@ -983,10 +1014,35 @@ namespace LTSM::Manager {
                  std::bind(& DBusAdaptor::sessionsCheckConnectedAction, this));
 
         inotifyWatchStart();
+
+#ifdef LTSM_WITH_AUDIT
+        auditLog = std::make_unique<AuditService>();
+        auditLog->auditServiceStart();
+#endif
+
     }
 
     DBusAdaptor::~DBusAdaptor() {
+#ifdef LTSM_WITH_AUDIT
+        auditLog->auditServiceStop();
+#endif
         unregisterAdaptor();
+    }
+
+    void DBusAdaptor::createRuntimeDir(void) const {
+        // create
+        if(! std::filesystem::is_directory(ltsmRuntimeDir)) {
+            std::filesystem::create_directories(ltsmRuntimeDir);
+        }
+
+        // fix mode 0755
+        std::filesystem::permissions(ltsmRuntimeDir, std::filesystem::perms::owner_all |
+                                     std::filesystem::perms::group_read | std::filesystem::perms::group_exec |
+                                     std::filesystem::perms::others_read | std::filesystem::perms::others_exec, std::filesystem::perm_options::replace);
+
+        // find group id
+        gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
+        Tools::setFileOwner(ltsmRuntimeDir, 0, setgid);
     }
 
     void DBusAdaptor::checkStartConfig(void) {
@@ -1226,7 +1282,14 @@ namespace LTSM::Manager {
             this->removeDisplaySession(displayNum);
             this->removeXvfbSocket(displayNum);
             this->emitDisplayRemoved(displayNum);
+
             Application::debug(DebugType::App, "%s: shutdown display: %" PRId32 " %s", "displayShutdown", displayNum, "complete");
+
+            if(notsys) {
+#ifdef LTSM_WITH_AUDIT
+                this->auditLog->auditSessionStop();
+#endif
+            }
         }).detach();
 
         return true;
@@ -1260,11 +1323,11 @@ namespace LTSM::Manager {
         });
     }
 
-    std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) {
-        std::string xauthFileTemplate = configGetString("xauth:file", "/var/run/ltsm/auth_%{display}");
-        xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{pid}", getpid());
-        xauthFileTemplate = Tools::replace(xauthFileTemplate, "%{display}", displayNum);
-        std::filesystem::path xauthFilePath(xauthFileTemplate);
+    std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) const {
+        // format ltsmRuntimeDir / auth_%{display}
+        auto xauthFilePath = ltsmRuntimeDir / "auth_";
+             xauthFilePath += std::to_string(displayNum);
+
         Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, xauthFilePath.c_str());
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
@@ -1869,6 +1932,10 @@ namespace LTSM::Manager {
         runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);
         runSessionScript(newSess, configGetString("session:connect"));
+
+#ifdef LTSM_WITH_AUDIT
+        auditLog->auditSessionStart();
+#endif
         return newSess->displayNum;
     }
 
@@ -2655,8 +2722,7 @@ namespace LTSM::Manager {
                     continue;
                 }
 
-                auto socket = configGetString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
-                xvfb->environments.emplace("SANE_UNIX_PATH", socket);
+                xvfb->environments.emplace("SANE_UNIX_PATH", saneRuntimeFmt);
             } else if(key == "username") {
                 login = val;
             } else if(key == "password") {
@@ -2779,8 +2845,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        auto printerSocket = configGetString("channel:printer:format", "/var/run/ltsm/cups/printer_%{user}");
-        auto socketFolder = std::filesystem::path(printerSocket).parent_path();
+        auto socketFolder = std::filesystem::path(cupsRuntimeFmt).parent_path();
         auto lp = Tools::getGroupGid("lp");
         std::error_code err;
 
@@ -2802,7 +2867,7 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.lp
         Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), lp);
-        printerSocket = Tools::replace(printerSocket, "%{user}", xvfb->userInfo->user());
+        auto printerSocket = Tools::replace(cupsRuntimeFmt, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(printerSocket, err)) {
             std::filesystem::remove(printerSocket, err);
@@ -2895,8 +2960,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
-        auto audioFormat = configGetString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
-        auto audioFolder = std::filesystem::path(Tools::replace(audioFormat, "%{user}", xvfb->userInfo->user()));
+        auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
         if(! std::filesystem::is_directory(audioFolder, err) &&
@@ -2937,8 +3001,7 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & encoding) {
         Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
-        auto audioFormat = configGetString("channel:audio:format", "/var/run/ltsm/audio/%{user}");
-        auto audioFolder = std::filesystem::path(Tools::replace(audioFormat, "%{user}", xvfb->userInfo->user()));
+        auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
@@ -2993,8 +3056,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        auto saneSocket = configGetString("channel:sane:format", "/var/run/ltsm/sane/%{user}");
-        auto socketFolder = std::filesystem::path(saneSocket).parent_path();
+        auto socketFolder = std::filesystem::path(saneRuntimeFmt).parent_path();
         std::error_code err;
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
@@ -3015,7 +3077,7 @@ namespace LTSM::Manager {
 
         // fix owner xvfb.user
         Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
-        saneSocket = Tools::replace(saneSocket, "%{user}", xvfb->userInfo->user());
+        auto saneSocket = Tools::replace(saneRuntimeFmt, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(saneSocket, err)) {
             std::filesystem::remove(saneSocket, err);
@@ -3109,8 +3171,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pcscFormat = configGetString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
-        auto pcscFolder = std::filesystem::path(Tools::replace(pcscFormat, "%{user}", xvfb->userInfo->user()));
+        auto pcscFolder = std::filesystem::path(Tools::replace(pcscRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
         if(! std::filesystem::is_directory(pcscFolder, err) &&
@@ -3150,8 +3211,7 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::stopPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pcscFormat = configGetString("channel:pcsc:format", "/var/run/ltsm/pcsc/%{user}");
-        auto pcscFolder = std::filesystem::path(Tools::replace(pcscFormat, "%{user}", xvfb->userInfo->user()));
+        auto pcscFolder = std::filesystem::path(Tools::replace(pcscRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
@@ -3198,8 +3258,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
-        auto pkcs11Format = configGetString("channel:pkcs11:format", "/var/run/ltsm/pkcs11/%{display}");
-        auto pkcs11Folder = std::filesystem::path(Tools::replace(pkcs11Format, "%{display}", xvfb->displayNum));
+        auto pkcs11Folder = std::filesystem::path(Tools::replace(pkcs11RuntimeFmt, "%{display}", xvfb->displayNum));
         std::error_code err;
 
         if(! std::filesystem::is_directory(pkcs11Folder, err) &&
@@ -3320,8 +3379,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: remote point: %s", __FUNCTION__, remotePoint.c_str());
-        auto userShareFormat = configGetString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
-        auto userShareFolder = Tools::replace(userShareFormat, "%{user}", xvfb->userInfo->user());
+        auto userShareFolder = Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
         std::error_code err;
@@ -3375,8 +3433,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopFuseListener(XvfbSessionPtr xvfb, const std::string & remotePoint) {
-        auto userShareFormat = configGetString("channel:fuse:format", "/var/run/ltsm/fuse/%{user}");
-        auto userShareFolder = Tools::replace(userShareFormat, "%{user}", xvfb->userInfo->user());
+        auto userShareFolder = Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
         auto localPoint = fusePointFolder.native();
@@ -3605,45 +3662,6 @@ namespace LTSM::Manager {
         return true;
     }
 
-    bool DBusAdaptor::createXauthDir(void) {
-        auto xauthFile = configGetString("xauth:file", "/var/run/ltsm/auth_%{display}");
-
-        // find group id
-        gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
-        // check directory
-        auto folderPath = std::filesystem::path(xauthFile).parent_path();
-
-        if(folderPath.empty()) {
-            Application::error("%s: path not found: `%s'",
-                               __FUNCTION__, folderPath.c_str());
-            return false;
-        }
-
-        std::error_code err;
-
-        // create
-        if(! std::filesystem::is_directory(folderPath, err)) {
-            if(! std::filesystem::create_directory(folderPath, err)) {
-                Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                                   __FUNCTION__, "create directory failed", folderPath.c_str(), getuid());
-                return false;
-            }
-        }
-
-        // fix mode 0755
-        std::filesystem::permissions(folderPath, std::filesystem::perms::owner_all |
-                                     std::filesystem::perms::group_read | std::filesystem::perms::group_exec |
-                                     std::filesystem::perms::others_read | std::filesystem::perms::others_exec, std::filesystem::perm_options::replace, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), folderPath.c_str(), getuid());
-        }
-
-        Tools::setFileOwner(folderPath, 0, setgid);
-        return true;
-    }
-
     /* Manager::startService */
     int startService(int argc, const char** argv) {
         bool isBackground = false;
@@ -3705,13 +3723,13 @@ namespace LTSM::Manager {
         serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
         Application::notice("%s: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
 
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
 
         serviceConn->enterEventLoop();
 
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
         Application::notice("%s: service stopped", "ServiceStart");

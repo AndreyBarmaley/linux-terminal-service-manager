@@ -58,6 +58,21 @@ namespace LTSM::Manager {
 
     using system_time_point = std::chrono::system_clock::time_point;
 
+    /// AuditService
+#ifdef LTSM_WITH_AUDIT
+    class AuditService : public AuditLog {
+      public:
+        AuditService() = default;
+        ~AuditService() = default;
+
+        void auditServiceStart(void) const;
+        void auditServiceStop(void) const;
+
+        void auditSessionStart(bool success = true) const;
+        void auditSessionStop(bool success = true) const;
+    };
+#endif
+
     /// PamService
     class PamService {
       protected:
@@ -253,12 +268,22 @@ namespace LTSM::Manager {
     };
 
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
+        const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
+
+        std::string saneRuntimeFmt, audioRuntimeFmt,
+            pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
+
         std::forward_list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
-        std::unique_ptr < Tools::BaseTimer > timer1, timer2, timer3;
+        std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
         std::atomic<bool> loginsDisable = false;
 
+#ifdef LTSM_WITH_AUDIT
+        std::unique_ptr<AuditService> auditLog;
+#endif
+
+    private:
         pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
                                     const ArgsList &, const EnvList &);
         void waitPidBackgroundSafe(pid_t pid);
@@ -271,11 +296,11 @@ namespace LTSM::Manager {
                                                TransferRejectFunc emitTransferReject, PidStatus zenityResult);
 
         void checkStartConfig(void);
-        bool createXauthDir(void);
+        void createRuntimeDir(void) const;
 
       protected:
         void closeSystemSession(XvfbSessionPtr);
-        std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie);
+        std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
         XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
                                                 UserInfoPtr userInfo);
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);

@@ -130,12 +130,12 @@ namespace LTSM {
         }
 
         void Region::join(const Region & reg) {
-            if(invalid()) {
+            if(! isValid()) {
                 x = reg.x;
                 y = reg.y;
                 width = reg.width;
                 height = reg.height;
-            } else if(! reg.empty() && *this != reg) {
+            } else if(! reg.isEmpty() && *this != reg) {
                 /* Horizontal union */
                 auto xm = std::min(x, reg.x);
                 width = std::max(x + width, reg.x + reg.width) - xm;
@@ -147,12 +147,8 @@ namespace LTSM {
             }
         }
 
-        bool Region::empty(void) const {
-            return width == 0 || height == 0;
-        }
-
-        bool Region::invalid(void) const {
-            return x == -1 && y == -1 && empty();
+        bool Region::isValid(void) const {
+            return Point::isValid() && ! isEmpty();
         }
 
         Region Region::intersected(const Region & reg) const {
@@ -162,8 +158,8 @@ namespace LTSM {
         }
 
         bool Region::intersects(const Region & reg1, const Region & reg2) {
-            // check reg1.empty || reg2.empty
-            if(reg1.empty() || reg2.empty()) {
+            // check reg1.isEmpty || reg2.isEmpty
+            if(reg1.isEmpty() || reg2.isEmpty()) {
                 return false;
             }
 
@@ -197,7 +193,7 @@ namespace LTSM {
             // vertical intersection
             res->y = std::max(reg1.y, reg2.y);
             res->height = std::min(reg1.y + reg1.height, reg2.y + reg2.height) - res->y;
-            return ! res->empty();
+            return ! res->isEmpty();
         }
 
         std::list<Region> Region::divideCounts(uint16_t cols, uint16_t rows) const {

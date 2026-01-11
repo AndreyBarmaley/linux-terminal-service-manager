@@ -1,12 +1,8 @@
 {
     "channel:printer:disabled": false,
-    "channel:printer:format": "/var/run/ltsm/cups/printer_%{user}",
     "channel:audio:disabled": false,
-    "channel:audio:format": "/var/run/ltsm/audio/%{user}",
     "channel:pcsc:disabled": false,
-    "channel:pcsc:format": "/var/run/ltsm/pcsc/%{user}",
     "channel:fuse:disabled": false,
-    "channel:fuse:format": "/var/run/ltsm/fuse/%{user}",
     "channel:sane:disabled": false,
 
     "session:started:timeout": 0,
@@ -36,8 +32,6 @@
 
     "display:min": 55,
     "display:max": 99,
-
-    "xauth:file": "/var/run/ltsm/auth_%{display}",
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",

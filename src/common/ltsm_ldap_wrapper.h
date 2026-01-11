@@ -50,6 +50,7 @@ namespace LTSM {
         std::string_view valueString(void) const;
         std::list<std::string_view> valueListString(void) const;
 
+        bool hasValue(std::string_view) const;
         bool hasValue(const char* ptr, size_t len) const;
     };
 

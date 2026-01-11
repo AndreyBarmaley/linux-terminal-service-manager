@@ -725,4 +725,28 @@ namespace LTSM {
         }
     }
 #endif
+
+#ifdef LTSM_WITH_AUDIT
+    AuditLog::AuditLog() {
+        fd = audit_open();
+        if(fd < 0) {
+            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "audit_open", strerror(errno), errno);
+            throw std::runtime_error(NS_FuncName);
+        }
+    }
+
+    AuditLog::~AuditLog() {
+        if(0 <= fd) {
+            audit_close(fd);
+        }
+    }
+
+    void AuditLog::auditUserMessage(int type, const char* msg, const char* hostname, const char* addr, const char* tty, bool success) const {
+        assert(msg);
+
+        if(int seq = audit_log_user_message(fd, type, msg, hostname, addr, tty, static_cast<int>(success)); seq < 0) {
+            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
+        }
+    }
+#endif
 }

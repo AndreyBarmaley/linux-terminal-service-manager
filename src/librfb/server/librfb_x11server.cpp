@@ -241,13 +241,13 @@ namespace LTSM {
                 fullscreenUpdateReq = false;
             }
 
-            if(clientRegion.empty()) {
+            if(clientRegion.isEmpty()) {
                 // wait loop
                 std::this_thread::sleep_for(5ms);
                 continue;
             }
 
-            if(damageRegion.empty()) {
+            if(damageRegion.isEmpty()) {
                 // wait loop
                 std::this_thread::sleep_for(5ms);
             } else {

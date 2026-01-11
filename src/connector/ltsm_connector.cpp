@@ -35,7 +35,7 @@
 #include <iostream>
 #include <filesystem>
 
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
 #include <systemd/sd-daemon.h>
 #endif
@@ -322,11 +322,11 @@ namespace LTSM::Connector {
         int res = 0;
 
         try {
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
             sd_notify(0, "READY=1");
 #endif
             res = connector->communication();
-#ifdef WITH_SYSTEMD
+#ifdef LTSM_WITH_SYSTEMD
             sd_notify(0, "STOPPING=1");
 #endif
         } catch(const std::exception & err) {

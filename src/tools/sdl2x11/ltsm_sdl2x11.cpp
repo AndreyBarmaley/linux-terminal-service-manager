@@ -244,7 +244,7 @@ namespace LTSM {
                     }
                 }
 
-                if(! damage.empty()) {
+                if(! damage.isEmpty()) {
                     delay = false;
 
                     if(auto reply = copyRootImageRegion(damage)) {

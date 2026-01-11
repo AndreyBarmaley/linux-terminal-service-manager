@@ -61,6 +61,19 @@ namespace LTSM {
         return res;
     }
 
+    bool LdapResult::hasValue(std::string_view str) const {
+        int count = valuesCount();
+        auto arr = _vals.get();
+
+        for(int it = 0; it < count; ++it) {
+            if(str == string2view(arr[0]->bv_val, arr[0]->bv_val + arr[0]->bv_len)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     bool LdapResult::hasValue(const char* ptr, size_t len) const {
         int count = valuesCount();
         auto arr = _vals.get();
