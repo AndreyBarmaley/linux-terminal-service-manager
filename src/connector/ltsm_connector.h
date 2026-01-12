@@ -42,6 +42,18 @@ namespace LTSM::Connector {
 
     enum class ConnectorType { VNC, LTSM, RDP };
 
+    /// AuditService
+#ifdef LTSM_WITH_AUDIT
+    class AuditConnector : public AuditLog {
+      public:
+        AuditConnector() = default;
+        ~AuditConnector() = default;
+
+        void auditRemoteConnected(const std::string & ipaddr) const;
+        void auditRemoteDisconnected(const std::string & ipaddr) const;
+    };
+#endif
+
     class DBusProxy : public ApplicationJsonConfig, public sdbus::ProxyInterfaces<Manager::Service_proxy> {
       protected:
         std::list<RenderPrimitivePtr> _renderPrimitives;
@@ -54,6 +66,10 @@ namespace LTSM::Connector {
 
         std::chrono::time_point<std::chrono::steady_clock> _idleSessionTp;
         uint32_t _idleTimeoutSec = 0;
+
+#ifdef LTSM_WITH_AUDIT
+        std::unique_ptr<AuditConnector> auditLog;
+#endif
 
       private:
         // dbus virtual signals

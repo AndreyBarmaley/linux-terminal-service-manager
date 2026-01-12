@@ -70,6 +70,9 @@ namespace LTSM::Manager {
 
         void auditSessionStart(bool success = true) const;
         void auditSessionStop(bool success = true) const;
+
+        void auditUserConnected(const std::string & tty) const;
+        void auditUserDisconnected(const std::string & tty) const;
     };
 #endif
 

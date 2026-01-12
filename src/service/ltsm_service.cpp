@@ -46,10 +46,6 @@
 #include <systemd/sd-daemon.h>
 #endif
 
-#ifdef LTSM_WITH_AUDIT
-#include <libaudit.h>
-#endif
-
 #include "ltsm_fuse.h"
 #include "ltsm_pcsc.h"
 #include "ltsm_audio.h"
@@ -976,6 +972,14 @@ namespace LTSM::Manager {
     void AuditService::auditSessionStop(bool success) const {
         auditUserMessage(AUDIT_USER_END, "session stopped", nullptr, nullptr, nullptr, static_cast<int>(success));
     }
+
+    void AuditService::auditUserConnected(const std::string & tty) const {
+        auditUserMessage(AUDIT_USER_LOGIN, "user connected", nullptr, nullptr, tty.c_str(), 1);
+    }
+
+    void AuditService::auditUserDisconnected(const std::string & tty) const {
+        auditUserMessage(AUDIT_USER_LOGOUT, "user disconnected", nullptr, nullptr, tty.c_str(), 1);
+    }
 #endif
 
     /* DBusAdaptor */
@@ -1253,6 +1257,12 @@ namespace LTSM::Manager {
             return false;
         }
 
+#ifdef LTSM_WITH_AUDIT
+        if(xvfb->mode == SessionMode::Connected) {
+            auditLog->auditUserDisconnected(xvfb->displayAddr);
+        }
+#endif
+
         Application::notice("%s: shutdown display: %" PRId32 " %s", __FUNCTION__, xvfb->displayNum, "starting");
         xvfb->mode = SessionMode::Shutdown;
 
@@ -1261,7 +1271,7 @@ namespace LTSM::Manager {
         }
 
         // dbus no wait, remove background
-        bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
+        const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
 
         if(notSysUser) {
             closeSystemSession(xvfb);
@@ -2101,6 +2111,10 @@ namespace LTSM::Manager {
             xvfb->onlineTimeLimitSec = configGetInteger("session:online:timeout", 0);
             xvfb->mode = SessionMode::Connected;
 
+#ifdef LTSM_WITH_AUDIT
+            auditLog->auditUserConnected(xvfb->displayAddr);
+#endif
+
             emitSessionOnline(xvfb->displayNum, xvfb->userInfo->user());
         } else {
             Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
@@ -2136,6 +2150,10 @@ namespace LTSM::Manager {
             ptr->tpOffline = std::chrono::system_clock::now();
             ptr->offlineTimeLimitSec = configGetInteger("session:offline:timeout", 0);
             ptr->mode = SessionMode::Disconnected;
+
+#ifdef LTSM_WITH_AUDIT
+            auditLog->auditUserDisconnected(ptr->displayAddr);
+#endif
 
             // stop user process
             if(configGetBoolean("session:kill:stop", false)) {

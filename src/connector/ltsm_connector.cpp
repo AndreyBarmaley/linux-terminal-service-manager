@@ -93,6 +93,16 @@ namespace LTSM::Connector {
         return home;
     }
 
+#ifdef LTSM_WITH_AUDIT
+    void AuditConnector::auditRemoteConnected(const std::string & ipaddr) const {
+        auditUserMessage(AUDIT_SERVICE_START, "remote connected", nullptr, ipaddr.c_str(), nullptr, 1);
+    }
+
+    void AuditConnector::auditRemoteDisconnected(const std::string & ipaddr) const {
+        auditUserMessage(AUDIT_SERVICE_STOP, "remote disconnected", nullptr, ipaddr.c_str(), nullptr, 1);
+    }
+#endif
+
     /* DBusProxy */
     DBusProxy::DBusProxy(const ConnectorType & type, const std::filesystem::path & confile, bool debug)
         : ApplicationJsonConfig("ltsm_connector", confile),
@@ -126,10 +136,18 @@ namespace LTSM::Connector {
             Application::setDebugLevel(DebugLevel::Debug);
         }
 
+#ifdef LTSM_WITH_AUDIT
+        auditLog = std::make_unique<AuditConnector>();
+        auditLog->auditRemoteConnected(_remoteaddr);
+#endif
+
         registerProxy();
     }
 
     DBusProxy::~DBusProxy() {
+#ifdef LTSM_WITH_AUDIT
+        auditLog->auditRemoteDisconnected(_remoteaddr);
+#endif
         unregisterProxy();
     }
 

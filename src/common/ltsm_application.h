@@ -181,7 +181,7 @@ namespace LTSM {
 
       public:
         AuditLog();
-        ~AuditLog();
+        virtual ~AuditLog();
 
         AuditLog(const AuditLog &) = delete;
         AuditLog& operator=(const AuditLog &) = delete;
