@@ -1425,7 +1425,7 @@ namespace LTSM::Manager {
             }
         }
     }
-
+/*
     XvfbSessionPtr DBusAdaptor::runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
             UserInfoPtr userInfo) {
         std::scoped_lock guard{ lockSessions };
@@ -1621,7 +1621,264 @@ namespace LTSM::Manager {
         (*its) = std::move(sess);
         return *its;
     }
+*/
+    bool DBusAdaptor::pamOpenSession(UserInfoPtr userInfo, const std::string & password, int displayNum) {
+        // child only
+        Application::info("%s: pid: %" PRId32, __FUNCTION__, getpid());
 
+        auto pam = std::make_unique<PamSession>(configGetString("pam:service"), userInfo->user(), password);
+
+        if(! pam->pamStart(userInfo->user()))
+        {
+            return false;
+        }
+
+        if(! pam->validateAccount())
+        {
+            return false;
+        }
+
+        if(password.size())
+        {
+            if(! pam->authenticate())
+            {
+                return false;
+            }
+        }
+
+        if(! std::filesystem::is_directory(userInfo->home()))
+        {
+            Application::error("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home());
+        }
+
+        if(0 != initgroups(userInfo->user(), userInfo->gid()))
+        {
+            Application::error("%s: %s failed, user: %s, gid: %" PRId32 ", error: %s",
+                __FUNCTION__, "initgroups", userInfo->user(), userInfo->gid(), strerror(errno));
+            return false;
+        }
+
+        if(! pam->openSession())
+        {
+            Application::error("%s: %s, display: %" PRId32 ", user: %s",
+                __FUNCTION__, "PAM open session failed", displayNum, userInfo->user());
+            return false;
+        }
+
+        Application::debug(DebugType::App, "%s: child mode, type: %s, uid: %" PRId32,
+            __FUNCTION__, "session", getuid());
+
+        // pam environments
+        auto environments = pam->getEnvList();
+
+        // putenv: valid string
+        for(const auto & env : environments)
+        {
+            Application::debug(DebugType::App, "%s: pam put environment: %s", __FUNCTION__, env.c_str());
+
+            if(0 > putenv(const_cast<char*>(env.c_str())))
+            {
+                Application::warning("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "putenv", strerror(errno), errno);
+            }
+        }
+
+        if(pid_t pid = fork(); 0 != pid)
+        {
+            // main thread
+            if(0 < pid)
+            {
+                RunAs::waitPid(pid);
+
+                // close pam session
+                pam.reset();
+
+                std::exit(0);
+            }
+
+            // fork failed
+            return false;
+        }
+
+        // child thread
+
+        // assign groups
+        if(! switchToUser(*userInfo))
+        {
+            return false;
+        }
+
+        //createSessionConnInfo(sess);
+
+        auto displayStr = std::to_string(displayNum);
+        auto sessionStarter = configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
+
+        if(! std::filesystem::exists(sessionStarter))
+        {
+            Application::error("%s: path not found: `%s'", __FUNCTION__, sessionStarter.c_str());
+            execl("/bin/true", "/bin/true", nullptr);
+            std::exit(0);
+        }
+
+        closefds({});
+
+        // create argv
+        const char* argv[] = { sessionStarter.c_str(), "--display", displayStr.c_str(), nullptr };
+        int res = execv(sessionStarter.c_str(), (char* const*) argv);
+
+        if(res < 0)
+        {
+            Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+                __FUNCTION__, "execv", strerror(errno), errno, sessionStarter.c_str());
+        }
+
+        return true;
+    }
+
+    XvfbSessionPtr DBusAdaptor::runNewDisplaySession(UserInfoPtr userInfo, const std::string & pass, bool loginMode)
+    {
+        if(userInfo->uid() == 0)
+        {
+            Application::error("%s: deny for root", __FUNCTION__);
+            return nullptr;
+        }
+
+        std::scoped_lock guard{ lockSessions };
+        auto its = std::find_if(sessions.begin(), sessions.end(), [](auto & ptr)
+        {
+            return ! ptr;
+        });
+
+        if(its == sessions.end())
+        {
+            Application::error("%s: all displays busy", __FUNCTION__);
+            return nullptr;
+        }
+
+        int min = configGetInteger("display:min", 55);
+        int max = configGetInteger("display:max", 99);
+        auto freeDisplay = min;
+
+        for(; freeDisplay <= max; ++freeDisplay)
+        {
+            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; }))
+            {
+                break;
+            }
+        }
+
+        if(freeDisplay > max)
+        {
+            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, freeDisplay);
+            return nullptr;
+        }
+
+        auto xvfbSocket = Tools::x11UnixPath(freeDisplay);
+        auto x11unix = std::filesystem::path(xvfbSocket).parent_path();
+
+        if(! std::filesystem::is_directory(x11unix))
+        {
+            std::error_code fserr;
+            std::filesystem::create_directory(x11unix, fserr);
+            // default permision: 1777
+            std::filesystem::permissions(x11unix,
+                                         std::filesystem::perms::sticky_bit | std::filesystem::perms::owner_all | std::filesystem::perms::group_all | std::filesystem::perms::others_all,
+                                         std::filesystem::perm_options::replace, fserr);
+        }
+
+        auto sess = std::make_shared<XvfbSession>();
+        sess->userInfo = std::move(userInfo);
+        sess->groupInfo = Tools::getGidInfo(sess->userInfo->gid());
+
+        if(! sess->groupInfo)
+        {
+            Application::error("%s: gid not found: %" PRId32 ", user: `%s'",
+                    __FUNCTION__, (int) sess->userInfo->gid(), sess->userInfo->user());
+            return nullptr;
+        }
+
+        sess->mode = loginMode ? SessionMode::Login : SessionMode::Started;
+        sess->displayNum = freeDisplay;
+        //sess->depth = depth;
+        //sess->width = width;
+        //sess->height = height;
+        sess->tpStart = std::chrono::system_clock::now();
+        sess->displayAddr = Tools::joinToString(":", sess->displayNum);
+        sess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+
+        // session xauthfile
+        sess->mcookie = Tools::randomBytes(128);
+        sess->xauthfile = createXauthFile(freeDisplay, sess->mcookie);
+
+        if(sess->xauthfile.empty())
+        {
+            return nullptr;
+        }
+
+        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
+
+        try
+        {
+            sess->pid1 = Application::forkMode();
+        }
+        catch(const std::exception &)
+        {
+            return nullptr;
+        }
+
+        if(0 == sess->pid1)
+        {
+            // child thread
+            setenv("XAUTHORITY", sess->xauthfile.c_str(), 1);
+            setenv("LTSM_REMOTEADDR", sess->remoteAddr.c_str(), 1);
+            setenv("LTSM_TYPECONN", sess->conntype.c_str(), 1);
+
+            if(loginMode)
+                setenv("LTSM_LOGIN_MODE", "OK", 1);
+
+            pamOpenSession(std::move(sess->userInfo), pass, sess->displayNum);
+
+            execl("/bin/true", "/bin/true", nullptr);
+            std::exit(-1);
+        }
+
+        // main thread
+        Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
+            __FUNCTION__, sess->pid1, sess->displayNum);
+
+        waitXvfbStarting(sess->displayNum, sess->mcookie, 5000 /* ms */);
+/*
+        // fix permission
+        auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
+        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), groupAuthGid);
+
+        // check socket
+        std::filesystem::path socketPath = Tools::x11UnixPath(oldScreen);
+
+        if(! std::filesystem::is_socket(socketPath, err))
+        {
+            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+                __FUNCTION__, (err ? err.message().c_str() : "not socket"), socketPath.c_str(), getuid());
+            return -1;
+        }
+
+        // fix socket pemissions 0660
+        std::filesystem::permissions(socketPath, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
+                                     std::filesystem::perms::group_read | std::filesystem::perms::group_write, std::filesystem::perm_options::replace, err);
+
+        if(err)
+        {
+            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
+                __FUNCTION__, err.message().c_str(), socketPath.c_str(), getuid());
+        }
+
+        Tools::setFileOwner(socketPath, newSess->userInfo->uid(), groupAuthGid);
+*/
+
+        (*its) = std::move(sess);
+        return *its;
+    }
+
+/*
     int DBusAdaptor::runUserSession(XvfbSessionPtr xvfb, const std::filesystem::path & sessionBin, PamSession* pam) {
         if(! pam) {
             Application::error("%s: %s, display: %" PRId32 ", user: %s",
@@ -1671,6 +1928,7 @@ namespace LTSM::Manager {
 
         return RunAs::runChildFailure(0);
     }
+*/
 
     int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
             const std::string & remoteAddr, const std::string & connType) {
@@ -1686,31 +1944,32 @@ namespace LTSM::Manager {
             return -1;
         }
 
-        auto xvfb = runXvfbDisplayNewSession(depth, displayWidth, displayHeight, std::move(userInfo));
+        auto sess = runNewDisplaySession(std::move(userInfo), "", true /* login mode */);
 
-        if(! xvfb) {
+        if(! sess) {
             return -1;
         }
 
         // registered xvfb job
-        waitPidBackgroundSafe(xvfb->pid1);
+        waitPidBackgroundSafe(sess->pid1);
 
         // update screen
-        xvfb->remoteAddr = remoteAddr;
-        xvfb->conntype = connType;
-        xvfb->connectorId = connectorId;
+        sess->remoteAddr = remoteAddr;
+        sess->conntype = connType;
+        sess->connectorId = connectorId;
+/*
         // fix permission
         auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
-        Tools::setFileOwner(xvfb->xauthfile, xvfb->userInfo->uid(), groupAuthGid);
+        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), groupAuthGid);
 
         // wait Xvfb display starting
-        if(! waitXvfbStarting(xvfb->displayNum, xvfb->mcookie, 5000 /* 5 sec */)) {
+        if(! waitXvfbStarting(xvfb->displayNum, xvfb->mcookie, 5000)) {
             Application::error("%s: %s failed, display: %" PRId32, __FUNCTION__, "waitXvfbStarting", xvfb->displayNum);
             return -1;
         }
 
         // check socket
-        std::filesystem::path socketPath = Tools::x11UnixPath(xvfb->displayNum);
+        std::filesystem::path socketPath = Tools::x11UnixPath(sess->displayNum);
         std::error_code err;
 
         if(! std::filesystem::is_socket(socketPath, err)) {
@@ -1740,9 +1999,12 @@ namespace LTSM::Manager {
             return -1;
         }
 
-        startLoginChannels(xvfb);
+*/
+        // FIXME wait dbus session?
 
-        return xvfb->displayNum;
+        startLoginChannels(sess);
+
+        return sess->displayNum;
     }
 
     int32_t DBusAdaptor::busStartUserSession(const int32_t & oldScreen, const int32_t & connectorId,
@@ -1834,7 +2096,7 @@ namespace LTSM::Manager {
         }
 
         // get owner screen
-        auto newSess = runXvfbDisplayNewSession(loginSess->depth, loginSess->width, loginSess->height, std::move(userInfo));
+        auto newSess = runNewDisplaySession(std::move(userInfo), pass, false /* login mode */);
 
         if(! newSess) {
             return -1;
@@ -1852,9 +2114,9 @@ namespace LTSM::Manager {
         newSess->conntype = connType;
         newSess->connectorId = connectorId;
         newSess->policy = sessionPolicy(Tools::lower(configGetString("session:policy")));
-        newSess->mode = SessionMode::Started;
-        newSess->tpStart = std::chrono::system_clock::now();
-        newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        //newSess->mode = SessionMode::Started;
+        //newSess->tpStart = std::chrono::system_clock::now();
+        //newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
         newSess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
         newSess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
@@ -1882,16 +2144,10 @@ namespace LTSM::Manager {
             newSess->setStatus(Flags::AllowChannel::RemoteFilesUse);
         }
 
+/*
         // fix permission
         auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
         Tools::setFileOwner(newSess->xauthfile, newSess->userInfo->uid(), groupAuthGid);
-
-        // wait Xvfb display starting
-        if(! waitXvfbStarting(newSess->displayNum, newSess->mcookie, 5000 /* 5 sec */)) {
-            Application::error("%s: %s, display: %" PRId32 ", user: %s",
-                               __FUNCTION__, "waitXvfbStarting failed", newSess->displayNum, newSess->userInfo->user());
-            return -1;
-        }
 
         // check socket
         std::filesystem::path socketPath = Tools::x11UnixPath(oldScreen);
@@ -1912,7 +2168,7 @@ namespace LTSM::Manager {
         }
 
         Tools::setFileOwner(socketPath, newSess->userInfo->uid(), groupAuthGid);
-
+*/
         // fixed environments
         for(auto & [key, val] : newSess->environments) {
             if(std::string::npos != val.find("%{user}")) {
@@ -1923,16 +2179,17 @@ namespace LTSM::Manager {
         }
 
         // move pam from login session
-        newSess->pam = std::move(pam);
-        newSess->pid2 = runUserSession(newSess, sessionBin, newSess->pam.get());
+        //newSess->pam = std::move(pam);
+        //newSess->pid2 = runUserSession(newSess, sessionBin, newSess->pam.get());
 
-        if(newSess->pid2 < 0) {
-            Application::error("%s: user session failed, result: %" PRId32, __FUNCTION__, newSess->pid2);
-            return -1;
-        }
+        //if(newSess->pid2 < 0)
+        //{
+        //    Application::error("%s: user session failed, result: %" PRId32, __FUNCTION__, newSess->pid2);
+        //    return -1;
+        //}
 
         // registered session job
-        waitPidBackgroundSafe(newSess->pid2);
+        //waitPidBackgroundSafe(newSess->pid2);
 
         // parent continue
         Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,

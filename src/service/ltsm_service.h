@@ -304,8 +304,10 @@ namespace LTSM::Manager {
       protected:
         void closeSystemSession(XvfbSessionPtr);
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
-        XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
-                                                UserInfoPtr userInfo);
+        bool pamOpenSession(UserInfoPtr userInfo, const std::string & password, int displayNum);
+        XvfbSessionPtr runNewDisplaySession(UserInfoPtr userInfo, const std::string & password, bool loginMode);
+        //XvfbSessionPtr runXvfbDisplayNewSession(uint8_t depth, uint16_t width, uint16_t height,
+        //                                        UserInfoPtr userInfo);
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
         void runSessionScript(XvfbSessionPtr, const std::string & cmd);
         bool waitXvfbStarting(int display, const std::vector<uint8_t> &, uint32_t waitms) const;

@@ -184,6 +184,22 @@ if(LTSM_BUILD_SERVER)
         set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
     endif()
 
+    if(LTSM_SERVER_BUILD_SERVICE)
+        project(LTSM_session_display)
+        set(CUR_TARGET LTSM_session_display)
+
+        CommonDefaults(SDBUS SYSTEMD JSON)
+
+        add_executable(${CUR_TARGET} ltsm_display_adaptor.h)
+        target_include_directories(${CUR_TARGET} PRIVATE common channels)
+
+        add_subdirectory(dbus ${CUR_TARGET}_dbus)
+        add_subdirectory(common ${CUR_TARGET}_common)
+        add_subdirectory(session_display ${CUR_TARGET}_display)
+
+        set_target_properties(${CUR_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    endif()
+
     if(LTSM_SERVER_BUILD_SESSION_PCSC)
         project(ltsm_session_pcsc)
         set(CUR_TARGET ltsm_session_pcsc)

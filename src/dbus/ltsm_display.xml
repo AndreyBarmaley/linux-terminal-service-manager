@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<node name="/ltsm/session/display">
+    <interface name="LTSM.Session.Display">
+
+        <method name="getVersion">
+            <arg type="i" name="version" direction="out" />
+        </method>
+
+        <method name="serviceShutdown">
+        </method>
+
+        <method name="setDebug">
+            <arg type="s" name="level" direction="in" />
+        </method>
+
+        <method name="runSessionCommand">
+            <arg type="s" name="cmd" direction="in" />
+            <arg type="as" name="args" direction="in" />
+            <arg type="as" name="envs" direction="in" />
+            <arg type="i" name="pid" direction="out" />
+        </method>
+
+        <method name="jsonStatus">
+            <arg type="s" name="json" direction="out" />
+        </method>
+
+        <signal name="runSessionCommandFailed">
+            <arg type="i" name="pid" />
+            <arg type="i" name="wstatus" />
+        </signal>
+
+        <signal name="runSessionCommandSuccess">
+            <arg type="i" name="pid" />
+            <arg type="i" name="ret" />
+            <arg type="ay" name="stdout" />
+        </signal>
+ 
+    </interface>
+</node>
