@@ -25,6 +25,7 @@
     "session:policy": "authlock",
     "session:path": "/etc/ltsm/xclients",
 
+    "starter:path": "/usr/libexec/ltsm/ltsm_session_display",
     "zenity:path": "/usr/bin/zenity",
 
     "default:width": 1024,
@@ -32,6 +33,8 @@
 
     "display:min": 55,
     "display:max": 99,
+
+    "xauth:file": "/var/run/ltsm/auth_%{display}",
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",
