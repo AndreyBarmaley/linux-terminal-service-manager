@@ -96,7 +96,9 @@ namespace LTSM {
         static bool isDebugTypes(uint32_t vals);
 
 #ifdef __UNIX__
-        static int forkMode(void);
+        static int forkMode(bool debug = false);
+        static void forkLogDebug(void);
+        static void forkLogClose(void);
 #endif
     };
 

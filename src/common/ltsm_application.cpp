@@ -305,7 +305,19 @@ namespace LTSM {
 
 
 #ifdef __UNIX__
-    int Application::forkMode(void) {
+    void Application::forkLogClose(void) {
+        appLoggingFd.reset();
+        appDebugTarget = DebugTarget::Quiet;
+    }
+
+    void Application::forkLogDebug(void) {
+        auto file = Tools::joinToString("/var/log/ltsm_fork_", getpid(), ".log");
+        appLoggingFd.reset(fopen(file.c_str(), "a"));
+        appDebugTarget = DebugTarget::SyslogFile;
+        appDebugTypes = DebugType::All;
+    }
+
+    int Application::forkMode(bool debug) {
         pid_t pid = fork();
 
         if(pid < 0) {
@@ -327,6 +339,10 @@ namespace LTSM {
         // skip closelog, glibc dead lock
         if(isDebugTarget(DebugTarget::Syslog)) {
             appDebugTarget = DebugTarget::Quiet;
+        }
+
+        if(debug) {
+            forkLogDebug();
         }
 
         return pid;

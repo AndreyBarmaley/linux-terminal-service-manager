@@ -732,10 +732,17 @@ namespace LTSM::Manager {
             return status;
         }
 
-        int runChildFailure(int res) {
+        int runChildFailure(int res = -1) {
+            Application::forkLogClose();
             execl("/bin/true", "/bin/true", nullptr);
             std::exit(res);
             return res;
+        }
+
+        void runChildSuccess(void) {
+            Application::forkLogClose();
+            execl("/bin/true", "/bin/true", nullptr);
+            std::exit(0);
         }
 
         void runChildProcess(XvfbSessionPtr xvfb, int pipeout, const std::filesystem::path & cmd,
@@ -749,7 +756,7 @@ namespace LTSM::Manager {
                               __FUNCTION__, getpid(), cmd.c_str(), Tools::join(params, " ").c_str());
 
             if(! switchToUser(*xvfb->userInfo)) {
-                runChildFailure(-1);
+                runChildFailure();
                 return;
             }
 
@@ -802,6 +809,7 @@ namespace LTSM::Manager {
             if(res < 0) {
                 Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
                                    __FUNCTION__, "execv", strerror(errno), errno, cmd.c_str());
+                runChildFailure(res);
             }
         }
 
@@ -884,13 +892,11 @@ namespace LTSM::Manager {
                 throw service_error(NS_FuncName);
             }
 
-            pid_t pid = Application::forkMode();
+            pid_t pid = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
 
             if(0 == pid) {
                 close(pipefd[0]);
                 runChildProcess(xvfb, pipefd[1], cmd, params, envs);
-                // child ended
-                std::exit(0);
             }
 
             // main thread processed
@@ -929,12 +935,10 @@ namespace LTSM::Manager {
                 throw service_error(NS_FuncName);
             }
 
-            pid_t pid = Application::forkMode();
+            pid_t pid = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
 
             if(0 == pid) {
                 runChildProcess(xvfb, -1, cmd, params, envs);
-                // child ended
-                std::exit(0);
             }
 
             // main thread processed
@@ -1314,7 +1318,7 @@ namespace LTSM::Manager {
         runSystemScript(std::move(xvfb), configGetString("system:disconnect"));
     }
 
-    bool DBusAdaptor::waitXvfbStarting(int display, const std::vector<uint8_t> & cookie, uint32_t ms) const {
+    bool DBusAdaptor::waitDisplaySessionStarting(int display, const std::vector<uint8_t> & cookie, uint32_t ms) const {
         if(0 >= display) {
             return false;
         }
@@ -1562,16 +1566,15 @@ namespace LTSM::Manager {
         Application::debug(DebugType::App, "%s: bin: `%s', args: `%s'", __FUNCTION__, xvfbBin.c_str(), Tools::join(xvfbArgs, " ").c_str());
 
         try {
-            sess->pid1 = Application::forkMode();
+            sess->pid1 = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
         } catch(const std::exception &) {
             return nullptr;
         }
 
         if(0 == sess->pid1) {
             if(! switchToUser(*sess->userInfo)) {
-                execl("/bin/true", "/bin/true", nullptr);
-                // execl failed
-                std::exit(0);
+                runChildFailure();
+                // ended
             }
 
             // errlog folder
@@ -1622,7 +1625,7 @@ namespace LTSM::Manager {
         return *its;
     }
 */
-    bool DBusAdaptor::pamOpenSession(UserInfoPtr userInfo, const std::string & password, int displayNum) {
+    bool DBusAdaptor::pamOpenDisplaySession(UserInfoPtr userInfo, const std::string & password, int displayNum) {
         // child only
         Application::info("%s: pid: %" PRId32, __FUNCTION__, getpid());
 
@@ -1648,7 +1651,7 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(userInfo->home()))
         {
-            Application::error("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home());
+            Application::warning("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home());
         }
 
         if(0 != initgroups(userInfo->user(), userInfo->gid()))
@@ -1666,7 +1669,7 @@ namespace LTSM::Manager {
         }
 
         Application::debug(DebugType::App, "%s: child mode, type: %s, uid: %" PRId32,
-            __FUNCTION__, "session", getuid());
+            __FUNCTION__, "pam session", getuid());
 
         // pam environments
         auto environments = pam->getEnvList();
@@ -1682,29 +1685,32 @@ namespace LTSM::Manager {
             }
         }
 
-        if(pid_t pid = fork(); 0 != pid)
+        if(pid_t pid = forkMode(Application::isDebugLevel(DebugLevel::Debug)); 0 != pid)
         {
             // main thread
-            if(0 < pid)
+            if(0 > pid)
             {
-                RunAs::waitPid(pid);
-
-                // close pam session
-                pam.reset();
-
-                std::exit(0);
+                // fork failed
+                Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "fork", strerror(errno), errno);
+                return false;
             }
 
-            // fork failed
-            return false;
+            RunAs::waitPid(pid);
+            // close pam session
+            pam.reset();
+            RunAs::runChildSuccess();
+            // ended
         }
 
         // child thread
+        Application::debug(DebugType::App, "%s: child mode, type: %s, uid: %" PRId32,
+            __FUNCTION__, "display session", getuid());
 
         // assign groups
         if(! switchToUser(*userInfo))
         {
-            return false;
+            RunAs::runChildFailure();
+            // ended
         }
 
         //createSessionConnInfo(sess);
@@ -1715,11 +1721,13 @@ namespace LTSM::Manager {
         if(! std::filesystem::exists(sessionStarter))
         {
             Application::error("%s: path not found: `%s'", __FUNCTION__, sessionStarter.c_str());
-            execl("/bin/true", "/bin/true", nullptr);
-            std::exit(0);
+            RunAs::runChildFailure();
+            // ended
         }
 
         closefds({});
+        // reopen debug fd
+        Application::forkLogDebug();
 
         // create argv
         const char* argv[] = { sessionStarter.c_str(), "--display", displayStr.c_str(), nullptr };
@@ -1729,6 +1737,9 @@ namespace LTSM::Manager {
         {
             Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
                 __FUNCTION__, "execv", strerror(errno), errno, sessionStarter.c_str());
+
+            RunAs::runChildFailure(res);
+            // ended
         }
 
         return true;
@@ -1818,7 +1829,7 @@ namespace LTSM::Manager {
 
         try
         {
-            sess->pid1 = Application::forkMode();
+            sess->pid1 = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
         }
         catch(const std::exception &)
         {
@@ -1835,7 +1846,7 @@ namespace LTSM::Manager {
             if(loginMode)
                 setenv("LTSM_LOGIN_MODE", "OK", 1);
 
-            pamOpenSession(std::move(sess->userInfo), pass, sess->displayNum);
+            pamOpenDisplaySession(std::move(sess->userInfo), pass, sess->displayNum);
 
             execl("/bin/true", "/bin/true", nullptr);
             std::exit(-1);
@@ -1845,7 +1856,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
             __FUNCTION__, sess->pid1, sess->displayNum);
 
-        waitXvfbStarting(sess->displayNum, sess->mcookie, 5000 /* ms */);
+        waitDisplaySessionStarting(sess->displayNum, sess->mcookie, 5000 /* ms */);
 /*
         // fix permission
         auto groupAuthGid = Tools::getGroupGid(ltsm_group_auth);
@@ -1886,7 +1897,7 @@ namespace LTSM::Manager {
             return -1;
         }
 
-        pid_t pid = Application::forkMode();
+        pid_t pid = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
 
         if(0 != pid) {
             // main thread
@@ -1925,8 +1936,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, "session", getuid());
 
         RunAs::runChildProcess(std::move(xvfb), -1, sessionBin, {}, pam->getEnvList());
-
-        return RunAs::runChildFailure(0);
+        return 0;
     }
 */
 
@@ -1963,7 +1973,7 @@ namespace LTSM::Manager {
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), groupAuthGid);
 
         // wait Xvfb display starting
-        if(! waitXvfbStarting(xvfb->displayNum, xvfb->mcookie, 5000)) {
+        if(! waitDisplaySessionStarting(xvfb->displayNum, xvfb->mcookie, 5000)) {
             Application::error("%s: %s failed, display: %" PRId32, __FUNCTION__, "waitXvfbStarting", xvfb->displayNum);
             return -1;
         }
@@ -2096,7 +2106,8 @@ namespace LTSM::Manager {
         }
 
         // get owner screen
-        auto newSess = runNewDisplaySession(std::move(userInfo), pass, false /* login mode */);
+        // FIXME pass
+        auto newSess = runNewDisplaySession(std::move(userInfo), "" /* pass */, false /* login mode */);
 
         if(! newSess) {
             return -1;

@@ -185,8 +185,8 @@ if(LTSM_BUILD_SERVER)
     endif()
 
     if(LTSM_SERVER_BUILD_SERVICE)
-        project(LTSM_session_display)
-        set(CUR_TARGET LTSM_session_display)
+        project(ltsm_session_display)
+        set(CUR_TARGET ltsm_session_display)
 
         CommonDefaults(SDBUS SYSTEMD JSON)
 

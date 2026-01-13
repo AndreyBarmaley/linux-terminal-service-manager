@@ -213,7 +213,7 @@ namespace LTSM
             throw std::runtime_error(NS_FuncName);
         }
 
-        pid_t pid = Application::forkMode();
+        pid_t pid = Application::forkMode(Application::isDebugLevel(DebugLevel::Debug));
 
         if(0 == pid)
         {
@@ -456,15 +456,6 @@ namespace LTSM
             return EXIT_FAILURE;
         }
 
-        // helper login
-        auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
-
-        if(0 != access(helperBin.c_str(), X_OK))
-        {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "login helper", helperBin.c_str());
-            return EXIT_FAILURE;
-        }
-
         // xorg bin
         auto xorgBin = configGetString("xvfb:path");
 
@@ -507,12 +498,27 @@ namespace LTSM
         ja = config().getArray("session:args");
         auto sessionArgs = ja ? ja->toStdVector<std::string>() : std::vector<std::string>();
 
+        if(getenv("LTSM_LOGIN_MODE"))
+        {
+            // helper login
+            auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
+
+            if(0 != access(helperBin.c_str(), X_OK))
+            {
+                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "login helper", helperBin.c_str());
+                return EXIT_FAILURE;
+            }
+
+            sessionBin = helperBin;
+            sessionArgs.clear();
+        }
+
         Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
 
-        // startXorg
+        // 1. start Xorg
         childCommands.emplace_front( runForkCommand(xorgBin, xorgArgs, {}) );
         pidXorg = childCommands.front().first;
 
@@ -534,17 +540,9 @@ namespace LTSM
             childCommands.emplace_front( runForkCommand(xsetupBin, {}, {}) );
         }
 
-        // startSession
-        if(getenv("LTSM_LOGIN_MODE"))
-        {
-            childCommands.emplace_front( runForkCommand(helperBin, {}, {}) );
-            pidSession = childCommands.front().first;
-        }
-        else
-        {
-            childCommands.emplace_front( runForkCommand(sessionBin, sessionArgs, {}) );
-            pidSession = childCommands.front().first;
-        }
+        // 2. start Session
+        childCommands.emplace_front( runForkCommand(sessionBin, sessionArgs, {}) );
+        pidSession = childCommands.front().first;
 
         // start main loop
         conn->enterEventLoop();
