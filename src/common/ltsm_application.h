@@ -25,6 +25,7 @@
 
 #include <list>
 #include <mutex>
+#include <vector>
 #include <thread>
 #include <string>
 #include <filesystem>
@@ -37,11 +38,13 @@
 #include "ltsm_json_wrapper.h"
 #endif
 
-namespace LTSM {
+namespace LTSM
+{
     enum class DebugTarget { Quiet, Console, Syslog, SyslogFile };
     enum class DebugLevel { None, Info, Debug, Trace };
 
-    enum DebugType {
+    enum DebugType
+    {
         All = 0xFFFFFFFF,
         Xcb = 1 << 31,
         Rfb = 1 << 30,
@@ -64,8 +67,9 @@ namespace LTSM {
         Gss = 1 << 13
     };
 
-    class Application {
-      public:
+    class Application
+    {
+    public:
         explicit Application(std::string_view ident);
         virtual ~Application();
 
@@ -94,35 +98,34 @@ namespace LTSM {
 
         static void setDebugTypes(const std::list<std::string> &);
         static bool isDebugTypes(uint32_t vals);
-
-#ifdef __UNIX__
-        static int forkMode(bool debug = false);
-        static void forkLogDebug(void);
-        static void forkLogClose(void);
-#endif
     };
 
 #ifdef LTSM_WITH_JSON
-    class ApplicationLog : public Application {
-      protected:
+    class ApplicationLog : public Application
+    {
+    protected:
         void setAppLog(const JsonObject*);
 
-      public:
+    public:
         ApplicationLog(std::string_view ident);
     };
 
-    class WatchModification {
+    class WatchModification
+    {
         std::thread _inotifyJob;
         std::string _fileName;
 
         int _inotifyFd = -1;
         int _inotifyWd = -1;
 
-      protected:
+    protected:
         bool inotifyWatchStart(const std::filesystem::path &);
         void inotifyWatchStop(void);
 
-      public:
+        WatchModification(const WatchModification &) = delete;
+        WatchModification & operator=(const WatchModification &) = delete;
+
+    public:
         WatchModification() = default;
         virtual ~WatchModification();
 
@@ -130,17 +133,18 @@ namespace LTSM {
         virtual void closeWriteEvent(const std::string &) {}
     };
 
-    class ApplicationJsonConfig : public ApplicationLog, protected WatchModification {
+    class ApplicationJsonConfig : public ApplicationLog, protected WatchModification
+    {
         JsonObject json;
 
-      protected:
+    protected:
         // WatchModification interface;
         void closeWriteEvent(const std::string &) override;
 
         bool inotifyWatchStart(void);
         void readDefaultConfig(void);
 
-      public:
+    public:
         explicit ApplicationJsonConfig(std::string_view ident);
         ApplicationJsonConfig(std::string_view ident, const std::filesystem::path & file);
 
@@ -151,23 +155,28 @@ namespace LTSM {
         void configSetString(const std::string &, std::string_view);
         void configSetDouble(const std::string &, double);
 
-        inline int configGetInteger(std::string_view key, int def = 0) const {
+        inline int configGetInteger(std::string_view key, int def = 0) const
+        {
             return json.getInteger(key, def);
         }
 
-        inline bool configGetBoolean(std::string_view key, bool def = false) const {
+        inline bool configGetBoolean(std::string_view key, bool def = false) const
+        {
             return json.getBoolean(key, def);
         }
 
-        inline std::string configGetString(std::string_view key, std::string_view def = "") const {
+        inline std::string configGetString(std::string_view key, std::string_view def = "") const
+        {
             return json.getString(key, def);
         }
 
-        inline double configGetDouble(std::string_view key, double def = 0) const {
+        inline double configGetDouble(std::string_view key, double def = 0) const
+        {
             return json.getDouble(key, def);
         }
 
-        inline bool configHasKey(std::string_view key) const {
+        inline bool configHasKey(std::string_view key) const
+        {
             return json.hasKey(key);
         }
 
@@ -178,18 +187,35 @@ namespace LTSM {
 #endif
 
 #ifdef LTSM_WITH_AUDIT
-    class AuditLog {
-      int fd = -1;
+    class AuditLog
+    {
+        int fd = -1;
 
-      public:
+    public:
         AuditLog();
         virtual ~AuditLog();
 
         AuditLog(const AuditLog &) = delete;
-        AuditLog& operator=(const AuditLog &) = delete;
+        AuditLog & operator=(const AuditLog &) = delete;
 
         void auditUserMessage(int type, const char* msg, const char* hostname, const char* addr, const char* tty, bool success) const;
     };
+#endif
+
+#ifdef __UNIX__
+    enum class RedirectLog { None, StdoutStderr, StdoutFd };
+
+    namespace ForkMode
+    {
+        int forkStart(bool debug = false);
+
+        int waitPid(int pid);
+        int runChildFailure(int res = -1);
+        void runChildSuccess(void);
+
+        void runChildProcess(const std::filesystem::path & cmd, const std::vector<std::string> & args,
+                             const std::vector<std::string> & envs, const RedirectLog & rmode, int redirectFd = -1);
+    }
 #endif
 }
 

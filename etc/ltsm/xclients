@@ -13,11 +13,12 @@ if [ -z "$UID" ]; then
     export UID=`id --user`
 fi
 
-if [ -z "$XDG_RUNTIME_DIR" ]; then
+if [ -z "$XDG_CONFIG_DIRS" ]; then
     export XDG_CONFIG_DIRS="/etc/xdg"
+fi
+
+if [ -z "$XDG_DATA_DIRS" ]; then
     export XDG_DATA_DIRS="/usr/share"
-    export XDG_RUNTIME_DIR=/run/user/$UID
-    export XDG_SESSION_TYPE="x11"
 fi
 
 if [ -d $XDG_RUNTIME_DIR ]; then
@@ -41,25 +42,17 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     eval $(dbus-launch --sh-syntax --close-stderr --exit-with-x11)
 fi
 
-DISPLAYNUM=$(echo ${DISPLAY} | cut --bytes=2- -)
-env | sort > $XDG_RUNTIME_DIR/ltsm/env_session_${DISPLAYNUM}
-echo "$DBUS_SESSION_BUS_ADDRESS" > $XDG_RUNTIME_DIR/ltsm/dbus_session_${DISPLAYNUM}
-
 if [ -x /usr/bin/dbus-update-activation-environment ]; then
     dbus-update-activation-environment --systemd --all
 fi
 
 # Xorg complete
-if [ -f /etc/X11/Xresources ]; then
-    xrdb -load /etc/X11/Xresources
-fi
-
-if [ -f /etc/X11/ltsm.xres ]; then
-    xrdb -load /etc/X11/ltsm.xres
-fi
-
 if [ -f ${HOME}/.Xresources ]; then
     xrdb -merge ${HOME}/.Xresources
+fi
+
+if [ -f ${HOME}/.Xmodmap ]; then
+    xmodmap ${HOME}/.Xmodmap
 fi
 
 # model:
@@ -73,14 +66,6 @@ setxkbmap -layout "us,ru" -variant ",winkeys" -option "grp:ctrl_shift_toggle"
 # change symbol:
 # setxkbmap -symbols "+kpdl(dotoss)+kpdl(dotoss):2"
 
-if [ -f /etc/X11/Xmodmap ]; then
-    xmodmap /etc/X11/Xmodmap
-fi
-
-if [ -f ${HOME}/.Xmodmap ]; then
-    xmodmap ${HOME}/.Xmodmap
-fi
-
 if [ -z "$XSESSION" ]; then
     if [ -x /usr/bin/icewm-session ]; then
         XSESSION=/usr/bin/icewm-session
@@ -89,6 +74,8 @@ if [ -z "$XSESSION" ]; then
     fi
 fi
 
-xsetroot -solid "#4e7db7" -cursor_name left_ptr
+DISPLAYNUM=$(echo ${DISPLAY} | cut --bytes=2- -)
+env | sort > $XDG_RUNTIME_DIR/ltsm/env_session_${DISPLAYNUM}
+echo "$DBUS_SESSION_BUS_ADDRESS" > $XDG_RUNTIME_DIR/ltsm/dbus_session_${DISPLAYNUM}
 
 exec ${XSESSION}

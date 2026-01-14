@@ -244,7 +244,7 @@ namespace LTSM::Connector {
         });
 
         if(! waitWidgetStarted) {
-            Application::error("%s: wait _loginWidgetStarted failed", "serverConnectedEvent");
+            Application::error("%s: %s failed", __FUNCTION__, "wait loginWidgetStarted");
             throw proto_error(NS_FuncName);
         }
 

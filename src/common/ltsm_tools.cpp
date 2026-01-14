@@ -710,13 +710,14 @@ namespace LTSM {
         return replace(src, pred, std::to_string(val));
     }
 
-    std::list<std::string> Tools::split(std::string_view str, std::string_view sep) {
-        std::list<std::string> list;
+    template<typename StringList>
+    StringList split_T(std::string_view str, std::string_view sep) {
+        StringList res;
         auto itbeg = str.begin();
 
         for(;;) {
             auto itend = std::search(itbeg, str.end(), sep.begin(), sep.end());
-            list.emplace_back(itbeg, itend);
+            res.emplace_back(itbeg, itend);
 
             if(itend >= str.end()) {
                 break;
@@ -726,11 +727,18 @@ namespace LTSM {
             std::advance(itbeg, sep.size());
         }
 
-        return list;
+        return res;
     }
 
     std::list<std::string> Tools::split(std::string_view str, int sep) {
-        return split(str, std::string(1, static_cast<char>(sep)));
+        using StringList = std::list<std::string>;
+        auto sep2 = std::string(1, static_cast<char>(sep));
+        return split_T<StringList>(str, sep2);
+    }
+
+    std::list<std::string> Tools::split(std::string_view str, std::string_view sep) {
+        using StringList = std::list<std::string>;
+        return split_T<StringList>(str, sep);
     }
 
     std::string Tools::runcmd(const std::string & cmd) {

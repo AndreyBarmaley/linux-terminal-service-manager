@@ -18,7 +18,7 @@
     "access:uid:max": 9999,
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
-    "helper:path": "/usr/libexec/ltsm/ltsm_helper",
+    "#helper:path": "/usr/libexec/ltsm/ltsm_helper",
 
     "login:failures_count": 3,
     "session:kill:stop": false,

@@ -21,8 +21,8 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#ifndef _LTSM_USER_SESSION_
-#define _LTSM_USER_SESSION_
+#ifndef _LTSM_DISPLAY_SESSION_
+#define _LTSM_DISPLAY_SESSION_
 
 #include <mutex>
 #include <chrono>
@@ -38,55 +38,73 @@
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
 
-#define LTSM_SESSION_DISPLAY_VERSION 20250910
+#define LTSM_SESSION_DISPLAY_VERSION 20260110
 
-namespace LTSM
+namespace LTSM::DisplaySession
 {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = std::pair<int, StdoutBuf>;
+    using PidStatus = std::pair<int, std::future<int>>;
     using PidStatusStdout = std::pair<int, std::future<StatusStdout>>;
 
-    class DisplaySessionBus : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Session::Display_adaptor>
+    class Starter;
+
+    class DBusAdaptor : public sdbus::AdaptorInterfaces<Session::Display_adaptor>
     {
-        std::forward_list<PidStatusStdout> childCommands;
-        std::mutex lockCommands;
-
-        XCB::AuthCookie mcookie;
-        std::unique_ptr<XCB::Connector> xcb;
-
-        std::unique_ptr<Tools::BaseTimer> timer1;
-
-        std::chrono::system_clock::time_point started;
-
-        std::string displayStr;
-        std::string xauthFile;
-
-        int defaultWidth = 0;
-        int defaultHeight = 0;
-        int defaultDepth = 0;
-
-        int displayNum = -1;
-        int pidXorg = -1;
-        int pidSession = -1;
-
-    protected:
-        void checkChildCommandsComplete(void);
-        void childProcessEnded(int pid, std::future<StatusStdout>);
-        bool xcbConnect(void);
-        void childStop(void);
+        Starter & starter_;
 
     public:
-        DisplaySessionBus(sdbus::IConnection &, int display);
-        virtual ~DisplaySessionBus();
-
-        int start(void);
+        DBusAdaptor(sdbus::IConnection &, Starter &);
+        virtual ~DBusAdaptor();
 
         int32_t getVersion(void) override;
         void serviceShutdown(void) override;
         void setDebug(const std::string & level) override;
 
         std::string jsonStatus(void) override;
-        int32_t runSessionCommand(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) override;
+        int32_t runSessionCommand(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+    };
+
+    class Starter : public ApplicationJsonConfig
+    {
+        const std::chrono::system_clock::time_point started_;
+
+        XCB::AuthCookie mcookie_;
+
+        int defaultWidth_ = 0;
+        int defaultHeight_ = 0;
+        int defaultDepth_ = 0;
+        int displayNum_ = -1;
+
+        std::forward_list<PidStatus> childCommands_;
+        std::mutex lockCommands_;
+
+        std::unique_ptr<XCB::Connector> xcb_;
+        std::unique_ptr<Tools::BaseTimer> timer1_;
+        std::unique_ptr<DBusAdaptor> dbus_;
+
+        int pidXorg_ = -1;
+        int pidSession_ = -1;
+
+    protected:
+        void startX11Display(int displayNum, const char* xauthFile);
+        bool startX11Session(void);
+        void checkChildCommandsComplete(void);
+        void childProcessEnded(int pid, std::future<int>);
+        void stopChilds(void);
+
+    public:
+        Starter(int displayNum, const char* xauthFile);
+        ~Starter();
+
+        int run(void);
+
+        // dbus callbacks
+        int32_t dbusGetVersion(void) const;
+        void dbusServiceShutdown(void) const;
+        void dbusSetDebug(const std::string & level);
+        std::string dbusJsonStatus(void) const;
+        int32_t dbusRunSessionCommand(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
     };
 }
 

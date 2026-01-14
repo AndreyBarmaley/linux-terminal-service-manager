@@ -31,6 +31,8 @@
     "#rdp:xcb:nodamage": false,
     "#rdp:keymap:file": "/etc/ltsm/keymap_rdp.json",
 
+    "#session:timeout": 5000,
+
     "transfer:file:disabled": false,
     "transfer:file:max": 100000000,
     "#transfer:group:only": "transfer-allow"

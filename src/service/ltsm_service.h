@@ -40,8 +40,10 @@
 #include "ltsm_service_adaptor.h"
 #include "ltsm_json_wrapper.h"
 
-namespace LTSM::Manager {
-    struct service_error : public std::runtime_error {
+namespace LTSM::Manager
+{
+    struct service_error : public std::runtime_error
+    {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
@@ -53,15 +55,16 @@ namespace LTSM::Manager {
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
     using TupleColor = sdbus::Struct<uint8_t, uint8_t, uint8_t>;
-    using ArgsList = std::list<std::string>;
-    using EnvList = std::forward_list<std::string>;
+    using ArgsList = std::vector<std::string>;
+    using EnvList = std::vector<std::string>;
 
     using system_time_point = std::chrono::system_clock::time_point;
 
     /// AuditService
 #ifdef LTSM_WITH_AUDIT
-    class AuditService : public AuditLog {
-      public:
+    class AuditService : public AuditLog
+    {
+    public:
         AuditService() = default;
         ~AuditService() = default;
 
@@ -77,15 +80,16 @@ namespace LTSM::Manager {
 #endif
 
     /// PamService
-    class PamService {
-      protected:
+    class PamService
+    {
+    protected:
         std::string service;
         pam_handle_t* pamh = nullptr;
         int status = PAM_SUCCESS;
 
         virtual struct pam_conv* pamConv(void) = 0;
 
-      public:
+    public:
         PamService(const std::string & name) : service(name) {}
 
         virtual ~PamService();
@@ -98,37 +102,38 @@ namespace LTSM::Manager {
     };
 
     /// PamAuthenticate
-    class PamAuthenticate : public PamService {
+    class PamAuthenticate : public PamService
+    {
         static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
 
         std::string login;
         std::string password;
-        struct pam_conv pamc {
+        struct pam_conv pamc
+        {
             pam_conv_func, this
         };
-        bool authenticateSuccess = false;
 
-      protected:
+    protected:
         struct pam_conv* pamConv(void) override;
         virtual char* onPamPrompt(int, const char*) const;
 
-      public:
+    public:
         PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
             : PamService(service), login(user), password(pass) {}
 
         bool authenticate(void);
 
-        bool isAuthenticated(void) const;
         bool isLogin(std::string_view name) const;
     };
 
     /// PamSession
-    class PamSession : public PamAuthenticate {
+    class PamSession : public PamAuthenticate
+    {
         bool sessionOpenned = false;
 
-      protected:
+    protected:
 
-      public:
+    public:
         PamSession(const std::string & service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
                     user, pass) {}
 
@@ -148,8 +153,10 @@ namespace LTSM::Manager {
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
-    namespace Flags {
-        enum AllowChannel : size_t {
+    namespace Flags
+    {
+        enum AllowChannel : size_t
+        {
             TransferFiles = (1 << 1),
             RedirectPrinter = (1 << 2),
             RedirectAudio = (1 << 3),
@@ -158,7 +165,8 @@ namespace LTSM::Manager {
             RemoteFilesUse = (1 << 6)
         };
 
-        enum SessionStatus : size_t {
+        enum SessionStatus : size_t
+        {
             CheckConnection = (1 << 24)
         };
     }
@@ -167,7 +175,8 @@ namespace LTSM::Manager {
 
 
     /// XvfbSession
-    struct XvfbSession {
+    struct XvfbSession
+    {
         std::unordered_map<std::string, std::string> environments;
         std::unordered_map<std::string, std::string> options;
 
@@ -209,34 +218,40 @@ namespace LTSM::Manager {
         uint8_t depth = 0;
 
         PidStatus idleActionStatus;
-        std::unique_ptr<PamSession> pam;
+        //std::unique_ptr<PamSession> pam;
 
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
-        inline bool checkStatus(uint64_t st) const {
+        inline bool checkStatus(uint64_t st) const
+        {
             return statusFlags & st;
         }
 
-        inline void setStatus(uint64_t st) {
+        inline void setStatus(uint64_t st)
+        {
             statusFlags |= st;
         }
 
-        inline void resetStatus(uint64_t st) {
+        inline void resetStatus(uint64_t st)
+        {
             statusFlags &= ~st;
         }
 
-        inline std::chrono::seconds sessionStartedSec(void) const {
+        inline std::chrono::seconds sessionStartedSec(void) const
+        {
             return system_time_point() == tpStart ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpStart);
         }
 
-        inline std::chrono::seconds sessionOnlinedSec(void) const {
+        inline std::chrono::seconds sessionOnlinedSec(void) const
+        {
             return mode != SessionMode::Connected ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOnline);
         }
 
-        inline std::chrono::seconds sessionOfflinedSec(void) const {
+        inline std::chrono::seconds sessionOfflinedSec(void) const
+        {
             return mode != SessionMode::Disconnected ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOffline);
         }
@@ -251,12 +266,13 @@ namespace LTSM::Manager {
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
     using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
 
-    class XvfbSessions {
-      protected:
+    class XvfbSessions
+    {
+    protected:
         std::vector<XvfbSessionPtr> sessions;
         mutable std::mutex lockSessions;
 
-      public:
+    public:
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
@@ -270,7 +286,18 @@ namespace LTSM::Manager {
         std::string toJsonString(void) const;
     };
 
-    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
+/*
+    DisplaySessionProxy
+    {
+        std::unique_ptr<sdbus::IProxy> proxy;
+
+    public:
+        DisplaySessionProxy(XvfbSessionPtr);
+    };
+*/
+
+    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
+    {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
         std::string saneRuntimeFmt, audioRuntimeFmt,
@@ -301,18 +328,15 @@ namespace LTSM::Manager {
         void checkStartConfig(void);
         void createRuntimeDir(void) const;
 
-      protected:
-        void closeSystemSession(XvfbSessionPtr);
+    protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
         XvfbSessionPtr runNewDisplaySession(UserInfoPtr userInfo, const std::string & password, bool loginMode);
-        bool pamOpenDisplaySession(UserInfoPtr userInfo, const std::string & password, int displayNum);
         bool waitDisplaySessionStarting(int display, const std::vector<uint8_t> &, uint32_t waitms) const;
+        bool checkDisplaySessionAlive(int display) const;
 
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
         void runSessionScript(XvfbSessionPtr, const std::string & cmd);
-        bool checkXvfbSocket(int display) const;
-        void removeXvfbSocket(int display) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
                              bool token);
@@ -325,7 +349,7 @@ namespace LTSM::Manager {
 
         void childEndedEvent(void);
 
-      public:
+    public:
         DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
@@ -334,7 +358,7 @@ namespace LTSM::Manager {
         // ApplicationJsonConfig interface
         void configReloadedEvent(void) override;
 
-      private: /* virtual dbus methods */
+    private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
         void busShutdownService(void) override;
         int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,

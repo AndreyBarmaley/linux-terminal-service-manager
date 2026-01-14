@@ -2,17 +2,14 @@
     "session:path": "/etc/ltsm/xclients",
     "session:args": [],
 
-    "helper:path": "/usr/libexec/ltsm/LTSM_helper",
+    "helper:path": "/usr/libexec/ltsm/ltsm_helper",
 
     "default:width": 1024,
     "default:height": 768,
     "default:depth": 24,
 
-    "display:solid": "0x4e7db7",
-    "display:cursor": "left_ptr",
-
-    "xvfb:path": "/usr/bin/Xvfb",
-    "xvfb:args": [ ":%{display}", "-nolisten", "tcp", "-screen", "0", "%{width}x%{height}x%{depth}", "-auth", "%{authfile}", "+extension", "DAMAGE", "+extension", "MIT-SHM", "+extension", "RANDR", "+extension", "XFIXES", "+extension", "XTEST" ],
+    "#xvfb:path": "/usr/bin/Xvfb",
+    "#xvfb:args": [ ":%{display}", "-nolisten", "tcp", "-screen", "0", "%{width}x%{height}x%{depth}", "-auth", "%{authfile}", "+extension", "DAMAGE", "+extension", "MIT-SHM", "+extension", "RANDR", "+extension", "XFIXES", "+extension", "XTEST" ],
     "xvfb:timeout": 3500,
 
     "xauth:file": "/run/ltsm/auth_%{display}"

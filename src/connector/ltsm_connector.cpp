@@ -163,8 +163,10 @@ namespace LTSM::Connector {
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
+        const uint32_t sessTimeout = configGetInteger("session:timeout", 5000);
+
         // wait display starting
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &socketPath ]() {
+        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(sessTimeout, 100, [ &socketPath ]() {
             return Tools::checkUnixSocket(socketPath);
         });
 

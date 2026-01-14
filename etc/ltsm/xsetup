@@ -11,16 +11,8 @@ if [ -f /etc/ltsm/xresource ]; then
     xrdb -load /etc/ltsm/xresource
 fi
 
-if [ -f ${HOME}/.Xresources ]; then
-    xrdb -merge ${HOME}/.Xresources
-fi
-
 if [ -f /etc/X11/Xmodmap ]; then
     xmodmap /etc/X11/Xmodmap
-fi
-
-if [ -f ${HOME}/.Xmodmap ]; then
-    xmodmap ${HOME}/.Xmodmap
 fi
 
 xsetroot -solid "#4e7db7" -cursor_name left_ptr

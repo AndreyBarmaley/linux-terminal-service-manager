@@ -203,8 +203,8 @@ namespace LTSM {
         }
 #endif
 
-        std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);
+        std::list<std::string> split(std::string_view str, std::string_view sep);
 
         template<typename... Args>
         std::string joinToString(Args... args) {
