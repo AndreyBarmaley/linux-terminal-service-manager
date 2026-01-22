@@ -66,7 +66,6 @@ namespace LTSM::Manager
     //
     std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &, int displayNum);
     void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path &);
-    void closefds(std::initializer_list<int> exclude);
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
     bool switchToUser(const UserInfo &);
 
@@ -794,46 +793,6 @@ namespace LTSM::Manager
         }
     }
 
-    void closefds(std::initializer_list<int> exclude)
-    {
-        std::vector<int> pids;
-        pids.reserve(255);
-
-        auto fdpath = std::filesystem::path("/proc") / std::to_string(getpid()) / "fd";
-
-        if(std::filesystem::is_directory(fdpath))
-        {
-            // read all pids first
-            for(auto const & dirEntry : std::filesystem::directory_iterator{fdpath})
-            {
-                try
-                {
-                    pids.push_back(std::stoi(dirEntry.path().filename()));
-                }
-                catch(...)
-                {
-                    continue;
-                }
-            }
-        }
-        else
-        {
-            Application::warning("%s: path not found: `%s'", __FUNCTION__, fdpath.c_str());
-
-            pids.resize(255);
-            std::iota(pids.begin(), pids.end(), 0);
-        }
-
-        for(auto fd : pids)
-        {
-            if(std::ranges::any_of(exclude, [&](auto & val) { return val == fd; }))
-            {
-                continue;
-            }
-            close(fd);
-        }
-    }
-
     bool runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd, bool detach /* true */)
     {
         if(cmd.empty())
@@ -1556,14 +1515,11 @@ namespace LTSM::Manager
         return 0 < display && Tools::checkUnixSocket(Tools::x11UnixPath(display));
     }
 
-    bool DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const
+    std::unique_ptr<DisplaySessionProxy> DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const
     {
-        if(0 >= sess->displayNum)
-        {
-            return false;
-        }
+        std::unique_ptr<DisplaySessionProxy> res;
 
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 300, [sess]()
+        Tools::waitCallable<std::chrono::milliseconds>(ms, 150, [sess, &res]()
         {
             try
             {
@@ -1571,35 +1527,18 @@ namespace LTSM::Manager
                 {
                     auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
                     //Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
-                    auto ptr = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
-                    return ptr && ptr->isAlive();
+                    res = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
+                    if(res->isAlive())
+                        return true;
+                    res.reset();
                 }
             }
             catch(...) {}
 
             return false;
         });
-
-/*
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [this, display = sess->displayNum, auth = std::addressof(sess->mcookie)]()
-        {
-            if(checkDisplaySessionAlive(display))
-            {
-                try
-                {
-                    if(auto xcb = std::make_unique<XCB::Connector>(display, auth))
-                    {
-                        return 0 == xcb->hasError();
-                    }
-                }
-                catch(const std::exception &)
-                {
-                }
-            }
-
-            return false;
-        });
-*/
+        
+        return res;
     }
 
     std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) const
@@ -1806,7 +1745,7 @@ namespace LTSM::Manager
         Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
-        if(waitDisplaySessionStarting(sess, 5000 /* ms */))
+        if(sess->dbus = waitDisplaySessionStarting(sess, 3000 /* ms */); !! sess->dbus)
         {
             try
             {
@@ -1863,8 +1802,6 @@ namespace LTSM::Manager
         sess->remoteAddr = remoteAddr;
         sess->conntype = connType;
         sess->connectorId = connectorId;
-
-        // FIXME wait dbus session?!!!!!!!!!!1
 
         startLoginChannels(sess);
 
@@ -1968,9 +1905,9 @@ namespace LTSM::Manager
         newSess->conntype = connType;
         newSess->connectorId = connectorId;
         newSess->policy = sessionPolicy(Tools::lower(configGetString("session:policy")));
-        //newSess->mode = SessionMode::Started;
-        //newSess->tpStart = std::chrono::system_clock::now();
-        //newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        newSess->mode = SessionMode::Started;
+        newSess->tpStart = std::chrono::system_clock::now();
+        newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
         newSess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
         newSess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
@@ -2017,19 +1954,14 @@ namespace LTSM::Manager
             }
         }
 
-        // move pam from login session
-        //if(newSess->pid2 < 0)
-        //{
-        // Application::error("%s: user session failed, result: %" PRId32, __FUNCTION__, newSess->pid2);
-        // return -1;
-        //}
-
         // registered session job
-        //waitPidBackgroundSafe(newSess->pid2);
+        waitPidBackgroundSafe(newSess->pid1);
 
         // parent continue
         Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, newSess->pid1, newSess->displayNum);
+
+        // FIXME
         sessionRunSetxkbmapLayout(newSess);
         runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);

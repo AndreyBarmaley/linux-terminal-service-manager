@@ -173,6 +173,17 @@ namespace LTSM::Manager
 
     SessionPolicy sessionPolicy(const std::string &);
 
+    class DisplaySessionProxy
+    {
+        const std::string dbusAddress;
+        const int displayNum;
+
+    public:
+        DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display) {}
+
+        bool isAlive(void) const;
+    };
+
 
     /// XvfbSession
     struct XvfbSession
@@ -217,6 +228,7 @@ namespace LTSM::Manager
         uint8_t depth = 0;
 
         PidStatus idleActionStatus;
+        std::unique_ptr<DisplaySessionProxy> dbus;
 
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
@@ -284,17 +296,6 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-    class DisplaySessionProxy
-    {
-        const std::string dbusAddress;
-        const int displayNum;
-
-    public:
-        DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display) {}
-
-        bool isAlive(void) const;
-    };
-
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
     {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
@@ -331,7 +332,7 @@ namespace LTSM::Manager
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
         XvfbSessionPtr runNewDisplaySession(UserInfoPtr userInfo, const std::string & password, bool loginMode);
-        bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
+        std::unique_ptr<DisplaySessionProxy> waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);

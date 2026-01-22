@@ -141,10 +141,12 @@ namespace LTSM::DisplaySession
             {
                 try
                 {
-                    if(res = std::make_unique<XCB::Connector>(displayNum, auth))
+                    if(res = std::make_unique<XCB::Connector>(displayNum, auth); !!res)
                     {
                         return 0 == res->hasError();
                     }
+
+                    res.reset();
                 }
                 catch(const std::exception &)
                 {
