@@ -142,13 +142,6 @@ namespace LTSM::Connector {
         }
     }
 
-    void ConnectorLtsm::onHelperWidgetStarted(const int32_t & display) {
-        if(display == displayNum()) {
-            Application::info("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
-            _loginWidgetStarted = true;
-        }
-    }
-
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
             Application::info("%s: dbus signal, display: %" PRId32, __FUNCTION__, display);
@@ -238,16 +231,6 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::serverConnectedEvent(void) {
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 100 ms pause
-        bool waitWidgetStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]() {
-            return ! ! this->_loginWidgetStarted;
-        });
-
-        if(! waitWidgetStarted) {
-            Application::error("%s: %s failed", __FUNCTION__, "wait loginWidgetStarted");
-            throw proto_error(NS_FuncName);
-        }
-
 #ifdef LTSM_WITH_GSSAPI
 
         if(auto info = ServerEncoder::authInfo(); ! info.first.empty()) {

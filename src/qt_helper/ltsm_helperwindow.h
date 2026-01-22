@@ -99,7 +99,6 @@ namespace LTSM::LoginHelper {
         void onHelperSetLoginPassword(const int32_t & display, const std::string & login,
                                       const std::string & pass, const bool & autologin) override;
         void onHelperSetTimezone(const int32_t & display, const std::string &) override;
-        void onHelperWidgetStarted(const int32_t & display) override;
         void onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) override;
         void onShutdownConnector(const int32_t & display) override;
 
@@ -113,7 +112,6 @@ namespace LTSM::LoginHelper {
         void loginPasswordChangedNotify(const QString, const QString &, bool);
         void pkcs11ListennerStartedNotify(int);
         void connectorShutdownNotify(void);
-        void widgetStartedNotify(void);
     };
 
     class LoginWindow : public QMainWindow, public ApplicationJsonConfig, protected XCB::RootDisplay {
@@ -134,7 +132,6 @@ namespace LTSM::LoginHelper {
         void setLoginPasswordCallback(const QString &, const QString &, bool);
         void pkcs11ListennerCallback(int);
         void shutdownConnectorCallback(void);
-        void widgetStartedCallback(void);
         void setLabelError(const QString &);
         void setLabelInfo(const QString &);
         void reloadUsersList(void);
@@ -177,7 +174,6 @@ namespace LTSM::LoginHelper {
 #ifdef LTSM_PKCS11_AUTH
         QScopedPointer<Pkcs11Client> pkcs11;
 #endif
-        std::once_flag widgetStarted;
     };
 }
 

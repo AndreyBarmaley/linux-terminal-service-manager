@@ -483,16 +483,6 @@ namespace LTSM::Connector {
         serverFormat = PixelFormat(XCB::RootDisplay::bitsPerPixel(),
                                    visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
-        // wait widget started signal(onHelperWidgetStarted), 3000ms, 10 ms pause
-        bool waitHelperStarted = Tools::waitCallable<std::chrono::milliseconds>(3000, 100, [this]() {
-            return ! ! this->helperStartedFlag;
-        });
-
-        if(! waitHelperStarted) {
-            Application::error("connector starting: %s", "something went wrong...");
-            return false;
-        }
-
         std::this_thread::sleep_for(50ms);
         return true;
     }
@@ -570,13 +560,6 @@ namespace LTSM::Connector {
         if(display == displayNum() &&
            freeRdp && freeRdp->peer && freeRdp->peer->settings && freeRdp->peer->settings->SoundBeepsEnabled) {
             // FIXME beep
-        }
-    }
-
-    void ConnectorRdp::onHelperWidgetStarted(const int32_t & display) {
-        if(display == displayNum()) {
-            helperStartedFlag = true;
-            Application::info("dbus signal: helper started, display: %" PRId32, display);
         }
     }
 

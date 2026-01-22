@@ -40,7 +40,6 @@ namespace LTSM::Connector {
     };
 
     class ConnectorRdp : public DBusProxy, public XCB::RootDisplay, protected ProxySocket {
-        std::atomic<bool> helperStartedFlag{false};
         std::atomic<bool> loopShutdownFlag{false};
         std::atomic<bool> updatePartFlag{true};
         std::unique_ptr<FreeRdpCallback> freeRdp;
@@ -53,7 +52,6 @@ namespace LTSM::Connector {
                             const uint32_t & userUid) override;
         void onSendBellSignal(const int32_t & display) override;
         void onShutdownConnector(const int32_t & display) override;
-        void onHelperWidgetStarted(const int32_t & display) override;
 
         // connector
         void serverScreenUpdateRequest(const XCB::Region &) override;

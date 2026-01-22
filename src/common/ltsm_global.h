@@ -41,6 +41,7 @@ namespace LTSM {
 
     inline static const char* dbus_session_display_name = "ltsm.session.display";
     inline static const char* dbus_session_display_path = "/ltsm/session/display";
+    inline static const char* dbus_session_display_ifce = "LTSM.Session.Display";
 
     inline static const char* ltsm_group_auth = "ltsm-auth";
     inline static const char* ltsm_user_conn = "ltsm-xvfb";

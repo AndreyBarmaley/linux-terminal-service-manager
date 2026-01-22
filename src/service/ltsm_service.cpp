@@ -151,6 +151,7 @@ namespace LTSM::Manager
                 {
                     runSystemScript(sess, json.configGetString("system:logoff"), false);
                 }
+
                 return;
             }
 
@@ -1164,47 +1165,37 @@ namespace LTSM::Manager
     }
 #endif
 
-/*
-    // DisplaySessionProxy
-    DisplaySessionProxy::DisplaySessionProxy(XvfbSessionPtr sess)
+    bool DisplaySessionProxy::isAlive(void) const
     {
-#ifdef SDBUS_ADDRESS_SUPPORT
         try
         {
-            auto dbusAddresses = getSessionDBusAddresses(*sess->userInfo, sess->displayNum);
-        
-            if(dbusAddresses.empty())
-            {
-                Application::warning("%s: %s, display: %" PRId32 ", user: %s",
-                                     __FUNCTION__, "dbus address empty", sess->displayNum, sess->userInfo->user());
-                throw service_error(NS_FuncName);
-            }
-        
-            auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
-            Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
-        
-            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
+#ifdef SDBUS_ADDRESS_SUPPORT
+            auto conn = sdbus::createSessionBusConnectionWithAddress(dbusAddress);
 #ifdef SDBUS_2_0_API
-            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path});
+            auto proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path});
 #else
-            proxy = sdbus::createProxy(std::move(conn), dbus_session_display_name, dbus_session_display_path);
+            auto proxy = sdbus::createProxy(std::move(conn), dbus_session_display_name, dbus_session_display_path);
 #endif
-            //concatenatorProxy->callMethod("umountPoint").onInterface(dbus_session_fuse_ifce).withArguments(localPoint).dontExpectReply();
+            int version = 0;
+            proxy->callMethod("getVersion").onInterface(dbus_session_display_ifce).storeResultsTo(version);
+
+            return 0 < version;
         }
         catch(const sdbus::Error & err)
         {
             Application::error("%s: failed, display: %" PRId32 ", sdbus error: %s, msg: %s",
-                               __FUNCTION__, sess->displayNum, err.getName().c_str(), err.getMessage().c_str());
+                               __FUNCTION__, displayNum, err.getName().c_str(), err.getMessage().c_str());
         }
         catch(std::exception & err)
         {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("%s: exception: %s", __FUNCTION__, err.what());
         }
+
 #else
-        Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+            Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
 #endif
+        return false;
     }
-*/
 
     /* DBusAdaptor */
     DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::filesystem::path & confile)
@@ -1565,14 +1556,32 @@ namespace LTSM::Manager
         return 0 < display && Tools::checkUnixSocket(Tools::x11UnixPath(display));
     }
 
-    bool DBusAdaptor::waitDisplaySessionStarting(int display, const std::vector<uint8_t> & cookie, uint32_t ms) const
+    bool DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const
     {
-        if(0 >= display)
+        if(0 >= sess->displayNum)
         {
             return false;
         }
 
-        return Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [this, display, auth = std::addressof(cookie)]()
+        return Tools::waitCallable<std::chrono::milliseconds>(ms, 300, [sess]()
+        {
+            try
+            {
+                if(auto dbusAddresses = getSessionDBusAddresses(*sess->userInfo, sess->displayNum); ! dbusAddresses.empty())
+                {
+                    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+                    //Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+                    auto ptr = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
+                    return ptr && ptr->isAlive();
+                }
+            }
+            catch(...) {}
+
+            return false;
+        });
+
+/*
+        return Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [this, display = sess->displayNum, auth = std::addressof(sess->mcookie)]()
         {
             if(checkDisplaySessionAlive(display))
             {
@@ -1590,6 +1599,7 @@ namespace LTSM::Manager
 
             return false;
         });
+*/
     }
 
     std::filesystem::path DBusAdaptor::createXauthFile(int displayNum, const std::vector<uint8_t> & mcookie) const
@@ -1796,7 +1806,7 @@ namespace LTSM::Manager
         Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
-        if(waitDisplaySessionStarting(sess->displayNum, sess->mcookie, 5000 /* ms */))
+        if(waitDisplaySessionStarting(sess, 5000 /* ms */))
         {
             try
             {
@@ -2649,16 +2659,6 @@ namespace LTSM::Manager
         }
     }
 
-    void DBusAdaptor::helperWidgetStartedAction(const int32_t & display)
-    {
-        Application::info("%s: display: %" PRId32, __FUNCTION__, display);
-
-        std::thread([this, display]()
-        {
-            this->emitHelperWidgetStarted(display);
-        }).detach();
-    }
-
     std::forward_list<std::string> DBusAdaptor::getAllowLogins(void) const
     {
         // uids names: "access:uid:min", "access:uid:max"
@@ -3184,7 +3184,7 @@ namespace LTSM::Manager
         return true;
     }
 
-    bool startAudioSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string audioSocket)
+    bool startAudioSessionJob(DBusAdaptor * owner, XvfbSessionPtr xvfb, std::string audioSocket)
     {
         // wait new session started
         while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
@@ -3424,7 +3424,7 @@ namespace LTSM::Manager
         return true;
     }
 
-    bool startPcscSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string pcscSocket)
+    bool startPcscSessionJob(DBusAdaptor * owner, XvfbSessionPtr xvfb, std::string pcscSocket)
     {
         // wait new session started
         while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2))
@@ -3659,7 +3659,7 @@ namespace LTSM::Manager
         Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
     }
 
-    bool startFuseSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string localPoint, std::string remotePoint,
+    bool startFuseSessionJob(DBusAdaptor * owner, XvfbSessionPtr xvfb, std::string localPoint, std::string remotePoint,
                              std::string fuseSocket)
     {
         // wait new session started

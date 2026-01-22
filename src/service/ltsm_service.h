@@ -199,7 +199,6 @@ namespace LTSM::Manager
         int displayNum = -1;
 
         int pid1 = 0; // xvfb pid
-        int pid2 = 0; // session pid
         int connectorId = 0; // connector pid
 
         std::atomic<uint32_t> startTimeLimitSec{0};
@@ -218,7 +217,6 @@ namespace LTSM::Manager
         uint8_t depth = 0;
 
         PidStatus idleActionStatus;
-        //std::unique_ptr<PamSession> pam;
 
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
@@ -286,15 +284,16 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-/*
-    DisplaySessionProxy
+    class DisplaySessionProxy
     {
-        std::unique_ptr<sdbus::IProxy> proxy;
+        const std::string dbusAddress;
+        const int displayNum;
 
     public:
-        DisplaySessionProxy(XvfbSessionPtr);
+        DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display) {}
+
+        bool isAlive(void) const;
     };
-*/
 
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
     {
@@ -332,7 +331,7 @@ namespace LTSM::Manager
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
         XvfbSessionPtr runNewDisplaySession(UserInfoPtr userInfo, const std::string & password, bool loginMode);
-        bool waitDisplaySessionStarting(int display, const std::vector<uint8_t> &, uint32_t waitms) const;
+        bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
@@ -400,7 +399,6 @@ namespace LTSM::Manager
         bool busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
                                     const uint32_t & filesz, const std::string & dstfile) override;
 
-        void helperWidgetStartedAction(const int32_t & display) override;
         std::vector<std::string> helperGetUsersList(const int32_t & display) override;
         void helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
                                            const std::string & password, const bool & action) override;

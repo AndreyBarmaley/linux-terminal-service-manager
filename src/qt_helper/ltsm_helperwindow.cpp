@@ -129,15 +129,6 @@ namespace LTSM::LoginHelper {
         }
     }
 
-    void DBusProxy::onHelperWidgetStarted(const int32_t & display) {
-        if(displayNum == display) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
-                               __FUNCTION__, display);
-
-            emit widgetStartedNotify();
-        }
-    }
-
     /// LoginWindow
     LoginWindow::LoginWindow(QWidget* parent) :
         QMainWindow(parent), ApplicationJsonConfig("ltsm_helper"),
@@ -175,7 +166,6 @@ namespace LTSM::LoginHelper {
 
         connect(dbus.data(), SIGNAL(pkcs11ListennerStartedNotify(int)), this, SLOT(pkcs11ListennerCallback(int)));
         connect(dbus.data(), SIGNAL(connectorShutdownNotify()), this, SLOT(shutdownConnectorCallback()));
-        connect(dbus.data(), SIGNAL(widgetStartedNotify()), this, SLOT(widgetStartedCallback()));
 
         loginTimeSec = configGetInteger("login:timeout:sec");
 
@@ -615,34 +605,28 @@ namespace LTSM::LoginHelper {
 
     void LoginWindow::showEvent(QShowEvent* ev) {
         if(QEvent::Show == ev->type()) {
-            std::call_once(widgetStarted, [dbus = dbus.data(), display = displayNum]() {
-                dbus->helperWidgetStartedAction(display);
-            });
-        }
-    }
+            auto screen = QGuiApplication::primaryScreen();
+            auto pos = (screen->size() - QMainWindow::size()) / 2;
+            move(pos.width(), pos.height());
 
-    void LoginWindow::widgetStartedCallback(void) {
-        auto screen = QGuiApplication::primaryScreen();
-        auto pos = (screen->size() - QMainWindow::size()) / 2;
-        move(pos.width(), pos.height());
+            if(! initArguments) {
+                if(auto title = QString::fromStdString(configGetString("title:format")); ! title.isEmpty()) {
+                    auto version = dbus->busGetServiceVersion();
+                    title.replace("%{version}", QString::number(version));
+                    ui->labelTitle->setText(title);
+                }
 
-        if(! initArguments) {
-            if(auto title = QString::fromStdString(configGetString("title:format")); ! title.isEmpty()) {
-                auto version = dbus->busGetServiceVersion();
-                title.replace("%{version}", QString::number(version));
-                ui->labelTitle->setText(title);
+                dateFormat = QString::fromStdString(configGetString("datetime:format"));
+                loginAutoComplete = configGetBoolean("login:autocomplete");
+                auto encryption = dbus->busEncryptionInfo(displayNum);
+                ui->lineEditEncryption->setText(QString::fromStdString(encryption));
+
+                if(loginAutoComplete) {
+                    reloadUsersList();
+                }
+
+                initArguments = true;
             }
-
-            dateFormat = QString::fromStdString(configGetString("datetime:format"));
-            loginAutoComplete = configGetBoolean("login:autocomplete");
-            auto encryption = dbus->busEncryptionInfo(displayNum);
-            ui->lineEditEncryption->setText(QString::fromStdString(encryption));
-
-            if(loginAutoComplete) {
-                reloadUsersList();
-            }
-
-            initArguments = true;
         }
     }
 

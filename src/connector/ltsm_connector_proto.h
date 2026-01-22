@@ -49,7 +49,6 @@ namespace LTSM::Connector {
         std::mutex _lockTransfer;
 
         std::atomic<uint32_t> _frameRate{10};
-        std::atomic<bool> _loginWidgetStarted{false};
         std::atomic<bool> _userSession{false};
         std::atomic<bool> _x11NoDamage{false};
 
@@ -83,7 +82,6 @@ namespace LTSM::Connector {
         void onLoginSuccess(const int32_t & display, const std::string & userName,
                             const uint32_t & userUid) override;
         void onShutdownConnector(const int32_t & display) override;
-        void onHelperWidgetStarted(const int32_t & display) override;
         void onSendBellSignal(const int32_t & display) override;
 
         // connector
