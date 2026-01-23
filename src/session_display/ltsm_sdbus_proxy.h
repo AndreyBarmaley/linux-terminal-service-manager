@@ -33,48 +33,54 @@
 #include <memory>
 #include <string>
 
-namespace SDBus
-{
-    class ProxyBase
-    {
-    protected:
+namespace LTSM::SDBus {
+    class SessionProxy {
+      protected:
         std::forward_list<std::string> signals;
         std::unique_ptr<sdbus::IProxy> proxy;
-        std::string interface;
+        const std::string interface;
 
-    public:
-        ProxyBase(const std::string &name, const std::string &path,
-                  const std::string &inter);
-        virtual ~ProxyBase();
+      public:
+        SessionProxy(const std::string &name, const std::string &path,
+                     const std::string &inter) : interface(inter) {
+            auto conn = sdbus::createSessionBusConnection();
+            proxy = sdbus::createProxy(std::move(conn), name, path);
+        }
 
-        ProxyBase(const ProxyBase &) = delete;
-        ProxyBase & operator=(const ProxyBase &) = delete;
+        virtual ~SessionProxy() {
+            for(const auto& signal : signals) {
+                proxy->unregisterSignalHandler(interface, signal);
+            }
+        }
 
-        ProxyBase(ProxyBase &&) = default;
-        ProxyBase & operator=(ProxyBase &&) = default;
+        SessionProxy(const SessionProxy &) = delete;
+        SessionProxy & operator=(const SessionProxy &) = delete;
+
+        SessionProxy(SessionProxy &&) = default;
+        SessionProxy & operator=(SessionProxy &&) = default;
 
         template <typename Func>
-        void registerSignal(const std::string &signalName, Func &&signalHandler)
-        {
+        void registerSignal(const std::string &signalName, Func &&signalHandler) {
             proxy->uponSignal(signalName)
             .onInterface(interface)
             .call(std::move(signalHandler));
             signals.push_front(signalName);
         }
 
-        inline void finishRegistration(void) { proxy->finishRegistration(); }
+        inline void finishRegistration(void) {
+            proxy->finishRegistration();
+        }
 
-        void unregisterSignal(const std::string signalName);
+        void unregisterSignal(const std::string &signalName) {
+            proxy->unregisterSignalHandler(interface, signalName);
+            signals.remove(signalName);
+        }
 
         template <typename Type>
-        Type getProperty(const std::string &prop) const
-        {
-            try
-            {
+        Type getProperty(const std::string &prop) const {
+            try {
                 return proxy->getProperty(prop).onInterface(interface);
-            }
-            catch(const sdbus::Error &err)
-            {
+            } catch(const sdbus::Error &err) {
                 Application::error("%s: failed, sdbus error: %s, msg: %s",
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }
@@ -84,19 +90,15 @@ namespace SDBus
 
         template <typename... Args>
         sdbus::ObjectPath CallProxyMethod(const std::string &methodName,
-                                          Args &&...args) const
-        {
+                                          Args &&...args) const {
             sdbus::ObjectPath res;
 
-            try
-            {
+            try {
                 proxy->callMethod(methodName)
                 .onInterface(interface)
                 .withArguments(std::forward<Args>(args)...)
                 .storeResultsTo(res);
-            }
-            catch(const sdbus::Error &err)
-            {
+            } catch(const sdbus::Error &err) {
                 Application::error("%s: failed, sdbus error: %s, msg: %s",
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }
@@ -106,16 +108,12 @@ namespace SDBus
 
         template <typename... Args>
         void CallProxyMethodNoResult(const std::string &methodName,
-                                     Args &&...args) const
-        {
-            try
-            {
+                                     Args &&...args) const {
+            try {
                 proxy->callMethod(methodName)
                 .onInterface(interface)
                 .withArguments(std::forward<Args>(args)...);
-            }
-            catch(const sdbus::Error &err)
-            {
+            } catch(const sdbus::Error &err) {
                 Application::error("%s: failed, sdbus error: %s, msg: %s",
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }

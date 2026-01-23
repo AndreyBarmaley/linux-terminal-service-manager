@@ -37,11 +37,11 @@
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
+#include "ltsm_sdbus_proxy.h"
 
 #define LTSM_SESSION_DISPLAY_VERSION 20260110
 
-namespace LTSM::DisplaySession
-{
+namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = std::pair<int, StdoutBuf>;
     using PidStatus = std::pair<int, std::future<int>>;
@@ -49,11 +49,38 @@ namespace LTSM::DisplaySession
 
     class Starter;
 
-    class DBusAdaptor : public sdbus::AdaptorInterfaces<Session::Display_adaptor>
-    {
+    class FreedesktopNotifications : public SDBus::SessionProxy {
+      public:
+        FreedesktopNotifications() : SDBus::SessionProxy("org.freedesktop.Notifications",
+                    "/org/freedesktop/Notifications", "org.freedesktop.Notifications") {}
+
+        enum class IconType { Information, Warning, Error, Question };
+
+        void notify(const std::string & applicationName, uint32_t replacesId, const IconType & iconType,
+                    const std::string & summary, const std::string & body, const std::vector<std::string> & actions,
+                    const std::map<std::string, sdbus::Variant> & hints, int32_t expirationTime) const;
+
+        void notifyInfo(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Information, summary, body, {}, {}, expirationTime);
+        }
+
+        void notifyWarning(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Warning, summary, body, {}, {}, expirationTime);
+        }
+
+        void notifyError(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Error, summary, body, {}, {}, expirationTime);
+        }
+
+        void notifyQuestion(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Question, summary, body, {}, {}, expirationTime);
+        }
+    };
+
+    class DBusAdaptor : public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
         Starter & starter_;
 
-    public:
+      public:
         DBusAdaptor(sdbus::IConnection &, Starter &);
         virtual ~DBusAdaptor();
 
@@ -63,10 +90,13 @@ namespace LTSM::DisplaySession
 
         std::string jsonStatus(void) override;
         int32_t runSessionCommand(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+
+        void notifyInfo(const std::string& summary, const std::string& body) override;
+        void notifyWarning(const std::string& summary, const std::string& body) override;
+        void notifyError(const std::string& summary, const std::string& body) override;
     };
 
-    class Starter : public ApplicationJsonConfig
-    {
+    class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;
 
         XCB::AuthCookie mcookie_;
@@ -76,24 +106,23 @@ namespace LTSM::DisplaySession
         int defaultDepth_ = 0;
         int displayNum_ = -1;
 
-        std::forward_list<PidStatus> childCommands_;
+        std::forward_list<PidStatusStdout> childCommands_;
         std::mutex lockCommands_;
 
         std::unique_ptr<XCB::Connector> xcb_;
         std::unique_ptr<Tools::BaseTimer> timer1_;
         std::unique_ptr<DBusAdaptor> dbus_;
 
-        int pidXorg_ = -1;
-        int pidSession_ = -1;
+        PidStatus pidXorg_, pidSession_;
 
-    protected:
+      protected:
         void startX11Display(int displayNum, const char* xauthFile);
         bool startX11Session(void);
         void checkChildCommandsComplete(void);
-        void childProcessEnded(int pid, std::future<int>);
+        void childProcessEnded(int pid, StatusStdout);
         void stopChilds(void);
 
-    public:
+      public:
         Starter(int displayNum, const char* xauthFile);
         ~Starter();
 

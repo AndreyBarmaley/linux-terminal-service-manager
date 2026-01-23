@@ -3,6 +3,7 @@
 <node name="/ltsm/session/display">
     <interface name="LTSM.Session.Display">
 
+        <!-- methods -->
         <method name="getVersion">
             <arg type="i" name="version" direction="out" />
         </method>
@@ -25,16 +26,28 @@
             <arg type="s" name="json" direction="out" />
         </method>
 
-        <signal name="runSessionCommandFailed">
-            <arg type="i" name="pid" />
-            <arg type="i" name="wstatus" />
-        </signal>
+        <method name="notifyInfo">
+            <arg type="s" name="summary" direction="in" />
+            <arg type="s" name="body" direction="in" />
+        </method>
 
-        <signal name="runSessionCommandSuccess">
+        <method name="notifyWarning">
+            <arg type="s" name="summary" direction="in" />
+            <arg type="s" name="body" direction="in" />
+        </method>
+
+        <method name="notifyError">
+            <arg type="s" name="summary" direction="in" />
+            <arg type="s" name="body" direction="in" />
+        </method>
+
+        <!-- signals -->        
+        <signal name="runSessionCommandComplete">
             <arg type="i" name="pid" />
-            <arg type="i" name="ret" />
+            <arg type="b" name="success" />
+            <arg type="i" name="wstatus" />
             <arg type="ay" name="stdout" />
         </signal>
- 
+
     </interface>
 </node>
