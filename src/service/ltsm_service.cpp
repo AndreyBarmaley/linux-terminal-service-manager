@@ -520,7 +520,7 @@ namespace LTSM::Manager
         jos.push("height", height);
         jos.push("uid", userInfo->uid());
         jos.push("gid", userInfo->gid());
-        jos.push("start:limit", startTimeLimitSec.load());
+        jos.push("lifetime:limit", lifeTimeLimitSec.load());
         jos.push("online:limit", onlineTimeLimitSec.load());
         jos.push("offline:limit", offlineTimeLimitSec.load());
         jos.push("status:flags", statusFlags.load());
@@ -542,7 +542,7 @@ namespace LTSM::Manager
             jos.push("offlined:sec", sessionOfflinedSec().count());
         }
 
-        jos.push("session:started:timeout", static_cast<uint32_t>(startTimeLimitSec));
+        jos.push("session:lifetime:timeout", static_cast<uint32_t>(lifeTimeLimitSec));
         jos.push("session:online:timeout", static_cast<uint32_t>(onlineTimeLimitSec));
         jos.push("session:offline:timeout", static_cast<uint32_t>(offlineTimeLimitSec));
         jos.push("session:idle:timeout", static_cast<uint32_t>(idleTimeLimitSec));
@@ -588,7 +588,7 @@ namespace LTSM::Manager
 
         for(const auto & ptr : sessions)
         {
-            if(ptr && (0 < ptr->startTimeLimitSec || 0 < ptr->onlineTimeLimitSec || 0 < ptr->offlineTimeLimitSec))
+            if(ptr && (0 < ptr->lifeTimeLimitSec || 0 < ptr->onlineTimeLimitSec || 0 < ptr->offlineTimeLimitSec))
             {
                 res.push_front(ptr);
             }
@@ -1291,21 +1291,21 @@ namespace LTSM::Manager
             uint32_t lastSecOnlined = UINT32_MAX;
 
             // check started timepoint
-            if(0 < ptr->startTimeLimitSec)
+            if(0 < ptr->lifeTimeLimitSec)
             {
                 auto startedSec = ptr->sessionStartedSec();
 
-                if(startedSec.count() > ptr->startTimeLimitSec)
+                if(startedSec.count() > ptr->lifeTimeLimitSec)
                 {
                     Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
-                                        __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->startTimeLimitSec), startedSec.count());
+                                        __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
                     displayShutdown(ptr, true);
                     continue;
                 }
 
                 if(ptr->mode != SessionMode::Login)
                 {
-                    lastSecStarted = ptr->startTimeLimitSec - startedSec.count();
+                    lastSecStarted = ptr->lifeTimeLimitSec - startedSec.count();
                 }
             }
 
@@ -1711,7 +1711,7 @@ namespace LTSM::Manager
         sess->displayNum = freeDisplay;
         sess->tpStart = std::chrono::system_clock::now();
         sess->displayAddr = Tools::joinToString(":", sess->displayNum);
-        sess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        sess->lifeTimeLimitSec = configGetInteger("session:lifetime:timeout", 0);
 
         // session xauthfile
         sess->mcookie = Tools::randomBytes(128);
@@ -1907,7 +1907,7 @@ namespace LTSM::Manager
         newSess->policy = sessionPolicy(Tools::lower(configGetString("session:policy")));
         newSess->mode = SessionMode::Started;
         newSess->tpStart = std::chrono::system_clock::now();
-        newSess->startTimeLimitSec = configGetInteger("session:started:timeout", 0);
+        newSess->lifeTimeLimitSec = configGetInteger("session:lifetime:timeout", 0);
         newSess->idleTimeLimitSec = configGetInteger("session:idle:timeout", 120);
         newSess->idleDisconnect = configGetBoolean("session:idle:disconnect", false);
 
@@ -3847,13 +3847,13 @@ namespace LTSM::Manager
         }
     }
 
-    void DBusAdaptor::busSetSessionDurationLimitSec(const int32_t & display, const uint32_t & limit)
+    void DBusAdaptor::busSetSessionLifetimeLimitSec(const int32_t & display, const uint32_t & limit)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display))
         {
-            xvfb->startTimeLimitSec = limit;
+            xvfb->lifeTimeLimitSec = limit;
             emitClearRenderPrimitives(display);
         }
         else

@@ -55,7 +55,7 @@
             <arg type="i" name="display" direction="in" />
             <arg type="s" name="info" direction="in" />
         </method>
-        <method name="busSetSessionDurationLimitSec">
+        <method name="busSetSessionLifetimeLimitSec">
             <arg type="i" name="display" direction="in" />
             <arg type="u" name="limit" direction="in" />
         </method>

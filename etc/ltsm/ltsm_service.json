@@ -5,7 +5,7 @@
     "channel:fuse:disabled": false,
     "channel:sane:disabled": false,
 
-    "session:started:timeout": 0,
+    "session:lifetime:timeout": 0,
     "session:online:timeout": 0,
     "session:offline:timeout": 0,
     "session:idle:timeout": 120,

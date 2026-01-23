@@ -212,7 +212,7 @@ namespace LTSM::Manager
         int pid1 = 0; // xvfb pid
         int connectorId = 0; // connector pid
 
-        std::atomic<uint32_t> startTimeLimitSec{0};
+        std::atomic<uint32_t> lifeTimeLimitSec{0};
         std::atomic<uint32_t> onlineTimeLimitSec{0};
         std::atomic<uint32_t> offlineTimeLimitSec{0};
         std::atomic<uint32_t> idleTimeLimitSec{0};
@@ -378,7 +378,7 @@ namespace LTSM::Manager
         void busSetChannelDebug(const int32_t & display, const uint8_t & channel,
                                 const bool & debug) override;
         void busSetEncryptionInfo(const int32_t & display, const std::string & info) override;
-        void busSetSessionDurationLimitSec(const int32_t & display, const uint32_t & limit) override;
+        void busSetSessionLifetimeLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) override;
         void busSetSessionIdleLimitSec(const int32_t & display, const uint32_t & limit) override;
