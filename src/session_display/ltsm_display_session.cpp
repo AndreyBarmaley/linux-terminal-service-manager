@@ -317,6 +317,10 @@ namespace LTSM::DisplaySession {
         return starter_.dbusRunSessionCommandAsync(cmd, args, envs);
     }
 
+    std::vector<uint8_t> DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
+        return starter_.dbusRunSessionCommandSync(cmd, args, envs);
+    }
+
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
         FreedesktopNotifications().notifyInfo(summary, body, 2000 /* ms */);
     }
@@ -598,16 +602,32 @@ namespace LTSM::DisplaySession {
         Application::debug(DebugType::Dbus, "%s: cmd: `%s'", __FUNCTION__, cmd.c_str());
 
         try {
-            std::scoped_lock guard{ lockCommands_ };
-            childCommands_.emplace_front(runForkCommandStdout(cmd, args, envs));
-
-            // return pid
-            return childCommands_.front().first;
+            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
+                std::scoped_lock guard{ lockCommands_ };
+                childCommands_.emplace_front(std::move(pidStatus));
+                // return pid
+                return childCommands_.front().first;
+            }
         } catch(const std::exception & err) {
             LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
         }
 
         return -1;
+    }
+
+    std::vector<uint8_t> Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
+        Application::debug(DebugType::Dbus, "%s: cmd: `%s'", __FUNCTION__, cmd.c_str());
+
+        try {
+            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
+                auto statusStdout = pidStatus.second.get();
+                return std::move(statusStdout.second);
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+
+        return {};
     }
 
     std::string Starter::dbusJsonStatus(void) const {
