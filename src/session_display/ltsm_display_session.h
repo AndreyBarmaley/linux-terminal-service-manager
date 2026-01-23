@@ -89,7 +89,7 @@ namespace LTSM::DisplaySession {
         void setDebug(const std::string & level) override;
 
         std::string jsonStatus(void) override;
-        int32_t runSessionCommand(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+        int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
 
         void notifyInfo(const std::string& summary, const std::string& body) override;
         void notifyWarning(const std::string& summary, const std::string& body) override;
@@ -133,7 +133,7 @@ namespace LTSM::DisplaySession {
         void dbusServiceShutdown(void) const;
         void dbusSetDebug(const std::string & level);
         std::string dbusJsonStatus(void) const;
-        int32_t dbusRunSessionCommand(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
+        int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
     };
 }
 

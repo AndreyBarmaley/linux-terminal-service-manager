@@ -15,7 +15,7 @@
             <arg type="s" name="level" direction="in" />
         </method>
 
-        <method name="runSessionCommand">
+        <method name="runSessionCommandAsync">
             <arg type="s" name="cmd" direction="in" />
             <arg type="as" name="args" direction="in" />
             <arg type="as" name="envs" direction="in" />
@@ -42,7 +42,7 @@
         </method>
 
         <!-- signals -->        
-        <signal name="runSessionCommandComplete">
+        <signal name="runSessionCommandAsyncComplete">
             <arg type="i" name="pid" />
             <arg type="b" name="success" />
             <arg type="i" name="wstatus" />
