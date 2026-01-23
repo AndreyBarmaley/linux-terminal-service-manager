@@ -38,6 +38,7 @@
 #include "ltsm_global.h"
 #include "ltsm_application.h"
 #include "ltsm_service_adaptor.h"
+#include "ltsm_display_proxy.h"
 #include "ltsm_json_wrapper.h"
 
 namespace LTSM::Manager
@@ -173,18 +174,16 @@ namespace LTSM::Manager
 
     SessionPolicy sessionPolicy(const std::string &);
 
-    class DisplaySessionProxy
+    class DisplaySessionProxy : public sdbus::ProxyInterfaces<Session::Display_proxy>
     {
-        const std::string dbusAddress;
         const int displayNum;
-
-        std::unique_ptr<sdbus::IProxy> proxy;
 
     public:
         DisplaySessionProxy(const std::string & addr, int display);
+        virtual ~DisplaySessionProxy();
 
-        bool isAlive(void) const;
-        int  runSessionCommand(std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) const;
+        // dbus signal
+        void onRunSessionCommandAsyncComplete(const int32_t& pid, const bool& success, const int32_t& wstatus, const std::vector<uint8_t>& stdout) override;
     };
 
     /// XvfbSession

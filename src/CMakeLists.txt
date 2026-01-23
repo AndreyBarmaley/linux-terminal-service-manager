@@ -71,6 +71,14 @@ add_custom_command(
     COMMENT "Generating D-Bus LTSM_DISPLAY adaptor interface"
 )
 
+add_custom_command(
+    OUTPUT ltsm_display_proxy.h
+    COMMAND sdbus-c++-xml2cpp ${CMAKE_CURRENT_SOURCE_DIR}/dbus/ltsm_display.xml
+                    --proxy=${CMAKE_BINARY_DIR}/src/ltsm_display_proxy.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/dbus/ltsm_display.xml
+    COMMENT "Generating D-Bus LTSM_DISPLAY proxy interface"
+)
+
 include_directories(${CMAKE_BINARY_DIR}/src)
 
 if(LTSM_BUILD_SERVER)
@@ -92,7 +100,7 @@ if(LTSM_BUILD_SERVER)
 
         CommonDefaults(SDBUS JSON SYSTEMD)
 
-        add_executable(${CUR_TARGET} ltsm_service_adaptor.h)
+        add_executable(${CUR_TARGET} ltsm_service_adaptor.h ltsm_display_proxy.h)
 
         target_include_directories(${CUR_TARGET} PRIVATE common channels librfb
                 session_fuse session_audio session_pcsc)

@@ -1123,43 +1123,32 @@ namespace LTSM::Manager
     }
 #endif
 
-    DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display)
-    {
 #ifdef SDBUS_ADDRESS_SUPPORT
-        auto conn = sdbus::createSessionBusConnectionWithAddress(dbusAddress);
+    DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) :
 #ifdef SDBUS_2_0_API
-        proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path});
+        ProxyInterfaces(sdbus::createSessionBusConnectionWithAddress(addr), sdbus::ServiceName{LTSM::dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path}),
 #else
-        proxy = sdbus::createProxy(std::move(conn), dbus_session_display_name, dbus_session_display_path);
+        ProxyInterfaces(sdbus::createSessionBusConnectionWithAddress(addr), LTSM::dbus_session_display_name, dbus_session_display_path),
 #endif
+        displayNum(display)
+    {
+        registerProxy();
+    }
 #else
+    DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : displayNum(display)
+    {
         Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
         throw service_error(NS_FuncName);
+    }
 #endif
+
+    DisplaySessionProxy::~DisplaySessionProxy()
+    {
+        unregisterProxy();
     }
 
-    int DisplaySessionProxy::runSessionCommand(std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) const
+    void DisplaySessionProxy::onRunSessionCommandAsyncComplete(const int32_t& pid, const bool& success, const int32_t& wstatus, const std::vector<uint8_t>& stdout)
     {
-        if(proxy)
-        {
-            int32_t pid = 0;
-            proxy->callMethod("runSessionCommand").onInterface(dbus_session_display_ifce).withArguments(cmd, args, envs).storeResultsTo(pid);
-            return pid;
-        }
-        
-        return false;
-    }
-    
-    bool DisplaySessionProxy::isAlive(void) const
-    {
-        if(proxy)
-        {
-            int32_t version = 0;
-            proxy->callMethod("getVersion").onInterface(dbus_session_display_ifce).storeResultsTo(version);
-            return 0 < version;
-        }
-        
-        return false;
     }
 
     /* DBusAdaptor */
@@ -1534,7 +1523,7 @@ namespace LTSM::Manager
                 try
                 {
                     res = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
-                    return res && res->isAlive();
+                    return res && 0 < res->getVersion();
                 } catch(...) {}
             }
 
@@ -1643,7 +1632,7 @@ namespace LTSM::Manager
             auto args = Tools::split(Tools::replace(
                                          Tools::replace(str, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
             assertm(! args.empty(), "empty args list");
-            xvfb->dbus->runSessionCommand(args.front(), { std::next(args.begin()), args.end() }, {});
+            xvfb->dbus->runSessionCommandAsync(args.front(), { std::next(args.begin()), args.end() }, {});
         }
     }
 
@@ -2273,6 +2262,9 @@ namespace LTSM::Manager
             auto pair = RunAs::runSessionCommandStdout(xvfb, zenity,
             { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" }, {});
             zenitySelectDirectoryResult = std::move(pair.second);
+
+            // FIXME
+            //xvfb->dbus->runSessionCommandSync(args.front(), { std::next(args.begin()), args.end() }, {});
         }
         catch(const std::exception & err)
         {

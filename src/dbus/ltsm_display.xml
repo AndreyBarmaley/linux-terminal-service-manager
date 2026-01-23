@@ -15,6 +15,13 @@
             <arg type="s" name="level" direction="in" />
         </method>
 
+        <method name="runSessionCommandSync">
+            <arg type="s" name="cmd" direction="in" />
+            <arg type="as" name="args" direction="in" />
+            <arg type="as" name="envs" direction="in" />
+            <arg type="ay" name="stdout" direction="out" />
+        </method>
+
         <method name="runSessionCommandAsync">
             <arg type="s" name="cmd" direction="in" />
             <arg type="as" name="args" direction="in" />

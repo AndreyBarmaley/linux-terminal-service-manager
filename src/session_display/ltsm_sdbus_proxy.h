@@ -36,7 +36,9 @@
 namespace LTSM::SDBus {
     class SessionProxy {
       protected:
+#ifndef SDBUS_2_0_API
         std::forward_list<std::string> signals;
+#endif
         std::unique_ptr<sdbus::IProxy> proxy;
         const std::string interface;
 
@@ -44,13 +46,19 @@ namespace LTSM::SDBus {
         SessionProxy(const std::string &name, const std::string &path,
                      const std::string &inter) : interface(inter) {
             auto conn = sdbus::createSessionBusConnection();
+#ifdef SDBUS_2_0_API
+            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{name}, sdbus::ObjectPath{path});
+#else
             proxy = sdbus::createProxy(std::move(conn), name, path);
+#endif
         }
 
         virtual ~SessionProxy() {
+#ifndef SDBUS_2_0_API
             for(const auto& signal : signals) {
                 proxy->unregisterSignalHandler(interface, signal);
             }
+#endif
         }
 
         SessionProxy(const SessionProxy &) = delete;
@@ -63,17 +71,23 @@ namespace LTSM::SDBus {
         void registerSignal(const std::string &signalName, Func &&signalHandler) {
             proxy->uponSignal(signalName)
             .onInterface(interface)
-            .call(std::move(signalHandler));
+            .call(std::forward<Func>(signalHandler));
+#ifndef SDBUS_2_0_API
             signals.push_front(signalName);
+#endif
         }
 
         inline void finishRegistration(void) {
+#ifndef SDBUS_2_0_API
             proxy->finishRegistration();
+#endif
         }
 
         void unregisterSignal(const std::string &signalName) {
+#ifndef SDBUS_2_0_API
             proxy->unregisterSignalHandler(interface, signalName);
             signals.remove(signalName);
+#endif
         }
 
         template <typename Type>
