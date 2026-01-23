@@ -49,34 +49,6 @@ namespace LTSM::DisplaySession {
 
     class Starter;
 
-    class FreedesktopNotifications : public SDBus::SessionProxy {
-      public:
-        FreedesktopNotifications() : SDBus::SessionProxy("org.freedesktop.Notifications",
-                    "/org/freedesktop/Notifications", "org.freedesktop.Notifications") {}
-
-        enum class IconType { Information, Warning, Error, Question };
-
-        void notify(const std::string & applicationName, uint32_t replacesId, const IconType & iconType,
-                    const std::string & summary, const std::string & body, const std::vector<std::string> & actions,
-                    const std::map<std::string, sdbus::Variant> & hints, int32_t expirationTime) const;
-
-        void notifyInfo(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
-            notify("LTSM", 0, IconType::Information, summary, body, {}, {}, expirationTime);
-        }
-
-        void notifyWarning(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
-            notify("LTSM", 0, IconType::Warning, summary, body, {}, {}, expirationTime);
-        }
-
-        void notifyError(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
-            notify("LTSM", 0, IconType::Error, summary, body, {}, {}, expirationTime);
-        }
-
-        void notifyQuestion(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
-            notify("LTSM", 0, IconType::Question, summary, body, {}, {}, expirationTime);
-        }
-    };
-
     class DBusAdaptor : public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
         Starter & starter_;
 
@@ -91,14 +63,21 @@ namespace LTSM::DisplaySession {
         std::string jsonStatus(void) override;
 
         int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
-        StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) override;
-        StatusStdout runSessionZenity(const std::vector<std::string>& args) override;
+        StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+        StatusStdout runSessionZenity(const std::vector<std::string> & args) override;
         void setSessionKeyboardLayout(const std::string& layout) override;
 
         void notifyInfo(const std::string& summary, const std::string& body) override;
         void notifyWarning(const std::string& summary, const std::string& body) override;
         void notifyError(const std::string& summary, const std::string& body) override;
-    };
+
+        bool audioChannelConnect(const std::string& socketPath) override;
+        void audioChannelDisconnect(const std::string& socketPath) override;
+        bool pcscChannelConnect(const std::string& socketPath) override;
+        void pcscChannelDisconnect(const std::string& socketPath) override;
+        bool fuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) override;
+        void fuseUmountPoint(const std::string& localPoint) override;
+       };
 
     class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;

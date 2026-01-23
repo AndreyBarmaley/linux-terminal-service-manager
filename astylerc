@@ -1,17 +1,50 @@
--A1
+# KR style formatting/indenting uses broken brackets
+-A14
+
+# tab spaces
+-s4
+
+# indent switch blocks
 -S
+
+# indent namespaces
 -N
+
+# indent comments
 -Y
+
+# min conditional indent
+-m0
+
+# pad empty lines around header blocks
 -f
---pad-oper
---pad-comma
---pad-include
+
+# insert space padding around operators
+-p
+
+# insert space padding comma
+-xg 
+
+# insert space padding not oper
 --pad-negation
---unpad-paren
---unpad-brackets
---align-pointer=type
---align-reference=middle
---add-braces
---keep-one-line-blocks
---convert-tabs
---squeeze-ws
+
+# unpad paren
+-U
+
+# Insert space padding around parenthesis on the inside only.
+# -D
+
+# delete empty lines within a function or method
+# -xe
+
+# align pointer left
+-k1
+
+# align reference middle
+-W2
+
+# Close ending angle brackets on template definitions.
+-xy
+
+# Add one line brackets to unbracketed one line conditional statements.
+-j

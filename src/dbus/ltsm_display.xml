@@ -57,6 +57,35 @@
             <arg type="s" name="body" direction="in" />
         </method>
 
+        <method name="audioChannelConnect">
+            <arg type="s" name="socketPath" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+
+        <method name="audioChannelDisconnect">
+            <arg type="s" name="socketPath" direction="in" />
+        </method>
+
+        <method name="pcscChannelConnect">
+            <arg type="s" name="socketPath" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+
+        <method name="pcscChannelDisconnect">
+            <arg type="s" name="socketPath" direction="in" />
+        </method>
+
+        <method name="fuseMountPoint">
+            <arg type="s" name="localPoint" direction="in" />
+            <arg type="s" name="remotePoint" direction="in" />
+            <arg type="s" name="fuseSocket" direction="in" />
+            <arg type="b" name="res" direction="out" />
+        </method>
+
+        <method name="fuseUmountPoint">
+            <arg type="s" name="localPoint" direction="in" />
+        </method>
+
         <!-- signals -->        
         <signal name="runSessionCommandAsyncComplete">
             <arg type="i" name="pid" />

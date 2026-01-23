@@ -116,17 +116,19 @@ namespace LTSM::DisplaySession {
                 ptr = res.data() + pos;
             }
         }
-        
+
         return res;
     }
 
     StatusStdout jobWaitStdout(int pid, int fd) {
         auto future = std::async(std::launch::async, &jobBlockRead, fd);
         int status = ForkMode::waitPid(pid);
+
         if(future.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready) {
             // force stop jobBlockRead
             close(fd);
         }
+
         return std::make_pair(status, future.get());
     }
 
@@ -256,30 +258,109 @@ namespace LTSM::DisplaySession {
     }
 
     // FreedesktopNotifications
-    void FreedesktopNotifications::notify(const std::string & applicationName, uint32_t replacesId,
-                                          const IconType & iconType, const std::string & summary, const std::string & body,
-                                          const std::vector<std::string> & actions, const std::map<std::string, sdbus::Variant> & hints, int32_t expirationTime) const {
-        std::string notificationIcon("dialog-information");
+    class FreedesktopNotifications : public SDBus::SessionProxy {
+      public:
+        FreedesktopNotifications() : SDBus::SessionProxy("org.freedesktop.Notifications",
+                    "/org/freedesktop/Notifications", "org.freedesktop.Notifications") {}
 
-        switch(iconType) {
-            case IconType::Information:
-                break;
+        enum class IconType { Information, Warning, Error, Question };
 
-            case IconType::Warning:
-                notificationIcon.assign("dialog-error");
-                break;
+        void notify(const std::string & applicationName, uint32_t replacesId, const IconType & iconType,
+                    const std::string & summary, const std::string & body, const std::vector<std::string> & actions,
+                    const std::map<std::string, sdbus::Variant> & hints, int32_t expirationTime) const {
 
-            case IconType::Error:
-                notificationIcon.assign("dialog-warning");
-                break;
+            std::string notificationIcon("dialog-information");
 
-            case IconType::Question:
-                notificationIcon.assign("dialog-question");
-                break;
+            switch(iconType) {
+                case IconType::Information:
+                    break;
+
+                case IconType::Warning:
+                    notificationIcon.assign("dialog-error");
+                    break;
+
+                case IconType::Error:
+                    notificationIcon.assign("dialog-warning");
+                    break;
+
+                case IconType::Question:
+                    notificationIcon.assign("dialog-question");
+                    break;
+            }
+
+            CallProxyMethodNoResult("Notify", applicationName, replacesId, notificationIcon, summary, body, actions, hints, expirationTime);
         }
 
-        CallProxyMethodNoResult("Notify", applicationName, replacesId, notificationIcon, summary, body, actions, hints, expirationTime);
-    }
+        inline void notifyInfo(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Information, summary, body, {}, {}, expirationTime);
+        }
+
+        inline void notifyWarning(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Warning, summary, body, {}, {}, expirationTime);
+        }
+
+        inline void notifyError(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Error, summary, body, {}, {}, expirationTime);
+        }
+
+        inline void notifyQuestion(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
+            notify("LTSM", 0, IconType::Question, summary, body, {}, {}, expirationTime);
+        }
+    };
+
+    // SessionAudio
+    class SessionAudio : public SDBus::SessionProxy {
+      public:
+        SessionAudio() : SDBus::SessionProxy(dbus_session_audio_name, dbus_session_audio_path, dbus_session_audio_ifce) {}
+
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+
+        bool connectChannel(const std::string & socketPath) const {
+            return CallProxyMethod<bool>("connectChannel", socketPath);
+        }
+
+        void disconnectChannel(const std::string & socketPath) const {
+            CallProxyMethodNoResult("disconnectChannel", socketPath);
+        }
+    };
+
+    // SessionPcsc
+    class SessionPcsc : public SDBus::SessionProxy {
+      public:
+        SessionPcsc() : SDBus::SessionProxy(dbus_session_pcsc_name, dbus_session_pcsc_path, dbus_session_pcsc_ifce) {}
+
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+
+        bool connectChannel(const std::string & socketPath) const {
+            return CallProxyMethod<bool>("connectChannel", socketPath);
+        }
+
+        void disconnectChannel(const std::string & socketPath) const {
+            CallProxyMethodNoResult("disconnectChannel", socketPath);
+        }
+    };
+
+    // SessionFuse
+    class SessionFuse : public SDBus::SessionProxy {
+      public:
+        SessionFuse() : SDBus::SessionProxy(dbus_session_fuse_name, dbus_session_fuse_path, dbus_session_fuse_ifce) {}
+
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+
+        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) const {
+            return CallProxyMethod<bool>("mountPoint", localPoint, remotePoint, fuseSocket);
+        }
+
+        void umountPoint(const std::string& localPoint) const {
+            CallProxyMethodNoResult("umountPoint", localPoint);
+        }
+    };
 
     // DBusAdaptor
     DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, Starter & starter)
@@ -330,7 +411,7 @@ namespace LTSM::DisplaySession {
         return -1;
     }
 
-    StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
+    StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         auto sargs = Tools::join(args.begin(), args.end(), ", ");
         Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
 
@@ -345,7 +426,7 @@ namespace LTSM::DisplaySession {
         return StatusStdout{ -1, {} };
     }
 
-    StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string>& args) {
+    StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string> & args) {
         auto sargs = Tools::join(args.begin(), args.end(), ", ");
         Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
 
@@ -384,6 +465,30 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::notifyError(const std::string& summary, const std::string& body) {
         FreedesktopNotifications().notifyError(summary, body, 2000 /* ms */);
+    }
+
+    bool DBusAdaptor::audioChannelConnect(const std::string& socketPath) {
+        return SessionAudio().connectChannel(socketPath);
+    }
+
+    void DBusAdaptor::audioChannelDisconnect(const std::string& socketPath) {
+        SessionAudio().disconnectChannel(socketPath);
+    }
+
+    bool DBusAdaptor::pcscChannelConnect(const std::string& socketPath) {
+        return SessionPcsc().connectChannel(socketPath);
+    }
+
+    void DBusAdaptor::pcscChannelDisconnect(const std::string& socketPath) {
+        SessionPcsc().disconnectChannel(socketPath);
+    }
+ 
+    bool DBusAdaptor::fuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) {
+        return SessionFuse().mountPoint(localPoint, remotePoint, fuseSocket);
+    }
+
+    void DBusAdaptor::fuseUmountPoint(const std::string& localPoint) {
+        SessionFuse().umountPoint(localPoint);
     }
 
     // Starter
@@ -646,8 +751,7 @@ namespace LTSM::DisplaySession {
         setDebugLevel(level);
     }
 
-    void Starter::storeChild(PidStatusStdout pidStatus)
-    {
+    void Starter::storeChild(PidStatusStdout pidStatus) {
         std::scoped_lock guard{ lockCommands_ };
         childCommands_.emplace_front(std::move(pidStatus));
     }

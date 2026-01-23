@@ -41,10 +41,8 @@
 #include "ltsm_display_proxy.h"
 #include "ltsm_json_wrapper.h"
 
-namespace LTSM::Manager
-{
-    struct service_error : public std::runtime_error
-    {
+namespace LTSM::Manager {
+    struct service_error : public std::runtime_error {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
@@ -60,9 +58,8 @@ namespace LTSM::Manager
 
     /// AuditService
 #ifdef LTSM_WITH_AUDIT
-    class AuditService : public AuditLog
-    {
-    public:
+    class AuditService : public AuditLog {
+      public:
         AuditService() = default;
         ~AuditService() = default;
 
@@ -78,16 +75,15 @@ namespace LTSM::Manager
 #endif
 
     /// PamService
-    class PamService
-    {
-    protected:
+    class PamService {
+      protected:
         std::string service;
         pam_handle_t* pamh = nullptr;
         int status = PAM_SUCCESS;
 
         virtual struct pam_conv* pamConv(void) = 0;
 
-    public:
+      public:
         PamService(const std::string & name) : service(name) {}
 
         virtual ~PamService();
@@ -100,22 +96,20 @@ namespace LTSM::Manager
     };
 
     /// PamAuthenticate
-    class PamAuthenticate : public PamService
-    {
+    class PamAuthenticate : public PamService {
         static int pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp, void* appdata);
 
         std::string login;
         std::string password;
-        struct pam_conv pamc
-        {
+        struct pam_conv pamc {
             pam_conv_func, this
         };
 
-    protected:
+      protected:
         struct pam_conv* pamConv(void) override;
         virtual char* onPamPrompt(int, const char*) const;
 
-    public:
+      public:
         PamAuthenticate(const std::string & service, const std::string & user, const std::string & pass)
             : PamService(service), login(user), password(pass) {}
 
@@ -125,13 +119,12 @@ namespace LTSM::Manager
     };
 
     /// PamSession
-    class PamSession : public PamAuthenticate
-    {
+    class PamSession : public PamAuthenticate {
         bool sessionOpenned = false;
 
-    protected:
+      protected:
 
-    public:
+      public:
         PamSession(const std::string & service, const std::string & user, const std::string & pass) : PamAuthenticate(service,
                     user, pass) {}
 
@@ -151,10 +144,8 @@ namespace LTSM::Manager
     enum class SessionPolicy : int { AuthLock = 0, AuthTake = 1, AuthShare = 2 };
 
     /// Flags
-    namespace Flags
-    {
-        enum AllowChannel : size_t
-        {
+    namespace Flags {
+        enum AllowChannel : size_t {
             TransferFiles = (1 << 1),
             RedirectPrinter = (1 << 2),
             RedirectAudio = (1 << 3),
@@ -163,29 +154,26 @@ namespace LTSM::Manager
             RemoteFilesUse = (1 << 6)
         };
 
-        enum SessionStatus : size_t
-        {
+        enum SessionStatus : size_t {
             CheckConnection = (1 << 24)
         };
     }
 
     SessionPolicy sessionPolicy(const std::string &);
 
-    class DisplaySessionProxy : public sdbus::ProxyInterfaces<Session::Display_proxy>
-    {
+    class DisplaySessionProxy : public sdbus::ProxyInterfaces<Session::Display_proxy> {
         const int displayNum;
 
-    public:
+      public:
         DisplaySessionProxy(const std::string & addr, int display);
         virtual ~DisplaySessionProxy();
 
         // dbus signal
-        void onRunSessionCommandAsyncComplete(const int32_t& pid, const bool& success, const int32_t& wstatus, const std::vector<uint8_t>& stdout) override;
+        void onRunSessionCommandAsyncComplete(const int32_t & pid, const bool& success, const int32_t & wstatus, const std::vector<uint8_t> & stdout) override;
     };
 
     /// XvfbSession
-    struct XvfbSession
-    {
+    struct XvfbSession {
         std::unordered_map<std::string, std::string> environments;
         std::unordered_map<std::string, std::string> options;
 
@@ -231,35 +219,29 @@ namespace LTSM::Manager
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
 
-        inline bool checkStatus(uint64_t st) const
-        {
+        inline bool checkStatus(uint64_t st) const {
             return statusFlags & st;
         }
 
-        inline void setStatus(uint64_t st)
-        {
+        inline void setStatus(uint64_t st) {
             statusFlags |= st;
         }
 
-        inline void resetStatus(uint64_t st)
-        {
+        inline void resetStatus(uint64_t st) {
             statusFlags &= ~st;
         }
 
-        inline std::chrono::seconds sessionStartedSec(void) const
-        {
+        inline std::chrono::seconds sessionStartedSec(void) const {
             return system_time_point() == tpStart ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpStart);
         }
 
-        inline std::chrono::seconds sessionOnlinedSec(void) const
-        {
+        inline std::chrono::seconds sessionOnlinedSec(void) const {
             return mode != SessionMode::Connected ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOnline);
         }
 
-        inline std::chrono::seconds sessionOfflinedSec(void) const
-        {
+        inline std::chrono::seconds sessionOfflinedSec(void) const {
             return mode != SessionMode::Disconnected ? std::chrono::seconds(0) :
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOffline);
         }
@@ -274,13 +256,12 @@ namespace LTSM::Manager
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
     using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
 
-    class XvfbSessions
-    {
-    protected:
+    class XvfbSessions {
+      protected:
         std::vector<XvfbSessionPtr> sessions;
         mutable std::mutex lockSessions;
 
-    public:
+      public:
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
@@ -294,8 +275,7 @@ namespace LTSM::Manager
         std::string toJsonString(void) const;
     };
 
-    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions
-    {
+    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
         std::string saneRuntimeFmt, audioRuntimeFmt,
@@ -311,17 +291,17 @@ namespace LTSM::Manager
         std::unique_ptr<AuditService> auditLog;
 #endif
 
-    private:
+      private:
         void waitPidBackgroundSafe(pid_t pid);
 
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
-                                                TransferRejectFunc emitTransferReject, std::string msg);
+                                               TransferRejectFunc emitTransferReject, std::string msg);
 
         void checkStartConfig(void);
         void createRuntimeDir(void) const;
 
-    protected:
+      protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
         XvfbSessionPtr runNewDisplaySession(UserInfoPtr userInfo, const std::string & password, bool loginMode);
@@ -342,7 +322,7 @@ namespace LTSM::Manager
 
         void childEndedEvent(void);
 
-    public:
+      public:
         DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
@@ -351,7 +331,7 @@ namespace LTSM::Manager
         // ApplicationJsonConfig interface
         void configReloadedEvent(void) override;
 
-    private: /* virtual dbus methods */
+      private: /* virtual dbus methods */
         int32_t busGetServiceVersion(void) override;
         void busShutdownService(void) override;
         int32_t busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,

@@ -30,15 +30,13 @@
 
 #include <cstdint>
 #include <forward_list>
+#include <unordered_map>
 #include <memory>
 #include <string>
 
 namespace LTSM::SDBus {
     class SessionProxy {
       protected:
-#ifndef SDBUS_2_0_API
-        std::forward_list<std::string> signals;
-#endif
         std::unique_ptr<sdbus::IProxy> proxy;
         const std::string interface;
 
@@ -47,19 +45,25 @@ namespace LTSM::SDBus {
                      const std::string &inter) : interface(inter) {
             auto conn = sdbus::createSessionBusConnection();
 #ifdef SDBUS_2_0_API
-            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName{name}, sdbus::ObjectPath{path});
+            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {name}, sdbus::ObjectPath {path});
 #else
             proxy = sdbus::createProxy(std::move(conn), name, path);
 #endif
         }
 
-        virtual ~SessionProxy() {
-#ifndef SDBUS_2_0_API
-            for(const auto& signal : signals) {
-                proxy->unregisterSignalHandler(interface, signal);
-            }
+#ifdef SDBUS_ADDRESS_SUPPORT
+        SessionProxy(const std::string &addr, const std::string &name, const std::string &path,
+                     const std::string &inter) : interface(inter) {
+            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
+#ifdef SDBUS_2_0_API
+            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {name}, sdbus::ObjectPath {path});
+#else
+            proxy = sdbus::createProxy(std::move(conn), name, path);
 #endif
         }
+#endif
+
+        virtual ~SessionProxy() {}
 
         SessionProxy(const SessionProxy &) = delete;
         SessionProxy & operator=(const SessionProxy &) = delete;
@@ -67,28 +71,6 @@ namespace LTSM::SDBus {
         SessionProxy(SessionProxy &&) = default;
         SessionProxy & operator=(SessionProxy &&) = default;
 
-        template <typename Func>
-        void registerSignal(const std::string &signalName, Func &&signalHandler) {
-            proxy->uponSignal(signalName)
-            .onInterface(interface)
-            .call(std::forward<Func>(signalHandler));
-#ifndef SDBUS_2_0_API
-            signals.push_front(signalName);
-#endif
-        }
-
-        inline void finishRegistration(void) {
-#ifndef SDBUS_2_0_API
-            proxy->finishRegistration();
-#endif
-        }
-
-        void unregisterSignal(const std::string &signalName) {
-#ifndef SDBUS_2_0_API
-            proxy->unregisterSignalHandler(interface, signalName);
-            signals.remove(signalName);
-#endif
-        }
 
         template <typename Type>
         Type getProperty(const std::string &prop) const {
@@ -102,10 +84,10 @@ namespace LTSM::SDBus {
             return "";
         }
 
-        template <typename... Args>
-        sdbus::ObjectPath CallProxyMethod(const std::string &methodName,
-                                          Args &&...args) const {
-            sdbus::ObjectPath res;
+        template <typename Ret, typename... Args>
+        Ret CallProxyMethod(const std::string &methodName,
+                            Args &&...args) const {
+            Ret res;
 
             try {
                 proxy->callMethod(methodName)
@@ -131,6 +113,32 @@ namespace LTSM::SDBus {
                 Application::error("%s: failed, sdbus error: %s, msg: %s",
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }
+        }
+    };
+
+    class SessionProxySignals : public SessionProxy {
+      protected:
+        std::unordered_map<std::string, sdbus::SignalSubscriber> signals;
+
+      public:
+        SessionProxySignals(const std::string &name, const std::string &path,
+                            const std::string &inter) : SessionProxy(name, path, inter) {}
+
+        template <typename Func>
+        void registerSignal(const std::string &signalName, Func &&signalHandler) {
+            signals.emplace(signalName, proxy->uponSignal(signalName)
+                            .onInterface(interface)
+                            .call(std::forward<Func>(signalHandler)));
+        }
+
+        inline void finishRegistration(void) {
+#ifndef SDBUS_2_0_API
+            proxy->finishRegistration();
+#endif
+        }
+
+        void unregisterSignal(const std::string &signalName) {
+            signals.erase(signalName);
         }
     };
 }
