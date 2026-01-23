@@ -178,12 +178,14 @@ namespace LTSM::Manager
         const std::string dbusAddress;
         const int displayNum;
 
+        std::unique_ptr<sdbus::IProxy> proxy;
+
     public:
-        DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display) {}
+        DisplaySessionProxy(const std::string & addr, int display);
 
         bool isAlive(void) const;
+        int  runSessionCommand(std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) const;
     };
-
 
     /// XvfbSession
     struct XvfbSession

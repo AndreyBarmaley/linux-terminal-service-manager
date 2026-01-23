@@ -313,8 +313,8 @@ namespace LTSM::DisplaySession {
         return starter_.dbusJsonStatus();
     }
 
-    int32_t DBusAdaptor::runSessionCommand(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        return starter_.dbusRunSessionCommand(cmd, args, envs);
+    int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+        return starter_.dbusRunSessionCommandAsync(cmd, args, envs);
     }
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
@@ -493,7 +493,7 @@ namespace LTSM::DisplaySession {
     void Starter::childProcessEnded(int pid, StatusStdout statusStdout) {
         if(dbus_) {
             const int & wstatus = statusStdout.first;
-            dbus_->emitRunSessionCommandComplete(pid, static_cast<bool>(WIFEXITED(wstatus)), wstatus, statusStdout.second);
+            dbus_->emitRunSessionCommandAsyncComplete(pid, static_cast<bool>(WIFEXITED(wstatus)), wstatus, statusStdout.second);
         }
     }
 
@@ -594,7 +594,7 @@ namespace LTSM::DisplaySession {
         setDebugLevel(level);
     }
 
-    int32_t Starter::dbusRunSessionCommand(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+    int32_t Starter::dbusRunSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "%s: cmd: `%s'", __FUNCTION__, cmd.c_str());
 
         try {

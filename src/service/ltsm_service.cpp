@@ -137,7 +137,7 @@ namespace LTSM::Manager
                 // logon
                 if(notSysUser && json.configHasKey("system:logon"))
                 {
-                    runSystemScript(sess, json.configGetString("system:logon"), true);
+                    runSystemScript(sess, json.configGetString("system:logon"), true /* detach */);
                 }
 
                 // main2 thread
@@ -148,7 +148,7 @@ namespace LTSM::Manager
                 // logoff
                 if(notSysUser && json.configHasKey("system:logoff"))
                 {
-                    runSystemScript(sess, json.configGetString("system:logoff"), false);
+                    runSystemScript(sess, json.configGetString("system:logoff"), false /* detach */);
                 }
 
                 return;
@@ -910,7 +910,6 @@ namespace LTSM::Manager
         void runChildProcess(XvfbSessionPtr xvfb, int pipeout, const std::filesystem::path & cmd,
                              const ArgsList & args, const EnvList & envs)
         {
-
             if(! switchToUser(*xvfb->userInfo))
             {
                 ForkMode::runChildFailure();
@@ -1124,35 +1123,42 @@ namespace LTSM::Manager
     }
 #endif
 
+    DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : dbusAddress(addr), displayNum(display)
+    {
+#ifdef SDBUS_ADDRESS_SUPPORT
+        auto conn = sdbus::createSessionBusConnectionWithAddress(dbusAddress);
+#ifdef SDBUS_2_0_API
+        proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path});
+#else
+        proxy = sdbus::createProxy(std::move(conn), dbus_session_display_name, dbus_session_display_path);
+#endif
+#else
+        Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+        throw service_error(NS_FuncName);
+#endif
+    }
+
+    int DisplaySessionProxy::runSessionCommand(std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) const
+    {
+        if(proxy)
+        {
+            int32_t pid = 0;
+            proxy->callMethod("runSessionCommand").onInterface(dbus_session_display_ifce).withArguments(cmd, args, envs).storeResultsTo(pid);
+            return pid;
+        }
+        
+        return false;
+    }
+    
     bool DisplaySessionProxy::isAlive(void) const
     {
-        try
+        if(proxy)
         {
-#ifdef SDBUS_ADDRESS_SUPPORT
-            auto conn = sdbus::createSessionBusConnectionWithAddress(dbusAddress);
-#ifdef SDBUS_2_0_API
-            auto proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path});
-#else
-            auto proxy = sdbus::createProxy(std::move(conn), dbus_session_display_name, dbus_session_display_path);
-#endif
-            int version = 0;
+            int32_t version = 0;
             proxy->callMethod("getVersion").onInterface(dbus_session_display_ifce).storeResultsTo(version);
-
             return 0 < version;
         }
-        catch(const sdbus::Error & err)
-        {
-            Application::error("%s: failed, display: %" PRId32 ", sdbus error: %s, msg: %s",
-                               __FUNCTION__, displayNum, err.getName().c_str(), err.getMessage().c_str());
-        }
-        catch(std::exception & err)
-        {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-        }
-
-#else
-            Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
-#endif
+        
         return false;
     }
 
@@ -1481,7 +1487,7 @@ namespace LTSM::Manager
         if(notSysUser)
         {
             runSessionScript(xvfb, configGetString("session:disconnect"));
-            runSystemScript(std::move(xvfb), configGetString("system:disconnect"));
+            runSystemScript(xvfb, configGetString("system:disconnect"));
         }
 
         // script run in thread
@@ -1521,19 +1527,16 @@ namespace LTSM::Manager
 
         Tools::waitCallable<std::chrono::milliseconds>(ms, 150, [sess, &res]()
         {
-            try
+            if(auto dbusAddresses = getSessionDBusAddresses(*sess->userInfo, sess->displayNum); ! dbusAddresses.empty())
             {
-                if(auto dbusAddresses = getSessionDBusAddresses(*sess->userInfo, sess->displayNum); ! dbusAddresses.empty())
+                auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
+                //Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
+                try
                 {
-                    auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
-                    //Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
                     res = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
-                    if(res->isAlive())
-                        return true;
-                    res.reset();
-                }
+                    return res && res->isAlive();
+                } catch(...) {}
             }
-            catch(...) {}
 
             return false;
         });
@@ -1633,17 +1636,16 @@ namespace LTSM::Manager
         std::thread(std::move(waitPidTask), pid).detach();
     }
 
-    void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & cmd)
+    void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str)
     {
-        if(! cmd.empty())
+        if(! str.empty())
         {
             auto args = Tools::split(Tools::replace(
-                                         Tools::replace(cmd, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
+                                         Tools::replace(str, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
             assertm(! args.empty(), "empty args list");
-            runSessionCommandSafe(std::move(xvfb), args.front(), { std::next(args.begin()), args.end() }, {});
+            xvfb->dbus->runSessionCommand(args.front(), { std::next(args.begin()), args.end() }, {});
         }
     }
-
 
     XvfbSessionPtr DBusAdaptor::runNewDisplaySession(UserInfoPtr userInfo, const std::string & pass, bool loginMode)
     {
