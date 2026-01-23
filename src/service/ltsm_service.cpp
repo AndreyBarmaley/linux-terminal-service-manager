@@ -904,193 +904,6 @@ namespace LTSM::Manager
         return true;
     }
 
-    /// RunAs namespace
-    namespace RunAs
-    {
-        void runChildProcess(XvfbSessionPtr xvfb, int pipeout, const std::filesystem::path & cmd,
-                             const ArgsList & args, const EnvList & envs)
-        {
-            if(! switchToUser(*xvfb->userInfo))
-            {
-                ForkMode::runChildFailure();
-            }
-
-            for(const auto & [key, val] : xvfb->getEnvironments(envs))
-            {
-                setenv(key.c_str(), val.c_str(), 1);
-            }
-
-            if(-1 > pipeout)
-            {
-                ForkMode::runChildProcess(cmd, args, {}, RedirectLog::None);
-            }
-            else if(0 > pipeout)
-            {
-                ForkMode::runChildProcess(cmd, args, {}, RedirectLog::StdoutStderr);
-            }
-            else
-            {
-                ForkMode::runChildProcess(cmd, args, {}, RedirectLog::StdoutFd, pipeout);
-            }
-        }
-
-        StatusStdout jobWaitStdout(pid_t pid, int fd)
-        {
-            bool error = false;
-            bool loop = true;
-            const size_t block = 1024;
-            std::vector<uint8_t> res(block);
-            uint8_t* ptr = res.data();
-            size_t last = block;
-
-            while(loop && ! error)
-            {
-                int ret = read(fd, ptr, last);
-
-                if(ret < 0)
-                {
-                    if(EAGAIN != errno && EINTR != errno)
-                    {
-                        Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "read", strerror(errno), errno);
-                        error = true;
-                    }
-
-                    // EAGAIN or EINTR continue
-                    continue;
-                }
-
-                // end stream
-                if(ret == 0)
-                {
-                    res.resize(res.size() - last);
-                    loop = false;
-                    continue;
-                }
-
-                ptr += ret;
-                last -= ret;
-
-                if(last == 0)
-                {
-                    auto pos = res.size();
-                    res.resize(res.size() + block);
-                    last = block;
-                    ptr = res.data() + pos;
-                }
-            }
-
-            if(error)
-            {
-                res.clear();
-            }
-
-            int status = ForkMode::waitPid(pid);
-            return std::make_pair(status, std::move(res));
-        }
-
-        PidStatusStdout runSessionCommandStdout(XvfbSessionPtr xvfb, const std::filesystem::path & cmd,
-                                                const ArgsList & params, const EnvList & envs)
-        {
-            if(! xvfb)
-            {
-                Application::error("%s: xvfb session null", __FUNCTION__);
-                throw service_error(NS_FuncName);
-            }
-
-            std::error_code err;
-
-            if(! std::filesystem::exists(cmd, err))
-            {
-                Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                                   __FUNCTION__, (err ? err.message().c_str() : "not found"), cmd.c_str(), getuid());
-                throw service_error(NS_FuncName);
-            }
-
-            Application::info("%s: request for user: %s, display: %" PRId32 ", cmd: `%s'",
-                              __FUNCTION__, xvfb->userInfo->user(), xvfb->displayNum, cmd.c_str());
-
-            if(! std::filesystem::is_directory(xvfb->userInfo->home(), err))
-            {
-                Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                                   __FUNCTION__, (err ? err.message().c_str() : "not directory"), xvfb->userInfo->home(), getuid());
-                throw service_error(NS_FuncName);
-            }
-
-            int pipefd[2];
-
-            if(0 > pipe(pipefd))
-            {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32,
-                                   __FUNCTION__, "pipe", strerror(errno), errno);
-                throw service_error(NS_FuncName);
-            }
-
-            pid_t pid = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug));
-
-            if(0 == pid)
-            {
-                close(pipefd[0]);
-                runChildProcess(xvfb, pipefd[1], cmd, params, envs);
-            }
-
-            // main thread processed
-            close(pipefd[1]);
-
-            if(0 > fcntl(pipefd[0], F_SETFL, fcntl(pipefd[0], F_GETFL, 0) | O_NONBLOCK))
-            {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "fcntl", strerror(errno), errno);
-            }
-
-            // planned get stdout from running job
-            auto future = std::async(std::launch::async, & RunAs::jobWaitStdout, pid, pipefd[0]);
-            return std::make_pair(pid, std::move(future));
-        }
-
-        PidStatus runSessionCommand(XvfbSessionPtr xvfb, const std::filesystem::path & cmd,
-                                    const ArgsList & params, const EnvList & envs)
-        {
-            if(! xvfb)
-            {
-                Application::error("%s: xvfb session null", __FUNCTION__);
-                throw service_error(NS_FuncName);
-            }
-
-            std::error_code err;
-
-            if(! std::filesystem::exists(cmd, err))
-            {
-                Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                                   __FUNCTION__, (err ? err.message().c_str() : "not found"), cmd.c_str(), getuid());
-                throw service_error(NS_FuncName);
-            }
-
-            Application::info("%s: request for: %s, display: %" PRId32 ", cmd: `%s %s'",
-                              __FUNCTION__, xvfb->userInfo->user(), xvfb->displayNum, cmd.c_str(), Tools::join(params, " ").c_str());
-
-            if(! std::filesystem::is_directory(xvfb->userInfo->home(), err))
-            {
-                Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                                   __FUNCTION__, (err ? err.message().c_str() : "not directory"), xvfb->userInfo->home(), getuid());
-                throw service_error(NS_FuncName);
-            }
-
-            pid_t pid = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug));
-
-            if(0 == pid)
-            {
-                runChildProcess(xvfb, -1, cmd, params, envs);
-            }
-
-            // main thread processed
-            auto future = std::async(std::launch::async, [pid]()
-            {
-                return ForkMode::waitPid(pid);
-            });
-            return std::make_pair(pid, std::move(future));
-        }
-
-    }; // RunAs
-
 #ifdef LTSM_WITH_AUDIT
     void AuditService::auditServiceStart(void) const
     {
@@ -1590,32 +1403,6 @@ namespace LTSM::Manager
         return xauthFilePath;
     }
 
-    pid_t DBusAdaptor::runSessionCommandSafe(XvfbSessionPtr xvfb, const std::filesystem::path & cmd,
-            const ArgsList & params, const EnvList & envs)
-    {
-        std::error_code err;
-
-        if(! std::filesystem::exists(cmd, err))
-        {
-            Application::warning("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
-            return 0;
-        }
-
-        try
-        {
-            std::scoped_lock guard{ lockRunning };
-            childsRunning.emplace_front(
-                RunAs::runSessionCommand(std::move(xvfb), cmd, params, envs));
-            return childsRunning.front().first;
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-        }
-
-        return 0;
-    }
-
     void DBusAdaptor::waitPidBackgroundSafe(pid_t pid)
     {
         // create wait pid task
@@ -1871,7 +1658,8 @@ namespace LTSM::Manager
                                    __FUNCTION__, cmd.c_str(), ret, oldSess->displayNum);
             }
 
-            sessionRunSetxkbmapLayout(oldSess);
+            // FIXME
+            //sessionRunSetxkbmapLayout(oldSess);
             startSessionChannels(oldSess);
             runSessionScript(oldSess, configGetString("session:connect"));
             return oldSess->displayNum;
@@ -1955,7 +1743,7 @@ namespace LTSM::Manager
                            __FUNCTION__, newSess->pid1, newSess->displayNum);
 
         // FIXME
-        sessionRunSetxkbmapLayout(newSess);
+        // sessionRunSetxkbmapLayout(newSess);
         runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);
         runSessionScript(newSess, configGetString("session:connect"));
@@ -2069,12 +1857,6 @@ namespace LTSM::Manager
         serviceConn->leaveEventLoop();
     }
 
-    bool DBusAdaptor::sessionRunZenity(XvfbSessionPtr xvfb, const ArgsList & params)
-    {
-        std::filesystem::path zenity = configGetString("zenity:path", "/usr/bin/zenity");
-        return 0 != runSessionCommandSafe(std::move(xvfb), zenity, params, {});
-    }
-
     void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", message: `%s'", __FUNCTION__, display, message.c_str());
@@ -2084,7 +1866,8 @@ namespace LTSM::Manager
             if(xvfb->mode == SessionMode::Connected ||
                     xvfb->mode == SessionMode::Disconnected)
             {
-                sessionRunZenity(xvfb, { "--info", "--no-wrap", "--text", Tools::quotedString(message) });
+                // zenity info
+                std::ignore = xvfb->dbus->runSessionZenity({ "--info", "--no-wrap", "--text", Tools::quotedString(message) });
                 return;
             }
 
@@ -2238,55 +2021,34 @@ namespace LTSM::Manager
         }
     }
 
-    void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb, std::filesystem::path zenity,
-            std::vector<FileNameSize> files, TransferRejectFunc emitTransferReject, PidStatus zenityQuestionResult)
+    void DBusAdaptor::transferFilesRequestCommunication(XvfbSessionPtr xvfb,
+            std::vector<FileNameSize> files, TransferRejectFunc emitTransferReject, std::string msg)
     {
-        // copy all files to (Connector) user home, after success move to real user
-        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
         // wait zenity question
-        int status = zenityQuestionResult.second.get();
+        auto statusQuestion = xvfb->dbus->runSessionZenity({ "--question", "--default-cancel", "--text", msg });
 
         // yes = 0, no: 256
-        if(status == 256)
+        if(256 == std::get<0>(statusQuestion))
         {
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
 
-        // zenity select directory
-        std::future<StatusStdout> zenitySelectDirectoryResult;
-        bool error = false;
+        // zenity select directory, wait file selection
+        auto statusSelectDir = xvfb->dbus->runSessionZenity(
+                { "--file-selection", "--directory",
+                    "--title", "Select directory",
+                    "--width", "640", "--height", "480" });
 
-        try
-        {
-            auto pair = RunAs::runSessionCommandStdout(xvfb, zenity,
-            { "--file-selection", "--directory", "--title", "Select directory", "--width", "640", "--height", "480" }, {});
-            zenitySelectDirectoryResult = std::move(pair.second);
-
-            // FIXME
-            //xvfb->dbus->runSessionCommandSync(args.front(), { std::next(args.begin()), args.end() }, {});
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-            emitTransferReject(xvfb->displayNum, files);
-            return;
-        }
-
-        // wait file selection
-        // get StatusStdout
-        auto ret = zenitySelectDirectoryResult.get();
-        status = ret.first;
-
-        // ok = 0, cancel: 256
-        if(status == 256)
+        // status: ok = 0, cancel: 256
+        if(256 == std::get<0>(statusSelectDir))
         {
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
 
         // get dstdir
-        auto & buf = ret.second;
+        const auto & buf = std::get<1>(statusSelectDir);
         auto end = buf.back() == 0x0a ? std::prev(buf.end()) : buf.end();
         std::filesystem::path dstdir(std::string(buf.begin(), end));
         std::error_code err;
@@ -2298,6 +2060,9 @@ namespace LTSM::Manager
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
+
+        // copy all files to (Connector) user home, after success move to real user
+        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
 
         for(const auto & info : files)
         {
@@ -2434,9 +2199,7 @@ namespace LTSM::Manager
             }
         }
 
-        std::filesystem::path zenity = configGetString("zenity:path", "/usr/bin/zenity");
         auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
-        PidStatus zenityResult;
 
         TransferRejectFunc emitTransferReject = [this](int display, const std::vector<FileNameSize> & files)
         {
@@ -2447,20 +2210,9 @@ namespace LTSM::Manager
             }
         };
 
-        try
-        {
-            zenityResult = RunAs::runSessionCommand(xvfb, zenity, { "--question", "--default-cancel", "--text", msg }, {});
-        }
-        catch(const std::exception & err)
-        {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-            emitTransferReject(display, files);
-            return false;
-        }
-
         //run background
-        std::thread(& DBusAdaptor::transferFilesRequestCommunication, this, xvfb, zenity, files, std::move(emitTransferReject),
-                    std::move(zenityResult)).detach();
+        std::thread(& DBusAdaptor::transferFilesRequestCommunication, this, xvfb,
+                    files, std::move(emitTransferReject), msg).detach();
         return true;
     }
 
@@ -2779,17 +2531,6 @@ namespace LTSM::Manager
         return true;
     }
 
-    void DBusAdaptor::sessionRunSetxkbmapLayout(XvfbSessionPtr xvfb)
-    {
-        if(xvfb && ! xvfb->layout.empty())
-        {
-            std::thread([this, ptr = std::move(xvfb)]
-            {
-                this->runSessionCommandSafe(ptr, "/usr/bin/setxkbmap", { "-layout", ptr->layout, "-option", "\"\"" }, {});
-            }).detach();
-        }
-    }
-
     void DBusAdaptor::busSetSessionKeyboardLayouts(const int32_t & display, const std::vector<std::string> & layouts)
     {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", layouts: [%s]",
@@ -2822,7 +2563,8 @@ namespace LTSM::Manager
             }
 
             xvfb->layout = Tools::quotedString(os.str());
-            sessionRunSetxkbmapLayout(xvfb);
+            // FIXME
+            // sessionRunSetxkbmapLayout(xvfb);
         }
         else
         {

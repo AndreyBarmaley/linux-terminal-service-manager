@@ -27,7 +27,6 @@
     "session:path": "/etc/ltsm/xclients",
 
     "starter:path": "/usr/libexec/ltsm/ltsm_session_display",
-    "zenity:path": "/usr/bin/zenity",
 
     "default:width": 1024,
     "default:height": 768,

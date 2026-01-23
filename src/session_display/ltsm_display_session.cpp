@@ -298,7 +298,7 @@ namespace LTSM::DisplaySession {
     }
 
     int32_t DBusAdaptor::getVersion(void) {
-        return starter_.dbusGetVersion();
+        return LTSM_SESSION_DISPLAY_VERSION;
     }
 
     void DBusAdaptor::serviceShutdown(void) {
@@ -314,12 +314,54 @@ namespace LTSM::DisplaySession {
     }
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        return starter_.dbusRunSessionCommandAsync(cmd, args, envs);
+        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+
+        try {
+            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
+                int pid = pidStatus.first;
+                starter_.storeChild(std::move(pidStatus));
+                return pid;
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+
+        return -1;
     }
 
-    std::vector<uint8_t> DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
-        return starter_.dbusRunSessionCommandSync(cmd, args, envs);
+    StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
+        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+
+        try {
+            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
+                return pidStatus.second.get();
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+
+        return StatusStdout{ -1, {} };
     }
+
+    StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string>& args) {
+        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+
+        auto zenityBin = starter_.configGetString("zenity:path", "/usr/bin/zenity");
+
+        try {
+            if(auto pidStatus = runForkCommandStdout(zenityBin, args, {}); 0 < pidStatus.first) {
+                return pidStatus.second.get();
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+
+        return StatusStdout{ -1, {} };
+    }
+
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
         FreedesktopNotifications().notifyInfo(summary, body, 2000 /* ms */);
@@ -496,8 +538,8 @@ namespace LTSM::DisplaySession {
 
     void Starter::childProcessEnded(int pid, StatusStdout statusStdout) {
         if(dbus_) {
-            const int & wstatus = statusStdout.first;
-            dbus_->emitRunSessionCommandAsyncComplete(pid, static_cast<bool>(WIFEXITED(wstatus)), wstatus, statusStdout.second);
+            const int & wstatus = std::get<0>(statusStdout);
+            dbus_->emitRunSessionCommandAsyncComplete(pid, static_cast<bool>(WIFEXITED(wstatus)), wstatus, std::get<1>(statusStdout));
         }
     }
 
@@ -583,11 +625,6 @@ namespace LTSM::DisplaySession {
         return EXIT_SUCCESS;
     }
 
-    int32_t Starter::dbusGetVersion(void) const {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
-        return LTSM_SESSION_DISPLAY_VERSION;
-    }
-
     void Starter::dbusServiceShutdown(void) const {
         Application::debug(DebugType::Dbus, "%s: pid: %s", __FUNCTION__, getpid());
         sessionConn->leaveEventLoop();
@@ -598,36 +635,10 @@ namespace LTSM::DisplaySession {
         setDebugLevel(level);
     }
 
-    int32_t Starter::dbusRunSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        Application::debug(DebugType::Dbus, "%s: cmd: `%s'", __FUNCTION__, cmd.c_str());
-
-        try {
-            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
-                std::scoped_lock guard{ lockCommands_ };
-                childCommands_.emplace_front(std::move(pidStatus));
-                // return pid
-                return childCommands_.front().first;
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-        }
-
-        return -1;
-    }
-
-    std::vector<uint8_t> Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) {
-        Application::debug(DebugType::Dbus, "%s: cmd: `%s'", __FUNCTION__, cmd.c_str());
-
-        try {
-            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
-                auto statusStdout = pidStatus.second.get();
-                return std::move(statusStdout.second);
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
-        }
-
-        return {};
+    void Starter::storeChild(PidStatusStdout pidStatus)
+    {
+        std::scoped_lock guard{ lockCommands_ };
+        childCommands_.emplace_front(std::move(pidStatus));
     }
 
     std::string Starter::dbusJsonStatus(void) const {

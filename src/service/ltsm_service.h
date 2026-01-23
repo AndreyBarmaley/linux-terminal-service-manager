@@ -49,9 +49,10 @@ namespace LTSM::Manager
     };
 
     using StdoutBuf = std::vector<uint8_t>;
-    using StatusStdout = std::pair<int, StdoutBuf>;
+    //using StatusStdout = std::pair<int, StdoutBuf>;
+    //using StatusStdout = sdbus::Struct<int, StdoutBuf>;
     using PidStatus = std::pair<pid_t, std::shared_future<int>>;
-    using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
+    //using PidStatusStdout = std::pair<pid_t, std::future<StatusStdout>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
@@ -315,16 +316,11 @@ namespace LTSM::Manager
 #endif
 
     private:
-        pid_t runSessionCommandSafe(XvfbSessionPtr, const std::filesystem::path &,
-                                    const ArgsList &, const EnvList &);
         void waitPidBackgroundSafe(pid_t pid);
 
-        bool sessionRunZenity(XvfbSessionPtr, const ArgsList &);
-        void sessionRunSetxkbmapLayout(XvfbSessionPtr);
-
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
-        void transferFilesRequestCommunication(XvfbSessionPtr, std::filesystem::path zenity, std::vector<FileNameSize> files,
-                                               TransferRejectFunc emitTransferReject, PidStatus zenityResult);
+        void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
+                                                TransferRejectFunc emitTransferReject, std::string msg);
 
         void checkStartConfig(void);
         void createRuntimeDir(void) const;

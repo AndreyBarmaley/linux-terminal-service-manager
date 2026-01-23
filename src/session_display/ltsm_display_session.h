@@ -43,7 +43,7 @@
 
 namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
-    using StatusStdout = std::pair<int, StdoutBuf>;
+    using StatusStdout = sdbus::Struct<int, StdoutBuf>;
     using PidStatus = std::pair<int, std::future<int>>;
     using PidStatusStdout = std::pair<int, std::future<StatusStdout>>;
 
@@ -91,7 +91,8 @@ namespace LTSM::DisplaySession {
         std::string jsonStatus(void) override;
 
         int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
-        std::vector<uint8_t> runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) override;
+        StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) override;
+        StatusStdout runSessionZenity(const std::vector<std::string>& args) override;
 
         void notifyInfo(const std::string& summary, const std::string& body) override;
         void notifyWarning(const std::string& summary, const std::string& body) override;
@@ -129,15 +130,13 @@ namespace LTSM::DisplaySession {
         ~Starter();
 
         int run(void);
+        void storeChild(PidStatusStdout);
 
         // dbus callbacks
-        int32_t dbusGetVersion(void) const;
         void dbusServiceShutdown(void) const;
         void dbusSetDebug(const std::string & level);
         std::string dbusJsonStatus(void) const;
 
-        int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
-        std::vector<uint8_t> dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs);
     };
 }
 

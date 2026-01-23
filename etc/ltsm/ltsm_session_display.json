@@ -12,5 +12,6 @@
     "#xvfb:args": [ ":%{display}", "-nolisten", "tcp", "-screen", "0", "%{width}x%{height}x%{depth}", "-auth", "%{authfile}", "+extension", "DAMAGE", "+extension", "MIT-SHM", "+extension", "RANDR", "+extension", "XFIXES", "+extension", "XTEST" ],
     "xvfb:timeout": 3500,
 
-    "xauth:file": "/run/ltsm/auth_%{display}"
+    "xauth:file": "/run/ltsm/auth_%{display}",
+    "zenity:path": "/usr/bin/zenity"
 }
