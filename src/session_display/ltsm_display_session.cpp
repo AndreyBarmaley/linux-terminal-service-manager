@@ -362,6 +362,17 @@ namespace LTSM::DisplaySession {
         return StatusStdout{ -1, {} };
     }
 
+    void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
+        Application::debug(DebugType::Dbus, "%s: [ %s ]", __FUNCTION__, layout.c_str());
+
+        try {
+            if(auto pidStatus = runForkCommandStdout("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {}); 0 < pidStatus.first) {
+                pidStatus.second.wait();
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+        }
+    }
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
         FreedesktopNotifications().notifyInfo(summary, body, 2000 /* ms */);

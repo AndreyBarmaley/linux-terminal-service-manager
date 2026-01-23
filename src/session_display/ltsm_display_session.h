@@ -93,6 +93,7 @@ namespace LTSM::DisplaySession {
         int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
         StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) override;
         StatusStdout runSessionZenity(const std::vector<std::string>& args) override;
+        void setSessionKeyboardLayout(const std::string& layout) override;
 
         void notifyInfo(const std::string& summary, const std::string& body) override;
         void notifyWarning(const std::string& summary, const std::string& body) override;

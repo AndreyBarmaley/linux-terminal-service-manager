@@ -65,7 +65,6 @@ namespace LTSM::Manager
 
     //
     std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &, int displayNum);
-    void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path &);
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
     bool switchToUser(const UserInfo &);
 
@@ -753,44 +752,6 @@ namespace LTSM::Manager
         }
 
         return dbusAddresses;
-    }
-
-    void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path & file)
-    {
-        auto dir = file.parent_path();
-        std::error_code fserr;
-
-        if(! std::filesystem::is_directory(dir, fserr))
-        {
-            std::filesystem::create_directories(dir, fserr);
-        }
-
-        int fd = open(file.c_str(), O_RDWR | O_CREAT, 0640);
-
-        if(0 <= fd)
-        {
-            if(out)
-            {
-                dup2(fd, STDOUT_FILENO);
-            }
-
-            if(err)
-            {
-                dup2(fd, STDERR_FILENO);
-            }
-
-            close(fd);
-        }
-        else
-        {
-            const char* devnull = "/dev/null";
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
-
-            if(file != devnull)
-            {
-                redirectStdoutStderrTo(out, err, devnull);
-            }
-        }
     }
 
     bool runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd, bool detach /* true */)
@@ -1659,7 +1620,7 @@ namespace LTSM::Manager
             }
 
             // FIXME
-            //sessionRunSetxkbmapLayout(oldSess);
+            oldSess->dbus->setSessionKeyboardLayout(oldSess->layout);
             startSessionChannels(oldSess);
             runSessionScript(oldSess, configGetString("session:connect"));
             return oldSess->displayNum;
@@ -1743,7 +1704,7 @@ namespace LTSM::Manager
                            __FUNCTION__, newSess->pid1, newSess->displayNum);
 
         // FIXME
-        // sessionRunSetxkbmapLayout(newSess);
+        newSess->dbus->setSessionKeyboardLayout(newSess->layout);
         runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);
         runSessionScript(newSess, configGetString("session:connect"));
@@ -2240,77 +2201,20 @@ namespace LTSM::Manager
             std::this_thread::sleep_for(1s);
         }
 
-        Application::debug(DebugType::App, "%s: display: %" PRId32 ", user: %s, summary: %s",
-                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), summary.c_str());
-
-        std::string notificationIcon("dialog-information");
-
         switch(icontype)
         {
-            //case NotifyParams::IconType::Information:
             case NotifyParams::IconType::Warning:
-                notificationIcon.assign("dialog-error");
+                xvfb->dbus->notifyWarning(summary, body);
                 break;
 
             case NotifyParams::IconType::Error:
-                notificationIcon.assign("dialog-warning");
-                break;
-
-            case NotifyParams::IconType::Question:
-                notificationIcon.assign("dialog-question");
+                xvfb->dbus->notifyError(summary, body);
                 break;
 
             default:
+                xvfb->dbus->notifyInfo(summary, body);
                 break;
         }
-
-        auto dbusAddresses = getSessionDBusAddresses(*xvfb->userInfo, xvfb->displayNum);
-
-        if(dbusAddresses.empty())
-        {
-            Application::warning("%s: %s, display: %" PRId32 ", user: %s",
-                                 __FUNCTION__, "dbus address empty", xvfb->displayNum, xvfb->userInfo->user());
-            return;
-        }
-
-        auto destinationName = "org.freedesktop.Notifications";
-        auto objectPath = "/org/freedesktop/Notifications";
-        std::vector<std::string> actions;
-        std::map<std::string, sdbus::Variant> hints;
-        int32_t expirationTimeout = -1;
-        std::string applicationName("LTSM");
-        uint32_t replacesID = 0;
-
-#ifdef SDBUS_ADDRESS_SUPPORT
-
-        try
-        {
-            auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
-            Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
-
-            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
-#ifdef SDBUS_2_0_API
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {destinationName}, sdbus::ObjectPath {objectPath});
-#else
-            auto concatenatorProxy = sdbus::createProxy(std::move(conn), destinationName, objectPath);
-#endif
-            concatenatorProxy->callMethod("Notify").onInterface("org.freedesktop.Notifications").withArguments(applicationName,
-                    replacesID, notificationIcon,
-                    summary, body, actions, hints, expirationTimeout).dontExpectReply();
-        }
-        catch(const sdbus::Error & err)
-        {
-            Application::error("%s: failed, display: %" PRId32 ", sdbus error: %s, msg: %s",
-                               __FUNCTION__, xvfb->displayNum, err.getName().c_str(), err.getMessage().c_str());
-        }
-        catch(std::exception & err)
-        {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
-        }
-
-#else
-        Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
-#endif
     }
 
     void DBusAdaptor::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
@@ -2563,8 +2467,7 @@ namespace LTSM::Manager
             }
 
             xvfb->layout = Tools::quotedString(os.str());
-            // FIXME
-            // sessionRunSetxkbmapLayout(xvfb);
+            xvfb->dbus->setSessionKeyboardLayout(xvfb->layout);
         }
         else
         {
