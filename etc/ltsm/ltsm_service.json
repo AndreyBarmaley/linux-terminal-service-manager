@@ -10,6 +10,7 @@
     "session:offline:timeout": 0,
     "session:idle:timeout": 120,
     "session:idle:disconnect": false,
+    "#session:start:timeout": 3,
 
     "pam:service": "ltsm",
 

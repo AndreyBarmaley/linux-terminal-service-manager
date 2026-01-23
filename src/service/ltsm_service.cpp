@@ -1745,7 +1745,9 @@ namespace LTSM::Manager
         Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
-        if(sess->dbus = waitDisplaySessionStarting(sess, 3000 /* ms */); !! sess->dbus)
+        auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
+
+        if(sess->dbus = waitDisplaySessionStarting(sess, sessionStartTimeout * 1000 /* ms */); !! sess->dbus)
         {
             try
             {
