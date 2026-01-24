@@ -99,17 +99,13 @@ namespace LTSM::DisplaySession {
         PidStatus pidXorg_, pidSession_;
 
       protected:
+        friend class DBusAdaptor;
+
         void startX11Display(int displayNum, const char* xauthFile);
         bool startX11Session(void);
         void checkChildCommandsComplete(void);
         void childProcessEnded(int pid, StatusStdout);
         void stopChilds(void);
-
-      public:
-        Starter(int displayNum, const char* xauthFile);
-        ~Starter();
-
-        int run(void);
         void storeChild(PidStatusStdout);
 
         // dbus callbacks
@@ -117,6 +113,11 @@ namespace LTSM::DisplaySession {
         void dbusSetDebug(const std::string & level);
         std::string dbusJsonStatus(void) const;
 
+      public:
+        Starter(int displayNum, const char* xauthFile);
+        ~Starter();
+
+        int run(void);
     };
 }
 

@@ -35,15 +35,14 @@
 #include <string>
 
 namespace LTSM::SDBus {
-    class SessionProxy {
+    class ProxyBase {
       protected:
         std::unique_ptr<sdbus::IProxy> proxy;
         const std::string interface;
 
       public:
-        SessionProxy(const std::string &name, const std::string &path,
+        ProxyBase(std::unique_ptr<sdbus::IConnection> conn, const std::string &name, const std::string &path,
                      const std::string &inter) : interface(inter) {
-            auto conn = sdbus::createSessionBusConnection();
 #ifdef SDBUS_2_0_API
             proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {name}, sdbus::ObjectPath {path});
 #else
@@ -51,37 +50,25 @@ namespace LTSM::SDBus {
 #endif
         }
 
-#ifdef SDBUS_ADDRESS_SUPPORT
-        SessionProxy(const std::string &addr, const std::string &name, const std::string &path,
-                     const std::string &inter) : interface(inter) {
-            auto conn = sdbus::createSessionBusConnectionWithAddress(addr);
-#ifdef SDBUS_2_0_API
-            proxy = sdbus::createProxy(std::move(conn), sdbus::ServiceName {name}, sdbus::ObjectPath {path});
-#else
-            proxy = sdbus::createProxy(std::move(conn), name, path);
-#endif
-        }
-#endif
+        virtual ~ProxyBase() {}
 
-        virtual ~SessionProxy() {}
+        ProxyBase(const ProxyBase &) = delete;
+        ProxyBase & operator=(const ProxyBase &) = delete;
 
-        SessionProxy(const SessionProxy &) = delete;
-        SessionProxy & operator=(const SessionProxy &) = delete;
-
-        SessionProxy(SessionProxy &&) = default;
-        SessionProxy & operator=(SessionProxy &&) = default;
+        ProxyBase(ProxyBase &&) = default;
+        ProxyBase & operator=(ProxyBase &&) = default;
 
 
         template <typename Type>
         Type getProperty(const std::string &prop) const {
             try {
-                return proxy->getProperty(prop).onInterface(interface);
+                return static_cast<Type>(proxy->getProperty(prop).onInterface(interface));
             } catch(const sdbus::Error &err) {
                 Application::error("%s: failed, sdbus error: %s, msg: %s",
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }
 
-            return "";
+            return {};
         }
 
         template <typename Ret, typename... Args>
@@ -114,6 +101,23 @@ namespace LTSM::SDBus {
                                    __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
             }
         }
+    };
+
+    class SystemProxy : public ProxyBase {
+      public:
+        SystemProxy(const std::string &name, const std::string &path, const std::string &inter)
+            :  ProxyBase(sdbus::createSystemBusConnection(), name, path, inter) {}
+    };
+
+    class SessionProxy : public ProxyBase {
+      public:
+        SessionProxy(const std::string &name, const std::string &path, const std::string &inter)
+            :  ProxyBase(sdbus::createSessionBusConnection(), name, path, inter) {}
+
+#ifdef SDBUS_ADDRESS_SUPPORT
+        SessionProxy(const std::string &addr, const std::string &name, const std::string &path, const std::string &inter)
+            : ProxyBase(sdbus::createSessionBusConnectionWithAddress(addr), name, path, inter) {}
+#endif
     };
 
     class SessionProxySignals : public SessionProxy {

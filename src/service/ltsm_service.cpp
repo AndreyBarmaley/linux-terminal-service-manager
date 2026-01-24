@@ -542,9 +542,7 @@ namespace LTSM::Manager {
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::ranges::none_of(sessions, [&](auto & ptr) {
-            return ptr && ptr->displayNum == freeDisplay;
-        })) {
+            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
                 break;
             }
         }
@@ -1146,9 +1144,7 @@ namespace LTSM::Manager {
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) {
-            return ptr && ptr->displayNum == freeDisplay;
-        })) {
+            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
                 break;
             }
         }
@@ -1777,9 +1773,7 @@ namespace LTSM::Manager {
             if(auto groupInfo = Tools::getGroupInfo(configGetString("transfer:group:only"))) {
                 auto gids = xvfb->userInfo->groups();
 
-                if(std::ranges::none_of(gids, [&](auto & gid) {
-                return gid == groupInfo->gid();
-                })) {
+                if(std::ranges::none_of(gids, [&](auto & gid) { return gid == groupInfo->gid(); })) {
                     Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
                     busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
                                   NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
@@ -2809,16 +2803,12 @@ namespace LTSM::Manager {
 
         auto modes = { "ro", "rw", "wo" };
 
-        if(std::ranges::none_of(modes, [&](auto & val) {
-        return cmode == val;
-    })) {
+        if(std::ranges::none_of(modes, [&](auto & val) { return cmode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "client", cmode.c_str());
             return false;
         }
 
-        if(std::ranges::none_of(modes, [&](auto & val) {
-        return smode == val;
-    })) {
+        if(std::ranges::none_of(modes, [&](auto & val) { return smode == val; })) {
             Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "server", smode.c_str());
             return false;
         }
