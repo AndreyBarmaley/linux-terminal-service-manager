@@ -64,7 +64,8 @@ namespace LTSM
         Sdl = 1 << 17,
         App = 1 << 16,
         Ldap = 1 << 14,
-        Gss = 1 << 13
+        Gss = 1 << 13,
+        Fork = 1 << 12
     };
 
     class Application
@@ -207,7 +208,7 @@ namespace LTSM
 
     namespace ForkMode
     {
-        int forkStart(bool debug = false);
+        int forkStart(void);
 
         int waitPid(int pid);
         int runChildFailure(int res = -1);

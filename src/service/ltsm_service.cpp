@@ -115,7 +115,7 @@ namespace LTSM::Manager {
             Application::debug(DebugType::App, "%s: child mode, type: %s, pid: %" PRId32 ", uid: %" PRId32,
                                __FUNCTION__, "pam session", getpid(), getuid());
 
-            if(pid_t pid = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug)); 0 != pid) {
+            if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
                 pidNext = pid;
                 const bool notSysUser = std::string_view(ltsm_user_conn) != sess->userInfo->user();
 
@@ -1259,7 +1259,7 @@ namespace LTSM::Manager {
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
 
         try {
-            sess->pid1 = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug));
+            sess->pid1 = ForkMode::forkStart();
 
             // child process
             if(0 == sess->pid1) {

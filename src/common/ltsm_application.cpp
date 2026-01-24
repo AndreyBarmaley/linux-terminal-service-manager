@@ -921,8 +921,9 @@ namespace LTSM
         appDebugTarget = DebugTarget::Quiet;
     }
 
-    int ForkMode::forkStart(bool debug)
+    int ForkMode::forkStart(void)
     {
+        const bool debug = Application::isDebugTypes(DebugType::Fork);
         pid_t pid = fork();
 
         if(pid < 0)

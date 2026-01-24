@@ -55,7 +55,7 @@ namespace LTSM::DisplaySession {
     }
 
     PidStatus runForkCommand(const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        pid_t pid = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug));
+        pid_t pid = ForkMode::forkStart();
 
         // child
         if(0 == pid) {
@@ -141,7 +141,7 @@ namespace LTSM::DisplaySession {
             throw std::runtime_error(NS_FuncName);
         }
 
-        int pid = ForkMode::forkStart(Application::isDebugLevel(DebugLevel::Debug));
+        int pid = ForkMode::forkStart();
 
         // child
         if(0 == pid) {
