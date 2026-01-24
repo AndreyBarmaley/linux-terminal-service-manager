@@ -63,7 +63,6 @@ namespace LTSM::Manager {
     std::unique_ptr<DBusAdaptor> serviceAdaptor;
 
     //
-    std::forward_list<std::string> getSessionDBusAddresses(const UserInfo &, int displayNum);
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
     bool switchToUser(const UserInfo &);
 
@@ -579,6 +578,7 @@ namespace LTSM::Manager {
         return jas.flush();
     }
 
+/*
     std::forward_list<std::string> getSessionDBusAddressesFromHome(const std::filesystem::path & dbusSessionPath, int displayNum) {
         std::forward_list<std::string> res;
 
@@ -640,6 +640,7 @@ namespace LTSM::Manager {
 
         return dbusAddresses;
     }
+*/
 
     bool runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd, bool detach /* true */) {
         if(cmd.empty()) {
@@ -1099,17 +1100,18 @@ namespace LTSM::Manager {
 
     std::unique_ptr<DisplaySessionProxy> DBusAdaptor::waitDisplaySessionStarting(XvfbSessionPtr sess, uint32_t ms) const {
         std::unique_ptr<DisplaySessionProxy> res;
+        // path generated from /etc/ltsm/xclients
+        // format userRuntimeDir / ltsm / dbus_session_%{display}
+        auto dbusPath = sess->userInfo->xdgRuntimeDir() / "ltsm" / Tools::joinToString("dbus_session_", sess->displayNum);
 
-        Tools::waitCallable<std::chrono::milliseconds>(ms, 150, [sess, &res]() {
-            if(auto dbusAddresses = getSessionDBusAddresses(*sess->userInfo, sess->displayNum); ! dbusAddresses.empty()) {
-                auto addr = Tools::join(dbusAddresses.begin(), dbusAddresses.end(), ";");
-
-                //Application::debug(DebugType::App, "%s: dbus address: `%s'", __FUNCTION__, addr.c_str());
-                try {
-                    res = std::make_unique<DisplaySessionProxy>(addr, sess->displayNum);
+        Tools::waitCallable<std::chrono::milliseconds>(ms, 150, [&dbusPath, displayNum = sess->displayNum, &res]() {
+            try {
+                if(std::filesystem::is_regular_file(dbusPath)) {
+                    auto addr = Tools::fileToString(dbusPath);
+                    res = std::make_unique<DisplaySessionProxy>(addr, displayNum);
                     return res && 0 < res->getVersion();
-                } catch(...) {}
-            }
+                }
+            } catch(...) {}
 
             return false;
         });
@@ -2000,9 +2002,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        if(std::ranges::none_of(users, [&](auto & val) {
-        return val == login;
-    })) {
+        if(std::ranges::none_of(users, [&](auto & val) { return val == login; })) {
             Application::error("%s: %s, display: %" PRId32 ", user: %s",
                                __FUNCTION__, "login not found", xvfb->displayNum, login.c_str());
             emitLoginFailure(xvfb->displayNum, "login not found");
