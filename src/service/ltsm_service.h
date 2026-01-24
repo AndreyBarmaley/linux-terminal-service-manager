@@ -309,7 +309,7 @@ namespace LTSM::Manager {
         bool checkDisplaySessionAlive(int display) const;
 
         int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
-        void runSessionScript(XvfbSessionPtr, const std::string & cmd);
+        void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
                              bool token);

@@ -578,70 +578,6 @@ namespace LTSM::Manager {
         return jas.flush();
     }
 
-/*
-    std::forward_list<std::string> getSessionDBusAddressesFromHome(const std::filesystem::path & dbusSessionPath, int displayNum) {
-        std::forward_list<std::string> res;
-
-        std::string_view dbusLabel = "DBUS_SESSION_BUS_ADDRESS='";
-        auto displaySuffix = Tools::joinToString("-", displayNum);
-
-        for(auto const & dirEntry : std::filesystem::directory_iterator{dbusSessionPath}) {
-            if(! endsWith(dirEntry.path().native(), displaySuffix)) {
-                continue;
-            }
-
-            std::ifstream ifs(dirEntry.path());
-            std::string line;
-
-            while(std::getline(ifs, line)) {
-                if(! startsWith(line, dbusLabel)) {
-                    continue;
-                }
-
-                auto it1 = line.begin() + dbusLabel.size();
-                auto it2 = std::prev(line.end());
-
-                // remove last \'
-                while(std::iscntrl(*it2) || *it2 == '\'') {
-                    it2 = std::prev(it2);
-                }
-
-                res.emplace_front(it1, it2);
-            }
-        }
-
-        return res;
-    }
-
-    std::forward_list<std::string> getSessionDBusAddresses(const UserInfo & userInfo, int displayNum) {
-        auto dbusSessionPath = std::filesystem::path(userInfo.home()) / ".dbus" / "session-bus";
-        std::forward_list<std::string> dbusAddresses;
-
-        // home may be nfs and deny for root
-        try {
-            if(std::filesystem::is_directory(dbusSessionPath)) {
-                dbusAddresses = getSessionDBusAddressesFromHome(dbusSessionPath, displayNum);
-            }
-
-            auto dbusBrokerPath = userInfo.xdgRuntimeDir() / "bus";
-
-            if(std::filesystem::is_socket(dbusBrokerPath)) {
-                dbusAddresses.emplace_front(Tools::joinToString("unix:path=", dbusBrokerPath.native()));
-            }
-
-            // ltsm path from /etc/ltsm/xclients
-            auto dbusLtsmSessionPath = userInfo.xdgRuntimeDir() / "ltsm" / Tools::joinToString("dbus_session_", displayNum);
-
-            if(std::filesystem::is_regular_file(dbusLtsmSessionPath)) {
-                dbusAddresses.emplace_front(Tools::fileToString(dbusLtsmSessionPath));
-            }
-        } catch(const std::filesystem::filesystem_error &) {
-        }
-
-        return dbusAddresses;
-    }
-*/
-
     bool runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd, bool detach /* true */) {
         if(cmd.empty()) {
             return false;
@@ -1055,7 +991,7 @@ namespace LTSM::Manager {
 
 #endif
 
-        Application::notice("%s: !!!!!!!!!!!!!!!! shutdown display: %" PRId32 " %s", __FUNCTION__, xvfb->displayNum, "starting");
+        Application::notice("%s: shutdown display: %" PRId32 " %s", __FUNCTION__, xvfb->displayNum, "starting");
         return true;
         xvfb->mode = SessionMode::Shutdown;
 
@@ -1178,12 +1114,14 @@ namespace LTSM::Manager {
         std::thread(std::move(waitPidTask), pid).detach();
     }
 
-    void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str) {
+    void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str) const {
         if(! str.empty()) {
             auto args = Tools::split(Tools::replace(
                                          Tools::replace(str, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
             assertm(! args.empty(), "empty args list");
-            xvfb->dbus->runSessionCommandAsync(args.front(), { std::next(args.begin()), args.end() }, {});
+            try {
+                xvfb->dbus->runSessionCommandAsync(args.front(), { std::next(args.begin()), args.end() }, {});
+            } catch(...) {}
         }
     }
 
@@ -1395,7 +1333,6 @@ namespace LTSM::Manager {
                                    __FUNCTION__, cmd.c_str(), ret, oldSess->displayNum);
             }
 
-            // FIXME
             oldSess->dbus->setSessionKeyboardLayout(oldSess->layout);
             startSessionChannels(oldSess);
             runSessionScript(oldSess, configGetString("session:connect"));
@@ -1468,7 +1405,6 @@ namespace LTSM::Manager {
         Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, newSess->pid1, newSess->displayNum);
 
-        // FIXME
         newSess->dbus->setSessionKeyboardLayout(newSess->layout);
         runSystemScript(newSess, configGetString("system:connect"));
         startSessionChannels(newSess);
