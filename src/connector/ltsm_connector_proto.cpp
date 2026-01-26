@@ -539,7 +539,7 @@ namespace LTSM::Connector {
                     continue;
                 }
 
-                auto it2 = Tools::nextToEnd(it1, freeChannels, files.end());
+                auto it2 = rangesNext(it1, freeChannels, files.end());
 
                 try {
                     // send partial request to manager

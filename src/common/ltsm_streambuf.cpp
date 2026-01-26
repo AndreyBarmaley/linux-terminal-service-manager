@@ -26,6 +26,7 @@
 
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
+#include "ltsm_compat.h"
 #include "ltsm_streambuf.h"
 #include "ltsm_application.h"
 
@@ -524,7 +525,7 @@ namespace LTSM {
         vec.resize(vsz + len);
         auto dst = std::next(vec.begin(), vsz);
         std::copy_n(src, len, dst);
-        it = Tools::nextToEnd(vec.begin(), offset, vec.end());
+        it = rangesNext(vec.begin(), offset, vec.end());
     }
 
     BinaryBuf StreamBuf::read(size_t len) const {

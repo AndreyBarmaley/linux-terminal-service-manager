@@ -74,7 +74,7 @@ namespace LTSM {
             return false;
         }
 
-        last.erase(last.begin(), Tools::nextToEnd(last.begin(), framesCount * sampleLength, last.end()));
+        last.erase(last.begin(), rangesNext(last.begin(), framesCount * sampleLength, last.end()));
         encodeSize = nBytes;
         return 0 < encodeSize;
     }

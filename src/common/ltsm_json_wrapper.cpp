@@ -929,7 +929,7 @@ namespace LTSM {
     int JsonContent::pushValuesToArray(const const_iterator & it, JsonArray & arr) const {
         int counts = (*it).counts();
         int skip = 1;
-        auto itval = Tools::nextToEnd(it, skip, end());
+        auto itval = rangesNext(it, skip, end());
 
         while(counts-- && itval != end()) {
             auto [ptr, count] = getValueFromIter(itval);
@@ -939,7 +939,7 @@ namespace LTSM {
             }
 
             skip += count;
-            itval = Tools::nextToEnd(it, skip, end());
+            itval = rangesNext(it, skip, end());
         }
 
         return skip;
@@ -955,8 +955,8 @@ namespace LTSM {
     int JsonContent::pushValuesToObject(const const_iterator & it, JsonObject & obj) const {
         int counts = (*it).counts();
         int skip = 1;
-        auto itkey = Tools::nextToEnd(it, skip, end());
-        auto itval = Tools::nextToEnd(itkey, 1, end());
+        auto itkey = rangesNext(it, skip, end());
+        auto itval = rangesNext(itkey, 1, end());
 
         while(counts-- && itval != end()) {
             if(!(*itkey).isKey()) {
@@ -978,8 +978,8 @@ namespace LTSM {
             }
 
             skip += 1 + count;
-            itkey = Tools::nextToEnd(it, skip, end());
-            itval = Tools::nextToEnd(itkey, 1, end());
+            itkey = rangesNext(it, skip, end());
+            itval = rangesNext(itkey, 1, end());
         }
 
         return skip;

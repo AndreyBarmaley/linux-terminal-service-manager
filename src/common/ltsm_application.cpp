@@ -117,7 +117,7 @@ namespace LTSM
             {
                 types |= DebugType::Tls;
             }
-            else if(slower == "chnl")
+            else if(slower == "chnl" || startsWith(slower, "chan"))
             {
                 types |= DebugType::Channels;
             }
@@ -136,6 +136,10 @@ namespace LTSM
             else if(slower == "x11cli")
             {
                 types |= DebugType::X11Cli;
+            }
+            else if(slower == "wincli")
+            {
+                types |= DebugType::WinCli;
             }
             else if(slower == "audio")
             {
@@ -169,6 +173,10 @@ namespace LTSM
             {
                 types |= DebugType::Gss;
             }
+            else if(slower == "fork")
+            {
+                types |= DebugType::Fork;
+            }
             else if(slower == "all")
             {
                 types |= DebugType::All;
@@ -186,7 +194,7 @@ namespace LTSM
     {
         facility = LOG_USER;
 
-        if(5 < name.size() && startsWith(name, "local"))
+        if(startsWith(name, "local"))
         {
             switch(name[5])
             {

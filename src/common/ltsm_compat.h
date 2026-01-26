@@ -23,8 +23,8 @@
 #ifndef _LTSM_COMPAT_
 #define _LTSM_COMPAT_
 
-
 #include <string>
+#include <iterator>
 
 namespace LTSM {
     inline std::string view2string(std::string_view view) {
@@ -40,14 +40,35 @@ namespace LTSM {
 #endif
     }
 
-    inline bool startsWith(std::string_view str, std::string_view pred) {
+    inline bool startsWith(std::string_view str, std::string_view pred) noexcept {
+#if __cplusplus >= 202002L
+        return str.starts_with(pred);
+#else
         return pred.size() <= str.size() &&
                str.substr(0, pred.size()) == pred;
+#endif
     }
 
-    inline bool endsWith(std::string_view str, std::string_view pred) {
+    inline bool endsWith(std::string_view str, std::string_view pred) noexcept {
+#if __cplusplus >= 202002L
+        return str.ends_with(pred);
+#else
         return pred.size() <= str.size() &&
                str.substr(str.size() - pred.size(), pred.size()) == pred;
+#endif
+    }
+
+    template<typename Iterator>
+    inline Iterator rangesNext(Iterator it1, size_t count, Iterator it2) noexcept {
+#if __cplusplus >= 202002L
+        return std::ranges::next(it1, count, it2);
+#else
+        while(it1 != it2 && count--) {
+            it1 = std::next(it1);
+        }
+
+        return it1;
+#endif
     }
 }
 
