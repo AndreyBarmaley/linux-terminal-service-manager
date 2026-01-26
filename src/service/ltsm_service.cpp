@@ -707,6 +707,7 @@ namespace LTSM::Manager {
 #endif
         displayNum(display) {
         registerProxy();
+        Application::debug(DebugType::App, "%s: create for display: %" PRId32, __FUNCTION__, displayNum);
     }
 #else
     DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : displayNum(display) {
@@ -1237,8 +1238,6 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
                            __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
-        auto displayWidth = configGetInteger("default:width", 1024);
-        auto displayHeight = configGetInteger("default:height", 768);
         auto userInfo = Tools::getUserInfo(ltsm_user_conn);
 
         if(! userInfo) {

@@ -37,7 +37,7 @@ namespace LTSM::SDBus {
     class ProxyBase {
       protected:
         std::unique_ptr<sdbus::IProxy> proxy;
-        const std::string interface;
+        std::string interface;
 
       public:
         ProxyBase(std::unique_ptr<sdbus::IConnection> conn, const std::string &name, const std::string &path,

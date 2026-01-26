@@ -78,6 +78,12 @@ namespace LTSM {
         explicit UserInfo(const std::string & name);
         explicit UserInfo(uid_t uid);
 
+        UserInfo(const UserInfo &) = delete;
+        UserInfo & operator=(const UserInfo &) = delete;
+
+        UserInfo(UserInfo &&) = default;
+        UserInfo & operator=(UserInfo &&) = default;
+
         std::vector<gid_t> groups(void) const;
 
         inline const char* user(void) const {
@@ -116,6 +122,12 @@ namespace LTSM {
       public:
         explicit GroupInfo(const std::string & name);
         explicit GroupInfo(gid_t gid);
+
+        GroupInfo(const GroupInfo &) = delete;
+        GroupInfo & operator=(const GroupInfo &) = delete;
+
+        GroupInfo(GroupInfo &&) = default;
+        GroupInfo & operator=(GroupInfo &&) = default;
 
         std::forward_list<std::string> members(void) const;
 
