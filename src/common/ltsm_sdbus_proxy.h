@@ -29,7 +29,6 @@
 #include "ltsm_application.h"
 
 #include <cstdint>
-#include <forward_list>
 #include <unordered_map>
 #include <memory>
 #include <string>

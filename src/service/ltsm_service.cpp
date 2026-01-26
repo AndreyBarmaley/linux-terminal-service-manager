@@ -1130,7 +1130,7 @@ namespace LTSM::Manager {
         }
 
         std::scoped_lock guard{ lockSessions };
-        auto its = std::find_if(sessions.begin(), sessions.end(), [](auto & ptr) {
+        auto its = std::ranges::find_if(sessions, [](auto & ptr) {
             return ! ptr;
         });
 
@@ -1144,7 +1144,7 @@ namespace LTSM::Manager {
         auto freeDisplay = min;
 
         for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::none_of(sessions.begin(), sessions.end(), [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
+            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
                 break;
             }
         }
@@ -1459,12 +1459,12 @@ namespace LTSM::Manager {
             }
         }
 
-        auto isValidSession = [](XvfbSessionPtr & ptr) {
-            return ptr;
+        auto isValidSession = [](const XvfbSessionPtr & ptr) {
+            return !! ptr;
         };
 
         // wait sessions
-        while(auto sessionsAlive = std::count_if(sessions.begin(), sessions.end(), isValidSession)) {
+        while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
             Application::debug(DebugType::App, "%s: wait sessions: %lu", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
         }
@@ -1473,7 +1473,7 @@ namespace LTSM::Manager {
 
         // childEnded
         if(! childsRunning.empty()) {
-            auto childsCount = std::count_if(childsRunning.begin(), childsRunning.end(), [](auto & pair) {
+            auto childsCount = std::ranges::count_if(childsRunning, [](auto & pair) {
                 return 0 < pair.first;
             });
 

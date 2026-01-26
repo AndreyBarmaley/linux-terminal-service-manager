@@ -812,7 +812,7 @@ namespace LTSM {
         }
 
         auto readerName = std::string(readerData.begin(),
-                                      std::find(readerData.begin(), readerData.end(), 0));
+                                      std::ranges::find(readerData, 0));
         auto currentReader = PcscLite::findReaderState(readerName);
 
         if(! currentReader) {
@@ -1124,7 +1124,7 @@ namespace LTSM {
         // atr changed
         if(! std::equal(atr.begin(), atr.end(), std::begin(reader->atr))) {
             std::fill(std::begin(reader->atr), std::end(reader->atr), 0);
-            std::copy_n(atr.data(), atr.size(), std::begin(reader->atr));
+            std::ranges::copy(atr, std::begin(reader->atr));
 
             reader->atrLen = atr.size();
 
@@ -1558,8 +1558,8 @@ namespace LTSM {
             assertm(state.cbAtr <= sizeof(rd.atr), "atr length invalid");
             rd.state = state.dwEventState & SCARD_STATE_PRESENT ? (PcscLite::StatePresent | PcscLite::StatePowered |
                        PcscLite::StateNegotiable) : PcscLite::StateAbsent;
-            std::copy_n(readerName.data(), readerName.size(), rd.name);
-            std::copy_n(state.rgbAtr, state.cbAtr, rd.atr);
+            std::ranges::copy(readerName, rd.name);
+            std::ranges::copy_n(state.rgbAtr, state.cbAtr, rd.atr);
             rd.atrLen = state.cbAtr;
 
             if(changed) {

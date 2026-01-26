@@ -97,7 +97,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
     if(last.empty()) {
         sb.reset(recv.data(), recv.size());
     } else {
-        std::copy(recv.begin(), recv.end(), std::back_inserter(last));
+        std::ranges::copy(recv, std::back_inserter(last));
         recv.swap(last);
         sb.reset(recv.data(), recv.size());
         last.clear();

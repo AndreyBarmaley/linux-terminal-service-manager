@@ -495,7 +495,7 @@ namespace LTSM {
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
 
-        std::fill(keycodes.begin(), keycodes.end(), NULL_KEYCODE);
+        std::ranges::fill(keycodes, NULL_KEYCODE);
     }
 
     XCB::ModuleTest::~ModuleTest() {

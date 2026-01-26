@@ -402,7 +402,7 @@ namespace LTSM {
     std::string PKCS11::RawDataRef::toString(void) const {
         if(size()) {
             auto beg = data();
-            auto end = std::find(beg, beg + size(), 0);
+            auto end = std::ranges::find(beg, beg + size(), 0);
             return std::string(beg, end);
         }
 

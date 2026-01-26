@@ -35,7 +35,7 @@ namespace LTSM {
         std::array<char, 1024> logbuf;
 
         const char* error(int errnum) {
-            std::fill(errbuf.begin(), errbuf.end(), 0);
+            std::ranges::fill(errbuf, 0);
             return 0 > av_strerror(errnum, errbuf.data(), errbuf.size() - 1) ? "error not found" : errbuf.data();
         }
 

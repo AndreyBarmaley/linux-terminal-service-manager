@@ -333,7 +333,7 @@ namespace LTSM {
             }
 
             auto it1 = line.begin();
-            auto it2 = std::find(it1, line.end(), 0x20);
+            auto it2 = std::ranges::find(it1, line.end(), 0x20);
             std::string_view cmd = string2view(it1, it2);
 
             if(it2 != line.end()) {

@@ -506,7 +506,7 @@ namespace LTSM {
             if(it != encodings.end()) {
                 auto enc = *it;
                 encodings.erase(it);
-                it = std::find(encodings.begin(), encodings.end(), ENCODING_LTSM);
+                it = std::ranges::find(encodings, ENCODING_LTSM);
                 encodings.insert(it == encodings.end() ? it : std::next(it), enc);
             }
         }

@@ -52,7 +52,7 @@ namespace LTSM {
 
         void addJob(JobFuture && job) {
             while(! jobs.empty()) {
-                auto busy = std::count_if(jobs.begin(), jobs.end(), [](auto & job) {
+                auto busy = std::ranges::count_if(jobs, [](auto & job) {
                     return job.wait_for(1us) != std::future_status::ready;
                 });
 

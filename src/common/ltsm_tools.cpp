@@ -610,7 +610,7 @@ namespace LTSM {
     }
 
     std::string Tools::prettyFuncName(std::string_view name) {
-        auto end = std::find(name.begin(), name.end(), '(');
+        auto end = std::ranges::find(name, '(');
         auto beg = end != name.end() ? end : end = std::prev(name.end());
 
         while(beg != name.begin() && ! std::isspace(*beg)) {
@@ -743,7 +743,7 @@ namespace LTSM {
 
     std::string Tools::runcmd(const std::string & cmd) {
         std::array<char, 128> buffer;
-        std::fill(buffer.begin(), buffer.end(), 0);
+        std::ranges::fill(buffer, 0);
         std::unique_ptr<FILE, int(*)(FILE*)> pipe{popen(cmd.c_str(), "r"), pclose};
         std::string result;
 

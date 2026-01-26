@@ -155,7 +155,7 @@ namespace LTSM {
         pitch = std::max(pitch1, pitch2);
         size_t length = pitch * static_cast<size_t>(fbsz.height);
         buffer = new uint8_t[length];
-        std::fill(buffer, buffer + length, 0);
+        std::fill_n(buffer, length, 0);
     }
 
     fbinfo_t::fbinfo_t(uint8_t* ptr, const XCB::Size & fbsz, const PixelFormat & fmt, uint32_t pitch2) : format(fmt), buffer(ptr) {
@@ -222,7 +222,7 @@ namespace LTSM {
         switch(bitsPerPixel()) {
             case 32:
                 if(auto ptr = static_cast<uint32_t*>(offset)) {
-                    std::fill(ptr, ptr + length, pixel);
+                    std::fill_n(ptr, length, pixel);
                 }
 
                 break;
@@ -250,14 +250,14 @@ namespace LTSM {
 
             case 16:
                 if(auto ptr = static_cast<uint16_t*>(offset)) {
-                    std::fill(ptr, ptr + length, static_cast<uint16_t>(pixel));
+                    std::fill_n(ptr, length, static_cast<uint16_t>(pixel));
                 }
 
                 break;
 
             case 8:
                 if(auto ptr = static_cast<uint8_t*>(offset)) {
-                    std::fill(ptr, ptr + length, static_cast<uint8_t>(pixel));
+                    std::fill_n(ptr, length, static_cast<uint8_t>(pixel));
                 }
 
                 break;
@@ -426,7 +426,7 @@ namespace LTSM {
         auto rowCopy = [&fb, &reg, &dst, this](int row) {
             auto ptr = fb.pitchData(reg.y + row) + reg.x * fb.bytePerPixel();
             size_t length = dst.width * fb.bytePerPixel();
-            std::copy(ptr, ptr + length, pitchData(dst.y + row) + dst.x * bytePerPixel());
+            std::copy_n(ptr, length, pitchData(dst.y + row) + dst.x * bytePerPixel());
         };
 
 #ifdef LTSM_WITH_FB_PARALLELS
