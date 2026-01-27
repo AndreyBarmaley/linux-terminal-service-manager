@@ -265,12 +265,12 @@ namespace LTSM::Manager {
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
-        XvfbSessionPtr findDisplaySession(int display);
-        XvfbSessionPtr findUserSession(const std::string & username);
+        XvfbSessionPtr findDisplaySession(int display) const;
+        XvfbSessionPtr findUserSession(const std::string & username) const;
         XvfbSessionPtr registryNewSession(int min, int max);
         void removeDisplaySession(int display);
-        std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void);
-        std::forward_list<XvfbSessionPtr> getOnlineSessions(void);
+        std::forward_list<XvfbSessionPtr> findTimepointLimitSessions(void) const;
+        std::forward_list<XvfbSessionPtr> getOnlineSessions(void) const;
 
         std::string toJsonString(void) const;
     };
@@ -281,7 +281,7 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::forward_list<PidStatus> childsRunning;
+        std::list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
         std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
@@ -308,7 +308,6 @@ namespace LTSM::Manager {
         std::unique_ptr<DisplaySessionProxy> waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
-        int runUserSession(XvfbSessionPtr, const std::filesystem::path &, PamSession*);
         void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,

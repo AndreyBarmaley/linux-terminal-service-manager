@@ -425,7 +425,7 @@ namespace LTSM::Manager {
             res.insert_or_assign("LTSM_LOGIN_MODE", "OK");
         }
 
-        for(auto & env : envs) {
+        for(const auto & env : envs) {
             if(auto pos = env.find("="); pos != std::string_view::npos) {
                 auto it = env.begin() + pos;
                 res.insert_or_assign(std::string{env.begin(), it}, std::string{std::next(it), env.end()});
@@ -476,9 +476,9 @@ namespace LTSM::Manager {
         sessions.resize(displays);
     }
 
-    XvfbSessionPtr XvfbSessions::findUserSession(const std::string & username) {
+    XvfbSessionPtr XvfbSessions::findUserSession(const std::string & username) const {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::ranges::find_if(sessions, [&](auto & ptr) {
+        auto it = std::ranges::find_if(sessions, [&](const auto & ptr) {
             return ptr &&
                    (ptr->mode == SessionMode::Started || ptr->mode == SessionMode::Connected || ptr->mode == SessionMode::Disconnected) &&
                    username == ptr->userInfo->user();
@@ -487,16 +487,16 @@ namespace LTSM::Manager {
         return it != sessions.end() ? *it : nullptr;
     }
 
-    XvfbSessionPtr XvfbSessions::findDisplaySession(int screen) {
+    XvfbSessionPtr XvfbSessions::findDisplaySession(int screen) const {
         std::scoped_lock guard{ lockSessions };
-        auto it = std::ranges::find_if(sessions, [&screen](auto & ptr) {
+        auto it = std::ranges::find_if(sessions, [&screen](const auto & ptr) {
             return ptr && ptr->displayNum == screen;
         });
 
         return it != sessions.end() ? *it : nullptr;
     }
 
-    std::forward_list<XvfbSessionPtr> XvfbSessions::findTimepointLimitSessions(void) {
+    std::forward_list<XvfbSessionPtr> XvfbSessions::findTimepointLimitSessions(void) const {
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard{ lockSessions };
 
@@ -509,7 +509,7 @@ namespace LTSM::Manager {
         return res;
     }
 
-    std::forward_list<XvfbSessionPtr> XvfbSessions::getOnlineSessions(void) {
+    std::forward_list<XvfbSessionPtr> XvfbSessions::getOnlineSessions(void) const {
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard{ lockSessions };
 
@@ -912,30 +912,33 @@ namespace LTSM::Manager {
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard1{ lockSessions };
 
-        for(const auto & ptr : sessions) {
+        for(auto & ptr : sessions) {
             if(! ptr) {
                 continue;
             }
 
             std::scoped_lock guard2{ lockRunning };
 
-            auto erased = std::erase_if(childsRunning, [pid1 = ptr->pid1](auto & pidStatus)
+            auto it = std::ranges::find_if(childsRunning, [pid1 = ptr->pid1](auto & pidStatus)
             {
-                if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                    return false;
-                }
-
                 if(pid1 != pidStatus.first) {
                     return false;
                 }
 
-                Application::notice("%s: session ended, pid: %" PRId32 ", ret: %" PRId32,
-                                    "findEndedSessions", pid1, pidStatus.second.get());
+                if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                    return false;
+                }
+
                 return true;
             });
 
-            if(erased)
-                res.push_front(ptr);
+            if(it != childsRunning.end()) {
+                Application::notice("%s: session ended, pid: %" PRId32 ", ret: %" PRId32,
+                                    __FUNCTION__, ptr->pid1, it->second.get());
+
+                res.push_front(std::move(ptr));
+                childsRunning.erase(it);
+            }
         }
 
         return res;
@@ -1101,7 +1104,7 @@ namespace LTSM::Manager {
         // create wait pid task
         std::packaged_task<int(int)> waitPidTask{& ForkMode::waitPid};
         std::scoped_lock guard{ lockRunning };
-        childsRunning.emplace_front(std::make_pair(pid, waitPidTask.get_future()));
+        childsRunning.emplace_back(std::make_pair(pid, waitPidTask.get_future()));
         std::thread(std::move(waitPidTask), pid).detach();
     }
 
