@@ -444,91 +444,94 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
         return st.channel == channel;
     });
 
-    if(it != channelsPlanned.end()) {
-        auto job = std::move(*it);
-        channelsPlanned.erase(it);
+    if(it == channelsPlanned.end()) {
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "planned not found", channel);
+        return false;
+    }
 
-        job.chOpts.flags = flags;
+    auto job = std::move(*it);
+    channelsPlanned.erase(it);
 
-        if(error) {
-            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "client connect error", channel);
+    job.chOpts.flags = flags;
 
-            if(0 <= job.serverFd) {
-                close(job.serverFd);
-                job.serverFd = -1;
-            }
-
-            return false;
-        }
-
-        if(job.channel <= static_cast<uint8_t>(ChannelType::System) || job.channel >= static_cast<uint8_t>(ChannelType::Reserved)) {
-            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", job.channel);
-
-            if(0 <= job.serverFd) {
-                close(job.serverFd);
-                job.serverFd = -1;
-            }
-
-            return false;
-        }
-
-        if(findChannel(job.channel)) {
-            Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel busy", channel);
-
-            if(0 <= job.serverFd) {
-                close(job.serverFd);
-                job.serverFd = -1;
-            }
-
-            return false;
-        }
+    if(error) {
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "client connect error", channel);
 
         if(0 <= job.serverFd) {
-            Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), "listener");
+            close(job.serverFd);
+            job.serverFd = -1;
+        }
 
-            switch(job.serverOpts.type()) {
+        return false;
+    }
+
+    if(job.channel <= static_cast<uint8_t>(ChannelType::System) || job.channel >= static_cast<uint8_t>(ChannelType::Reserved)) {
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel incorrect", job.channel);
+
+        if(0 <= job.serverFd) {
+            close(job.serverFd);
+            job.serverFd = -1;
+        }
+
+        return false;
+    }
+
+    if(findChannel(job.channel)) {
+        Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel busy", channel);
+
+        if(0 <= job.serverFd) {
+            close(job.serverFd);
+            job.serverFd = -1;
+        }
+
+        return false;
+    }
+
+    if(0 <= job.serverFd) {
+        Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), "listener");
+
+        switch(job.serverOpts.type()) {
 #ifdef __UNIX__
 
-                case Channel::ConnectorType::Unix:
-                    createChannelUnixFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::Unix:
+                createChannelUnixFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+                break;
 
-                case Channel::ConnectorType::Socket:
-                    createChannelSocketFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::Socket:
+                createChannelSocketFd(job.channel, job.serverFd, job.serverOpts.mode, job.chOpts);
+                break;
 #endif
 
-                default:
-                    Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
-                    throw channel_error(NS_FuncName);
-            }
-        } else if(! job.serverOpts.content().empty()) {
-            Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
+            default:
+                Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
+                throw channel_error(NS_FuncName);
+        }
+    } else if(! job.serverOpts.content().empty()) {
+        Application::info("%s: %s, id: %" PRId8 ", client url: `%s', server url: `%s'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
 
-            switch(job.serverOpts.type()) {
+        switch(job.serverOpts.type()) {
 #ifdef __UNIX__
 
-                case Channel::ConnectorType::Unix:
-                    createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::Unix:
+                createChannelUnix(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+                break;
 
-                case Channel::ConnectorType::Socket:
-                    createChannelSocket(job.channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::Socket:
+                createChannelSocket(job.channel, Channel::Connector::parseAddrPort(job.serverOpts.content()), job.serverOpts.mode, job.chOpts);
+                break;
 #endif
 
-                case Channel::ConnectorType::File:
-                    createChannelFile(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::File:
+                createChannelFile(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+                break;
 
-                case Channel::ConnectorType::Command:
-                    createChannelCommand(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
-                    break;
+            case Channel::ConnectorType::Command:
+                createChannelCommand(job.channel, job.serverOpts.content(), job.serverOpts.mode, job.chOpts);
+                break;
 
-                default:
-                    Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
-                    throw channel_error(NS_FuncName);
-            }
+            default:
+                Application::error("%s: %s, id: %" PRId8, __FUNCTION__, "channel type not implemented", channel);
+                throw channel_error(NS_FuncName);
         }
     }
 

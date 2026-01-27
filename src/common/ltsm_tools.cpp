@@ -836,61 +836,64 @@ namespace LTSM {
             return str;
         }
 
-        // variants: \\, \", \/, \t, \n, \r, \f, \b
-        for(auto it = str.begin(); it != str.end(); ++it) {
-            auto itn = std::next(it);
+        size_t pos = 0;
 
-            if(itn == str.end()) {
+        while(std::string::npos != (pos = str.find('\\', pos))) {
+            if(pos + 1 == str.size()) {
                 break;
             }
 
-            if(*it == '\\') {
-                switch(*itn) {
-                    case '\\':
-                        str.erase(itn);
-                        break;
+            auto & ch1 = str[pos];
+            auto & ch2 = str[pos + 1];
 
-                    case '"':
-                        str.erase(itn);
-                        *it = '"';
-                        break;
+            switch(ch2) {
+                case '\\':
+                    ch2 = 0;
+                    break;
 
-                    case '/':
-                        str.erase(itn);
-                        *it = '/';
-                        break;
+                case '"':
+                    ch2 = 0;
+                    ch1 = '"';
+                    break;
 
-                    case 't':
-                        str.erase(itn);
-                        *it = '\t';
-                        break;
+                case '/':
+                    ch2 = 0;
+                    ch1 = '/';
+                    break;
 
-                    case 'n':
-                        str.erase(itn);
-                        *it = '\n';
-                        break;
+                case 't':
+                    ch2 = 0;
+                    ch1 = '\t';
+                    break;
 
-                    case 'r':
-                        str.erase(itn);
-                        *it = '\r';
-                        break;
+                case 'n':
+                    ch2 = 0;
+                    ch1 = '\n';
+                    break;
 
-                    case 'f':
-                        str.erase(itn);
-                        *it = '\f';
-                        break;
+                case 'r':
+                    ch2 = 0;
+                    ch1 = '\r';
+                    break;
 
-                    case 'b':
-                        str.erase(itn);
-                        *it = '\b';
-                        break;
+                case 'f':
+                    ch2 = 0;
+                    ch1 = '\f';
+                    break;
 
-                    default:
-                        break;
-                }
+                case 'b':
+                    ch2 = 0;
+                    ch1 = '\b';
+                    break;
+
+                default:
+                    break;
             }
+
+            pos += ch2 == 0 ? 2 : 1;
         }
 
+        std::erase(str, 0);
         return str;
     }
 
