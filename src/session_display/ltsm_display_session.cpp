@@ -681,7 +681,7 @@ namespace LTSM::DisplaySession {
         }
 
         // timer job
-        childCommands_.remove_if([this](auto & pidStatus) {
+        std::erase_if(childCommands_, [this](auto & pidStatus) {
             auto & futureStatus = pidStatus.second;
 
             if(futureStatus.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {

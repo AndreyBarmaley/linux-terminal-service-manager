@@ -595,7 +595,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
 bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string> files) {
     Application::info("%s", __FUNCTION__);
 
-    files.remove_if([](auto & file) {
+    std::erase_if(files, [](auto & file) {
         std::error_code err;
 
         if(! std::filesystem::is_regular_file(file, err)) {

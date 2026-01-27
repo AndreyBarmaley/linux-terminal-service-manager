@@ -41,7 +41,7 @@ using namespace std::chrono_literals;
 namespace LTSM {
     // ClintEncodings
     void ClientEncodings::setPriority(const std::vector<int> & priorities) {
-        encs.remove_if([&](auto & enc) {
+        std::erase_if(encs, [&](auto & enc) {
             return std::ranges::any_of(priorities, [&](auto & val) { return val == enc; });
         });
 

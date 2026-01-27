@@ -925,7 +925,7 @@ namespace LTSM {
 
         std::string cmd = Tools::runcmd(Tools::joinToString(cvt, " ", sz.width, " ", sz.height));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
-        params.remove_if([](auto & val) {
+        std::erase_if(params, [](auto & val) {
             return val.empty();
         });
 
@@ -1642,7 +1642,7 @@ namespace LTSM {
         if(XCB_WINDOW_NONE == win) {
             requestsIncr.clear();
         } else {
-            requestsIncr.remove_if([ = ](auto & req) {
+            std::erase_if(requestsIncr, [=](auto & req) {
                 return req.ev.requestor == win;
             });
         }

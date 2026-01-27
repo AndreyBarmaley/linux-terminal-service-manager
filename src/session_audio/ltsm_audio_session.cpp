@@ -274,7 +274,7 @@ namespace LTSM {
 
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket) {
         Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
-        clients.remove_if([&clientSocket](auto & cli) {
+        std::erase_if(clients, [&clientSocket](auto & cli) {
             return cli.socketPath == clientSocket;
         });
     }

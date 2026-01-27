@@ -949,7 +949,7 @@ namespace LTSM {
 
     void FuseSessionBus::umountPoint(const std::string & localPoint) {
         LTSM::Application::debug(DebugType::Dbus, "%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
-        childs.remove_if([ &](auto & ptr) {
+        std::erase_if(childs, [&](auto & ptr) {
             return ptr->localPoint == localPoint;
         });
     }

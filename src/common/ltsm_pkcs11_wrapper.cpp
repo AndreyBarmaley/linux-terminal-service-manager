@@ -593,8 +593,7 @@ namespace LTSM {
         auto certs = findTokenObjects(CKO_CERTIFICATE);
 
         if(havePulicPrivateKeys) {
-            auto publicKeys = getPublicKeys();
-            auto itend = std::remove_if(certs.begin(), certs.end(), [&](auto & certId) {
+            std::erase_if(certs, [&](auto & certId) {
                 auto certInfo = getObjectInfo(certId);
 
                 if(0 == findPublicKey(certInfo.getId())) {
@@ -609,8 +608,6 @@ namespace LTSM {
 
                 return false;
             });
-
-            certs.erase(itend, certs.end());
         }
 
         return certs;

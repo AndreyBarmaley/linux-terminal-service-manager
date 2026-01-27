@@ -1733,7 +1733,7 @@ namespace LTSM {
         Application::debug(DebugType::App, "%s: shutdown clientId: %" PRId32, __FUNCTION__, cli->id());
 
         const std::scoped_lock guard{ clientsLock };
-        this->clients.remove_if([cli](auto & st) {
+        std::erase_if(clients, [cli](auto & st) {
             return cli == std::addressof(st);
         });
     }

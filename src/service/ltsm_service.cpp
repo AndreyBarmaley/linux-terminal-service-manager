@@ -919,12 +919,7 @@ namespace LTSM::Manager {
 
             std::scoped_lock guard2{ lockRunning };
 
-#if __cplusplus >= 202002L
-            auto success = childsRunning.remove_if([pid1 = ptr->pid1](auto & pidStatus)
-#else
-            bool success = false;
-            childsRunning.remove_if([pid1 = ptr->pid1, &success](auto & pidStatus)
-#endif
+            auto erased = std::erase_if(childsRunning, [pid1 = ptr->pid1](auto & pidStatus)
             {
                 if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
                     return false;
@@ -936,13 +931,10 @@ namespace LTSM::Manager {
 
                 Application::notice("%s: session ended, pid: %" PRId32 ", ret: %" PRId32,
                                     "findEndedSessions", pid1, pidStatus.second.get());
-#if __cplusplus < 202002L
-                success = true;
-#endif
                 return true;
             });
 
-            if(success)
+            if(erased)
                 res.push_front(ptr);
         }
 
