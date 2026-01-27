@@ -730,10 +730,9 @@ namespace LTSM {
         return res;
     }
 
-    std::list<std::string> Tools::split(std::string_view str, int sep) {
+    std::list<std::string> Tools::split(std::string_view str, char sep) {
         using StringList = std::list<std::string>;
-        auto sep2 = std::string(1, static_cast<char>(sep));
-        return split_T<StringList>(str, sep2);
+        return split_T<StringList>(str, std::string_view{&sep, 1});
     }
 
     std::list<std::string> Tools::split(std::string_view str, std::string_view sep) {

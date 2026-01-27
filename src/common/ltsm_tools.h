@@ -195,7 +195,7 @@ namespace LTSM {
             return std::ranges::next(it1, count, std::end(cont));
         }
 
-        std::list<std::string> split(std::string_view str, int sep);
+        std::list<std::string> split(std::string_view str, char sep);
         std::list<std::string> split(std::string_view str, std::string_view sep);
 
         template<typename... Args>
