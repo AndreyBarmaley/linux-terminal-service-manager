@@ -65,6 +65,7 @@ namespace LTSM::Manager {
     //
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
     bool switchToUser(const UserInfo &);
+    void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype);
 
     namespace ChildProcess {
         int pidNext = 0;
@@ -733,8 +734,13 @@ namespace LTSM::Manager {
 #endif
         , XvfbSessions(300) {
         //
-        checkStartConfig();
+        checkConfigPathes();
         createRuntimeDir();
+
+        // set pool sessions
+        int min = configGetInteger("display:min", 55);
+        int max = configGetInteger("display:max", 99);
+        sessions.resize(std::abs(max - min));
 
         //
         saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
@@ -790,7 +796,7 @@ namespace LTSM::Manager {
         Tools::setFileOwner(ltsmRuntimeDir, 0, setgid);
     }
 
-    void DBusAdaptor::checkStartConfig(void) {
+    void DBusAdaptor::checkConfigPathes(void) const {
         // check present executable files
         for(const auto & key : config().keys()) {
             // only for path
@@ -808,16 +814,6 @@ namespace LTSM::Manager {
                 Application::warning("%s: path not found: `%s'", "CheckProgram", value.c_str());
             }
         }
-
-        int min = configGetInteger("display:min", 55);
-        int max = configGetInteger("display:max", 99);
-
-        size_t poolsz = std::abs(max - min);
-
-        if(poolsz > sessions.size()) {
-            std::scoped_lock guard{ lockSessions };
-            sessions.resize(poolsz);
-        }
     }
 
     void DBusAdaptor::shutdownService(void) {
@@ -825,6 +821,9 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::configReloadedEvent(void) {
+        checkConfigPathes();
+
+        // check pool sessions
         int min = configGetInteger("display:min", 55);
         int max = configGetInteger("display:max", 99);
         size_t poolsz = std::abs(max - min);
@@ -908,7 +907,7 @@ namespace LTSM::Manager {
         }
     }
 
-    std::forward_list<XvfbSessionPtr> DBusAdaptor::findEndedSessions(void) {
+    std::forward_list<XvfbSessionPtr> DBusAdaptor::moveEndedSessions(void) {
         std::forward_list<XvfbSessionPtr> res;
         std::scoped_lock guard1{ lockSessions };
 
@@ -945,7 +944,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::sessionsEndedAction(void) {
-        for(const auto & ptr : findEndedSessions()) {
+        for(const auto & ptr : moveEndedSessions()) {
             ptr->pid1 = 0;
             displayShutdown(ptr, true);
         }
@@ -1672,8 +1671,7 @@ namespace LTSM::Manager {
             auto spaceInfo = std::filesystem::space(dstdir, err);
 
             if(spaceInfo.available < filesize) {
-                busSendNotify(xvfb->displayNum, "Transfer Rejected", "not enough disk space",
-                              NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                sendNotifyCall(xvfb, "Transfer Rejected", "not enough disk space", NotifyParams::Error);
                 break;
             }
 
@@ -1682,9 +1680,7 @@ namespace LTSM::Manager {
 
             if(std::filesystem::exists(dstfile, err)) {
                 Application::error("%s: file present and skipping, path: `%s'", __FUNCTION__, dstfile.c_str());
-                busSendNotify(xvfb->displayNum, "Transfer Skipping",
-                              Tools::joinToString("such a file exists: ", dstfile),
-                              NotifyParams::Warning, NotifyParams::UrgencyLevel::Normal);
+                sendNotifyCall(xvfb, "Transfer Skipping", Tools::joinToString("such a file exists: ", dstfile), NotifyParams::Warning);
                 continue;
             }
 
@@ -1708,8 +1704,7 @@ namespace LTSM::Manager {
 
             // check lost conn
             if(xvfb->mode != SessionMode::Connected) {
-                busSendNotify(xvfb->displayNum, "Transfer Error", "transfer connection is lost",
-                              NotifyParams::Error, NotifyParams::UrgencyLevel::Normal);
+                sendNotifyCall(xvfb, "Transfer Error", "transfer connection is lost", NotifyParams::Error);
                 error = true;
                 std::filesystem::remove(tmpfile, fserr);
                 continue;
@@ -1740,10 +1735,10 @@ namespace LTSM::Manager {
 
         if(! error) {
             Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
-            busSendNotify(xvfb->displayNum, "Transfer Complete",
+            sendNotifyCall(xvfb, "Transfer Complete",
                           Tools::joinToString("new file added: <a href=\"file://", dstfile, "\">",
                                               std::filesystem::path(dstfile).filename(), "</a>"),
-                          NotifyParams::Information, NotifyParams::UrgencyLevel::Normal);
+                          NotifyParams::Information);
         }
     }
 
@@ -1758,8 +1753,8 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::TransferFiles)) {
             Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
-            busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 
@@ -1769,8 +1764,8 @@ namespace LTSM::Manager {
 
                 if(std::ranges::none_of(gids, [&](auto & gid) { return gid == groupInfo->gid(); })) {
                     Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
-                    busSendNotify(display, "Transfer Restricted", "transfer is blocked, contact the administrator",
-                                  NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+                    sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
+                                  NotifyParams::IconType::Warning);
                     return false;
                 }
             }
@@ -2215,8 +2210,8 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPrinter)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "printer");
-            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 
@@ -2292,8 +2287,8 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectAudio)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "audio");
-            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 
@@ -2352,8 +2347,8 @@ namespace LTSM::Manager {
     bool DBusAdaptor::startSaneListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectScanner)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "scanner");
-            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 
@@ -2429,8 +2424,8 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPcsc)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "pcsc");
-            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 
@@ -2560,8 +2555,8 @@ namespace LTSM::Manager {
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse)) {
             Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "fuse");
-            busSendNotify(xvfb->displayNum, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
-                          NotifyParams::IconType::Warning, NotifyParams::UrgencyLevel::Normal);
+            sendNotifyCall(xvfb, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
+                          NotifyParams::IconType::Warning);
             return false;
         }
 

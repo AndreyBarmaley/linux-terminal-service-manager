@@ -298,8 +298,10 @@ namespace LTSM::Manager {
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
                                                TransferRejectFunc emitTransferReject, std::string msg);
 
-        void checkStartConfig(void);
+        void checkConfigPathes(void) const;
         void createRuntimeDir(void) const;
+
+        std::forward_list<XvfbSessionPtr> moveEndedSessions(void);
 
       protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
@@ -310,16 +312,12 @@ namespace LTSM::Manager {
 
         void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
-        bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password,
-                             bool token);
-        std::forward_list<XvfbSessionPtr> findEndedSessions(void);
+        bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
 
         void sessionsTimeLimitAction(void);
         void sessionsEndedAction(void);
         void sessionsCheckConnectedAction(void);
-
-        void childEndedEvent(void);
 
       public:
         DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
