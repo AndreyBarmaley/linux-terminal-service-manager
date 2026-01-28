@@ -141,11 +141,10 @@ namespace LTSM::DisplaySession {
             throw std::runtime_error(NS_FuncName);
         }
 
-        int pid = ForkMode::forkStart();
+        int pid = ForkMode::forkStart(pipefd[1]);
 
         // child
         if(0 == pid) {
-            close(pipefd[0]);
             ForkMode::runChildProcess(cmd, args, envs, RedirectLog::StdoutFd, pipefd[1]);
             // child ended
         }

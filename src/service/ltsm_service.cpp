@@ -60,7 +60,6 @@ using namespace std::chrono_literals;
 
 namespace LTSM::Manager {
     std::unique_ptr<sdbus::IConnection> serviceConn;
-    std::unique_ptr<DBusAdaptor> serviceAdaptor;
 
     //
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
@@ -408,6 +407,8 @@ namespace LTSM::Manager {
         try {
             // remove xautfile
             std::filesystem::remove(xauthfile);
+            // safe dbus destroy
+            dbus.reset();
         } catch(const std::filesystem::filesystem_error &) {
         }
     }
@@ -1215,7 +1216,7 @@ namespace LTSM::Manager {
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
 
-        if(sess->dbus = waitDisplaySessionStarting(sess, sessionStartTimeout * 1000 /* ms */); ! ! sess->dbus) {
+        if(sess->dbus = waitDisplaySessionStarting(sess, sessionStartTimeout * 1000 /* ms */); !! sess->dbus) {
             try {
                 // fix X11 socket pemissions 0660
                 std::filesystem::permissions(Tools::x11UnixPath(sess->displayNum),
@@ -1234,7 +1235,6 @@ namespace LTSM::Manager {
         ForkMode::waitPid(sess->pid1);
         return nullptr;
     }
-
 
     int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
             const std::string & remoteAddr, const std::string & connType) {
@@ -2875,7 +2875,7 @@ namespace LTSM::Manager {
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
         Application::notice("%s: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef LTSM_WITH_SYSTEMD

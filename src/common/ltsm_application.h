@@ -208,14 +208,13 @@ namespace LTSM
 
     namespace ForkMode
     {
-        int forkStart(void);
-
+        int forkStart(int redirectFd = -1);
         int waitPid(int pid);
-        int runChildFailure(int res = -1);
-        void runChildSuccess(void);
 
         void runChildProcess(const std::filesystem::path & cmd, const std::vector<std::string> & args,
                              const std::vector<std::string> & envs, const RedirectLog & rmode, int redirectFd = -1);
+        void runChildSuccess(void);
+        int runChildFailure(int res = -1);
     }
 #endif
 }

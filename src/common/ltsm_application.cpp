@@ -929,7 +929,45 @@ namespace LTSM
         appDebugTarget = DebugTarget::Quiet;
     }
 
-    int ForkMode::forkStart(void)
+    void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path & file)
+    {
+        auto dir = file.parent_path();
+        std::error_code fserr;
+
+        if(! std::filesystem::is_directory(dir, fserr))
+        {
+            std::filesystem::create_directories(dir, fserr);
+        }
+
+        int fd = open(file.c_str(), O_RDWR | O_CREAT, 0640);
+
+        if(0 <= fd)
+        {
+            if(out)
+            {
+                dup2(fd, STDOUT_FILENO);
+            }
+
+            if(err)
+            {
+                dup2(fd, STDERR_FILENO);
+            }
+
+            close(fd);
+        }
+        else
+        {
+            const char* devnull = "/dev/null";
+            Application::warning("%s: %s, path: `%s', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
+
+            if(file != devnull)
+            {
+                redirectStdoutStderrTo(out, err, devnull);
+            }
+        }
+    }
+
+    int ForkMode::forkStart(int redirectFd)
     {
         const bool debug = Application::isDebugTypes(DebugType::Fork);
         pid_t pid = fork();
@@ -958,6 +996,20 @@ namespace LTSM
         {
             Application::setDebugTarget(DebugTarget::Quiet);
         }
+
+        appLoggingFd.reset();
+
+        // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
+        for(int fd = 3; fd < 1024; ++fd)
+        {
+            if(fd == redirectFd)
+            {
+                continue;
+            }
+
+            close(fd);
+        }
+
 
         if(debug)
         {
@@ -1017,44 +1069,6 @@ namespace LTSM
         runChildFailure(0);
     }
 
-    void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path & file)
-    {
-        auto dir = file.parent_path();
-        std::error_code fserr;
-
-        if(! std::filesystem::is_directory(dir, fserr))
-        {
-            std::filesystem::create_directories(dir, fserr);
-        }
-
-        int fd = open(file.c_str(), O_RDWR | O_CREAT, 0640);
-
-        if(0 <= fd)
-        {
-            if(out)
-            {
-                dup2(fd, STDOUT_FILENO);
-            }
-
-            if(err)
-            {
-                dup2(fd, STDERR_FILENO);
-            }
-
-            close(fd);
-        }
-        else
-        {
-            const char* devnull = "/dev/null";
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
-
-            if(file != devnull)
-            {
-                redirectStdoutStderrTo(out, err, devnull);
-            }
-        }
-    }
-
     void ForkMode::runChildProcess(const std::filesystem::path & cmd, const std::vector<std::string> & args,
                                    const std::vector<std::string> & envs, const RedirectLog & rmode, int redirectFd)
     {
@@ -1088,56 +1102,43 @@ namespace LTSM
 
         argv.push_back(nullptr);
 
+        auto procLogDir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+
         if(auto home = getenv("HOME"))
         {
-            auto procLogDir = std::filesystem::path{home} / ".ltsm" / "log";
+            procLogDir = std::filesystem::path{home} / ".ltsm" / "log";
+        }
+    
+        if(! std::filesystem::is_directory(procLogDir))
+        {
+            std::error_code fserr;
+            std::filesystem::create_directories(procLogDir, fserr);
+        }
 
-            if(! std::filesystem::is_directory(procLogDir))
+        auto logFile = procLogDir / cmd.filename();
+        logFile.replace_extension(".log");
+
+        if(rmode == RedirectLog::StdoutFd)
+        {
+            // redirect stderr
+            redirectStdoutStderrTo(false, true, logFile.native());
+
+            if(0 <= redirectFd)
             {
-                std::error_code fserr;
-                std::filesystem::create_directories(procLogDir, fserr);
-            }
-
-            auto logFile = procLogDir / cmd.filename();
-            logFile.replace_extension(".log");
-
-            if(rmode == RedirectLog::StdoutFd)
-            {
-                // redirect stderr
-                redirectStdoutStderrTo(false, true, logFile.native());
-
-                if(0 <= redirectFd)
+                // redirect stdout
+                if(0 > dup2(redirectFd, STDOUT_FILENO))
                 {
-                    // redirect stdout
-                    if(0 > dup2(redirectFd, STDOUT_FILENO))
-                    {
-                        Application::warning("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "dup2", strerror(errno), errno);
-                    }
-
-                    close(redirectFd);
-                    redirectFd = -1;
+                    Application::warning("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "dup2", strerror(errno), errno);
                 }
-            }
-            else if(rmode == RedirectLog::StdoutStderr)
-            {
-                // redirect stdout, stderr
-                redirectStdoutStderrTo(true, true, logFile.native());
+
+                close(redirectFd);
+                redirectFd = -1;
             }
         }
-        else
+        else if(rmode == RedirectLog::StdoutStderr)
         {
-            Application::warning("%s: %s not found", __FUNCTION__, "HOME");
-        }
-
-        // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
-        for(int fd = 3; fd < 1024; ++fd)
-        {
-            if(fd == redirectFd)
-            {
-                continue;
-            }
-
-            close(fd);
+            // redirect stdout, stderr
+            redirectStdoutStderrTo(true, true, logFile.native());
         }
 
         fileLogClose();
