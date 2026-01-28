@@ -40,6 +40,7 @@
 #include <cstdio>
 #include <memory>
 #include <random>
+#include <ranges>
 #include <codecvt>
 #include <cstring>
 #include <clocale>
@@ -710,8 +711,9 @@ namespace LTSM {
         return replace(src, pred, std::to_string(val));
     }
 
+/*
     template<typename StringList>
-    StringList split_T(std::string_view str, std::string_view sep) {
+    StringList split_T_old(std::string_view str, std::string_view sep) {
         StringList res;
         auto itbeg = str.begin();
 
@@ -728,6 +730,20 @@ namespace LTSM {
         }
 
         return res;
+    }
+*/
+    template<typename StringList>
+    StringList split_T(std::string_view str, std::string_view sep) {
+        std::list<std::string> list;
+
+        for(const auto & sr: str | std::views::split(sep)) {
+            if(const auto size = std::ranges::distance(sr)) {
+                const auto data = std::addressof(*sr.begin());
+                list.emplace_back(data, size);
+            }
+        }
+
+        return list;
     }
 
     std::list<std::string> Tools::split(std::string_view str, char sep) {
