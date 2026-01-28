@@ -47,6 +47,7 @@ namespace LTSM::Manager {
     };
 
     using PidStatus = std::pair<pid_t, std::shared_future<int>>;
+    using PidStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
     using TupleRegion = sdbus::Struct<int16_t, int16_t, uint16_t, uint16_t>;
@@ -214,7 +215,7 @@ namespace LTSM::Manager {
         uint8_t depth = 0;
 
         PidStatus idleActionStatus;
-        std::unique_ptr<DisplaySessionProxy> dbus;
+        std::string dbusAddress;
 
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
@@ -246,6 +247,21 @@ namespace LTSM::Manager {
                    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - tpOffline);
         }
 
+        std::filesystem::path dbusSessionPath(void) const noexcept;
+        int32_t dbusGetVersion(void) const noexcept;
+        void dbusNotifyWarning(const std::string & summary, const std::string & body) const noexcept;
+        void dbusNotifyError(const std::string & summary, const std::string & body) const noexcept;
+        void dbusNotifyInfo(const std::string & summary, const std::string & body) const noexcept;
+        PidStdout dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept;
+        int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string>& args, const std::vector<std::string>& envs) const noexcept;
+        void dbusSetSessionKeyboardLayout(void) const noexcept;
+        bool dbusAudioChannelConnect(const std::string& socketPath) const noexcept;
+        void dbusAudioChannelDisconnect(const std::string& socketPath) const noexcept;
+        bool dbusPcscChannelConnect(const std::string& socketPath) const noexcept;
+        void dbusPcscChannelDisconnect(const std::string& socketPath) const noexcept;
+        bool dbusFuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) const noexcept;
+        void dbusFuseUmountPoint(const std::string& localPoint) const noexcept;
+    
         XvfbSession() = default;
         ~XvfbSession();
 
@@ -307,7 +323,7 @@ namespace LTSM::Manager {
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
         XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password);
-        std::unique_ptr<DisplaySessionProxy> waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
+        bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
         void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
