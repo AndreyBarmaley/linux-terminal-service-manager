@@ -961,7 +961,7 @@ namespace LTSM
 
         if(debug)
         {
-            auto file = Tools::joinToString("/var/tmp/fork_", getpid(), ".log");
+            auto file = Tools::joinToString("/var/tmp/.fork_", ident, "_", getpid(), ".log");
             Application::setDebugTargetFile(file);
             appDebugTypes = DebugType::All;
             appLogSync = true;
