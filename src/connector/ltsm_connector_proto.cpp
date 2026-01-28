@@ -36,16 +36,19 @@ using namespace std::chrono_literals;
 namespace LTSM::Connector {
     /* ConnectorLtsm */
     ConnectorLtsm::~ConnectorLtsm() {
-        rfbMessagesShutdown();
-        xcbDisableMessages(true);
+        try {
+            rfbMessagesShutdown();
+            xcbDisableMessages(true);
 
-        if(0 < displayNum()) {
-            busConnectorTerminated(displayNum(), getpid());
-            clientDisconnectedEvent(displayNum());
+            if(0 < displayNum()) {
+                busConnectorTerminated(displayNum(), getpid());
+                clientDisconnectedEvent(displayNum());
+                Application::info("%s: connector shutdown, display: %d", __FUNCTION__, displayNum());
+            }
+
+        } catch(const std::exception & err) {
+            Application::warning("%s: connector error: %s", __FUNCTION__, err.what());
         }
-
-        // waitUpdateProcess();
-        Application::info("%s: connector shutdown", __FUNCTION__);
     }
 
     int ConnectorLtsm::communication(void) {

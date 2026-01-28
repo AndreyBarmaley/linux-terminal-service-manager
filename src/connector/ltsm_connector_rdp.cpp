@@ -329,9 +329,14 @@ namespace LTSM::Connector {
     }
 
     ConnectorRdp::~ConnectorRdp() {
-        if(0 < displayNum()) {
-            busConnectorTerminated(displayNum(), getpid());
-            disconnectedEvent();
+        try {
+            if(0 < displayNum()) {
+                busConnectorTerminated(displayNum(), getpid());
+                disconnectedEvent();
+                Application::info("%s: connector shutdown, display: %d", __FUNCTION__, displayNum());
+            }
+        } catch(const std::exception & err) {
+            Application::warning("%s: connector error: %s", __FUNCTION__, err.what());
         }
     }
 
