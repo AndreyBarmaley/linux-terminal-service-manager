@@ -1118,11 +1118,20 @@ namespace LTSM::Manager {
         }
     }
 
-    XvfbSessionPtr DBusAdaptor::runNewDisplaySession(UserInfoPtr userInfo, const std::string & pass, bool loginMode) {
+    XvfbSessionPtr DBusAdaptor::runNewDisplaySession(const std::string & username, const std::string & pass) {
+        auto userInfo = Tools::getUserInfo(username);
+
+        if(! userInfo) {
+            Application::error("%s: user not found: `%s'", __FUNCTION__, username.c_str());
+            return nullptr;
+        }
+
         if(userInfo->uid() == 0) {
             Application::error("%s: deny for root", __FUNCTION__);
             return nullptr;
         }
+
+        const bool loginMode = username == ltsm_user_conn;
 
         std::scoped_lock guard{ lockSessions };
         auto its = std::ranges::find_if(sessions, [](auto & ptr) {
@@ -1232,14 +1241,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
                            __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
-        auto userInfo = Tools::getUserInfo(ltsm_user_conn);
-
-        if(! userInfo) {
-            Application::error("%s: user not found: `%s'", __FUNCTION__, ltsm_user_conn);
-            return -1;
-        }
-
-        auto sess = runNewDisplaySession(std::move(userInfo), "", true /* login mode */);
+        auto sess = runNewDisplaySession(ltsm_user_conn, "");
 
         if(! sess) {
             return -1;
@@ -1264,21 +1266,6 @@ namespace LTSM::Manager {
                            __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
         std::string sessionBin = configGetString("session:path", "/etc/ltsm/xclients");
-
-        auto userInfo = Tools::getUserInfo(userName);
-
-        if(! userInfo) {
-            Application::error("%s: user not found: `%s'", __FUNCTION__, userName.c_str());
-            return -1;
-        }
-
-        std::error_code err;
-
-        if(! std::filesystem::is_directory(userInfo->home(), err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                               __FUNCTION__, (err ? err.message().c_str() : "not directory"), userInfo->home(), getuid());
-            return -1;
-        }
 
         auto loginSess = findDisplaySession(oldScreen);
 
@@ -1328,9 +1315,20 @@ namespace LTSM::Manager {
             return oldSess->displayNum;
         }
 
+/*
+        FIXME
+        std::error_code err;
+
+        if(! std::filesystem::is_directory(userInfo->home(), err)) {
+            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+                               __FUNCTION__, (err ? err.message().c_str() : "not directory"), userInfo->home(), getuid());
+            return -1;
+        }
+*/
+
         // get owner screen
         // FIXME pass
-        auto newSess = runNewDisplaySession(std::move(userInfo), "" /* pass */, false /* login mode */);
+        auto newSess = runNewDisplaySession(userName, "" /* pass */);
 
         if(! newSess) {
             return -1;
@@ -1338,6 +1336,10 @@ namespace LTSM::Manager {
 
         // registered xvfb job
         waitPidBackgroundSafe(newSess->pid1);
+
+        // parent continue
+        Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
+                           __FUNCTION__, newSess->pid1, newSess->displayNum);
 
         // update screen
         newSess->environments = std::move(loginSess->environments);
@@ -1387,12 +1389,6 @@ namespace LTSM::Manager {
             }
         }
 
-        // registered session job
-        waitPidBackgroundSafe(newSess->pid1);
-
-        // parent continue
-        Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
-                           __FUNCTION__, newSess->pid1, newSess->displayNum);
 
         newSess->dbus->setSessionKeyboardLayout(newSess->layout);
         runSystemScript(newSess, configGetString("system:connect"));
