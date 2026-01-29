@@ -183,6 +183,7 @@ namespace LTSM::Manager {
         UserInfoPtr userInfo;
         GroupInfoPtr groupInfo;
 
+        std::string password;
         std::string displayAddr;
         std::string remoteAddr;
         std::string conntype;

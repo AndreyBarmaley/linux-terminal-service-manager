@@ -1472,6 +1472,7 @@ namespace LTSM::Manager {
             oldSess->options = std::move(loginSess->options);
             oldSess->encryption = std::move(loginSess->encryption);
             oldSess->layout = std::move(loginSess->layout);
+            oldSess->password = std::move(loginSess->password);
 
             /*
             FIXME
@@ -1500,8 +1501,7 @@ namespace LTSM::Manager {
         }
 
         // get owner screen
-        // FIXME pass построить схему взамодействия после pam auth
-        auto newSess = runNewDisplaySession(userName, "" /* pass */);
+        auto newSess = runNewDisplaySession(userName, loginSess->password);
 
         if(! newSess) {
             return -1;
@@ -1520,6 +1520,7 @@ namespace LTSM::Manager {
         }
 
         // update screen
+        newSess->password = std::move(loginSess->password);
         newSess->environments = std::move(loginSess->environments);
         newSess->options = std::move(loginSess->options);
         newSess->encryption = std::move(loginSess->encryption);
@@ -2137,6 +2138,7 @@ namespace LTSM::Manager {
                 return false;
             }
 
+            xvfb->password = password;
             pam->setItem(PAM_XDISPLAY, xvfb->displayAddr.c_str());
             pam->setItem(PAM_TTY, std::string("X11:").append(xvfb->displayAddr.c_str()).c_str());
             pam->setItem(PAM_RHOST, xvfb->remoteAddr.empty() ? "127.0.0.1" : xvfb->remoteAddr.c_str());
