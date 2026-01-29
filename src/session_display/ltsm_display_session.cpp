@@ -39,6 +39,7 @@
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_streambuf.h"
+#include "ltsm_sdbus_proxy.h"
 #include "ltsm_display_session.h"
 
 using namespace std::chrono_literals;
@@ -209,7 +210,7 @@ namespace LTSM::DisplaySession {
         Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [displayNum, auth = std::addressof(mcookie), &res]() {
             if(Tools::checkUnixSocket(Tools::x11UnixPath(displayNum))) {
                 try {
-                    if(res = std::make_unique<XCB::Connector>(displayNum, auth); ! ! res) {
+                    if(res = std::make_unique<XCB::Connector>(displayNum, auth); !! res) {
                         return 0 == res->hasError();
                     }
 
@@ -304,60 +305,6 @@ namespace LTSM::DisplaySession {
 
         inline void notifyQuestion(const std::string & summary, const std::string & body, int32_t expirationTime = -1) const {
             notify("LTSM", 0, IconType::Question, summary, body, {}, {}, expirationTime);
-        }
-    };
-
-    // SessionAudio
-    class SessionAudio : public SDBus::SessionProxy {
-      public:
-        SessionAudio() : SDBus::SessionProxy(dbus_session_audio_name, dbus_session_audio_path, dbus_session_audio_ifce) {}
-
-        int32_t getVersion(void) const {
-            return CallProxyMethod<int32_t>("getVersion");
-        }
-
-        bool connectChannel(const std::string & socketPath) const {
-            return CallProxyMethod<bool>("connectChannel", socketPath);
-        }
-
-        void disconnectChannel(const std::string & socketPath) const {
-            CallProxyMethodNoResult("disconnectChannel", socketPath);
-        }
-    };
-
-    // SessionPcsc
-    class SessionPcsc : public SDBus::SessionProxy {
-      public:
-        SessionPcsc() : SDBus::SessionProxy(dbus_session_pcsc_name, dbus_session_pcsc_path, dbus_session_pcsc_ifce) {}
-
-        int32_t getVersion(void) const {
-            return CallProxyMethod<int32_t>("getVersion");
-        }
-
-        bool connectChannel(const std::string & socketPath) const {
-            return CallProxyMethod<bool>("connectChannel", socketPath);
-        }
-
-        void disconnectChannel(const std::string & socketPath) const {
-            CallProxyMethodNoResult("disconnectChannel", socketPath);
-        }
-    };
-
-    // SessionFuse
-    class SessionFuse : public SDBus::SessionProxy {
-      public:
-        SessionFuse() : SDBus::SessionProxy(dbus_session_fuse_name, dbus_session_fuse_path, dbus_session_fuse_ifce) {}
-
-        int32_t getVersion(void) const {
-            return CallProxyMethod<int32_t>("getVersion");
-        }
-
-        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) const {
-            return CallProxyMethod<bool>("mountPoint", localPoint, remotePoint, fuseSocket);
-        }
-
-        void umountPoint(const std::string& localPoint) const {
-            CallProxyMethodNoResult("umountPoint", localPoint);
         }
     };
 
@@ -464,30 +411,6 @@ namespace LTSM::DisplaySession {
 
     void DBusAdaptor::notifyError(const std::string& summary, const std::string& body) {
         FreedesktopNotifications().notifyError(summary, body, 2000 /* ms */);
-    }
-
-    bool DBusAdaptor::audioChannelConnect(const std::string& socketPath) {
-        return SessionAudio().connectChannel(socketPath);
-    }
-
-    void DBusAdaptor::audioChannelDisconnect(const std::string& socketPath) {
-        SessionAudio().disconnectChannel(socketPath);
-    }
-
-    bool DBusAdaptor::pcscChannelConnect(const std::string& socketPath) {
-        return SessionPcsc().connectChannel(socketPath);
-    }
-
-    void DBusAdaptor::pcscChannelDisconnect(const std::string& socketPath) {
-        SessionPcsc().disconnectChannel(socketPath);
-    }
- 
-    bool DBusAdaptor::fuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) {
-        return SessionFuse().mountPoint(localPoint, remotePoint, fuseSocket);
-    }
-
-    void DBusAdaptor::fuseUmountPoint(const std::string& localPoint) {
-        SessionFuse().umountPoint(localPoint);
     }
 
     // Starter

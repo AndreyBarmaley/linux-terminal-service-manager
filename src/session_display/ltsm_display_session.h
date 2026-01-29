@@ -37,7 +37,6 @@
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
-#include "ltsm_sdbus_proxy.h"
 
 #define LTSM_SESSION_DISPLAY_VERSION 20260110
 
@@ -70,14 +69,7 @@ namespace LTSM::DisplaySession {
         void notifyInfo(const std::string& summary, const std::string& body) override;
         void notifyWarning(const std::string& summary, const std::string& body) override;
         void notifyError(const std::string& summary, const std::string& body) override;
-
-        bool audioChannelConnect(const std::string& socketPath) override;
-        void audioChannelDisconnect(const std::string& socketPath) override;
-        bool pcscChannelConnect(const std::string& socketPath) override;
-        void pcscChannelDisconnect(const std::string& socketPath) override;
-        bool fuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) override;
-        void fuseUmountPoint(const std::string& localPoint) override;
-       };
+    };
 
     class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;

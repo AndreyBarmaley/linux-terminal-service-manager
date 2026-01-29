@@ -54,9 +54,69 @@
 #include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
+#include "ltsm_sdbus_proxy.h"
 #include "ltsm_xcb_wrapper.h"
 
 using namespace std::chrono_literals;
+
+namespace LTSM::DisplaySession {
+    // SessionAudio
+    class SessionAudio : public SDBus::SessionProxy {
+      public:
+        SessionAudio(const std::string & dbusAddress)
+            : SDBus::SessionProxy(dbusAddress, dbus_session_audio_name, dbus_session_audio_path, dbus_session_audio_ifce) {}
+      
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+
+        bool connectChannel(const std::string & socketPath) const {
+            return CallProxyMethod<bool>("connectChannel", socketPath);
+        }
+
+        void disconnectChannel(const std::string & socketPath) const {
+            CallProxyMethodNoResult("disconnectChannel", socketPath);
+        }
+    };
+
+    // SessionPcsc
+    class SessionPcsc : public SDBus::SessionProxy {
+      public:
+        SessionPcsc(const std::string & dbusAddress)
+            : SDBus::SessionProxy(dbusAddress, dbus_session_pcsc_name, dbus_session_pcsc_path, dbus_session_pcsc_ifce) {}
+      
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+
+        bool connectChannel(const std::string & socketPath) const {
+            return CallProxyMethod<bool>("connectChannel", socketPath);
+        }
+
+        void disconnectChannel(const std::string & socketPath) const {
+            CallProxyMethodNoResult("disconnectChannel", socketPath);
+        }
+    };
+
+    // SessionFuse
+    class SessionFuse : public SDBus::SessionProxy {
+      public:
+        SessionFuse(const std::string & dbusAddress)
+            : SDBus::SessionProxy(dbusAddress, dbus_session_fuse_name, dbus_session_fuse_path, dbus_session_fuse_ifce) {}
+
+        int32_t getVersion(void) const {
+            return CallProxyMethod<int32_t>("getVersion");
+        }
+            
+        bool mountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) const {
+            return CallProxyMethod<bool>("mountPoint", localPoint, remotePoint, fuseSocket);
+        }
+            
+        void umountPoint(const std::string& localPoint) const {
+            CallProxyMethodNoResult("umountPoint", localPoint);
+        }
+    };
+}
 
 namespace LTSM::Manager {
     std::unique_ptr<sdbus::IConnection> serviceConn;
@@ -432,39 +492,6 @@ namespace LTSM::Manager {
         return 0;
     }
 
-    void XvfbSession::dbusNotifyWarning(const std::string & summary, const std::string & body) const noexcept {
-        if(0 < displayNum && dbusAddress.size()) {
-            try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->notifyWarning(summary, body);
-            } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
-            }
-        }
-    }
-
-    void XvfbSession::dbusNotifyError(const std::string & summary, const std::string & body) const noexcept {
-        if(0 < displayNum && dbusAddress.size()) {
-            try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->notifyError(summary, body);
-            } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
-            }
-        }
-    }
-
-    void XvfbSession::dbusNotifyInfo(const std::string & summary, const std::string & body) const noexcept {
-        if(0 < displayNum && dbusAddress.size()) {
-            try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->notifyInfo(summary, body);
-            } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
-            }
-        }
-    }
-
     PidStdout XvfbSession::dbusRunSessionZenity(const std::vector<std::string>& args) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
@@ -500,11 +527,43 @@ namespace LTSM::Manager {
         }
     }
 
-    bool XvfbSession::dbusAudioChannelConnect(const std::string& socketPath) const noexcept {
+    void XvfbSession::dbusNotifyWarning(const std::string & summary, const std::string & body) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                return proxy->audioChannelConnect(socketPath);
+                proxy->notifyWarning(summary, body);
+            } catch(const std::exception & err) {
+                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+            }
+        }
+    }
+
+    void XvfbSession::dbusNotifyError(const std::string & summary, const std::string & body) const noexcept {
+        if(0 < displayNum && dbusAddress.size()) {
+            try {
+                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
+                proxy->notifyError(summary, body);
+            } catch(const std::exception & err) {
+                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+            }
+        }
+    }
+
+    void XvfbSession::dbusNotifyInfo(const std::string & summary, const std::string & body) const noexcept {
+        if(0 < displayNum && dbusAddress.size()) {
+            try {
+                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
+                proxy->notifyInfo(summary, body);
+            } catch(const std::exception & err) {
+                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+            }
+        }
+    }
+
+    bool XvfbSession::dbusAudioChannelConnect(const std::string& socketPath) const noexcept {
+        if(0 < displayNum && dbusAddress.size()) {
+            try {
+                return DisplaySession::SessionAudio(dbusAddress).connectChannel(socketPath);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -515,8 +574,7 @@ namespace LTSM::Manager {
     void XvfbSession::dbusAudioChannelDisconnect(const std::string& socketPath) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->audioChannelDisconnect(socketPath);
+                DisplaySession::SessionAudio(dbusAddress).disconnectChannel(socketPath);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -526,8 +584,7 @@ namespace LTSM::Manager {
     bool XvfbSession::dbusPcscChannelConnect(const std::string& socketPath) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                return proxy->pcscChannelConnect(socketPath);
+                return DisplaySession::SessionPcsc(dbusAddress).connectChannel(socketPath);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -538,8 +595,7 @@ namespace LTSM::Manager {
     void XvfbSession::dbusPcscChannelDisconnect(const std::string& socketPath) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->pcscChannelDisconnect(socketPath);
+                DisplaySession::SessionPcsc(dbusAddress).disconnectChannel(socketPath);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -549,8 +605,7 @@ namespace LTSM::Manager {
     bool XvfbSession::dbusFuseMountPoint(const std::string& localPoint, const std::string& remotePoint, const std::string& fuseSocket) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                return proxy->fuseMountPoint(localPoint, remotePoint, fuseSocket);
+                return DisplaySession::SessionFuse(dbusAddress).mountPoint(localPoint, remotePoint, fuseSocket);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -561,8 +616,7 @@ namespace LTSM::Manager {
     void XvfbSession::dbusFuseUmountPoint(const std::string& localPoint) const noexcept {
         if(0 < displayNum && dbusAddress.size()) {
             try {
-                auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
-                proxy->fuseUmountPoint(localPoint);
+                DisplaySession::SessionFuse(dbusAddress).umountPoint(localPoint);
             } catch(const std::exception & err) {
                 Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
             }
@@ -1291,10 +1345,11 @@ namespace LTSM::Manager {
         if(auto x11SocketDir = std::filesystem::path(Tools::x11UnixPath(freeDisplay)).parent_path();
                                     ! std::filesystem::is_directory(x11SocketDir)) {
             std::error_code fserr;
-            std::filesystem::create_directory(x11SocketDir, fserr);
+            std::filesystem::create_directories(x11SocketDir, fserr);
             // default permision: 1777
             std::filesystem::permissions(x11SocketDir,
-                                         std::filesystem::perms::sticky_bit | std::filesystem::perms::owner_all | std::filesystem::perms::group_all | std::filesystem::perms::others_all,
+                                         std::filesystem::perms::sticky_bit | std::filesystem::perms::owner_all |
+                                         std::filesystem::perms::group_all | std::filesystem::perms::others_all,
                                          std::filesystem::perm_options::replace, fserr);
         }
 
