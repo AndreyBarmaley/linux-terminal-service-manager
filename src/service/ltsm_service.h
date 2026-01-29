@@ -283,6 +283,7 @@ namespace LTSM::Manager {
         virtual ~XvfbSessions() = default;
 
         XvfbSessionPtr findDisplaySession(int display) const;
+        std::forward_list<XvfbSessionPtr> findUserSessions(const std::string & username) const;
         XvfbSessionPtr findUserSession(const std::string & username) const;
         XvfbSessionPtr registryNewSession(int min, int max);
         void removeDisplaySession(int display);

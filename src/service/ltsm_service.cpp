@@ -688,6 +688,17 @@ namespace LTSM::Manager {
         sessions.resize(displays);
     }
 
+    std::forward_list<XvfbSessionPtr> XvfbSessions::findUserSessions(const std::string & username) const {
+        std::forward_list<XvfbSessionPtr> res;
+
+        std::scoped_lock guard{ lockSessions };
+        std::ranges::copy_if(sessions, std::front_inserter(res), [&](const auto & ptr) {
+            return ptr && ptr->mode != SessionMode::Shutdown && username == ptr->userInfo->user();
+        });
+
+        return res;
+    }
+
     XvfbSessionPtr XvfbSessions::findUserSession(const std::string & username) const {
         std::scoped_lock guard{ lockSessions };
         auto it = std::ranges::find_if(sessions, [&](const auto & ptr) {
@@ -1454,7 +1465,9 @@ namespace LTSM::Manager {
             return -1;
         }
 
-        if(auto oldSess = findUserSession(userName)) {
+        if(auto userSessions = findUserSessions(userName); !userSessions.empty()) {
+            auto oldSess = userSessions.front();
+
             Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
                     __FUNCTION__, "connect to session", oldSess->displayNum, oldSess->userInfo->user(), oldSess->pid1);
 
@@ -2144,7 +2157,10 @@ namespace LTSM::Manager {
             pam->setItem(PAM_RHOST, xvfb->remoteAddr.empty() ? "127.0.0.1" : xvfb->remoteAddr.c_str());
 
             if(! pam->validateAccount()) {
-                Application::error("%s: %s failed", __FUNCTION__, "validateAccount");
+                Application::error("%s: %s failed", __FUNCTION__, "validate account");
+                for(auto & sess: findUserSessions(login)) {
+                    busShutdownDisplay(sess->displayNum);
+                }
                 return false;
             }
         }
