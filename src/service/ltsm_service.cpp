@@ -781,17 +781,9 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix owner
-        Tools::setFileOwner(xdgLtsm, userInfo.uid(), userInfo.gid());
-        Tools::setFileOwner(xdgRuntimeDir, userInfo.uid(), userInfo.gid());
-
-        // set permissions 0750
-        std::filesystem::permissions(xdgLtsm, std::filesystem::perms::group_write |
-                                     std::filesystem::perms::others_all, std::filesystem::perm_options::remove, err);
-
-        // set permissions 0700
-        std::filesystem::permissions(xdgRuntimeDir, std::filesystem::perms::group_all | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
+        // fix owner, perms
+        Tools::setFileOwner(xdgLtsm, userInfo.uid(), userInfo.gid(), 0750);
+        Tools::setFileOwner(xdgRuntimeDir, userInfo.uid(), userInfo.gid(), 0700);
 
         // set groups
         auto gids = userInfo.groups();
@@ -940,17 +932,16 @@ namespace LTSM::Manager {
     void DBusAdaptor::createRuntimeDir(void) const {
         // create
         if(! std::filesystem::is_directory(ltsmRuntimeDir)) {
-            std::filesystem::create_directories(ltsmRuntimeDir);
+            std::error_code fserr;
+            std::filesystem::create_directories(ltsmRuntimeDir, fserr);
         }
 
-        // fix mode 0755
-        std::filesystem::permissions(ltsmRuntimeDir, std::filesystem::perms::owner_all |
-                                     std::filesystem::perms::group_read | std::filesystem::perms::group_exec |
-                                     std::filesystem::perms::others_read | std::filesystem::perms::others_exec, std::filesystem::perm_options::replace);
-
-        // find group id
-        gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
-        Tools::setFileOwner(ltsmRuntimeDir, 0, setgid);
+        if(std::filesystem::is_directory(ltsmRuntimeDir)) {
+            // find group id
+            gid_t setgid = Tools::getGroupGid(ltsm_group_auth);
+            // fix mode 0755
+            Tools::setFileOwner(ltsmRuntimeDir, 0, setgid, 0755);
+        }
     }
 
     void DBusAdaptor::checkConfigPathes(void) const {
@@ -1237,21 +1228,6 @@ namespace LTSM::Manager {
             return "";
         }
 
-        std::error_code err;
-
-        if(! std::filesystem::exists(xauthFilePath, err)) {
-            return "";
-        }
-
-        // set permissons 0440
-        std::filesystem::permissions(xauthFilePath, std::filesystem::perms::owner_read |
-                                     std::filesystem::perms::group_read, std::filesystem::perm_options::replace, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), xauthFilePath.c_str(), getuid());
-        }
-
         return xauthFilePath;
     }
 
@@ -1348,7 +1324,8 @@ namespace LTSM::Manager {
             return nullptr;
         }
 
-        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid());
+        // set permissons 0440
+        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid(), 0440);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -2383,17 +2360,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), socketFolder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.lp
-        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), lp);
+        // fix owner xvfb.lp, mode 0750
+        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), lp, 0750);
         auto printerSocket = Tools::replace(cupsRuntimeFmt, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(printerSocket, err)) {
@@ -2452,17 +2420,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(audioFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), audioFolder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.user
-        Tools::setFileOwner(audioFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
+        // fix owner xvfb.user, mode 0750
+        Tools::setFileOwner(audioFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
 
@@ -2519,17 +2478,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(socketFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), socketFolder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.user
-        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
+        // fix owner xvfb.user, mode 0750
+        Tools::setFileOwner(socketFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
         auto saneSocket = Tools::replace(saneRuntimeFmt, "%{user}", xvfb->userInfo->user());
 
         if(std::filesystem::is_socket(saneSocket, err)) {
@@ -2589,17 +2539,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(pcscFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), pcscFolder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.user
-        Tools::setFileOwner(pcscFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
+        // fix owner xvfb.user, mode 0750
+        Tools::setFileOwner(pcscFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         if(std::filesystem::is_socket(pcscSocket, err)) {
@@ -2645,17 +2586,8 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(pkcs11Folder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), pkcs11Folder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.user
-        Tools::setFileOwner(pkcs11Folder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
+        // fix owner xvfb.user, mode 0750
+        Tools::setFileOwner(pkcs11Folder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
         auto pkcs11Socket = std::filesystem::path(pkcs11Folder) / "sock";
 
         if(std::filesystem::is_socket(pkcs11Socket, err)) {
@@ -2722,28 +2654,11 @@ namespace LTSM::Manager {
             return false;
         }
 
-        // fix mode 0750
-        std::filesystem::permissions(userShareFolder, std::filesystem::perms::group_write | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
+        // fix owner xvfb.user, mode 0750
+        Tools::setFileOwner(userShareFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid(), 0750);
+        // fix owner user.user, mode 0700
+        Tools::setFileOwner(fusePointFolder, xvfb->userInfo->uid(), xvfb->userInfo->gid(), 0700);
 
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), fusePointFolder.c_str(), getuid());
-        }
-
-        // fix owner xvfb.user
-        Tools::setFileOwner(userShareFolder, Tools::getUserUid(ltsm_user_conn), xvfb->userInfo->gid());
-        // fix mode 0700
-        std::filesystem::permissions(fusePointFolder, std::filesystem::perms::group_all | std::filesystem::perms::others_all,
-                                     std::filesystem::perm_options::remove, err);
-
-        if(err) {
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32,
-                                 __FUNCTION__, err.message().c_str(), fusePointFolder.c_str(), getuid());
-        }
-
-        // fix owner user.user
-        Tools::setFileOwner(fusePointFolder, xvfb->userInfo->uid(), xvfb->userInfo->gid());
         auto fuseSocket = std::filesystem::path(userShareFolder) / fusePointName;
         fuseSocket += ".sock";
 
