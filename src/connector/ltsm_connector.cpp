@@ -142,6 +142,15 @@ namespace LTSM::Connector {
 #endif
 
         registerProxy();
+
+        Application::info("service started, uid: %d, gid: %d, pid: %d, version: %d",
+                        getuid(), getgid(), getpid(), LTSM::service_version);
+
+        if(auto home = homeRuntime(); 0 == chdir(home.c_str())) {
+            Application::info("%s: working dir: `%s'", __FUNCTION__, home.c_str());
+        } else {
+            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
+        }
     }
 
     DBusProxy::~DBusProxy() {
@@ -156,10 +165,8 @@ namespace LTSM::Connector {
     }
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
-        Application::info("%s: display: %d", __FUNCTION__, screen);
         std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("%s: display: %d, xauthfile: %s, uid: %d, gid: %d", __FUNCTION__, screen, xauthFile.c_str(), getuid(),
-                          getgid());
+        Application::info("%s: display: %d, xauthfile: %s", __FUNCTION__, screen, xauthFile.c_str());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
@@ -181,16 +188,6 @@ namespace LTSM::Connector {
             Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
             return false;
         }
-
-//        auto defaultSz = XCB::Size(config().getInteger("default:width", 0),
-//                                   config().getInteger("default:height", 0));
-//        auto displaySz = xcbDisplay.size();
-//        Application::debug(DebugType::App, "%s: display: %d, size: [%" PRIu16 ",%" PRIu16 "], depth: %lu", __FUNCTION__, screen, displaySz.width,
-//                           displaySz.height, xcbDisplay.depth());
-
-//        if(! defaultSz.isEmpty() && displaySz != defaultSz) {
-//            xcbDisplay.setRandrScreenSize(defaultSz);
-//        }
 
         _xcbDisplayNum = screen;
         return true;
@@ -310,16 +307,6 @@ namespace LTSM::Connector {
 
         // signals
         signal(SIGPIPE, SIG_IGN);
-        Application::notice("%s: uid: %d, gid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
-
-        auto home = homeRuntime();
-
-        if(0 != chdir(home.c_str())) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
-        } else {
-            Application::info("%s: working dir: `%s'", __FUNCTION__, home.c_str());
-        }
-
         std::unique_ptr<DBusProxy> connector;
 
 #ifdef LTSM_WITH_RDP

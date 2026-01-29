@@ -493,7 +493,8 @@ namespace LTSM::DisplaySession {
     // Starter
     Starter::Starter(int displayNum, const char* xauthFile)
         : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()) {
-        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
+        Application::info("service started, uid: %d, gid: %d, pid: %d, version: %d",
+                                getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
         startX11Display(displayNum, xauthFile);
     }
 

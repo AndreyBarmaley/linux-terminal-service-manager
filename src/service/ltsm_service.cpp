@@ -1288,14 +1288,12 @@ namespace LTSM::Manager {
             return nullptr;
         }
 
-        auto xvfbSocket = Tools::x11UnixPath(freeDisplay);
-        auto x11unix = std::filesystem::path(xvfbSocket).parent_path();
-
-        if(! std::filesystem::is_directory(x11unix)) {
+        if(auto x11SocketDir = std::filesystem::path(Tools::x11UnixPath(freeDisplay)).parent_path();
+                                    ! std::filesystem::is_directory(x11SocketDir)) {
             std::error_code fserr;
-            std::filesystem::create_directory(x11unix, fserr);
+            std::filesystem::create_directory(x11SocketDir, fserr);
             // default permision: 1777
-            std::filesystem::permissions(x11unix,
+            std::filesystem::permissions(x11SocketDir,
                                          std::filesystem::perms::sticky_bit | std::filesystem::perms::owner_all | std::filesystem::perms::group_all | std::filesystem::perms::others_all,
                                          std::filesystem::perm_options::replace, fserr);
         }
@@ -1324,8 +1322,8 @@ namespace LTSM::Manager {
             return nullptr;
         }
 
-        // set permissons 0440
-        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), sess->userInfo->gid(), 0440);
+        // set permissons user,auth, 0440
+        Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0440);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -1349,9 +1347,8 @@ namespace LTSM::Manager {
         if(waitDisplaySessionStarting(sess, sessionStartTimeout * 1000 /* ms */)) {
             try {
                 // fix X11 socket pemissions 0660
-                std::filesystem::permissions(Tools::x11UnixPath(sess->displayNum),
-                                             std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
-                                             std::filesystem::perms::group_read | std::filesystem::perms::group_write, std::filesystem::perm_options::replace);
+                Tools::setFileOwner(Tools::x11UnixPath(sess->displayNum),
+                            sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0660);
 
                 (*its) = std::move(sess);
                 return *its;
@@ -1395,18 +1392,23 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "%s: session request, user: %s, remote: %s, display: %" PRId32,
                            __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
-        std::string sessionBin = configGetString("session:path", "/etc/ltsm/xclients");
-
         auto loginSess = findDisplaySession(oldScreen);
 
         if(! loginSess) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, oldScreen);
+            Application::error("%s: display not found: %" PRId32, __FUNCTION__, oldScreen);
             return -1;
         }
 
-        auto oldSess = findUserSession(userName);
+        if(auto oldSess = findUserSession(userName)) {
+            Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
+                    __FUNCTION__, "connect to session", oldSess->displayNum, oldSess->userInfo->user(), oldSess->pid1);
 
-        if(oldSess && checkDisplaySessionAlive(oldSess->displayNum)) {
+            if(! checkDisplaySessionAlive(oldSess->displayNum)) {
+                Application::error("%s: %s failed, display: %" PRId32,
+                    __FUNCTION__, "checkDisplaySessionAlive", oldSess->displayNum);
+                return -1;
+            }
+
             // parent continue
             oldSess->remoteAddr = remoteAddr;
             oldSess->conntype = connType;
@@ -1427,9 +1429,6 @@ namespace LTSM::Manager {
                         }
             */
 
-            // update conn info
-            Application::debug(DebugType::App, "%s: %s, display: %" PRId32 ", user: %s",
-                               __FUNCTION__, "user connect to session", oldSess->displayNum, oldSess->userInfo->user());
             emitSessionReconnect(remoteAddr, connType);
 
             if(configGetBoolean("session:kill:stop", false)) {
@@ -1445,19 +1444,8 @@ namespace LTSM::Manager {
             return oldSess->displayNum;
         }
 
-/*
-        FIXME
-        std::error_code err;
-
-        if(! std::filesystem::is_directory(userInfo->home(), err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
-                               __FUNCTION__, (err ? err.message().c_str() : "not directory"), userInfo->home(), getuid());
-            return -1;
-        }
-*/
-
         // get owner screen
-        // FIXME pass
+        // FIXME pass построить схему взамодействия после pam auth
         auto newSess = runNewDisplaySession(userName, "" /* pass */);
 
         if(! newSess) {
@@ -1468,8 +1456,13 @@ namespace LTSM::Manager {
         waitPidBackgroundSafe(newSess->pid1);
 
         // parent continue
-        Application::debug(DebugType::App, "%s: user session started, pid: %" PRId32 ", display: %" PRId32,
-                           __FUNCTION__, newSess->pid1, newSess->displayNum);
+        Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
+                    __FUNCTION__, "session started", newSess->displayNum, newSess->userInfo->user(), newSess->pid1);
+
+        std::error_code err;
+        if(! std::filesystem::is_directory(newSess->userInfo->home(), err)) {
+            Application::warning("%s: path not found: `%s'", __FUNCTION__, newSess->userInfo->home());
+        }
 
         // update screen
         newSess->environments = std::move(loginSess->environments);
@@ -1510,7 +1503,8 @@ namespace LTSM::Manager {
             newSess->setStatus(Flags::AllowChannel::RemoteFilesUse);
         }
 
-        // fixed environments
+        // FIXME move to runNewDisplaySess?
+        // fixed environments see busSetSessionEnvironments/busSetSessionOptions
         for(auto & [key, val] : newSess->environments) {
             if(std::string::npos != val.find("%{user}")) {
                 val = Tools::replace(val, "%{user}", userName);
@@ -1518,7 +1512,6 @@ namespace LTSM::Manager {
                 val = Tools::replace(val, "%{runtime_dir}", newSess->userInfo->xdgRuntimeDir().native());
             }
         }
-
 
         newSess->dbusSetSessionKeyboardLayout();
         runSystemScript(newSess, configGetString("system:connect"));
