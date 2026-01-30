@@ -172,12 +172,12 @@ namespace LTSM {
         int mode = RFB::SECURITY_VENCRYPT02_TLSNONE;
 
         if(sec.tlsAnonMode) {
-            if(std::ranges::none_of(venCryptTypes, [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_TLSNONE; })) {
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_TLSNONE; })) {
                 Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "anon");
                 return false;
             }
         } else {
-            if(std::ranges::none_of(venCryptTypes, [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_X509NONE; })) {
+            if(std::none_of(venCryptTypes.begin(), venCryptTypes.end(), [=](auto & val) { return val == RFB::SECURITY_VENCRYPT02_X509NONE; })) {
                 Application::error("%s: server unsupported tls: %s mode", __FUNCTION__, "x509");
                 return false;
             }
@@ -295,7 +295,7 @@ namespace LTSM {
         Gss::CredentialPtr krb5Cred;
 
         if(sec.authKrb5 &&
-            std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_GSSAPI; })) {
+            std::any_of(security.begin(), security.end(), [=](auto & val) { return val == RFB::SECURITY_TYPE_GSSAPI; })) {
             // check local ticket
             if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name); krb5Cred) {
                 auto canon = Gss::displayName(krb5Cred->name);
@@ -314,7 +314,7 @@ namespace LTSM {
 #endif
 #ifdef LTSM_WITH_GNUTLS
             if(sec.authVenCrypt &&
-                std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; })) {
+                std::any_of(security.begin(), security.end(), [=](auto & val) { return val == RFB::SECURITY_TYPE_VENCRYPT; })) {
             Application::debug(DebugType::Rfb, "%s: security: %s selected", __FUNCTION__, "vencrypt");
             sendInt8(RFB::SECURITY_TYPE_VENCRYPT).sendFlush();
 
@@ -322,7 +322,7 @@ namespace LTSM {
                 return false;
             }
         } else if(sec.authVnc &&
-            std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_VNC; })) {
+            std::any_of(security.begin(), security.end(), [=](auto & val) { return val == RFB::SECURITY_TYPE_VNC; })) {
             auto & password = sec.passwdFile;
 
             if(password.empty()) {
@@ -336,7 +336,7 @@ namespace LTSM {
         } else
 #endif
             if(sec.authNone &&
-                std::ranges::any_of(security, [=](auto & val) { return val == RFB::SECURITY_TYPE_NONE; })) {
+                std::any_of(security.begin(), security.end(), [=](auto & val) { return val == RFB::SECURITY_TYPE_NONE; })) {
             Application::debug(DebugType::Rfb, "%s: security: %s selected", __FUNCTION__, "noauth");
             sendInt8(RFB::SECURITY_TYPE_NONE).sendFlush();
         } else {
@@ -499,7 +499,7 @@ namespace LTSM {
 
         if(! prefferedEncoding.empty()) {
             // preffered set priority
-            auto it = std::ranges::find_if(encodings, [&](auto & enc) {
+            auto it = std::find_if(encodings.begin(), encodings.end(), [&](auto & enc) {
                 return prefferedEncoding == Tools::lower(RFB::encodingName(enc));
             });
 

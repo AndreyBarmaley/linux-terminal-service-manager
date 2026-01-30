@@ -178,12 +178,6 @@ namespace LTSM {
         std::string base64Encode(const ByteArray &);
         std::vector<uint8_t> base64Decode(std::string_view);
 
-#if __cplusplus >= 202002L
-        template<typename Iterator>
-        inline Iterator nextToEnd(Iterator it1, size_t count, Iterator it2) {
-            return std::ranges::next(it1, count, it2);
-        }
-#else
         template<typename Iterator>
         Iterator nextToEnd(Iterator it1, size_t count, Iterator it2) {
             if(it1 == it2) {
@@ -201,7 +195,6 @@ namespace LTSM {
 
             return it1;
         }
-#endif
 
         std::list<std::string> split(std::string_view str, std::string_view sep);
         std::list<std::string> split(std::string_view str, int sep);

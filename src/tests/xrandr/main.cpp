@@ -116,7 +116,7 @@ class X11Test : public XCB::RootDisplay {
         auto modes2 = randr->getOutputModes(curout);
 
         for(auto info : modes) {
-            if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
+            if(std::any_of(modes2.begin(), modes2.end(), [&](auto & id) { return id == info.id; })) {
                 Application::info("mode 0x%08x, width: %d, height: %d, clock: %d", info.id, info.width, info.height, info.dot_clock);
             }
         }
@@ -132,7 +132,7 @@ class X11Test : public XCB::RootDisplay {
         auto randr = static_cast<const XCB::ModuleRandr*>(getExtension(XCB::Module::RANDR));
         auto sizes = randr->getScreenSizes();
 
-        if(std::ranges::any_of(sizes, [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
+        if(std::any_of(sizes.begin(), sizes.end(), [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
             Application::warning("mode present, size: %d, %d", nsz.width, nsz.height);
             return false;
         }

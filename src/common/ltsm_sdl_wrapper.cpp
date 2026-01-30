@@ -362,7 +362,7 @@ namespace LTSM {
     };
 
     int SDL::Window::convertScanCodeToKeySym(SDL_Scancode scancode) {
-        auto it = std::ranges::find_if(sdlKeyMap, [&](auto & pair) {
+        auto it = std::find_if(sdlKeyMap.begin(), sdlKeyMap.end(), [&](auto & pair) {
             return pair.scancode == scancode;
         });
 

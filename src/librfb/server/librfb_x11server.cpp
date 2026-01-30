@@ -456,7 +456,7 @@ namespace LTSM {
 
             if(auto copy = static_cast<XCB::ModuleCopySelection*>(ptr->getExtension(XCB::Module::SELECTION_COPY))) {
                 for(const auto & atom : selectionSourceTargets()) {
-                    if(std::ranges::any_of(beg, end, [&](auto & trgt) { return atom == trgt; })) {
+                    if(std::any_of(beg, end, [&](auto & trgt) { return atom == trgt; })) {
                         return copy->convertSelection(atom, *this);
                     }
                 }
@@ -480,7 +480,7 @@ namespace LTSM {
     bool RFB::X11Server::selectionSourceReady(xcb_atom_t atom) const {
         auto targets = selectionSourceTargets();
 
-        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) { return atom == trgt; })) {
             return false;
         }
 
@@ -518,7 +518,7 @@ namespace LTSM {
     size_t RFB::X11Server::selectionSourceSize(xcb_atom_t atom) const {
         auto targets = selectionSourceTargets();
 
-        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) { return atom == trgt; })) {
             return 0;
         }
 
@@ -529,7 +529,7 @@ namespace LTSM {
     std::vector<uint8_t> RFB::X11Server::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
         auto targets = selectionSourceTargets();
 
-        if(std::ranges::none_of(targets, [&](auto & trgt) { return atom == trgt; })) {
+        if(std::none_of(targets.begin(), targets.end(), [&](auto & trgt) { return atom == trgt; })) {
             return {};
         }
 
