@@ -171,7 +171,7 @@ namespace LTSM {
 
     int PixelMapPalette::findColorIndex(const uint32_t & col) const {
 #if defined(__APPLE__) || defined(LTSM_CENTOS7)
-        auto it = std::find_if(cbegin.end(), cend(), [&](auto & pair) {
+        auto it = std::find_if(cbegin(), cend(), [&](auto & pair) {
             return pair.first == col;
         });
 #else
