@@ -118,6 +118,7 @@ namespace LTSM {
                                   "    --nodamage (skip X11 damage events)" << std::endl <<
                                   "    --framerate <fps>" << std::endl <<
                                   "    --geometry <WIDTHxHEIGHT> (set window geometry)" << std::endl <<
+                                  "    --dpi <DPI> (set X11 dpi)" << std::endl <<
                                   "    --fixed (not resizable window)" << std::endl <<
                                   "    --extclip (extclip support)" << std::endl <<
                                   "    --noltsm (disable LTSM features, viewer only)" << std::endl <<
@@ -560,6 +561,13 @@ namespace LTSM {
             } catch(const std::invalid_argument &) {
                 std::cerr << "incorrect frame rate" << std::endl;
                 frameRate = 16;
+            }
+        } else if(cmd == "--dpi" && arg.size()) {
+            try {
+                xcbDpi = std::stoi(view2string(arg));
+            } catch(const std::invalid_argument &) {
+                std::cerr << "incorrect dpi" << std::endl;
+                xcbDpi = 0;
             }
         } else if(cmd == "--geometry" && arg.size()) {
             size_t idx;
@@ -1548,6 +1556,7 @@ namespace LTSM {
         jo.push("platform", SDL_GetPlatform());
         jo.push("ltsm:client", LTSM_VNC2SDL_VERSION);
         jo.push("x11:nodamage", xcbNoDamage);
+        jo.push("x11:dpi", xcbDpi);
         jo.push("frame:rate", frameRate);
         jo.push("enc:opts", JsonArrayStream(encodingOptions.begin(), encodingOptions.end()).flush());
 

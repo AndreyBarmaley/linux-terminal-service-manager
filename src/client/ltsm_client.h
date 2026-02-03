@@ -86,6 +86,7 @@ namespace LTSM {
         std::atomic<bool> focusLost{false};
         std::atomic<bool> needUpdate{false};
 
+        int xcbDpi = 0;
         int port = 5900;
         int frameRate = 16;
         int windowFlags = SDL_WINDOW_SHOWN; // | SDL_WINDOW_RESIZABLE;

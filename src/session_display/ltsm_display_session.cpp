@@ -33,6 +33,7 @@
 #include <future>
 #include <cstring>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <filesystem>
 
@@ -96,15 +97,21 @@ namespace LTSM::DisplaySession {
                     continue;
                 }
 
+                // end stream: pipe close
+                if(EBADF == errno) {
+                    res.resize(res.size() - last);
+                    break;
+                }
+
                 Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "read", strerror(errno), errno);
                 res.clear();
                 break;
             }
 
-            // end stream
+            // no data: continue
             if(ret == 0) {
-                res.resize(res.size() - last);
-                break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
             }
 
             ptr += ret;
@@ -519,6 +526,9 @@ namespace LTSM::DisplaySession {
             sessionArgs = ja->toStdVector<std::string>();
         }
 
+        auto xresources = std::filesystem::path{getenv("HOME")} / ".ltsm" / ".Xresources";
+        std::filesystem::remove(xresources);
+
         if(getenv("LTSM_LOGIN_MODE")) {
             // helper login
             auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
@@ -529,6 +539,19 @@ namespace LTSM::DisplaySession {
             }
 
             sessionEnvs.emplace_back(std::string("XSESSION=").append(helperBin));
+        }
+        else if(auto env = getenv("LTSM_CLIENT_OPTS")) {
+            try {
+                auto content = Tools::zlibUncompress(BinaryBuf(Tools::base64Decode(env)));
+                auto jo = JsonContentString(std::string_view{(const char*) content.data(), content.size()}).toObject();
+                // set session dpi
+                if(auto dpi = jo.getInteger("x11:dpi", 0); 0 < dpi) {
+                    std::ofstream ofs(xresources, std::ios::trunc);
+                    ofs << "Xft.dpi: " << dpi << std::endl;
+                }
+            } catch(const std::exception & err) {
+                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+            }
         }
 
         std::scoped_lock guard{ lockCommands_ };

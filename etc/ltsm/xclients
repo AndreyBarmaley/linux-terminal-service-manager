@@ -53,6 +53,10 @@ if [ -f ${HOME}/.Xresources ]; then
     xrdb -merge ${HOME}/.Xresources
 fi
 
+if [ -f ${HOME}/.ltsm/.Xresources ]; then
+    xrdb -merge ${HOME}/.ltsm/.Xresources
+fi
+
 if [ -f ${HOME}/.Xmodmap ]; then
     xmodmap ${HOME}/.Xmodmap
 fi

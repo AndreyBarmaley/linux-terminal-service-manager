@@ -173,22 +173,82 @@ namespace LTSM::Manager {
         void onRunSessionCommandAsyncComplete(const int32_t & pid, const bool& success, const int32_t & wstatus, const std::vector<uint8_t> & stdout) override;
     };
 
+    using GroupsIds = std::vector<gid_t>;
+
+    class UserSession {
+        std::string username_;
+        std::string password_;
+        std::string shell_;
+        std::string gecos_;
+        std::string homedir_;
+        std::string runtimedir_;
+        GroupsIds groups_;
+        uid_t uid_;
+        gid_t gid_;
+    
+    public:
+        UserSession(UserInfoPtr ptr, const std::string & pass) : username_(ptr->user()), password_(pass), shell_(ptr->shell()),
+            gecos_(ptr->gecos()), homedir_(ptr->home()), groups_(ptr->groups()), uid_(ptr->uid()), gid_(ptr->gid()) {}
+
+        void setPassword(std::string_view pass) {
+            password_.assign(pass.begin(), pass.end());
+        }
+
+        inline const std::string & user(void) const {
+            return username_;
+        }
+
+        inline const std::string & password(void) const {
+            return password_;
+        }
+
+        inline const std::string & home(void) const {
+            return homedir_;
+        }
+
+        inline const std::string & shell(void) const {
+            return shell_;
+        }
+
+        inline const std::string & gecos(void) const {
+            return gecos_;
+        }
+
+        inline std::filesystem::path xdgRuntimeDir(void) const {
+            return std::filesystem::path("/run/user") / std::to_string(uid_);
+        }
+
+        inline const GroupsIds & groups(void) const {
+            return groups_;
+        }
+
+        inline uid_t uid(void) const {
+            return uid_;
+        }
+
+        inline gid_t gid(void) const {
+            return gid_;
+        }
+    };
+
+    using UserSessionPtr = std::shared_ptr<UserSession>;
+    using EnvironmentsMap = std::unordered_map<std::string, std::string>;
+    using OptionsMap = std::unordered_map<std::string, std::string>;
+    
     /// XvfbSession
     struct XvfbSession {
-        std::unordered_map<std::string, std::string> environments;
-        std::unordered_map<std::string, std::string> options;
+        EnvironmentsMap environments;
+        OptionsMap options;
 
         std::filesystem::path xauthfile;
+        UserSessionPtr userInfo;
 
-        UserInfoPtr userInfo;
-        GroupInfoPtr groupInfo;
-
-        std::string password;
         std::string displayAddr;
         std::string remoteAddr;
         std::string conntype;
         std::string encryption;
         std::string layout;
+        std::string dbusAddress;
         std::vector<uint8_t> mcookie;
 
         system_time_point tpStart;
@@ -214,9 +274,6 @@ namespace LTSM::Manager {
         uint16_t width = 0;
         uint16_t height = 0;
         uint8_t depth = 0;
-
-        PidStatus idleActionStatus;
-        std::string dbusAddress;
 
         std::atomic<SessionMode> mode{ SessionMode::Login };
         SessionPolicy policy = SessionPolicy::AuthTake;
@@ -324,7 +381,7 @@ namespace LTSM::Manager {
       protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
-        XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password);
+        XvfbSessionPtr runNewDisplaySession(const std::string & username, const std::string & password, EnvironmentsMap && envs, OptionsMap && opts);
         bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 

@@ -1240,13 +1240,18 @@ namespace LTSM {
 
         // cursor rgba data
         if(std::ranges::none_of(cursorSended, [&cursorId](auto & curid) { return curid == cursorId; })) {
-            auto zlib = Tools::zlibCompress(rawPtr);
-            // raw size
-            sendIntBE32(rawPtr.size());
-            // compress size
-            sendIntBE32(zlib.size());
-            sendData(zlib);
-            cursorSended.push_front(cursorId);
+            try {
+                auto zlib = Tools::zlibCompress(rawPtr);
+                // raw size
+                sendIntBE32(rawPtr.size());
+                // compress size
+                sendIntBE32(zlib.size());
+                sendData(zlib);
+                cursorSended.push_front(cursorId);
+            } catch(const std::exception & err) {
+                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+                sendIntBE32(0);
+            }
         } else {
             sendIntBE32(0);
         }

@@ -19,22 +19,18 @@
     "access:uid:max": 9999,
     "#access:users": [ "demo1", "demo2", "demo3", "demoadm" ],
 
-    "#helper:path": "/usr/libexec/ltsm/ltsm_helper",
-
     "login:failures_count": 3,
     "session:kill:stop": false,
     "session:policy": "authlock",
     "session:path": "/etc/ltsm/xclients",
 
-    "starter:path": "/usr/libexec/ltsm/ltsm_session_display",
+    "#starter:path": "/usr/libexec/ltsm/ltsm_session_display",
 
     "default:width": 1024,
     "default:height": 768,
 
-    "display:min": 55,
-    "display:max": 99,
-
-    "xauth:file": "/var/run/ltsm/auth_%{display}",
+    "limit:sessions": 20,
+    "limit:users": 10,
 
     "#session:connect": "/path/script",
     "#session:disconnect": "/path/script",

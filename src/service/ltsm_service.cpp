@@ -39,6 +39,7 @@
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
+#include <unordered_set>
 
 #ifdef LTSM_WITH_SYSTEMD
 #include <systemd/sd-login.h>
@@ -123,7 +124,7 @@ namespace LTSM::Manager {
 
     //
     bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
-    bool switchToUser(const UserInfo &);
+    bool switchToUser(const UserSession &);
     void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype);
 
     namespace ChildProcess {
@@ -135,12 +136,13 @@ namespace LTSM::Manager {
             }
         }
 
-        void pamOpenDisplaySession(XvfbSessionPtr sess, const ApplicationJsonConfig & json, const std::string & password) {
+        void pamOpenDisplaySession(XvfbSessionPtr sess, const ApplicationJsonConfig & json) {
             // child1 thread
             signal(SIGTERM, ChildProcess::signalHandler);
 
             const auto & userInfo = sess->userInfo;
-            auto pam = std::make_unique<PamSession>(json.configGetString("pam:service"), userInfo->user(), password);
+            auto pam = std::make_unique<PamSession>(json.configGetString("pam:service"),
+                            userInfo->user(), userInfo->password());
 
             if(! pam->pamStart(userInfo->user())) {
                 return;
@@ -150,25 +152,25 @@ namespace LTSM::Manager {
                 return;
             }
 
-            if(password.size()) {
+            if(! userInfo->password().empty()) {
                 if(! pam->authenticate()) {
                     return;
                 }
             }
 
             if(! std::filesystem::is_directory(userInfo->home())) {
-                Application::warning("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home());
+                Application::warning("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home().c_str());
             }
 
-            if(0 != initgroups(userInfo->user(), userInfo->gid())) {
+            if(0 != initgroups(userInfo->user().c_str(), userInfo->gid())) {
                 Application::error("%s: %s failed, user: %s, gid: %" PRId32 ", error: %s",
-                                   __FUNCTION__, "initgroups", userInfo->user(), userInfo->gid(), strerror(errno));
+                                   __FUNCTION__, "initgroups", userInfo->user().c_str(), userInfo->gid(), strerror(errno));
                 return;
             }
 
             if(! pam->openSession()) {
                 Application::error("%s: %s, display: %" PRId32 ", user: %s",
-                                   __FUNCTION__, "PAM open session failed", sess->displayNum, userInfo->user());
+                                   __FUNCTION__, "PAM open session failed", sess->displayNum, userInfo->user().c_str());
                 return;
             }
 
@@ -191,7 +193,7 @@ namespace LTSM::Manager {
 
                 // logoff
                 if(notSysUser && json.configHasKey("system:logoff")) {
-                    runSystemScript(sess, json.configGetString("system:logoff"), false /* detach */);
+                    runSystemScript(sess, json.configGetString("system:logoff"), false /* no detach */);
                 }
 
                 return;
@@ -630,7 +632,7 @@ namespace LTSM::Manager {
         res.insert_or_assign("DISPLAY", displayAddr);
         res.insert_or_assign("LTSM_REMOTEADDR", remoteAddr);
         res.insert_or_assign("LTSM_TYPECONN", conntype);
-        res.insert_or_assign("XDG_RUNTIME_DIR", Tools::joinToString("/run/user/", userInfo->uid()));
+        res.insert_or_assign("XDG_RUNTIME_DIR", userInfo->xdgRuntimeDir().native());
         res.insert_or_assign("XDG_SESSION_TYPE", "x11");
 
         if(mode == SessionMode::Login) {
@@ -829,12 +831,12 @@ namespace LTSM::Manager {
         return true;
     }
 
-    bool switchToUser(const UserInfo & userInfo) {
+    bool switchToUser(const UserSession & userInfo) {
         Application::debug(DebugType::App, "%s: pid: %" PRId32 ", uid: %" PRId32 ", gid: %" PRId32 ", home: `%s', shell: `%s'",
-                           __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(), userInfo.home(), userInfo.shell());
+                           __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(), userInfo.home().c_str(), userInfo.shell().c_str());
+
         auto xdgRuntimeDir = userInfo.xdgRuntimeDir();
         auto xdgLtsm = xdgRuntimeDir / "ltsm";
-
         std::error_code err;
 
         if(! std::filesystem::is_directory(xdgLtsm, err)) {
@@ -867,15 +869,15 @@ namespace LTSM::Manager {
             return false;
         }
 
-        if(0 != chdir(userInfo.home())) {
+        if(0 != chdir(userInfo.home().c_str())) {
             Application::warning("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                                 __FUNCTION__, "chdir", strerror(errno), errno, userInfo.home());
+                                 __FUNCTION__, "chdir", strerror(errno), errno, userInfo.home().c_str());
         }
 
-        setenv("USER", userInfo.user(), 1);
-        setenv("LOGNAME", userInfo.user(), 1);
-        setenv("HOME", userInfo.home(), 1);
-        setenv("SHELL", userInfo.shell(), 1);
+        setenv("USER", userInfo.user().c_str(), 1);
+        setenv("LOGNAME", userInfo.user().c_str(), 1);
+        setenv("HOME", userInfo.home().c_str(), 1);
+        setenv("SHELL", userInfo.shell().c_str(), 1);
         setenv("TERM", "linux", 1);
 
         if(Application::isDebugLevel(DebugLevel::Debug)) {
@@ -952,9 +954,7 @@ namespace LTSM::Manager {
         createRuntimeDir();
 
         // set pool sessions
-        int min = configGetInteger("display:min", 55);
-        int max = configGetInteger("display:max", 99);
-        sessions.resize(std::abs(max - min));
+        sessions.resize(std::abs(configGetInteger("limit:sessions", 20)));
 
         //
         saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
@@ -1037,9 +1037,7 @@ namespace LTSM::Manager {
         checkConfigPathes();
 
         // check pool sessions
-        int min = configGetInteger("display:min", 55);
-        int max = configGetInteger("display:max", 99);
-        size_t poolsz = std::abs(max - min);
+        size_t poolsz = std::abs(configGetInteger("limit:sessions", 20));
 
         if(poolsz > sessions.size()) {
             std::scoped_lock guard{ lockSessions };
@@ -1189,6 +1187,11 @@ namespace LTSM::Manager {
             return false;
         }
 
+        xvfb->mode = SessionMode::Shutdown;
+        if(emitSignal) {
+            emitShutdownConnector(xvfb->displayNum);
+        }
+
 #ifdef LTSM_WITH_AUDIT
 
         if(xvfb->mode == SessionMode::Connected) {
@@ -1197,14 +1200,7 @@ namespace LTSM::Manager {
 
 #endif
 
-        Application::notice("%s: shutdown display: %" PRId32 " %s", __FUNCTION__, xvfb->displayNum, "starting");
-        return true;
-        xvfb->mode = SessionMode::Shutdown;
-
-        if(emitSignal) {
-            emitShutdownConnector(xvfb->displayNum);
-        }
-
+        Application::notice("%s: display: %" PRId32, __FUNCTION__, xvfb->displayNum);
         // dbus no wait, remove background
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
 
@@ -1216,15 +1212,13 @@ namespace LTSM::Manager {
         // script run in thread
         std::thread([wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
             if(wait) {
-                std::this_thread::sleep_for(300ms);
+                std::this_thread::sleep_for(100ms);
             }
 
             auto displayNum = ptr->displayNum;
 
             this->removeDisplaySession(displayNum);
             this->emitDisplayRemoved(displayNum);
-
-            Application::debug(DebugType::App, "%s: shutdown display: %" PRId32 " %s", "displayShutdown", displayNum, "complete");
 
             if(notsys) {
 #ifdef LTSM_WITH_AUDIT
@@ -1313,7 +1307,9 @@ namespace LTSM::Manager {
         }
     }
 
-    XvfbSessionPtr DBusAdaptor::runNewDisplaySession(const std::string & username, const std::string & pass) {
+    XvfbSessionPtr DBusAdaptor::runNewDisplaySession(const std::string & username,
+                const std::string & pass, EnvironmentsMap && envs, OptionsMap && opts) {
+
         auto userInfo = Tools::getUserInfo(username);
 
         if(! userInfo) {
@@ -1329,28 +1325,39 @@ namespace LTSM::Manager {
         const bool loginMode = username == ltsm_user_conn;
 
         std::scoped_lock guard{ lockSessions };
-        auto its = std::ranges::find_if(sessions, [](auto & ptr) {
+        
+        // check limit:sessions
+        auto freeSlot = std::ranges::find_if(sessions, [](auto & ptr) {
             return ! ptr;
         });
 
-        if(its == sessions.end()) {
-            Application::error("%s: all displays busy", __FUNCTION__);
+        if(freeSlot == sessions.end()) {
+            Application::error("%s: limit:sessions overload", __FUNCTION__);
             return nullptr;
         }
 
-        int min = configGetInteger("display:min", 55);
-        int max = configGetInteger("display:max", 99);
-        auto freeDisplay = min;
-
-        for(; freeDisplay <= max; ++freeDisplay) {
-            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
-                break;
+        // check limit:users
+        if(int usersLimitMax = configGetInteger("limit:users", 0); 0 < usersLimitMax) {
+            std::unordered_set<uid_t> users;
+            users.reserve(sessions.size());
+            for(const auto & ptr: sessions) {
+                if(ptr) {
+                    users.emplace(ptr->userInfo->uid());
+                }
+            }
+            if(usersLimitMax <= users.size()) {
+                Application::error("%s: limit:users overload", __FUNCTION__);
+                return nullptr;
             }
         }
 
-        if(freeDisplay > max) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, freeDisplay);
-            return nullptr;
+        int freeDisplay = configGetInteger("display:init", 101);
+        const int freeDisplayMax = freeDisplay + sessions.size();
+    
+        for(; freeDisplay <= freeDisplayMax; ++freeDisplay) {
+            if(std::ranges::none_of(sessions, [&](auto & ptr) { return ptr && ptr->displayNum == freeDisplay; })) {
+                break;
+            }
         }
 
         if(auto x11SocketDir = std::filesystem::path(Tools::x11UnixPath(freeDisplay)).parent_path();
@@ -1365,13 +1372,32 @@ namespace LTSM::Manager {
         }
 
         auto sess = std::make_shared<XvfbSession>();
-        sess->userInfo = std::move(userInfo);
-        sess->groupInfo = Tools::getGidInfo(sess->userInfo->gid());
+        sess->userInfo = std::make_shared<UserSession>(std::move(userInfo), pass);
 
-        if(! sess->groupInfo) {
-            Application::error("%s: gid not found: %" PRId32 ", user: `%s'",
-                               __FUNCTION__, (int) sess->userInfo->gid(), sess->userInfo->user());
-            return nullptr;
+        if(envs.size()) {
+            sess->environments = std::move(envs);
+            for(auto & [key, val] : sess->environments) {
+                if(std::string::npos != val.find("%{user}")) {
+                    val = Tools::replace(val, "%{user}", sess->userInfo->user());
+                } else if(std::string::npos != val.find("%{runtime_dir}")) {
+                    val = Tools::replace(val, "%{runtime_dir}", sess->userInfo->xdgRuntimeDir().native());
+                }
+            }
+        }
+
+        if(opts.size()) {
+            sess->options = std::move(opts);
+            JsonObjectStream jos;
+            for(const auto & [key, val]: sess->options) {
+                jos.push(key, val);
+            }
+            try {
+                auto json = jos.flush();
+                auto base64 = Tools::base64Encode(BinaryBuf(Tools::zlibCompress(RawPtr(json.data(), json.size()))));
+                sess->environments.emplace("LTSM_CLIENT_OPTS", std::move(base64));
+            } catch(const std::exception & err) {
+                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+            }
         }
 
         sess->mode = loginMode ? SessionMode::Login : SessionMode::Started;
@@ -1396,7 +1422,7 @@ namespace LTSM::Manager {
 
             // child process
             if(0 == sess->pid1) {
-                ChildProcess::pamOpenDisplaySession(std::move(sess), *this, pass);
+                ChildProcess::pamOpenDisplaySession(std::move(sess), *this);
                 ForkMode::runChildSuccess();
                 // ended
             }
@@ -1416,8 +1442,8 @@ namespace LTSM::Manager {
                 Tools::setFileOwner(Tools::x11UnixPath(sess->displayNum),
                             sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0660);
 
-                (*its) = std::move(sess);
-                return *its;
+                (*freeSlot) = std::move(sess);
+                return *freeSlot;
             } catch(const std::exception & err) {
                 Application::error("%s: %s", __FUNCTION__, "permission", err.what());
             }
@@ -1434,7 +1460,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
                            __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
-        auto sess = runNewDisplaySession(ltsm_user_conn, "");
+        auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
 
         if(! sess) {
             return -1;
@@ -1469,7 +1495,7 @@ namespace LTSM::Manager {
             auto oldSess = userSessions.front();
 
             Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
-                    __FUNCTION__, "connect to session", oldSess->displayNum, oldSess->userInfo->user(), oldSess->pid1);
+                    __FUNCTION__, "connect to session", oldSess->displayNum, oldSess->userInfo->user().c_str(), oldSess->pid1);
 
             if(! checkDisplaySessionAlive(oldSess->displayNum)) {
                 Application::error("%s: %s failed, display: %" PRId32,
@@ -1481,18 +1507,18 @@ namespace LTSM::Manager {
             oldSess->remoteAddr = remoteAddr;
             oldSess->conntype = connType;
             oldSess->connectorId = connectorId;
-            oldSess->environments = std::move(loginSess->environments);
-            oldSess->options = std::move(loginSess->options);
             oldSess->encryption = std::move(loginSess->encryption);
             oldSess->layout = std::move(loginSess->layout);
-            oldSess->password = std::move(loginSess->password);
+            // FIXME not working
+            //oldSess->environments = std::move(loginSess->environments);
+            //oldSess->options = std::move(loginSess->options);
 
             /*
             FIXME
                         // reinit pam session
                         if(! oldSess->pam || ! oldSess->pam->refreshCreds()) {
                             Application::error("%s: %s, display: %" PRId32 ", user: %s",
-                                               __FUNCTION__, "PAM failed", oldSess->displayNum, oldSess->userInfo->user());
+                                               __FUNCTION__, "PAM failed", oldSess->displayNum, oldSess->userInfo->user().c_str());
                             displayShutdown(oldSess, true);
                             return -1;
                         }
@@ -1514,7 +1540,8 @@ namespace LTSM::Manager {
         }
 
         // get owner screen
-        auto newSess = runNewDisplaySession(userName, loginSess->password);
+        auto newSess = runNewDisplaySession(userName, loginSess->userInfo->password(),
+                std::move(loginSess->environments), std::move(loginSess->options));
 
         if(! newSess) {
             return -1;
@@ -1525,17 +1552,14 @@ namespace LTSM::Manager {
 
         // parent continue
         Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
-                    __FUNCTION__, "session started", newSess->displayNum, newSess->userInfo->user(), newSess->pid1);
+                    __FUNCTION__, "session started", newSess->displayNum, newSess->userInfo->user().c_str(), newSess->pid1);
 
         std::error_code err;
         if(! std::filesystem::is_directory(newSess->userInfo->home(), err)) {
-            Application::warning("%s: path not found: `%s'", __FUNCTION__, newSess->userInfo->home());
+            Application::warning("%s: path not found: `%s'", __FUNCTION__, newSess->userInfo->home().c_str());
         }
 
         // update screen
-        newSess->password = std::move(loginSess->password);
-        newSess->environments = std::move(loginSess->environments);
-        newSess->options = std::move(loginSess->options);
         newSess->encryption = std::move(loginSess->encryption);
         newSess->layout = std::move(loginSess->layout);
         newSess->remoteAddr = remoteAddr;
@@ -1570,16 +1594,6 @@ namespace LTSM::Manager {
 
         if(! configGetBoolean("channel:fuse:disabled", false)) {
             newSess->setStatus(Flags::AllowChannel::RemoteFilesUse);
-        }
-
-        // FIXME move to runNewDisplaySess?
-        // fixed environments see busSetSessionEnvironments/busSetSessionOptions
-        for(auto & [key, val] : newSess->environments) {
-            if(std::string::npos != val.find("%{user}")) {
-                val = Tools::replace(val, "%{user}", userName);
-            } else if(std::string::npos != val.find("%{runtime_dir}")) {
-                val = Tools::replace(val, "%{runtime_dir}", newSess->userInfo->xdgRuntimeDir().native());
-            }
         }
 
         newSess->dbusSetSessionKeyboardLayout();
@@ -2151,7 +2165,7 @@ namespace LTSM::Manager {
                 return false;
             }
 
-            xvfb->password = password;
+            xvfb->userInfo->setPassword(password);
             pam->setItem(PAM_XDISPLAY, xvfb->displayAddr.c_str());
             pam->setItem(PAM_TTY, std::string("X11:").append(xvfb->displayAddr.c_str()).c_str());
             pam->setItem(PAM_RHOST, xvfb->remoteAddr.empty() ? "127.0.0.1" : xvfb->remoteAddr.c_str());
@@ -2233,20 +2247,22 @@ namespace LTSM::Manager {
     void DBusAdaptor::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string> & map) {
         Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", env counts: %lu",
                            __FUNCTION__, display, map.size());
+        auto xvfb = findDisplaySession(display);
 
-        if(auto xvfb = findDisplaySession(display)) {
-            xvfb->environments.clear();
-
-            for(const auto & [key, val] : map) {
-                Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), val.c_str());
-                xvfb->environments.emplace(key, val);
-
-                if(key == "TZ") {
-                    emitHelperSetTimezone(display, val);
-                }
-            }
-        } else {
+        if(! xvfb) {
             Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            return;
+        }
+
+        xvfb->environments.clear();
+
+        for(const auto & [key, val] : map) {
+            Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), val.c_str());
+            xvfb->environments.emplace(key, val);
+
+            if(key == "TZ") {
+                emitHelperSetTimezone(display, val);
+            }
         }
     }
 
@@ -2450,7 +2466,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), audioSocket.c_str());
 
         if(! xvfb->dbusAudioChannelConnect(audioSocket)) {
             auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket);
@@ -2513,7 +2529,7 @@ namespace LTSM::Manager {
         audioSocket += ".sock";
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), audioSocket.c_str());
 
         xvfb->dbusAudioChannelDisconnect(audioSocket);
     }
@@ -2569,7 +2585,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), pcscSocket.c_str());
 
         if(! xvfb->dbusPcscChannelConnect(pcscSocket)) {
             auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket);
@@ -2630,7 +2646,7 @@ namespace LTSM::Manager {
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), pcscSocket.c_str());
 
         xvfb->dbusPcscChannelDisconnect(pcscSocket);
     }
@@ -2682,7 +2698,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("%s: display: %" PRId32 ", user: %s, local: `%s', remote: `%s', socket: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint.c_str(), remotePoint.c_str(), fuseSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), localPoint.c_str(), remotePoint.c_str(), fuseSocket.c_str());
 
         if(! xvfb->dbusFuseMountPoint(localPoint, remotePoint, fuseSocket)) {
             auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket);
@@ -2751,7 +2767,7 @@ namespace LTSM::Manager {
         auto localPoint = fusePointFolder.native();
 
         Application::info("%s: display: %" PRId32 ", user: %s, local point: `%s'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), localPoint.c_str());
 
         xvfb->dbusFuseUmountPoint(localPoint);
     }

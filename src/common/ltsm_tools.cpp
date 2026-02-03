@@ -425,8 +425,8 @@ namespace LTSM {
             if(ret == Z_OK) {
                 res.resize(dstsz);
             } else {
-                res.clear();
                 Application::error("%s: %s failed, error: %d", __FUNCTION__, "compress", ret);
+                throw std::runtime_error(__FUNCTION__);
             }
         }
 
@@ -451,8 +451,8 @@ namespace LTSM {
             if(ret == Z_OK) {
                 res.resize(dstsz);
             } else {
-                res.clear();
                 Application::error("%s: %s failed, error: %d", __FUNCTION__, "uncompress", ret);
+                throw std::runtime_error(__FUNCTION__);
             }
         }
 
@@ -541,43 +541,44 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> Tools::base64Decode(std::string_view str) {
+
+        if(str.empty() || 0 != (str.length() % 4)) {
+            Application::error("%s: %s failed, data length: %lu", __FUNCTION__, "base64", str.length());
+            throw std::runtime_error(__FUNCTION__);
+        }
+
+        size_t len = 3 * str.length() / 4;
+
+        if(str[str.length() - 1] == '=') {
+            len--;
+        }
+
+        if(str[str.length() - 2] == '=') {
+            len--;
+        }
+
         std::vector<uint8_t> res;
+        res.reserve(len);
 
-        if(0 < str.length() && 0 == (str.length() % 4)) {
-            size_t len = 3 * str.length() / 4;
+        for(size_t ii = 0; ii < str.length(); ii += 4) {
+            uint32_t sxtet_a = base64DecodeChar(str[ii]);
+            uint32_t sxtet_b = base64DecodeChar(str[ii + 1]);
+            uint32_t sxtet_c = base64DecodeChar(str[ii + 2]);
+            uint32_t sxtet_d = base64DecodeChar(str[ii + 3]);
 
-            if(str[str.length() - 1] == '=') {
-                len--;
+            uint32_t triple = (sxtet_a << 18) + (sxtet_b << 12) + (sxtet_c << 6) + sxtet_d;
+
+            if(res.size() < len) {
+                res.push_back((triple >> 16) & 0xFF);
             }
 
-            if(str[str.length() - 2] == '=') {
-                len--;
+            if(res.size() < len) {
+                res.push_back((triple >> 8) & 0xFF);
             }
 
-            res.reserve(len);
-
-            for(size_t ii = 0; ii < str.length(); ii += 4) {
-                uint32_t sxtet_a = base64DecodeChar(str[ii]);
-                uint32_t sxtet_b = base64DecodeChar(str[ii + 1]);
-                uint32_t sxtet_c = base64DecodeChar(str[ii + 2]);
-                uint32_t sxtet_d = base64DecodeChar(str[ii + 3]);
-
-                uint32_t triple = (sxtet_a << 18) + (sxtet_b << 12) + (sxtet_c << 6) + sxtet_d;
-
-                if(res.size() < len) {
-                    res.push_back((triple >> 16) & 0xFF);
-                }
-
-                if(res.size() < len) {
-                    res.push_back((triple >> 8) & 0xFF);
-                }
-
-                if(res.size() < len) {
-                    res.push_back(triple & 0xFF);
-                }
+            if(res.size() < len) {
+                res.push_back(triple & 0xFF);
             }
-        } else {
-            Application::error("%s: %s failed", __FUNCTION__, "base64");
         }
 
         return res;

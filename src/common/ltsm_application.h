@@ -28,6 +28,7 @@
 #include <vector>
 #include <thread>
 #include <string>
+#include <functional>
 #include <filesystem>
 
 #ifdef LTSM_WITH_AUDIT
@@ -107,6 +108,8 @@ namespace LTSM {
         ApplicationLog(std::string_view ident);
     };
 
+    using WatchModificationCb = std::function<void(const std::string &)>;
+
     class WatchModification {
         std::thread _inotifyJob;
         std::string _fileName;
@@ -114,29 +117,31 @@ namespace LTSM {
         int _inotifyFd = -1;
         int _inotifyWd = -1;
 
+        WatchModificationCb closeWriteCb;
+
       protected:
-        bool inotifyWatchStart(const std::filesystem::path &);
-        void inotifyWatchStop(void);
+        void inotifyWatchCb(void) const;
 
         WatchModification(const WatchModification &) = delete;
         WatchModification & operator=(const WatchModification &) = delete;
 
       public:
-        WatchModification() = default;
-        virtual ~WatchModification();
+        WatchModification(WatchModificationCb && cb) : closeWriteCb(std::forward<WatchModificationCb>(cb)) {};
+        ~WatchModification();
 
-        bool inotifyWatchTarget(std::string_view) const;
-        virtual void closeWriteEvent(const std::string &) {}
+        bool inotifyWatchStart(const std::filesystem::path &);
+        void inotifyWatchStop(void);
     };
 
-    class ApplicationJsonConfig : public ApplicationLog, protected WatchModification {
+    class ApplicationJsonConfig : public ApplicationLog {
         JsonObject json;
+        std::unique_ptr<WatchModification> watcher;
 
       protected:
-        // WatchModification interface;
-        void closeWriteEvent(const std::string &) override;
+        void closeWriteEvent(const std::string &);
 
         bool inotifyWatchStart(void);
+        void inotifyWatchStop(void);
         void readDefaultConfig(void);
 
       public:

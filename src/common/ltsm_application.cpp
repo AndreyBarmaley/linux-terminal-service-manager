@@ -523,11 +523,11 @@ namespace LTSM {
     }
 
 #ifdef __UNIX__
-    void inotifyWatchCb(int fd, std::string filename, WatchModification* owner) {
+    void WatchModification::inotifyWatchCb(void) const {
         std::array<char, 256> buf = {};
 
         while(true) {
-            auto len = read(fd, buf.data(), buf.size());
+            auto len = read(_inotifyFd, buf.data(), buf.size());
 
             if(len < 0) {
                 if(errno == EAGAIN) {
@@ -536,7 +536,7 @@ namespace LTSM {
 
                 if(errno != EBADF) {
                     Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                                       __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                                       __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 }
 
                 break;
@@ -544,7 +544,7 @@ namespace LTSM {
 
             if(len < sizeof(struct inotify_event)) {
                 Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                                   __FUNCTION__, "inotify read", strerror(errno), errno, filename.c_str());
+                                   __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 break;
             }
 
@@ -555,18 +555,14 @@ namespace LTSM {
                 auto st = (const struct inotify_event*) std::addressof(*beg);
 
                 if(st->mask == IN_CLOSE_WRITE) {
-                    if(st->len && owner->inotifyWatchTarget(st->name)) {
-                        owner->closeWriteEvent(filename);
+                    if(st->len && _fileName == st->name &&closeWriteCb) {
+                        closeWriteCb(_fileName);
                     }
                 }
 
                 beg += sizeof(struct inotify_event) + st->len;
             }
         }
-    }
-
-    bool WatchModification::inotifyWatchTarget(std::string_view name) const {
-        return _fileName == name;
     }
 
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
@@ -594,7 +590,7 @@ namespace LTSM {
             return false;
         }
 
-        _inotifyJob = std::thread(& inotifyWatchCb, _inotifyFd, file.native(), this);
+        _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 
         Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, file.c_str());
         return true;
@@ -617,6 +613,9 @@ namespace LTSM {
         }
     }
 #else
+    void WatchModification::inotifyWatchCb(void) const {
+    }
+
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
         return false;
     }
@@ -699,7 +698,16 @@ namespace LTSM {
     }
 
     bool ApplicationJsonConfig::inotifyWatchStart(void) {
-        return WatchModification::inotifyWatchStart(configGetString("config:path"));
+        if(! watcher) {
+            watcher = std::make_unique<WatchModification>(std::bind(& ApplicationJsonConfig::closeWriteEvent, this, std::placeholders::_1));
+        }
+        return watcher->inotifyWatchStart(configGetString("config:path"));
+    }
+
+    void ApplicationJsonConfig::inotifyWatchStop(void) {
+        if(watcher) {
+            watcher->inotifyWatchStart(configGetString("config:path"));
+        }
     }
 
     void ApplicationJsonConfig::configSetInteger(const std::string & key, int val) {
