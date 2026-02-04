@@ -11,6 +11,9 @@ endif()
 
 target_compile_definitions(${CUR_TARGET} PUBLIC -DJSMN_STATIC)
 
+find_package(spdlog CONFIG REQUIRED)
+target_link_libraries(${CUR_TARGET} PRIVATE spdlog::spdlog)
+
 target_sources(${CUR_TARGET} PRIVATE
     ltsm_application.cpp
     ltsm_tools.cpp

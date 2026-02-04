@@ -303,7 +303,8 @@ namespace LTSM::Connector {
             }
         }
 
-        Application::setDebug(DebugTarget::Syslog, DebugLevel::Info);
+        Application::setDebugTarget(DebugTarget::Syslog);
+        Application::setDebugLevel(DebugLevel::Info);
 
         // signals
         signal(SIGPIPE, SIG_IGN);

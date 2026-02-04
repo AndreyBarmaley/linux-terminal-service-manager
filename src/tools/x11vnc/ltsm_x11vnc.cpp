@@ -117,7 +117,8 @@ namespace LTSM {
             configSetBoolean("syslog", true);
         }
 
-        Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::None);
+        Application::setDebugTarget(LTSM::DebugTarget::Console);
+        Application::setDebugLevel(LTSM::DebugLevel::Info);
 
         if(configGetBoolean("syslog")) {
             Application::setDebugTarget(LTSM::DebugTarget::Syslog);
@@ -173,7 +174,7 @@ namespace LTSM {
             // child
             if(0 == fork()) {
                 if(configGetBoolean("syslog")) {
-                    Application::setDebugTarget(DebugTarget::Quiet);
+                    Application::setDebugLevel(DebugLevel::Quiet);
                 }
 
                 close(fd);

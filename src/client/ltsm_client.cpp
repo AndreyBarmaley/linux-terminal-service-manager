@@ -249,7 +249,8 @@ namespace LTSM {
 
     Vnc2SDL::Vnc2SDL(int argc, const char** argv)
         : Application("ltsm_client") {
-        Application::setDebug(DebugTarget::Console, DebugLevel::Info);
+        Application::setDebugTarget(DebugTarget::Console);
+        Application::setDebugLevel(DebugLevel::Info);
 #ifdef LTSM_WITH_GNUTLS
         rfbsec.authVenCrypt = true;
         rfbsec.tlsDebug = 2;
@@ -519,7 +520,7 @@ namespace LTSM {
             }
         } else if(cmd == "--syslog") {
             if(arg.size()) {
-                Application::setDebugTargetFile(arg);
+                Application::setDebugTarget(DebugTarget::SyslogFile, arg);
             } else {
                 Application::setDebugTarget(DebugTarget::Syslog);
             }

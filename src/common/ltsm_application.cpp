@@ -72,11 +72,22 @@
 #define LOG_LOCAL7      (23<<3) /* reserved for local use */
 #endif
 
+#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/stdout_sinks.h"
+
+#ifdef __UNIX__
+#include "spdlog/sinks/syslog_sink.h"
+#ifdef LTSM_WITH_SYSTEMD
+#include "spdlog/sinks/systemd_sink.h"
+#endif
+#endif
+
 using namespace std::chrono_literals;
 
 namespace LTSM {
     // local application
     std::unique_ptr<FILE, int(*)(FILE*)> appLoggingFd{ nullptr, fclose };
+    std::string appLoggingFile;
     DebugTarget appDebugTarget = DebugTarget::Console;
     DebugLevel appDebugLevel = DebugLevel::Info;
     uint32_t appDebugTypes = DebugType::All;
@@ -85,8 +96,35 @@ namespace LTSM {
     std::mutex appLoggingLock;
 
     std::string ident{"application"};
-    int facility = LOG_USER;
     bool forceSyslog = false;
+
+    const char* debugTypeToName(const DebugType & type) {
+        switch(type) {
+            case DebugType::All: return "all";
+            case DebugType::Xcb: return "xcb";
+            case DebugType::Rfb: return "rfb";
+            case DebugType::Clip: return "clip";
+            case DebugType::Sock: return "sock";
+            case DebugType::Tls: return "tls";
+            case DebugType::Channels: return "chan";
+            case DebugType::Dbus: return "dbus";
+            case DebugType::Enc: return "enc";
+            case DebugType::X11Srv: return "x11srv";
+            case DebugType::X11Cli: return "x11cli";
+            case DebugType::Audio: return "audio";
+            case DebugType::Fuse: return "fuse";
+            case DebugType::Pcsc: return "pcsc";
+            case DebugType::Pkcs11: return "pkcs11";
+            case DebugType::Sdl: return "sdl";
+            case DebugType::App: return "app";
+            case DebugType::Ldap: return "ldap";
+            case DebugType::Gss: return "gss";
+            case DebugType::Fork: return "fork";
+            case DebugType::Common: return "common";
+            case DebugType::Default: return "default";
+        }
+        return "default";
+    }
 
     uint32_t debugListToTypes(const std::list<std::string> & typesList) {
         uint32_t types = 0;
@@ -134,6 +172,10 @@ namespace LTSM {
                 types |= DebugType::Gss;
             } else if(slower == "fork") {
                 types |= DebugType::Fork;
+            } else if(slower == "common") {
+                types |= DebugType::Common;
+            } else if(slower == "default") {
+                types |= DebugType::Default;
             } else if(slower == "all") {
                 types |= DebugType::All;
             } else {
@@ -144,8 +186,41 @@ namespace LTSM {
         return types;
     }
 
-    void setDebugSyslogFacility(std::string_view name) {
-        facility = LOG_USER;
+    Logger Application::logger(const DebugType & type) {
+
+        auto name = debugTypeToName(type);
+
+        if(auto log = spdlog::get(name)) {
+            return log;
+        }
+
+        spdlog::set_automatic_registration(true);
+        Logger log;
+
+        switch(appDebugTarget) {
+            case DebugTarget::Console:
+                log = spdlog::stderr_logger_mt(name);
+                break;
+            case DebugTarget::Syslog:
+#ifdef __UNIX__
+#ifdef LTSM_WITH_SYSTEMD
+                log = spdlog::systemd_logger_mt(name, ident);
+#else
+                log = spdlog::syslog_logger_mt(name, ident);
+#endif
+#endif
+                break;
+            case DebugTarget::SyslogFile:
+                log = spdlog::basic_logger_st(name, appLoggingFile);
+                break;
+        }
+
+        log->set_level(static_cast<spdlog::level::level_enum>(appDebugLevel));
+        return log;
+    }
+
+    int syslogFacility(std::string_view name) {
+        int facility = LOG_USER;
 
         if(startsWith(name, "local")) {
             switch(name[5]) {
@@ -186,14 +261,7 @@ namespace LTSM {
             }
         }
 
-#ifdef __UNIX__
-
-        if(0 < facility) {
-            closelog();
-            ::openlog(ident.c_str(), 0, facility);
-        }
-
-#endif
+        return facility;
     }
 
     bool Application::isDebugTarget(const DebugTarget & tgt) {
@@ -204,34 +272,57 @@ namespace LTSM {
         return appDebugTypes & vals;
     }
 
-    void Application::setDebug(const DebugTarget & tgt, const DebugLevel & lvl) {
-        setDebugTarget(tgt);
-
-        appDebugLevel = lvl;
-    }
-
     void Application::setDebugTypes(const std::list<std::string> & list) {
         appDebugTypes = debugListToTypes(list);
     }
 
-    void Application::setDebugTarget(const DebugTarget & tgt) {
-        if(appDebugTarget == DebugTarget::SyslogFile && tgt != DebugTarget::SyslogFile) {
-            appLoggingFd.reset();
-        }
+    void Application::setDebugTarget(const DebugTarget & tgt, std::string_view ext) {
 
+        switch(tgt) {
+            case DebugTarget::Console:
+                if(appDebugTarget == DebugTarget::SyslogFile) {
+                    appLoggingFd.reset(fopen(appLoggingFile.c_str(), "a"));
+                    appLoggingFile.clear();
+                }
 #ifdef __UNIX__
-
-        if(appDebugTarget != DebugTarget::Syslog && tgt == DebugTarget::Syslog) {
-            openlog(ident.c_str(), 0, facility);
-        } else if(appDebugTarget == DebugTarget::Syslog && tgt != DebugTarget::Syslog) {
-            closelog();
-        }
-
+                if(appDebugTarget == DebugTarget::Syslog) {
+                    closelog();
+                }
 #endif
-        appDebugTarget = tgt;
+                appDebugTarget = tgt;
+                break;
+
+            case DebugTarget::Syslog:
+                if(appDebugTarget == DebugTarget::SyslogFile) {
+                    appLoggingFd.reset(fopen(appLoggingFile.c_str(), "a"));
+                    appLoggingFile.clear();
+                }
+#ifdef __UNIX__
+                if(appDebugTarget == DebugTarget::Syslog) {
+                    closelog();
+                }
+
+                openlog(ident.c_str(), 0, syslogFacility(ext));
+#endif
+                appDebugTarget = tgt;
+                break;
+
+            case DebugTarget::SyslogFile:
+#ifdef __UNIX__
+                if(appDebugTarget == DebugTarget::Syslog) {
+                    closelog();
+                }
+#endif
+                if(!ext.empty()) {
+                    appLoggingFile = view2string(ext);
+                    appLoggingFd.reset(fopen(appLoggingFile.c_str(), "a"));
+                }
+                appDebugTarget = tgt;
+                break;
+        }
     }
 
-    void Application::setDebugTarget(std::string_view tgt) {
+    void Application::setDebugTarget(std::string_view tgt, std::string_view ext) {
         if(tgt == "console") {
             setDebugTarget(DebugTarget::Console);
         }
@@ -242,20 +333,10 @@ namespace LTSM {
         }
 
 #endif
-        else {
-            setDebugTarget(DebugTarget::Quiet);
-        }
-    }
-
-    void Application::setDebugTargetFile(const std::filesystem::path & file) {
-        if(! file.empty()) {
-#ifdef __WIN32__
-            auto tmp = Tools::wstring2string(file.native());
-            appLoggingFd.reset(fopen(tmp.c_str(), "a"));
-#else
-            appLoggingFd.reset(fopen(file.c_str(), "a"));
-#endif
-            setDebugTarget(appLoggingFd ? DebugTarget::SyslogFile : DebugTarget::Console);
+        else if(tgt == "file") {
+            setDebugTarget(DebugTarget::SyslogFile, ext);
+        } else {
+            setDebugTarget(DebugTarget::Console);
         }
     }
 
@@ -282,11 +363,17 @@ namespace LTSM {
             setDebugLevel(DebugLevel::Debug);
         } else if(lvl == "trace") {
             setDebugLevel(DebugLevel::Trace);
+        } else if(startsWith(lvl, "warn")) {
+            setDebugLevel(DebugLevel::Warn);
+        } else if(startsWith(lvl, "err")) {
+            setDebugLevel(DebugLevel::Error);
+        } else if(startsWith(lvl, "crit")) {
+            setDebugLevel(DebugLevel::Crit);
         } else {
-            setDebugLevel(DebugLevel::None);
+            setDebugLevel(DebugLevel::Quiet);
         }
     }
-
+ 
     Application::Application(std::string_view sid) {
         std::setlocale(LC_ALL, "ru_RU.utf8");
         std::setlocale(LC_NUMERIC, "C");
@@ -331,7 +418,7 @@ namespace LTSM {
     }
 
     void Application::info(const char* format, ...) {
-        if(appDebugLevel != DebugLevel::None) {
+        if(appDebugLevel != DebugLevel::Quiet) {
             va_list args;
             va_start(args, format);
 
@@ -377,7 +464,7 @@ namespace LTSM {
     }
 
     void Application::warning(const char* format, ...) {
-        if(appDebugLevel != DebugLevel::None) {
+        if(appDebugLevel != DebugLevel::Quiet) {
             va_list args;
             va_start(args, format);
 
@@ -422,7 +509,7 @@ namespace LTSM {
         va_end(args);
     }
 
-    void Application::vdebug(uint32_t subsys, const char* format, va_list args) {
+    void Application::vdebug(const DebugType & subsys, const char* format, va_list args) {
         if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile) {
             const std::scoped_lock guard{ appLoggingLock };
 
@@ -439,7 +526,7 @@ namespace LTSM {
         }
     }
 
-    void Application::debug(uint32_t subsys, const char* format, ...) {
+    void Application::debug(const DebugType & subsys, const char* format, ...) {
         if((subsys & appDebugTypes) &&
            (appDebugLevel == DebugLevel::Debug || appDebugLevel == DebugLevel::Trace)) {
             va_list args;
@@ -451,7 +538,7 @@ namespace LTSM {
         }
     }
 
-    void Application::vtrace(uint32_t subsys, const char* format, va_list args) {
+    void Application::vtrace(const DebugType & subsys, const char* format, va_list args) {
         if(appDebugTarget == DebugTarget::Console || appDebugTarget == DebugTarget::SyslogFile) {
             const std::scoped_lock guard{ appLoggingLock };
 
@@ -468,7 +555,7 @@ namespace LTSM {
         }
     }
 
-    void Application::trace(uint32_t subsys, const char* format, ...) {
+    void Application::trace(const DebugType & subsys, const char* format, ...) {
         if((subsys & appDebugTypes) &&
            (appDebugLevel == DebugLevel::Trace)) {
             va_list args;
@@ -498,19 +585,19 @@ namespace LTSM {
     }
 
     void ApplicationLog::setAppLog(const JsonObject* jo) {
-        setDebugTarget(jo->getString("debug:target", "console"));
-        setDebugLevel(jo->getString("debug:level", "info"));
+        auto target = jo->getString("debug:target", "console");
 
-        if(isDebugTarget(DebugTarget::Syslog)) {
+        if(target == "syslog") {
             auto facility = jo->getString("debug:syslog", "user");
-            setDebugSyslogFacility(facility);
-        } else if(isDebugTarget(DebugTarget::SyslogFile)) {
-            if(auto file = jo->getString("debug:file"); ! file.empty()) {
-                setDebugTargetFile(file);
-            } else {
-                setDebugTarget(DebugTarget::Console);
-            }
+            setDebugTarget(DebugTarget::Syslog, facility);
+        } else if(target == "file") {
+            auto file = jo->getString("debug:file");
+            setDebugTarget(DebugTarget::SyslogFile, file);
+        } else {
+            setDebugTarget(DebugTarget::Console);
         }
+
+        setDebugLevel(jo->getString("debug:level", "info"));
 
         if(auto types = jo->getArray("debug:types")) {
             setDebugTypes(types->toStdList<std::string>());
@@ -525,6 +612,7 @@ namespace LTSM {
 #ifdef __UNIX__
     void WatchModification::inotifyWatchCb(void) const {
         std::array<char, 256> buf = {};
+        auto logger = Application::logger(DebugType::App);
 
         while(true) {
             auto len = read(_inotifyFd, buf.data(), buf.size());
@@ -535,16 +623,16 @@ namespace LTSM {
                 }
 
                 if(errno != EBADF) {
-                    Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                                       __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
+                    logger->error("{} failed, error: {}, code: {}, path: {}",
+                                       "inotify read", strerror(errno), errno, _fileName);
                 }
 
                 break;
             }
 
             if(len < sizeof(struct inotify_event)) {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                                   __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
+                logger->error("{} failed, error: {}, code: {}, path: {}",
+                                   "inotify read", strerror(errno), errno, _fileName);
                 break;
             }
 
@@ -566,16 +654,18 @@ namespace LTSM {
     }
 
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
+        auto logger = Application::logger(DebugType::App);
+
         if(! std::filesystem::is_regular_file(file)) {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            logger->error("path not found: {}", file.c_str());
             return false;
         }
 
         _inotifyFd = inotify_init();
 
         if(0 > _inotifyFd) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
-                               __FUNCTION__, "inotify_init", strerror(errno), errno);
+            logger->error("{} failed, error: {}, code: {}",
+                        "inotify_init", strerror(errno), errno);
             return false;
         }
 
@@ -583,8 +673,8 @@ namespace LTSM {
         _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
 
         if(0 > _inotifyWd) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
-                               __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.c_str());
+            logger->error("{} failed, error: {}, code: {}, path: {}",
+                        "inotify_add_watch", strerror(errno), errno, file.c_str());
 
             inotifyWatchStop();
             return false;
@@ -592,7 +682,7 @@ namespace LTSM {
 
         _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 
-        Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, file.c_str());
+        logger->debug("inotify started, path: {}", file.c_str());
         return true;
     }
 
@@ -669,6 +759,7 @@ namespace LTSM {
     }
 
     bool ApplicationJsonConfig::readConfig(const std::filesystem::path & file) {
+        auto logger = Application::logger(DebugType::App);
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
@@ -676,8 +767,8 @@ namespace LTSM {
             return false;
         }
 
-        if((std::filesystem::status(file, err).permissions() & std::filesystem::perms::owner_read)
-           == std::filesystem::perms::none) {
+        if((std::filesystem::status(file, err).permissions() &
+            std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
             Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
             return false;
         }
@@ -765,7 +856,8 @@ namespace LTSM {
 #ifdef __UNIX__
     void fileLogClose(void) {
         appLoggingFd.reset();
-        appDebugTarget = DebugTarget::Quiet;
+        appDebugTarget = DebugTarget::Console;
+        appDebugLevel = DebugLevel::Quiet;
     }
 
     void redirectStdoutStderrTo(bool out, bool err, const std::filesystem::path & file) {
@@ -821,7 +913,8 @@ namespace LTSM {
 
         // skip closelog, glibc dead lock
         if(Application::isDebugTarget(DebugTarget::Syslog)) {
-            Application::setDebugTarget(DebugTarget::Quiet);
+            Application::setDebugTarget(DebugTarget::Console);
+            Application::setDebugLevel(DebugLevel::Quiet);
         }
 
         appLoggingFd.reset();
@@ -838,7 +931,7 @@ namespace LTSM {
 
         if(debug) {
             auto file = Tools::joinToString("/var/tmp/.fork_", ident, "_", getpid(), ".log");
-            Application::setDebugTargetFile(file);
+            Application::setDebugTarget(DebugTarget::SyslogFile, file);
             appDebugTypes = DebugType::All;
             appLogSync = true;
             Application::debug(DebugType::App, "%s: log redirected", __FUNCTION__);

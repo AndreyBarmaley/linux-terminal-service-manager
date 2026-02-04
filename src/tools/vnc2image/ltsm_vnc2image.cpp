@@ -42,7 +42,8 @@ namespace LTSM {
 
     Vnc2Image::Vnc2Image(int argc, const char** argv)
         : Application("ltsm_vnc2image") {
-        Application::setDebug(DebugTarget::Console, DebugLevel::Info);
+        Application::setDebugTarget(DebugTarget::Console);
+        Application::setDebugLevel(DebugLevel::Info);
 
         for(int it = 1; it < argc; ++it) {
             if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {

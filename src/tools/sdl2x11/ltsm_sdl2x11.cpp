@@ -292,7 +292,8 @@ int main(int argc, const char** argv) {
     std::string xauth;
     std::string geometry;
     std::string title = "SDL2X11";
-    LTSM::Application::setDebug(LTSM::DebugTarget::Console, LTSM::DebugLevel::Info);
+    LTSM::Application::setDebugTarget(LTSM::DebugTarget::Console);
+    LTSM::Application::setDebugLevel(LTSM::DebugLevel::Info);
 
     if(auto val = getenv("SDL2X11_SCALE")) {
         size_t idx;

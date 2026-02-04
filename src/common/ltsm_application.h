@@ -39,9 +39,20 @@
 #include "ltsm_json_wrapper.h"
 #endif
 
+#include "spdlog/spdlog.h"
+
 namespace LTSM {
-    enum class DebugTarget { Quiet, Console, Syslog, SyslogFile };
-    enum class DebugLevel { None, Info, Debug, Trace };
+    enum class DebugTarget { Console, Syslog, SyslogFile };
+
+    enum class DebugLevel : int {
+        Trace = SPDLOG_LEVEL_TRACE,
+        Debug = SPDLOG_LEVEL_DEBUG,
+        Info = SPDLOG_LEVEL_INFO,
+        Warn = SPDLOG_LEVEL_WARN,
+        Error = SPDLOG_LEVEL_ERROR,
+        Crit = SPDLOG_LEVEL_CRITICAL,
+        Quiet = SPDLOG_LEVEL_OFF
+    };
 
     enum DebugType {
         All = 0xFFFFFFFF,
@@ -64,8 +75,12 @@ namespace LTSM {
         App = 1 << 16,
         Ldap = 1 << 14,
         Gss = 1 << 13,
-        Fork = 1 << 12
+        Fork = 1 << 12,
+        Common = 1 << 11,
+        Default = 1 << 10
     };
+
+    using Logger = std::shared_ptr<spdlog::logger>;
 
     class Application {
       public:
@@ -75,20 +90,19 @@ namespace LTSM {
         Application(Application &) = delete;
         Application & operator= (const Application &) = delete;
 
+        static Logger logger(const DebugType & type = DebugType::Default);
+
         static void info(const char* format, ...);
         static void notice(const char* format, ...);
         static void warning(const char* format, ...);
         static void error(const char* format, ...);
-        static void vdebug(uint32_t subsys, const char* format, va_list args);
-        static void debug(uint32_t subsys, const char* format, ...);
-        static void vtrace(uint32_t subsys, const char* format, va_list args);
-        static void trace(uint32_t subsys, const char* format, ...);
+        static void vdebug(const DebugType &, const char* format, va_list args);
+        static void debug(const DebugType &, const char* format, ...);
+        static void vtrace(const DebugType &, const char* format, va_list args);
+        static void trace(const DebugType &, const char* format, ...);
 
-        static void setDebug(const DebugTarget &, const DebugLevel &);
-
-        static void setDebugTarget(const DebugTarget &);
-        static void setDebugTarget(std::string_view target);
-        static void setDebugTargetFile(const std::filesystem::path & file);
+        static void setDebugTarget(const DebugTarget &, std::string_view = "");
+        static void setDebugTarget(std::string_view target, std::string_view = "");
         static bool isDebugTarget(const DebugTarget &);
 
         static void setDebugLevel(const DebugLevel &);
