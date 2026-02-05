@@ -64,7 +64,8 @@ namespace LTSM {
       public:
 
         CupsBackend(int argc, const char** argv) : Application("ltsm_cups") {
-            setDebug(DebugTarget::Syslog, DebugLevel::Info);
+            setDebugTarget(DebugTarget::Syslog);
+            setDebugLevel(DebugLevel::Info);
 
             // job from stdin
             if(argc == 6) {

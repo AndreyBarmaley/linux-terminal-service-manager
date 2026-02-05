@@ -1900,7 +1900,8 @@ namespace LTSM {
             return;
         }
 
-        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s')", __FUNCTION__, selectionWin, type, selectionName.c_str());
+        Application::debug(DebugType::Xcb, "%s: window id: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `%s')",
+                                __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
 
         source = std::addressof(src);
         selectionTime = 0;

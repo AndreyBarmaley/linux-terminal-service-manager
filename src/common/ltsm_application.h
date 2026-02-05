@@ -85,21 +85,44 @@ namespace LTSM {
     class Application {
       public:
         explicit Application(std::string_view ident);
-        virtual ~Application();
+        virtual ~Application() = default;
 
         Application(Application &) = delete;
         Application & operator= (const Application &) = delete;
 
         static Logger logger(const DebugType & type = DebugType::Default);
 
-        static void info(const char* format, ...);
-        static void notice(const char* format, ...);
-        static void warning(const char* format, ...);
-        static void error(const char* format, ...);
-        static void vdebug(const DebugType &, const char* format, va_list args);
-        static void debug(const DebugType &, const char* format, ...);
-        static void vtrace(const DebugType &, const char* format, va_list args);
-        static void trace(const DebugType &, const char* format, ...);
+        template<typename... Args>
+        static void error(std::string_view fmt, Args&& ... args) {
+            spdlog::error(fmt::runtime(fmt), args...);
+        }
+
+        template<typename... Args>
+        static void warning(std::string_view fmt, Args&& ... args) {
+            spdlog::warn(fmt::runtime(fmt), args...);
+        }
+
+        template<typename... Args>
+        static void info(std::string_view fmt, Args&& ... args) {
+            spdlog::info(fmt::runtime(fmt), args...);
+        }
+
+        template<typename... Args>
+        static void notice(std::string_view fmt, Args&& ... args) {
+            spdlog::warn(fmt::runtime(fmt), args...);
+        }
+
+        template<typename... Args>
+        static void debug(const DebugType & type, std::string_view fmt, Args&& ... args) {
+            auto log = logger(type);
+            log->debug(fmt::runtime(fmt), args...);
+        }
+
+        template<typename... Args>
+        static void trace(const DebugType & type, std::string_view fmt, Args&& ... args) {
+            auto log = logger(type);
+            log->debug(fmt::runtime(fmt), args...);
+        }
 
         static void setDebugTarget(const DebugTarget &, std::string_view = "");
         static void setDebugTarget(std::string_view target, std::string_view = "");

@@ -976,7 +976,7 @@ namespace LTSM {
             // pressed
             if(ke->state == SDL_PRESSED) {
                 Application::debug(DebugType::App, "%s: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32,
-                                   __FUNCTION__, ke->keysym.scancode, ke->keysym.sym);
+                                   __FUNCTION__, static_cast<int>(ke->keysym.scancode), ke->keysym.sym);
 
                 // ctrl + F10 -> fast close
                 if(ke->keysym.sym == SDLK_F10 &&
