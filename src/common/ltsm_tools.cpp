@@ -611,15 +611,10 @@ namespace LTSM {
         return os.str();
     }
 
-    std::string Tools::prettyFuncName(std::string_view name) {
-        auto end = std::ranges::find(name, '(');
-        auto beg = end != name.end() ? end : end = std::prev(name.end());
-
-        while(beg != name.begin() && ! std::isspace(*beg)) {
-            beg = std::prev(beg);
-        }
-
-        return std::string{std::next(beg), end};
+    std::string_view Tools::prettyFuncNameView(std::string_view name) {
+        auto it2 = std::find(name.begin(), name.end(), '(');
+        auto it1 = std::find(std::make_reverse_iterator(std::prev(it2)), std::make_reverse_iterator(name.begin()), 0x20);
+        return std::string_view{it1.base(), it2};
     }
 
     std::string Tools::fileToString(const std::filesystem::path & file) {

@@ -623,16 +623,16 @@ namespace LTSM {
                 }
 
                 if(errno != EBADF) {
-                    logger->error("{} failed, error: {}, code: {}, path: {}",
-                                       "inotify read", strerror(errno), errno, _fileName);
+                    logger->error("{}: {} failed, error: {}, code: {}, path: {}",
+                                       NS_FuncNameV, "inotify read", strerror(errno), errno, _fileName);
                 }
 
                 break;
             }
 
             if(len < sizeof(struct inotify_event)) {
-                logger->error("{} failed, error: {}, code: {}, path: {}",
-                                   "inotify read", strerror(errno), errno, _fileName);
+                logger->error("{}: {} failed, error: {}, code: {}, path: {}",
+                                   NS_FuncNameV, "inotify read", strerror(errno), errno, _fileName);
                 break;
             }
 
@@ -657,15 +657,15 @@ namespace LTSM {
         auto logger = Application::logger(DebugType::App);
 
         if(! std::filesystem::is_regular_file(file)) {
-            logger->error("path not found: {}", file.c_str());
+            logger->error("{}: path not found: {}", NS_FuncNameV, file.c_str());
             return false;
         }
 
         _inotifyFd = inotify_init();
 
         if(0 > _inotifyFd) {
-            logger->error("{} failed, error: {}, code: {}",
-                        "inotify_init", strerror(errno), errno);
+            logger->error("{}: {} failed, error: {}, code: {}",
+                        NS_FuncNameV, "inotify_init", strerror(errno), errno);
             return false;
         }
 
@@ -673,8 +673,8 @@ namespace LTSM {
         _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
 
         if(0 > _inotifyWd) {
-            logger->error("{} failed, error: {}, code: {}, path: {}",
-                        "inotify_add_watch", strerror(errno), errno, file.c_str());
+            logger->error("{}: {} failed, error: {}, code: {}, path: {}",
+                        NS_FuncNameV, "inotify_add_watch", strerror(errno), errno, file.c_str());
 
             inotifyWatchStop();
             return false;
@@ -682,7 +682,7 @@ namespace LTSM {
 
         _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 
-        logger->debug("inotify started, path: {}", file.c_str());
+        logger->debug("{}: path: {}", NS_FuncNameV, file.c_str());
         return true;
     }
 
