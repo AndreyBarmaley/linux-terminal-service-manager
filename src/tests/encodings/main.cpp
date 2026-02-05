@@ -28,7 +28,7 @@ struct Image {
             fb->blitRegion(fb24, XCB::Region(0, 0, fb->width(), fb->height()), XCB::Point(0, 0));
         }
 
-        Application::info("%s: loading: %s", __FUNCTION__, file.c_str());
+        Application::info("{}: loading: {}", __FUNCTION__, file.c_str());
     }
 };
 
@@ -77,7 +77,7 @@ class EncodingTest : public Application {
 
             srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
-            Application::info("%s: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
+            Application::info("{}: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
                               __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 
@@ -93,7 +93,7 @@ class EncodingTest : public Application {
                 }
 
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-                Application::info("%s: encoding: %s, time: %dms, stream sz: %dMb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
+                Application::info("{}: encoding: {}, time: %dms, stream sz: %dMb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
 
                 srv->resetBuffer();
             }
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
     try {
         res = EncodingTest(folder, threadNum).start();
     } catch(const std::exception & err) {
-        Application::error("exception: %s", err.what());
+        Application::error("exception: {}", err.what());
     }
 
     SDL_Quit();

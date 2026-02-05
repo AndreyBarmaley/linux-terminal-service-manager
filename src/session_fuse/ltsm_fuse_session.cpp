@@ -191,7 +191,7 @@ namespace LTSM {
         }
 
         if(! fuse->sock) {
-            Application::error("%s: %s failed", __FUNCTION__, "socket");
+            Application::error("{}: {} failed", __FUNCTION__, "socket");
             fuse->exitSession();
             return;
         }
@@ -213,13 +213,13 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Init) {
-                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse->exitSession();
                 return;
             }
 
             if(err) {
-                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
                 fuse->exitSession();
                 return;
             }
@@ -232,14 +232,14 @@ namespace LTSM {
             fuse->remoteGid = fuse->sock->recvIntLE32();
             fuse->recvShareRootInfo();
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("{}: exception: {}", __FUNCTION__, err.what());
             fuse->exitSession();
             return;
         }
     }
 
     void ll_lookup(fuse_req_t req, fuse_ino_t parent, const char* path) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64 ", path: `{}'", __FUNCTION__, parent, path);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse) {
@@ -269,22 +269,22 @@ namespace LTSM {
     }
 
     void ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse) {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse");
             fuse_reply_err(req, EFAULT);
             return;
         }
 
         if(! fuse->sock) {
-            Application::error("%s: %s failed", __FUNCTION__, "sock");
+            Application::error("{}: {} failed", __FUNCTION__, "sock");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -292,7 +292,7 @@ namespace LTSM {
         auto pathStat = fuse->findInode(ino);
 
         if(! pathStat) {
-            Application::error("%s: %s failed", __FUNCTION__, "inode");
+            Application::error("{}: {} failed", __FUNCTION__, "inode");
             fuse_reply_err(req, ENOENT);
             return;
         }
@@ -301,17 +301,17 @@ namespace LTSM {
     }
 
     void ll_readlink(fuse_req_t req, fuse_ino_t ino) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64, __FUNCTION__, ino);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse) {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse");
             fuse_reply_err(req, EFAULT);
             return;
         }
 
         if(! fuse->sock) {
-            Application::error("%s: %s failed", __FUNCTION__, "sock");
+            Application::error("{}: {} failed", __FUNCTION__, "sock");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -319,13 +319,13 @@ namespace LTSM {
         auto pathStat = fuse->findInode(ino);
 
         if(! pathStat) {
-            Application::error("%s: %s failed", __FUNCTION__, "inode");
+            Application::error("{}: {} failed", __FUNCTION__, "inode");
             fuse_reply_err(req, ENOENT);
             return;
         }
 
         if(! S_ISLNK(pathStat->statRef().st_mode)) {
-            Application::error("%s: %s failed", __FUNCTION__, "islnk");
+            Application::error("{}: {} failed", __FUNCTION__, "islnk");
             fuse_reply_err(req, EINVAL);
             return;
         }
@@ -333,7 +333,7 @@ namespace LTSM {
         auto pair = fuse->findLink(ino);
 
         if(! pair) {
-            Application::error("%s: %s failed", __FUNCTION__, "findLink");
+            Application::error("{}: {} failed", __FUNCTION__, "findLink");
             fuse_reply_err(req, ENOENT);
             return;
         }
@@ -341,7 +341,7 @@ namespace LTSM {
         pathStat = fuse->findInode(pair->second);
 
         if(! pathStat) {
-            Application::error("%s: %s failed", __FUNCTION__, "findInode");
+            Application::error("{}: {} failed", __FUNCTION__, "findInode");
             fuse_reply_err(req, ENOENT);
             return;
         }
@@ -351,10 +351,10 @@ namespace LTSM {
     }
 
     void ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t off, struct fuse_file_info* fi) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64 ", max size: %" PRIu64 ", offset: %" PRIu64, __FUNCTION__, ino, maxsize, off);
 
         if(fi) {
-            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         }
 
         auto fuse = (FuseSession*) fuse_req_userdata(req);
@@ -396,12 +396,12 @@ namespace LTSM {
     }
 
     void ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         } else {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse_file_info");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -448,13 +448,13 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Open) {
-                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
 
             if(err) {
-                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }
@@ -463,7 +463,7 @@ namespace LTSM {
             fi->fh = fuse->sock->recvIntLE32();
             fuse_reply_open(req, fi);
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("{}: exception: {}", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -471,12 +471,12 @@ namespace LTSM {
     }
 
     void ll_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         } else {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse_file_info");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -519,32 +519,32 @@ namespace LTSM {
             auto err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Release) {
-                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
 
             if(err) {
-                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }
 
             fuse_reply_err(req, 0);
         } catch(const std::exception & err) {
-            Application::error("%s: exception %s", __FUNCTION__, err.what());
+            Application::error("{}: exception {}", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
     }
 
     void ll_read(fuse_req_t req, fuse_ino_t ino, size_t maxsize, off_t offset, struct fuse_file_info* fi) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64, __FUNCTION__, ino);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64, __FUNCTION__, ino);
 
         if(fi) {
-            Application::debug(DebugType::App, "%s: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
+            Application::debug(DebugType::App, "{}: file info - flags: 0x%" PRIx32 ", fh: %" PRIu64, __FUNCTION__, fi->flags, fi->fh);
         } else {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse_file_info");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse_file_info");
             fuse_reply_err(req, EFAULT);
             return;
         }
@@ -592,13 +592,13 @@ namespace LTSM {
             int err = fuse->sock->recvIntLE32();
 
             if(cmd != FuseOp::Read) {
-                Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+                Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
                 fuse_reply_err(req, EFAULT);
                 return;
             }
 
             if(err) {
-                Application::error("%s: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }
@@ -614,14 +614,14 @@ namespace LTSM {
             auto buf = fuse->sock->recvData(len);
             fuse_reply_buf(req, (const char*) buf.data(), buf.size());
         } catch(const std::exception & err) {
-            Application::error("%s: exception %s", __FUNCTION__, err.what());
+            Application::error("{}: exception {}", __FUNCTION__, err.what());
             fuse_reply_err(req, EFAULT);
             return;
         }
     }
 
     void ll_access(fuse_req_t req, fuse_ino_t ino, int mask) {
-        Application::debug(DebugType::App, "%s: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
+        Application::debug(DebugType::App, "{}: ino: %" PRIu64 ", mask: 0x%" PRIx32, __FUNCTION__, ino, mask);
         auto fuse = (FuseSession*) fuse_req_userdata(req);
 
         if(! fuse) {
@@ -683,12 +683,12 @@ namespace LTSM {
         struct stat st = {};
 
         if(0 > ::stat(local.c_str(), & st)) {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'", __FUNCTION__, "stat", strerror(errno), errno,
+            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'", __FUNCTION__, "stat", strerror(errno), errno,
                                local.c_str());
             throw fuse_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, 1, local.c_str());
+        Application::debug(DebugType::App, "{}: added ino: %" PRIu64 ", path: `{}'", __FUNCTION__, 1, local.c_str());
         auto pair = inodes.emplace(1, PathStat{"/", std::move(st)});
         pathes.emplace("/", pair.first->second.statPtr());
         // fuse init
@@ -704,14 +704,14 @@ namespace LTSM {
         ses.reset(fuse_session_new(& args, & oper, sizeof(oper), this));
 
         if(! ses) {
-            Application::error("%s: %s failed", __FUNCTION__, "fuse_session_new");
+            Application::error("{}: {} failed", __FUNCTION__, "fuse_session_new");
             throw fuse_error(NS_FuncName);
         }
 
         fuse_set_signal_handlers(ses.get());
 
         if(0 > fuse_session_mount(ses.get(), local.c_str())) {
-            Application::error("%s: %s failed, local point: `%s'", __FUNCTION__, "fuse_session_mount", local.c_str());
+            Application::error("{}: {} failed, local point: `{}'", __FUNCTION__, "fuse_session_mount", local.c_str());
             throw fuse_error(NS_FuncName);
         }
 
@@ -799,7 +799,7 @@ namespace LTSM {
             if(ino != 1 &&
                startsWith(path, remotePoint)) {
                 path = path.substr(remotePoint.size());
-                Application::debug(DebugType::App, "%s: added ino: %" PRIu64 ", path: `%s'", __FUNCTION__, ino, path.c_str());
+                Application::debug(DebugType::App, "{}: added ino: %" PRIu64 ", path: `{}'", __FUNCTION__, ino, path.c_str());
                 // added relative path
                 auto pair = inodes.emplace(ino, PathStat{path, std::move(st)});
                 pathes.emplace(std::move(path), pair.first->second.statPtr());
@@ -847,7 +847,7 @@ namespace LTSM {
             return itp->second;
         }
 
-        Application::warning("%s: not found, ino: %" PRIu64 ", path: `%s'", __FUNCTION__, parent, path.c_str());
+        Application::warning("{}: not found, ino: %" PRIu64 ", path: `{}'", __FUNCTION__, parent, path.c_str());
         return nullptr;
     }
 
@@ -910,22 +910,22 @@ namespace LTSM {
     }
 
     int32_t FuseSessionBus::getVersion(void) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
         return LTSM_SESSION_FUSE_VERSION;
     }
 
     void FuseSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "%s: pid: %d", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: %d", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 
     bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
                                     const std::string & fuseSocket) {
-        Application::debug(DebugType::Dbus, "%s: local point: `%s', remote point: `%s', fuse socket: `%s'", __FUNCTION__, localPoint.c_str(),
+        Application::debug(DebugType::Dbus, "{}: local point: `{}', remote point: `{}', fuse socket: `{}'", __FUNCTION__, localPoint.c_str(),
                            remotePoint.c_str(), fuseSocket.c_str());
 
         if(std::ranges::any_of(childs, [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
-            Application::error("%s: point busy, point: `%s'", __FUNCTION__, localPoint.c_str());
+            Application::error("{}: point busy, point: `{}'", __FUNCTION__, localPoint.c_str());
             return false;
         }
 
@@ -934,7 +934,7 @@ namespace LTSM {
         try {
             ptr = std::make_unique<FuseSession>(localPoint, remotePoint, fuseSocket);
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             return false;
         }
 
@@ -943,12 +943,12 @@ namespace LTSM {
     }
 
     void FuseSessionBus::setDebug(const std::string & level) {
-        LTSM::Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
+        LTSM::Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
         setDebugLevel(level);
     }
 
     void FuseSessionBus::umountPoint(const std::string & localPoint) {
-        LTSM::Application::debug(DebugType::Dbus, "%s: local point: `%s'", __FUNCTION__, localPoint.c_str());
+        LTSM::Application::debug(DebugType::Dbus, "{}: local point: `{}'", __FUNCTION__, localPoint.c_str());
         std::erase_if(childs, [&](auto & ptr) {
             return ptr->localPoint == localPoint;
         });
@@ -990,9 +990,9 @@ int main(int argc, char** argv) {
         LTSM::FuseSessionBus fuseSession(*LTSM::conn, debug);
         return fuseSession.start();
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

@@ -135,28 +135,28 @@ namespace LTSM {
     PKCS11::Library::Library(const std::string & name) :
         dll{ nullptr, dlclose } {
         if(name.empty()) {
-            Application::error("%s: failed, name empty", __FUNCTION__);
+            Application::error("{}: failed, name empty", __FUNCTION__);
             throw pkcs11_error(NS_FuncName);
         }
 
         dll.reset(dlopen(name.c_str(), RTLD_LAZY));
 
         if(! dll) {
-            Application::error("%s: %s failed, name: %s", __FUNCTION__, "dlopen", name.c_str());
+            Application::error("{}: {} failed, name: {}", __FUNCTION__, "dlopen", name.c_str());
             throw pkcs11_error(NS_FuncName);
         }
 
         auto pfGetFunctionList = (CK_C_GetFunctionList) dlsym(dll.get(), "C_GetFunctionList");
 
         if(! pfGetFunctionList) {
-            Application::error("%s: %s symbol not found", __FUNCTION__, "C_GetFunctionList");
+            Application::error("{}: {} symbol not found", __FUNCTION__, "C_GetFunctionList");
             throw pkcs11_error(NS_FuncName);
         }
 
         auto ret = pfGetFunctionList(& pFunctionList);
 
         if(ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'", __FUNCTION__, "C_GetFunctionList", ret,
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'", __FUNCTION__, "C_GetFunctionList", ret,
                                rvString(ret));
             throw pkcs11_error(NS_FuncName);
         }
@@ -164,7 +164,7 @@ namespace LTSM {
         ret = pFunctionList->C_Initialize(nullptr);
 
         if(ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'", __FUNCTION__, "C_Initialize", ret, rvString(ret));
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'", __FUNCTION__, "C_Initialize", ret, rvString(ret));
             throw pkcs11_error(NS_FuncName);
         }
     }
@@ -207,7 +207,7 @@ namespace LTSM {
             return info;
         }
 
-        Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'", __FUNCTION__, "C_GetInfo", ret, rvString(ret));
+        Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'", __FUNCTION__, "C_GetInfo", ret, rvString(ret));
         return nullptr;
     }
 
@@ -215,21 +215,21 @@ namespace LTSM {
         CK_ULONG pulCount = 0;
 
         if(auto ret = lib->func()->C_GetSlotList(tokenPresentOnly, nullptr, & pulCount); ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_GetSlotList", ret, rvString(ret));
             return {};
         }
 
         if(0 == pulCount) {
-            Application::debug(DebugType::Pkcs11, "%s: empty %s", __FUNCTION__, "slots");
+            Application::debug(DebugType::Pkcs11, "{}: empty {}", __FUNCTION__, "slots");
             return {};
         }
 
-        Application::debug(DebugType::Pkcs11, "%s: connected slots: %" PRIu64, __FUNCTION__, pulCount);
+        Application::debug(DebugType::Pkcs11, "{}: connected slots: %" PRIu64, __FUNCTION__, pulCount);
         std::vector<SlotId> slots(pulCount);
 
         if(auto ret = lib->func()->C_GetSlotList(tokenPresentOnly, slots.data(), & pulCount); ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_GetSlotList", ret, rvString(ret));
             return {};
         }
@@ -244,11 +244,11 @@ namespace LTSM {
     }
 
     void PKCS11::Library::sessionClose(CK_SESSION_HANDLE sid) {
-        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: %" PRIu64, __FUNCTION__, sid);
         auto ret = pFunctionList->C_CloseSession(sid);
 
         if(ret != CKR_OK) {
-            Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_CloseSession", sid, ret, rvString(ret));
         }
 
@@ -256,7 +256,7 @@ namespace LTSM {
     }
 
     CK_SESSION_HANDLE PKCS11::Library::sessionOpen(const SlotId & id, bool rwmode) {
-        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: %" PRIu64, __FUNCTION__, id);
         CK_FLAGS flags = CKF_SERIAL_SESSION;
 
         if(rwmode) {
@@ -267,12 +267,12 @@ namespace LTSM {
         auto ret = pFunctionList->C_OpenSession(id, flags, nullptr, nullptr, & sid);
 
         if(ret != CKR_OK) {
-            Application::error("%s: %s failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_OpenSession", id, ret, rvString(ret));
             return CK_INVALID_HANDLE;
         }
 
-        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: %" PRIu64, __FUNCTION__, sid);
         sessions.push_front(sid);
         return sid;
     }
@@ -284,13 +284,13 @@ namespace LTSM {
     // Slot
     PKCS11::Slot::Slot(const SlotId & val, const LibraryPtr & lib) : weak(lib), id(val) {
         if(! lib) {
-            Application::error("%s: lib failed", __FUNCTION__);
+            Application::error("{}: lib failed", __FUNCTION__);
             throw pkcs11_error(NS_FuncName);
         }
     }
 
     bool PKCS11::Slot::getSlotInfo(SlotInfo & info) const {
-        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib) {
@@ -303,7 +303,7 @@ namespace LTSM {
             return true;
         }
 
-        Application::error("%s: %s failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+        Application::error("{}: {} failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                            __FUNCTION__, "C_GetSlotInfo", id, ret, rvString(ret));
         return false;
     }
@@ -319,7 +319,7 @@ namespace LTSM {
     }
 
     bool PKCS11::Slot::getTokenInfo(TokenInfo & info) const {
-        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib) {
@@ -332,7 +332,7 @@ namespace LTSM {
             return true;
         }
 
-        Application::error("%s: %s failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+        Application::error("{}: {} failed, slot: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                            __FUNCTION__, "C_GetTokenInfo", id, ret, rvString(ret));
         return false;
     }
@@ -348,7 +348,7 @@ namespace LTSM {
     }
 
     PKCS11::MechList PKCS11::Slot::getMechanisms(void) const {
-        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64, __FUNCTION__, id);
+        Application::debug(DebugType::Pkcs11, "{}: slot: %" PRIu64, __FUNCTION__, id);
         auto lib = weak.lock();
 
         if(! lib)
@@ -357,20 +357,20 @@ namespace LTSM {
         CK_ULONG pulCount = 0;
 
         if(auto ret = lib->func()->C_GetMechanismList(id, nullptr, & pulCount); ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_GetMechanismList", ret, rvString(ret));
             return {};
         }
 
         if(0 == pulCount) {
-            Application::debug(DebugType::Pkcs11, "%s: empty %s", __FUNCTION__, "mechanisms");
+            Application::debug(DebugType::Pkcs11, "{}: empty {}", __FUNCTION__, "mechanisms");
             return {};
         }
 
         MechList mechs(pulCount);
 
         if(auto ret = lib->func()->C_GetMechanismList(id, mechs.data(), & pulCount); ret != CKR_OK) {
-            Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_GetMechanismList", ret, rvString(ret));
             return {};
         }
@@ -379,7 +379,7 @@ namespace LTSM {
     }
 
     PKCS11::MechInfoPtr PKCS11::Slot::getMechInfo(const MechType & mech) const {
-        Application::debug(DebugType::Pkcs11, "%s: slot: %" PRIu64 ", mech: %s", __FUNCTION__, id, mechString(mech));
+        Application::debug(DebugType::Pkcs11, "{}: slot: %" PRIu64 ", mech: {}", __FUNCTION__, id, mechString(mech));
         auto lib = weak.lock();
 
         if(! lib) {
@@ -393,7 +393,7 @@ namespace LTSM {
             return info;
         }
 
-        Application::error("%s: %s failed, mech: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+        Application::error("{}: {} failed, mech: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                            __FUNCTION__, "C_GetMechanismInfo", mech, ret, rvString(ret));
         return nullptr;
     }
@@ -429,10 +429,10 @@ namespace LTSM {
                 month = std::stoi(std::string(ref.data() + 4, ref.data() + 6));
                 day = std::stoi(std::string(ref.data() + 6, ref.data() + 8));
             } catch(const std::invalid_argument &) {
-                Application::error("%s: invalid value `%.*s`", __FUNCTION__, 8, (const char*) ref.data());
+                Application::error("{}: invalid value `%.*s`", __FUNCTION__, 8, (const char*) ref.data());
             }
         } else {
-            Application::error("%s: invalid size: %lu", __FUNCTION__, ref.size());
+            Application::error("{}: invalid size: %lu", __FUNCTION__, ref.size());
         }
     }
 
@@ -465,7 +465,7 @@ namespace LTSM {
     }
 
     PKCS11::SessionInfoPtr PKCS11::Session::getInfo(void) const {
-        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: %" PRIu64, __FUNCTION__, sid);
 
         if(auto lib = weak.lock()) {
             auto info = std::make_unique<SessionInfo>();
@@ -475,7 +475,7 @@ namespace LTSM {
                 return info;
             }
 
-            Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_GetSessionInfo", sid, ret, rvString(ret));
         }
 
@@ -483,7 +483,7 @@ namespace LTSM {
     }
 
     PKCS11::RawData PKCS11::Session::generateRandom(size_t len) const {
-        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64, __FUNCTION__, sid);
+        Application::debug(DebugType::Pkcs11, "{}: session: %" PRIu64, __FUNCTION__, sid);
 
         if(auto lib = weak.lock()) {
             RawData res;
@@ -494,7 +494,7 @@ namespace LTSM {
                 auto ret = lib->func()->C_GenerateRandom(sid, tmp.data(), tmp.size());
 
                 if(ret != CKR_OK) {
-                    Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                        __FUNCTION__, "C_GenerateRandom", sid, ret, rvString(ret));
                     return {};
                 }
@@ -513,7 +513,7 @@ namespace LTSM {
         auto info = getTokenInfo();
 
         if(! info->flagLoginRequired()) {
-            Application::debug(DebugType::Pkcs11, "%s: not login required, session: %" PRIu64, __FUNCTION__, sid);
+            Application::debug(DebugType::Pkcs11, "{}: not login required, session: %" PRIu64, __FUNCTION__, sid);
             return true;
         }
 
@@ -525,7 +525,7 @@ namespace LTSM {
                 return true;
             }
 
-            Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+            Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                __FUNCTION__, "C_Login", sid, ret, rvString(ret));
         }
 
@@ -541,7 +541,7 @@ namespace LTSM {
             auto ret = lib->func()->C_Logout(sid);
 
             if(ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Logout", sid, ret, rvString(ret));
             }
         }
@@ -552,7 +552,7 @@ namespace LTSM {
     PKCS11::ObjectList PKCS11::Session::findTokenObjects(size_t maxObjects, const CK_ATTRIBUTE* attrs, size_t counts) const {
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_FindObjectsInit(sid, const_cast<CK_ATTRIBUTE*>(attrs), counts); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_FindObjectsInit", sid, ret, rvString(ret));
                 return {};
             }
@@ -561,14 +561,14 @@ namespace LTSM {
             CK_ULONG objectCount = 0;
 
             if(auto ret = lib->func()->C_FindObjects(sid, res.data(), res.size(), & objectCount); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_FindObjects", sid, ret, rvString(ret));
             }
 
-            Application::debug(DebugType::Pkcs11, "%s: objects count: %" PRIu64, __FUNCTION__, objectCount);
+            Application::debug(DebugType::Pkcs11, "{}: objects count: %" PRIu64, __FUNCTION__, objectCount);
 
             if(auto ret = lib->func()->C_FindObjectsFinal(sid); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_FindObjectsFinal", sid, ret, rvString(ret));
             }
 
@@ -692,7 +692,7 @@ namespace LTSM {
         }
 
         if(sizeof(CK_BBOOL) != it->ulValueLen) {
-            Application::error("%s: invalid bool, type: 0x%" PRIx64, __FUNCTION__, type);
+            Application::error("{}: invalid bool, type: 0x%" PRIx64, __FUNCTION__, type);
             return false;
         }
 
@@ -702,7 +702,7 @@ namespace LTSM {
     bool PKCS11::Session::getAttributes(const ObjectHandle & handle, const CK_ATTRIBUTE* attribs, size_t counts) const {
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, const_cast<CK_ATTRIBUTE*>(attribs), counts); ret != CKR_OK) {
-                Application::error("%s: %s failed, code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_GetAttributeValue", ret, rvString(ret));
                 return false;
             }
@@ -721,7 +721,7 @@ namespace LTSM {
             const CK_ULONG countAttribs = sizeof(attribs) / sizeof(CK_ATTRIBUTE);
 
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, attribs, countAttribs); ret != CKR_OK) {
-                Application::error("%s: %s failed, type: 0x%" PRIx64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, type: 0x%" PRIx64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_GetAttributeValue", attrType, ret, rvString(ret));
                 return -1;
             }
@@ -746,7 +746,7 @@ namespace LTSM {
             const CK_ULONG countAttribs = sizeof(attribs) / sizeof(CK_ATTRIBUTE);
 
             if(auto ret = lib->func()->C_GetAttributeValue(sid, handle, attribs, countAttribs); ret != CKR_OK) {
-                Application::error("%s: %s failed, type: 0x%" PRIx64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, type: 0x%" PRIx64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_GetAttributeValue", attrType, ret, rvString(ret));
                 return {};
             }
@@ -758,10 +758,10 @@ namespace LTSM {
     }
 
     PKCS11::RawData PKCS11::Session::digestData(const void* ptr, size_t len, const MechType & type) const {
-        Application::debug(DebugType::Pkcs11, "%s: session: %" PRIu64 ", mech: %s", __FUNCTION__, sid, mechString(type));
+        Application::debug(DebugType::Pkcs11, "{}: session: %" PRIu64 ", mech: {}", __FUNCTION__, sid, mechString(type));
 
         if(! ptr || len == 0) {
-            Application::warning("%s: data empty", __FUNCTION__);
+            Application::warning("{}: data empty", __FUNCTION__);
             return {};
         }
 
@@ -769,7 +769,7 @@ namespace LTSM {
             CK_MECHANISM mech = { type, nullptr, 0 };
 
             if(auto ret = lib->func()->C_DigestInit(sid, & mech); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_DigestInit", sid, ret, rvString(ret));
                 return {};
             }
@@ -777,7 +777,7 @@ namespace LTSM {
             CK_ULONG hashLen = 0;
 
             if(auto ret = lib->func()->C_Digest(sid, (CK_BYTE_PTR) ptr, len, nullptr, & hashLen); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Digest", sid, ret, rvString(ret));
                 return {};
             }
@@ -785,7 +785,7 @@ namespace LTSM {
             RawData hash(hashLen);
 
             if(auto ret = lib->func()->C_Digest(sid, (CK_BYTE_PTR) ptr, len, hash.data(), & hashLen); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Digest", sid, ret, rvString(ret));
                 return {};
             }
@@ -837,14 +837,14 @@ namespace LTSM {
     PKCS11::RawData PKCS11::Session::signData(const RawDataRef & certId, const void* data, size_t length,
             const MechType & mechType) const {
         if(! islogged) {
-            Application::error("%s: not logged session", __FUNCTION__);
+            Application::error("{}: not logged session", __FUNCTION__);
             return {};
         }
 
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
             return {};
         }
 
@@ -852,13 +852,13 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString().c_str());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_SignInit(sid, & mech, privateHandle); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_SignInit", sid, ret, rvString(ret));
                 return {};
             }
@@ -868,7 +868,7 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
                 return {};
             }
@@ -876,7 +876,7 @@ namespace LTSM {
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Sign(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Sign", sid, ret, rvString(ret));
                 return {};
             }
@@ -897,7 +897,7 @@ namespace LTSM {
             auto mechInfo = getMechInfo(mechType);
             if(! mechType)
             {
-                Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+                Application::error("{}: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
                 return false;
             }
 
@@ -906,7 +906,7 @@ namespace LTSM {
 
             if(! publicHandle)
             {
-                Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "public key", certId.toHexString().c_str());
+                Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString().c_str());
                 return false;
             }
 
@@ -914,14 +914,14 @@ namespace LTSM {
             {
                 if(auto ret = lib->func()->C_VerifyInit(sid, & mech, publicHandle); ret != CKR_OK)
                 {
-                    Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                         __FUNCTION__, "C_VerifyInit", sid, ret, rvString(ret));
                     return false;
                 }
 
                 if(auto ret = lib->func()->C_Verify(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK)
                 {
-                    Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                    Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                         __FUNCTION__, "C_Verify", sid, ret, rvString(ret));
                     return false;
                 }
@@ -937,7 +937,7 @@ namespace LTSM {
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
             return {};
         }
 
@@ -945,13 +945,13 @@ namespace LTSM {
         CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
 
         if(! publicHandle) {
-            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "public key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString().c_str());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_EncryptInit(sid, & mech, publicHandle); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_EncryptInit", sid, ret, rvString(ret));
                 return {};
             }
@@ -961,7 +961,7 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
                 return {};
             }
@@ -969,7 +969,7 @@ namespace LTSM {
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Encrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Encrypt", sid, ret, rvString(ret));
                 return {};
             }
@@ -987,14 +987,14 @@ namespace LTSM {
     PKCS11::RawData PKCS11::Session::decryptData(const RawDataRef & certId, const void* data, size_t length,
             const MechType & mechType) const {
         if(! islogged) {
-            Application::error("%s: not logged session", __FUNCTION__);
+            Application::error("{}: not logged session", __FUNCTION__);
             return {};
         }
 
         auto mechInfo = getMechInfo(mechType);
 
         if(! mechType) {
-            Application::error("%s: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
+            Application::error("{}: unknown mech type: 0x%" PRIx64, __FUNCTION__, mechType);
             return {};
         }
 
@@ -1002,13 +1002,13 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("%s: %s not found, id: `%s'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString().c_str());
             return {};
         }
 
         if(auto lib = weak.lock()) {
             if(auto ret = lib->func()->C_DecryptInit(sid, & mech, privateHandle); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_DecryptInit", sid, ret, rvString(ret));
                 return {};
             }
@@ -1018,7 +1018,7 @@ namespace LTSM {
 
             // get result size
             if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, nullptr, & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
                 return {};
             }
@@ -1026,7 +1026,7 @@ namespace LTSM {
             buf.resize(bufLength);
 
             if(auto ret = lib->func()->C_Decrypt(sid, (unsigned char*) data, length, buf.data(), & bufLength); ret != CKR_OK) {
-                Application::error("%s: %s failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `%s'",
+                Application::error("{}: {} failed, session: %" PRIu64 ", code: 0x%" PRIx64 ", rv: `{}'",
                                    __FUNCTION__, "C_Decrypt", sid, ret, rvString(ret));
                 return {};
             }
@@ -1046,7 +1046,7 @@ namespace LTSM {
         try {
             return std::make_unique<Session>(id, rwmode, lib);
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         }
 
         return nullptr;

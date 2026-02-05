@@ -76,7 +76,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onLoginFailure(const int32_t & display, const std::string & msg) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", message: `%s'",
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", message: `{}'",
                                __FUNCTION__, display, msg.c_str());
 
             emit loginFailureNotify(QString::fromStdString(msg));
@@ -85,7 +85,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", username: `%s', uid: %" PRIu32,
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", username: `{}', uid: %" PRIu32,
                                __FUNCTION__, display, userName.c_str(), userUid);
 
             emit loginSuccessNotify(QString::fromStdString(userName));
@@ -95,7 +95,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
             const std::string & pass, const bool & autologin) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", login: `%s', pass length: %" PRIu32 ", auto login: %d",
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", login: `{}', pass length: %" PRIu32 ", auto login: %d",
                                __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
@@ -104,7 +104,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
                                __FUNCTION__, display, connectorId);
 
             emit pkcs11ListennerStartedNotify(connectorId);
@@ -113,7 +113,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onHelperSetTimezone(const int32_t & display, const std::string & tz) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", tz: `%s'",
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", tz: `{}'",
                                __FUNCTION__, display, tz.c_str());
 
             setenv("TZ", tz.c_str(), 1);
@@ -122,7 +122,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onShutdownConnector(const int32_t & display) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32,
                                __FUNCTION__, display);
 
             emit connectorShutdownNotify();
@@ -135,7 +135,7 @@ namespace LTSM::LoginHelper {
         ui(new Ui::LoginWindow), dateFormat("dddd dd MMMM, hh:mm:ss"), displayNum(0), timerOneSec(0), timer200ms(0),
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false) {
         if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr)) {
-            Application::error("%s: xcb connect failed", __FUNCTION__);
+            Application::error("{}: xcb connect failed", __FUNCTION__);
             throw xcb_error(NS_FuncName);
         }
 
@@ -199,7 +199,7 @@ namespace LTSM::LoginHelper {
     }
 
     void LoginWindow::switchLoginMode(void) {
-        Application::debug(DebugType::App, "%s: set login mode", __FUNCTION__);
+        Application::debug(DebugType::App, "{}: set login mode", __FUNCTION__);
 
         tokenAuthMode = false;
         ui->labelDomain->setText(tr("domain:"));
@@ -243,7 +243,7 @@ namespace LTSM::LoginHelper {
 #ifdef LTSM_PKCS11_AUTH
         auto & tokens = pkcs11->getTokens();
 
-        Application::debug(DebugType::App, "%s: tokens count: %lu", __FUNCTION__, tokens.size());
+        Application::debug(DebugType::App, "{}: tokens count: %lu", __FUNCTION__, tokens.size());
 
         if(tokens.empty()) {
             switchLoginMode();
@@ -285,7 +285,7 @@ namespace LTSM::LoginHelper {
             auto buf = ui->comboBoxDomain->itemData(index, Qt::UserRole).toByteArray();
 
             if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Token)) {
-                Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
+                Application::error("{}: {} failed, index: %d", __FUNCTION__, "item", index);
                 return;
             }
 
@@ -334,7 +334,7 @@ namespace LTSM::LoginHelper {
             auto buf = ui->comboBoxUsername->itemData(index, Qt::UserRole).toByteArray();
 
             if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Cert)) {
-                Application::error("%s: %s failed, index: %d", __FUNCTION__, "item", index);
+                Application::error("{}: {} failed, index: %d", __FUNCTION__, "item", index);
                 return;
             }
 
@@ -372,7 +372,7 @@ namespace LTSM::LoginHelper {
         gnutls_x509_crt_t ptr1 = nullptr;
 
         if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
                                err);
             throw LTSM::gnutls_error(NS_FuncName);
         }
@@ -382,7 +382,7 @@ namespace LTSM::LoginHelper {
         std::unique_ptr<gnutls_x509_crt_int, void(*)(gnutls_x509_crt_t)> cert = { ptr1, gnutls_x509_crt_deinit };
 
         if(int err = gnutls_x509_crt_import(cert.get(), & dt1, GNUTLS_X509_FMT_DER); err != GNUTLS_E_SUCCESS) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
                                err);
             throw gnutls_error(NS_FuncName);
         }
@@ -390,14 +390,14 @@ namespace LTSM::LoginHelper {
         gnutls_pubkey_t ptr2 = nullptr;
 
         if(int err = gnutls_pubkey_init(& ptr2); GNUTLS_E_SUCCESS != err) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
 
         std::unique_ptr<gnutls_pubkey_st, void(*)(gnutls_pubkey_t)> pkey = { ptr2, gnutls_pubkey_deinit };
 
         if(int err = gnutls_pubkey_import_x509(pkey.get(), cert.get(), 0); GNUTLS_E_SUCCESS != err) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509",
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509",
                                gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
@@ -405,7 +405,7 @@ namespace LTSM::LoginHelper {
         gnutls_datum_t res;
 
         if(int err = gnutls_pubkey_encrypt_data(pkey.get(), 0, & dt2, & res); GNUTLS_E_SUCCESS != err) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data",
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data",
                                gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
@@ -416,7 +416,7 @@ namespace LTSM::LoginHelper {
 #endif
 
     void LoginWindow::loginClicked(void) {
-        Application::error("%s: tokenAuthMode: %d", __FUNCTION__, (int) tokenAuthMode);
+        Application::error("{}: tokenAuthMode: %d", __FUNCTION__, (int) tokenAuthMode);
 
         ui->pushButtonLogin->setDisabled(true);
         ui->comboBoxUsername->setDisabled(true);
@@ -426,11 +426,11 @@ namespace LTSM::LoginHelper {
             auto login = ui->comboBoxUsername->currentText().toStdString();
             auto pass = ui->lineEditPassword->text().toStdString();
 
-            Application::debug(DebugType::App, "%s: display: %" PRId32 ", user: `%s', pass length: %" PRIu32,
+            Application::debug(DebugType::App, "{}: display: %" PRId32 ", user: `{}', pass length: %" PRIu32,
                                __FUNCTION__, displayNum, login.c_str(), pass.size());
 
             if(! dbus->busSetAuthenticateLoginPass(displayNum, login, pass)) {
-                Application::error("%s: %s, display: %" PRId32 ", user: `%s'",
+                Application::error("{}: {}, display: %" PRId32 ", user: `{}'",
                                    __FUNCTION__, "session failed", displayNum, login.c_str());
                 // failed
                 close();
@@ -451,7 +451,7 @@ namespace LTSM::LoginHelper {
         // generate 32byte hash
         std::vector<uint8_t> hash1 = Tools::randomBytes(32);
 
-        Application::debug(DebugType::Pkcs11, "%s: hash1 random bytes: %lu", __FUNCTION__, hash1.size());
+        Application::debug(DebugType::Pkcs11, "{}: hash1 random bytes: %lu", __FUNCTION__, hash1.size());
         setLabelInfo("check token...");
 
         auto returnInvalidCert = [ui = this->ui]() {
@@ -464,12 +464,12 @@ namespace LTSM::LoginHelper {
 
         try {
             auto dt = gnutlsEncryptData(certPtr->objectValue, hash1);
-            Application::debug(DebugType::Pkcs11, "%s: hash1 encrypted size: %lu", __FUNCTION__, dt->size);
+            Application::debug(DebugType::Pkcs11, "{}: hash1 encrypted size: %lu", __FUNCTION__, dt->size);
 
             std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size,
                                          CKM_RSA_PKCS);
 
-            Application::debug(DebugType::Pkcs11, "%s: hash2 decrypted size: %lu", __FUNCTION__, hash2.size());
+            Application::debug(DebugType::Pkcs11, "{}: hash2 decrypted size: %lu", __FUNCTION__, hash2.size());
 
             if(hash1 != hash2) {
                 setLabelError("invalid token hash");
@@ -477,7 +477,7 @@ namespace LTSM::LoginHelper {
             }
         } catch(const std::exception & err) {
             setLabelError("system error");
-            Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            Application::error("{}: exception: {}", __FUNCTION__, err.what());
             return returnInvalidCert();
         }
 
@@ -488,7 +488,7 @@ namespace LTSM::LoginHelper {
             if(listErrors.size()) {
                 for(auto & err : listErrors) {
                     setLabelError(err.errorString());
-                    Application::warning("%s: %s failed, error: %s", __FUNCTION__, "cert verify", err.errorString().toStdString().c_str());
+                    Application::warning("{}: {} failed, error: {}", __FUNCTION__, "cert verify", err.errorString().toStdString().c_str());
                 }
 
                 return returnInvalidCert();
@@ -499,12 +499,12 @@ namespace LTSM::LoginHelper {
         if(configGetBoolean("pkcs11:cert:expires", true)) {
             if(ssl.expiryDate() < QDateTime::currentDateTime()) {
                 setLabelError("certificate expired");
-                Application::warning("%s: %s failed, error: %s", __FUNCTION__, "cert verify", "expired date");
+                Application::warning("{}: {} failed, error: {}", __FUNCTION__, "cert verify", "expired date");
                 return returnInvalidCert();
             }
         }
 
-        Application::notice("%s: %s success", __FUNCTION__, "pkcs11 check");
+        Application::notice("{}: {} success", __FUNCTION__, "pkcs11 check");
 
         auto authType = configGetString("pkcs11:auth:type");
         std::string login;
@@ -512,19 +512,19 @@ namespace LTSM::LoginHelper {
         if(authType == "cert:email") {
             if(auto list = ssl.subjectInfo(QSslCertificate::EmailAddress); list.size()) {
                 login = list.front().toStdString();
-                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "cert:email", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:email", login.c_str());
             } else {
                 setLabelError("cert:email not found");
-                Application::warning("%s: %s failed", __FUNCTION__, "cert:email");
+                Application::warning("{}: {} failed", __FUNCTION__, "cert:email");
                 return returnInvalidCert();
             }
         } else if(authType == "cert:cn") {
             if(auto list = ssl.subjectInfo(QSslCertificate::CommonName); list.size()) {
                 login = list.front().toStdString();
-                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "cert:cn", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:cn", login.c_str());
             } else {
                 setLabelError("cert:cn not found");
-                Application::warning("%s: %s failed", __FUNCTION__, "cert:cn");
+                Application::warning("{}: {} failed", __FUNCTION__, "cert:cn");
                 return returnInvalidCert();
             }
         } else if(authType == "script") {
@@ -532,10 +532,10 @@ namespace LTSM::LoginHelper {
                 auto sha256 = ssl.digest(QCryptographicHash::Sha256);
                 auto arg = QString("digest:sha256:").append(sha256.toHex());
                 login = Tools::runcmd(cmd.append(" ").append(arg.toStdString()));
-                Application::debug(DebugType::Pkcs11, "%s: pkcs:auth = `%s', login found: `%s'", __FUNCTION__, "script", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "script", login.c_str());
             } else {
                 setLabelError("script not found");
-                Application::warning("%s: path not found: `%s'", __FUNCTION__, cmd.c_str());
+                Application::warning("{}: path not found: `{}'", __FUNCTION__, cmd.c_str());
                 return returnInvalidCert();
             }
         }
@@ -548,7 +548,7 @@ namespace LTSM::LoginHelper {
                 ldap.reset(new LdapWrapper());
             } catch(const std::exception &) {
                 setLabelError("LDAP failed");
-                Application::warning("%s: %s", __FUNCTION__, "LDAP failed");
+                Application::warning("{}: {}", __FUNCTION__, "LDAP failed");
                 return returnInvalidCert();
             }
 
@@ -564,7 +564,7 @@ namespace LTSM::LoginHelper {
 
             if(login.empty()) {
                 setLabelError("LDAP cert not found");
-                Application::warning("%s: %s", __FUNCTION__, "LDAP cert not found");
+                Application::warning("{}: {}", __FUNCTION__, "LDAP cert not found");
                 return returnInvalidCert();
             }
         }
@@ -573,17 +573,17 @@ namespace LTSM::LoginHelper {
 
         if(login.empty()) {
             setLabelError("login not found");
-            Application::warning("%s: %s", __FUNCTION__, "login not found");
+            Application::warning("{}: {}", __FUNCTION__, "login not found");
             return returnInvalidCert();
         }
 
-        Application::debug(DebugType::Pkcs11, "%s: display: % " PRId32 ", login found: `%s'",
+        Application::debug(DebugType::Pkcs11, "{}: display: % " PRId32 ", login found: `{}'",
                            __FUNCTION__, displayNum, login.c_str());
 
         setLabelInfo("Login found");
 
         if(! dbus->busSetAuthenticateToken(displayNum, login)) {
-            Application::error("%s: %s, display: %" PRId32 ", user: `%s'",
+            Application::error("{}: {}, display: %" PRId32 ", user: `{}'",
                                __FUNCTION__, "session failed", displayNum, login.c_str());
 
             // failed
@@ -656,13 +656,13 @@ namespace LTSM::LoginHelper {
                 loginTimeSec--;
 
                 if(0 == loginTimeSec) {
-                    Application::debug(DebugType::App, "%s: close", __FUNCTION__);
+                    Application::debug(DebugType::App, "{}: close", __FUNCTION__);
                     close();
                 }
             }
         } else if(ev->timerId() == timer200ms) {
             if(auto err = XCB::RootDisplay::hasError()) {
-                Application::error("%s: x11 has error: %d", __FUNCTION__, err);
+                Application::error("{}: x11 has error: %d", __FUNCTION__, err);
                 return;
             }
 
@@ -673,7 +673,7 @@ namespace LTSM::LoginHelper {
                     uint16_t opcode = 0;
 
                     if(extXkb->isEventError(xcbEvent, & opcode)) {
-                        Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
+                        Application::warning("{}: {} error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
                     }
                 }
             }
@@ -725,7 +725,7 @@ namespace LTSM::LoginHelper {
     }
 
     void LoginWindow::loginFailureCallback(const QString & error) {
-        Application::error("%s: login failure", __FUNCTION__);
+        Application::error("{}: login failure", __FUNCTION__);
         ui->pushButtonLogin->setDisabled(false);
         ui->comboBoxUsername->setDisabled(false);
         ui->lineEditPassword->setDisabled(false);
@@ -735,12 +735,12 @@ namespace LTSM::LoginHelper {
     }
 
     void LoginWindow::shutdownConnectorCallback(void) {
-        Application::debug(DebugType::App, "%s: close", __FUNCTION__);
+        Application::debug(DebugType::App, "{}: close", __FUNCTION__);
         close();
     }
 
     void LoginWindow::loginSuccessCallback(const QString & username) {
-        Application::debug(DebugType::App, "%s: close", __FUNCTION__);
+        Application::debug(DebugType::App, "{}: close", __FUNCTION__);
         close();
     }
 

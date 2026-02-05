@@ -103,7 +103,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(const auto & val : outputs) {
             auto info = randr->getOutputInfo(val);
-            Application::info("output name: %s, connected: %s, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
+            Application::info("output name: {}, connected: {}, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
 
             if(info->connected) {
                 curout = val;
@@ -163,7 +163,7 @@ class TestApp : public Application {
         auto _xcbDisplay = std::unique_ptr<X11Test>(new X11Test(screen));
 
         if(! _xcbDisplay) {
-            Application::error("xcb connect: %s", "failed");
+            Application::error("xcb connect: {}", "failed");
             return EXIT_FAILURE;
         }
 
@@ -172,26 +172,26 @@ class TestApp : public Application {
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
 
         if(! visual) {
-            Application::error("%s", "xcb visual empty");
+            Application::error("{}", "xcb visual empty");
             return EXIT_FAILURE;
         }
 
-        Application::info("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
         _xcbDisplay->test_extinfo();
         return EXIT_SUCCESS;
 
         XCB::Size nsz(1024, 600);
 
-        Application::info("%s: INFO =====================>", __FUNCTION__);
+        Application::info("{}: INFO =====================>", __FUNCTION__);
         _xcbDisplay->test_randr_info_outputs();
 
-        Application::info("%s: CREATE ===================>", __FUNCTION__);
+        Application::info("{}: CREATE ===================>", __FUNCTION__);
         _xcbDisplay->test_randr_create_mode(nsz);
 
-        Application::info("%s: INFO =====================>", __FUNCTION__);
+        Application::info("{}: INFO =====================>", __FUNCTION__);
         _xcbDisplay->test_randr_info_outputs();
 
-        Application::info("%s: CHANGE====================>", __FUNCTION__);
+        Application::info("{}: CHANGE====================>", __FUNCTION__);
         _xcbDisplay->test_randr_change_events(nsz);
 
         return EXIT_SUCCESS;

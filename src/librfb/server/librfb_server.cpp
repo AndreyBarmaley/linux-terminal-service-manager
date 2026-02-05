@@ -79,7 +79,7 @@ namespace LTSM {
                 streamOut->sendFlush();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -91,7 +91,7 @@ namespace LTSM {
                 netStatTx += len;
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             rfbMessagesShutdown();
         }
     }
@@ -103,7 +103,7 @@ namespace LTSM {
                 netStatRx += len;
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -114,7 +114,7 @@ namespace LTSM {
                 return streamIn->hasInput();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -127,7 +127,7 @@ namespace LTSM {
                 return streamIn->hasData();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -140,7 +140,7 @@ namespace LTSM {
                 return streamIn->peekInt8();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -163,7 +163,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
-            Application::debug(DebugType::Rfb, "%s: challenge: %s", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp.c_str());
         }
 
         sendRaw(challenge.data(), challenge.size());
@@ -172,7 +172,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(response.begin(), response.end(), 2);
-            Application::debug(DebugType::Rfb, "%s: response: %s", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: response: {}", __FUNCTION__, tmp.c_str());
         }
 
         std::ifstream ifs(passwdFile, std::ifstream::in);
@@ -184,7 +184,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
-                Application::debug(DebugType::Rfb, "%s: encrypt: %s", __FUNCTION__, tmp.c_str());
+                Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp.c_str());
             }
 
             if(crypt == response) {
@@ -194,7 +194,7 @@ namespace LTSM {
 
         const std::string err("password mismatch");
         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-        Application::error("%s: %s, passwd file: %s", __FUNCTION__, err.c_str(), passwdFile.c_str());
+        Application::error("{}: {}, passwd file: {}", __FUNCTION__, err.c_str(), passwdFile.c_str());
         return false;
     }
 
@@ -204,12 +204,12 @@ namespace LTSM {
         // client req
         int majorVer = recvInt8();
         int minorVer = recvInt8();
-        Application::debug(DebugType::Rfb, "%s: client vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
+        Application::debug(DebugType::Rfb, "{}: client vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
 
         if(majorVer != 0 || (minorVer < 1 || minorVer > 2)) {
             // send unsupported
             sendInt8(255).sendFlush();
-            Application::error("%s: unsupported vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
+            Application::error("{}: unsupported vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
             return false;
         }
 
@@ -225,7 +225,7 @@ namespace LTSM {
             }
 
             int mode = recvInt8();
-            Application::debug(DebugType::Rfb, "%s: client choice vencrypt mode: %d", __FUNCTION__, mode);
+            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: %d", __FUNCTION__, mode);
 
             switch(mode) {
                 case RFB::SECURITY_VENCRYPT01_TLSNONE:
@@ -233,7 +233,7 @@ namespace LTSM {
 
                 case RFB::SECURITY_VENCRYPT01_X509NONE:
                     if(secInfo.tlsAnonMode) {
-                        Application::error("%s: unsupported vencrypt mode: %s", __FUNCTION__, "x509");
+                        Application::error("{}: unsupported vencrypt mode: {}", __FUNCTION__, "x509");
                         return false;
                     }
 
@@ -241,7 +241,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("%s: unsupported vencrypt mode: %d", __FUNCTION__, mode);
+                    Application::error("{}: unsupported vencrypt mode: %d", __FUNCTION__, mode);
                     return false;
             }
         } else
@@ -254,7 +254,7 @@ namespace LTSM {
             }
 
             int mode = recvIntBE32();
-            Application::debug(DebugType::Rfb, "%s: client choice vencrypt mode: %d", __FUNCTION__, mode);
+            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: %d", __FUNCTION__, mode);
 
             switch(mode) {
                 case RFB::SECURITY_VENCRYPT02_TLSNONE:
@@ -262,7 +262,7 @@ namespace LTSM {
 
                 case RFB::SECURITY_VENCRYPT02_X509NONE:
                     if(secInfo.tlsAnonMode) {
-                        Application::error("%s: unsupported vencrypt mode: %s", __FUNCTION__, "x509");
+                        Application::error("{}: unsupported vencrypt mode: {}", __FUNCTION__, "x509");
                         return false;
                     }
 
@@ -270,7 +270,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("%s: unsupported vencrypt mode: %d", __FUNCTION__, mode);
+                    Application::error("{}: unsupported vencrypt mode: %d", __FUNCTION__, mode);
                     return false;
             }
         }
@@ -292,7 +292,7 @@ namespace LTSM {
             }
 
             if(errFile) {
-                Application::error("%s: file not found: %s", __FUNCTION__, errFile->c_str());
+                Application::error("{}: file not found: {}", __FUNCTION__, errFile->c_str());
                 sendInt8(0).sendFlush();
                 return false;
             }
@@ -308,7 +308,7 @@ namespace LTSM {
                 tls = std::make_unique<TLS::AnonSession>(socket.get(), secInfo.tlsPriority, true, secInfo.tlsDebug);
             }
         } catch(gnutls::exception & err) {
-            Application::error("gnutls error: %s, code: %d", err.what(), err.get_code());
+            Application::error("gnutls error: {}, code: %d", err.what(), err.get_code());
             return false;
         }
 
@@ -324,14 +324,14 @@ namespace LTSM {
         auto version = Tools::joinToString("RFB 00", RFB::VERSION_MAJOR, ".00", RFB::VERSION_MINOR, "\n");
         sendString(version).sendFlush();
         std::string magick = recvString(12);
-        Application::debug(DebugType::Rfb, "%s: handshake version %s", __FUNCTION__, magick.c_str());
+        Application::debug(DebugType::Rfb, "{}: handshake version {}", __FUNCTION__, magick.c_str());
 
         if(magick == "RFB 003.003\n") {
             protover = 33;
         } else if(magick == "RFB 003.007\n") {
             protover = 37;
         } else if(magick != version) {
-            Application::error("%s: handshake failure, unknown magic: %s", __FUNCTION__, magick.c_str());
+            Application::error("{}: handshake failure, unknown magic: {}", __FUNCTION__, magick.c_str());
             return 0;
         }
 
@@ -381,7 +381,7 @@ namespace LTSM {
             sendInt8(res.size());
 
             if(res.empty()) {
-                Application::error("%s: server security invalid", __FUNCTION__);
+                Application::error("{}: server security invalid", __FUNCTION__);
                 sendFlush();
                 return false;
             }
@@ -397,7 +397,7 @@ namespace LTSM {
         }
 
         int clientSecurity = recvInt8();
-        Application::debug(DebugType::Rfb, "%s, client security: 0x%02x", __FUNCTION__, clientSecurity);
+        Application::debug(DebugType::Rfb, "{}, client security: 0x%02x", __FUNCTION__, clientSecurity);
 
         if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
             // RFB 6.1.3 security result
@@ -408,7 +408,7 @@ namespace LTSM {
 #ifdef LTSM_WITH_GNUTLS
             else if(clientSecurity == RFB::SECURITY_TYPE_VNC && secInfo.authVnc) {
                 if(secInfo.passwdFile.empty()) {
-                    Application::error("%s: passwd file not defined", __FUNCTION__);
+                    Application::error("{}: passwd file not defined", __FUNCTION__);
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                     return false;
                 }
@@ -416,7 +416,7 @@ namespace LTSM {
                 std::error_code err;
 
                 if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                    Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+                    Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                        secInfo.passwdFile.c_str(), getuid());
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                     return false;
@@ -442,7 +442,7 @@ namespace LTSM {
             else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
                 try {
                     auto krb = std::make_unique<GssApi::Server>(socket.get());
-                    Application::info("%s: kerberos service: `%s'", __FUNCTION__, secInfo.krb5Service.c_str());
+                    Application::info("{}: kerberos service: `{}'", __FUNCTION__, secInfo.krb5Service.c_str());
 
                     if(krb->handshakeLayer(secInfo.krb5Service)) {
                         auto remoteName = Gss::displayName(krb->securityContext()->name);
@@ -455,7 +455,7 @@ namespace LTSM {
 
                         // stop kerbero session
                         krb.reset();
-                        Application::info("%s: kerberos auth: %s, remote: %s", __FUNCTION__, "success", remoteName.c_str());
+                        Application::info("{}: kerberos auth: {}, remote: {}", __FUNCTION__, "success", remoteName.c_str());
 
                         if(auto pos = remoteName.find("@"); pos != std::string::npos) {
                             clientAuthName = remoteName.substr(0, pos);
@@ -477,12 +477,12 @@ namespace LTSM {
                         return true;
                     }
                 } catch(const std::exception & err) {
-                    LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+                    LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
                 }
 
                 const std::string err("security kerberos failed");
                 sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+                Application::error("{}: error: {}", __FUNCTION__, err.c_str());
                 return false;
             }
 
@@ -490,7 +490,7 @@ namespace LTSM {
             else {
                 const std::string err("no matching security types");
                 sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                Application::error("%s: error: %s", __FUNCTION__, err.c_str());
+                Application::error("{}: error: {}", __FUNCTION__, err.c_str());
                 return false;
             }
         }
@@ -502,11 +502,11 @@ namespace LTSM {
             const PixelFormat & pf) {
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();
-        Application::debug(DebugType::Rfb, "%s: client shared: 0x%02x", __FUNCTION__, clientSharedFlag);
+        Application::debug(DebugType::Rfb, "{}: client shared: 0x%02x", __FUNCTION__, clientSharedFlag);
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("%s: server pf - bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
+        Application::notice("{}: server pf - bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
                             PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
                             __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
                             pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
@@ -543,7 +543,7 @@ namespace LTSM {
                 res = true;
             }
         } catch(const std::exception & err) {
-            Application::error("%s: vnc exception: %s", __FUNCTION__, err.what());
+            Application::error("{}: vnc exception: {}", __FUNCTION__, err.what());
         } catch(...) {
         }
 
@@ -562,7 +562,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::rfbMessagesLoop(void) {
-        Application::debug(DebugType::Rfb, "%s: wait remote messages...", __FUNCTION__);
+        Application::debug(DebugType::Rfb, "{}: wait remote messages...", __FUNCTION__);
 
         while(rfbMessages) {
             if(! hasInput()) {
@@ -574,17 +574,17 @@ namespace LTSM {
 
             if(msgType == RFB::PROTOCOL_LTSM) {
                 if(! clientLtsmSupported) {
-                    Application::error("%s: client not support encoding: %s", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
+                    Application::error("{}: client not support encoding: {}", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
                     throw rfb_error(NS_FuncName);
                 }
 
                 try {
                     recvLtsmProto(*this);
                 } catch(const std::runtime_error & err) {
-                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
                     rfbMessagesShutdown();
                 } catch(const std::exception & err) {
-                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
                 }
 
                 continue;
@@ -628,7 +628,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("%s: unknown message: 0x%02x", __FUNCTION__, msgType);
+                    Application::error("{}: unknown message: 0x%02x", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
                     break;
             }
@@ -652,7 +652,7 @@ namespace LTSM {
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("%s: client pf - bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
+        Application::notice("{}: client pf - bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
                             ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
                             __FUNCTION__, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
@@ -663,13 +663,13 @@ namespace LTSM {
                 break;
 
             default: {
-                Application::error("%s: %s", __FUNCTION__, " unknown pixel format");
+                Application::error("{}: {}", __FUNCTION__, " unknown pixel format");
                 throw rfb_error(NS_FuncName);
             }
         }
 
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0) {
-            Application::error("%s: %s", __FUNCTION__, " unsupported pixel format");
+            Application::error("{}: {}", __FUNCTION__, " unsupported pixel format");
             throw rfb_error(NS_FuncName);
         }
 
@@ -694,7 +694,7 @@ namespace LTSM {
         // skip padding
         recvSkip(1);
         int numEncodings = recvIntBE16();
-        Application::info("%s: encoding counts: %d", __FUNCTION__, numEncodings);
+        Application::info("{}: encoding counts: %d", __FUNCTION__, numEncodings);
 
         bool extendedClipboard = false;
         bool continueUpdates = false;
@@ -710,7 +710,7 @@ namespace LTSM {
                 auto enclower = Tools::lower(RFB::encodingName(encoding));
 
                 if(std::ranges::any_of(disabledEncodings, [&](auto & str) { return enclower == Tools::lower(str); })) {
-                    Application::warning("%s: request encodings: %s (disabled)", __FUNCTION__, RFB::encodingName(encoding));
+                    Application::warning("{}: request encodings: {} (disabled)", __FUNCTION__, RFB::encodingName(encoding));
                     continue;
                 }
             }
@@ -745,9 +745,9 @@ namespace LTSM {
             const char* name = RFB::encodingName(encoding);
 
             if(0 == std::strcmp(name, "unknown")) {
-                Application::info("%s: request encodings: 0x%08x", __FUNCTION__, encoding);
+                Application::info("{}: request encodings: 0x%08x", __FUNCTION__, encoding);
             } else {
-                Application::info("%s: request encodings: %s", __FUNCTION__, RFB::encodingName(encoding));
+                Application::info("{}: request encodings: {}", __FUNCTION__, RFB::encodingName(encoding));
             }
         }
 
@@ -785,7 +785,7 @@ namespace LTSM {
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug(DebugType::Rfb, "%s: request update, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], incremental: %d",
+        Application::debug(DebugType::Rfb, "{}: request update, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
@@ -795,7 +795,7 @@ namespace LTSM {
         bool pressed = recvInt8();
         recvSkip(2);
         uint32_t keysym = recvIntBE32();
-        Application::debug(DebugType::Rfb, "%s: action %s, keysym: 0x%08" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
+        Application::debug(DebugType::Rfb, "{}: action {}, keysym: 0x%08" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
         serverRecvKeyEvent(pressed, keysym);
     }
 
@@ -805,7 +805,7 @@ namespace LTSM {
         uint8_t buttons = recvInt8();
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug(DebugType::Rfb, "%s: mask: 0x%02" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
+        Application::debug(DebugType::Rfb, "{}: mask: 0x%02" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
         serverRecvPointerEvent(buttons, posx, posy);
     }
 
@@ -819,7 +819,7 @@ namespace LTSM {
         int32_t length = recvIntBE32();
 
         if(0 < length) {
-            Application::debug(DebugType::Rfb, "%s: text length: %" PRId32 ", limit: %" PRId32, __FUNCTION__, length, localExtClipTypeTextSz);
+            Application::debug(DebugType::Rfb, "{}: text length: %" PRId32 ", limit: %" PRId32, __FUNCTION__, length, localExtClipTypeTextSz);
             size_t recv = localExtClipTypeTextSz ?
                           std::min(static_cast<uint32_t>(length), localExtClipTypeTextSz) : length;
             auto buffer = recvData(recv);
@@ -827,7 +827,7 @@ namespace LTSM {
             serverRecvCutTextEvent(std::move(buffer));
         } else if(length < 0) {
             if(0 == extClipboardLocalCaps()) {
-                Application::error("%s: invalid format, failed `%s'", __FUNCTION__, "ext clipboard");
+                Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
                 throw rfb_error(NS_FuncName);
             }
 
@@ -842,7 +842,7 @@ namespace LTSM {
         int16_t regy = recvIntBE16();
         uint16_t regw = recvIntBE16();
         uint16_t regh = recvIntBE16();
-        Application::info("%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
+        Application::info("{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
                           regy, regw, regh, enable);
         continueUpdatesProcessed = enable;
         serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
@@ -855,7 +855,7 @@ namespace LTSM {
         uint16_t height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::info("%s: size [%" PRIu16 ", %" PRIu16 "], screens: %d", __FUNCTION__, width, height, numOfScreens);
+        Application::info("{}: size [%" PRIu16 ", %" PRIu16 "], screens: %d", __FUNCTION__, width, height, numOfScreens);
         // screens array
         std::vector<RFB::ScreenInfo> screens;
 
@@ -873,7 +873,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz) {
-        Application::info("%s: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("{}: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
         std::thread([this, sz = dsz]() {
@@ -888,11 +888,11 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::clientDisconnectedEvent(int display) {
-        Application::warning("%s: display: %d", __FUNCTION__, display);
+        Application::warning("{}: display: %d", __FUNCTION__, display);
     }
 
     void RFB::ServerEncoder::sendColourMap(int first) {
-        Application::info("%s: first: %d, colour map length: %lu", __FUNCTION__, first, colourMap.size());
+        Application::info("{}: first: %d, colour map length: %lu", __FUNCTION__, first, colourMap.size());
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
@@ -910,7 +910,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::sendBellEvent(void) {
-        Application::info("%s: process", __FUNCTION__);
+        Application::info("{}: process", __FUNCTION__);
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.3
         sendInt8(RFB::SERVER_BELL);
@@ -929,7 +929,7 @@ namespace LTSM {
         if(ext) {
             // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
             if(0 == extClipboardRemoteCaps()) {
-                Application::error("%s: invalid format, failed `%s'", __FUNCTION__, "ext clipboard");
+                Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
                 throw rfb_error(NS_FuncName);
             }
 
@@ -937,7 +937,7 @@ namespace LTSM {
             // is used and abs(length) is the total number of following bytes.
             sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - len + 1);
         } else {
-            Application::debug(DebugType::Rfb, "%s: length text: %" PRIu32, __FUNCTION__, len);
+            Application::debug(DebugType::Rfb, "{}: length text: %" PRIu32, __FUNCTION__, len);
             sendIntBE32(len);
         }
 
@@ -947,7 +947,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::sendContinuousUpdates(bool enable) {
         // RFB: 6.5.5
-        Application::info("%s: status: %s", __FUNCTION__, (enable ? "enable" : "disable"));
+        Application::info("{}: status: {}", __FUNCTION__, (enable ? "enable" : "disable"));
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::SERVER_CONTINUOUS_UPDATES).sendFlush();
         continueUpdatesProcessed = enable;
@@ -955,12 +955,12 @@ namespace LTSM {
 
     bool RFB::ServerEncoder::sendFrameBufferUpdate(const FrameBuffer & fb) {
         if(! encoder) {
-            Application::warning("%s: encoder null", __FUNCTION__);
+            Application::warning("{}: encoder null", __FUNCTION__);
             return false;
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.1
@@ -1002,11 +1002,11 @@ namespace LTSM {
             threads = 1;
         } else if(std::thread::hardware_concurrency() < threads) {
             threads = std::thread::hardware_concurrency();
-            Application::error("%s: encoding threads incorrect, fixed to hardware concurrency: %d", __FUNCTION__, threads);
+            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: %d", __FUNCTION__, threads);
         }
 
         if(encoder) {
-            Application::info("%s: using encoding threads: %d", __FUNCTION__, threads);
+            Application::info("{}: using encoding threads: %d", __FUNCTION__, threads);
             encoder->setThreads(threads);
         }
     }
@@ -1109,7 +1109,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::serverSelectEncodings(void) {
         serverSelectClientEncoding();
-        Application::notice("%s: select encoding: %s", __FUNCTION__, RFB::encodingName(encoder->getType()));
+        Application::notice("{}: select encoding: {}", __FUNCTION__, RFB::encodingName(encoder->getType()));
         serverEncodingSelectedEvent();
     }
 
@@ -1118,11 +1118,11 @@ namespace LTSM {
             const XCB::Size & desktopSize) {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
-        Application::info("%s: status: %d, error: %d, size [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, statusCode, errorCode,
+        Application::info("{}: status: %d, error: %d, size [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, statusCode, errorCode,
                           desktopSize.width, desktopSize.height);
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE)) {
-            Application::error("%s: %s", __FUNCTION__, "client not supported ExtDesktopResize encoding");
+            Application::error("{}: {}", __FUNCTION__, "client not supported ExtDesktopResize encoding");
             throw rfb_error(NS_FuncName);
         }
 
@@ -1164,7 +1164,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         Tools::StreamBitsPack bitmask;
@@ -1207,7 +1207,7 @@ namespace LTSM {
         const std::vector<uint8_t> & bitmaskBuf = bitmask.toVector();
 
         if(bitmaskSize != bitmaskBuf.size()) {
-            Application::error("%s: bitmask missmatch, buf size: %lu, bitmask size: %lu", __FUNCTION__, bitmaskBuf.size(),
+            Application::error("{}: bitmask missmatch, buf size: %lu, bitmask size: %lu", __FUNCTION__, bitmaskBuf.size(),
                                bitmaskSize);
             throw rfb_error(NS_FuncName);
         }
@@ -1219,7 +1219,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "%s: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         std::scoped_lock guard{ sendLock };
@@ -1249,7 +1249,7 @@ namespace LTSM {
                 sendData(zlib);
                 cursorSended.push_front(cursorId);
             } catch(const std::exception & err) {
-                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
                 sendIntBE32(0);
             }
         } else {
@@ -1260,7 +1260,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::sendEncodingLtsmSupported(void) {
-        Application::info("%s: server supported", __FUNCTION__);
+        Application::info("{}: server supported", __FUNCTION__);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::SERVER_FB_UPDATE);
         // padding
@@ -1315,7 +1315,7 @@ namespace LTSM {
         jc.parseBinary(reinterpret_cast<const char*>(buf.data()), buf.size());
 
         if(! jc.isObject()) {
-            Application::error("%s: %s", __FUNCTION__, "json broken");
+            Application::error("{}: {}", __FUNCTION__, "json broken");
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -1323,11 +1323,11 @@ namespace LTSM {
         auto cmd = jo.getString("cmd");
 
         if(cmd.empty()) {
-            Application::error("%s: %s", __FUNCTION__, "format message broken");
+            Application::error("{}: {}", __FUNCTION__, "format message broken");
             throw std::invalid_argument(NS_FuncName);
         }
 
-        Application::debug(DebugType::Rfb, "%s: cmd: %s", __FUNCTION__, cmd.c_str());
+        Application::debug(DebugType::Rfb, "{}: cmd: {}", __FUNCTION__, cmd.c_str());
 
         if(cmd == SystemCommand::ClientVariables) {
             systemClientVariables(jo);
@@ -1348,7 +1348,7 @@ namespace LTSM {
         } else if(cmd == SystemCommand::LoginSuccess) {
             systemLoginSuccess(jo);
         } else {
-            Application::error("%s: %s", __FUNCTION__, "unknown cmd");
+            Application::error("{}: {}", __FUNCTION__, "unknown cmd");
             throw std::invalid_argument(NS_FuncName);
         }
     }
@@ -1367,7 +1367,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::cursorFailed(uint32_t cursorId) {
-        Application::info("%s: cursorId: 0x%08" PRIx32, __FUNCTION__, cursorId);
+        Application::info("{}: cursorId: 0x%08" PRIx32, __FUNCTION__, cursorId);
         cursorSended.remove(cursorId);
     }
 }

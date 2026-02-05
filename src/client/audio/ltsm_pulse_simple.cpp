@@ -35,7 +35,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_flush(ctx.get(), & error)) {
-            Application::error("%s: %s failed, error: `%d'", __FUNCTION__, "pa_simple_flush", pa_strerror(error));
+            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_flush", pa_strerror(error));
             return false;
         }
 
@@ -47,7 +47,7 @@ namespace LTSM {
         auto res = pa_simple_get_latency(ctx.get(), & error);
 
         if(error) {
-            Application::error("%s: %s failed, error: `%d'", __FUNCTION__, "pa_simple_get_latency", pa_strerror(error));
+            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_get_latency", pa_strerror(error));
             return 0;
         }
 
@@ -70,7 +70,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("%s: %s failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
+                Application::error("{}: {} failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
                                    __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
                 throw audio_error(NS_FuncName);
         }
@@ -79,7 +79,7 @@ namespace LTSM {
         audioSpec.channels = fmt.channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
-            Application::error("%s: %s failed, format: `%s', rate: %" PRIu32 ", channels: %" PRIu8,
+            Application::error("{}: {} failed, format: `{}', rate: %" PRIu32 ", channels: %" PRIu8,
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
         }
@@ -89,7 +89,7 @@ namespace LTSM {
                                 nullptr, streamName.c_str(), & audioSpec, nullptr, attr, & error));
 
         if(! ctx) {
-            Application::error("%s: %s failed, error: `%s'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
             throw audio_error(NS_FuncName);
         }
     }
@@ -98,7 +98,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_write(ctx.get(), ptr, len, & error)) {
-            Application::error("%s: %s failed, error: `%d'", __FUNCTION__, "pa_simple_write", pa_strerror(error));
+            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_write", pa_strerror(error));
             return false;
         }
 
@@ -109,7 +109,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_drain(ctx.get(), & error)) {
-            Application::error("%s: %s failed, error: `%d'", __FUNCTION__, "pa_simple_drain", pa_strerror(error));
+            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_drain", pa_strerror(error));
             return false;
         }
 
@@ -123,7 +123,7 @@ namespace LTSM {
         audioSpec.channels = channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
-            Application::error("%s: %s failed, format: `%s', rate: %" PRIu32 ", channels: %" PRIu8,
+            Application::error("{}: {} failed, format: `{}', rate: %" PRIu32 ", channels: %" PRIu8,
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
         }
@@ -133,7 +133,7 @@ namespace LTSM {
                                 nullptr, streamName.c_str(), & audioSpec, nullptr, attr, & error));
 
         if(! ctx) {
-            Application::error("%s: %s failed, error: `%s'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
             throw audio_error(NS_FuncName);
         }
     }
@@ -143,7 +143,7 @@ namespace LTSM {
         std::vector<uint8_t> buf(len, 0);
 
         if(0 != pa_simple_read(ctx.get(), buf.data(), buf.size(), & error)) {
-            Application::error("%s: %s failed, error: `%d'", __FUNCTION__, "pa_simple_read", pa_strerror(error));
+            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_read", pa_strerror(error));
             return {};
         }
 

@@ -133,7 +133,7 @@ namespace LTSM {
             std::string file = configGetString("authfile");
 
             if(! file.empty() && ! std::filesystem::exists(file)) {
-                Application::warning("authfile not found: `%s'", file.c_str());
+                Application::warning("authfile not found: `{}'", file.c_str());
             }
         }
 
@@ -141,10 +141,10 @@ namespace LTSM {
             std::string file = configGetString("passwdfile");
 
             if(file.empty()) {
-                Application::error("error: %s", "passwdfile not defined");
+                Application::error("error: {}", "passwdfile not defined");
                 error = true;
             } else if(! std::filesystem::exists(file)) {
-                Application::error("passwdfile not found: `%s'", file.c_str());
+                Application::error("passwdfile not found: `{}'", file.c_str());
                 error = true;
             }
         }
@@ -184,7 +184,7 @@ namespace LTSM {
                     auto connector = std::make_unique<Connector::X11VNC>(sock, config());
                     res = connector->rfbCommunication();
                 } catch(const std::exception & err) {
-                    Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
                 }
 
                 close(sock);
@@ -206,7 +206,7 @@ namespace LTSM {
             auto connector = std::make_unique<Connector::X11VNC>(-1, config());
             res = connector->rfbCommunication();
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         }
 
         return res;
@@ -231,8 +231,8 @@ int main(int argc, const char** argv) {
         LTSM::X11Vnc app(argc, argv);
         res = app.start();
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-        LTSM::Application::info("program: %s", "terminate...");
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::info("program: {}", "terminate...");
     } catch(int val) {
         res = val;
     }

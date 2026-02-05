@@ -240,7 +240,7 @@ namespace LTSM {
         try {
             return std::stoi(content, nullptr, 0);
         } catch(const std::invalid_argument &) {
-            Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
+            Application::error("{}: not number: `{}'", __FUNCTION__, content.c_str());
         }
 
         return 0;
@@ -256,7 +256,7 @@ namespace LTSM {
         try {
             return std::stod(content, nullptr);
         } catch(const std::invalid_argument &) {
-            Application::error("%s: not number: `%s'", __FUNCTION__, content.c_str());
+            Application::error("{}: not number: `{}'", __FUNCTION__, content.c_str());
         }
 
         return 0;
@@ -276,7 +276,7 @@ namespace LTSM {
         try {
             return static_cast<bool>(std::stoi(content, nullptr, 0));
         } catch(const std::invalid_argument &) {
-            Application::error("%s: not boolean: `%s'", __FUNCTION__, content.c_str());
+            Application::error("{}: not boolean: `{}'", __FUNCTION__, content.c_str());
         }
 
         return false;
@@ -865,15 +865,15 @@ namespace LTSM {
         } while(counts == JSMN_ERROR_NOMEM);
 
         if(counts == JSMN_ERROR_INVAL) {
-            Application::error("%s: %s, `%.*s'", __FUNCTION__, "invalid character inside JSON content", (int) len, str);
+            Application::error("{}: {}, `%.*s'", __FUNCTION__, "invalid character inside JSON content", (int) len, str);
             clear();
             return false;
         } else if(counts == JSMN_ERROR_PART) {
-            Application::error("%s: %s, `%.*s'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", (int) len, str);
+            Application::error("{}: {}, `%.*s'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", (int) len, str);
             clear();
             return false;
         } else if(counts < 0) {
-            Application::error("%s: %s", __FUNCTION__, "unknown error");
+            Application::error("{}: {}", __FUNCTION__, "unknown error");
             clear();
             return false;
         }
@@ -961,7 +961,7 @@ namespace LTSM {
         while(counts-- && itval != end()) {
             if(!(*itkey).isKey()) {
                 auto str = stringToken(*itkey);
-                Application::error("%s: not key, index: %lu, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), static_cast<int>(str.size()), str.data());
+                Application::error("{}: not key, index: %lu, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), static_cast<int>(str.size()), str.data());
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
@@ -997,7 +997,7 @@ namespace LTSM {
         auto val = stringToken(*it);
 
         if(!(*it).isValue()) {
-            Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
+            Application::error("{}: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
         }
 
         size_t dotpos = val.find(".");
@@ -1042,7 +1042,7 @@ namespace LTSM {
         auto val = stringToken(tok);
 
         if(! tok.isValue()) {
-            Application::error("%s: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
+            Application::error("{}: not value, index: %lu, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);
@@ -1050,7 +1050,7 @@ namespace LTSM {
 
     JsonObject JsonContent::toObject(void) const {
         if(! isObject()) {
-            Application::error("%s: not json object", __FUNCTION__);
+            Application::error("{}: not json object", __FUNCTION__);
             throw json_error(NS_FuncName);
         }
 
@@ -1062,7 +1062,7 @@ namespace LTSM {
 
     JsonArray JsonContent::toArray(void) const {
         if(! isArray()) {
-            Application::error("%s: not json array", __FUNCTION__);
+            Application::error("{}: not json array", __FUNCTION__);
             throw json_error(NS_FuncName);
         }
 

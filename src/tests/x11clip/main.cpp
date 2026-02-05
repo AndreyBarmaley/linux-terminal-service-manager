@@ -32,7 +32,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
   protected:
     void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override {
         auto name = getAtomName(atom);
-        Application::info("%s: atom: `%s', size: %lu", __FUNCTION__, name.data(), len);
+        Application::info("{}: atom: `{}', size: %lu", __FUNCTION__, name.data(), len);
 
         if(! file.empty()) {
             Tools::binaryToFile(ptr, len, file);
@@ -41,7 +41,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
 
     void selectionReceiveTargets(const xcb_atom_t* beg, const xcb_atom_t* end) const override {
         std::for_each(beg, end, [&](auto & atom) {
-            Application::info("%s: target: `%s'", "selectionReceiveTargets", getAtomName(atom).data());
+            Application::info("{}: target: `{}'", "selectionReceiveTargets", getAtomName(atom).data());
 
             if(atom == target) {
                 copy->convertSelection(target, *this);
@@ -50,7 +50,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
     }
 
     void selectionChangedEvent(void) const override {
-        Application::info("%s", __FUNCTION__);
+        Application::info("{}", __FUNCTION__);
         copy->convertSelection(targets, *this);
     }
 
@@ -67,7 +67,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
         targets = getAtom("TARGETS", true);
         copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY));
 
-        Application::info("mode: %s, target: `%s', data save: `%s'", "copy", getAtomName(target).data(), file.c_str());
+        Application::info("mode: {}, target: `{}', data save: `{}'", "copy", getAtomName(target).data(), file.c_str());
     }
 
     int start(void) override {
@@ -101,7 +101,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     }
 
     size_t selectionSourceSize(xcb_atom_t atom) const override {
-        Application::info("%s, atom: `%s'", __FUNCTION__, getAtomName(atom).data());
+        Application::info("{}, atom: `{}'", __FUNCTION__, getAtomName(atom).data());
 
         if(atom == target) {
             return buf.size();
@@ -111,7 +111,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     }
 
     std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
-        Application::info("%s, atom: `%s', offset: %lu, length: %lu", __FUNCTION__, getAtomName(atom).data(), offset, length);
+        Application::info("{}, atom: `{}', offset: %lu, length: %lu", __FUNCTION__, getAtomName(atom).data(), offset, length);
 
         if(atom == target) {
             if(offset + length <= buf.size()) {
@@ -144,7 +144,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
             buf.assign(test.begin(), test.end());
         }
 
-        Application::info("mode: %s, target: `%s', data size: %lu", "paste", getAtomName(target).data(), buf.size());
+        Application::info("mode: {}, target: `{}', data size: %lu", "paste", getAtomName(target).data(), buf.size());
         paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE));
     }
 
@@ -189,7 +189,7 @@ int main(int argc, const char** argv) {
         std::cout << "usage: " << argv[0] << " <copy|paste> <target atom> <file>" << std::endl;
         return EXIT_SUCCESS;
     } catch(const std::exception & err) {
-        Application::error("exception: %s", err.what());
+        Application::error("exception: {}", err.what());
     }
 
     return EXIT_FAILURE;

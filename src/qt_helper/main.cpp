@@ -39,9 +39,9 @@ int main(int argc, char* argv[]) {
         return app.exec();
 
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus exception: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

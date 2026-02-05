@@ -72,26 +72,26 @@ namespace LTSM {
         auto len = readlink(path.c_str(), linkto.data(), linkto.size() - 1);
 
         if(len < 0) {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
 
         if(len < dir.size()) {
-            Application::warning("%s: %s, path: `%s'", __FUNCTION__, "link skipped", path.c_str());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path.c_str());
             throw fuse_error(NS_FuncName);
         }
 
         // check scope
         if(! std::equal(dir.begin(), dir.end(), linkto.begin(), linkto.begin() + dir.size())) {
-            Application::warning("%s: %s, path: `%s'", __FUNCTION__, "link skipped", path.c_str());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path.c_str());
             throw fuse_error(NS_FuncName);
         }
 
         struct stat st2 = {};
 
         if(0 > ::stat(linkto.data(), & st2)) {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
@@ -109,7 +109,7 @@ namespace LTSM {
             struct stat st = {};
 
             if(0 > ::stat(path.c_str(), & st)) {
-                Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                    __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
                 continue;
             }
@@ -129,7 +129,7 @@ namespace LTSM {
 #endif
 
                 default:
-                    Application::warning("%s: %s, mode: 0x%" PRIx64 ", path: `%s'",
+                    Application::warning("{}: {}, mode: 0x%" PRIx64 ", path: `{}'",
                                          __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path.c_str());
                     continue;
             }
@@ -169,11 +169,11 @@ namespace LTSM {
 // createClientFuseConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: %" PRId8 ", url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
-        Application::error("%s: %s, mode: %s", __FUNCTION__, "fuse mode failed", Channel::Connector::modeString(mode));
+        Application::error("{}: {}, mode: {}", __FUNCTION__, "fuse mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncName);
     }
 
@@ -184,7 +184,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseCon
 LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod,
         const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
+    Application::info("{}: channelId: %" PRIu8, __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
@@ -231,10 +231,10 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto fuseCmd = sb.readIntLE16();
-            Application::debug(DebugType::Fuse, "%s: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
+            Application::debug(DebugType::Fuse, "{}: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
 
             if(! fuseInit && fuseCmd != FuseOp::Init) {
-                Application::error("%s: %s failed, cmd: 0x%" PRIx16, __FUNCTION__, "initialize", fuseCmd);
+                Application::error("{}: {} failed, cmd: 0x%" PRIx16, __FUNCTION__, "initialize", fuseCmd);
                 throw channel_error(NS_FuncName);
             }
 
@@ -262,7 +262,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
                     break;
 
                 default:
-                    Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
+                    Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
                     throw channel_error(NS_FuncName);
             }
         }
@@ -271,7 +271,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("%s: underflow data: %lu, func: %s", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: %lu, func: {}", __FUNCTION__, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -299,10 +299,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
     auto mountPoint = sb.readString(len);
 
     if(! owner->createChannelAllow(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
-        Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "mount point", mountPoint.c_str());
+        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mount point", mountPoint.c_str());
         fuseInit = false;
     } else {
-        Application::info("%s: version: 0x%" PRIx16 ", mount point: `%s'", __FUNCTION__, fuseVer, mountPoint.c_str());
+        Application::info("{}: version: 0x%" PRIx16 ", mount point: `{}'", __FUNCTION__, fuseVer, mountPoint.c_str());
         shareRoot.assign(mountPoint);
         fuseInit = true;
     }
@@ -329,17 +329,17 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpQuit(const StreamBufRef & sb) {
-    Application::error("%s: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", __FUNCTION__);
     return false;
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpLookup(const StreamBufRef & sb) {
-    Application::error("%s: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", __FUNCTION__);
     return false;
 }
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpGetAttr(const StreamBufRef & sb) {
-    Application::error("%s: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", __FUNCTION__);
     return false;
 }
 
@@ -360,12 +360,12 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
 
     if(0 > ret)
     {
-        Application::error("%s: %s failed, error: %s, code: %d, fd: %d",
+        Application::error("{}: {} failed, error: {}, code: %d, fd: %d",
                     __FUNCTION__, "fstat", strerror(error), error, fdh);
     }
     else
     {
-        Application::debug(DebugType::Fuse, "%s: fd: %d", __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: %d", __FUNCTION__, fdh);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
@@ -391,12 +391,12 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
 
     if(0 > ret)
     {
-        Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+        Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                     __FUNCTION__, "stat", strerror(error), error, path);
     }
     else
     {
-        Application::debug(DebugType::Fuse, "%s: path: `%s'", __FUNCTION__, path);
+        Application::debug(DebugType::Fuse, "{}: path: `{}'", __FUNCTION__, path);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
@@ -408,7 +408,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
 */
 
 bool LTSM::Channel::ConnectorClientFuse::fuseOpReadDir(const StreamBufRef & sb) {
-    Application::error("%s: not implemented", __FUNCTION__);
+    Application::error("{}: not implemented", __FUNCTION__);
     return false;
 }
 
@@ -438,10 +438,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("%s: %s failed, error: %s, code: %d, path: `%s', flags: 0x%" PRIx32,
+        Application::error("{}: {} failed, error: {}, code: %d, path: `{}', flags: 0x%" PRIx32,
                            __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
     } else {
-        Application::debug(DebugType::Fuse, "%s: path: `%s', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
+        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);
@@ -469,10 +469,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("%s: %s failed, error: %s, code: %d, fd: %" PRId32,
+        Application::error("{}: {} failed, error: {}, code: %d, fd: %" PRId32,
                            __FUNCTION__, "close", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "%s: fd: %" PRId32, __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: %" PRId32, __FUNCTION__, fdh);
         opens.remove(fdh);
     }
 
@@ -502,7 +502,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         // <ERR32> - errno
         reply.writeIntLE16(FuseOp::Read);
         reply.writeIntLE32(error);
-        Application::error("%s: %s failed, error: %s, code: %d, offset: %lu",
+        Application::error("{}: {} failed, error: {}, code: %d, offset: %lu",
                            __FUNCTION__, "lseek", strerror(error), error, offset);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
         return true;
@@ -518,10 +518,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
     reply.writeIntLE32(error);
 
     if(0 > rsz) {
-        Application::error("%s: %s failed, error: %s, code: %d, fd: %d",
+        Application::error("{}: {} failed, error: {}, code: %d, fd: %d",
                            __FUNCTION__, "read", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "%s: request block size: %" PRIu16 ", send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "{}: request block size: %" PRIu16 ", send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size()) {
             buf.resize(rsz);

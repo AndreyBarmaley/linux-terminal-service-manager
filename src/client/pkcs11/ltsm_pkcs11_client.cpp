@@ -47,11 +47,11 @@ using namespace std::chrono_literals;
 // createClientPkcs11Connector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11Connector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("%s: id: %" PRId8 ", url: `%s', mode: %s", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: %" PRId8 ", url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
-        Application::error("%s: %s, mode: %s", __FUNCTION__, "pkcs11 mode failed", Channel::Connector::modeString(mode));
+        Application::error("{}: {}, mode: {}", __FUNCTION__, "pkcs11 mode failed", Channel::Connector::modeString(mode));
         throw channel_error(NS_FuncName);
     }
 
@@ -62,7 +62,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11C
 LTSM::Channel::ConnectorClientPkcs11::ConnectorClientPkcs11(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("%s: channelId: %" PRIu8, __FUNCTION__, cid);
+    Application::info("{}: channelId: %" PRIu8, __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
@@ -83,7 +83,7 @@ void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed
 }
 
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv) {
-    Application::debug(DebugType::Pkcs11, "%s: size: %lu", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Pkcs11, "{}: size: %lu", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -106,7 +106,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto pkcs11Cmd = sb.readIntLE16();
-            Application::debug(DebugType::Pkcs11, "%s: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
+            Application::debug(DebugType::Pkcs11, "{}: cmd: 0x%" PRIx16, __FUNCTION__, pkcs11Cmd);
 
             if(Pkcs11Op::Init == pkcs11Cmd) {
                 pkcs11Init(sb);
@@ -121,7 +121,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             } else if(Pkcs11Op::DecryptData == pkcs11Cmd) {
                 pkcs11DecryptData(sb);
             } else {
-                Application::error("%s: %s failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
+                Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }
@@ -130,7 +130,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error &) {
-        Application::warning("%s: underflow data: %lu", __FUNCTION__, sb.last());
+        Application::warning("{}: underflow data: %lu", __FUNCTION__, sb.last());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -159,7 +159,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     try {
         pkcs11 = PKCS11::loadLibrary(owner->pkcs11Library());
     } catch(const std::exception & err) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
@@ -306,7 +306,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     try {
         sess = std::make_unique<const PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE16(0);
         return false;
@@ -375,7 +375,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
@@ -431,7 +431,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;

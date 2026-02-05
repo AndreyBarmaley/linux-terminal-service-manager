@@ -271,7 +271,7 @@ namespace LTSM {
         }
 
         if(len < toVector().size()) {
-            Application::error("%s: %s", __FUNCTION__, "incorrect data size");
+            Application::error("{}: {}", __FUNCTION__, "incorrect data size");
             throw std::out_of_range(NS_FuncName);
         }
 
@@ -280,7 +280,7 @@ namespace LTSM {
 
     bool Tools::StreamBitsUnpack::popBit(void) {
         if(vecbuf.empty()) {
-            Application::error("%s: %s", __FUNCTION__, "empty data");
+            Application::error("{}: {}", __FUNCTION__, "empty data");
             throw std::invalid_argument(NS_FuncName);
         }
 

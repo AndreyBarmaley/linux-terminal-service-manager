@@ -147,9 +147,9 @@ namespace LTSM::Connector {
                         getuid(), getgid(), getpid(), LTSM::service_version);
 
         if(auto home = homeRuntime(); 0 == chdir(home.c_str())) {
-            Application::info("%s: working dir: `%s'", __FUNCTION__, home.c_str());
+            Application::info("{}: working dir: `{}'", __FUNCTION__, home.c_str());
         } else {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
         }
     }
 
@@ -166,7 +166,7 @@ namespace LTSM::Connector {
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
         std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("%s: display: %d, xauthfile: %s", __FUNCTION__, screen, xauthFile.c_str());
+        Application::info("{}: display: %d, xauthfile: {}", __FUNCTION__, screen, xauthFile.c_str());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
@@ -178,14 +178,14 @@ namespace LTSM::Connector {
         });
 
         if(! waitSocket) {
-            Application::error("%s: checkUnixSocket failed, `%s'", __FUNCTION__, socketPath.c_str());
+            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath.c_str());
             return false;
         }
 
         try {
             xcbDisplay.displayReconnect(screen);
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             return false;
         }
 
@@ -210,7 +210,7 @@ namespace LTSM::Connector {
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
-            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                fileName.c_str(), getuid());
             fileName.clear();
         }
@@ -220,7 +220,7 @@ namespace LTSM::Connector {
 
     void DBusProxy::onClearRenderPrimitives(const int32_t & display) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
             for(const auto & ptr : _renderPrimitives) {
                 if(auto prim = ptr.get()) {
@@ -235,7 +235,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderRect(const int32_t & display,
                                     const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
@@ -245,7 +245,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderText(const int32_t & display, const std::string & text,
                                     const TuplePosition & pos, const TupleColor & color) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
@@ -257,7 +257,7 @@ namespace LTSM::Connector {
 
     void DBusProxy::onPingConnector(const int32_t & display) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
+            Application::debug(DebugType::Dbus, "{}: display: %" PRId32,
                                __FUNCTION__, display);
 
             std::thread([this, display]() {
@@ -338,7 +338,7 @@ namespace LTSM::Connector {
             sd_notify(0, "STOPPING=1");
 #endif
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
         }
@@ -354,9 +354,9 @@ int main(int argc, const char** argv) {
     try {
         return Connector::startService(argc, argv);
     } catch(const sdbus::Error & err) {
-        Application::error("sdbus exception: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        Application::error("sdbus exception: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

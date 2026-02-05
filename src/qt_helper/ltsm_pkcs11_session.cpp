@@ -70,7 +70,7 @@ void Pkcs11Client::run(void) {
         fd = UnixSocket::connect(socketPath);
     }
 
-    Application::debug(DebugType::Pkcs11, "%s: connected, socket fd: %" PRId32, __FUNCTION__, fd);
+    Application::debug(DebugType::Pkcs11, "{}: connected, socket fd: %" PRId32, __FUNCTION__, fd);
     sock.setSocket(fd);
 
     uint16_t cmd = 0;
@@ -87,14 +87,14 @@ void Pkcs11Client::run(void) {
         cmd = sock.recvIntLE16();
         err = sock.recvIntLE16();
     } catch(const std::exception & exp) {
-        Application::error("%s: exception: %s", NS_FuncName.c_str(), "PKCS11 initialization failed");
+        Application::error("{}: exception: {}", NS_FuncName.c_str(), "PKCS11 initialization failed");
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, NS_FuncName.c_str(), "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, NS_FuncName.c_str(), "id", cmd);
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;
@@ -102,7 +102,7 @@ void Pkcs11Client::run(void) {
 
     if(err) {
         auto str = sock.recvString(err);
-        Application::error("%s: recv error: %s", __FUNCTION__, str.c_str());
+        Application::error("{}: recv error: {}", __FUNCTION__, str.c_str());
         emit pkcs11Error(QString("PKCS11 error: %1").arg(QString(str.c_str())));
         emit pkcs11Shutdown();
         return;
@@ -155,7 +155,7 @@ bool Pkcs11Client::updateTokens(void) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlots) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
         return false;
     }
 
@@ -232,7 +232,7 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -260,7 +260,7 @@ std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -298,7 +298,7 @@ std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string &
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::SignData) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -329,7 +329,7 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::DecryptData) {
-        Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
         return {};
     }
 

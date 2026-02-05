@@ -37,7 +37,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::WinCli, "%s, length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}, length: %" PRIu32, __FUNCTION__, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -47,11 +47,11 @@ namespace LTSM {
 
     std::vector<uint8_t> RFB::WinClient::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardLocalCaps()) {
-            Application::error("%s: unsupported encoding: %s", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::WinCli, "%s", __FUNCTION__);
+        Application::debug(DebugType::WinCli, "{}", __FUNCTION__);
 
         /*
                 auto ptr = const_cast<RFB::WinClient*>(this);
@@ -84,7 +84,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteTypesEvent(uint16_t types) {
-        Application::debug(DebugType::WinCli, "%s, types: 0x%04" PRIx16, __FUNCTION__, types);
+        Application::debug(DebugType::WinCli, "{}, types: 0x%04" PRIx16, __FUNCTION__, types);
 
         if(extClipboardRemoteCaps()) {
             clipRemoteTypes = types;
@@ -92,25 +92,25 @@ namespace LTSM {
             //if(auto paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE)))
             //        paste->setSelectionOwner(*this);
         } else {
-            Application::error("%s: unsupported encoding: %s", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncName);
         }
     }
 
     void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::WinCli, "%s, type: 0x%04" PRIx16 ", length: %" PRIu32, __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::WinCli, "{}, type: 0x%04" PRIx16 ", length: %" PRIu32, __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
             clientClipboard.swap(buf);
         } else {
-            Application::error("%s: unsupported encoding: %s", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
+            Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncName);
         }
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::WinCli, "%s: data length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}: data length: %" PRIu32, __FUNCTION__, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);

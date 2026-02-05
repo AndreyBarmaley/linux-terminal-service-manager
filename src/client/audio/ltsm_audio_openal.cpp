@@ -71,7 +71,7 @@ namespace LTSM {
         }
 
         if(! fmtFormat) {
-            Application::error("%s: %s failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
+            Application::error("{}: {} failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
                                __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
             throw audio_error(NS_FuncName);
         }
@@ -103,26 +103,26 @@ namespace LTSM {
         dev.reset(alcOpenDevice(nullptr /* pref device name */));
 
         if(! dev) {
-            Application::error("%s: %s failed", __FUNCTION__, "alcOpenDevice");
+            Application::error("{}: {} failed", __FUNCTION__, "alcOpenDevice");
             throw audio_error(NS_FuncName);
         }
 
         ctx.reset(alcCreateContext(dev.get(), nullptr /* attr list */));
 
         if(! ctx) {
-            Application::error("%s: %s failed", __FUNCTION__, "alcCreateContext");
+            Application::error("{}: {} failed", __FUNCTION__, "alcCreateContext");
             throw audio_error(NS_FuncName);
         }
 
         if(! alcMakeContextCurrent(ctx.get())) {
-            Application::error("%s: %s failed", __FUNCTION__, "alcMakeContextCurrent");
+            Application::error("{}: {} failed", __FUNCTION__, "alcMakeContextCurrent");
             throw audio_error(NS_FuncName);
         }
 
         alGenSources(1, & sourceId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alcMakeContextCurrent", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alcMakeContextCurrent", alcErrorName(err));
             throw audio_error(NS_FuncName);
         }
     }
@@ -140,7 +140,7 @@ namespace LTSM {
         alGetSourcei(sourceId, AL_BUFFERS_PROCESSED, & res);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alGetSourcei", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alGetSourcei", alcErrorName(err));
             return 0;
         }
 
@@ -152,7 +152,7 @@ namespace LTSM {
         alGetSourcei(sourceId, AL_BUFFERS_QUEUED, & res);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alGetSourcei", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alGetSourcei", alcErrorName(err));
             return 0;
         }
 
@@ -165,7 +165,7 @@ namespace LTSM {
             alSourceUnqueueBuffers(sourceId, 1, & bufId);
 
             if(auto err = alGetError(); err != AL_NO_ERROR) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__, "alSourceUnqueueBuffers", alcErrorName(err));
+                Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourceUnqueueBuffers", alcErrorName(err));
                 return 0;
             }
 
@@ -179,7 +179,7 @@ namespace LTSM {
         alSourcePlay(sourceId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alSourcePlay", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourcePlay", alcErrorName(err));
             return false;
         }
 
@@ -190,7 +190,7 @@ namespace LTSM {
         alSourceStop(sourceId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alSourceStop", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourceStop", alcErrorName(err));
             return false;
         }
 
@@ -201,7 +201,7 @@ namespace LTSM {
         alSourcePause(sourceId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alSourcePause", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourcePause", alcErrorName(err));
             return false;
         }
 
@@ -213,7 +213,7 @@ namespace LTSM {
         alGetSourcei(sourceId, AL_SOURCE_STATE, & sourceState);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alGetSourcei", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alGetSourcei", alcErrorName(err));
             return false;
         }
 
@@ -231,7 +231,7 @@ namespace LTSM {
             alGenBuffers(1, & bufId);
 
             if(auto err = alGetError(); err != AL_NO_ERROR) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__, "alGetBuffers", alcErrorName(err));
+                Application::error("{}: {} failed, error: {}", __FUNCTION__, "alGetBuffers", alcErrorName(err));
                 return false;
             }
         }
@@ -239,14 +239,14 @@ namespace LTSM {
         alBufferData(bufId, fmtFormat, buf, len, fmtFrequency);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alBufferData", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alBufferData", alcErrorName(err));
             return false;
         }
 
         alSourceQueueBuffers(sourceId, 1, & bufId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "alSourceQueueBuffers", alcErrorName(err));
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourceQueueBuffers", alcErrorName(err));
             return false;
         }
 

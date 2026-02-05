@@ -78,12 +78,12 @@ namespace LTSM {
         struct passwd* res = nullptr;
 
         if(int ret = getpwnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
         if(! res) {
-            Application::warning("%s: user not found: `%s'", __FUNCTION__, name.c_str());
+            Application::warning("{}: user not found: `{}'", __FUNCTION__, name.c_str());
             throw std::runtime_error(__FUNCTION__);
         }
     }
@@ -94,12 +94,12 @@ namespace LTSM {
         struct passwd* res = nullptr;
 
         if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
         if(! res) {
-            Application::warning("%s: uid not found: %d", __FUNCTION__, uid);
+            Application::warning("{}: uid not found: %d", __FUNCTION__, uid);
             throw std::runtime_error(__FUNCTION__);
         }
     }
@@ -130,12 +130,12 @@ namespace LTSM {
         struct group* res = nullptr;
 
         if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
         if(! res) {
-            Application::warning("%s: gid not found: %d", __FUNCTION__, gid);
+            Application::warning("{}: gid not found: %d", __FUNCTION__, gid);
             throw std::runtime_error(__FUNCTION__);
         }
     }
@@ -151,12 +151,12 @@ namespace LTSM {
         struct group* res = nullptr;
 
         if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
             throw std::runtime_error(__FUNCTION__);
         }
 
         if(! res) {
-            Application::warning("%s: group not found: `%s'", __FUNCTION__, name.c_str());
+            Application::warning("{}: group not found: `{}'", __FUNCTION__, name.c_str());
             throw std::runtime_error(__FUNCTION__);
         }
     }
@@ -182,7 +182,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
+        Application::warning("{}: uid not found: %d", __FUNCTION__, (int) uid);
         return nullptr;
     }
 
@@ -192,7 +192,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
+        Application::warning("{}: user not found: `{}'", __FUNCTION__, user.c_str());
         return nullptr;
     }
 
@@ -202,7 +202,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
+        Application::warning("{}: user not found: `{}'", __FUNCTION__, user.c_str());
         return 0;
     }
 
@@ -212,7 +212,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: uid not found: %d", __FUNCTION__, (int) uid);
+        Application::warning("{}: uid not found: %d", __FUNCTION__, (int) uid);
         return "";
     }
 
@@ -222,7 +222,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: user not found: `%s'", __FUNCTION__, user.c_str());
+        Application::warning("{}: user not found: `{}'", __FUNCTION__, user.c_str());
         return "";
     }
 
@@ -232,7 +232,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: gid not found: %d", __FUNCTION__, (int) gid);
+        Application::warning("{}: gid not found: %d", __FUNCTION__, (int) gid);
         return nullptr;
     }
 
@@ -242,7 +242,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: group not found: `%s'", __FUNCTION__, group.c_str());
+        Application::warning("{}: group not found: `{}'", __FUNCTION__, group.c_str());
         return nullptr;
     }
 
@@ -252,7 +252,7 @@ namespace LTSM {
         } catch(const std::exception &) {
         }
 
-        Application::warning("%s: group not found: `%s'", __FUNCTION__, group.c_str());
+        Application::warning("{}: group not found: `{}'", __FUNCTION__, group.c_str());
         return 0;
     }
 
@@ -291,7 +291,7 @@ namespace LTSM {
         std::array<char, 256> buf = {};
 
         if(0 != gethostname(buf.data(), buf.size() - 1)) {
-            Application::warning("%s: %s failed, error: %s, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gethostname", strerror(errno), errno);
             return "localhost";
         }
 
@@ -313,7 +313,7 @@ namespace LTSM {
                 const auto & native = path.native();
 
                 if(native.size() > sizeof(sockaddr.sun_path) - 1) {
-                    Application::warning("%s: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
+                    Application::warning("{}: unix path is long, truncated to size: %lu", __FUNCTION__, sizeof(sockaddr.sun_path) - 1);
                 }
 
                 std::copy_n(native.begin(), std::min(native.size(), sizeof(sockaddr.sun_path) - 1), sockaddr.sun_path);
@@ -328,13 +328,13 @@ namespace LTSM {
 
     bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode) {
         if(0 != chown(path.c_str(), uid, gid)) {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                __FUNCTION__, "chown", strerror(errno), errno, path.c_str());
             return false;
         }
 
         if(mode && 0 != chmod(path.c_str(), mode)) {
-            Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                __FUNCTION__, "chmod", strerror(errno), errno, path.c_str());
             return false;
         }
@@ -379,7 +379,7 @@ namespace LTSM {
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("%s: %s failed", __FUNCTION__, "mbstowcs");
+            Application::error("{}: {} failed", __FUNCTION__, "mbstowcs");
             return {};
         }
 
@@ -399,7 +399,7 @@ namespace LTSM {
 
         if(len == static_cast<std::size_t>(-1)) {
             // utf16le or utf16be
-            Application::error("%s: %s failed", __FUNCTION__, "wcstombs");
+            Application::error("{}: {} failed", __FUNCTION__, "wcstombs");
             return {};
         }
 
@@ -425,7 +425,7 @@ namespace LTSM {
             if(ret == Z_OK) {
                 res.resize(dstsz);
             } else {
-                Application::error("%s: %s failed, error: %d", __FUNCTION__, "compress", ret);
+                Application::error("{}: {} failed, error: %d", __FUNCTION__, "compress", ret);
                 throw std::runtime_error(__FUNCTION__);
             }
         }
@@ -451,7 +451,7 @@ namespace LTSM {
             if(ret == Z_OK) {
                 res.resize(dstsz);
             } else {
-                Application::error("%s: %s failed, error: %d", __FUNCTION__, "uncompress", ret);
+                Application::error("{}: {} failed, error: %d", __FUNCTION__, "uncompress", ret);
                 throw std::runtime_error(__FUNCTION__);
             }
         }
@@ -543,7 +543,7 @@ namespace LTSM {
     std::vector<uint8_t> Tools::base64Decode(std::string_view str) {
 
         if(str.empty() || 0 != (str.length() % 4)) {
-            Application::error("%s: %s failed, data length: %lu", __FUNCTION__, "base64", str.length());
+            Application::error("{}: {} failed, data length: %lu", __FUNCTION__, "base64", str.length());
             throw std::runtime_error(__FUNCTION__);
         }
 
@@ -621,7 +621,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
             return {};
         }
 
@@ -640,7 +640,7 @@ namespace LTSM {
             return content;
         }
 
-        Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
+        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file.c_str());
         return {};
     }
 
@@ -759,7 +759,7 @@ namespace LTSM {
         std::string result;
 
         if(! pipe) {
-            Application::error("%s: popen failed: `%s'", __FUNCTION__, cmd.c_str());
+            Application::error("{}: popen failed: `{}'", __FUNCTION__, cmd.c_str());
             return result;
         }
 
@@ -1002,7 +1002,7 @@ namespace LTSM {
             ofs.close();
             return true;
         } else {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "write", file.c_str());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "write", file.c_str());
         }
 
         return false;
@@ -1021,10 +1021,10 @@ namespace LTSM {
                 ifs.read((char*) buf.data(), buf.size());
                 ifs.close();
             } else {
-                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "read", file.c_str());
+                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file.c_str());
             }
         } else {
-            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
         }
 
         return buf;

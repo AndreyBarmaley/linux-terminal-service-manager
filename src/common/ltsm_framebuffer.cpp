@@ -263,7 +263,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("%s: unknown bpp: %" PRIu8, __FUNCTION__, bitsPerPixel());
+                Application::error("{}: unknown bpp: %" PRIu8, __FUNCTION__, bitsPerPixel());
                 throw std::invalid_argument(NS_FuncName);
         }
     }
@@ -404,7 +404,7 @@ namespace LTSM {
                 break;
         }
 
-        Application::error("%s: unknown bpp: %" PRId32, __FUNCTION__, bpp);
+        Application::error("{}: unknown bpp: %" PRId32, __FUNCTION__, bpp);
         throw std::invalid_argument(NS_FuncName);
     }
 

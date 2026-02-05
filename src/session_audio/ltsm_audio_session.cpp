@@ -69,7 +69,7 @@ namespace LTSM {
         }
 
         if(! sock) {
-            Application::error("%s: %s failed", __FUNCTION__, "socket");
+            Application::error("{}: {} failed", __FUNCTION__, "socket");
             return false;
         }
 
@@ -104,13 +104,13 @@ namespace LTSM {
         auto err = sock->recvIntLE16();
 
         if(cmd != AudioOp::Init) {
-            Application::error("%s: %s: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+            Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
             return false;
         }
 
         if(err) {
             auto str = sock->recvString(err);
-            Application::error("%s: recv error: %s", __FUNCTION__, str.c_str());
+            Application::error("{}: recv error: {}", __FUNCTION__, str.c_str());
             return false;
         }
 
@@ -118,7 +118,7 @@ namespace LTSM {
         auto ver = sock->recvIntLE16();
         // encoding
         auto enc = sock->recvIntLE16();
-        Application::info("%s: client proto version: %" PRIu16 ", encode type: 0x%" PRIx16, __FUNCTION__, ver, enc);
+        Application::info("{}: client proto version: %" PRIu16 ", encode type: 0x%" PRIx16, __FUNCTION__, ver, enc);
         uint32_t defaultBitRate = 44100;
         uint32_t bufFragSize = 1024;
         // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
@@ -152,7 +152,7 @@ namespace LTSM {
                     break;
                 }
             } else {
-                LTSM::Application::warning("%s: wait pulseaudio", __FUNCTION__);
+                LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
                 std::this_thread::sleep_for(1s);
             }
         }
@@ -160,13 +160,13 @@ namespace LTSM {
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
             encoder = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
-            Application::info("%s: selected encoder: %s", __FUNCTION__, "OPUS");
+            Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
 #else
-            Application::error("%s: unsupported encoder: %s", __FUNCTION__, "OPUS");
+            Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
             throw audio_error(NS_FuncName);
 #endif
         } else {
-            Application::info("%s: selected encoder: %s", __FUNCTION__, "PCM");
+            Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
         return true;
@@ -201,7 +201,7 @@ namespace LTSM {
             try {
                 this->socketInitialize();
             } catch(const std::exception & err) {
-                LTSM::Application::error("%s: exception: %s", "AudioClientThread", err.what());
+                LTSM::Application::error("{}: exception: {}", "AudioClientThread", err.what());
             }
         });
     }
@@ -246,25 +246,25 @@ namespace LTSM {
     }
 
     int32_t AudioSessionBus::getVersion(void) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
         return LTSM_SESSION_AUDIO_VERSION;
     }
 
     void AudioSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "%s: pid: %s", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 
     void AudioSessionBus::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
         setDebugLevel(level);
     }
 
     bool AudioSessionBus::connectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket.c_str());
 
         if(std::ranges::any_of(clients, [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
-            Application::error("%s: socket busy, path: `%s'", __FUNCTION__, clientSocket.c_str());
+            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, clientSocket.c_str());
             return false;
         }
 
@@ -273,7 +273,7 @@ namespace LTSM {
     }
 
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "%s: socket path: `%s'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket.c_str());
         std::erase_if(clients, [&clientSocket](auto & cli) {
             return cli.socketPath == clientSocket;
         });
@@ -315,9 +315,9 @@ int main(int argc, char** argv) {
         LTSM::AudioSessionBus audioSession(*LTSM::conn, debug);
         return audioSession.start();
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
     }
 
     return EXIT_FAILURE;

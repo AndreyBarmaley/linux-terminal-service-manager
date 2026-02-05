@@ -90,7 +90,7 @@ add_device (const char* path, Unix_Device** ndp)
     Unix_Device *nd;
     struct sockaddr_un *sun;
 
-    DBG (1, "add_device: adding backend %s\n", path);
+    DBG (1, "add_device: adding backend {}\n", path);
 
     for (nd = first_device; nd; nd = nd->next)
         if (strcmp (nd->path, path) == 0)
@@ -137,7 +137,7 @@ add_device (const char* path, Unix_Device** ndp)
         *ndp = nd;
     }
 
-    DBG (2, "add_device: backend %s added\n", path);
+    DBG (2, "add_device: backend {} added\n", path);
     return SANE_STATUS_GOOD;
 }
 
@@ -149,7 +149,7 @@ connect_dev (Unix_Device* dev)
     SANE_Status status = SANE_STATUS_IO_ERROR;
     SANE_Init_Req req;
 
-    DBG (2, "connect_dev: trying to connect to %s\n", dev->path);
+    DBG (2, "connect_dev: trying to connect to {}\n", dev->path);
 
     if (dev->addr.sun_family != AF_UNIX)
     {
@@ -162,7 +162,7 @@ connect_dev (Unix_Device* dev)
 
     if (dev->ctl < 0)
     {
-        DBG (1, "connect_dev: failed to obtain socket (%s)\n",
+        DBG (1, "connect_dev: failed to obtain socket ({})\n",
              strerror (errno));
         dev->ctl = -1;
         return SANE_STATUS_IO_ERROR;
@@ -170,7 +170,7 @@ connect_dev (Unix_Device* dev)
 
     if (connect (dev->ctl, &dev->addr, sizeof (dev->addr)) < 0)
     {
-        DBG (1, "connect_dev: failed to connect (%s)\n", strerror (errno));
+        DBG (1, "connect_dev: failed to connect ({})\n", strerror (errno));
         dev->ctl = -1;
         return SANE_STATUS_IO_ERROR;
     }
@@ -187,7 +187,7 @@ connect_dev (Unix_Device* dev)
     req.version_code = SANE_VERSION_CODE (V_MAJOR, V_MINOR,
                                           SANEI_NET_PROTOCOL_VERSION);
     req.username = getlogin ();
-    DBG (2, "connect_dev: unix_init (user=%s, local version=%d.%d.%d)\n",
+    DBG (2, "connect_dev: unix_init (user={}, local version=%d.%d.%d)\n",
          req.username, V_MAJOR, V_MINOR, SANEI_NET_PROTOCOL_VERSION);
     sanei_w_call (&dev->wire, SANE_NET_INIT,
                   (WireCodecFunc) sanei_w_init_req, &req,
@@ -195,7 +195,7 @@ connect_dev (Unix_Device* dev)
 
     if (dev->wire.status != 0)
     {
-        DBG (1, "connect_dev: argument marshalling error (%s)\n",
+        DBG (1, "connect_dev: argument marshalling error ({})\n",
              strerror (dev->wire.status));
         status = SANE_STATUS_IO_ERROR;
         goto fail;
@@ -203,7 +203,7 @@ connect_dev (Unix_Device* dev)
 
     status = reply.status;
     version_code = reply.version_code;
-    DBG (2, "connect_dev: freeing init reply (status=%s, remote "
+    DBG (2, "connect_dev: freeing init reply (status={}, remote "
          "version=%d.%d.%d)\n", sane_strstatus (status),
          SANE_VERSION_MAJOR (version_code),
          SANE_VERSION_MINOR (version_code), SANE_VERSION_BUILD (version_code));
@@ -211,7 +211,7 @@ connect_dev (Unix_Device* dev)
 
     if (status != 0)
     {
-        DBG (1, "connect_dev: access to %s denied\n", dev->path);
+        DBG (1, "connect_dev: access to {} denied\n", dev->path);
         goto fail;
     }
 
@@ -238,7 +238,7 @@ connect_dev (Unix_Device* dev)
     return SANE_STATUS_GOOD;
 
 fail:
-    DBG (2, "connect_dev: closing connection to %s\n", dev->path);
+    DBG (2, "connect_dev: closing connection to {}\n", dev->path);
     close (dev->ctl);
     dev->ctl = -1;
     return status;
@@ -261,7 +261,7 @@ fetch_options (Unix_Scanner* s)
 
         if (s->hw->wire.status)
         {
-            DBG (1, "fetch_options: failed to free old list (%s)\n",
+            DBG (1, "fetch_options: failed to free old list ({})\n",
                  strerror (s->hw->wire.status));
             return SANE_STATUS_IO_ERROR;
         }
@@ -274,7 +274,7 @@ fetch_options (Unix_Scanner* s)
 
     if (s->hw->wire.status)
     {
-        DBG (1, "fetch_options: failed to get option descriptors (%s)\n",
+        DBG (1, "fetch_options: failed to get option descriptors ({})\n",
              strerror (s->hw->wire.status));
         return SANE_STATUS_IO_ERROR;
     }
@@ -353,7 +353,7 @@ do_authorization (Unix_Device* dev, SANE_String resource)
     SANE_Char password[SANE_MAX_PASSWORD_LEN];
     char *unix_resource;
 
-    DBG (2, "do_authorization: dev=%p resource=%s\n", (void*) dev, resource);
+    DBG (2, "do_authorization: dev=%p resource={}\n", (void*) dev, resource);
 
     dev->auth_active = 1;
 
@@ -365,11 +365,11 @@ do_authorization (Unix_Device* dev, SANE_String resource)
 
     if (unix_resource != NULL)
     {
-        sprintf (unix_resource, "unix:%s:%s", dev->path, resource);
+        sprintf (unix_resource, "unix:{}:{}", dev->path, resource);
 
         if (auth_callback)
         {
-            DBG (2, "do_authorization: invoking auth_callback, resource = %s\n",
+            DBG (2, "do_authorization: invoking auth_callback, resource = {}\n",
                  unix_resource);
             (*auth_callback) (unix_resource, username, password);
         }
@@ -387,7 +387,7 @@ do_authorization (Unix_Device* dev, SANE_String resource)
 
         if (auth_callback)
         {
-            DBG (2, "do_authorization: invoking auth_callback, resource = %s\n",
+            DBG (2, "do_authorization: invoking auth_callback, resource = {}\n",
                  resource);
             (*auth_callback) (resource, username, password);
         }
@@ -428,7 +428,7 @@ sane_init (SANE_Int* version_code, SANE_Auth_Callback authorize)
 
     DBG_INIT ();
 
-    DBG (2, "sane_init: authorize %s null, version_code %s null\n", (authorize) ? "!=" : "==",
+    DBG (2, "sane_init: authorize {} null, version_code {} null\n", (authorize) ? "!=" : "==",
          (version_code) ? "!=" : "==");
 
     devlist = NULL;
@@ -444,7 +444,7 @@ sane_init (SANE_Int* version_code, SANE_Auth_Callback authorize)
         *version_code = SANE_VERSION_CODE (SANE_DLL_V_MAJOR, SANE_DLL_V_MINOR,
                                            SANE_DLL_V_BUILD);
 
-    DBG (1, "sane_init: SANE unix backend version %s from %s\n", UNIX_VERSION,
+    DBG (1, "sane_init: SANE unix backend version {} from {}\n", UNIX_VERSION,
          PACKAGE_STRING);
 
     /* determine (client) machine byte order */
@@ -482,7 +482,7 @@ sane_init (SANE_Int* version_code, SANE_Auth_Callback authorize)
              * Check for unix backend options.
              * Anything that isn't an option is a saned host.
              */
-            DBG (2, "sane_init: trying to add %s\n", unix_path);
+            DBG (2, "sane_init: trying to add {}\n", unix_path);
             add_device (unix_path, 0);
             break;
         }
@@ -491,7 +491,7 @@ sane_init (SANE_Int* version_code, SANE_Auth_Callback authorize)
         DBG (2, "sane_init: done reading config\n");
     }
     else
-        DBG (1, "sane_init: could not open config file (%s): %s\n",
+        DBG (1, "sane_init: could not open config file ({}): {}\n",
              UNIX_CONFIG_FILE, strerror (errno));
 
     DBG (2, "sane_init: evaluating environment variable SANE_UNIX_PATH\n");
@@ -657,7 +657,7 @@ sane_get_devices (const SANE_Device*** device_list, SANE_Bool local_only)
 
             if (status != SANE_STATUS_GOOD)
             {
-                DBG (1, "sane_get_devices: ignoring failure to connect to %s\n",
+                DBG (1, "sane_get_devices: ignoring failure to connect to {}\n",
                      dev->path);
                 continue;
             }
@@ -669,7 +669,7 @@ sane_get_devices (const SANE_Device*** device_list, SANE_Bool local_only)
 
         if (reply.status != SANE_STATUS_GOOD)
         {
-            DBG (1, "sane_get_devices: ignoring rpc-returned status %s\n",
+            DBG (1, "sane_get_devices: ignoring rpc-returned status {}\n",
                  sane_strstatus (reply.status));
             sanei_w_free (&dev->wire,
                           (WireCodecFunc) sanei_w_get_devices_reply, &reply);
@@ -709,7 +709,7 @@ sane_get_devices (const SANE_Device*** device_list, SANE_Bool local_only)
 
             strcat (full_name, ":");
             strcat (full_name, reply.device_list[i]->name);
-            DBG (3, "sane_get_devices: got %s\n", full_name);
+            DBG (3, "sane_get_devices: got {}\n", full_name);
 
             rdev = (SANE_Device*) mem;
             rdev->name = full_name;
@@ -773,7 +773,7 @@ sane_open (SANE_String_Const full_name, SANE_Handle* meta_handle)
     Unix_Scanner *s;
     int need_auth;
 
-    DBG (3, "sane_open(\"%s\")\n", full_name);
+    DBG (3, "sane_open(\"{}\")\n", full_name);
 
     dev_name = strchr (full_name, ':');
 
@@ -817,7 +817,7 @@ sane_open (SANE_String_Const full_name, SANE_Handle* meta_handle)
         dev_name = "";
     }
 
-    DBG (2, "sane_open: host = %s, device = %s\n", nd_name, dev_name);
+    DBG (2, "sane_open: host = {}, device = {}\n", nd_name, dev_name);
 
     if (!nd_name[0])
     {
@@ -839,7 +839,7 @@ sane_open (SANE_String_Const full_name, SANE_Handle* meta_handle)
     if (!dev)
     {
         DBG (1,
-             "sane_open: device %s not found, trying to register it anyway\n",
+             "sane_open: device {} not found, trying to register it anyway\n",
              nd_name);
         status = add_device (nd_name, &dev);
 
@@ -875,7 +875,7 @@ sane_open (SANE_String_Const full_name, SANE_Handle* meta_handle)
     {
         if (dev->wire.status != 0)
         {
-            DBG (1, "sane_open: open rpc call failed (%s)\n",
+            DBG (1, "sane_open: open rpc call failed ({})\n",
                  strerror (dev->wire.status));
             return SANE_STATUS_IO_ERROR;
         }
@@ -941,7 +941,7 @@ sane_open (SANE_String_Const full_name, SANE_Handle* meta_handle)
 
     if (status != SANE_STATUS_GOOD)
     {
-        DBG (1, "sane_open: fetch_options failed (%s), closing device again\n",
+        DBG (1, "sane_open: fetch_options failed ({}), closing device again\n",
              sane_strstatus (status));
 
         sanei_w_call (&s->hw->wire, SANE_NET_CLOSE,
@@ -1005,7 +1005,7 @@ sane_close (SANE_Handle handle)
 
         if (s->hw->wire.status)
             DBG (1, "sane_close: couldn't free sanei_w_option_descriptor_array "
-                 "(%s)\n", sane_strstatus (s->hw->wire.status));
+                 "({})\n", sane_strstatus (s->hw->wire.status));
     }
 
     DBG (2, "sane_close: removing local option descriptors\n");
@@ -1051,7 +1051,7 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 
         if (status != SANE_STATUS_GOOD)
         {
-            DBG (1, "sane_get_option_descriptor: fetch_options failed (%s)\n",
+            DBG (1, "sane_get_option_descriptor: fetch_options failed ({})\n",
                  sane_strstatus (status));
             return 0;
         }
@@ -1198,7 +1198,7 @@ sane_control_option (SANE_Handle handle, SANE_Int option,
     }
     while (need_auth);
 
-    DBG (2, "sane_control_option: remote done (%s, info %x)\n", sane_strstatus (status), local_info);
+    DBG (2, "sane_control_option: remote done ({}, info %x)\n", sane_strstatus (status), local_info);
 
     if ((status == SANE_STATUS_GOOD) && (info == NULL) && (local_info & SANE_INFO_RELOAD_OPTIONS))
     {
@@ -1206,10 +1206,10 @@ sane_control_option (SANE_Handle handle, SANE_Int option,
 
         status = fetch_options (s);
 
-        DBG (2, "sane_control_option: reload done (%s)\n", sane_strstatus (status));
+        DBG (2, "sane_control_option: reload done ({})\n", sane_strstatus (status));
     }
 
-    DBG (2, "sane_control_option: done (%s, info %x)\n", sane_strstatus (status), local_info);
+    DBG (2, "sane_control_option: done ({}, info %x)\n", sane_strstatus (status), local_info);
 
     return status;
 }
@@ -1240,7 +1240,7 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters* params)
     sanei_w_free (&s->hw->wire,
                   (WireCodecFunc) sanei_w_get_parameters_reply, &reply);
 
-    DBG (3, "sane_get_parameters: returned status %s\n",
+    DBG (3, "sane_get_parameters: returned status {}\n",
          sane_strstatus (status));
     return status;
 }
@@ -1274,7 +1274,7 @@ sane_start (SANE_Handle handle)
 
     if (fd < 0)
     {
-        DBG (1, "sane_start: socket() failed (%s)\n", strerror (errno));
+        DBG (1, "sane_start: socket() failed ({})\n", strerror (errno));
         return SANE_STATUS_IO_ERROR;
     }
 
@@ -1326,7 +1326,7 @@ sane_start (SANE_Handle handle)
 
         if (status != SANE_STATUS_GOOD)
         {
-            DBG (1, "sane_start: remote start failed (%s)\n",
+            DBG (1, "sane_start: remote start failed ({})\n",
                  sane_strstatus (status));
             close (fd);
             return status;
@@ -1336,7 +1336,7 @@ sane_start (SANE_Handle handle)
 
     if (connect (fd, (struct sockaddr*) &sun, len) < 0)
     {
-        DBG (1, "sane_start: connect() failed (%s)\n", strerror (errno));
+        DBG (1, "sane_start: connect() failed ({})\n", strerror (errno));
         close (fd);
         return SANE_STATUS_IO_ERROR;
     }
@@ -1345,7 +1345,7 @@ sane_start (SANE_Handle handle)
     s->data = fd;
     s->reclen_buf_offset = 0;
     s->bytes_remaining = 0;
-    DBG (3, "sane_start: done (%s)\n", sane_strstatus (status));
+    DBG (3, "sane_start: done ({})\n", sane_strstatus (status));
     return status;
 }
 
@@ -1408,7 +1408,7 @@ sane_read (SANE_Handle handle, SANE_Byte* data, SANE_Int max_length,
 
         if (nread < 0)
         {
-            DBG (3, "sane_read: read failed (%s)\n", strerror (errno));
+            DBG (3, "sane_read: read failed ({})\n", strerror (errno));
 
             if (errno == EAGAIN)
             {
@@ -1457,7 +1457,7 @@ sane_read (SANE_Handle handle, SANE_Byte* data, SANE_Int max_length,
                 ch = SANE_STATUS_IO_ERROR;
             }
 
-            DBG (1, "sane_read: error code %s\n",
+            DBG (1, "sane_read: error code {}\n",
                  sane_strstatus ((SANE_Status) ch));
             do_cancel (s);
             return (SANE_Status) ch;
@@ -1473,7 +1473,7 @@ sane_read (SANE_Handle handle, SANE_Byte* data, SANE_Int max_length,
 
     if (nread < 0)
     {
-        DBG (2, "sane_read: error code %s\n", strerror (errno));
+        DBG (2, "sane_read: error code {}\n", strerror (errno));
 
         if (errno == EAGAIN)
         {
@@ -1622,7 +1622,7 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 
     if (fcntl (s->data, F_SETFL, non_blocking ? O_NONBLOCK : 0) < 0)
     {
-        DBG (1, "sane_set_io_mode: fcntl failed (%s)\n", strerror (errno));
+        DBG (1, "sane_set_io_mode: fcntl failed ({})\n", strerror (errno));
         return SANE_STATUS_IO_ERROR;
     }
 

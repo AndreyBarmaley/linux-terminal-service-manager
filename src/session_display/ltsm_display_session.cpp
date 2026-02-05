@@ -69,10 +69,10 @@ namespace LTSM::DisplaySession {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
-            Application::info("%s: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `%s', args: [ %s ], envs: [ %s ]",
+            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("%s: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `%s'", __FUNCTION__, getuid(), pid, cmd.c_str());
+            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
         }
 
         // main thread processed
@@ -103,7 +103,7 @@ namespace LTSM::DisplaySession {
                     break;
                 }
 
-                Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "read", strerror(errno), errno);
+                Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "read", strerror(errno), errno);
                 res.clear();
                 break;
             }
@@ -144,7 +144,7 @@ namespace LTSM::DisplaySession {
         int pipefd[2] = {};
 
         if(0 > pipe(pipefd)) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pipe", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
@@ -161,10 +161,10 @@ namespace LTSM::DisplaySession {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
-            Application::info("%s: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `%s', args: [ %s ], envs: [ %s ]",
+            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("%s: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `%s'", __FUNCTION__, getuid(), pid, cmd.c_str());
+            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
         }
 
         // main thread processed
@@ -182,7 +182,7 @@ namespace LTSM::DisplaySession {
         while(sb.last()) {
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
             if(auto ver = sb.readIntBE16(); ver != 0x0100) {
-                Application::error("%s: invalid xauth format, ver: 0x%04" PRIx16, __FUNCTION__, ver);
+                Application::error("{}: invalid xauth format, ver: 0x%04" PRIx16, __FUNCTION__, ver);
                 throw std::runtime_error(NS_FuncName);
             }
 
@@ -199,13 +199,13 @@ namespace LTSM::DisplaySession {
             auto cookie = sb.read(len);
 
             if(display == std::to_string(displayNum)) {
-                Application::debug(DebugType::App, "%s: %s found, display %" PRId32,
+                Application::debug(DebugType::App, "{}: {} found, display %" PRId32,
                                    __FUNCTION__, "xcb cookie", displayNum);
                 return cookie;
             }
         }
 
-        Application::error("%s: %s found, display: %" PRId32,
+        Application::error("{}: {} found, display: %" PRId32,
                            __FUNCTION__, "xcb cookie not", displayNum);
 
         throw std::runtime_error(NS_FuncName);
@@ -260,7 +260,7 @@ namespace LTSM::DisplaySession {
             return res;
         }
 
-        Application::error("%s: %s not found", __FUNCTION__, "XDG_RUNTIME_DIR");
+        Application::error("{}: {} not found", __FUNCTION__, "XDG_RUNTIME_DIR");
         return "";
     }
 
@@ -349,7 +349,7 @@ namespace LTSM::DisplaySession {
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         auto sargs = Tools::join(args.begin(), args.end(), ", ");
-        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs.c_str());
 
         try {
             if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
@@ -358,7 +358,7 @@ namespace LTSM::DisplaySession {
                 return pid;
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
         }
 
         return -1;
@@ -366,14 +366,14 @@ namespace LTSM::DisplaySession {
 
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         auto sargs = Tools::join(args.begin(), args.end(), ", ");
-        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs.c_str());
 
         try {
             if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
                 return pidStatus.second.get();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
         }
 
         return StatusStdout{ -1, {} };
@@ -381,7 +381,7 @@ namespace LTSM::DisplaySession {
 
     StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string> & args) {
         auto sargs = Tools::join(args.begin(), args.end(), ", ");
-        Application::debug(DebugType::Dbus, "%s: args: [ %s ]", __FUNCTION__, sargs.c_str());
+        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs.c_str());
 
         auto zenityBin = starter_.configGetString("zenity:path", "/usr/bin/zenity");
 
@@ -390,21 +390,21 @@ namespace LTSM::DisplaySession {
                 return pidStatus.second.get();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
         }
 
         return StatusStdout{ -1, {} };
     }
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
-        Application::debug(DebugType::Dbus, "%s: [ %s ]", __FUNCTION__, layout.c_str());
+        Application::debug(DebugType::Dbus, "{}: [ {} ]", __FUNCTION__, layout.c_str());
 
         try {
             if(auto pidStatus = runForkCommandStdout("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {}); 0 < pidStatus.first) {
                 pidStatus.second.wait();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("%s: exception: %s", __FUNCTION__, err.what());
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
         }
     }
 
@@ -459,7 +459,7 @@ namespace LTSM::DisplaySession {
         }
 
         if(! std::filesystem::exists(xorgBin)) {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, xorgBin.c_str());
+            Application::error("{}: path not found: `{}'", __FUNCTION__, xorgBin.c_str());
             throw std::runtime_error(NS_FuncName);
         }
 
@@ -517,7 +517,7 @@ namespace LTSM::DisplaySession {
         std::vector<std::string> sessionEnvs;
 
         if(! std::filesystem::exists(sessionBin)) {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, sessionBin.c_str());
+            Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin.c_str());
             return false;
         }
 
@@ -534,7 +534,7 @@ namespace LTSM::DisplaySession {
             auto helperBin = configGetString("helper:path", "/usr/libexec/ltsm/LTSM_helper");
 
             if(! std::filesystem::exists(helperBin)) {
-                Application::error("%s: path not found: `%s'", __FUNCTION__, helperBin.c_str());
+                Application::error("{}: path not found: `{}'", __FUNCTION__, helperBin.c_str());
                 return false;
             }
 
@@ -550,7 +550,7 @@ namespace LTSM::DisplaySession {
                     ofs << "Xft.dpi: " << dpi << std::endl;
                 }
             } catch(const std::exception & err) {
-                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
 
@@ -645,21 +645,21 @@ namespace LTSM::DisplaySession {
         xcb_ = waitX11DisplayStarting(displayNum_, mcookie_, x11Timeout);
 
         if(! xcb_) {
-            Application::error("%s: %s failed", __FUNCTION__, "X11 connect");
+            Application::error("{}: {} failed", __FUNCTION__, "X11 connect");
             return EXIT_FAILURE;
         }
 
         clearSessionDbusAddress(displayNum_);
 
         if(! startX11Session()) {
-            Application::error("%s: %s failed", __FUNCTION__, "X11 session");
+            Application::error("{}: {} failed", __FUNCTION__, "X11 session");
             return EXIT_FAILURE;
         }
 
         auto dbusAddress = waitSessionDbusAddress(displayNum_, x11Timeout);
 
         if(dbusAddress.empty()) {
-            Application::error("%s: %s failed", __FUNCTION__, "dbus session");
+            Application::error("{}: {} failed", __FUNCTION__, "dbus session");
             return EXIT_FAILURE;
         }
 
@@ -672,7 +672,7 @@ namespace LTSM::DisplaySession {
 #endif
 
         if(! DisplaySession::sessionConn) {
-            Application::error("%s: dbus connection failed, uid: %d", __FUNCTION__, getuid());
+            Application::error("{}: dbus connection failed, uid: %d", __FUNCTION__, getuid());
             return EXIT_FAILURE;
         }
 
@@ -688,12 +688,12 @@ namespace LTSM::DisplaySession {
     }
 
     void Starter::dbusServiceShutdown(void) const {
-        Application::debug(DebugType::Dbus, "%s: pid: %s", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
         sessionConn->leaveEventLoop();
     }
 
     void Starter::dbusSetDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
         setDebugLevel(level);
     }
 
@@ -758,7 +758,7 @@ int main(int argc, char** argv) {
             std::filesystem::create_directory(ltsmDir);
         }
     } else {
-        Application::error("%s: %s not found", __FUNCTION__, "HOME");
+        Application::error("{}: {} not found", __FUNCTION__, "HOME");
         return EXIT_FAILURE;
     }
 
@@ -769,9 +769,9 @@ int main(int argc, char** argv) {
         int displayNum = std::stoi(displayAddr + 1);
         return DisplaySession::Starter(displayNum, xauthFile).run();
     } catch(const sdbus::Error & err) {
-        Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        Application::error("exception: %s", err.what());
+        Application::error("exception: {}", err.what());
     }
 
     return EXIT_FAILURE;

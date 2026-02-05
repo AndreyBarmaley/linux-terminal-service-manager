@@ -128,7 +128,7 @@ namespace LTSM {
                     auto beg = clientClipboard.get() + offset;
                     return std::vector<uint8_t>(beg, beg + length);
                 } else {
-                    Application::error("%s: invalid length: %lu, offset: %" PRIu32, __FUNCTION__, length, offset);
+                    Application::error("{}: invalid length: %lu, offset: %" PRIu32, __FUNCTION__, length, offset);
                 }
             }
 
@@ -217,7 +217,7 @@ namespace LTSM {
                     break;
 
                 case SDL_QUIT:
-                    Application::warning("%s: %s", __FUNCTION__, "SDL quit event");
+                    Application::warning("{}: {}", __FUNCTION__, "SDL quit event");
                     throw sdl_error(NS_FuncName);
 
                 default:
@@ -239,7 +239,7 @@ namespace LTSM {
                 // processing xcb events
                 while(auto ev = XCB::RootDisplay::pollEvent()) {
                     if(auto err = XCB::RootDisplay::hasError()) {
-                        Application::error("%s: xcb error, code: %d", __FUNCTION__, err);
+                        Application::error("{}: xcb error, code: %d", __FUNCTION__, err);
                         return EXIT_SUCCESS;
                     }
                 }

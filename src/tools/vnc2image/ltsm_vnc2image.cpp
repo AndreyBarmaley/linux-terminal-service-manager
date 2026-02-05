@@ -94,7 +94,7 @@ namespace LTSM {
                 rfbMessagesLoop();
             }
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
         }
 
         return 0;
@@ -154,7 +154,7 @@ namespace LTSM {
 
     void Vnc2Image::updateRawPixels2(const XCB::Region & reg, const void* ptr, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) {
         // SDL_PIXELFORMAT_RGBX8888 SDL_PIXELFORMAT_XBGR8888
-        Application::warning("%s: not implemented", __FUNCTION__);
+        Application::warning("{}: not implemented", __FUNCTION__);
     }
 
     const PixelFormat & Vnc2Image::clientFormat(void) const {
@@ -186,8 +186,8 @@ int main(int argc, const char** argv) {
         LTSM::Vnc2Image app(argc, argv);
         res = app.start();
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-        LTSM::Application::info("program: %s", "terminate...");
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::info("program: {}", "terminate...");
     } catch(int val) {
         res = val;
     }

@@ -28,7 +28,7 @@ void signalHandler(int sig) {
     if(sig == SIGTERM || sig == SIGINT) {
         Run::process = false;
     } else {
-        Application::warning("%s: receive signal: %d", __FUNCTION__, sig);
+        Application::warning("{}: receive signal: %d", __FUNCTION__, sig);
     }
 }
 
@@ -39,14 +39,14 @@ class FakeStream : public RFB::EncoderStream {
   public:
     FakeStream(const XCB::RootDisplay* xcb) {
         if(! xcb) {
-            Application::error("%s: xcb failed", __FUNCTION__);
+            Application::error("{}: xcb failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
 
         auto visual = xcb->visual();
 
         if(! visual) {
-            Application::error("%s: xcb visual failed", __FUNCTION__);
+            Application::error("{}: xcb visual failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
 
@@ -185,8 +185,8 @@ class EncodingTest : public Application {
             pitch += 8 - align8;
         }
 
-        Application::info("%s: settings - fps: %d, threads: %d, iterations: %d", __FUNCTION__, frameRate, threadsCount, countLoop);
-        Application::info("%s: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: settings - fps: %d, threads: %d, iterations: %d", __FUNCTION__, frameRate, threadsCount, countLoop);
+        Application::info("{}: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
@@ -264,7 +264,7 @@ class EncodingTest : public Application {
                         break;
 
                     default:
-                        Application::error("encoding not found: %s", name.data());
+                        Application::error("encoding not found: {}", name.data());
                         break;;
                 }
             }
@@ -300,7 +300,7 @@ class EncodingTest : public Application {
                     enc.encodeTime(pixmapReply->data(), reg);
                 }
             } else {
-                Application::error("%s: %s", __FUNCTION__, "xcb copy region failed");
+                Application::error("{}: {}", __FUNCTION__, "xcb copy region failed");
                 throw std::runtime_error(NS_FuncName);
             }
 
@@ -390,7 +390,7 @@ int main(int argc, char** argv) {
     try {
         res = EncodingTest(frameRate, countLoop, useThreads, encodings).start();
     } catch(const std::exception & err) {
-        Application::error("exception: %s", err.what());
+        Application::error("exception: {}", err.what());
     }
 
     return res;

@@ -194,7 +194,7 @@ namespace LTSM {
             } else if(slower == "all") {
                 types |= DebugType::All;
             } else {
-                Application::warning("%s: unknown debug marker: `%s'", __FUNCTION__, slower.c_str());
+                Application::warning("{}: unknown debug marker: `{}'", __FUNCTION__, slower.c_str());
             }
         }
 
@@ -402,7 +402,7 @@ namespace LTSM {
                 }
 
                 if(errno != EBADF) {
-                    Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                    Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                        __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 }
 
@@ -410,7 +410,7 @@ namespace LTSM {
             }
 
             if(len < sizeof(struct inotify_event)) {
-                Application::error("%s: %s failed, error: %s, code: %d, path: `%s'",
+                Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
                                    __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 break;
             }
@@ -435,14 +435,14 @@ namespace LTSM {
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
 
         if(! std::filesystem::is_regular_file(file)) {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, file.c_str());
+            Application::error("{}: path not found: `{}'", __FUNCTION__, file.c_str());
             return false;
         }
 
         _inotifyFd = inotify_init();
 
         if(0 > _inotifyFd) {
-            Application::error("%s: %s failed, error: %s, code: %d",
+            Application::error("{}: {} failed, error: {}, code: %d",
                                __FUNCTION__, "inotify_init", strerror(errno), errno);
             return false;
         }
@@ -451,7 +451,7 @@ namespace LTSM {
         _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
 
         if(0 > _inotifyWd) {
-            Application::error("%s: %s failed, error: %d, code: %d, path: `%s'",
+            Application::error("{}: {} failed, error: %d, code: %d, path: `{}'",
                                __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.c_str());
 
             inotifyWatchStop();
@@ -460,7 +460,7 @@ namespace LTSM {
 
         _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 
-        Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, file.c_str());
+        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, file.c_str());
         return true;
     }
 
@@ -540,22 +540,22 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
             return false;
         }
 
         if((std::filesystem::status(file, err).permissions() &
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
-            Application::error("%s: %s, path: `%s', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
             return false;
         }
 
 
-        Application::info("%s: path: `%s', uid: %d", __FUNCTION__, file.c_str(), getuid());
+        Application::info("{}: path: `{}', uid: %d", __FUNCTION__, file.c_str(), getuid());
         JsonContentFile jsonFile(file);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject()) {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "json object", file.c_str());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "json object", file.c_str());
             return false;
         }
 
@@ -611,7 +611,7 @@ namespace LTSM {
         fd = audit_open();
 
         if(fd < 0) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "audit_open", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "audit_open", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
     }
@@ -626,7 +626,7 @@ namespace LTSM {
         assert(msg);
 
         if(int seq = audit_log_user_message(fd, type, msg, hostname, addr, tty, static_cast<int>(success)); seq < 0) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
         }
     }
 #endif
@@ -654,7 +654,7 @@ namespace LTSM {
             close(fd);
         } else {
             const char* devnull = "/dev/null";
-            Application::warning("%s: %s, path: `%s', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
 
             if(file != devnull) {
                 redirectStdoutStderrTo(out, err, devnull);
@@ -667,13 +667,13 @@ namespace LTSM {
         pid_t pid = fork();
 
         if(pid < 0) {
-            Application::error("%s: %s failed, error: %s, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
 
         // parent mode
         if(0 < pid) {
-            Application::debug(DebugType::App, "%s: child pid: %d", __FUNCTION__, pid);
+            Application::debug(DebugType::App, "{}: child pid: %d", __FUNCTION__, pid);
             return pid;
         }
 
@@ -705,32 +705,32 @@ namespace LTSM {
             Application::setDebugTarget(DebugTarget::SyslogFile, file);
             appDebugTypes = DebugType::All;
             appLogSync = true;
-            Application::debug(DebugType::App, "%s: log redirected", __FUNCTION__);
+            Application::debug(DebugType::App, "{}: log redirected", __FUNCTION__);
         }
 
         return pid;
     }
 
     int ForkMode::waitPid(int pid) {
-        Application::debug(DebugType::App, "%s: pid: %" PRId32, __FUNCTION__, pid);
+        Application::debug(DebugType::App, "{}: pid: %" PRId32, __FUNCTION__, pid);
         // waitpid
         int status;
         int ret = waitpid(pid, &status, 0);
 
         if(0 > ret) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "waitpid", strerror(errno), errno);
             return ret;
         }
 
         if(WIFSIGNALED(status)) {
-            Application::warning("%s: process %s, pid: %" PRId32 ", signal: %" PRId32,
+            Application::warning("{}: process {}, pid: %" PRId32 ", signal: %" PRId32,
                                  __FUNCTION__, "killed", pid, WTERMSIG(status));
         } else if(WIFEXITED(status)) {
-            Application::info("%s: process %s, pid: %" PRId32 ", return: %" PRId32,
+            Application::info("{}: process {}, pid: %" PRId32 ", return: %" PRId32,
                               __FUNCTION__, "exited", pid, WEXITSTATUS(status));
         } else {
-            Application::debug(DebugType::App, "%s: process %s, pid: %" PRId32 ", wstatus: 0x%08" PRIx32,
+            Application::debug(DebugType::App, "{}: process {}, pid: %" PRId32 ", wstatus: 0x%08" PRIx32,
                                __FUNCTION__, "ended", pid, status);
         }
 
@@ -754,10 +754,10 @@ namespace LTSM {
             auto sargs = Tools::join(args.begin(), args.end(), " ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ",");
 
-            Application::info("%s: pid: %" PRId32 ", cmd: `%s', args: `%s', envs: [ %s ]",
+            Application::info("{}: pid: %" PRId32 ", cmd: `{}', args: `{}', envs: [ {} ]",
                               __FUNCTION__, getpid(), cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("%s: pid: %" PRId32 ", cmd: `%s'", __FUNCTION__, getpid(), cmd.c_str());
+            Application::info("{}: pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getpid(), cmd.c_str());
         }
 
         for(const auto & env : envs) {
@@ -796,7 +796,7 @@ namespace LTSM {
             if(0 <= redirectFd) {
                 // redirect stdout
                 if(0 > dup2(redirectFd, STDOUT_FILENO)) {
-                    Application::warning("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "dup2", strerror(errno), errno);
+                    Application::warning("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "dup2", strerror(errno), errno);
                 }
 
                 close(redirectFd);
@@ -810,7 +810,7 @@ namespace LTSM {
         spdlog::drop_all();
 
         if(int res = execv(cmd.c_str(), (char* const*) argv.data()); res < 0) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+            Application::error("{}: {} failed, error: {}, code: %" PRId32 ", path: `{}'",
                                __FUNCTION__, "execv", strerror(errno), errno, cmd.c_str());
         }
 

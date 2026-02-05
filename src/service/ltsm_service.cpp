@@ -159,22 +159,22 @@ namespace LTSM::Manager {
             }
 
             if(! std::filesystem::is_directory(userInfo->home())) {
-                Application::warning("%s: HOME not found: `%s'", __FUNCTION__, userInfo->home().c_str());
+                Application::warning("{}: HOME not found: `{}'", __FUNCTION__, userInfo->home().c_str());
             }
 
             if(0 != initgroups(userInfo->user().c_str(), userInfo->gid())) {
-                Application::error("%s: %s failed, user: %s, gid: %" PRId32 ", error: %s",
+                Application::error("{}: {} failed, user: {}, gid: %" PRId32 ", error: {}",
                                    __FUNCTION__, "initgroups", userInfo->user().c_str(), userInfo->gid(), strerror(errno));
                 return;
             }
 
             if(! pam->openSession()) {
-                Application::error("%s: %s, display: %" PRId32 ", user: %s",
+                Application::error("{}: {}, display: %" PRId32 ", user: {}",
                                    __FUNCTION__, "PAM open session failed", sess->displayNum, userInfo->user().c_str());
                 return;
             }
 
-            Application::debug(DebugType::App, "%s: child mode, type: %s, pid: %" PRId32 ", uid: %" PRId32,
+            Application::debug(DebugType::App, "{}: child mode, type: {}, pid: %" PRId32 ", uid: %" PRId32,
                                __FUNCTION__, "pam session", getpid(), getuid());
 
             if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
@@ -200,7 +200,7 @@ namespace LTSM::Manager {
             }
 
             // child2 thread
-            Application::debug(DebugType::App, "%s: child mode, type: %s, pid: %" PRId32 ", uid: %" PRId32,
+            Application::debug(DebugType::App, "{}: child mode, type: {}, pid: %" PRId32 ", uid: %" PRId32,
                                __FUNCTION__, "display session", getpid(), getuid());
 
             auto sessionBin = json.configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
@@ -210,14 +210,14 @@ namespace LTSM::Manager {
                 if(switchToUser(*sess->userInfo)) {
                     // set environments
                     for(const auto & [key, val] : sess->getEnvironments(pam->getEnvList())) {
-                        Application::debug(DebugType::App, "%s: setenv[ %s ] = `%s'", __FUNCTION__, key.c_str(), val.c_str());
+                        Application::debug(DebugType::App, "{}: setenv[ {} ] = `{}'", __FUNCTION__, key.c_str(), val.c_str());
                         setenv(key.c_str(), val.c_str(), 1);
                     }
 
                     ForkMode::runChildProcess(sessionBin, sessionArgs, {}, RedirectLog::StdoutStderr);
                 }
             } else {
-                Application::error("%s: path not found: `%s'", __FUNCTION__, sessionBin.c_str());
+                Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin.c_str());
             }
         }
     }
@@ -264,10 +264,10 @@ namespace LTSM::Manager {
 
         if(PAM_SUCCESS != status) {
             if(pamh) {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32,
+                Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                    __FUNCTION__, "pam_start", pam_strerror(pamh, status), status);
             } else {
-                Application::error("%s: %s failed", __FUNCTION__, "pam_start");
+                Application::error("{}: {} failed", __FUNCTION__, "pam_start");
             }
 
             return false;
@@ -280,12 +280,12 @@ namespace LTSM::Manager {
     int PamAuthenticate::pam_conv_func(int num_msg, const struct pam_message** msg, struct pam_response** resp,
                                        void* appdata) {
         if(! appdata) {
-            Application::error("%s: pam error: %s", __FUNCTION__, "empty data");
+            Application::error("{}: pam error: {}", __FUNCTION__, "empty data");
             return PAM_CONV_ERR;
         }
 
         if(! msg || ! resp) {
-            Application::error("%s: pam error: %s", __FUNCTION__, "empty params");
+            Application::error("{}: pam error: {}", __FUNCTION__, "empty params");
             return PAM_CONV_ERR;
         }
 
@@ -293,7 +293,7 @@ namespace LTSM::Manager {
             *resp = (struct pam_response*) calloc(num_msg, sizeof(struct pam_response));
 
             if(! *resp) {
-                Application::error("%s: pam error: %s", __FUNCTION__, "buf error");
+                Application::error("{}: pam error: {}", __FUNCTION__, "buf error");
                 return PAM_BUF_ERR;
             }
         }
@@ -318,15 +318,15 @@ namespace LTSM::Manager {
     char* PamAuthenticate::onPamPrompt(int style, const char* msg) const {
         switch(style) {
             case PAM_ERROR_MSG:
-                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_ERROR_MSG", msg);
+                Application::info("{}: style: `{}', msg: `{}'", __FUNCTION__, "PAM_ERROR_MSG", msg);
                 break;
 
             case PAM_TEXT_INFO:
-                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_TEXT_INFO", msg);
+                Application::info("{}: style: `{}', msg: `{}'", __FUNCTION__, "PAM_TEXT_INFO", msg);
                 break;
 
             case PAM_PROMPT_ECHO_ON:
-                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_ON", msg);
+                Application::info("{}: style: `{}', msg: `{}'", __FUNCTION__, "PAM_PROMPT_ECHO_ON", msg);
 
                 //if(0 == strncasecmp(msg, "login:", 6));
                 return strdup(login.c_str());
@@ -334,7 +334,7 @@ namespace LTSM::Manager {
                 break;
 
             case PAM_PROMPT_ECHO_OFF:
-                Application::info("%s: style: `%s', msg: `%s'", __FUNCTION__, "PAM_PROMPT_ECHO_OFF", msg);
+                Application::info("{}: style: `{}', msg: `{}'", __FUNCTION__, "PAM_PROMPT_ECHO_OFF", msg);
 
                 //if(0 == strncasecmp(msg, "password:", 9));
                 return strdup(password.c_str());
@@ -360,7 +360,7 @@ namespace LTSM::Manager {
         status = pam_authenticate(pamh, 0);
 
         if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_authenticate", pam_strerror(pamh, status), status);
             return false;
         }
@@ -384,12 +384,12 @@ namespace LTSM::Manager {
             status = pam_chauthtok(pamh, PAM_CHANGE_EXPIRED_AUTHTOK);
 
             if(PAM_SUCCESS != status) {
-                Application::error("%s: %s failed, error: %s, code: %" PRId32,
+                Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                    __FUNCTION__, "pam_chauthtok", pam_strerror(pamh, status), status);
                 return false;
             }
         } else if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_acct_mgmt", pam_strerror(pamh, status), status);
             return false;
         }
@@ -401,7 +401,7 @@ namespace LTSM::Manager {
         status = pam_setcred(pamh, PAM_REFRESH_CRED);
 
         if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_setcred", pam_strerror(pamh, status), status);
             return false;
         }
@@ -413,7 +413,7 @@ namespace LTSM::Manager {
         status = pam_setcred(pamh, PAM_ESTABLISH_CRED);
 
         if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_setcred", pam_strerror(pamh, status), status);
             return false;
         }
@@ -421,7 +421,7 @@ namespace LTSM::Manager {
         status = pam_open_session(pamh, 0);
 
         if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_open_session", pam_strerror(pamh, status), status);
             return false;
         }
@@ -435,7 +435,7 @@ namespace LTSM::Manager {
         status = pam_setcred(pamh, cred);
 
         if(PAM_SUCCESS != status) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: %" PRId32,
                                __FUNCTION__, "pam_setcred", pam_strerror(pamh, status), status);
             return false;
         }
@@ -462,7 +462,7 @@ namespace LTSM::Manager {
     XvfbSession::~XvfbSession() {
         if(0 < pid1) {
             // kill session
-            Application::debug(DebugType::App, "%s: display: %" PRId32 ", pid: %" PRId32, "destroySession", displayNum, pid1);
+            Application::debug(DebugType::App, "{}: display: %" PRId32 ", pid: %" PRId32, "destroySession", displayNum, pid1);
             kill(pid1, SIGTERM);
         }
 
@@ -488,7 +488,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 return proxy->getVersion();
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return 0;
@@ -500,7 +500,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 return proxy->runSessionZenity(args);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return PidStdout{-1, {}};
@@ -512,7 +512,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 return proxy->runSessionCommandAsync(cmd, args, envs);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return -1;
@@ -524,7 +524,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 return proxy->setSessionKeyboardLayout(layout);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -535,7 +535,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 proxy->notifyWarning(summary, body);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -546,7 +546,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 proxy->notifyError(summary, body);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -557,7 +557,7 @@ namespace LTSM::Manager {
                 auto proxy = std::make_unique<DisplaySessionProxy>(dbusAddress, displayNum);
                 proxy->notifyInfo(summary, body);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -567,7 +567,7 @@ namespace LTSM::Manager {
             try {
                 return DisplaySession::SessionAudio(dbusAddress).connectChannel(socketPath);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return false;
@@ -578,7 +578,7 @@ namespace LTSM::Manager {
             try {
                 DisplaySession::SessionAudio(dbusAddress).disconnectChannel(socketPath);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -588,7 +588,7 @@ namespace LTSM::Manager {
             try {
                 return DisplaySession::SessionPcsc(dbusAddress).connectChannel(socketPath);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return false;
@@ -599,7 +599,7 @@ namespace LTSM::Manager {
             try {
                 DisplaySession::SessionPcsc(dbusAddress).disconnectChannel(socketPath);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -609,7 +609,7 @@ namespace LTSM::Manager {
             try {
                 return DisplaySession::SessionFuse(dbusAddress).mountPoint(localPoint, remotePoint, fuseSocket);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
         return false;
@@ -620,7 +620,7 @@ namespace LTSM::Manager {
             try {
                 DisplaySession::SessionFuse(dbusAddress).umountPoint(localPoint);
             } catch(const std::exception & err) {
-                Application::warning("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
     }
@@ -809,7 +809,7 @@ namespace LTSM::Manager {
         std::error_code err;
 
         if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20)), err)) {
-            Application::warning("%s: %s, path: `%s'", __FUNCTION__, err.message().c_str(), cmd.c_str());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, err.message().c_str(), cmd.c_str());
             return false;
         }
 
@@ -818,7 +818,7 @@ namespace LTSM::Manager {
 
         auto thr = std::thread([ptr = std::move(xvfb), str]() {
             int ret = std::system(str.c_str());
-            Application::debug(DebugType::App, "%s: command: `%s', return code: %" PRId32 ", display: %" PRId32,
+            Application::debug(DebugType::App, "{}: command: `{}', return code: %" PRId32 ", display: %" PRId32,
                                "runSystemScript", str.c_str(), ret, ptr->displayNum);
         });
 
@@ -832,7 +832,7 @@ namespace LTSM::Manager {
     }
 
     bool switchToUser(const UserSession & userInfo) {
-        Application::debug(DebugType::App, "%s: pid: %" PRId32 ", uid: %" PRId32 ", gid: %" PRId32 ", home: `%s', shell: `%s'",
+        Application::debug(DebugType::App, "{}: pid: %" PRId32 ", uid: %" PRId32 ", gid: %" PRId32 ", home: `{}', shell: `{}'",
                            __FUNCTION__, getpid(), userInfo.uid(), userInfo.gid(), userInfo.home().c_str(), userInfo.shell().c_str());
 
         auto xdgRuntimeDir = userInfo.xdgRuntimeDir();
@@ -844,7 +844,7 @@ namespace LTSM::Manager {
         }
 
         if(! std::filesystem::is_directory(xdgLtsm, err)) {
-            Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "mkdir", xdgLtsm.c_str());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mkdir", xdgLtsm.c_str());
             return false;
         }
 
@@ -860,17 +860,17 @@ namespace LTSM::Manager {
         }
 
         if(0 != setgid(userInfo.gid())) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "setgid", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "setgid", strerror(errno), errno);
             return false;
         }
 
         if(0 != setuid(userInfo.uid())) {
-            Application::error("%s: %s failed, error: %s, code: %" PRId32, __FUNCTION__, "setuid", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "setuid", strerror(errno), errno);
             return false;
         }
 
         if(0 != chdir(userInfo.home().c_str())) {
-            Application::warning("%s: %s failed, error: %s, code: %" PRId32 ", path: `%s'",
+            Application::warning("{}: {} failed, error: {}, code: %" PRId32 ", path: `{}'",
                                  __FUNCTION__, "chdir", strerror(errno), errno, userInfo.home().c_str());
         }
 
@@ -883,7 +883,7 @@ namespace LTSM::Manager {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto cwd = std::filesystem::current_path();
             auto sgroups = Tools::join(gids.begin(), gids.end(), ",");
-            Application::debug(DebugType::App, "%s: groups: (%s), current dir: `%s'", __FUNCTION__, sgroups.c_str(), cwd.c_str());
+            Application::debug(DebugType::App, "{}: groups: ({}), current dir: `{}'", __FUNCTION__, sgroups.c_str(), cwd.c_str());
         }
 
         return true;
@@ -924,11 +924,11 @@ namespace LTSM::Manager {
 #endif
         displayNum(display) {
         registerProxy();
-        Application::debug(DebugType::App, "%s: create for display: %" PRId32, __FUNCTION__, displayNum);
+        Application::debug(DebugType::App, "{}: create for display: %" PRId32, __FUNCTION__, displayNum);
     }
 #else
     DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : displayNum(display) {
-        Application::warning("%s: sdbus address not supported, use 1.2 version", __FUNCTION__);
+        Application::warning("{}: sdbus address not supported, use 1.2 version", __FUNCTION__);
         throw service_error(NS_FuncName);
     }
 #endif
@@ -1024,7 +1024,7 @@ namespace LTSM::Manager {
 
             if(auto value = configGetString(key);
                ! std::filesystem::exists(value)) {
-                Application::warning("%s: path not found: `%s'", "CheckProgram", value.c_str());
+                Application::warning("{}: path not found: `{}'", "CheckProgram", value.c_str());
             }
         }
     }
@@ -1044,7 +1044,7 @@ namespace LTSM::Manager {
             sessions.resize(poolsz);
         }
 
-        Application::notice("%s: success", __FUNCTION__);
+        Application::notice("{}: success", __FUNCTION__);
     }
 
     void DBusAdaptor::sessionsTimeLimitAction(void) {
@@ -1057,7 +1057,7 @@ namespace LTSM::Manager {
                 auto startedSec = ptr->sessionStartedSec();
 
                 if(startedSec.count() > ptr->lifeTimeLimitSec) {
-                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
                                         __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
                     displayShutdown(ptr, true);
                     continue;
@@ -1073,7 +1073,7 @@ namespace LTSM::Manager {
                 auto onlinedSec = ptr->sessionOnlinedSec();
 
                 if(onlinedSec.count() > ptr->onlineTimeLimitSec) {
-                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
                                         __FUNCTION__, "online", ptr->displayNum, static_cast<uint32_t>(ptr->onlineTimeLimitSec), onlinedSec.count());
                     emitShutdownConnector(ptr->displayNum);
                     continue;
@@ -1087,7 +1087,7 @@ namespace LTSM::Manager {
                 auto offlinedSec = ptr->sessionOfflinedSec();
 
                 if(offlinedSec.count() > ptr->offlineTimeLimitSec) {
-                    Application::notice("%s: %s limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: %" PRId32 ", limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
                                         __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
                     displayShutdown(ptr, true);
                     continue;
@@ -1143,7 +1143,7 @@ namespace LTSM::Manager {
             });
 
             if(it != childsRunning.end()) {
-                Application::notice("%s: session ended, pid: %" PRId32 ", ret: %" PRId32,
+                Application::notice("{}: session ended, pid: %" PRId32 ", ret: %" PRId32,
                                     __FUNCTION__, ptr->pid1, it->second.get());
 
                 res.push_front(std::move(ptr));
@@ -1200,7 +1200,7 @@ namespace LTSM::Manager {
 
 #endif
 
-        Application::notice("%s: display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+        Application::notice("{}: display: %" PRId32, __FUNCTION__, xvfb->displayNum);
         // dbus no wait, remove background
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
 
@@ -1259,7 +1259,7 @@ namespace LTSM::Manager {
         auto xauthFilePath = ltsmRuntimeDir / "auth_";
         xauthFilePath += std::to_string(displayNum);
 
-        Application::debug(DebugType::App, "%s: path: `%s'", __FUNCTION__, xauthFilePath.c_str());
+        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, xauthFilePath.c_str());
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
         if(ofs) {
@@ -1283,7 +1283,7 @@ namespace LTSM::Manager {
             ofs.write((const char*) rawbuf.data(), rawbuf.size());
             ofs.close();
         } else {
-            Application::error("%s: create xauthfile failed, path: `%s'", __FUNCTION__, xauthFilePath.c_str());
+            Application::error("{}: create xauthfile failed, path: `{}'", __FUNCTION__, xauthFilePath.c_str());
             return "";
         }
 
@@ -1313,12 +1313,12 @@ namespace LTSM::Manager {
         auto userInfo = Tools::getUserInfo(username);
 
         if(! userInfo) {
-            Application::error("%s: user not found: `%s'", __FUNCTION__, username.c_str());
+            Application::error("{}: user not found: `{}'", __FUNCTION__, username.c_str());
             return nullptr;
         }
 
         if(userInfo->uid() == 0) {
-            Application::error("%s: deny for root", __FUNCTION__);
+            Application::error("{}: deny for root", __FUNCTION__);
             return nullptr;
         }
 
@@ -1332,7 +1332,7 @@ namespace LTSM::Manager {
         });
 
         if(freeSlot == sessions.end()) {
-            Application::error("%s: limit:sessions overload", __FUNCTION__);
+            Application::error("{}: limit:sessions overload", __FUNCTION__);
             return nullptr;
         }
 
@@ -1346,7 +1346,7 @@ namespace LTSM::Manager {
                 }
             }
             if(usersLimitMax <= users.size()) {
-                Application::error("%s: limit:users overload", __FUNCTION__);
+                Application::error("{}: limit:users overload", __FUNCTION__);
                 return nullptr;
             }
         }
@@ -1396,7 +1396,7 @@ namespace LTSM::Manager {
                 auto base64 = Tools::base64Encode(BinaryBuf(Tools::zlibCompress(RawPtr(json.data(), json.size()))));
                 sess->environments.emplace("LTSM_CLIENT_OPTS", std::move(base64));
             } catch(const std::exception & err) {
-                Application::error("%s: exception: `%s'", __FUNCTION__, err.what());
+                Application::error("{}: exception: `{}'", __FUNCTION__, err.what());
             }
         }
 
@@ -1431,7 +1431,7 @@ namespace LTSM::Manager {
         }
 
         // main thread
-        Application::debug(DebugType::App, "%s: started, pid: %" PRId32 ", display: %" PRId32,
+        Application::debug(DebugType::App, "{}: started, pid: %" PRId32 ", display: %" PRId32,
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
         auto sessionStartTimeout = configGetDouble("session:start:timeout", 3.f);
@@ -1445,10 +1445,10 @@ namespace LTSM::Manager {
                 (*freeSlot) = std::move(sess);
                 return *freeSlot;
             } catch(const std::exception & err) {
-                Application::error("%s: %s", __FUNCTION__, "permission", err.what());
+                Application::error("{}: {}", __FUNCTION__, "permission", err.what());
             }
         } else {
-            Application::error("%s: display session not started", __FUNCTION__);
+            Application::error("{}: display session not started", __FUNCTION__);
         }
 
         ForkMode::waitPid(sess->pid1);
@@ -1457,7 +1457,7 @@ namespace LTSM::Manager {
 
     int32_t DBusAdaptor::busStartLoginSession(const int32_t & connectorId, const uint8_t & depth,
             const std::string & remoteAddr, const std::string & connType) {
-        Application::debug(DebugType::Dbus, "%s: login request, remote: %s, type: %s",
+        Application::debug(DebugType::Dbus, "{}: login request, remote: {}, type: {}",
                            __FUNCTION__, remoteAddr.c_str(), connType.c_str());
 
         auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
@@ -1481,24 +1481,24 @@ namespace LTSM::Manager {
 
     int32_t DBusAdaptor::busStartUserSession(const int32_t & oldScreen, const int32_t & connectorId,
             const std::string & userName, const std::string & remoteAddr, const std::string & connType) {
-        Application::debug(DebugType::Dbus, "%s: session request, user: %s, remote: %s, display: %" PRId32,
+        Application::debug(DebugType::Dbus, "{}: session request, user: {}, remote: {}, display: %" PRId32,
                            __FUNCTION__, userName.c_str(), remoteAddr.c_str(), oldScreen);
 
         auto loginSess = findDisplaySession(oldScreen);
 
         if(! loginSess) {
-            Application::error("%s: display not found: %" PRId32, __FUNCTION__, oldScreen);
+            Application::error("{}: display not found: %" PRId32, __FUNCTION__, oldScreen);
             return -1;
         }
 
         if(auto userSessions = findUserSessions(userName); !userSessions.empty()) {
             auto oldSess = userSessions.front();
 
-            Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
+            Application::info("{}: {}, display: %" PRId32 ", user: {}, pid: %" PRId32,
                     __FUNCTION__, "connect to session", oldSess->displayNum, oldSess->userInfo->user().c_str(), oldSess->pid1);
 
             if(! checkDisplaySessionAlive(oldSess->displayNum)) {
-                Application::error("%s: %s failed, display: %" PRId32,
+                Application::error("{}: {} failed, display: %" PRId32,
                     __FUNCTION__, "checkDisplaySessionAlive", oldSess->displayNum);
                 return -1;
             }
@@ -1517,7 +1517,7 @@ namespace LTSM::Manager {
             FIXME
                         // reinit pam session
                         if(! oldSess->pam || ! oldSess->pam->refreshCreds()) {
-                            Application::error("%s: %s, display: %" PRId32 ", user: %s",
+                            Application::error("{}: {}, display: %" PRId32 ", user: {}",
                                                __FUNCTION__, "PAM failed", oldSess->displayNum, oldSess->userInfo->user().c_str());
                             displayShutdown(oldSess, true);
                             return -1;
@@ -1529,7 +1529,7 @@ namespace LTSM::Manager {
             if(configGetBoolean("session:kill:stop", false)) {
                 auto cmd = std::string("/usr/bin/killall -s SIGCONT -u ").append(oldSess->userInfo->user());
                 int ret = std::system(cmd.c_str());
-                Application::debug(DebugType::App, "%s: command: `%s', return code: %" PRId32 ", display: %" PRId32,
+                Application::debug(DebugType::App, "{}: command: `{}', return code: %" PRId32 ", display: %" PRId32,
                                    __FUNCTION__, cmd.c_str(), ret, oldSess->displayNum);
             }
 
@@ -1551,12 +1551,12 @@ namespace LTSM::Manager {
         waitPidBackgroundSafe(newSess->pid1);
 
         // parent continue
-        Application::info("%s: %s, display: %" PRId32 ", user: %s, pid: %" PRId32,
+        Application::info("{}: {}, display: %" PRId32 ", user: {}, pid: %" PRId32,
                     __FUNCTION__, "session started", newSess->displayNum, newSess->userInfo->user().c_str(), newSess->pid1);
 
         std::error_code err;
         if(! std::filesystem::is_directory(newSess->userInfo->home(), err)) {
-            Application::warning("%s: path not found: `%s'", __FUNCTION__, newSess->userInfo->home().c_str());
+            Application::warning("{}: path not found: `{}'", __FUNCTION__, newSess->userInfo->home().c_str());
         }
 
         // update screen
@@ -1608,23 +1608,23 @@ namespace LTSM::Manager {
     }
 
     int32_t DBusAdaptor::busGetServiceVersion(void) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
         return LTSM::service_version;
     }
 
     std::string DBusAdaptor::busDisplayAuthFile(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display)) {
             return xvfb->xauthfile;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return "";
     }
 
     void DBusAdaptor::busShutdownDisplay(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto ptr = findDisplaySession(display)) {
             std::thread([this, xvfb = std::move(ptr)]() {
@@ -1632,12 +1632,12 @@ namespace LTSM::Manager {
                 this->displayShutdown(xvfb, true);
             }).detach();
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
         std::thread([this, display]() {
             std::this_thread::sleep_for(10ms);
             this->emitShutdownConnector(display);
@@ -1645,7 +1645,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busShutdownService(void) {
-        Application::debug(DebugType::Dbus, "%s: %s, pid: %" PRId32, __FUNCTION__, "starting", getpid());
+        Application::debug(DebugType::Dbus, "{}: {}, pid: %" PRId32, __FUNCTION__, "starting", getpid());
 
         // terminate connectors
         for(const auto & ptr : sessions) {
@@ -1660,7 +1660,7 @@ namespace LTSM::Manager {
 
         // wait sessions
         while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
-            Application::debug(DebugType::App, "%s: wait sessions: %lu", __FUNCTION__, sessionsAlive);
+            Application::debug(DebugType::App, "{}: wait sessions: %lu", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
         }
 
@@ -1672,7 +1672,7 @@ namespace LTSM::Manager {
                 return 0 < pair.first;
             });
 
-            Application::error("%s: running childs: %lu, killed process", __FUNCTION__, childsCount);
+            Application::error("{}: running childs: %lu, killed process", __FUNCTION__, childsCount);
 
             for(const auto & [pid, futureStatus] : childsRunning) {
                 kill(pid, SIGTERM);
@@ -1687,12 +1687,12 @@ namespace LTSM::Manager {
             childsRunning.clear();
         }
 
-        Application::notice("%s: %s, pid: %" PRId32, __FUNCTION__, "complete", getpid());
+        Application::notice("{}: {}, pid: %" PRId32, __FUNCTION__, "complete", getpid());
         serviceConn->leaveEventLoop();
     }
 
     void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", message: `%s'", __FUNCTION__, display, message.c_str());
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", message: `{}'", __FUNCTION__, display, message.c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
             if(xvfb->mode == SessionMode::Connected ||
@@ -1702,14 +1702,14 @@ namespace LTSM::Manager {
                 return;
             }
 
-            Application::warning("%s: %s failed, display: %" PRId32, __FUNCTION__, "session mode", display);
+            Application::warning("{}: {} failed, display: %" PRId32, __FUNCTION__, "session mode", display);
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSessionIdleTimeout(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto ptr = findDisplaySession(display)) {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
@@ -1721,23 +1721,23 @@ namespace LTSM::Manager {
                 }).detach();
             }
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busConnectorAlive(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->resetStatus(Flags::SessionStatus::CheckConnection);
             xvfb->connectorFailures = 0;
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetLoginsDisable(const bool & action) {
-        Application::debug(DebugType::Dbus, "%s: action: %s", __FUNCTION__, (action ? "true" : "false"));
+        Application::debug(DebugType::Dbus, "{}: action: {}", __FUNCTION__, (action ? "true" : "false"));
         loginsDisable = action;
     }
 
@@ -1757,7 +1757,7 @@ namespace LTSM::Manager {
 #endif
 
     void DBusAdaptor::busConnectorConnected(const int32_t & display, const int32_t & connectorId) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->connectorId = connectorId;
@@ -1771,17 +1771,17 @@ namespace LTSM::Manager {
 
             emitSessionOnline(xvfb->displayNum, xvfb->userInfo->user());
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busConnectorTerminated(const int32_t & display, const int32_t & connectorId) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         auto ptr = findDisplaySession(display);
 
         if(! ptr) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
             return;
         }
 
@@ -1813,7 +1813,7 @@ namespace LTSM::Manager {
             if(configGetBoolean("session:kill:stop", false)) {
                 auto cmd = std::string("/usr/bin/killall -s SIGSTOP -u ").append(ptr->userInfo->user());
                 int ret = std::system(cmd.c_str());
-                Application::debug(DebugType::App, "%s: command: `%s', return code: %" PRId32 ", display: %" PRId32,
+                Application::debug(DebugType::App, "{}: command: `{}', return code: %" PRId32 ", display: %" PRId32,
                                    __FUNCTION__, cmd.c_str(), ret, ptr->displayNum);
             }
 
@@ -1852,7 +1852,7 @@ namespace LTSM::Manager {
         std::error_code err;
 
         if(! std::filesystem::is_directory(dstdir, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, err.message().c_str(), dstdir.c_str(), getuid());
             emitTransferReject(xvfb->displayNum, files);
             return;
@@ -1864,7 +1864,7 @@ namespace LTSM::Manager {
         for(const auto & info : files) {
             auto tmpname = std::filesystem::path(connectorHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
-            Application::debug(DebugType::App, "%s: transfer file request, display: %" PRId32 ", select dir: `%s', tmp name: `%s'",
+            Application::debug(DebugType::App, "{}: transfer file request, display: %" PRId32 ", select dir: `{}', tmp name: `{}'",
                                __FUNCTION__, xvfb->displayNum, dstdir.c_str(), tmpname.c_str());
             auto filepath = std::filesystem::path(std::get<0>(info));
             auto filesize = std::get<1>(info);
@@ -1881,7 +1881,7 @@ namespace LTSM::Manager {
             auto dstfile = dstdir / filepath.filename();
 
             if(std::filesystem::exists(dstfile, err)) {
-                Application::error("%s: file present and skipping, path: `%s'", __FUNCTION__, dstfile.c_str());
+                Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile.c_str());
                 sendNotifyCall(xvfb, "Transfer Skipping", Tools::joinToString("such a file exists: ", dstfile), NotifyParams::Warning);
                 continue;
             }
@@ -1928,7 +1928,7 @@ namespace LTSM::Manager {
             if(fserr.value() == 18) {
                 std::filesystem::copy_file(tmpfile, dstfile, fserr);
             } else {
-                Application::error("%s: %s, path: `%s'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
+                Application::error("{}: {}, path: `{}'", __FUNCTION__, fserr.message().c_str(), dstfile.c_str());
                 error = true;
             }
 
@@ -1945,16 +1945,16 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busTransferFilesRequest(const int32_t & display, const std::vector<FileNameSize> & files) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", count: %lu", __FUNCTION__, display, files.size());
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", count: %lu", __FUNCTION__, display, files.size());
         auto xvfb = findDisplaySession(display);
 
         if(! xvfb) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
             return false;
         }
 
         if(! xvfb->checkStatus(Flags::AllowChannel::TransferFiles)) {
-            Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
+            Application::warning("{}: display %" PRId32 ", transfer reject", __FUNCTION__, display);
             sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
@@ -1965,7 +1965,7 @@ namespace LTSM::Manager {
                 auto gids = xvfb->userInfo->groups();
 
                 if(std::ranges::none_of(gids, [&](auto & gid) { return gid == groupInfo->gid(); })) {
-                    Application::warning("%s: display %" PRId32 ", transfer reject", __FUNCTION__, display);
+                    Application::warning("{}: display %" PRId32 ", transfer reject", __FUNCTION__, display);
                     sendNotifyCall(xvfb, "Transfer Restricted", "transfer is blocked, contact the administrator",
                                   NotifyParams::IconType::Warning);
                     return false;
@@ -1990,7 +1990,7 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::busTransferFileStarted(const int32_t & display, const std::string & tmpfile,
             const uint32_t & filesz, const std::string & dstfile) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", tmp file: `%s', dst file: `%s'",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", tmp file: `{}', dst file: `{}'",
                            __FUNCTION__, display, tmpfile.c_str(), dstfile.c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
@@ -1998,7 +1998,7 @@ namespace LTSM::Manager {
             return true;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return false;
     }
 
@@ -2025,7 +2025,7 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::busSendNotify(const int32_t & display, const std::string & summary, const std::string & body,
                                     const uint8_t & icontype, const uint8_t & urgency) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", summary: `%s', body: `%s'",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", summary: `{}', body: `{}'",
                            __FUNCTION__, display, summary.c_str(), body.c_str());
 
         // urgency:  NotifyParams::UrgencyLevel { Low, Normal, Critical }
@@ -2038,9 +2038,9 @@ namespace LTSM::Manager {
                 return;
             }
 
-            Application::warning("%s: %s failed, display: %" PRId32, __FUNCTION__, "session mode", display);
+            Application::warning("{}: {} failed, display: %" PRId32, __FUNCTION__, "session mode", display);
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
@@ -2085,7 +2085,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busSetAuthenticateToken(const int32_t & display, const std::string & login) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: %s",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", user: {}",
                            __FUNCTION__, display, login.c_str());
 
         if(auto xvfb = this->findDisplaySession(display)) {
@@ -2093,13 +2093,13 @@ namespace LTSM::Manager {
             return true;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return true;
     }
 
     bool DBusAdaptor::busSetAuthenticateLoginPass(const int32_t & display, const std::string & login,
             const std::string & password) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", user: %s",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", user: {}",
                            __FUNCTION__, display, login.c_str());
 
         if(auto xvfb = this->findDisplaySession(display)) {
@@ -2107,31 +2107,31 @@ namespace LTSM::Manager {
             return true;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return false;
     }
 
     bool DBusAdaptor::pamAuthenticate(XvfbSessionPtr xvfb, const std::string & login, const std::string & password,
                                       bool token) {
-        Application::info("%s: display: %" PRId32 ", user: %s", __FUNCTION__, xvfb->displayNum, login.c_str());
+        Application::info("{}: display: %" PRId32 ", user: {}", __FUNCTION__, xvfb->displayNum, login.c_str());
         auto users = getAllowLogins();
 
         if(users.empty()) {
-            Application::error("%s: %s, display: %" PRId32 ", user: %s",
+            Application::error("{}: {}, display: %" PRId32 ", user: {}",
                                __FUNCTION__, "login disabled", xvfb->displayNum, login.c_str());
             emitLoginFailure(xvfb->displayNum, "login disabled");
             return false;
         }
 
         if(std::ranges::none_of(users, [&](auto & val) { return val == login; })) {
-            Application::error("%s: %s, display: %" PRId32 ", user: %s",
+            Application::error("{}: {}, display: %" PRId32 ", user: {}",
                                __FUNCTION__, "login not found", xvfb->displayNum, login.c_str());
             emitLoginFailure(xvfb->displayNum, "login not found");
             return false;
         }
 
         if(loginsDisable) {
-            Application::info("%s: %s, display: %" PRId32, __FUNCTION__, "logins disabled", xvfb->displayNum);
+            Application::info("{}: {}, display: %" PRId32, __FUNCTION__, "logins disabled", xvfb->displayNum);
             emitLoginFailure(xvfb->displayNum, "logins disabled by the administrator");
             return false;
         }
@@ -2157,7 +2157,7 @@ namespace LTSM::Manager {
                 xvfb->loginFailures += 1;
 
                 if(loginFailuresConf < xvfb->loginFailures) {
-                    Application::error("%s: login failures limit, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+                    Application::error("{}: login failures limit, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
                     emitLoginFailure(xvfb->displayNum, "failures limit");
                     displayShutdown(xvfb, true);
                 }
@@ -2171,7 +2171,7 @@ namespace LTSM::Manager {
             pam->setItem(PAM_RHOST, xvfb->remoteAddr.empty() ? "127.0.0.1" : xvfb->remoteAddr.c_str());
 
             if(! pam->validateAccount()) {
-                Application::error("%s: %s failed", __FUNCTION__, "validate account");
+                Application::error("{}: {} failed", __FUNCTION__, "validate account");
                 for(auto & sess: findUserSessions(login)) {
                     busShutdownDisplay(sess->displayNum);
                 }
@@ -2190,7 +2190,7 @@ namespace LTSM::Manager {
         if(userSess && 0 < userSess->displayNum &&
            userSess->mode == SessionMode::Connected) {
             if(userSess->policy == SessionPolicy::AuthLock) {
-                Application::error("%s: session busy, policy: %s, user: %s, session display: %" PRId32 ", from: %s, display: %" PRId32,
+                Application::error("{}: session busy, policy: {}, user: {}, session display: %" PRId32 ", from: {}, display: %" PRId32,
                                    __FUNCTION__, "authlock", login.c_str(), userSess->displayNum, userSess->remoteAddr.c_str(), xvfb->displayNum);
                 // informer login display
                 emitLoginFailure(xvfb->displayNum, Tools::joinToString("session busy, from: ", userSess->remoteAddr));
@@ -2205,7 +2205,7 @@ namespace LTSM::Manager {
             }
         }
 
-        Application::notice("%s: success, display: %" PRId32 ", user: %s, token: %s",
+        Application::notice("{}: success, display: %" PRId32 ", user: {}, token: {}",
                             __FUNCTION__, xvfb->displayNum, login.c_str(), (token ? "true" : "false"));
 
         emitLoginSuccess(xvfb->displayNum, login, Tools::getUserUid(login));
@@ -2213,7 +2213,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionKeyboardLayouts(const int32_t & display, const std::vector<std::string> & layouts) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", layouts: [%s]",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", layouts: [{}]",
                            __FUNCTION__, display, Tools::join(layouts, ",").c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
@@ -2240,24 +2240,24 @@ namespace LTSM::Manager {
             xvfb->layout = Tools::quotedString(os.str());
             xvfb->dbusSetSessionKeyboardLayout();
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string> & map) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", env counts: %lu",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", env counts: %lu",
                            __FUNCTION__, display, map.size());
         auto xvfb = findDisplaySession(display);
 
         if(! xvfb) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
             return;
         }
 
         xvfb->environments.clear();
 
         for(const auto & [key, val] : map) {
-            Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), val.c_str());
+            Application::info("{}: {} = `{}'", __FUNCTION__, key.c_str(), val.c_str());
             xvfb->environments.emplace(key, val);
 
             if(key == "TZ") {
@@ -2267,13 +2267,13 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionOptions(const int32_t & display, const std::map<std::string, std::string> & map) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", opts counts: %lu",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", opts counts: %lu",
                            __FUNCTION__, display, map.size());
 
         auto xvfb = findDisplaySession(display);
 
         if(! xvfb) {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
             return;
         }
 
@@ -2281,7 +2281,7 @@ namespace LTSM::Manager {
         std::string login, pass;
 
         for(const auto & [key, val] : map) {
-            Application::info("%s: %s = `%s'", __FUNCTION__, key.c_str(), (key != "password" ? val.c_str() : "HIDDEN"));
+            Application::info("{}: {} = `{}'", __FUNCTION__, key.c_str(), (key != "password" ? val.c_str() : "HIDDEN"));
 
             if(key == "redirect:cups") {
                 if(configGetBoolean("channel:printer:disabled", false)) {
@@ -2373,7 +2373,7 @@ namespace LTSM::Manager {
                     startFuseListener(xvfb, share);
                 }
             } catch(...) {
-                Application::warning("%s: invalid json array: `%s'", __FUNCTION__, fuse->second.c_str());
+                Application::warning("{}: invalid json array: `{}'", __FUNCTION__, fuse->second.c_str());
             }
         }
     }
@@ -2417,17 +2417,17 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startPrinterListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPrinter)) {
-            Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "printer");
+            Application::warning("{}: display %" PRId32 ", redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "printer");
             sendNotifyCall(xvfb, "Channel Disabled", "redirect " "printer" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
 
-        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
+        Application::info("{}: url: {}", __FUNCTION__, clientUrl.c_str());
         auto[clientType, clientAddress] = Channel::parseUrl(clientUrl);
 
         if(clientType == Channel::ConnectorType::Unknown) {
-            Application::error("%s: %s, unknown client url: %s", __FUNCTION__, "printer", clientUrl.c_str());
+            Application::error("{}: {}, unknown client url: {}", __FUNCTION__, "printer", clientUrl.c_str());
             return false;
         }
 
@@ -2437,7 +2437,7 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", socketFolder.c_str(), getuid());
             return false;
         }
@@ -2465,7 +2465,7 @@ namespace LTSM::Manager {
             std::this_thread::sleep_for(550ms);
         }
 
-        Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), audioSocket.c_str());
 
         if(! xvfb->dbusAudioChannelConnect(audioSocket)) {
@@ -2480,24 +2480,24 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & encoding) {
         if(xvfb->mode == SessionMode::Login) {
-            Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+            Application::error("{}: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
         }
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectAudio)) {
-            Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "audio");
+            Application::warning("{}: display %" PRId32 ", redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "audio");
             sendNotifyCall(xvfb, "Channel Disabled", "redirect " "audio" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
 
-        Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
+        Application::info("{}: encoding: {}", __FUNCTION__, encoding.c_str());
         auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
         if(! std::filesystem::is_directory(audioFolder, err) &&
            ! std::filesystem::create_directories(audioFolder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", audioFolder.c_str(), getuid());
             return false;
         }
@@ -2523,12 +2523,12 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & encoding) {
-        Application::info("%s: encoding: %s", __FUNCTION__, encoding.c_str());
+        Application::info("{}: encoding: {}", __FUNCTION__, encoding.c_str());
         auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";
 
-        Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), audioSocket.c_str());
 
         xvfb->dbusAudioChannelDisconnect(audioSocket);
@@ -2536,17 +2536,17 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startSaneListener(XvfbSessionPtr xvfb, const std::string & clientUrl) {
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectScanner)) {
-            Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "scanner");
+            Application::warning("{}: display %" PRId32 ", redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "scanner");
             sendNotifyCall(xvfb, "Channel Disabled", "redirect " "scanner" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
 
-        Application::info("%s: url: %s", __FUNCTION__, clientUrl.c_str());
+        Application::info("{}: url: {}", __FUNCTION__, clientUrl.c_str());
         auto[clientType, clientAddress] = Channel::parseUrl(clientUrl);
 
         if(clientType == Channel::ConnectorType::Unknown) {
-            Application::error("%s: %s, unknown client url: %s", __FUNCTION__, "sane", clientUrl.c_str());
+            Application::error("{}: {}, unknown client url: {}", __FUNCTION__, "sane", clientUrl.c_str());
             return false;
         }
 
@@ -2555,7 +2555,7 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", socketFolder.c_str(), getuid());
             return false;
         }
@@ -2584,7 +2584,7 @@ namespace LTSM::Manager {
             std::this_thread::sleep_for(550ms);
         }
 
-        Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), pcscSocket.c_str());
 
         if(! xvfb->dbusPcscChannelConnect(pcscSocket)) {
@@ -2599,24 +2599,24 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
         if(xvfb->mode == SessionMode::Login) {
-            Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+            Application::error("{}: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
         }
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RedirectPcsc)) {
-            Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "pcsc");
+            Application::warning("{}: display %" PRId32 ", redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "pcsc");
             sendNotifyCall(xvfb, "Channel Disabled", "redirect " "smartcard" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
 
-        Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
+        Application::info("{}: param: `{}'", __FUNCTION__, param.c_str());
         auto pcscFolder = std::filesystem::path(Tools::replace(pcscRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
         if(! std::filesystem::is_directory(pcscFolder, err) &&
            ! std::filesystem::create_directories(pcscFolder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", pcscFolder.c_str(), getuid());
             return false;
         }
@@ -2641,11 +2641,11 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopPcscListener(XvfbSessionPtr xvfb, const std::string & param) {
-        Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
+        Application::info("{}: param: `{}'", __FUNCTION__, param.c_str());
         auto pcscFolder = std::filesystem::path(Tools::replace(pcscRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
-        Application::info("%s: display: %" PRId32 ", user: %s, socket: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), pcscSocket.c_str());
 
         xvfb->dbusPcscChannelDisconnect(pcscSocket);
@@ -2653,17 +2653,17 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param) {
         if(xvfb->mode != SessionMode::Login) {
-            Application::warning("%s: login session only, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+            Application::warning("{}: login session only, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
         }
 
-        Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
+        Application::info("{}: param: `{}'", __FUNCTION__, param.c_str());
         auto pkcs11Folder = std::filesystem::path(Tools::replace(pkcs11RuntimeFmt, "%{display}", xvfb->displayNum));
         std::error_code err;
 
         if(! std::filesystem::is_directory(pkcs11Folder, err) &&
            ! std::filesystem::create_directories(pkcs11Folder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", pkcs11Folder.c_str(), getuid());
             return false;
         }
@@ -2687,7 +2687,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stopPkcs11Listener(XvfbSessionPtr xvfb, const std::string & param) {
-        Application::info("%s: param: `%s'", __FUNCTION__, param.c_str());
+        Application::info("{}: param: `{}'", __FUNCTION__, param.c_str());
     }
 
     bool startFuseSessionJob(DBusAdaptor * owner, XvfbSessionPtr xvfb, std::string localPoint, std::string remotePoint,
@@ -2697,7 +2697,7 @@ namespace LTSM::Manager {
             std::this_thread::sleep_for(550ms);
         }
 
-        Application::info("%s: display: %" PRId32 ", user: %s, local: `%s', remote: `%s', socket: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, local: `{}', remote: `{}', socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), localPoint.c_str(), remotePoint.c_str(), fuseSocket.c_str());
 
         if(! xvfb->dbusFuseMountPoint(localPoint, remotePoint, fuseSocket)) {
@@ -2712,18 +2712,18 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::startFuseListener(XvfbSessionPtr xvfb, const std::string & remotePoint) {
         if(xvfb->mode == SessionMode::Login) {
-            Application::error("%s: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
+            Application::error("{}: login session skipped, display: %" PRId32, __FUNCTION__, xvfb->displayNum);
             return false;
         }
 
         if(! xvfb->checkStatus(Flags::AllowChannel::RemoteFilesUse)) {
-            Application::warning("%s: display %" PRId32 ", redirect disabled: %s", __FUNCTION__, xvfb->displayNum, "fuse");
+            Application::warning("{}: display %" PRId32 ", redirect disabled: {}", __FUNCTION__, xvfb->displayNum, "fuse");
             sendNotifyCall(xvfb, "Channel Disabled", "redirect " "drivers" " is blocked, contact the administrator",
                           NotifyParams::IconType::Warning);
             return false;
         }
 
-        Application::info("%s: remote point: %s", __FUNCTION__, remotePoint.c_str());
+        Application::info("{}: remote point: {}", __FUNCTION__, remotePoint.c_str());
         auto userShareFolder = Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
@@ -2731,7 +2731,7 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(fusePointFolder, err) &&
            ! std::filesystem::create_directories(fusePointFolder, err)) {
-            Application::error("%s: %s, path: `%s', uid: %" PRId32,
+            Application::error("{}: {}, path: `{}', uid: %" PRId32,
                                __FUNCTION__, "create directory failed", fusePointFolder.c_str(), getuid());
             return false;
         }
@@ -2766,102 +2766,102 @@ namespace LTSM::Manager {
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
         auto localPoint = fusePointFolder.native();
 
-        Application::info("%s: display: %" PRId32 ", user: %s, local point: `%s'",
+        Application::info("{}: display: %" PRId32 ", user: {}, local point: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user().c_str(), localPoint.c_str());
 
         xvfb->dbusFuseUmountPoint(localPoint);
     }
 
     void DBusAdaptor::busSetDebugLevel(const std::string & level) {
-        Application::debug(DebugType::Dbus, "%s: level: %s", __FUNCTION__, level.c_str());
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
         Application::setDebugLevel(level);
     }
 
     void DBusAdaptor::busSetChannelDebug(const int32_t & display, const uint8_t & channel, const bool & debug) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", channel: %" PRIu8 ", debug: %s",
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", channel: %" PRIu8 ", debug: {}",
                            __FUNCTION__, display, channel, (debug ? "true" : "false"));
         emitDebugChannel(display, channel, debug);
     }
 
     std::string DBusAdaptor::busEncryptionInfo(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32,
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32,
                            __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display)) {
             return xvfb->encryption;
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return "none";
     }
 
     void DBusAdaptor::busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", width: %" PRIu16 ", height: %" PRIu16,
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", width: %" PRIu16 ", height: %" PRIu16,
                            __FUNCTION__, display, width, height);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->width = width;
             xvfb->height = height;
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetEncryptionInfo(const int32_t & display, const std::string & info) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", encryption: %s", __FUNCTION__, display, info.c_str());
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", encryption: {}", __FUNCTION__, display, info.c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->encryption = info;
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionLifetimeLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->lifeTimeLimitSec = limit;
             emitClearRenderPrimitives(display);
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->onlineTimeLimitSec = limit;
             emitClearRenderPrimitives(display);
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->offlineTimeLimitSec = limit;
             emitClearRenderPrimitives(display);
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionIdleLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", limit: %" PRIu32, __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->idleTimeLimitSec = limit;
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::busSetSessionPolicy(const int32_t & display, const std::string & policy) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32 ", policy: %s", __FUNCTION__, display, policy.c_str());
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", policy: {}", __FUNCTION__, display, policy.c_str());
 
         if(auto xvfb = findDisplaySession(display)) {
             if(Tools::lower(policy) == "authlock") {
@@ -2871,16 +2871,16 @@ namespace LTSM::Manager {
             } else if(Tools::lower(policy) == "authshare") {
                 xvfb->policy = SessionPolicy::AuthShare;
             } else {
-                Application::warning("%s: %s, display: %" PRId32 ", policy: %s", __FUNCTION__, "unknown value", display, policy.c_str());
+                Application::warning("{}: {}, display: %" PRId32 ", policy: {}", __FUNCTION__, "unknown value", display, policy.c_str());
             }
         } else {
-            Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+            Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         }
     }
 
     void DBusAdaptor::helperSetSessionLoginPassword(const int32_t & display, const std::string & login,
             const std::string & password, const bool & action) {
-        Application::info("%s: display: %" PRId32 ", user: %s", __FUNCTION__, display, login.c_str());
+        Application::info("{}: display: %" PRId32 ", user: {}", __FUNCTION__, display, login.c_str());
 
         std::thread([this, display, login, password, action]() {
             std::this_thread::sleep_for(10ms);
@@ -2889,23 +2889,23 @@ namespace LTSM::Manager {
     }
 
     std::string DBusAdaptor::busGetSessionJson(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
 
         if(auto xvfb = findDisplaySession(display)) {
             return xvfb->toJsonString();
         }
 
-        Application::warning("%s: display not found: %" PRId32, __FUNCTION__, display);
+        Application::warning("{}: display not found: %" PRId32, __FUNCTION__, display);
         return "{}";
     }
 
     std::string DBusAdaptor::busGetSessionsJson(void) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
         return XvfbSessions::toJsonString();
     }
 
     void DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         std::thread([this, display, rect, color, fill]() {
             std::this_thread::sleep_for(10ms);
@@ -2914,7 +2914,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         std::thread([this, display, text, pos, color]() {
             std::this_thread::sleep_for(10ms);
@@ -2923,7 +2923,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busRenderClear(const int32_t & display) {
-        Application::debug(DebugType::Dbus, "%s", __FUNCTION__);
+        Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         std::thread([this, display]() {
             std::this_thread::sleep_for(10ms);
@@ -2933,18 +2933,18 @@ namespace LTSM::Manager {
 
     bool DBusAdaptor::busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
                                        const std::string & server, const std::string & smode, const std::string & speed) {
-        Application::debug(DebugType::Dbus, "%s:, display: %" PRId32 ", client: (%s, %s), server: (%s, %s), speed: %s",
+        Application::debug(DebugType::Dbus, "{}:, display: %" PRId32 ", client: ({}, {}), server: ({}, {}), speed: {}",
                            __FUNCTION__, display, client.c_str(), cmode.c_str(), server.c_str(), smode.c_str(), speed.c_str());
 
         auto modes = { "ro", "rw", "wo" };
 
         if(std::ranges::none_of(modes, [&](auto & val) { return cmode == val; })) {
-            Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "client", cmode.c_str());
+            Application::error("{}: incorrect {} mode: {}", __FUNCTION__, "client", cmode.c_str());
             return false;
         }
 
         if(std::ranges::none_of(modes, [&](auto & val) { return smode == val; })) {
-            Application::error("%s: incorrect %s mode: %s", __FUNCTION__, "server", smode.c_str());
+            Application::error("{}: incorrect {} mode: {}", __FUNCTION__, "server", smode.c_str());
             return false;
         }
 
@@ -2953,7 +2953,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busDestroyChannel(const int32_t & display, const uint8_t & channel) {
-        Application::debug(DebugType::Dbus, "%s:, display: %" PRId32 ", channel: 0x%02" PRIx8,
+        Application::debug(DebugType::Dbus, "{}:, display: %" PRId32 ", channel: 0x%02" PRIx8,
                            __FUNCTION__, display, channel);
 
         emitDestroyChannel(display, channel);
@@ -3001,7 +3001,7 @@ namespace LTSM::Manager {
 #endif
 
         if(! serviceConn) {
-            Application::error("%s: %s failed",
+            Application::error("{}: {} failed",
                                "ServiceStart", "dbus connection");
             return EXIT_FAILURE;
         }
@@ -3009,7 +3009,7 @@ namespace LTSM::Manager {
         auto connectorHome = Tools::getUserHome(ltsm_user_conn);
 
         if(! std::filesystem::is_directory(connectorHome)) {
-            Application::error("%s: path not found: `%s'", __FUNCTION__, connectorHome.c_str());
+            Application::error("{}: path not found: `{}'", __FUNCTION__, connectorHome.c_str());
             return EXIT_FAILURE;
         }
 
@@ -3026,7 +3026,7 @@ namespace LTSM::Manager {
         signal(SIGHUP, SIG_IGN);
 
         auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
-        Application::notice("%s: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
+        Application::notice("{}: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
@@ -3037,7 +3037,7 @@ namespace LTSM::Manager {
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
-        Application::notice("%s: service stopped", "ServiceStart");
+        Application::notice("{}: service stopped", "ServiceStart");
         serviceAdaptor.reset();
 
         return EXIT_SUCCESS;
@@ -3050,9 +3050,9 @@ int main(int argc, const char** argv) {
     try {
         res = LTSM::Manager::startService(argc, argv);
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [%s] %s", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
     }
 
     return res;

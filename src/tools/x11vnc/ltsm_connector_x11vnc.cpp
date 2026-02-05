@@ -48,7 +48,7 @@ namespace LTSM {
         auto jc = JsonContentFile(_config->getString("keymapfile"));
 
         if(! jc.isObject()) {
-            Application::error("%s: invalid keymap file", __FUNCTION__);
+            Application::error("{}: invalid keymap file", __FUNCTION__);
             return false;
         }
 
@@ -119,7 +119,7 @@ namespace LTSM {
     bool Connector::X11VNC::xcbConnect(void) {
         // FIXM XAUTH
         std::string xauthFile = _config->getString("authfile");
-        Application::debug(DebugType::App, "%s: xauthfile: `%s'", __FUNCTION__, xauthFile.c_str());
+        Application::debug(DebugType::App, "{}: xauthfile: `{}'", __FUNCTION__, xauthFile.c_str());
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         size_t screen = _config->getInteger("display", 0);
@@ -127,17 +127,17 @@ namespace LTSM {
         try {
             xcbDisplay()->displayReconnect(screen);
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
             return false;
         }
 
-        Application::info("%s: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(),
+        Application::info("{}: display: %d, size: [%d,%d], depth: %d", __FUNCTION__, screen, xcbDisplay()->width(),
                           xcbDisplay()->height(), xcbDisplay()->depth());
-        Application::debug(DebugType::App, "%s: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::App, "{}: xcb max request: %d", __FUNCTION__, xcbDisplay()->getMaxRequest());
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {
-            Application::error("%s: xcb visual empty", __FUNCTION__);
+            Application::error("{}: xcb visual empty", __FUNCTION__);
             return false;
         }
 
@@ -149,7 +149,7 @@ namespace LTSM {
 
     void Connector::X11VNC::serverHandshakeVersionEvent(void) {
         if(! xcbConnect()) {
-            Application::error("%s: %s", __FUNCTION__, "xcb connect failed");
+            Application::error("{}: {}", __FUNCTION__, "xcb connect failed");
             throw rfb_error(NS_FuncName);
         }
     }

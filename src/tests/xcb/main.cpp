@@ -161,7 +161,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(const auto & val : outputs) {
             auto info = getRandrOutputInfo(val);
-            Application::info("output name: %s, connected: %s, width: %d, height: %d", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
+            Application::info("output name: {}, connected: {}, width: %d, height: %d", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
 
             if(info.connected) {
                 curout = val;
@@ -197,7 +197,7 @@ class X11Test : public XCB::RootDisplay {
         auto xcbReply = getReplyFunc2(xcb_xkb_get_state, _conn.get(), XCB_XKB_ID_USE_CORE_KBD);
 
         if(auto err = xcbReply.error()) {
-            Application::error("xcb_xkb_get_state: %s", "failed");
+            Application::error("xcb_xkb_get_state: {}", "failed");
         } else if(auto reply = xcbReply.reply()) {
             Application::info("current layout: %d", reply->group);
             return true;
@@ -222,11 +222,11 @@ class X11Test : public XCB::RootDisplay {
         //test_xkbgroup(1);
         //test_xkblayoutcur();
 
-        Application::info("xkb group names1: %s", Tools::join(getXkbNames(), ",").c_str());
+        Application::info("xkb group names1: {}", Tools::join(getXkbNames(), ",").c_str());
         Application::info("xkb layout group: %d", getXkbLayoutGroup());
 
         fakeInputKeycode(96, true);
-        Application::info("xkb group names2: %s", Tools::join(getXkbNames(), ",").c_str());
+        Application::info("xkb group names2: {}", Tools::join(getXkbNames(), ",").c_str());
         fakeInputKeycode(96, false);
 
         return false;
@@ -264,19 +264,19 @@ class X11Test : public XCB::RootDisplay {
 
                     if(pn && pn->atom == active) {
                         auto type = getPropertyType(_screen->root, active);
-                        Application::info("property: %d, `%s'", type, getAtomName(type).c_str());
+                        Application::info("property: %d, `{}'", type, getAtomName(type).c_str());
 
                         auto win = getPropertyWindow(_screen->root, active);
                         Application::info("property change for window id: %08x", win);
 
                         auto str1 = getPropertyString(win, XCB_ATOM_WM_CLASS);
                         //auto str2 = getPropertyString(win, XCB_ATOM_WM_CLASS, str1.size() + 1);
-                        Application::info("win: %08x, wmclass: `%s', %d", win, str1.c_str(), str1.size());
+                        Application::info("win: %08x, wmclass: `{}', %d", win, str1.c_str(), str1.size());
                         /*
                                                 auto list = getPropertyStringList(win, XCB_ATOM_WM_CLASS);
                             	                Application::info("list: %d", list.size());
                             	                if(1 < list.size())
-                                                    Application::info("win: %08x, wmclass: `%s', `%s'", win, list.front().c_str(), list.back().c_str());
+                                                    Application::info("win: %08x, wmclass: `{}', `{}'", win, list.front().c_str(), list.back().c_str());
                         */
                     }
                 }
@@ -305,7 +305,7 @@ class App : public Application {
         auto _xcbDisplay = std::unique_ptr<X11Test>(new X11Test(screen));
 
         if(! _xcbDisplay) {
-            Application::error("xcb connect: %s", "failed");
+            Application::error("xcb connect: {}", "failed");
             return EXIT_FAILURE;
         }
 
@@ -314,11 +314,11 @@ class App : public Application {
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
 
         if(! visual) {
-            Application::error("%s", "xcb visual empty");
+            Application::error("{}", "xcb visual empty");
             return EXIT_FAILURE;
         }
 
-        Application::info("%s: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
 
         // _xcbDisplay->test_randr();
         _xcbDisplay->test_extinfo();

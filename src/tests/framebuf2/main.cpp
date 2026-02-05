@@ -25,14 +25,14 @@ class FakeStream : public RFB::EncoderStream {
   public:
     FakeStream(const XCB::RootDisplay* xcb) {
         if(! xcb) {
-            Application::error("%s: xcb failed", __FUNCTION__);
+            Application::error("{}: xcb failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
 
         auto visual = xcb->visual();
 
         if(! visual) {
-            Application::error("%s: xcb visual failed", __FUNCTION__);
+            Application::error("{}: xcb visual failed", __FUNCTION__);
             throw std::runtime_error(NS_FuncName);
         }
 
@@ -105,7 +105,7 @@ class EncodingTest : public Application {
             pitch += 8 - align8;
         }
 
-        Application::info("%s: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
@@ -124,19 +124,19 @@ class EncodingTest : public Application {
             auto map1 = fb.pixelMapPalette(reg);
             auto dt1 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp1);
 
-            Application::info("%s: pixelMapPalette: %lu", __FUNCTION__, dt1.count());
+            Application::info("{}: pixelMapPalette: %lu", __FUNCTION__, dt1.count());
 
             auto tp2 = std::chrono::steady_clock::now();
             auto map2 = fb.pixelMapWeight(reg);
             auto dt2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp2);
 
-            Application::info("%s: pixelMapWeight: %lu", __FUNCTION__, dt2.count());
+            Application::info("{}: pixelMapWeight: %lu", __FUNCTION__, dt2.count());
 
             auto tp3 = std::chrono::steady_clock::now();
             auto map3 = fb.toRLE(reg);
             auto dt3 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp3);
 
-            Application::info("%s: toRLE: %lu", __FUNCTION__, dt3.count());
+            Application::info("{}: toRLE: %lu", __FUNCTION__, dt3.count());
         }
 
         return 0;
@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
     try {
         res = EncodingTest().start();
     } catch(const std::exception & err) {
-        Application::error("exception: %s", err.what());
+        Application::error("exception: {}", err.what());
     }
 
     return res;

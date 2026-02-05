@@ -340,10 +340,10 @@ namespace LTSM {
 
             if(it2 != line.end()) {
                 std::string_view arg = string2view(it2 + 1, line.end());
-                Application::info("%s: %.*s %.*s", __FUNCTION__, (int) cmd.size(), cmd.data(), (int) arg.size(), arg.data());
+                Application::info("{}: %.*s %.*s", __FUNCTION__, (int) cmd.size(), cmd.data(), (int) arg.size(), arg.data());
                 parseCommand(cmd, arg);
             } else {
-                Application::info("%s: %.*s", __FUNCTION__, (int) cmd.size(), cmd.data());
+                Application::info("{}: %.*s", __FUNCTION__, (int) cmd.size(), cmd.data());
                 parseCommand(cmd, "");
             }
         }
@@ -441,7 +441,7 @@ namespace LTSM {
             auto encodings = ClientDecoder::supportedEncodings(extClipboardLocalCaps());
 
             if(std::ranges::none_of(encodings, [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; })) {
-                Application::warning("%s: incorrect encoding: %s", __FUNCTION__,
+                Application::warning("{}: incorrect encoding: {}", __FUNCTION__,
                                      prefferedEncoding.c_str());
                 prefferedEncoding.clear();
             }
@@ -471,7 +471,7 @@ namespace LTSM {
                 auto url = Channel::parseUrl(arg);
 
                 if(url.first == Channel::ConnectorType::Unknown) {
-                    Application::warning("%s: parse %s failed, unknown url: %.*s",
+                    Application::warning("{}: parse {} failed, unknown url: %.*s",
                                          __FUNCTION__, "printer", (int) arg.size(), arg.data());
                 } else {
                     printerUrl.assign(arg.begin(), arg.end());
@@ -484,7 +484,7 @@ namespace LTSM {
                 auto url = Channel::parseUrl(arg);
 
                 if(url.first == Channel::ConnectorType::Unknown) {
-                    Application::warning("%s: parse %s failed, unknown url: %.*s",
+                    Application::warning("{}: parse {} failed, unknown url: %.*s",
                                          __FUNCTION__, "sane", (int) arg.size(), arg.data());
                 } else {
                     saneUrl.assign(arg.begin(), arg.end());
@@ -501,7 +501,7 @@ namespace LTSM {
             }
 
             if(! std::filesystem::exists(pkcs11Auth)) {
-                Application::warning("%s: parse %s failed, not exist: %s",
+                Application::warning("{}: parse {} failed, not exist: {}",
                                      __FUNCTION__, "pkcs11-auth", pkcs11Auth.c_str());
                 pkcs11Auth.clear();
             }
@@ -532,7 +532,7 @@ namespace LTSM {
             if(std::filesystem::is_directory(arg)) {
                 shareFolders.emplace_front(arg.begin(), arg.end());
             } else {
-                Application::warning("%s: parse %s failed, not exist: %.*s",
+                Application::warning("{}: parse {} failed, not exist: %.*s",
                                      __FUNCTION__, "share-folder", (int) arg.size(), arg.data());
             }
         } else if(cmd == "--password" && arg.size()) {
@@ -653,7 +653,7 @@ namespace LTSM {
         rfbsec.tlsAnonMode = rfbsec.keyFile.empty();
 
         if(rfbsec.authKrb5 && rfbsec.krb5Service.empty()) {
-            Application::warning("%s: kerberos remote service empty", __FUNCTION__);
+            Application::warning("{}: kerberos remote service empty", __FUNCTION__);
             rfbsec.authKrb5 = false;
         }
 
@@ -675,9 +675,9 @@ namespace LTSM {
                 rfbsec.krb5Service.append("@").append(host);
             }
 
-            Application::info("%s: kerberos remote service: %s", __FUNCTION__,
+            Application::info("{}: kerberos remote service: {}", __FUNCTION__,
                               rfbsec.krb5Service.c_str());
-            Application::info("%s: kerberos local name: %s", __FUNCTION__,
+            Application::info("{}: kerberos local name: {}", __FUNCTION__,
                               rfbsec.krb5Name.c_str());
         }
 
@@ -697,7 +697,7 @@ namespace LTSM {
 #ifdef __UNIX__
 
                 if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::warning("%s: x11 error: %d", __FUNCTION__, err);
+                    Application::warning("{}: x11 error: %d", __FUNCTION__, err);
                     this->rfbMessagesShutdown();
                     break;
                 }
@@ -707,7 +707,7 @@ namespace LTSM {
                         uint16_t opcode = 0;
 
                         if(extXkb->isEventError(ev, & opcode)) {
-                            Application::warning("%s: %s error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
+                            Application::warning("{}: {} error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
                         }
                     }
                 }
@@ -776,7 +776,7 @@ namespace LTSM {
                 SDL_Texture* tx = SDL_CreateTextureFromSurface(window->render(), sfback.get());
 
                 if(! tx) {
-                    Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                    Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                        "SDL_CreateTextureFromSurface", SDL_GetError());
                     throw sdl_error(NS_FuncName);
                 }
@@ -784,7 +784,7 @@ namespace LTSM {
                 window->renderReset();
 
                 if(0 != SDL_RenderCopy(window->render(), tx, nullptr, nullptr)) {
-                    Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_RenderCopy",
+                    Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderCopy",
                                        SDL_GetError());
                     throw sdl_error(NS_FuncName);
                 }
@@ -937,7 +937,7 @@ namespace LTSM {
 
     bool Vnc2SDL::sdlWindowEvent(const SDL::GenericEvent & ev) {
         if(auto we = ev.window()) {
-            Application::debug(DebugType::App, "%s: window event: %s", __FUNCTION__, sdlWindowEventName(we->event));
+            Application::debug(DebugType::App, "{}: window event: {}", __FUNCTION__, sdlWindowEventName(we->event));
 
             switch(we->event) {
                 case SDL_WINDOWEVENT_EXPOSED:
@@ -953,12 +953,12 @@ namespace LTSM {
                     return true;
 
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    Application::debug(DebugType::App, "%s: size changed: [%" PRId32 "x%" PRId32 "]",
+                    Application::debug(DebugType::App, "{}: size changed: [%" PRId32 "x%" PRId32 "]",
                                        __FUNCTION__, we->data1, we->data2);
                     return true;
 
                 case SDL_WINDOWEVENT_RESIZED:
-                    Application::debug(DebugType::App, "%s: event resized: [%" PRId32 "x%" PRId32 "]",
+                    Application::debug(DebugType::App, "{}: event resized: [%" PRId32 "x%" PRId32 "]",
                                        __FUNCTION__, we->data1, we->data2);
                     windowResizedEvent(we->data1, we->data2);
                     return true;
@@ -975,20 +975,20 @@ namespace LTSM {
         if(auto ke = ev.key()) {
             // pressed
             if(ke->state == SDL_PRESSED) {
-                Application::debug(DebugType::App, "%s: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32,
+                Application::debug(DebugType::App, "{}: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32,
                                    __FUNCTION__, static_cast<int>(ke->keysym.scancode), ke->keysym.sym);
 
                 // ctrl + F10 -> fast close
                 if(ke->keysym.sym == SDLK_F10 &&
                    (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("%s: hotkey received (%s), %s", __FUNCTION__, "ctrl + F10", "close application");
+                    Application::warning("{}: hotkey received ({}), {}", __FUNCTION__, "ctrl + F10", "close application");
                     return sdlQuitEvent();
                 }
 
                 // ctrl + F11 -> fullscreen toggle
                 if(ke->keysym.sym == SDLK_F11 &&
                    (KMOD_CTRL & SDL_GetModState())) {
-                    Application::warning("%s: hotkey received (%s), %s", __FUNCTION__, "ctrl + F11", "fullscreen toggle");
+                    Application::warning("{}: hotkey received ({}), {}", __FUNCTION__, "ctrl + F11", "fullscreen toggle");
 
                     if(windowFullScreen()) {
                         SDL_SetWindowFullscreen(window->get(), 0);
@@ -1012,7 +1012,7 @@ namespace LTSM {
             if(ke->keysym.sym == 0x40000000 && ! capslockEnable) {
                 auto mod = SDL_GetModState();
                 SDL_SetModState(static_cast<SDL_Keymod>(mod & ~KMOD_CAPS));
-                Application::debug(DebugType::App, "%s: CAPS reset", __FUNCTION__);
+                Application::debug(DebugType::App, "{}: CAPS reset", __FUNCTION__);
                 return true;
             }
 
@@ -1156,7 +1156,7 @@ namespace LTSM {
         event.data2 = (void*)(ptrdiff_t) nsz.height;
 
         if(0 > SDL_PushEvent((SDL_Event*) & event)) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_PushEvent",
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_PushEvent",
                                SDL_GetError());
             return false;
         }
@@ -1180,7 +1180,7 @@ namespace LTSM {
             } else {
                 // server runtime
                 if(windowFullScreen() && primarySize != nsz) {
-                    Application::warning("%s: fullscreen mode: [%" PRIu16 ", %" PRIu16
+                    Application::warning("{}: fullscreen mode: [%" PRIu16 ", %" PRIu16
                                          "], server request resize desktop: [%" PRIu16 ", %" PRIu16 "]",
                                          __FUNCTION__, primarySize.width, primarySize.height, nsz.width, nsz.height);
                 }
@@ -1194,7 +1194,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("%s: status: %d, error code: %d", __FUNCTION__, status, err);
+                Application::error("{}: status: %d, error code: %d", __FUNCTION__, status, err);
 
                 //if(! nsz.isEmpty())
                 //    primarySize.reset();
@@ -1209,7 +1209,7 @@ namespace LTSM {
     }
 
     void Vnc2SDL::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
-        Application::info("%s: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+        Application::info("{}: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
                           wsz.width, wsz.height);
         const std::scoped_lock guard{ renderLock };
         bool eventResize = false;
@@ -1224,7 +1224,7 @@ namespace LTSM {
 
         if(SDL_TRUE != SDL_PixelFormatEnumToMasks(window->pixelFormat(), &bpp, &rmask,
                 &gmask, &bmask, &amask)) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -1251,7 +1251,7 @@ namespace LTSM {
                                               clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
 
             if(! sfback) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateSurface", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -1262,7 +1262,7 @@ namespace LTSM {
         Uint32 color = SDL_MapRGB(sfback->format, col.r, col.g, col.b);
 
         if(0 > SDL_FillRect(sfback.get(), &dstrt, color)) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_FillRect",
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_FillRect",
                                SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -1285,7 +1285,7 @@ namespace LTSM {
             SDL_FreeSurface};
 
         if(! sfframe) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_CreateRGBSurfaceFrom", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -1303,7 +1303,7 @@ namespace LTSM {
             SDL_FreeSurface};
 
         if(! sfframe) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -1318,7 +1318,7 @@ namespace LTSM {
                                               clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask()));
 
             if(! sfback) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateSurface", SDL_GetError());
                 throw sdl_error(NS_FuncName);
             }
@@ -1327,7 +1327,7 @@ namespace LTSM {
         SDL_Rect dstrt{ .x = wrt.x, .y = wrt.y, .w = wrt.width, .h = wrt.height };
 
         if(0 > SDL_BlitSurface(sfframe, nullptr, sfback.get(), & dstrt)) {
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "SDL_BlitSurface",
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_BlitSurface",
                                SDL_GetError());
             throw sdl_error(NS_FuncName);
         }
@@ -1362,7 +1362,7 @@ namespace LTSM {
             if(0 != SDL_SetClipboardText(reinterpret_cast<const char*>
                                          (clipboardBufRemote.data())))
             {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_SetClipboardText", SDL_GetError());
             }
 
@@ -1382,14 +1382,14 @@ namespace LTSM {
                              clientPf.rmask(), clientPf.gmask(), clientPf.bmask(), clientPf.amask());
 
             if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_MasksToPixelFormatEnum", SDL_GetError());
                 return;
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
-                               ", %" PRIu16 "], sdl format: %s",
+            Application::debug(DebugType::App, "{}: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
+                               ", %" PRIu16 "], sdl format: {}",
                                __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
 
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
@@ -1397,7 +1397,7 @@ namespace LTSM {
                       sdlFormat);
 
             if(! sf) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
                 return;
             }
@@ -1412,9 +1412,9 @@ namespace LTSM {
                 auto tmp1 = Tools::buffer2hexstring(pixels.begin(), pixels.end(), 2, ",", false);
                 auto tmp2 = Tools::buffer2hexstring(mask.begin(), mask.end(), 2, ",", false);
 
-                Application::warning("%s: %s failed, error: %s", __FUNCTION__,
+                Application::warning("{}: {} failed, error: {}", __FUNCTION__,
                                      "SDL_CreateColorCursor", SDL_GetError());
-                Application::warning("%s: pixels: [%s], mask: [%s]", __FUNCTION__, tmp1.c_str(), tmp2.c_str());
+                Application::warning("{}: pixels: [{}], mask: [{}]", __FUNCTION__, tmp1.c_str(), tmp2.c_str());
                 return;
             }
 
@@ -1429,7 +1429,7 @@ namespace LTSM {
 
         if(cursors.end() == it) {
             if(pixels.empty()) {
-                Application::error("%s: cursor not found, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                Application::error("{}: cursor not found, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }
@@ -1443,19 +1443,19 @@ namespace LTSM {
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
             if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4) {
-                Application::error("%s: invalid pixels, length: %lu, id: 0x%08" PRIx32, __FUNCTION__, pixels.size(), cursorId);
+                Application::error("{}: invalid pixels, length: %lu, id: 0x%08" PRIx32, __FUNCTION__, pixels.size(), cursorId);
                 return;
             }
 
             if(sdlFormat == SDL_PIXELFORMAT_UNKNOWN) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_MasksToPixelFormatEnum", SDL_GetError());
                 return;
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "%s: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
-                               ", %" PRIu16 "], sdl format: %s",
+            Application::debug(DebugType::App, "{}: create cursor, crc32b: %" PRIu32 ", size: [%" PRIu16
+                               ", %" PRIu16 "], sdl format: {}",
                                __FUNCTION__, cursorId, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
 
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
@@ -1463,7 +1463,7 @@ namespace LTSM {
                       sdlFormat);
 
             if(! sf) {
-                Application::error("%s: %s failed, error: %s", __FUNCTION__,
+                Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
                 return;
             }
@@ -1474,10 +1474,10 @@ namespace LTSM {
             auto curs = SDL_CreateColorCursor(sf, reg.x, reg.y);
 
             if(! curs) {
-                Application::warning("%s: %s failed, error: %s", __FUNCTION__,
+                Application::warning("{}: {} failed, error: {}", __FUNCTION__,
                                      "SDL_CreateColorCursor", SDL_GetError());
 
-                Application::warning("%s: send cursor failed, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                Application::warning("{}: send cursor failed, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }
@@ -1580,13 +1580,13 @@ namespace LTSM {
         }
 
         if(! printerUrl.empty()) {
-            Application::info("%s: %s url: %s", __FUNCTION__, "printer",
+            Application::info("{}: {} url: {}", __FUNCTION__, "printer",
                               printerUrl.c_str());
             jo.push("redirect:cups", printerUrl);
         }
 
         if(! saneUrl.empty()) {
-            Application::info("%s: %s url: %s", __FUNCTION__, "sane", saneUrl.c_str());
+            Application::info("{}: {} url: {}", __FUNCTION__, "sane", saneUrl.c_str());
             jo.push("redirect:sane", saneUrl);
         }
 
@@ -1615,7 +1615,7 @@ namespace LTSM {
             if(std::ranges::any_of(allowEncoding, [&](auto & enc) { return enc == audioEncoding; })) {
                 jo.push("redirect:audio", audioEncoding);
             } else {
-                Application::warning("%s: unsupported audio: %s", __FUNCTION__, audioEncoding.c_str());
+                Application::warning("{}: unsupported audio: {}", __FUNCTION__, audioEncoding.c_str());
             }
         }
 
@@ -1629,7 +1629,7 @@ namespace LTSM {
             }
         } else {
             auto error = jo.getString("error");
-            Application::error("%s: %s failed, error: %s", __FUNCTION__, "login",
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "login",
                                error.c_str());
         }
     }
@@ -1644,7 +1644,7 @@ namespace LTSM {
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
             if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {
-                Application::error("%s: %s failed, path: `%s'", __FUNCTION__, "share", content.c_str());
+                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "share", content.c_str());
                 return false;
             }
         }
@@ -1739,8 +1739,8 @@ int main(int argc, const char** argv)
             std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
             return -1;
         } catch(const std::exception & err) {
-            Application::error("%s: exception: %s", NS_FuncName.c_str(), err.what());
-            Application::info("program: %s", "terminate...");
+            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::info("program: {}", "terminate...");
         }
     }
 
