@@ -186,8 +186,8 @@ namespace LTSM::Connector {
                 throw rdp_error(NS_FuncName);
             }
 
-            Application::debug(DebugType::App, "peer context: %p", peer);
-            Application::debug(DebugType::App, "rdp context: %p", peer->context);
+            Application::debug(DebugType::App, "peer context: {}", fmt::ptr(peer));
+            Application::debug(DebugType::App, "rdp context: {}", fmt::ptr(peer->context));
             context = static_cast<ServerContext*>(peer->context);
             context->config = & config;
             context->conrdp = connector;
@@ -838,12 +838,12 @@ namespace LTSM::Connector {
     // freerdp callback func
     BOOL ConnectorRdp::cbServerAuthenticate(freerdp_peer* peer, const char** user, const char** domain,
                                             const char** password) {
-        Application::info("{}: peer: %p", __FUNCTION__, peer);
+        Application::info("{}: peer: {}", __FUNCTION__, fmt::ptr(peer));
         return TRUE;
     }
 
     BOOL ConnectorRdp::cbServerCapabilities(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->conrdp;
@@ -858,13 +858,13 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerAdjustMonitorsLayout(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
     BOOL ConnectorRdp::cbServerClientCapabilities(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         [[maybe_unused]] auto context = static_cast<ServerContext*>(peer->context);
         //auto connector = context->conrdp;
@@ -876,7 +876,7 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerPostConnect(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->conrdp;
@@ -897,18 +897,18 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerClose(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
     void ConnectorRdp::cbServerDisconnect(freerdp_peer* peer) {
-        Application::info("{}: peer: %p, desktop: [%d,%d], peer depth: %d", __FUNCTION__, peer, peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [%d,%d], peer depth: %d", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
     }
 
     BOOL ConnectorRdp::cbServerActivate(freerdp_peer* peer) {
-        Application::info("{}: peer:%p", __FUNCTION__, peer);
+        Application::info("{}: peer:{}", __FUNCTION__, fmt::ptr(peer));
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
@@ -1012,8 +1012,8 @@ namespace LTSM::Connector {
     /// @param flags: KBD_FLAGS_EXTENDED(0x0100), KBD_FLAGS_EXTENDED1(0x0200), KBD_FLAGS_DOWN(0x4000), KBD_FLAGS_RELEASE(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code) {
-        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: %p, context: %p", __FUNCTION__, flags, code,
-                           input, input->context);
+        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: {}, context: {}", __FUNCTION__, flags, code,
+                           fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
@@ -1065,8 +1065,8 @@ namespace LTSM::Connector {
     ///               PTR_FLAGS_WHEEL(0x0200), PTR_FLAGS_WHEEL_NEGATIVE(0x0100), PTR_FLAGS_MOVE(0x0800), PTR_FLAGS_DOWN(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy) {
-        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: %p, context: %p", __FUNCTION__,
-                           flags, posx, posy, input, input->context);
+        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: {}, context: {}", __FUNCTION__,
+                           flags, posx, posy, fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
@@ -1105,7 +1105,7 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerRefreshRect(rdpContext* rdpctx, BYTE count, const RECTANGLE_16* areas) {
-        Application::debug(DebugType::App, "{}: count rects: %d, context: %p", __FUNCTION__, (int) count, rdpctx);
+        Application::debug(DebugType::App, "{}: count rects: %d, context: {}", __FUNCTION__, (int) count, fmt::ptr(rdpctx));
         auto context = static_cast<ServerContext*>(rdpctx);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
