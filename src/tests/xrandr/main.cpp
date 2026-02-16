@@ -63,20 +63,20 @@ class X11Test : public XCB::RootDisplay {
 
                     // window, crtc, mode, rotation, x, y, width, height
                     if(0 < cc.width && 0 < cc.height) {
-                        Application::info("randr crtc change notify, window: 0x%08" PRIx32 ", crtc: 0x%08" PRIx32 ", mode: {}, rotation: 0x%04" PRIx16 ", geometry: [{}, {}, {}, {}], sequence: 0x%04" PRIx16 ", timestamp: {}",
+                        Application::info("randr crtc change notify, window: {:#08x}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, geometry: [{}, {}, {}, {}], sequence: {:#04x}, timestamp: {}",
                                           cc.window, cc.crtc, cc.mode, cc.rotation, cc.x, cc.y, cc.width, cc.height, rn->sequence, cc.timestamp);
                     }
                 } else if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_OUTPUT_CHANGE)) {
                     auto rn = reinterpret_cast<xcb_randr_notify_event_t*>(ev.get());
                     xcb_randr_output_change_t oc = rn->u.oc;
                     // window, output, crtc, mode, rotation, connection, subpixel
-                    Application::info("randr output change notify, window: 0x%08" PRIx32 ", output: 0x%08" PRIx32 ", crtc: 0x%08" PRIx32 ", mode: {}, rotation: 0x%04" PRIx16 ", connection: {}, subpixel_order: {}, sequence: 0x%04" PRIx16 ", timestamp: {}, config timestamp: {}",
+                    Application::info("randr output change notify, window: {:#08x}, output: {:#08x}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, connection: {}, subpixel_order: {}, sequence: {:#04x}, timestamp: {}, config timestamp: {}",
                                       oc.window, oc.output, oc.crtc, oc.mode, oc.rotation, oc.connection, oc.subpixel_order, rn->sequence, oc.timestamp, oc.config_timestamp);
                 } else if(XCB::RootDisplay::isRandrScreenNotify(ev)) {
                     // windows, timestamps, sizeID, subpixel, width, height, mwidth, mheight,
                     auto sc = reinterpret_cast<xcb_randr_screen_change_notify_event_t*>(ev.get());
 
-                    Application::info("randr screen change notify,  rotation: 0x%02" PRIx8 ", sequence: 0x%04" PRIx16 ", root: 0x%08" PRIx32 ", request_window: 0x%08" PRIx32 ", sizeID: {}, size: [{}, {}], monitor: [{}, {}], timestamp: {}, config timestamp: {}",
+                    Application::info("randr screen change notify,  rotation: {:#02x}, sequence: {:#04x}, root: {:#08x}, request_window: {:#08x}, sizeID: {}, size: [{}, {}], monitor: [{}, {}], timestamp: {}, config timestamp: {}",
                                       sc->rotation, sc->sequence, sc->root, sc->request_window, sc->sizeID, sc->width, sc->height, sc->mwidth, sc->mheight, sc->timestamp, sc->config_timestamp);
                 }
             }

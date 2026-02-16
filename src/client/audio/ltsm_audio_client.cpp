@@ -114,7 +114,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto audioCmd = sb.readIntLE16();
-            Application::debug(DebugType::Audio, "{}: cmd: 0x%" PRIx16, __FUNCTION__, audioCmd);
+            Application::debug(DebugType::Audio, "{}: cmd: {:#04x}", __FUNCTION__, audioCmd);
 
             if(AudioOp::Init == audioCmd) {
                 if(! audioOpInit(sb)) {
@@ -125,7 +125,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             } else if(AudioOp::Silent == audioCmd) {
                 audioOpSilent(sb);
             } else {
-                Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "audio", audioCmd, recv.size());
+                Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu", __FUNCTION__, "audio", audioCmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }

@@ -2953,7 +2953,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busDestroyChannel(const int32_t & display, const uint8_t & channel) {
-        Application::debug(DebugType::Dbus, "{}:, display: {}, channel: 0x%02" PRIx8,
+        Application::debug(DebugType::Dbus, "{}:, display: {}, channel: {:#02x}",
                            __FUNCTION__, display, channel);
 
         emitDestroyChannel(display, channel);

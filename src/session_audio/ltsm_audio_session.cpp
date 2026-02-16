@@ -104,7 +104,7 @@ namespace LTSM {
         auto err = sock->recvIntLE16();
 
         if(cmd != AudioOp::Init) {
-            Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+            Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
             return false;
         }
 
@@ -118,7 +118,7 @@ namespace LTSM {
         auto ver = sock->recvIntLE16();
         // encoding
         auto enc = sock->recvIntLE16();
-        Application::info("{}: client proto version: {}, encode type: 0x%" PRIx16, __FUNCTION__, ver, enc);
+        Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
         uint32_t defaultBitRate = 44100;
         uint32_t bufFragSize = 1024;
         // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960

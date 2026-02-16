@@ -207,7 +207,7 @@ namespace LTSM {
     void RFB::DecodingHexTile::updateRegionColors(DecoderStream & cli, const XCB::Region & reg) {
         auto flag = cli.recvInt8();
 
-        Application::trace(DebugType::Enc, "{}: sub encoding mask: 0x%02" PRIx8 ", sub region [{}, {}, {}, {}]",
+        Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#02x}, sub region [{}, {}, {}, {}]",
             __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
 
         if(flag & RFB::HEXTILE_RAW) {
@@ -296,7 +296,7 @@ namespace LTSM {
     void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg) {
         auto type = cli.recvInt8();
 
-        Application::trace(DebugType::Enc, "{}: sub encoding type: 0x%02" PRIx8 ", sub region: [{}, {}, {}, {}], zrle: %d",
+        Application::trace(DebugType::Enc, "{}: sub encoding type: {:#02x}, sub region: [{}, {}, {}, {}], zrle: %d",
                            __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
 
         // trle raw

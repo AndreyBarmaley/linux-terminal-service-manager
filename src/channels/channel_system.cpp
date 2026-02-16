@@ -368,7 +368,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo) {
     int flags = jo.getInteger("flags", 0);
     bool replyError = false;
 
-    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: 0x%08" PRIx32, __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), flags);
+    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#08x}", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), flags);
 
     if(! isUserSession()) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "not user session", channel);

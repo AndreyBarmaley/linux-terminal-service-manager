@@ -94,7 +94,7 @@ void Pkcs11Client::run(void) {
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, NS_FuncName.c_str(), "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", NS_FuncName.c_str(), "id", cmd);
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;
@@ -155,7 +155,7 @@ bool Pkcs11Client::updateTokens(void) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlots) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         return false;
     }
 
@@ -232,7 +232,7 @@ std::list<Pkcs11Cert> Pkcs11Client::getCertificates(uint64_t slotId) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlotCertificates) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -260,7 +260,7 @@ std::list<Pkcs11Mech> Pkcs11Client::getMechanisms(uint64_t slotId) {
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::GetSlotMechanisms) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -298,7 +298,7 @@ std::vector<uint8_t> Pkcs11Client::signData(uint64_t slotId, const std::string &
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::SignData) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         return {};
     }
 
@@ -329,7 +329,7 @@ std::vector<uint8_t> Pkcs11Client::decryptData(uint64_t slotId, const std::strin
     auto cmd = sock.recvIntLE16();
 
     if(cmd != Pkcs11Op::DecryptData) {
-        Application::error("{}: {}: failed, cmd: 0x%" PRIx16, __FUNCTION__, "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
         return {};
     }
 

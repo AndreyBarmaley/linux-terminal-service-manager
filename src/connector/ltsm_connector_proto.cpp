@@ -389,7 +389,7 @@ namespace LTSM::Connector {
         auto cursorId = jo.getInteger("cursor");
 
         if(cursorId) {
-            Application::debug(DebugType::App, "{}: cursor id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+            Application::debug(DebugType::App, "{}: cursor id: {:#08x}", __FUNCTION__, cursorId);
             cursorFailed(cursorId);
         }
     }
@@ -420,7 +420,7 @@ namespace LTSM::Connector {
                 }
             }
 
-            //Application::debug(DebugType::Input, "{}: pressed: %d, scancode: 0x%08" PRIx32 ", keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
+            //Application::debug(DebugType::Input, "{}: pressed: %d, scancode: {:#08x}, keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
 
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();

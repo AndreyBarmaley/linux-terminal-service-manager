@@ -793,7 +793,7 @@ namespace LTSM {
         bool pressed = recvInt8();
         recvSkip(2);
         uint32_t keysym = recvIntBE32();
-        Application::debug(DebugType::Rfb, "{}: action {}, keysym: 0x%08" PRIx32, __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
+        Application::debug(DebugType::Rfb, "{}: action {}, keysym: {:#08x}", __FUNCTION__, (pressed ? "pressed" : "released"), keysym);
         serverRecvKeyEvent(pressed, keysym);
     }
 
@@ -803,7 +803,7 @@ namespace LTSM {
         uint8_t buttons = recvInt8();
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: mask: 0x%02" PRIx8 ", pos: [ {}, {}]", __FUNCTION__, buttons, posx, posy);
+        Application::debug(DebugType::Rfb, "{}: mask: {:#02x}, pos: [ {}, {}]", __FUNCTION__, buttons, posx, posy);
         serverRecvPointerEvent(buttons, posx, posy);
     }
 
@@ -1365,7 +1365,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::cursorFailed(uint32_t cursorId) {
-        Application::info("{}: cursorId: 0x%08" PRIx32, __FUNCTION__, cursorId);
+        Application::info("{}: cursorId: {:#08x}", __FUNCTION__, cursorId);
         cursorSended.remove(cursorId);
     }
 }

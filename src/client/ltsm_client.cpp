@@ -707,7 +707,7 @@ namespace LTSM {
                         uint16_t opcode = 0;
 
                         if(extXkb->isEventError(ev, & opcode)) {
-                            Application::warning("{}: {} error: 0x%04" PRIx16, __FUNCTION__, "xkb", opcode);
+                            Application::warning("{}: {} error: {:#04x}", __FUNCTION__, "xkb", opcode);
                         }
                     }
                 }
@@ -975,7 +975,7 @@ namespace LTSM {
         if(auto ke = ev.key()) {
             // pressed
             if(ke->state == SDL_PRESSED) {
-                Application::debug(DebugType::App, "{}: SDL Keysym - scancode: 0x%08" PRIx32 ", keycode: 0x%08" PRIx32,
+                Application::debug(DebugType::App, "{}: SDL Keysym - scancode: {:#08x}, keycode: {:#08x}",
                                    __FUNCTION__, static_cast<int>(ke->keysym.scancode), ke->keysym.sym);
 
                 // ctrl + F10 -> fast close
@@ -1427,7 +1427,7 @@ namespace LTSM {
 
         if(cursors.end() == it) {
             if(pixels.empty()) {
-                Application::error("{}: cursor not found, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                Application::error("{}: cursor not found, id: {:#08x}", __FUNCTION__, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }
@@ -1441,7 +1441,7 @@ namespace LTSM {
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
             if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4) {
-                Application::error("{}: invalid pixels, length: %lu, id: 0x%08" PRIx32, __FUNCTION__, pixels.size(), cursorId);
+                Application::error("{}: invalid pixels, length: %lu, id: {:#08x}", __FUNCTION__, pixels.size(), cursorId);
                 return;
             }
 
@@ -1474,7 +1474,7 @@ namespace LTSM {
                 Application::warning("{}: {} failed, error: {}", __FUNCTION__,
                                      "SDL_CreateColorCursor", SDL_GetError());
 
-                Application::warning("{}: send cursor failed, id: 0x%08" PRIx32, __FUNCTION__, cursorId);
+                Application::warning("{}: send cursor failed, id: {:#08x}", __FUNCTION__, cursorId);
                 sendSystemCursorFailed(cursorId);
                 return;
             }

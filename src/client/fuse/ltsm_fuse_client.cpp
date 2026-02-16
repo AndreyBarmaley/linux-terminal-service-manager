@@ -129,7 +129,7 @@ namespace LTSM {
 #endif
 
                 default:
-                    Application::warning("{}: {}, mode: 0x%" PRIx64 ", path: `{}'",
+                    Application::warning("{}: {}, mode: {:#016x}, path: `{}'",
                                          __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path.c_str());
                     continue;
             }
@@ -231,10 +231,10 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
             auto fuseCmd = sb.readIntLE16();
-            Application::debug(DebugType::Fuse, "{}: cmd: 0x%" PRIx16, __FUNCTION__, fuseCmd);
+            Application::debug(DebugType::Fuse, "{}: cmd: {:#04x}", __FUNCTION__, fuseCmd);
 
             if(! fuseInit && fuseCmd != FuseOp::Init) {
-                Application::error("{}: {} failed, cmd: 0x%" PRIx16, __FUNCTION__, "initialize", fuseCmd);
+                Application::error("{}: {} failed, cmd: {:#04x}", __FUNCTION__, "initialize", fuseCmd);
                 throw channel_error(NS_FuncName);
             }
 
@@ -262,7 +262,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
                     break;
 
                 default:
-                    Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
+                    Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
                     throw channel_error(NS_FuncName);
             }
         }
@@ -302,7 +302,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
         Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mount point", mountPoint.c_str());
         fuseInit = false;
     } else {
-        Application::info("{}: version: 0x%" PRIx16 ", mount point: `{}'", __FUNCTION__, fuseVer, mountPoint.c_str());
+        Application::info("{}: version: {:#04x}, mount point: `{}'", __FUNCTION__, fuseVer, mountPoint.c_str());
         shareRoot.assign(mountPoint);
         fuseInit = true;
     }
@@ -438,10 +438,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("{}: {} failed, error: {}, code: %d, path: `{}', flags: 0x%" PRIx32,
+        Application::error("{}: {} failed, error: {}, code: %d, path: `{}', flags: {:#08x}",
                            __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
     } else {
-        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: 0x%" PRIx32 ", fdh: {}", __FUNCTION__, path.c_str(), flags, ret);
+        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#08x}, fdh: {}", __FUNCTION__, path.c_str(), flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);

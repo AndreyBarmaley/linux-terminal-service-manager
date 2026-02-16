@@ -647,7 +647,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym) {
-        Application::debug(DebugType::Rfb, "{}: keysym: 0x%08" PRIx32 ", pressed: %d", __FUNCTION__, keysym, (int) pressed);
+        Application::debug(DebugType::Rfb, "{}: keysym: {:#08x}, pressed: %d", __FUNCTION__, keysym, (int) pressed);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
@@ -658,7 +658,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {
-        Application::debug(DebugType::Rfb, "{}: pointer: [{}, {}], buttons: 0x%02" PRIx8, __FUNCTION__, posx, posy, buttons);
+        Application::debug(DebugType::Rfb, "{}: pointer: [{}, {}], buttons: {:#02x}", __FUNCTION__, posx, posy, buttons);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_POINTER);
         sendInt8(buttons);
@@ -875,7 +875,7 @@ namespace LTSM {
             col.g = recvInt8();
             col.b = recvInt8();
 
-            Application::trace(DebugType::Rfb, "{}: color [0x%02" PRIx8 ",0x%02" PRIx8 ",0x%02" PRIx8 "]", __FUNCTION__, col.r, col.g, col.b);
+            Application::trace(DebugType::Rfb, "{}: color [{:#02x},{:#02x},{:#02x}]", __FUNCTION__, col.r, col.g, col.b);
         }
 
         clientRecvSetColorMapEvent(colors);
@@ -967,8 +967,8 @@ namespace LTSM {
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: {}, area: [{}, {}, {}, {}], flags: 0x%08"
-                               PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: [{}, {}, {}, {}], flags: {:#08x}",
+                               __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 
         clientRecvDecodingDesktopSizeEvent(status, err, sz, screens);

@@ -182,7 +182,7 @@ namespace LTSM::DisplaySession {
         while(sb.last()) {
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
             if(auto ver = sb.readIntBE16(); ver != 0x0100) {
-                Application::error("{}: invalid xauth format, ver: 0x%04" PRIx16, __FUNCTION__, ver);
+                Application::error("{}: invalid xauth format, ver: {:#04x}", __FUNCTION__, ver);
                 throw std::runtime_error(NS_FuncName);
             }
 

@@ -730,7 +730,7 @@ namespace LTSM {
             Application::info("{}: process {}, pid: {}, return: {}",
                               __FUNCTION__, "exited", pid, WEXITSTATUS(status));
         } else {
-            Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: 0x%08" PRIx32,
+            Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: {:#08x}",
                                __FUNCTION__, "ended", pid, status);
         }
 

@@ -208,7 +208,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
                 pcscCommand(cmd, sb);
                 //
             } else {
-                Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", recv size: %lu",
+                Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu",
                                    __FUNCTION__, "pcsc init", pcscInit, recv.size());
                 throw channel_error(NS_FuncName);
             }
@@ -229,7 +229,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamBufRef & sb) {
-    Application::debug(DebugType::Pcsc, "{}: cmd: {} (0x%" PRIx16 ")", __FUNCTION__, PcscLite::commandName(cmd), cmd);
+    Application::debug(DebugType::Pcsc, "{}: cmd: {} ({:#04x})", __FUNCTION__, PcscLite::commandName(cmd), cmd);
 
     switch(cmd) {
         case PcscLite::EstablishContext:
@@ -281,7 +281,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamB
             break;
     }
 
-    Application::error("{}: {} failed, cmd: 0x%" PRIx16 ", last size: %lu",
+    Application::error("{}: {} failed, cmd: {:#04x}, last size: %lu",
                        __FUNCTION__, "pcsc", cmd, sb.last());
     throw channel_error(NS_FuncName);
 }
@@ -297,9 +297,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
     uint32_t ret = SCardEstablishContext(scope, nullptr, nullptr, & hContext);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> context: 0x%016" PRIx64, __FUNCTION__, hContext);
+        Application::debug(DebugType::Pcsc, "{}: >> context: {:#016x}", __FUNCTION__, hContext);
     } else {
-        Application::error("{}: error: 0x%08" PRIx32 " ({})", __FUNCTION__, ret, pcsc_stringify_error(ret));
+        Application::error("{}: error: {:#08x} ({})", __FUNCTION__, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -314,13 +314,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef &
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: 0x%016" PRIx64, __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}", __FUNCTION__, hContext);
     uint32_t ret = SCardReleaseContext(hContext);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -341,7 +341,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
         return {};
 
     if(ret != SCARD_S_SUCCESS) {
-        LTSM::Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        LTSM::Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
         return {};
     }
 
@@ -365,7 +365,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
         return readers;
     }
 
-    LTSM::Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+    LTSM::Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     return {};
 }
 
@@ -375,7 +375,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: 0x%016" PRIx64, __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}", __FUNCTION__, hContext);
     auto readers = getListReaders(hContext);
     // reply
     StreamBuf reply(256);
@@ -405,7 +405,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
     }
 
     auto readerName = sb.readString(len);
-    Application::debug(DebugType::Pcsc, "{}: << context: 0x%016" PRIx64 ", readerName: `{}', shareMode: {}, prefferedProtocols: {}",
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}, readerName: `{}', shareMode: {}, prefferedProtocols: {}",
                        __FUNCTION__, hContext, readerName.c_str(), shareMode, prefferedProtocols);
     SCARDHANDLE hCard = 0;
     DWORD activeProtocol = 0;
@@ -416,9 +416,9 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> handle: 0x%016" PRIx64 ", activeProtocol: {}", __FUNCTION__, hCard, static_cast<uint32_t>(activeProtocol));
+        Application::debug(DebugType::Pcsc, "{}: >> handle: {:#016x}, activeProtocol: {}", __FUNCTION__, hCard, static_cast<uint32_t>(activeProtocol));
     } else {
-        Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -436,7 +436,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
     uint32_t shareMode = sb.readIntLE32();
     uint32_t prefferedProtocols = sb.readIntLE32();
     uint32_t initialization = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", shareMode: {}, prefferedProtocols: {}, initialization: {}",
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, shareMode: {}, prefferedProtocols: {}, initialization: {}",
                        __FUNCTION__, hCard, shareMode, prefferedProtocols, initialization);
     DWORD activeProtocol = 0;
     uint32_t ret = SCardReconnect(hCard, shareMode, prefferedProtocols, initialization, & activeProtocol);
@@ -444,7 +444,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> activeProtocol: {}", __FUNCTION__, static_cast<uint32_t>(activeProtocol));
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -460,14 +460,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
 
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", disposition: {}",
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, disposition: {}",
                        __FUNCTION__, hCard, disposition);
     uint32_t ret = SCardDisconnect(hCard, disposition);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -482,14 +482,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64,
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}",
                        __FUNCTION__, hCard);
     uint32_t ret = SCardBeginTransaction(hCard);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -505,14 +505,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
 
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t disposition = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", disposition: {}",
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, disposition: {}",
                        __FUNCTION__, hCard, disposition);
     uint32_t ret = SCardEndTransaction(hCard, disposition);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -539,7 +539,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
     }
 
     auto sendBuffer = sb.read(sendLength);
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
                        __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, static_cast<uint32_t>(recvLength));
 
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
@@ -550,7 +550,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
         Application::debug(DebugType::Pcsc, "{}: >> dwProtocol: {}, pciLength: {}, recv size: {}",
                            __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, static_cast<uint32_t>(recvLength));
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -570,7 +570,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64, __FUNCTION__, hCard);
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}", __FUNCTION__, hCard);
     DWORD state = 0;
     DWORD protocol = 0;
     char readerName[MAX_READERNAME];
@@ -584,10 +584,10 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> readerName: `%.*s', state: 0x%08" PRIx32 ", protocol: {}, atrLen: {}",
+        Application::debug(DebugType::Pcsc, "{}: >> readerName: `%.*s', state: {:#08x}, protocol: {}, atrLen: {}",
                            __FUNCTION__, static_cast<int>(readerNameLen), readerName, static_cast<uint32_t>(state), static_cast<uint32_t>(protocol), static_cast<uint32_t>(atrLen));
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -644,7 +644,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         }
     }
 
-    Application::debug(DebugType::Pcsc, "{}: << context: 0x%016" PRIx64 ", timeout: {}, states count: {}", __FUNCTION__, hContext, timeout, statesCount);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}, timeout: {}, states count: {}", __FUNCTION__, hContext, timeout, statesCount);
 #ifdef __WIN32__
     uint32_t ret = SCardGetStatusChangeA(hContext, timeout, states.data(), states.size());
 #else
@@ -654,7 +654,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> statesCount: {}", __FUNCTION__, statesCount);
     } else {
-        Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -669,7 +669,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         reply.writeIntLE32(szReader ? szReader->size() : 0);
         reply.writeIntLE32(state.cbAtr);
 
-        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}', currentState: 0x%08" PRIx32 ", eventState: 0x%08" PRIx32 ", atrLen: {}",
+        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}', currentState: {:#08x}, eventState: {:#08x}, atrLen: {}",
                            __FUNCTION__, state.szReader, static_cast<uint32_t>(state.dwCurrentState), static_cast<uint32_t>(state.dwEventState), static_cast<uint32_t>(state.cbAtr));
 
         if(szReader) {
@@ -699,7 +699,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
     }
 
     auto sendBuffer = sb.read(sendLength);
-    Application::debug(DebugType::Pcsc, "{}: handle: << 0x%016" PRIx64 ", controlCode: 0x%08" PRIx32 ", send size: {}, recv size: {}",
+    Application::debug(DebugType::Pcsc, "{}: handle: << {:#016x}, controlCode: {:#08x}, send size: {}, recv size: {}",
                        __FUNCTION__, hCard, controlCode, sendLength, recvLength);
     DWORD bytesReturned = 0;
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
@@ -709,7 +709,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> bytesReturned: {}", __FUNCTION__, bytesReturned);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -729,13 +729,13 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
     }
 
     SCARDHANDLE hContext = sb.readIntLE64();
-    Application::debug(DebugType::Pcsc, "{}: << context: 0x%016" PRIx64, __FUNCTION__, hContext);
+    Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}", __FUNCTION__, hContext);
     uint32_t ret = SCardCancel(hContext);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: context: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
+        Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -751,7 +751,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) 
 
     SCARDHANDLE hCard = sb.readIntLE64();
     uint32_t attrId = sb.readIntLE32();
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", attrId: {}", __FUNCTION__, hCard, attrId);
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, attrId: {}", __FUNCTION__, hCard, attrId);
     std::vector<BYTE> attrBuf(MAX_BUFFER_SIZE);
     DWORD attrLen = MAX_BUFFER_SIZE;
     uint32_t ret = SCardGetAttrib(hCard, attrId, attrBuf.data(), & attrLen);
@@ -759,7 +759,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> attrLen: {}", __FUNCTION__, attrLen);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply
@@ -787,14 +787,14 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) 
     }
 
     auto attrBuf = sb.read(attrLen);
-    Application::debug(DebugType::Pcsc, "{}: << handle: 0x%016" PRIx64 ", attrId: {}, attrLen: {}",
+    Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, attrId: {}, attrLen: {}",
                        __FUNCTION__, hCard, attrId, attrLen);
     uint32_t ret = SCardSetAttrib(hCard, attrId, attrBuf.data(), attrLen);
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> success", __FUNCTION__);
     } else {
-        Application::error("{}: handle: 0x%016" PRIx64 ", error: 0x%08" PRIx32 " ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
+        Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
 
     // reply

@@ -156,7 +156,7 @@ namespace LTSM {
         }
 
         auto flags = sb.readIntBE32();
-        Application::debug(DebugType::Clip, "{}: flags: 0x%08" PRIx32, __FUNCTION__, flags);
+        Application::debug(DebugType::Clip, "{}: flags: {:#08x}", __FUNCTION__, flags);
 
         if(flags & ExtClipCaps::OpCaps) {
             auto typesCount = Tools::maskCountBits(flags & 0xFFFF);
@@ -172,7 +172,7 @@ namespace LTSM {
             auto opCount = Tools::maskCountBits(flags & allop);
 
             if(1 != opCount) {
-                Application::warning("{}: ext clipboard invalid flags: 0x%08" PRIx32, __FUNCTION__, flags);
+                Application::warning("{}: ext clipboard invalid flags: {:#08x}", __FUNCTION__, flags);
                 return;
             }
 
@@ -196,7 +196,7 @@ namespace LTSM {
     }
 
     void RFB::ExtClip::recvExtClipboardCapsContinue(uint32_t flags, StreamBuf && sb) {
-        Application::debug(DebugType::Clip, "{}: flags: 0x%08" PRIx32 ", data length: %lu", __FUNCTION__, flags, sb.last());
+        Application::debug(DebugType::Clip, "{}: flags: {:#08x}, data length: %lu", __FUNCTION__, flags, sb.last());
 
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         auto typesCount = Tools::maskCountBits(flags & 0xFFFF);
@@ -244,7 +244,7 @@ namespace LTSM {
     }
 
     void RFB::ExtClip::recvExtClipboardRequest(uint32_t flags) {
-        Application::debug(DebugType::Clip, "{}: flags: 0x%08" PRIx32, __FUNCTION__, flags);
+        Application::debug(DebugType::Clip, "{}: flags: {:#08x}", __FUNCTION__, flags);
         // The recipient should respond with a PROVIDE message with the clipboard data for the formats indicated in flags.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
 
@@ -252,7 +252,7 @@ namespace LTSM {
             const int allowTypes = 0xFFFF & localExtClipboardFlags & flags;
             sendExtClipboardProvide(allowTypes);
         } else {
-            Application::error("{}: ext clipboard unsupport op: 0x%08" PRIx32, __FUNCTION__, localExtClipboardFlags);
+            Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
             throw rfb_error(NS_FuncName);
         }
     }
@@ -266,13 +266,13 @@ namespace LTSM {
             const int allowTypes = 0xFFFF & localExtClipboardFlags;
             sendExtClipboardNotify(allowTypes & extClipboardLocalTypes());
         } else {
-            Application::error("{}: ext clipboard unsupport op: 0x%08" PRIx32, __FUNCTION__, localExtClipboardFlags);
+            Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
             throw rfb_error(NS_FuncName);
         }
     }
 
     void RFB::ExtClip::recvExtClipboardNotify(uint32_t flags) {
-        Application::debug(DebugType::Clip, "{}: flags: 0x%08" PRIx32, __FUNCTION__, flags);
+        Application::debug(DebugType::Clip, "{}: flags: {:#08x}", __FUNCTION__, flags);
 
         // This message indicates which formats are available on the remote side
         // and should be sent whenever the clipboard changes, or as a response to a peek message.
@@ -282,7 +282,7 @@ namespace LTSM {
             const int allowTypes = 0xFFFF & remoteExtClipboardFlags & flags;
             extClipboardRemoteTypesEvent(allowTypes);
         } else {
-            Application::error("{}: ext clipboard unsupport op: 0x%08" PRIx32, __FUNCTION__, localExtClipboardFlags);
+            Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
             throw rfb_error(NS_FuncName);
         }
     }
@@ -312,14 +312,14 @@ namespace LTSM {
                 Application::warning("{}: zlib empty", __FUNCTION__);
             }
         } else {
-            Application::error("{}: ext clipboard unsupport op: 0x%08" PRIx32, __FUNCTION__, localExtClipboardFlags);
+            Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
             throw rfb_error(NS_FuncName);
         }
     }
 
     void RFB::ExtClip::sendExtClipboardCaps(void) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        Application::debug(DebugType::Clip, "{}: server flags: 0x%08" PRIx32, __FUNCTION__, localExtClipboardFlags);
+        Application::debug(DebugType::Clip, "{}: server flags: {:#08x}", __FUNCTION__, localExtClipboardFlags);
 
         const int allowFlags = ExtClipCaps::TypeText | ExtClipCaps::TypeRtf | ExtClipCaps::TypeHtml | ExtClipCaps::TypeDib |
                                ExtClipCaps::OpRequest | ExtClipCaps::OpPeek | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide;
@@ -356,7 +356,7 @@ namespace LTSM {
 
     void RFB::ExtClip::sendExtClipboardRequest(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        Application::debug(DebugType::Clip, "{}: types: 0x%04" PRIx16, __FUNCTION__, types);
+        Application::debug(DebugType::Clip, "{}: types: {:#04x}", __FUNCTION__, types);
 
         if(! types) {
             Application::warning("{}: types empty", __FUNCTION__);
@@ -367,7 +367,7 @@ namespace LTSM {
 
         // skip types, see recvExtClipboardProvide
         if((localProvideTypes & types) == types) {
-            Application::warning("{}: also provided, types: 0x%04" PRIx16, __FUNCTION__, types);
+            Application::warning("{}: also provided, types: {:#04x}", __FUNCTION__, types);
             return;
         }
 
@@ -393,7 +393,7 @@ namespace LTSM {
 
     void RFB::ExtClip::sendExtClipboardNotify(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        Application::debug(DebugType::Clip, "{}: types: 0x%04" PRIx16, __FUNCTION__, types);
+        Application::debug(DebugType::Clip, "{}: types: {:#04x}", __FUNCTION__, types);
 
         const int allowTypes = remoteExtClipboardFlags & types;
 
@@ -405,7 +405,7 @@ namespace LTSM {
 
     void RFB::ExtClip::sendExtClipboardProvide(uint16_t types) {
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        Application::debug(DebugType::Clip, "{}: types: 0x%04" PRIx16, __FUNCTION__, types);
+        Application::debug(DebugType::Clip, "{}: types: {:#04x}", __FUNCTION__, types);
 
         auto zlib = std::make_unique<ZLib::DeflateStream>();
 
