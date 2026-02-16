@@ -754,11 +754,11 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
 #ifdef __UNIX__
 bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! createChannelAllow(Channel::ConnectorType::Unix, path.native(), mode)) {
-        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", path.native());
+        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", path);
         return false;
     }
 
-    Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path.native(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -814,11 +814,11 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
     if(! createChannelAllow(Channel::ConnectorType::File, path.native(), mode))
 #endif
     {
-        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", path.native());
+        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", path);
         return false;
     }
 
-    Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path.native(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -1652,16 +1652,16 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
     std::error_code err;
 
     if(! std::filesystem::is_socket(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.native(), getuid());
+        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
         throw channel_error(NS_FuncName);
     }
 
-    Application::info("{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path.native(), Channel::Connector::modeString(mode));
+    Application::info("{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path, Channel::Connector::modeString(mode));
 
     int fd = UnixSocket::connect(path);
 
     if(0 > fd) {
-        Application::error("{}: {}, id: {}, path: `{}'", __FUNCTION__, "unix failed", channel, path.native());
+        Application::error("{}: {}, id: {}, path: `{}'", __FUNCTION__, "unix failed", channel, path);
         throw channel_error(NS_FuncName);
     }
 
@@ -1763,7 +1763,7 @@ LTSM::Channel::createTcpConnector(uint8_t channel, int sock, const ConnectorMode
 /// createFileConnector
 LTSM::Channel::ConnectorBasePtr
 LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path & path, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path.native(), Channel::Connector::modeString(mode));
+    Application::info("{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path, Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "file mode failed", Channel::Connector::modeString(mode));
@@ -1774,7 +1774,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(mode == ConnectorMode::ReadOnly &&
        ! std::filesystem::exists(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.native(), getuid());
+        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1792,7 +1792,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
         if(std::filesystem::exists(path, err)) {
             flags |= O_APPEND;
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "file exists switch mode to append", path.native());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "file exists switch mode to append", path);
         } else {
             flags |= O_CREAT | O_EXCL;
         }

@@ -178,7 +178,7 @@ namespace LTSM::Connector {
         });
 
         if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath.native());
+            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath);
             return false;
         }
 

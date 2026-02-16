@@ -329,13 +329,13 @@ namespace LTSM {
     bool Tools::setFileOwner(const std::filesystem::path & path, uid_t uid, gid_t gid, mode_t mode) {
         if(0 != chown(path.c_str(), uid, gid)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "chown", strerror(errno), errno, path.native());
+                               __FUNCTION__, "chown", strerror(errno), errno, path);
             return false;
         }
 
         if(mode && 0 != chmod(path.c_str(), mode)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "chmod", strerror(errno), errno, path.native());
+                               __FUNCTION__, "chmod", strerror(errno), errno, path);
             return false;
         }
 
@@ -621,7 +621,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file.native(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file, getuid());
             return {};
         }
 
@@ -640,7 +640,7 @@ namespace LTSM {
             return content;
         }
 
-        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file.native());
+        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file);
         return {};
     }
 
@@ -1002,7 +1002,7 @@ namespace LTSM {
             ofs.close();
             return true;
         } else {
-            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "write", file.native());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "write", file);
         }
 
         return false;
@@ -1021,10 +1021,10 @@ namespace LTSM {
                 ifs.read((char*) buf.data(), buf.size());
                 ifs.close();
             } else {
-                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file.native());
+                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "read", file);
             }
         } else {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file.native(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file, getuid());
         }
 
         return buf;

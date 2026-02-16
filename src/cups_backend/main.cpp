@@ -116,12 +116,12 @@ namespace LTSM {
             std::filesystem::path socketPath = Tools::replace(socketFormat, "username", jobUser);
 
             if(! std::filesystem::is_socket(socketPath)) {
-                Application::error("{}: socket not found: {}", __FUNCTION__, socketPath.native());
+                Application::error("{}: socket not found: {}", __FUNCTION__, socketPath);
                 return CUPS_BACKEND_HOLD;
             }
 
             if(0 != access(socketPath.c_str(), W_OK)) {
-                Application::error("{}: write access failed, socket: {}", __FUNCTION__, socketPath.native());
+                Application::error("{}: write access failed, socket: {}", __FUNCTION__, socketPath);
                 return CUPS_BACKEND_HOLD;
             }
 

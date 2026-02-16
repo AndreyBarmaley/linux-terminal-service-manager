@@ -845,7 +845,7 @@ namespace LTSM::Manager {
         }
 
         if(! std::filesystem::is_directory(xdgLtsm, err)) {
-            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mkdir", xdgLtsm.native());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mkdir", xdgLtsm);
             return false;
         }
 
@@ -884,7 +884,7 @@ namespace LTSM::Manager {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto cwd = std::filesystem::current_path();
             auto sgroups = Tools::join(gids.begin(), gids.end(), ",");
-            Application::debug(DebugType::App, "{}: groups: ({}), current dir: `{}'", __FUNCTION__, sgroups, cwd.native());
+            Application::debug(DebugType::App, "{}: groups: ({}), current dir: `{}'", __FUNCTION__, sgroups, cwd);
         }
 
         return true;
@@ -1260,7 +1260,7 @@ namespace LTSM::Manager {
         auto xauthFilePath = ltsmRuntimeDir / "auth_";
         xauthFilePath += std::to_string(displayNum);
 
-        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, xauthFilePath.native());
+        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, xauthFilePath);
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
         if(ofs) {
@@ -1284,7 +1284,7 @@ namespace LTSM::Manager {
             ofs.write((const char*) rawbuf.data(), rawbuf.size());
             ofs.close();
         } else {
-            Application::error("{}: create xauthfile failed, path: `{}'", __FUNCTION__, xauthFilePath.native());
+            Application::error("{}: create xauthfile failed, path: `{}'", __FUNCTION__, xauthFilePath);
             return "";
         }
 
@@ -1854,7 +1854,7 @@ namespace LTSM::Manager {
 
         if(! std::filesystem::is_directory(dstdir, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, err.message(), dstdir.native(), getuid());
+                               __FUNCTION__, err.message(), dstdir, getuid());
             emitTransferReject(xvfb->displayNum, files);
             return;
         }
@@ -1866,7 +1866,7 @@ namespace LTSM::Manager {
             auto tmpname = std::filesystem::path(connectorHome) / "transfer_";
             tmpname += Tools::randomHexString(8);
             Application::debug(DebugType::App, "{}: transfer file request, display: {}, select dir: `{}', tmp name: `{}'",
-                               __FUNCTION__, xvfb->displayNum, dstdir.native(), tmpname.native());
+                               __FUNCTION__, xvfb->displayNum, dstdir, tmpname);
             auto filepath = std::filesystem::path(std::get<0>(info));
             auto filesize = std::get<1>(info);
             // check disk space limited
@@ -1882,7 +1882,7 @@ namespace LTSM::Manager {
             auto dstfile = dstdir / filepath.filename();
 
             if(std::filesystem::exists(dstfile, err)) {
-                Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile.native());
+                Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile);
                 sendNotifyCall(xvfb, "Transfer Skipping", std::format("such a file exists: {}", dstfile.native()), NotifyParams::Warning);
                 continue;
             }
@@ -2438,7 +2438,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", socketFolder.native(), getuid());
+                               __FUNCTION__, "create directory failed", socketFolder, getuid());
             return false;
         }
 
@@ -2498,7 +2498,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(audioFolder, err) &&
            ! std::filesystem::create_directories(audioFolder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", audioFolder.native(), getuid());
+                               __FUNCTION__, "create directory failed", audioFolder, getuid());
             return false;
         }
 
@@ -2529,7 +2529,7 @@ namespace LTSM::Manager {
         audioSocket += ".sock";
 
         Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket.native());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
 
         xvfb->dbusAudioChannelDisconnect(audioSocket);
     }
@@ -2556,7 +2556,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(socketFolder, err) &&
            ! std::filesystem::create_directories(socketFolder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", socketFolder.native(), getuid());
+                               __FUNCTION__, "create directory failed", socketFolder, getuid());
             return false;
         }
 
@@ -2617,7 +2617,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(pcscFolder, err) &&
            ! std::filesystem::create_directories(pcscFolder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", pcscFolder.native(), getuid());
+                               __FUNCTION__, "create directory failed", pcscFolder, getuid());
             return false;
         }
 
@@ -2646,7 +2646,7 @@ namespace LTSM::Manager {
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.native());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket);
 
         xvfb->dbusPcscChannelDisconnect(pcscSocket);
     }
@@ -2664,7 +2664,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(pkcs11Folder, err) &&
            ! std::filesystem::create_directories(pkcs11Folder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", pkcs11Folder.native(), getuid());
+                               __FUNCTION__, "create directory failed", pkcs11Folder, getuid());
             return false;
         }
 
@@ -2732,7 +2732,7 @@ namespace LTSM::Manager {
         if(! std::filesystem::is_directory(fusePointFolder, err) &&
            ! std::filesystem::create_directories(fusePointFolder, err)) {
             Application::error("{}: {}, path: `{}', uid: {}",
-                               __FUNCTION__, "create directory failed", fusePointFolder.native(), getuid());
+                               __FUNCTION__, "create directory failed", fusePointFolder, getuid());
             return false;
         }
 
@@ -2764,12 +2764,11 @@ namespace LTSM::Manager {
         auto userShareFolder = Tools::replace(fuseRuntimeFmt, "%{user}", xvfb->userInfo->user());
         auto fusePointName = std::filesystem::path(remotePoint).filename();
         auto fusePointFolder = std::filesystem::path(userShareFolder) / fusePointName;
-        auto localPoint = fusePointFolder.native();
 
         Application::info("{}: display: {}, user: {}, local point: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint);
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), fusePointFolder);
 
-        xvfb->dbusFuseUmountPoint(localPoint);
+        xvfb->dbusFuseUmountPoint(fusePointFolder.native());
     }
 
     void DBusAdaptor::busSetDebugLevel(const std::string & level) {

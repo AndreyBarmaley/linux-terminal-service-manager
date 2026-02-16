@@ -28,7 +28,7 @@ struct Image {
             fb->blitRegion(fb24, XCB::Region(0, 0, fb->width(), fb->height()), XCB::Point(0, 0));
         }
 
-        Application::info("{}: loading: {}", __FUNCTION__, file.native());
+        Application::info("{}: loading: {}", __FUNCTION__, file);
     }
 };
 

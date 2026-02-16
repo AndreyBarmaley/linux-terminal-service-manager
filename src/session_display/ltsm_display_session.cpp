@@ -71,9 +71,9 @@ namespace LTSM::DisplaySession {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
             Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
-                              __FUNCTION__, getuid(), pid, cmd.native(), sargs, senvs);
+                              __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
         } else {
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.native());
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd);
         }
 
         // main thread processed
@@ -163,9 +163,9 @@ namespace LTSM::DisplaySession {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
             Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
-                              __FUNCTION__, getuid(), pid, cmd.native(), sargs, senvs);
+                              __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
         } else {
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.native());
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd);
         }
 
         // main thread processed

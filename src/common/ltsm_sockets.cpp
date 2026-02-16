@@ -496,7 +496,7 @@ namespace LTSM {
         std::filesystem::remove(socketPath, err);
 
         if(err) {
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), socketPath.native(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), socketPath, getuid());
         }
     }
 
@@ -765,7 +765,7 @@ namespace LTSM {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.native());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path);
             return -1;
         }
 
@@ -785,7 +785,7 @@ namespace LTSM {
         Application::debug(DebugType::Sock, "{}: path: {}", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "connect", strerror(errno), errno, path.native());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "connect", strerror(errno), errno, path);
             close(sock);
             sock = -1;
         } else {
@@ -799,7 +799,7 @@ namespace LTSM {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.native());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path);
             return -1;
         }
 
@@ -807,7 +807,7 @@ namespace LTSM {
         std::filesystem::remove(path, err);
 
         if(err) {
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.native(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
         }
 
         struct sockaddr_un sockaddr;
@@ -825,7 +825,7 @@ namespace LTSM {
         Application::debug(DebugType::Sock, "{}: bind path: {}", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "bind", strerror(errno), errno, path.native());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "bind", strerror(errno), errno, path);
             close(fd);
             return -1;
         }
@@ -863,7 +863,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::is_socket(path, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not socket"), path.native(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not socket"), path, getuid());
             return false;
         }
 

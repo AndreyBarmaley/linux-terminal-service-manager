@@ -67,7 +67,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
         targets = getAtom("TARGETS", true);
         copy = static_cast<XCB::ModuleCopySelection*>(getExtension(XCB::Module::SELECTION_COPY));
 
-        Application::info("mode: {}, target: `{}', data save: `{}'", "copy", getAtomName(target).data(), file.native());
+        Application::info("mode: {}, target: `{}', data save: `{}'", "copy", getAtomName(target).data(), file);
     }
 
     int start(void) override {

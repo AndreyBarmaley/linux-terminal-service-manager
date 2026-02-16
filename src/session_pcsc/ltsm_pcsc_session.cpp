@@ -1662,11 +1662,11 @@ namespace LTSM {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: socket path: `{}'", __FUNCTION__, pcscSocketPath.native());
+        Application::info("{}: socket path: `{}'", __FUNCTION__, pcscSocketPath);
 
         if(std::filesystem::is_socket(pcscSocketPath)) {
             std::filesystem::remove(pcscSocketPath);
-            Application::warning("{}: socket found: {}", __FUNCTION__, pcscSocketPath.native());
+            Application::warning("{}: socket found: {}", __FUNCTION__, pcscSocketPath);
         }
 
         signal(SIGTERM, signalHandler);

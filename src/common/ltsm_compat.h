@@ -25,6 +25,31 @@
 
 #include <string>
 #include <iterator>
+#include <filesystem>
+
+#include "spdlog/spdlog.h"
+
+/* C++26 with SPDLOG_USE_STD_FORMAT
+template <>
+struct std::formatter<std::filesystem::path> : std::formatter<std::string> {
+    auto format(const std::filesystem::path& path, std::format_context& ctx) const {
+        return std::formatter<std::string>::format(
+            std::format("{}", p.native()), ctx);
+    }
+};
+*/
+
+template <>
+struct fmt::formatter<std::filesystem::path> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const std::filesystem::path& path, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", path.native());
+    }
+};
 
 namespace LTSM {
     inline std::string view2string(std::string_view view) {
