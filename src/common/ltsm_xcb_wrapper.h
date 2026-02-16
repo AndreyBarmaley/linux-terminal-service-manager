@@ -247,6 +247,14 @@ namespace LTSM {
             xcb_xkb_state_notify_event_t state_notify;
         };
 
+        struct AtomName {
+            std::string name;
+            xcb_atom_t atom = XCB_ATOM_NONE;
+
+            AtomName(xcb_connection_t* conn, xcb_atom_t at);
+            AtomName() = default;
+        };
+    
         struct RandrOutputInfo {
             bool connected = false;
             xcb_randr_crtc_t crtc = 0;
@@ -409,10 +417,8 @@ namespace LTSM {
             // destinations
             std::list<WindowRequest> requestsIncr;
 
-            std::string selectionName;
-
             // selection type: clipboard, primary, etc
-            xcb_atom_t selectionType = XCB_ATOM_NONE;
+            AtomName selectionAtom;
 
             // selection fake win source
             xcb_window_t selectionWin = XCB_WINDOW_NONE;
@@ -478,10 +484,8 @@ namespace LTSM {
             // incr source
             std::unique_ptr<WindowSource> sourceIncr;
 
-            std::string selectionName;
-
             // selection type: clipboard, primary, etc
-            xcb_atom_t selectionType = XCB_ATOM_NONE;
+            AtomName selectionAtom;
 
             xcb_atom_t selectionProp = XCB_ATOM_NONE;
             xcb_atom_t selectionTrgt = XCB_ATOM_NONE;
