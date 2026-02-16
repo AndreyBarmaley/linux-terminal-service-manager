@@ -1736,7 +1736,7 @@ int main(int argc, const char** argv)
             std::cerr << "unknown params: " << err.what() << std::endl << std::endl;
             return -1;
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             Application::info("program: {}", "terminate...");
         }
     }

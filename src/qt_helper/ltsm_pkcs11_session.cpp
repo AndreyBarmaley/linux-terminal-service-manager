@@ -87,14 +87,14 @@ void Pkcs11Client::run(void) {
         cmd = sock.recvIntLE16();
         err = sock.recvIntLE16();
     } catch(const std::exception & exp) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), "PKCS11 initialization failed");
+        Application::error("{}: exception: {}", NS_FuncNameV, "PKCS11 initialization failed");
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;
     }
 
     if(cmd != Pkcs11Op::Init) {
-        Application::error("{}: {}: failed, cmd: {:#04x}", NS_FuncName.c_str(), "id", cmd);
+        Application::error("{}: {}: failed, cmd: {:#04x}", NS_FuncNameV, "id", cmd);
         emit pkcs11Error("PKCS11 initialization failed");
         emit pkcs11Shutdown();
         return;

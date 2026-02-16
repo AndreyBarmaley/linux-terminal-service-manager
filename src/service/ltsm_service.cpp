@@ -3052,7 +3052,7 @@ int main(int argc, const char** argv) {
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
     return res;

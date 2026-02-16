@@ -245,7 +245,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
                 error = true;
             }
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             error = true;
         }
 
@@ -268,7 +268,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
     try {
         port = std::stoi(list.back());
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
     return std::make_pair(addr, port);
@@ -702,7 +702,7 @@ bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::s
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createClientAudioConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -721,7 +721,7 @@ bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::st
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createClientFuseConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -740,7 +740,7 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createClientPcscConnector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -764,7 +764,7 @@ bool LTSM::ChannelClient::createChannelUnix(uint8_t channel, const std::filesyst
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createUnixConnector(channel, path, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -778,7 +778,7 @@ bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const C
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createUnixConnector(channel, sock, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -795,7 +795,7 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createClientPkcs11Connector(channel, url, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -824,7 +824,7 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createFileConnector(channel, path, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -843,7 +843,7 @@ bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::strin
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createCommandConnector(channel, runcmd, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -873,7 +873,7 @@ bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::st
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createTcpConnector(channel, ipAddrPort.first, ipAddrPort.second, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -887,7 +887,7 @@ bool LTSM::ChannelClient::createChannelSocketFd(uint8_t channel, int sock, const
         const std::scoped_lock guard{lockch};
         channels.emplace_back(Channel::createTcpConnector(channel, sock, mode, chOpts, *this));
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -1058,7 +1058,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
             return true;
         }
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -1277,7 +1277,7 @@ bool LTSM::Channel::Local2Remote::readData(void) {
         }
     } catch(const std::exception & err) {
         error = errno;
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         return false;
     }
 
@@ -1930,7 +1930,7 @@ void LTSM::Channel::Listener::loopAccept(Listener* st) {
         } catch(const std::exception & err) {
             st->loopRunning = false;
 
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         if(input) {

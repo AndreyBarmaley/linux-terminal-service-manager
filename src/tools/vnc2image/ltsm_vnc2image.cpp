@@ -94,7 +94,7 @@ namespace LTSM {
                 rfbMessagesLoop();
             }
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return 0;
@@ -186,7 +186,7 @@ int main(int argc, const char** argv) {
         LTSM::Vnc2Image app(argc, argv);
         res = app.start();
     } catch(const std::exception & err) {
-        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         LTSM::Application::info("program: {}", "terminate...");
     } catch(int val) {
         res = val;

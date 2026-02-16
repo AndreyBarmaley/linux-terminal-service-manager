@@ -1046,7 +1046,7 @@ namespace LTSM {
         try {
             return std::make_unique<Session>(id, rwmode, lib);
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return nullptr;

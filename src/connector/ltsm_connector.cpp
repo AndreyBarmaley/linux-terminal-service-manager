@@ -185,7 +185,7 @@ namespace LTSM::Connector {
         try {
             xcbDisplay.displayReconnect(screen);
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             return false;
         }
 
@@ -338,7 +338,7 @@ namespace LTSM::Connector {
             sd_notify(0, "STOPPING=1");
 #endif
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             // terminated connection: exit normal
             res = EXIT_SUCCESS;
         }
@@ -356,7 +356,7 @@ int main(int argc, const char** argv) {
     } catch(const sdbus::Error & err) {
         Application::error("sdbus exception: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
     return EXIT_FAILURE;

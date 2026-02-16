@@ -184,7 +184,7 @@ namespace LTSM {
                     auto connector = std::make_unique<Connector::X11VNC>(sock, config());
                     res = connector->rfbCommunication();
                 } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
 
                 close(sock);
@@ -206,7 +206,7 @@ namespace LTSM {
             auto connector = std::make_unique<Connector::X11VNC>(-1, config());
             res = connector->rfbCommunication();
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return res;
@@ -231,7 +231,7 @@ int main(int argc, const char** argv) {
         LTSM::X11Vnc app(argc, argv);
         res = app.start();
     } catch(const std::exception & err) {
-        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         LTSM::Application::info("program: {}", "terminate...");
     } catch(int val) {
         res = val;

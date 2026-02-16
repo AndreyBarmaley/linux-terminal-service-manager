@@ -934,7 +934,7 @@ namespace LTSM {
         try {
             ptr = std::make_unique<FuseSession>(localPoint, remotePoint, fuseSocket);
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             return false;
         }
 
@@ -992,7 +992,7 @@ int main(int argc, char** argv) {
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
     } catch(const std::exception & err) {
-        LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }
 
     return EXIT_FAILURE;

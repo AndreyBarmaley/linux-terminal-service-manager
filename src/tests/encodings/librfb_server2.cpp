@@ -41,7 +41,7 @@ namespace LTSM {
     // ServerEncoder
     RFB::ServerEncoderBuf::ServerEncoderBuf(const FrameBuffer* fb)
         : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat()) {
-        LTSM::Application::info("{}: dsz: {}, {}", NS_FuncName.c_str(), dsz.width, dsz.height);
+        LTSM::Application::info("{}: dsz: {}, {}", NS_FuncNameV, dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
         socket = std::make_unique<EncoderWrapper>(&bufData, this);
 
@@ -52,7 +52,7 @@ namespace LTSM {
         try {
             streamOut->sendFlush();
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
     }
 
@@ -61,7 +61,7 @@ namespace LTSM {
             streamOut->sendRaw(ptr, len);
             netStatTx += len;
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
     }
 
@@ -70,7 +70,7 @@ namespace LTSM {
             streamIn->recvRaw(ptr, len);
             netStatRx += len;
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
     }
 
@@ -78,7 +78,7 @@ namespace LTSM {
         try {
             return streamIn->hasInput();
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return false;
@@ -88,7 +88,7 @@ namespace LTSM {
         try {
             return streamIn->hasData();
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return 0;
@@ -98,7 +98,7 @@ namespace LTSM {
         try {
             return streamIn->peekInt8();
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         }
 
         return 0;

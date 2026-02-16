@@ -79,7 +79,7 @@ namespace LTSM {
                 streamOut->sendFlush();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             rfbMessagesShutdown();
         }
     }
@@ -91,7 +91,7 @@ namespace LTSM {
                 netStatTx += len;
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             rfbMessagesShutdown();
         }
     }
@@ -103,7 +103,7 @@ namespace LTSM {
                 netStatRx += len;
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
     }
@@ -114,7 +114,7 @@ namespace LTSM {
                 return streamIn->hasInput();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -127,7 +127,7 @@ namespace LTSM {
                 return streamIn->hasData();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -140,7 +140,7 @@ namespace LTSM {
                 return streamIn->peekInt8();
             }
         } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             const_cast<ServerEncoder*>(this)->rfbMessagesShutdown();
         }
 
@@ -477,7 +477,7 @@ namespace LTSM {
                         return true;
                     }
                 } catch(const std::exception & err) {
-                    LTSM::Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+                    LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
 
                 const std::string err("security kerberos failed");
@@ -580,10 +580,10 @@ namespace LTSM {
                 try {
                     recvLtsmProto(*this);
                 } catch(const std::runtime_error & err) {
-                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                     rfbMessagesShutdown();
                 } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                 }
 
                 continue;

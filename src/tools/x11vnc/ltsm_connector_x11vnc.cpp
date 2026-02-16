@@ -127,7 +127,7 @@ namespace LTSM {
         try {
             xcbDisplay()->displayReconnect(screen);
         } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+            Application::error("{}: exception: {}", NS_FuncNameV, err.what());
             return false;
         }
 

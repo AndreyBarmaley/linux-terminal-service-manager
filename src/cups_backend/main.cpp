@@ -93,7 +93,7 @@ namespace LTSM {
                 try {
                     DescriptorStream::writeFromTo(buf.data(), is->gcount(), fd);
                 } catch(const std::exception & err) {
-                    Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+                    Application::error("{}: exception: {}", NS_FuncNameV, err.what());
                     return CUPS_BACKEND_HOLD;
                 }
 

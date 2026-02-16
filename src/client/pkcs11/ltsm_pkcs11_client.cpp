@@ -159,7 +159,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     try {
         pkcs11 = PKCS11::loadLibrary(owner->pkcs11Library());
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         std::string error = err.what();
         reply.writeIntLE16(error.size());
         reply.write(error);
@@ -306,7 +306,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
     try {
         sess = std::make_unique<const PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         // certs count
         reply.writeIntLE16(0);
         return false;
@@ -375,7 +375,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
@@ -431,7 +431,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     try {
         sess = std::make_unique<PKCS11::Session>(slotId, false /* rwmode */, pkcs11);
     } catch(const std::exception & err) {
-        Application::error("{}: exception: {}", NS_FuncName.c_str(), err.what());
+        Application::error("{}: exception: {}", NS_FuncNameV, err.what());
         // certs count
         reply.writeIntLE32(0);
         return false;
