@@ -535,13 +535,13 @@ namespace LTSM::Connector {
         auto wsz = XCB::RootDisplay::size();
 
         if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight) {
-            Application::warning("{}: remote request desktop size [{}, {}], display: {}", __FUNCTION__,
+            Application::warning("{}: remote request desktop size: [{}, {}], display: {}", __FUNCTION__,
                                  freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
 
             if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
                                                     freeRdp->peer->settings->DesktopHeight))) {
                 wsz = XCB::RootDisplay::size();
-                Application::info("change session size [{}, {}], display: {}", wsz.width, wsz.height, displayNum());
+                Application::info("change session size: {}, display: {}", wsz, displayNum());
             }
         } else {
             // full update
@@ -596,8 +596,8 @@ namespace LTSM::Connector {
         //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
         // reply info dump
-        Application::debug(DebugType::App, "{}: request size: [{}, {}], reply length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
-                           __FUNCTION__, reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
+        Application::debug(DebugType::App, "{}: request size: {}, reply length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+                           __FUNCTION__, reg.toSize(), reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
         renderPrimitivesToFB(frameBuffer);
@@ -612,8 +612,8 @@ namespace LTSM::Connector {
         const size_t pixelFormat = freeRdp->peer->settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
 
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
-            Application::error("{}: {} failed, length: {}, size: [{}, {}], bpp: {}", __FUNCTION__,
-                               "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
+            Application::error("{}: {} failed, length: {}, size: {}, bpp: {}", __FUNCTION__,
+                               "align region", reply->size(), reg.toSize(), reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
 
@@ -638,7 +638,8 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [{}, {}, {}, {}], bits per pixel: {}, scanline: {}", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+        Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
+                __FUNCTION__, reg, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -715,8 +716,8 @@ namespace LTSM::Connector {
         const size_t tileSize = 64;
 
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
-            Application::error("{}: {} failed, length: {}, size: [{}, {}], bpp: {}", __FUNCTION__,
-                               "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
+            Application::error("{}: {} failed, length: {}, size: {}, bpp: {}", __FUNCTION__,
+                               "align region", reply->size(), reg.toSize(), reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
 
@@ -764,7 +765,8 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [{}, {}, {}, {}], bits per pixel: {}, scanline: {}", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+        Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
+                __FUNCTION__, reg, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -1063,8 +1065,8 @@ namespace LTSM::Connector {
     ///               PTR_FLAGS_WHEEL(0x0200), PTR_FLAGS_WHEEL_NEGATIVE(0x0100), PTR_FLAGS_MOVE(0x0800), PTR_FLAGS_DOWN(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy) {
-        Application::debug(DebugType::App, "{}: flags: {:#04x}, pos: [{}, {}], input: {}, context: {}", __FUNCTION__,
-                           flags, posx, posy, fmt::ptr(input), fmt::ptr(input->context));
+        Application::debug(DebugType::App, "{}: flags: {:#04x}, pos: {}, input: {}, context: {}", __FUNCTION__,
+                           flags, XCB::Point(posx, posy), fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);

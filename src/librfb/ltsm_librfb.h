@@ -127,13 +127,13 @@ namespace LTSM {
         const int ENCODING_LTSM_QOI = 0x514F4900;
         const int PROTOCOL_LTSM = 119;
 
-        struct ScreenInfo {
+        struct ScreenInfo : XCB::Region {
             uint32_t id = 0;
-            uint16_t posx = 0;
-            uint16_t posy = 0;
-            uint16_t width = 0;
-            uint16_t height = 0;
             uint32_t flags = 0;
+
+            const XCB::Region & pos(void) const {
+                return *this;
+            }
         };
 
         enum class DesktopResizeStatus { ServerRuntime, ClientSide, OtherClient };

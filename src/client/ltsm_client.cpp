@@ -1180,8 +1180,8 @@ namespace LTSM {
             } else {
                 // server runtime
                 if(windowFullScreen() && primarySize != nsz) {
-                    Application::warning("{}: fullscreen mode: [{}, {}], server request resize desktop: [{}, {}]",
-                                         __FUNCTION__, primarySize.width, primarySize.height, nsz.width, nsz.height);
+                    Application::warning("{}: fullscreen mode: {}, server request resize desktop: {}",
+                                         __FUNCTION__, primarySize, nsz);
                 }
 
                 pushEventWindowResize(nsz);
@@ -1208,8 +1208,7 @@ namespace LTSM {
     }
 
     void Vnc2SDL::clientRecvPixelFormatEvent(const PixelFormat & pf, const XCB::Size & wsz) {
-        Application::info("{}: size: [{}, {}]", __FUNCTION__,
-                          wsz.width, wsz.height);
+        Application::info("{}: size: {}", __FUNCTION__, wsz);
         const std::scoped_lock guard{ renderLock };
         bool eventResize = false;
 
@@ -1387,8 +1386,8 @@ namespace LTSM {
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: [{}, {}], sdl format: {}",
-                               __FUNCTION__, key, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: {}, sdl format: {}",
+                               __FUNCTION__, key, reg.toSize(), SDL_GetPixelFormatName(sdlFormat));
 
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
                       reg.height, clientPf.bitsPerPixel(), reg.width * clientPf.bytePerPixel(),
@@ -1452,8 +1451,8 @@ namespace LTSM {
             }
 
             // pixels data as client format
-            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: [{}, {}], sdl format: {}",
-                               __FUNCTION__, cursorId, reg.width, reg.height, SDL_GetPixelFormatName(sdlFormat));
+            Application::debug(DebugType::App, "{}: create cursor, crc32b: {}, size: {}, sdl format: {}",
+                               __FUNCTION__, cursorId, reg.toSize(), SDL_GetPixelFormatName(sdlFormat));
 
             auto sf = SDL_CreateRGBSurfaceWithFormatFrom(pixels.data(), reg.width,
                       reg.height, clientPf.bitsPerPixel(), reg.width * cursorFmt.bytePerPixel(),

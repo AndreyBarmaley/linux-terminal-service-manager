@@ -107,12 +107,12 @@ namespace LTSM::Connector {
 
         // fix new session size
         if(xcbDisplay()->size() != clientRegion.toSize()) {
-            Application::warning("{}: remote request desktop size: [{}, {}], display: {}", __FUNCTION__,
-                                 clientRegion.width, clientRegion.height, displayNum());
+            Application::warning("{}: remote request desktop size: {}, display: {}", __FUNCTION__,
+                                 clientRegion.toSize(), displayNum());
 
             if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
-                Application::info("{}: change session size: [{}, {}], display: {}", __FUNCTION__, clientRegion.width,
-                                  clientRegion.height, displayNum());
+                Application::info("{}: change session size: {}, display: {}",
+                        __FUNCTION__, clientRegion.toSize(), displayNum());
             }
         } else {
             // full update

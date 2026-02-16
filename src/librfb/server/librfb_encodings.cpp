@@ -248,8 +248,8 @@ namespace LTSM {
     void RFB::EncodingRaw::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
         // regions counts
@@ -264,8 +264,7 @@ namespace LTSM {
 
     RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId) {
-        Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}]", __FUNCTION__, jobId, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: job id: {}, region: {}", __FUNCTION__, jobId, reg);
 
         buf.clear();
         EncoderWrapper wrap(& buf, st);
@@ -277,8 +276,8 @@ namespace LTSM {
     void RFB::EncodingRRE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz = isCoRRE() ? XCB::Size(64, 64) : XCB::Size(128, 128);
@@ -322,8 +321,8 @@ namespace LTSM {
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel {:#08x}, sub rects: {}",
-                               __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}, sub rects: {}",
+                               __FUNCTION__, jobId, reg + top, back, goods.size());
 
             sendRects(& wrap, reg, fb, jobId, back, goods);
         }
@@ -331,8 +330,8 @@ namespace LTSM {
         else {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel {:#08x}, {}",
-                               __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}, {}",
+                               __FUNCTION__, jobId, reg + top, back, "solid");
 
             // num sub rects
             wrap.sendIntBE32(1);
@@ -384,8 +383,8 @@ namespace LTSM {
                 st->sendIntBE16(region.height);
             }
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel {:#08x}",
-                               __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
+            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel {:#08x}",
+                               __FUNCTION__, jobId, region - reg.topLeft(), pair.pixel());
         }
     }
 
@@ -393,8 +392,8 @@ namespace LTSM {
     void RFB::EncodingHexTile::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
         const XCB::Size bsz(16, 16);
@@ -435,8 +434,8 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: {:#08x}, {}",
-                               __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, {}",
+                               __FUNCTION__, jobId, reg + top, back, "solid");
 
             // hextile flags
             wrap.sendInt8(RFB::HEXTILE_BACKGROUND);
@@ -457,13 +456,13 @@ namespace LTSM {
 
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], {}",
-                                       __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
+                                       __FUNCTION__, jobId, reg + top, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: {:#08x}, sub rects: {}, {}",
-                                       __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, sub rects: {}, {}",
+                                       __FUNCTION__, jobId, reg + top, back, goods.size(), "foreground");
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -472,13 +471,13 @@ namespace LTSM {
 
                 // compare with raw
                 if(hextileRawLength < hextileColoredLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], {}",
-                                       __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, {}",
+                                       __FUNCTION__, jobId, reg + top, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: {:#08x}, sub rects: {}, {}",
-                                       __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
+                    Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, sub rects: {}, {}",
+                                       __FUNCTION__, jobId, reg + top, back, goods.size(), "colored");
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
                 }
@@ -503,8 +502,8 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: {:#08x}",
-                               __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
+            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}",
+                               __FUNCTION__, jobId, region- reg.topLeft(), pair.pixel());
         }
     }
 
@@ -524,8 +523,8 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}]",
-                               __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height);
+            Application::trace(DebugType::Enc, "{}: job id: {}, region: {}",
+                               __FUNCTION__, jobId, region - reg.topLeft());
         }
     }
 
@@ -545,8 +544,8 @@ namespace LTSM {
     void RFB::EncodingTRLE::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         const XCB::Size bsz(64, 64);
         const XCB::Point top(reg0.x, reg0.y);
@@ -588,8 +587,8 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: {:#08x}, {}",
-                               __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, back pixel: {:#08x}, {}",
+                               __FUNCTION__, jobId, reg + top, back, "solid");
 
             // subencoding type: solid tile
             wrap.sendInt8(1);
@@ -603,8 +602,8 @@ namespace LTSM {
                 fieldWidth = 2;
             }
 
-            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], palsz: {}, packed: {}",
-                               __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), fieldWidth);
+            Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, palsz: {}, packed: {}",
+                               __FUNCTION__, jobId, reg + top, map.size(), fieldWidth);
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
         } else {
@@ -626,18 +625,18 @@ namespace LTSM {
             const size_t rawLength = 1 + 3 * reg.width * reg.height;
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], length: {}, rle plain",
-                                   __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
+                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, length: {}, rle plain",
+                                   __FUNCTION__, jobId, reg + top, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
             } else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], pal size: {}, length: {}, rle palette",
-                                   __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
+                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, pal size: {}, length: {}, rle palette",
+                                   __FUNCTION__, jobId, reg + top, map.size(), rleList.size());
 
                 sendRegionPalette(& wrap, reg, fb, map, rleList);
             } else {
-                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], raw",
-                                   __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
+                Application::debug(DebugType::Enc, "{}: job id: {}, region: {}, raw",
+                                   __FUNCTION__, jobId, reg + top);
 
                 sendRegionRaw(& wrap, reg, fb);
             }
@@ -748,8 +747,8 @@ namespace LTSM {
     void RFB::EncodingZlib::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         const XCB::Point top(reg0.x, reg0.y);
         // regions counts
@@ -805,8 +804,8 @@ namespace LTSM {
     void RFB::EncodingLZ4::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         // calculate block size
         XCB::Size bsz;
@@ -948,8 +947,8 @@ namespace LTSM {
     void RFB::EncodingTJPG::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         // calculate block size
         XCB::Size bsz;
@@ -1049,8 +1048,8 @@ namespace LTSM {
     void RFB::EncodingQOI::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
         const XCB::Region & reg0 = fb.region();
 
-        Application::debug(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}]", __FUNCTION__,
-                           getTypeName(), reg0.x, reg0.y, reg0.width, reg0.height);
+        Application::debug(DebugType::Enc, "{}: type: {}, region: {}", __FUNCTION__,
+                           getTypeName(), reg0);
 
         // calculate block size
         XCB::Size bsz;

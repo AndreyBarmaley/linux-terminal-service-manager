@@ -143,15 +143,13 @@ namespace LTSM {
     }
 
     void RFB::DecodingRaw::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
 
         cli.recvRegionUpdatePixels(reg);
     }
 
     void RFB::DecodingRRE::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
 
         auto subRects = cli.recvIntBE32();
         auto bgColor = cli.recvPixel();
@@ -176,8 +174,7 @@ namespace LTSM {
                 dst.height = cli.recvIntBE16();
             }
 
-            Application::trace(DebugType::Enc, "{}: sub region [{}, {}, {}, {}]", __FUNCTION__, dst.x, dst.y,
-                               dst.width, dst.height);
+            Application::trace(DebugType::Enc, "{}: sub region: {}", __FUNCTION__, dst);
 
             dst.x += reg.x;
             dst.y += reg.y;
@@ -193,13 +190,11 @@ namespace LTSM {
 
     void RFB::DecodingHexTile::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         if(16 < reg.width || 16 < reg.height) {
-            Application::error("{}: invalid hextile region: [{}, {}, {}, {}]", __FUNCTION__,
-                               reg.x, reg.y, reg.width, reg.height);
+            Application::error("{}: invalid hextile region: {}", __FUNCTION__, reg);
             throw rfb_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
 
         updateRegionColors(cli, reg);
     }
@@ -207,8 +202,8 @@ namespace LTSM {
     void RFB::DecodingHexTile::updateRegionColors(DecoderStream & cli, const XCB::Region & reg) {
         auto flag = cli.recvInt8();
 
-        Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#02x}, sub region [{}, {}, {}, {}]",
-            __FUNCTION__, flag, reg.x, reg.y, reg.width, reg.height);
+        Application::trace(DebugType::Enc, "{}: sub encoding mask: {:#02x}, sub region: {}",
+            __FUNCTION__, flag, reg);
 
         if(flag & RFB::HEXTILE_RAW) {
             Application::trace(DebugType::Enc, "{}: type: {}", __FUNCTION__, "raw");
@@ -250,8 +245,8 @@ namespace LTSM {
                     dst.width = 1 + (0x0F & (val2 >> 4));
                     dst.height = 1 + (0x0F & val2);
 
-                    Application::trace(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}], pixel: {:#08x}",
-                                       __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
+                    Application::trace(DebugType::Enc, "{}: type: {}, region: {}, pixel: {:#08x}",
+                                       __FUNCTION__, "subrects", dst, pixel);
 
                     dst.x += reg.x;
                     dst.y += reg.y;
@@ -274,8 +269,7 @@ namespace LTSM {
     }
 
     void RFB::DecodingTRLE::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
 
         const XCB::Size bsz(64, 64);
 
@@ -296,8 +290,8 @@ namespace LTSM {
     void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg) {
         auto type = cli.recvInt8();
 
-        Application::trace(DebugType::Enc, "{}: sub encoding type: {:#02x}, sub region: [{}, {}, {}, {}], zrle: {}",
-                           __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
+        Application::trace(DebugType::Enc, "{}: sub encoding type: {:#02x}, sub region: {}, zrle: {}",
+                           __FUNCTION__, type, reg, (int) isZRLE());
 
         // trle raw
         if(0 == type) {
@@ -350,8 +344,7 @@ namespace LTSM {
                         auto pos = reg.topLeft() + XCB::Point(ox, oy);
                         auto index = sb.popValue(field);
 
-                        Application::trace(DebugType::Enc, "{}: type: {}, pos: [{}, {}], index: {}", __FUNCTION__, "packed palette", pos.x,
-                                           pos.y, index);
+                        Application::trace(DebugType::Enc, "{}: type: {}, pos: {}, index: {}", __FUNCTION__, "packed palette", pos, index);
 
                         if(index >= palette.size()) {
                             Application::error("{}: {}", __FUNCTION__, "index out of range");
@@ -447,8 +440,7 @@ namespace LTSM {
     }
 
     void RFB::DecodingZlib::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
 
         cli.recvZlibData(zlib.get(), false);
         //DecoderWrapper wrap(zlib.get(), & cli)
@@ -463,8 +455,7 @@ namespace LTSM {
 #ifdef LTSM_DECODING_LZ4
     /// DecodingLZ4
     void RFB::DecodingLZ4::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
 
         auto lz4sz = cli.recvIntBE32();
         auto lz4buf = cli.recvData(lz4sz);
@@ -508,8 +499,7 @@ namespace LTSM {
 #ifdef LTSM_DECODING_TJPG
     /// DecodingTJPG
     void RFB::DecodingTJPG::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
 
         auto jpgsz = cli.recvIntBE32();
         auto jpgbuf = cli.recvData(jpgsz);
@@ -576,8 +566,7 @@ namespace LTSM {
 #ifdef LTSM_DECODING_QOI
     /// DecodingQOI
     void RFB::DecodingQOI::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
 
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);

@@ -225,8 +225,8 @@ namespace LTSM {
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rect: [{}, {}, {}, {}], resource id: {:#08x}",
-                               __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
+            Application::debug(DebugType::Xcb, "{}: rect: {}, resource id: {:#08x}",
+                               __FUNCTION__, rect, res);
 
             return std::make_unique<FixesRegionId>(conn, res);
         }
@@ -427,8 +427,8 @@ namespace LTSM {
 
     bool XCB::ModuleWindowDamage::addRegion(const xcb_rectangle_t & reg) const {
         if(addRegions(& reg, 1)) {
-            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: [{}, {}, {}, {}]",
-                               __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
+            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: {}",
+                               __FUNCTION__, xid, win, reg);
 
             return true;
         }
@@ -466,8 +466,8 @@ namespace LTSM {
             xcb_damage_subtract_checked(ptr.get(), xid, regid, XCB_XFIXES_REGION_NONE);
             xcb_xfixes_destroy_region(ptr.get(), regid);
 
-            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: [{}, {}, {}, {}]",
-                               __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
+            Application::debug(DebugType::Xcb, "{}: damage: {:#08x}, window: {:#08x}, region: {}",
+                               __FUNCTION__, xid, win, reg);
 
             return true;
         }
@@ -998,7 +998,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: id: {:#08x}, mode: [{}, {}]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
+            Application::debug(DebugType::Xcb, "{}: id: {:#08x}, mode: {}", __FUNCTION__, reply->mode, Size(mode_info.width, mode_info.height));
             return reply->mode;
         }
 
@@ -1143,7 +1143,7 @@ namespace LTSM {
             width += 8 - alignW;
         }
 
-        Application::debug(DebugType::Xcb,  "{}: size: [{}, {}], dpi: {}", __FUNCTION__, width, height, dpi);
+        Application::debug(DebugType::Xcb,  "{}: size: {}, dpi: {}", __FUNCTION__, Size(width, height), dpi);
 
         uint32_t mm_width = width * 25.4 / dpi;
         uint32_t mm_height = height * 25.4 / dpi;
@@ -1194,14 +1194,15 @@ namespace LTSM {
             }
 
             output = *ito;
-            mode = cvtCreateMode({szw, szh});
+            const Size sz{szw, szh};
+            mode = cvtCreateMode(sz);
 
             if(0 == mode) {
                 return false;
             }
 
             if(! addOutputMode(output, mode)) {
-                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "addOutputMode", szw, szh);
+                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "addOutputMode", sz);
                 destroyMode(mode);
                 return false;
             }
@@ -1213,7 +1214,7 @@ namespace LTSM {
             });
 
             if(itm == modes.end()) {
-                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "getModesInfo", szw, szh);
+                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "getModesInfo", sz);
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
@@ -1229,7 +1230,7 @@ namespace LTSM {
             });
 
             if(its == screenSizes.end()) {
-                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "getScreenSizes", szw, szh);
+                Application::error("{}: {} failed, mode: {}", __FUNCTION__, "getScreenSizes", Size(szw, szh));
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
@@ -1243,8 +1244,8 @@ namespace LTSM {
                                            screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
             if(const auto & err = xcbReply2.error()) {
-                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
-                                   __FUNCTION__, szw, szh, screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
+                Application::debug(DebugType::Xcb, "{}: set size: {}, timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
+                        __FUNCTION__, Size(szw, szh), screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
 
                 error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
                 return false;
@@ -1255,7 +1256,7 @@ namespace LTSM {
                     *sequence = reply->sequence;
                 }
 
-                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], id: {}, sequence: {}", __FUNCTION__, szw, szh, sizeID, reply->sequence);
+                Application::debug(DebugType::Xcb, "{}: set size: {}, id: {}, sequence: {}", __FUNCTION__, Size(szw, szh), sizeID, reply->sequence);
             }
 
             return true;
@@ -3105,7 +3106,7 @@ namespace LTSM {
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: screen area: [{}, {}, {}, {}]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
+        Application::debug(DebugType::Xcb, "{}: screen area: {}", __FUNCTION__, screenArea);
 
         auto outputs = _modRandr->getOutputs();
         auto crtcs = _modRandr->getCrtcs();
@@ -3215,7 +3216,7 @@ namespace LTSM {
     }
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, ShmIdShared shm) const {
-        Application::debug(DebugType::Xcb, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Xcb, "{}: region: {}", __FUNCTION__, reg);
         const uint32_t planeMask = 0xFFFFFFFF;
 
         if(shm && 0 < shm->id) {
@@ -3243,7 +3244,7 @@ namespace LTSM {
         PixmapInfoReply res;
 
         if(pitch == 0) {
-            Application::error("{}: copy root image error, empty size: [{}, {}], bpp: {}", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
+            Application::error("{}: copy root image error, empty size: {}, bpp: {}", __FUNCTION__, reg.toSize(), bitsPerPixel());
             return res;
         }
 
@@ -3326,14 +3327,14 @@ namespace LTSM {
             auto dn = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height) {
-                Application::warning("{}: damage discard, region: [{}, {}, {}, {}], level: {}, sequence: {}, timestamp: {}",
-                                     __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
+                Application::warning("{}: damage discard, region: {}, level: {}, sequence: {}, timestamp: {}",
+                                     __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-            Application::debug(DebugType::Xcb, "{}: damage notify, region: [{}, {}, {}, {}], level: {}, sequence: {}, timestamp: {}",
-                               __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
+            Application::debug(DebugType::Xcb, "{}: damage notify, region: {}, level: {}, sequence: {}, timestamp: {}",
+                               __FUNCTION__, dn->area, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);
         } else if(isXFixesSelectionNotify(ev)) {
@@ -3360,14 +3361,14 @@ namespace LTSM {
                 auto wsz = updateGeometrySize();
 
                 if(cc.width != wsz.width || cc.height != wsz.height) {
-                    Application::warning("{}: crtc change discard, size: [{}, {}], current: [{}, {}], sequence: {}, timestamp: {}",
-                                         __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
+                    Application::warning("{}: crtc change discard, size: {}, current: {}, sequence: {}, timestamp: {}",
+                                         __FUNCTION__, Size(cc.width, cc.height), wsz, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
-                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: [{}, {}], crtc: {:#08x}, mode: {}, rotation: {:#04x}, sequence: {}, timestamp: {}",
-                                   __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
+                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: {}, crtc: {:#08x}, mode: {}, rotation: {:#04x}, sequence: {}, timestamp: {}",
+                                   __FUNCTION__, Size(cc.width, cc.height), cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
                 if(createFullScreenDamage()) {
                     xcb_flush(_conn.get());

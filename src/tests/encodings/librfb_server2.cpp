@@ -132,7 +132,7 @@ namespace LTSM {
     void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb) {
         auto & reg = fb.region();
 
-        Application::debug(DebugType::App, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::App, "{}: region: {}", __FUNCTION__, reg);
 
         std::scoped_lock guard{ sendLock };
 

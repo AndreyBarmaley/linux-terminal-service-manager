@@ -71,13 +71,12 @@ namespace LTSM {
     }
 
     void RFB::X11Server::xcbRandrScreenSetSizeEvent(const XCB::Size & wsz) {
-        Application::info("{}: size: [{}, {}]", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("{}: size: {}", __FUNCTION__, wsz);
         displayResizeProcessed = true;
     }
 
     void RFB::X11Server::xcbRandrScreenChangedEvent(const XCB::Size & wsz, const xcb_randr_notify_event_t & notify) {
-        Application::info("{}: size: [{}, {}], sequence: {:#04x}", __FUNCTION__, wsz.width, wsz.height,
-                          (uint16_t) notify.sequence);
+        Application::info("{}: size: {}, sequence: {:#04x}", __FUNCTION__, wsz, notify.sequence);
         xcbShmInit();
         displayResizeProcessed = false;
         serverDisplayResizedEvent(wsz);
@@ -355,9 +354,9 @@ namespace LTSM {
                     }
                 }
             } else {
-                Application::debug(DebugType::X11Srv, "{}: xfb fake input move, pos: [{}, {}]", __FUNCTION__, posx, posy);
-
-                test->screenInputMove(XCB::Point(posx, posy));
+                const XCB::Point pos(posx, posy);
+                Application::debug(DebugType::X11Srv, "{}: xfb fake input move, pos: {}", __FUNCTION__, pos);
+                test->screenInputMove(pos);
             }
         }
     }
@@ -580,14 +579,13 @@ namespace LTSM {
         XCB::Region desktop(0, 0, 0, 0);
 
         for(const auto & info : screens) {
-            Application::info("{}: screen id: {:#08x}, region: [{}, {}, {}, {}], flags: {:#08x}",
-                              __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
-            desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
+            Application::info("{}: screen id: {:#08x}, region: {}, flags: {:#08x}",
+                              __FUNCTION__, info.id, info.pos(), info.flags);
+            desktop.join(info.pos());
         }
 
         if(desktop.x != 0 && desktop.y != 0) {
-            Application::error("{}: incorrect desktop size: [{}, {}, {}, {}]", __FUNCTION__,
-                               desktop.x, desktop.y, desktop.width, desktop.height);
+            Application::error("{}: incorrect desktop size: {}", __FUNCTION__, desktop);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout,
                                       XCB::RootDisplay::size());
         } else if(! xcbAllowMessages()) {
@@ -657,8 +655,7 @@ namespace LTSM {
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
-        Application::debug(DebugType::X11Srv, "{}: region [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y,
-                           reg.width, reg.height);
+        Application::debug(DebugType::X11Srv, "{}: region: {}", __FUNCTION__, reg);
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
 
         if(! pixmapReply) {
@@ -666,14 +663,14 @@ namespace LTSM {
             throw rfb_error(NS_FuncName);
         }
 
-        Application::trace(DebugType::X11Srv, "{}: request size [{}, {}], reply: length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
-                           __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
+        Application::trace(DebugType::X11Srv, "{}: request size: {}, reply: length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+                           __FUNCTION__, reg.toSize(), pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
                            pixmapReply->gmask, pixmapReply->bmask);
 
         // fix align
         if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel()) {
-            Application::error("{}: region not aligned, reply size: {}, reg size: [{}, {}], byte per pixel: {}",
-                               __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
+            Application::error("{}: region not aligned, reply size: {}, reg size: {}, byte per pixel: {}",
+                               __FUNCTION__, pixmapReply->size(), reg.toSize(), pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);
         }
 

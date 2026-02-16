@@ -274,8 +274,7 @@ namespace LTSM {
         swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avPixelFormat,
                                     frame->width, frame->height, (AVPixelFormat) frame->format, SWS_BILINEAR, nullptr, nullptr, nullptr));
         packet.reset(av_packet_alloc());
-        Application::info("{}: {}, size: [{}, {}]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
-                          csz.height);
+        Application::info("{}: {}, size: {}", __FUNCTION__, RFB::encodingName(getType()), csz);
     }
 
     void RFB::EncodingFFmpeg::sendFrameBuffer(EncoderStream* st, const FrameBuffer & fb) {
@@ -284,7 +283,7 @@ namespace LTSM {
         if(! avcctx) {
             initContext(fb.region().toSize());
         } else if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
-            Application::warning("{}: incorrect region size: [{}, {}]", __FUNCTION__, fb.width(), fb.height());
+            Application::warning("{}: incorrect region size: {}", __FUNCTION__, fb.region().toSize());
             initContext(fb.region().toSize());
         }
 
@@ -505,13 +504,11 @@ namespace LTSM {
             throw ffmpeg_error(NS_FuncName);
         }
 
-        Application::info("{}: {}, size: [{}, {}]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
-                          csz.height);
+        Application::info("{}: {}, size: {}", __FUNCTION__, RFB::encodingName(getType()), csz);
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Enc, "{}: decoding region {}", __FUNCTION__, reg);
 
         auto len = cli.recvIntBE32();
         auto buf = cli.recvData(len);
@@ -521,7 +518,7 @@ namespace LTSM {
         }
 
         if(reg.toSize() != cli.clientSize()) {
-            Application::warning("{}: incorrect region size: [{}, {}]", __FUNCTION__, reg.width, reg.height);
+            Application::warning("{}: incorrect region size: {}", __FUNCTION__, reg.toSize());
             return;
         }
 

@@ -51,6 +51,18 @@
 #include "ltsm_tools.h"
 #include "ltsm_xcb_types.h"
 
+template <>
+struct fmt::formatter<xcb_rectangle_t> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const xcb_rectangle_t& rt, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "[{}, {}, {}, {}]", rt.x, rt.y, rt.width, rt.height);
+    }
+};
+
 namespace LTSM {
     namespace XCB {
         using ConnectionShared = std::shared_ptr<xcb_connection_t>;

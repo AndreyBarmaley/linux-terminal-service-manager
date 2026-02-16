@@ -784,8 +784,8 @@ namespace LTSM {
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, {}, {}], incremental: {}",
-                           __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
+        Application::debug(DebugType::Rfb, "{}: request update, region: {}, incremental: {}",
+                           __FUNCTION__, clientRegion, incremental);
         serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
 
@@ -837,14 +837,14 @@ namespace LTSM {
 
     void RFB::ServerEncoder::recvSetContinuousUpdates(void) {
         int enable = recvInt8();
-        int16_t regx = recvIntBE16();
-        int16_t regy = recvIntBE16();
-        uint16_t regw = recvIntBE16();
-        uint16_t regh = recvIntBE16();
-        Application::info("{}: region: [{}, {}, {}, {}], enabled: {}", __FUNCTION__, regx,
-                          regy, regw, regh, enable);
+        XCB::Region reg;
+        reg.x = recvIntBE16();
+        reg.y = recvIntBE16();
+        reg.width = recvIntBE16();
+        reg.height = recvIntBE16();
+        Application::info("{}: region: {}, enabled: {}", __FUNCTION__, reg, enable);
         continueUpdatesProcessed = enable;
-        serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
+        serverRecvSetContinuousUpdatesEvent(enable, reg);
     }
 
     void RFB::ServerEncoder::recvSetDesktopSize(void) {
@@ -854,25 +854,26 @@ namespace LTSM {
         uint16_t height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::info("{}: size [{}, {}], screens: {}", __FUNCTION__, width, height, numOfScreens);
+        Application::info("{}: size: {}, screens: {}", __FUNCTION__, XCB::Size(width, height), numOfScreens);
         // screens array
         std::vector<RFB::ScreenInfo> screens;
 
         for(int it = 0; it < numOfScreens; it++) {
-            uint32_t id = recvIntBE32();
-            uint16_t posx = recvIntBE16();
-            uint16_t posy = recvIntBE16();
-            uint16_t width = recvIntBE16();
-            uint16_t height = recvIntBE16();
-            uint32_t flags = recvIntBE32();
-            screens.push_back({ .id = id, .posx = posx, .posy = posy, .width = width, .height = height, .flags = flags });
+            RFB::ScreenInfo info;
+            info.id = recvIntBE32();
+            info.x = recvIntBE16();
+            info.y = recvIntBE16();
+            info.width = recvIntBE16();
+            info.height = recvIntBE16();
+            info.flags = recvIntBE32();
+            screens.emplace_back(info);
         }
 
         serverRecvDesktopSizeEvent(screens);
     }
 
     void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz) {
-        Application::info("{}: display resized, new size: [{}, {}]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("{}: display resized, new size: {}", __FUNCTION__, dsz);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
         std::thread([this, sz = dsz]() {
@@ -959,8 +960,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y,
-                           reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: region: {}", __FUNCTION__, reg);
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.1
         sendInt8(RFB::SERVER_FB_UPDATE);
@@ -1117,8 +1117,8 @@ namespace LTSM {
             const XCB::Size & desktopSize) {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
-        Application::info("{}: status: {}, error: {}, size [{}, {}]", __FUNCTION__, statusCode, errorCode,
-                          desktopSize.width, desktopSize.height);
+        Application::info("{}: status: {}, error: {}, size: {}",
+                __FUNCTION__, statusCode, errorCode, desktopSize);
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE)) {
             Application::error("{}: {}", __FUNCTION__, "client not supported ExtDesktopResize encoding");
@@ -1163,8 +1163,8 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}], hot: [{}, {}]",
-                           __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+        Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
+                           __FUNCTION__, reg, XCB::Point(xhot, yhot));
 
         Tools::StreamBitsPack bitmask;
 
@@ -1218,8 +1218,8 @@ namespace LTSM {
 
     void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}], hot: [{}, {}]",
-                           __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
+        Application::debug(DebugType::Rfb, "{}: region: {}, hot: {}",
+                           __FUNCTION__, reg, XCB::Point(xhot, yhot));
 
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::SERVER_FB_UPDATE);

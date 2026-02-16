@@ -131,9 +131,10 @@ namespace LTSM {
             return false;
         }
 
-        Application::info("{}: display: {}, size: [{}, {}], depth: {}", __FUNCTION__, screen, xcbDisplay()->width(),
-                          xcbDisplay()->height(), xcbDisplay()->depth());
-        Application::debug(DebugType::App, "{}: xcb max request: {}", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::info("{}: display: {}, size: {}, depth: {}",
+                __FUNCTION__, screen, xcbDisplay()->size(), xcbDisplay()->depth());
+        Application::debug(DebugType::App, "{}: xcb max request: {}",
+                __FUNCTION__, xcbDisplay()->getMaxRequest());
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {

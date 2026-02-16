@@ -181,6 +181,43 @@ namespace LTSM {
             }
         };
     }
+    
 }
+
+template <>
+struct fmt::formatter<LTSM::XCB::Point> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const LTSM::XCB::Point& pt, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "[{}, {}]", pt.x, pt.y);
+    }
+};
+
+template <>
+struct fmt::formatter<LTSM::XCB::Size> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const LTSM::XCB::Size& sz, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "[{}, {}]", sz.width, sz.height);
+    }
+};
+
+template <>
+struct fmt::formatter<LTSM::XCB::Region> {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const LTSM::XCB::Region& rt, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "[{}, {}, {}, {}]", rt.x, rt.y, rt.width, rt.height);
+    }
+};
 
 #endif // _LTSM_XCB_TYPES_

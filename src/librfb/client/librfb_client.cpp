@@ -360,7 +360,7 @@ namespace LTSM {
         // RFB 6.3.2 server init
         auto fbWidth = recvIntBE16();
         auto fbHeight = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: [{}, {}]", __FUNCTION__, fbWidth, fbHeight);
+        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: {}", __FUNCTION__, XCB::Size(fbWidth, fbHeight));
         // recv server pixel format
         int bpp = recvInt8();
         int depth = recvInt8();
@@ -593,7 +593,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz) {
-        Application::info("{}: display resized, new size: [{}, {}]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("{}: display resized, new size: {}", __FUNCTION__, dsz);
 #ifdef LTSM_DECODING_FFMPEG
         // event background
         std::thread([this, sz = dsz]() {
@@ -659,7 +659,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {
-        Application::debug(DebugType::Rfb, "{}: pointer: [{}, {}], buttons: {:#02x}", __FUNCTION__, posx, posy, buttons);
+        Application::debug(DebugType::Rfb, "{}: pointer: {}, buttons: {:#02x}", __FUNCTION__, XCB::Point(posx, posy), buttons);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_POINTER);
         sendInt8(buttons);
@@ -694,8 +694,8 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: status: {}, region [{}, {}, {}, {}]", __FUNCTION__,
-                           (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: status: {}, region: {}", __FUNCTION__,
+                           (enable ? "enable" : "disable"), reg);
         std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
         sendInt8(enable ? 1 : 0);
@@ -713,8 +713,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr) {
-        Application::debug(DebugType::Rfb, "{}: region [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y,
-                           reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: region: {}", __FUNCTION__, reg);
         std::scoped_lock guard{ sendLock };
         // send framebuffer update request
         sendInt8(CLIENT_REQUEST_FB_UPDATE);
@@ -816,8 +815,8 @@ namespace LTSM {
             reg.width = recvIntBE16();
             reg.height = recvIntBE16();
             int encodingType = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: region [{}, {}, {}, {}], encodingType: {}",
-                               __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
+            Application::debug(DebugType::Rfb, "{}: region: {}, encodingType: {}",
+                               __FUNCTION__, reg, RFB::encodingName(encodingType));
 
             switch(encodingType) {
                 case ENCODING_LTSM:
@@ -918,13 +917,11 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", __FUNCTION__, reg);
     }
 
     void RFB::ClientDecoder::recvDecodingLtsmCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", __FUNCTION__, reg);
 
         auto cursorId = recvIntBE32();
 
@@ -945,8 +942,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
-                           reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Rfb, "{}: decoding region: {}", __FUNCTION__, reg);
         auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
@@ -955,8 +951,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz) {
-        Application::info("{}: status: {}, error: {}, size: [{}, {}]", __FUNCTION__, status, err, sz.width,
-                          sz.height);
+        Application::info("{}: status: {}, error: {}, size: {}", __FUNCTION__, status, err, sz);
         auto numOfScreens = recvInt8();
         recvSkip(3);
         std::vector<RFB::ScreenInfo> screens(numOfScreens);
@@ -968,15 +963,15 @@ namespace LTSM {
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: {}, area: [{}, {}, {}, {}], flags: {:#08x}",
-                               __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: {}, flags: {:#08x}",
+                               __FUNCTION__, screen.id, XCB::Region(posx, posy, screen.width, screen.height), flags);
         }
 
         clientRecvDecodingDesktopSizeEvent(status, err, sz, screens);
     }
 
     void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz) {
-        Application::info("{}: size: [{}, {}]", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("{}: size: {}", __FUNCTION__, wsz);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
