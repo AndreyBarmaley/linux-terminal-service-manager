@@ -1078,7 +1078,7 @@ namespace LTSM {
             }
 
             if(0 > ret) {
-                Application::error("gnutls_record_recv ret: %ld, error: {}", ret, gnutls_strerror(ret));
+                Application::error("gnutls_record_recv ret: {}, error: {}", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret)) {
                     throw gnutls_error(NS_FuncName);
@@ -1117,7 +1117,7 @@ namespace LTSM {
             }
 
             if(ret != static_cast<ssize_t>(len)) {
-                Application::error("gnutls_record_send ret: %ld, error: {}", ret, gnutls_strerror(ret));
+                Application::error("gnutls_record_send ret: {}, error: {}", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret)) {
                     throw gnutls_error(NS_FuncName);
