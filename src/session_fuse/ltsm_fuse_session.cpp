@@ -219,7 +219,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: {}", __FUNCTION__, err);
                 fuse->exitSession();
                 return;
             }
@@ -454,7 +454,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: {}", __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }
@@ -525,7 +525,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: {}", __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }
@@ -598,7 +598,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("{}: recv error: %" PRId32, __FUNCTION__, err);
+                Application::error("{}: recv error: {}", __FUNCTION__, err);
                 fuse_reply_err(req, err);
                 return;
             }

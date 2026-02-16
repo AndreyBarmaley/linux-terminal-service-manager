@@ -224,7 +224,7 @@ namespace LTSM {
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rect: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
+            Application::debug(DebugType::Xcb, "{}: rect: [{}, {}, %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
                                __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
             return std::make_unique<FixesRegionId>(conn, res);
@@ -426,7 +426,7 @@ namespace LTSM {
 
     bool XCB::ModuleWindowDamage::addRegion(const xcb_rectangle_t & reg) const {
         if(addRegions(& reg, 1)) {
-            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
+            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, %" PRIu16 ", %" PRIu16 "]",
                                __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
 
             return true;
@@ -465,7 +465,7 @@ namespace LTSM {
             xcb_damage_subtract_checked(ptr.get(), xid, regid, XCB_XFIXES_REGION_NONE);
             xcb_xfixes_destroy_region(ptr.get(), regid);
 
-            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]",
+            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, %" PRIu16 ", %" PRIu16 "]",
                                __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
 
             return true;
@@ -1446,7 +1446,7 @@ namespace LTSM {
                 return false;
             }
 
-            Application::debug(DebugType::Xcb, "{}: keyboard updated, device id: %" PRId32, __FUNCTION__, devid);
+            Application::debug(DebugType::Xcb, "{}: keyboard updated, device id: {}", __FUNCTION__, devid);
             return true;
         }
 
@@ -3113,7 +3113,7 @@ namespace LTSM {
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: screen area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
+        Application::debug(DebugType::Xcb, "{}: screen area: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
 
         auto outputs = _modRandr->getOutputs();
         auto crtcs = _modRandr->getCrtcs();
@@ -3223,7 +3223,7 @@ namespace LTSM {
     }
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, ShmIdShared shm) const {
-        Application::debug(DebugType::Xcb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Xcb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
         const uint32_t planeMask = 0xFFFFFFFF;
 
         if(shm && 0 < shm->id) {
@@ -3334,13 +3334,13 @@ namespace LTSM {
             auto dn = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height) {
-                Application::warning("{}: damage discard, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+                Application::warning("{}: damage discard, region: [{}, {}, %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                      __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-            Application::debug(DebugType::Xcb, "{}: damage notify, region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: damage notify, region: [{}, {}, %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
                                __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);

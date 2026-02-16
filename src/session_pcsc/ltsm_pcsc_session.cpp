@@ -204,7 +204,7 @@ namespace LTSM {
     std::tuple<uint64_t, uint32_t>
     PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << scope: %" PRIu32, __FUNCTION__, id, scope);
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: %" PRIu32, __FUNCTION__, id, scope);
 
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EstablishContext);
@@ -221,7 +221,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendReleaseContext(const int32_t & id, const uint64_t & context) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: 0x%016" PRIx64,
                            __FUNCTION__, id, context);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ReleaseContext);
@@ -240,7 +240,7 @@ namespace LTSM {
         transactionId = id;
 
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteContext: 0x%016" PRIx64 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", reader: `{}'",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: 0x%016" PRIx64 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName.c_str());
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Connect);
@@ -262,7 +262,7 @@ namespace LTSM {
     std::tuple<uint32_t, uint32_t>
     PcscRemote::sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", shareMode: %" PRIu32
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64 ", shareMode: %" PRIu32
                            ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32,
                            __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
         // send
@@ -280,7 +280,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
                            __FUNCTION__, id, handle, disposition);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Disconnect);
@@ -298,7 +298,7 @@ namespace LTSM {
         transactionId = id;
 
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64,
                            __FUNCTION__, id, handle);
 
         // send
@@ -320,7 +320,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64 ", disposition: %" PRIu32,
                            __FUNCTION__, id, handle, disposition);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EndTransaction);
@@ -339,7 +339,7 @@ namespace LTSM {
     std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data1) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64
                            ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32  ", send size: %lu, recv size: %" PRIu32,
                            __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
@@ -371,7 +371,7 @@ namespace LTSM {
     std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendStatus(const int32_t & id, const uint64_t & handle) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64,
                            __FUNCTION__, id, handle);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Status);
@@ -393,7 +393,7 @@ namespace LTSM {
     std::tuple<uint32_t, binary_buf>
     PcscRemote::sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", controlCode: 0x%08"
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64 ", controlCode: 0x%08"
                            PRIx32 ", send size: %lu, recv size: %" PRIu32,
                            __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
 
@@ -423,7 +423,7 @@ namespace LTSM {
     std::tuple<uint32_t, binary_buf>
     PcscRemote::sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle: 0x%016" PRIx64 ", attrId: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: 0x%016" PRIx64 ", attrId: %" PRIu32,
                            __FUNCTION__, id, handle, attrId);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetAttrib);
@@ -442,7 +442,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteHandle 0x%016" PRIx64 ", attrId: %" PRIu32 ", attrLength %lu",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle 0x%016" PRIx64 ", attrId: %" PRIu32 ", attrLength %lu",
                            __FUNCTION__, id, handle, attrId, attr.size());
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -468,7 +468,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendCancel(const int32_t & id, const uint64_t & context) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << remoteContext 0x%016" PRIx64,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext 0x%016" PRIx64,
                            __FUNCTION__, id, context);
 
         // send
@@ -491,7 +491,7 @@ namespace LTSM {
         // recv
         uint32_t readersCount = sock.recvIntLE32();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers count: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localContext: 0x%08" PRIx32 ", readers count: %" PRIu32,
                            __FUNCTION__, id, context, readersCount);
 
         std::list<std::string> names;
@@ -530,7 +530,7 @@ namespace LTSM {
         uint32_t counts = sock.recvIntLE32();
         uint32_t ret = sock.recvIntLE32();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> remoteContext: 0x%016" PRIx64 ", timeout: %" PRIu32 ", states: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteContext: 0x%016" PRIx64 ", timeout: %" PRIu32 ", states: %" PRIu32,
                            __FUNCTION__, id, context, timeout, counts);
 
         assertm(counts == statesCount, "count states invalid");
@@ -569,7 +569,7 @@ namespace LTSM {
                 try {
                     processed = this->clientAction();
                 } catch(const std::exception & ex) {
-                    Application::error("{}: client id: %" PRId32 ", context: 0x%08" PRIx32 ", exception: {}",
+                    Application::error("{}: client id: {}, context: 0x%08" PRIx32 ", exception: {}",
                                        "PcscLocalThread", this->id(), this->context, ex.what());
                     processed = false;
                 }
@@ -600,19 +600,19 @@ namespace LTSM {
     }
 
     bool PcscLocal::clientAction(void) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 ", wait command", __FUNCTION__, id());
+        Application::debug(DebugType::Pcsc, "{}: clientId: {}, wait command", __FUNCTION__, id());
 
         uint32_t len = sock.recvInt32();
         uint32_t cmd = sock.recvInt32();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 ", cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, id(), cmd, len);
+        Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: 0x%08" PRIx32 ", len: %" PRIu32, __FUNCTION__, id(), cmd, len);
 
         if(len != PcscLite::apiCmdLength(cmd) ||
            // transmit: cmd length + variable size
            (cmd == PcscLite::Transmit && len < PcscLite::apiCmdLength(cmd)) ||
            // control: cmd length + variable size
            (cmd == PcscLite::Control && len < PcscLite::apiCmdLength(cmd))) {
-            Application::error("{}: clientId: %" PRId32 ", assert len: %" PRIu32, __FUNCTION__, id(), len);
+            Application::error("{}: clientId: {}, assert len: %" PRIu32, __FUNCTION__, id(), len);
             return false;
         }
 
@@ -724,7 +724,7 @@ namespace LTSM {
         sock.recvSkip(8);
 
         if(context) {
-            Application::error("{}: clientId: %" PRId32 ", invalid context", __FUNCTION__, id());
+            Application::error("{}: clientId: {}, invalid context", __FUNCTION__, id());
             replyError(PcscLite::EstablishContext, SCARD_E_INVALID_PARAMETER);
             return false;
         }
@@ -747,10 +747,10 @@ namespace LTSM {
             // init readers status
             syncReaders();
 
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> remoteContext: 0x%016" PRIx64 ", localContext: 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteContext: 0x%016" PRIx64 ", localContext: 0x%08" PRIx32,
                                __FUNCTION__, id(), remoteContext, context);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), ret, PcscLite::err2str(ret));
         }
 
@@ -764,7 +764,7 @@ namespace LTSM {
         sock.recvSkip(4);
 
         if(! ctx || ctx != context) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
+            Application::error("{}: clientId: {}, invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
             replyError(PcscLite::ReleaseContext, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -783,7 +783,7 @@ namespace LTSM {
             std::tie(ret) = ptr->sendReleaseContext(id(), remoteContext);
 
             if(ret != SCARD_S_SUCCESS) {
-                Application::error("{}: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+                Application::error("{}: clientId: {}, context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                    __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
             }
         }
@@ -806,7 +806,7 @@ namespace LTSM {
         sock.recvSkip(12);
 
         if(! ctx || ctx != context) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
+            Application::error("{}: clientId: {}, invalid localContext: 0x%08" PRIx32, __FUNCTION__, id(), ctx);
             replyError(PcscLite::Connect, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -825,7 +825,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteContext) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteContext", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteContext", __FUNCTION__, id());
                 replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -851,10 +851,10 @@ namespace LTSM {
                 reader->protocol = activeProtocol;
             }
 
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> remoteHandle: 0x%016" PRIx64 ", localHandle: 0x%08" PRIx32
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteHandle: 0x%016" PRIx64 ", localHandle: 0x%08" PRIx32
                                ", activeProtocol: %" PRIu32, __FUNCTION__, id(), remoteHandle, handle, activeProtocol);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
         }
 
@@ -873,7 +873,7 @@ namespace LTSM {
         sock.recvSkip(8);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::Reconnect, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -882,7 +882,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Reconnect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -899,10 +899,10 @@ namespace LTSM {
             std::scoped_lock guard{ PcscLite::readersLock };
             reader->share = shareMode;
             reader->protocol = activeProtocol;
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32 ", activeProtocol: %" PRIu32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32 ", shareMode: %" PRIu32 ", prefferedProtocols: %" PRIu32 ", inititalization: %" PRIu32 ", activeProtocol: %" PRIu32,
                                __FUNCTION__, id(), handle, shareMode, prefferedProtocols, initialization, activeProtocol);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -919,7 +919,7 @@ namespace LTSM {
         sock.recvSkip(4);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::Disconnect, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -928,7 +928,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Disconnect, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -951,10 +951,10 @@ namespace LTSM {
             reader->protocol = 0;
             reader = nullptr;
 
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
                                __FUNCTION__, id(), handle, disposition);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -970,7 +970,7 @@ namespace LTSM {
         sock.recvSkip(4);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::BeginTransaction, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -979,7 +979,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::BeginTransaction, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -993,10 +993,10 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32,
                                __FUNCTION__, id(), handle);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1012,7 +1012,7 @@ namespace LTSM {
         sock.recvSkip(4);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::EndTransaction, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -1021,7 +1021,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::EndTransaction, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1034,10 +1034,10 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32 ", disposition: %" PRIu32,
                                __FUNCTION__, id(), handle, disposition);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1059,13 +1059,13 @@ namespace LTSM {
         const auto data1 = sock.recvData(sendLength);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::Transmit, SCARD_E_INVALID_HANDLE);
             return false;
         }
 
         if(sendLength != data1.size()) {
-            Application::error("{}: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
+            Application::error("{}: clientId: {}, invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
                                sendLength, data1.size());
             return false;
         }
@@ -1075,7 +1075,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Transmit, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1088,7 +1088,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32
                                ", pciProtocol: 0x%08" PRIx32 ", pciLength: %" PRIu32 ", recv size: %lu",
                                __FUNCTION__, id(), handle, ioRecvPciProtocol, ioRecvPciLength, data2.size());
 
@@ -1097,7 +1097,7 @@ namespace LTSM {
                 Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str.c_str());
             }
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1114,7 +1114,7 @@ namespace LTSM {
     }
 
     void PcscLocal::statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " reader: `{}', state: %" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} reader: `{}', state: %" PRIx32 ", protocol: %" PRIu32 ", atrLen: %" PRIu32,
                            __FUNCTION__, id(), name.c_str(), state, protocol, atr.size());
 
         assertm(reader, "reader not connected");
@@ -1150,7 +1150,7 @@ namespace LTSM {
         sock.recvSkip(4);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::Status, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -1161,7 +1161,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1174,12 +1174,12 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32,
                                __FUNCTION__, id(), handle);
 
             statusApply(name, state, protocol, atr);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1198,13 +1198,13 @@ namespace LTSM {
         auto data1 = sock.recvData(sendLength);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::Control, SCARD_E_INVALID_HANDLE);
             return false;
         }
 
         if(sendLength != data1.size()) {
-            Application::error("{}: clientId: %" PRId32 ", invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
+            Application::error("{}: clientId: {}, invalid length, send: %" PRIu32 ", data: %lu", __FUNCTION__, id(),
                                sendLength, data1.size());
             return false;
         }
@@ -1214,7 +1214,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Control, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1227,7 +1227,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", controlCode: 0x%08" PRIx32 ", bytesReturned: %lu",
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32 ", controlCode: 0x%08" PRIx32 ", bytesReturned: %lu",
                                __FUNCTION__, id(), handle, controlCode, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1235,7 +1235,7 @@ namespace LTSM {
                 Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str.c_str());
             }
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1259,7 +1259,7 @@ namespace LTSM {
         sock.recvSkip(MAX_BUFFER_SIZE + 8);
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::GetAttrib, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -1269,7 +1269,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::GetAttrib, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1282,7 +1282,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLen: %lu",
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: 0x%08" PRIx32 ", attrId: %" PRIu32 ", attrLen: %lu",
                                __FUNCTION__, id(), handle, attrId, attr.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1290,7 +1290,7 @@ namespace LTSM {
                 Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str.c_str());
             }
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1318,7 +1318,7 @@ namespace LTSM {
         }
 
         if(hdl != handle) {
-            Application::error("{}: clientId: %" PRId32 ", invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
+            Application::error("{}: clientId: {}, invalid localHandle: 0x%08" PRIx32, __FUNCTION__, id(), hdl);
             replyError(PcscLite::SetAttrib, SCARD_E_INVALID_HANDLE);
             return false;
         }
@@ -1327,7 +1327,7 @@ namespace LTSM {
 
         if(auto ptr = remote.lock()) {
             if(! remoteHandle) {
-                Application::error("{}: clientId: %" PRId32 ", invalid remoteHandle", __FUNCTION__, id());
+                Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::SetAttrib, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
@@ -1340,10 +1340,10 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localHandle 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle 0x%08" PRIx32,
                                __FUNCTION__, id(), handle);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, handle: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
@@ -1361,7 +1361,7 @@ namespace LTSM {
         const uint32_t ctx = sock.recvInt32();
         uint32_t ret = sock.recvInt32();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << context: 0x%08" PRIx32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << context: 0x%08" PRIx32,
                            __FUNCTION__, id(), ctx);
 
         if(auto remoteContext2 = clientCanceledCb(ctx)) {
@@ -1378,10 +1378,10 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localContext 0x%08" PRIx32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localContext 0x%08" PRIx32,
                                __FUNCTION__, id(), context);
         } else {
-            Application::error("{}: clientId: %" PRId32 ", context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
+            Application::error("{}: clientId: {}, context: 0x%08" PRIx32 ", error: 0x%08" PRIx32 " ({})",
                                __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
         }
 
@@ -1394,7 +1394,7 @@ namespace LTSM {
         const uint32_t versionMinor = sock.recvInt32();
         [[maybe_unused]] const uint32_t ret = sock.recvInt32();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> protocol version: %" PRIu32 ".%" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> protocol version: %" PRIu32 ".%" PRIu32,
                            __FUNCTION__, id(), versionMajor, versionMinor);
         PcscLite::apiVersion = versionMajor * 10 + versionMinor;
 
@@ -1405,7 +1405,7 @@ namespace LTSM {
     bool PcscLocal::proxyGetReaderState(void) {
         const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> localContext: 0x%08" PRIx32 ", readers length: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localContext: 0x%08" PRIx32 ", readers length: %" PRIu32,
                            __FUNCTION__, id(), context, readersLength);
 
         std::scoped_lock guard{ PcscLite::readersLock };
@@ -1417,7 +1417,7 @@ namespace LTSM {
     }
 
     uint32_t PcscLocal::waitReadersStatusChanged(uint32_t timeout) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
                            __FUNCTION__, id(), context, timeout);
 
         if(0 == timeout) {
@@ -1433,23 +1433,23 @@ namespace LTSM {
         Tools::Timeout timeoutSyncReaders(1s);
         waitStatusChanged.start();
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " wait: {}", __FUNCTION__, id(), "started");
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "started");
 
         while(ret == SCARD_E_TIMEOUT) {
             if(waitStatusChanged.canceled) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " wait: {}", __FUNCTION__, id(), "timeout");
+                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "timeout");
                 ret = SCARD_E_CANCELLED;
                 break;
             }
 
             if(waitStatusChanged.stopped) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " wait: {}", __FUNCTION__, id(), "stopped");
+                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "stopped");
                 ret = SCARD_S_SUCCESS;
                 break;
             }
 
             if(timeoutLimit.check()) {
-                Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " wait: {}", __FUNCTION__, id(), "limit");
+                Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "limit");
                 break;
             }
 
@@ -1458,7 +1458,7 @@ namespace LTSM {
                 auto ret2 = syncReaders(& readersChanged);
 
                 if(ret2 != SCARD_S_SUCCESS || readersChanged) {
-                    Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " wait: {}", __FUNCTION__, id(), "error");
+                    Application::debug(DebugType::Pcsc, "{}: clientId: {} wait: {}", __FUNCTION__, id(), "error");
                     ret = ret2;
                     break;
                 }
@@ -1467,7 +1467,7 @@ namespace LTSM {
             std::this_thread::sleep_for(100ms);
         }
 
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " >> timeout: %" PRIu32, __FUNCTION__, id(), timeout);
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} >> timeout: %" PRIu32, __FUNCTION__, id(), timeout);
         sock.sendInt32(timeout).sendInt32(ret).sendFlush();
         waitStatusChanged.reset();
 
@@ -1479,13 +1479,13 @@ namespace LTSM {
             // old protocol: 4.2
             const uint32_t timeout = sock.recvInt32();
             [[maybe_unused]] const uint32_t ret = sock.recvInt32();
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
                                __FUNCTION__, id(), context, timeout);
             waitStatusChanged.stop();
             waitStatusChanged.job = std::async(std::launch::async, & PcscLocal::waitReadersStatusChanged, this, timeout);
         } else {
             // new protocol 4.4: empty params
-            Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: 0x%08" PRIx32 ", timeout: %" PRIu32,
                                __FUNCTION__, id(), context);
             waitReadersStatusChanged(0);
 
@@ -1500,7 +1500,7 @@ namespace LTSM {
     }
 
     bool PcscLocal::proxyReaderStateChangeStop(void) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: %" PRId32 " << localContext: 0x%08" PRIx32,
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: 0x%08" PRIx32,
                            __FUNCTION__, id(), context);
 
         if(PcscLite::apiVersion < 43) {
@@ -1690,7 +1690,7 @@ namespace LTSM {
                     break;
                 }
 
-                Application::debug(DebugType::App, "{}: add clientId: %" PRId32, "PcscSessionBusThread", sock);
+                Application::debug(DebugType::App, "{}: add clientId: {}", "PcscSessionBusThread", sock);
 
                 const std::scoped_lock guard{ clientsLock };
                 this->clients.emplace_front(sock, remote, this);
@@ -1721,7 +1721,7 @@ namespace LTSM {
         });
 
         if(it != clients.end()) {
-            Application::debug(DebugType::App, "{}: calceled clientId: %" PRId32, __FUNCTION__, it->id());
+            Application::debug(DebugType::App, "{}: calceled clientId: {}", __FUNCTION__, it->id());
             it->canceledAction();
             return it->proxyContext();
         }
@@ -1730,7 +1730,7 @@ namespace LTSM {
     }
 
     void PcscSessionBus::clientShutdownNotify(const PcscLocal* cli) {
-        Application::debug(DebugType::App, "{}: shutdown clientId: %" PRId32, __FUNCTION__, cli->id());
+        Application::debug(DebugType::App, "{}: shutdown clientId: {}", __FUNCTION__, cli->id());
 
         const std::scoped_lock guard{ clientsLock };
         std::erase_if(clients, [cli](auto & st) {

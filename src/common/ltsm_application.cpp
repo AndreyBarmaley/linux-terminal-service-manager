@@ -611,7 +611,7 @@ namespace LTSM {
         fd = audit_open();
 
         if(fd < 0) {
-            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "audit_open", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "audit_open", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
     }
@@ -626,7 +626,7 @@ namespace LTSM {
         assert(msg);
 
         if(int seq = audit_log_user_message(fd, type, msg, hostname, addr, tty, static_cast<int>(success)); seq < 0) {
-            Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "audit_log_user_message", strerror(errno), errno);
         }
     }
 #endif
@@ -654,7 +654,7 @@ namespace LTSM {
             close(fd);
         } else {
             const char* devnull = "/dev/null";
-            Application::warning("{}: {}, path: `{}', uid: %" PRId32, __FUNCTION__, "open failed", file.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, "open failed", file.c_str(), getuid());
 
             if(file != devnull) {
                 redirectStdoutStderrTo(out, err, devnull);
@@ -712,25 +712,25 @@ namespace LTSM {
     }
 
     int ForkMode::waitPid(int pid) {
-        Application::debug(DebugType::App, "{}: pid: %" PRId32, __FUNCTION__, pid);
+        Application::debug(DebugType::App, "{}: pid: {}", __FUNCTION__, pid);
         // waitpid
         int status;
         int ret = waitpid(pid, &status, 0);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: {}",
                                __FUNCTION__, "waitpid", strerror(errno), errno);
             return ret;
         }
 
         if(WIFSIGNALED(status)) {
-            Application::warning("{}: process {}, pid: %" PRId32 ", signal: %" PRId32,
+            Application::warning("{}: process {}, pid: {}, signal: {}",
                                  __FUNCTION__, "killed", pid, WTERMSIG(status));
         } else if(WIFEXITED(status)) {
-            Application::info("{}: process {}, pid: %" PRId32 ", return: %" PRId32,
+            Application::info("{}: process {}, pid: {}, return: {}",
                               __FUNCTION__, "exited", pid, WEXITSTATUS(status));
         } else {
-            Application::debug(DebugType::App, "{}: process {}, pid: %" PRId32 ", wstatus: 0x%08" PRIx32,
+            Application::debug(DebugType::App, "{}: process {}, pid: {}, wstatus: 0x%08" PRIx32,
                                __FUNCTION__, "ended", pid, status);
         }
 
@@ -754,10 +754,10 @@ namespace LTSM {
             auto sargs = Tools::join(args.begin(), args.end(), " ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ",");
 
-            Application::info("{}: pid: %" PRId32 ", cmd: `{}', args: `{}', envs: [ {} ]",
+            Application::info("{}: pid: {}, cmd: `{}', args: `{}', envs: [ {} ]",
                               __FUNCTION__, getpid(), cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("{}: pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getpid(), cmd.c_str());
+            Application::info("{}: pid: {}, cmd: `{}'", __FUNCTION__, getpid(), cmd.c_str());
         }
 
         for(const auto & env : envs) {
@@ -796,7 +796,7 @@ namespace LTSM {
             if(0 <= redirectFd) {
                 // redirect stdout
                 if(0 > dup2(redirectFd, STDOUT_FILENO)) {
-                    Application::warning("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "dup2", strerror(errno), errno);
+                    Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "dup2", strerror(errno), errno);
                 }
 
                 close(redirectFd);
@@ -810,7 +810,7 @@ namespace LTSM {
         spdlog::drop_all();
 
         if(int res = execv(cmd.c_str(), (char* const*) argv.data()); res < 0) {
-            Application::error("{}: {} failed, error: {}, code: %" PRId32 ", path: `{}'",
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "execv", strerror(errno), errno, cmd.c_str());
         }
 

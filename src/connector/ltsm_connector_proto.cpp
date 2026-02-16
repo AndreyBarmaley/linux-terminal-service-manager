@@ -78,7 +78,7 @@ namespace LTSM::Connector {
         xcbDisableMessages(true);
         waitUpdateProcess();
         _shmUid = userUid;
-        Application::notice("{}: dbus signal, display: %" PRId32 ", username: {}, uid: %" PRIu32, __FUNCTION__, display,
+        Application::notice("{}: dbus signal, display: {}, username: {}, uid: %" PRIu32, __FUNCTION__, display,
                             userName.c_str(), userUid);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
@@ -138,7 +138,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onShutdownConnector(const int32_t & display) {
         if(display == displayNum()) {
-            Application::notice("{}: dbus signal, display: %" PRId32, __FUNCTION__, display);
+            Application::notice("{}: dbus signal, display: {}", __FUNCTION__, display);
             xcbDisableMessages(true);
             waitUpdateProcess();
             rfbMessagesShutdown();
@@ -147,7 +147,7 @@ namespace LTSM::Connector {
 
     void ConnectorLtsm::onSendBellSignal(const int32_t & display) {
         if(display == displayNum()) {
-            Application::info("{}: dbus signal, display: %" PRId32, __FUNCTION__, display);
+            Application::info("{}: dbus signal, display: {}", __FUNCTION__, display);
             std::thread([this] { this->sendBellEvent(); }).detach();
         }
     }
@@ -563,7 +563,7 @@ namespace LTSM::Connector {
         // filepath - client file path
         // tmpfile - server tmpfile
         // dstdir - server target directory
-        Application::debug(DebugType::App, "{}: display: %" PRId32, __FUNCTION__, display);
+        Application::debug(DebugType::App, "{}: display: {}", __FUNCTION__, display);
 
         if(display == displayNum()) {
             std::scoped_lock<std::mutex> guard{_lockTransfer};

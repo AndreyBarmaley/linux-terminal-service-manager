@@ -70,7 +70,7 @@ void Pkcs11Client::run(void) {
         fd = UnixSocket::connect(socketPath);
     }
 
-    Application::debug(DebugType::Pkcs11, "{}: connected, socket fd: %" PRId32, __FUNCTION__, fd);
+    Application::debug(DebugType::Pkcs11, "{}: connected, socket fd: {}", __FUNCTION__, fd);
     sock.setSocket(fd);
 
     uint16_t cmd = 0;

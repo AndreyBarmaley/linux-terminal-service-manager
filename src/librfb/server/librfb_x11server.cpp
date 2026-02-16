@@ -580,14 +580,14 @@ namespace LTSM {
         XCB::Region desktop(0, 0, 0, 0);
 
         for(const auto & info : screens) {
-            Application::info("{}: screen id: 0x%08" PRIx32 ", region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16
+            Application::info("{}: screen id: 0x%08" PRIx32 ", region: [{}, {}, %" PRIu16 ", %" PRIu16
                               "], flags: 0x%08" PRIx32,
                               __FUNCTION__, info.id, info.posx, info.posy, info.width, info.height, info.flags);
             desktop.join(XCB::Region(info.posx, info.posy, info.width, info.height));
         }
 
         if(desktop.x != 0 && desktop.y != 0) {
-            Application::error("{}: incorrect desktop size: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+            Application::error("{}: incorrect desktop size: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
                                desktop.x, desktop.y, desktop.width, desktop.height);
             sendEncodingDesktopResize(RFB::DesktopResizeStatus::ClientSide, RFB::DesktopResizeError::InvalidScreenLayout,
                                       XCB::RootDisplay::size());
@@ -658,7 +658,7 @@ namespace LTSM {
     }
 
     XcbFrameBuffer RFB::X11Server::serverFrameBuffer(const XCB::Region & reg) const {
-        Application::debug(DebugType::X11Srv, "{}: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::X11Srv, "{}: region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         auto pixmapReply = XCB::RootDisplay::copyRootImageRegion(reg, shm);
 

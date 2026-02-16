@@ -55,7 +55,7 @@ using namespace std::chrono_literals;
 // createClientAudioConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: %" PRId8 ", url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {

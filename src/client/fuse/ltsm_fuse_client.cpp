@@ -169,7 +169,7 @@ namespace LTSM {
 // createClientFuseConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: %" PRId8 ", url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
@@ -441,7 +441,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
         Application::error("{}: {} failed, error: {}, code: %d, path: `{}', flags: 0x%" PRIx32,
                            __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
     } else {
-        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: 0x%" PRIx32 ", fdh: %" PRId32, __FUNCTION__, path.c_str(), flags, ret);
+        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: 0x%" PRIx32 ", fdh: {}", __FUNCTION__, path.c_str(), flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);
@@ -469,10 +469,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("{}: {} failed, error: {}, code: %d, fd: %" PRId32,
+        Application::error("{}: {} failed, error: {}, code: %d, fd: {}",
                            __FUNCTION__, "close", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "{}: fd: %" PRId32, __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: {}", __FUNCTION__, fdh);
         opens.remove(fdh);
     }
 

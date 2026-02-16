@@ -510,7 +510,7 @@ namespace LTSM {
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
 
         auto len = cli.recvIntBE32();

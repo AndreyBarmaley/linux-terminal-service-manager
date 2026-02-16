@@ -695,7 +695,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: status: {}, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+        Application::debug(DebugType::Rfb, "{}: status: {}, region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
                            (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
@@ -714,7 +714,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr) {
-        Application::debug(DebugType::Rfb, "{}: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::Rfb, "{}: region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         // send framebuffer update request
@@ -817,7 +817,7 @@ namespace LTSM {
             reg.width = recvIntBE16();
             reg.height = recvIntBE16();
             int encodingType = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], encodingType: {}",
+            Application::debug(DebugType::Rfb, "{}: region [{}, {}, %" PRIu16 ", %" PRIu16 "], encodingType: {}",
                                __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
 
             switch(encodingType) {
@@ -896,7 +896,7 @@ namespace LTSM {
         int32_t length = recvIntBE32();
 
         if(0 < length) {
-            Application::debug(DebugType::Rfb, "{}: length: %" PRId32, __FUNCTION__, length);
+            Application::debug(DebugType::Rfb, "{}: length: {}", __FUNCTION__, length);
             auto text = recvData(length);
             clientRecvCutTextEvent(std::move(text));
         } else if(length < 0) {
@@ -906,7 +906,7 @@ namespace LTSM {
             }
 
             length = std::abs(length);
-            Application::debug(DebugType::Rfb, "{}: length: %" PRId32 ", extclip", __FUNCTION__, length);
+            Application::debug(DebugType::Rfb, "{}: length: {}, extclip", __FUNCTION__, length);
 
             auto buffer = recvData(length);
             recvExtClipboardCaps(StreamBuf(std::move(buffer)));
@@ -919,12 +919,12 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
     }
 
     void RFB::ClientDecoder::recvDecodingLtsmCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
 
         auto cursorId = recvIntBE32();
@@ -946,7 +946,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
         auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
@@ -969,7 +969,7 @@ namespace LTSM {
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: %" PRIu32 ", area: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], flags: 0x%08"
+            Application::debug(DebugType::Rfb, "{}: screen: %" PRIu32 ", area: [{}, {}, %" PRIu16 ", %" PRIu16 "], flags: 0x%08"
                                PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 

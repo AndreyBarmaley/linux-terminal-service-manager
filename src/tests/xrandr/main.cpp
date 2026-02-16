@@ -63,7 +63,7 @@ class X11Test : public XCB::RootDisplay {
 
                     // window, crtc, mode, rotation, x, y, width, height
                     if(0 < cc.width && 0 < cc.height) {
-                        Application::info("randr crtc change notify, window: 0x%08" PRIx32 ", crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", geometry: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
+                        Application::info("randr crtc change notify, window: 0x%08" PRIx32 ", crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", geometry: [{}, {}, %" PRIu16 ", %" PRIu16 "], sequence: 0x%04" PRIx16 ", timestamp: %" PRIu32,
                                           cc.window, cc.crtc, cc.mode, cc.rotation, cc.x, cc.y, cc.width, cc.height, rn->sequence, cc.timestamp);
                     }
                 } else if(XCB::RootDisplay::isRandrNotify(ev, XCB_RANDR_NOTIFY_OUTPUT_CHANGE)) {

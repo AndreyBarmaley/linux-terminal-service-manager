@@ -220,7 +220,7 @@ namespace LTSM::Connector {
 
     void DBusProxy::onClearRenderPrimitives(const int32_t & display) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
             for(const auto & ptr : _renderPrimitives) {
                 if(auto prim = ptr.get()) {
@@ -235,7 +235,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderRect(const int32_t & display,
                                     const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
             _renderPrimitives.emplace_back(std::make_unique<RenderRect>(rect, color, fill));
             serverScreenUpdateRequest(tupleRegionToXcbRegion(rect));
@@ -245,7 +245,7 @@ namespace LTSM::Connector {
     void DBusProxy::onAddRenderText(const int32_t & display, const std::string & text,
                                     const TuplePosition & pos, const TupleColor & color) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32, __FUNCTION__, display);
+            Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
             const TupleRegion rect = std::make_tuple(std::get<0>(pos), std::get<1>(pos),
                                      _systemfont.width * text.size(), _systemfont.height);
@@ -257,7 +257,7 @@ namespace LTSM::Connector {
 
     void DBusProxy::onPingConnector(const int32_t & display) {
         if(display == displayNum()) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32,
+            Application::debug(DebugType::Dbus, "{}: display: {}",
                                __FUNCTION__, display);
 
             std::thread([this, display]() {

@@ -581,7 +581,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamUnderflowEvent(int64_t index) {
-        Application::info("{}: index: %" PRId64, __FUNCTION__, index);
+        Application::info("{}: index: {}", __FUNCTION__, index);
     }
 
     bool PulseAudio::BaseStream::streamSuspended(void) const {

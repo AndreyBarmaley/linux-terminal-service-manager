@@ -76,7 +76,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onLoginFailure(const int32_t & display, const std::string & msg) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", message: `{}'",
+            Application::debug(DebugType::Dbus, "{}: display: {}, message: `{}'",
                                __FUNCTION__, display, msg.c_str());
 
             emit loginFailureNotify(QString::fromStdString(msg));
@@ -85,7 +85,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", username: `{}', uid: %" PRIu32,
+            Application::debug(DebugType::Dbus, "{}: display: {}, username: `{}', uid: %" PRIu32,
                                __FUNCTION__, display, userName.c_str(), userUid);
 
             emit loginSuccessNotify(QString::fromStdString(userName));
@@ -95,7 +95,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
             const std::string & pass, const bool & autologin) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", login: `{}', pass length: %" PRIu32 ", auto login: %d",
+            Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: %" PRIu32 ", auto login: %d",
                                __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
@@ -104,7 +104,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onHelperPkcs11ListennerStarted(const int32_t & display, const int32_t & connectorId) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", connectorId: 0x%08" PRIx32,
+            Application::debug(DebugType::Dbus, "{}: display: {}, connectorId: 0x%08" PRIx32,
                                __FUNCTION__, display, connectorId);
 
             emit pkcs11ListennerStartedNotify(connectorId);
@@ -113,7 +113,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onHelperSetTimezone(const int32_t & display, const std::string & tz) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32 ", tz: `{}'",
+            Application::debug(DebugType::Dbus, "{}: display: {}, tz: `{}'",
                                __FUNCTION__, display, tz.c_str());
 
             setenv("TZ", tz.c_str(), 1);
@@ -122,7 +122,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onShutdownConnector(const int32_t & display) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: %" PRId32,
+            Application::debug(DebugType::Dbus, "{}: display: {}",
                                __FUNCTION__, display);
 
             emit connectorShutdownNotify();
@@ -426,11 +426,11 @@ namespace LTSM::LoginHelper {
             auto login = ui->comboBoxUsername->currentText().toStdString();
             auto pass = ui->lineEditPassword->text().toStdString();
 
-            Application::debug(DebugType::App, "{}: display: %" PRId32 ", user: `{}', pass length: %" PRIu32,
+            Application::debug(DebugType::App, "{}: display: {}, user: `{}', pass length: %" PRIu32,
                                __FUNCTION__, displayNum, login.c_str(), pass.size());
 
             if(! dbus->busSetAuthenticateLoginPass(displayNum, login, pass)) {
-                Application::error("{}: {}, display: %" PRId32 ", user: `{}'",
+                Application::error("{}: {}, display: {}, user: `{}'",
                                    __FUNCTION__, "session failed", displayNum, login.c_str());
                 // failed
                 close();
@@ -577,13 +577,13 @@ namespace LTSM::LoginHelper {
             return returnInvalidCert();
         }
 
-        Application::debug(DebugType::Pkcs11, "{}: display: % " PRId32 ", login found: `{}'",
+        Application::debug(DebugType::Pkcs11, "{}: display: {}, login found: `{}'",
                            __FUNCTION__, displayNum, login.c_str());
 
         setLabelInfo("Login found");
 
         if(! dbus->busSetAuthenticateToken(displayNum, login)) {
-            Application::error("{}: {}, display: %" PRId32 ", user: `{}'",
+            Application::error("{}: {}, display: {}, user: `{}'",
                                __FUNCTION__, "session failed", displayNum, login.c_str());
 
             // failed

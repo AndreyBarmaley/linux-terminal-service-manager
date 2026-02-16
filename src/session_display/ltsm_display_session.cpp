@@ -69,10 +69,10 @@ namespace LTSM::DisplaySession {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
-            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}', args: [ {} ], envs: [ {} ]",
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
         }
 
         // main thread processed
@@ -103,7 +103,7 @@ namespace LTSM::DisplaySession {
                     break;
                 }
 
-                Application::error("{}: {} failed, error: {}, code: %" PRId32, __FUNCTION__, "read", strerror(errno), errno);
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "read", strerror(errno), errno);
                 res.clear();
                 break;
             }
@@ -144,7 +144,7 @@ namespace LTSM::DisplaySession {
         int pipefd[2] = {};
 
         if(0 > pipe(pipefd)) {
-            Application::error("{}: {} failed, error: {}, code: %" PRId32,
+            Application::error("{}: {} failed, error: {}, code: {}",
                                __FUNCTION__, "pipe", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
@@ -161,10 +161,10 @@ namespace LTSM::DisplaySession {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args.begin(), args.end(), ", ");
             auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
-            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}', args: [ {} ], envs: [ {} ]",
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd.c_str(), sargs.c_str(), senvs.c_str());
         } else {
-            Application::info("{}: uid: %" PRId32 ", pid: %" PRId32 ", cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
+            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd.c_str());
         }
 
         // main thread processed
@@ -199,13 +199,13 @@ namespace LTSM::DisplaySession {
             auto cookie = sb.read(len);
 
             if(display == std::to_string(displayNum)) {
-                Application::debug(DebugType::App, "{}: {} found, display %" PRId32,
+                Application::debug(DebugType::App, "{}: {} found, display {}",
                                    __FUNCTION__, "xcb cookie", displayNum);
                 return cookie;
             }
         }
 
-        Application::error("{}: {} found, display: %" PRId32,
+        Application::error("{}: {} found, display: {}",
                            __FUNCTION__, "xcb cookie not", displayNum);
 
         throw std::runtime_error(NS_FuncName);

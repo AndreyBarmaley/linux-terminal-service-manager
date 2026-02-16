@@ -507,7 +507,7 @@ namespace LTSM::Connector {
             });
         }
 
-        Application::notice("{}: dbus signal, display: %" PRId32 ", username: {}", __FUNCTION__, display, userName.c_str());
+        Application::notice("{}: dbus signal, display: {}, username: {}", __FUNCTION__, display, userName.c_str());
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
@@ -557,7 +557,7 @@ namespace LTSM::Connector {
             freeRdp->stopEventLoop();
             xcbDisableMessages(true);
             loopShutdownFlag = true;
-            Application::info("dbus signal: shutdown connector, display: %" PRId32, display);
+            Application::info("dbus signal: shutdown connector, display: {}", display);
         }
     }
 
@@ -638,7 +638,7 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
+        Application::debug(DebugType::App, "{}: area [{}, {}, %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
                            ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
@@ -765,7 +765,7 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
+        Application::debug(DebugType::App, "{}: area [{}, {}, %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
                            ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
@@ -1012,7 +1012,7 @@ namespace LTSM::Connector {
     /// @param flags: KBD_FLAGS_EXTENDED(0x0100), KBD_FLAGS_EXTENDED1(0x0200), KBD_FLAGS_DOWN(0x4000), KBD_FLAGS_RELEASE(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerKeyboardEvent(rdpInput* input, UINT16 flags, UINT16 code) {
-        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", code:0x%04" PRIx16 ", input: {}, context: {}", __FUNCTION__, flags, code,
+        Application::debug(DebugType::App, "{}: flags: 0x%04" PRIx16 ", code: 0x%04" PRIx16 ", input: {}, context: {}", __FUNCTION__, flags, code,
                            fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;
@@ -1065,7 +1065,7 @@ namespace LTSM::Connector {
     ///               PTR_FLAGS_WHEEL(0x0200), PTR_FLAGS_WHEEL_NEGATIVE(0x0100), PTR_FLAGS_MOVE(0x0800), PTR_FLAGS_DOWN(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy) {
-        Application::debug(DebugType::App, "{}: flags:0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: {}, context: {}", __FUNCTION__,
+        Application::debug(DebugType::App, "{}: flags: 0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: {}, context: {}", __FUNCTION__,
                            flags, posx, posy, fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;

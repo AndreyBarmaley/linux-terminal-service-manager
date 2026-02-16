@@ -785,7 +785,7 @@ namespace LTSM {
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: request update, region [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], incremental: %d",
+        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, %" PRIu16 ", %" PRIu16 "], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
@@ -805,7 +805,7 @@ namespace LTSM {
         uint8_t buttons = recvInt8();
         uint16_t posx = recvIntBE16();
         uint16_t posy = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: mask: 0x%02" PRIx8 ", pos: [ %" PRId16 ", %" PRId16 "]", __FUNCTION__, buttons, posx, posy);
+        Application::debug(DebugType::Rfb, "{}: mask: 0x%02" PRIx8 ", pos: [ {}, {}]", __FUNCTION__, buttons, posx, posy);
         serverRecvPointerEvent(buttons, posx, posy);
     }
 
@@ -819,7 +819,7 @@ namespace LTSM {
         int32_t length = recvIntBE32();
 
         if(0 < length) {
-            Application::debug(DebugType::Rfb, "{}: text length: %" PRId32 ", limit: %" PRId32, __FUNCTION__, length, localExtClipTypeTextSz);
+            Application::debug(DebugType::Rfb, "{}: text length: {}, limit: {}", __FUNCTION__, length, localExtClipTypeTextSz);
             size_t recv = localExtClipTypeTextSz ?
                           std::min(static_cast<uint32_t>(length), localExtClipTypeTextSz) : length;
             auto buffer = recvData(recv);
@@ -842,7 +842,7 @@ namespace LTSM {
         int16_t regy = recvIntBE16();
         uint16_t regw = recvIntBE16();
         uint16_t regh = recvIntBE16();
-        Application::info("{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
+        Application::info("{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
                           regy, regw, regh, enable);
         continueUpdatesProcessed = enable;
         serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
@@ -960,7 +960,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.1
@@ -1164,7 +1164,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         Tools::StreamBitsPack bitmask;
@@ -1219,7 +1219,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [%" PRId16 ", %" PRId16 ", %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         std::scoped_lock guard{ sendLock };

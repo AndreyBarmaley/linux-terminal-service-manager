@@ -404,7 +404,7 @@ namespace LTSM {
                 break;
         }
 
-        Application::error("{}: unknown bpp: %" PRId32, __FUNCTION__, bpp);
+        Application::error("{}: unknown bpp: {}", __FUNCTION__, bpp);
         throw std::invalid_argument(NS_FuncName);
     }
 
