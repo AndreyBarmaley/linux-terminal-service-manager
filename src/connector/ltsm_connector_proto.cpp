@@ -420,7 +420,7 @@ namespace LTSM::Connector {
                 }
             }
 
-            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#08x}, keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
+            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#08x}, keycode: {}", __FUNCTION__, (int) pressed, scancode, keycode);
 
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();

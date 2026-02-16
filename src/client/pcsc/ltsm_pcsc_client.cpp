@@ -416,7 +416,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> handle: {:#016x}, activeProtocol: {}", __FUNCTION__, hCard, static_cast<uint32_t>(activeProtocol));
+        Application::debug(DebugType::Pcsc, "{}: >> handle: {:#016x}, activeProtocol: {}", __FUNCTION__, hCard, activeProtocol);
     } else {
         Application::error("{}: context: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hContext, ret, pcsc_stringify_error(ret));
     }
@@ -442,7 +442,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
     uint32_t ret = SCardReconnect(hCard, shareMode, prefferedProtocols, initialization, & activeProtocol);
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> activeProtocol: {}", __FUNCTION__, static_cast<uint32_t>(activeProtocol));
+        Application::debug(DebugType::Pcsc, "{}: >> activeProtocol: {}", __FUNCTION__, activeProtocol);
     } else {
         Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
@@ -540,7 +540,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
 
     auto sendBuffer = sb.read(sendLength);
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}, dwProtocol: {}, pciLength: {}, send size: {}, recv size: {}",
-                       __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, static_cast<uint32_t>(recvLength));
+                       __FUNCTION__, hCard, ioSendPci.dwProtocol, ioSendPci.cbPciLength, sendLength, recvLength);
 
     std::vector<BYTE> recvBuffer(recvLength ? recvLength : MAX_BUFFER_SIZE_EXTENDED);
     uint32_t ret = SCardTransmit(hCard, & ioSendPci, sendBuffer.data(), sendBuffer.size(),
@@ -548,7 +548,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
 
     if(ret == SCARD_S_SUCCESS) {
         Application::debug(DebugType::Pcsc, "{}: >> dwProtocol: {}, pciLength: {}, recv size: {}",
-                           __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, static_cast<uint32_t>(recvLength));
+                           __FUNCTION__, ioRecvPci.dwProtocol, ioRecvPci.cbPciLength, recvLength);
     } else {
         Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
@@ -584,8 +584,8 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
 #endif
 
     if(ret == SCARD_S_SUCCESS) {
-        Application::debug(DebugType::Pcsc, "{}: >> readerName: `%.*s', state: {:#08x}, protocol: {}, atrLen: {}",
-                           __FUNCTION__, static_cast<int>(readerNameLen), readerName, static_cast<uint32_t>(state), static_cast<uint32_t>(protocol), static_cast<uint32_t>(atrLen));
+        Application::debug(DebugType::Pcsc, "{}: >> readerName: `{:.{}}', state: {:#08x}, protocol: {}, atrLen: {}",
+                           __FUNCTION__, readerName, readerNameLen, state, protocol, atrLen);
     } else {
         Application::error("{}: handle: {:#016x}, error: {:#08x} ({})", __FUNCTION__, hCard, ret, pcsc_stringify_error(ret));
     }
@@ -670,7 +670,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         reply.writeIntLE32(state.cbAtr);
 
         Application::debug(DebugType::Pcsc, "{}: >> reader: `{}', currentState: {:#08x}, eventState: {:#08x}, atrLen: {}",
-                           __FUNCTION__, state.szReader, static_cast<uint32_t>(state.dwCurrentState), static_cast<uint32_t>(state.dwEventState), static_cast<uint32_t>(state.cbAtr));
+                           __FUNCTION__, state.szReader, state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(szReader) {
             reply.write(*szReader);

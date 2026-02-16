@@ -429,7 +429,7 @@ namespace LTSM {
                 month = std::stoi(std::string(ref.data() + 4, ref.data() + 6));
                 day = std::stoi(std::string(ref.data() + 6, ref.data() + 8));
             } catch(const std::invalid_argument &) {
-                Application::error("{}: invalid value `%.*s`", __FUNCTION__, 8, (const char*) ref.data());
+                Application::error("{}: invalid value `{:.{}}'", __FUNCTION__, (const char*) ref.data(), 8);
             }
         } else {
             Application::error("{}: invalid size: {}", __FUNCTION__, ref.size());

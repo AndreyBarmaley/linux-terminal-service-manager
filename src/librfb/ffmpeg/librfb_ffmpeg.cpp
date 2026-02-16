@@ -58,21 +58,21 @@ namespace LTSM {
                     case AV_LOG_PANIC:
                     case AV_LOG_FATAL:
                     case AV_LOG_ERROR:
-                        Application::error("{}: [{}] %.*s", type, name, len, logbuf.data());
+                        Application::error("{}: [{}] {:.{}}", type, name, logbuf.data(), len);
                         break;
 
                     case AV_LOG_WARNING:
-                        Application::warning("{}: [{}] %.*s", type, name, len, logbuf.data());
+                        Application::warning("{}: [{}] {:.{}}", type, name, logbuf.data(), len);
                         break;
 
                     case AV_LOG_INFO:
                     case AV_LOG_VERBOSE:
-                        Application::notice("{}: [{}] %.*s", type, name, len, logbuf.data());
+                        Application::notice("{}: [{}] {:.{}}", type, name, logbuf.data(), len);
                         break;
 
                     case AV_LOG_DEBUG:
                     case AV_LOG_TRACE:
-                        Application::info("{}: [{}] %.*s", type, name, len, logbuf.data());
+                        Application::info("{}: [{}] {:.{}}", type, name, logbuf.data(), len);
                         break;
 
                     default:

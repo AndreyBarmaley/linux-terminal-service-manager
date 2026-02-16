@@ -747,8 +747,8 @@ namespace LTSM {
                 }
             }
         } else if(auto len = std::min(nbytes, pcm.size())) {
-            Application::info("{}: request: {}, last: {}, write: {}, latency: %8d, neg: {}", __FUNCTION__, nbytes, pcm.size(), len,
-                              usec, neg);
+            Application::info("{}: request: {}, last: {}, write: {}, latency: {}, neg: {}",
+                     __FUNCTION__, nbytes, pcm.size(), len, usec, neg);
 
             if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE)) {
                 Application::error("{}: {} failed", __FUNCTION__, "pa_stream_write");

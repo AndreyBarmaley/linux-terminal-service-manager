@@ -898,7 +898,7 @@ namespace LTSM {
                Application::isDebugLevel(DebugLevel::Debug)) {
                 // remove end line
                 if(size_t len = strnlen(str, 1024)) {
-                    Application::debug(DebugType::Tls, "{}: %.*s", __FUNCTION__, static_cast<int>(len - 1), str);
+                    Application::debug(DebugType::Tls, "{}: {:.{}}", __FUNCTION__, str, static_cast<int>(len - 1));
                 }
             }
         }

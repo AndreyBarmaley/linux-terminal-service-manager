@@ -865,11 +865,11 @@ namespace LTSM {
         } while(counts == JSMN_ERROR_NOMEM);
 
         if(counts == JSMN_ERROR_INVAL) {
-            Application::error("{}: {}, `%.*s'", __FUNCTION__, "invalid character inside JSON content", (int) len, str);
+            Application::error("{}: {}, `{:.{}}'", __FUNCTION__, "invalid character inside JSON content", str, len);
             clear();
             return false;
         } else if(counts == JSMN_ERROR_PART) {
-            Application::error("{}: {}, `%.*s'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", (int) len, str);
+            Application::error("{}: {}, `{:.{}}'", __FUNCTION__, "the content is not a full JSON packet, more bytes expected", str, len);
             clear();
             return false;
         } else if(counts < 0) {
@@ -961,7 +961,7 @@ namespace LTSM {
         while(counts-- && itval != end()) {
             if(!(*itkey).isKey()) {
                 auto str = stringToken(*itkey);
-                Application::error("{}: not key, index: {}, `%.*s'", __FUNCTION__, std::distance(begin(), itkey), static_cast<int>(str.size()), str.data());
+                Application::error("{}: not key, index: {}, `{}'", __FUNCTION__, std::distance(begin(), itkey), str);
             }
 
             auto key = Tools::unescaped(stringToken(*itkey));
@@ -997,7 +997,7 @@ namespace LTSM {
         auto val = stringToken(*it);
 
         if(!(*it).isValue()) {
-            Application::error("{}: not value, index: {}, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
+            Application::error("{}: not value, index: {}, value: `{}'", __FUNCTION__, std::distance(begin(), it), val);
         }
 
         size_t dotpos = val.find(".");
@@ -1042,7 +1042,7 @@ namespace LTSM {
         auto val = stringToken(tok);
 
         if(! tok.isValue()) {
-            Application::error("{}: not value, index: {}, value: `%.*s'", __FUNCTION__, std::distance(begin(), it), static_cast<int>(val.size()), val.data());
+            Application::error("{}: not value, index: {}, value: `{}'", __FUNCTION__, std::distance(begin(), it), val);
         }
 
         return std::make_pair(JsonValuePtr(Tools::unescaped(val)), 1);

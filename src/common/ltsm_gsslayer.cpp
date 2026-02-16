@@ -360,8 +360,8 @@ namespace Gss {
     }
 
     CredentialPtr acquireCredential(std::string_view service, const NameType & type, const CredentialUsage & usage, ErrorCodes* err) {
-        Application::debug(DebugType::Gss, "{}: service: `%.*s', type: `{}', usage: `{}'",
-                           __FUNCTION__, static_cast<int>(service.size()), service.data(), nameTypeName(type), credUsageName(usage));
+        Application::debug(DebugType::Gss, "{}: service: `{}', type: `{}', usage: `{}'",
+                           __FUNCTION__, service, nameTypeName(type), credUsageName(usage));
 
         auto name = importName(service, type, err);
 
@@ -389,7 +389,7 @@ namespace Gss {
     }
 
     CredentialPtr acquireUserPasswordCredential(std::string_view username, std::string_view password, ErrorCodes* err) {
-        Application::debug(DebugType::Gss, "{}: username: `%.*s'", __FUNCTION__, static_cast<int>(username.size()), username.data());
+        Application::debug(DebugType::Gss, "{}: username: `{}'", __FUNCTION__, username);
 
         auto name = importName(username, Gss::NameType::NtUserName, err);
 
@@ -569,7 +569,7 @@ namespace Gss {
 
     // ClientContext
     bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr) {
-        Application::debug(DebugType::Gss, "{}: service: `%.*s', mutual: {}", __FUNCTION__, static_cast<int>(service.size()), service.data(), static_cast<int>(mutual));
+        Application::debug(DebugType::Gss, "{}: service: `{}', mutual: {}", __FUNCTION__, service, mutual);
 
         ErrorCodes err;
         auto name = importName(service, NameType::NtHostService, & err);

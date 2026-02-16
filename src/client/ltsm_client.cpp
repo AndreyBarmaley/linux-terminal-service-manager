@@ -340,10 +340,10 @@ namespace LTSM {
 
             if(it2 != line.end()) {
                 std::string_view arg = string2view(it2 + 1, line.end());
-                Application::info("{}: %.*s %.*s", __FUNCTION__, (int) cmd.size(), cmd.data(), (int) arg.size(), arg.data());
+                Application::info("{}: {} {}", __FUNCTION__, cmd, arg);
                 parseCommand(cmd, arg);
             } else {
-                Application::info("{}: %.*s", __FUNCTION__, (int) cmd.size(), cmd.data());
+                Application::info("{}: {}", __FUNCTION__, cmd);
                 parseCommand(cmd, "");
             }
         }
@@ -471,8 +471,8 @@ namespace LTSM {
                 auto url = Channel::parseUrl(arg);
 
                 if(url.first == Channel::ConnectorType::Unknown) {
-                    Application::warning("{}: parse {} failed, unknown url: %.*s",
-                                         __FUNCTION__, "printer", (int) arg.size(), arg.data());
+                    Application::warning("{}: parse {} failed, unknown url: {}",
+                                         __FUNCTION__, "printer", arg);
                 } else {
                     printerUrl.assign(arg.begin(), arg.end());
                 }
@@ -484,8 +484,8 @@ namespace LTSM {
                 auto url = Channel::parseUrl(arg);
 
                 if(url.first == Channel::ConnectorType::Unknown) {
-                    Application::warning("{}: parse {} failed, unknown url: %.*s",
-                                         __FUNCTION__, "sane", (int) arg.size(), arg.data());
+                    Application::warning("{}: parse {} failed, unknown url: {}",
+                                         __FUNCTION__, "sane", arg);
                 } else {
                     saneUrl.assign(arg.begin(), arg.end());
                 }
@@ -532,8 +532,8 @@ namespace LTSM {
             if(std::filesystem::is_directory(arg)) {
                 shareFolders.emplace_front(arg.begin(), arg.end());
             } else {
-                Application::warning("{}: parse {} failed, not exist: %.*s",
-                                     __FUNCTION__, "share-folder", (int) arg.size(), arg.data());
+                Application::warning("{}: parse {} failed, not exist: {}",
+                                     __FUNCTION__, "share-folder", arg);
             }
         } else if(cmd == "--password" && arg.size()) {
             rfbsec.passwdFile.assign(arg.begin(), arg.end());
