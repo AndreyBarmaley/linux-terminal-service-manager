@@ -104,7 +104,9 @@ namespace LTSM {
 
         template<typename... Args>
         static void info(std::string_view fmt, Args&& ... args) {
-            spdlog::info(fmt::runtime(fmt), args...);
+            if(isDebugLevel(DebugLevel::Info)) {
+                spdlog::info(fmt::runtime(fmt), args...);
+            }
         }
 
         template<typename... Args>
@@ -114,16 +116,20 @@ namespace LTSM {
 
         template<typename... Args>
         static void debug(const DebugType & type, std::string_view fmt, Args&& ... args) {
-            auto log = logger(type);
-            log->debug(fmt::runtime(fmt), args...);
+            if(isDebugLevel(DebugLevel::Debug)) {
+                auto log = logger(type);
+                log->debug(fmt::runtime(fmt), args...);
+            }
         }
 
         template<typename... Args>
         static void trace(const DebugType & type, std::string_view fmt, Args&& ... args) {
-            auto log = logger(type);
-            log->debug(fmt::runtime(fmt), args...);
+            if(isDebugLevel(DebugLevel::Trace)) {
+                auto log = logger(type);
+                log->debug(fmt::runtime(fmt), args...);
+            }
         }
-
+        
         static void setDebugTarget(const DebugTarget &, std::string_view = "");
         static void setDebugTarget(std::string_view target, std::string_view = "");
         static bool isDebugTarget(const DebugTarget &);

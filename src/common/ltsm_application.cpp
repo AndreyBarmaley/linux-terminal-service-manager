@@ -68,6 +68,8 @@ namespace LTSM {
     std::string ident{"application"};
 
     bool appLogSync = false;
+
+    // used with docker
     bool forceSyslog = false;
 
     const char* debugTypeToName(const DebugType & type) {
@@ -210,7 +212,6 @@ namespace LTSM {
             return log;
         }
 
-        spdlog::set_automatic_registration(true);
         Logger log;
 
         switch(appDebugTarget) {
@@ -242,7 +243,7 @@ namespace LTSM {
                 break;
         }
 
-        log->set_level(static_cast<spdlog::level::level_enum>(appDebugLevel));
+        spdlog::register_logger(log);
         return log;
     }
 
@@ -274,6 +275,10 @@ namespace LTSM {
                 appDebugTarget = tgt;
                 break;
         }
+
+        spdlog::drop_all();
+        auto log = logger(DebugType::Default);
+        spdlog::set_default_logger(log);
     }
 
     void Application::setDebugTarget(std::string_view tgt, std::string_view ext) {
@@ -295,6 +300,10 @@ namespace LTSM {
     }
 
     bool Application::isDebugLevel(const DebugLevel & lvl) {
+        if(appDebugLevel == lvl) {
+            return true;
+        }
+
         if(appDebugLevel == DebugLevel::Trace) {
             return true;
         }
@@ -303,9 +312,9 @@ namespace LTSM {
             return true;
         }
 
-        return appDebugLevel == lvl;
+        return false;
     }
-
+ 
     void Application::setDebugLevel(const DebugLevel & lvl) {
         appDebugLevel = lvl;
     }
@@ -332,6 +341,7 @@ namespace LTSM {
         std::setlocale(LC_ALL, "ru_RU.utf8");
         std::setlocale(LC_NUMERIC, "C");
 
+        spdlog::set_automatic_registration(false);
         auto log = logger(DebugType::Default);
         spdlog::set_default_logger(log);
 
@@ -703,9 +713,9 @@ namespace LTSM {
 
         if(debug) {
             auto file = std::format("/var/tmp/.fork_{}_{}.log", ident, getpid());
-            Application::setDebugTarget(DebugTarget::SyslogFile, file);
             appDebugTypes = DebugType::All;
             appLogSync = true;
+            Application::setDebugTarget(DebugTarget::SyslogFile, file);
             Application::debug(DebugType::App, "{}: log redirected", __FUNCTION__);
         }
 
