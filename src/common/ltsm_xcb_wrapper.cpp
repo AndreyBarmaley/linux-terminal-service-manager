@@ -919,7 +919,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), cvt, getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), cvt, getuid());
             return 0;
         }
 
@@ -1564,7 +1564,7 @@ namespace LTSM {
         selectionType = atom != XCB_ATOM_NONE ? atom : Atom::clipboard;
         selectionName = Atom::getName(ptr.get(), selectionType);
 
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}')", __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
+        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}')", __FUNCTION__, selectionWin, selectionType, selectionName);
     }
 
     XCB::ModulePasteSelection::~ModulePasteSelection() {
@@ -1598,12 +1598,10 @@ namespace LTSM {
 
         if(warn) {
             Application::warning("{}: EVENT[ sequence: {}, time: {}, owner: {:#08x}, requestor: {:#08x}, selection atom({:#08x}, `{}'), target atom({:#08x}, `{}'), property atom({:#08x}, `{}') ]",
-                                 __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
-                                 ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+                                 __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor, ev->selection, sel, ev->target, tgt, ev->property, prop);
         } else {
             Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, owner: {:#08x}, requestor: {:#08x}, selection atom({:#08x}, `{}'), target atom({:#08x}, `{}'), property atom({:#08x}, `{}') ]",
-                               __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
-                               ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+                               __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor, ev->selection, sel, ev->target, tgt, ev->property, prop);
         }
     }
 
@@ -1651,7 +1649,7 @@ namespace LTSM {
 
     void XCB::ModulePasteSelection::destroyNotifyEvent(const xcb_destroy_notify_event_t* ev) {
         Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}', EVENT[ sequence: {}, event: {:#08x}, window: {:#08x}]",
-                           __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->event, ev->window);
+                           __FUNCTION__, selectionWin, selectionName, ev->sequence, ev->event, ev->window);
 
         if(ev->window) {
             if(removeRequestors(ev->window)) {
@@ -1662,7 +1660,7 @@ namespace LTSM {
 
     void XCB::ModulePasteSelection::selectionClearEvent(const xcb_selection_clear_event_t* ev) {
         Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}' EVENT[ sequence: {}, time: {}, owner: {:#08x}, selection: {:#08x} ]",
-                           __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->time, ev->owner, ev->selection);
+                           __FUNCTION__, selectionWin, selectionName, ev->sequence, ev->time, ev->owner, ev->selection);
 
         if(ev->owner == selectionWin && ev->selection == selectionType && requestsIncr.size()) {
             if(removeRequestors(XCB_WINDOW_NONE)) {
@@ -1673,7 +1671,7 @@ namespace LTSM {
 
     void XCB::ModulePasteSelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
         Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}', EVENT[ sequence: {}, window: {:#08x}, atom: {:#08x}, time: {}, state: {:#02x} ]",
-                           __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+                           __FUNCTION__, selectionWin, selectionName, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_DELETE) {
             return;
@@ -1746,7 +1744,7 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::selectionRequestEvent(const xcb_selection_request_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}'", __FUNCTION__, selectionWin, selectionName.c_str());
+        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}'", __FUNCTION__, selectionWin, selectionName);
 
         auto ptr = conn.lock();
 
@@ -1899,7 +1897,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}')",
-                                __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
+                                __FUNCTION__, selectionWin, selectionType, selectionName);
 
         source = std::addressof(src);
         selectionTime = 0;
@@ -1940,7 +1938,7 @@ namespace LTSM {
 
         xfixesWin = screen.root;
 
-        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}')", __FUNCTION__, selectionWin, selectionType, selectionName.c_str());
+        Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}')", __FUNCTION__, selectionWin, selectionType, selectionName);
     }
 
     XCB::ModuleCopySelection::~ModuleCopySelection() {
@@ -1957,18 +1955,16 @@ namespace LTSM {
 
         if(warn) {
             Application::warning("{}: EVENT[ sequence: {}, time: {}, requestor: {:#08x}, selection atom({:#08x}, `{}'), target atom({:#08x}, `{}'), property atom({:#08x}, `{}') ]",
-                                 __FUNCTION__, ev->sequence, ev->time, ev->requestor,
-                                 ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+                                 __FUNCTION__, ev->sequence, ev->time, ev->requestor, ev->selection, sel, ev->target, tgt, ev->property, prop);
         } else {
             Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, requestor: {:#08x}, selection atom({:#08x}, `{}'), target atom({:#08x}, `{}'), property atom({:#08x}, `{}') ]",
-                               __FUNCTION__, ev->sequence, ev->time, ev->requestor,
-                               ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
+                               __FUNCTION__, ev->sequence, ev->time, ev->requestor, ev->selection, sel, ev->target, tgt, ev->property, prop);
         }
     }
 
     void XCB::ModuleCopySelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
         Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}', EVENT[ sequence: {}, window: {:#08x}, atom: {:#08x}, time: {}, state: {:#02x} ]",
-                           __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
+                           __FUNCTION__, selectionWin, selectionName, ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_NEW_VALUE) {
             return;
@@ -2009,7 +2005,7 @@ namespace LTSM {
     }
 
     void XCB::ModuleCopySelection::selectionNotifyEvent(const xcb_selection_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}'", __FUNCTION__, selectionWin, selectionName.c_str());
+        Application::debug(DebugType::Xcb, "{}: owner: {:#08x}, selection: `{}'", __FUNCTION__, selectionWin, selectionName);
 
         auto ptr = conn.lock();
 
@@ -2083,7 +2079,7 @@ namespace LTSM {
                                 eventNotifyWarning(ptr, ev);
 
                                 auto name = Atom::getName(ptr.get(), reply->type);
-                                Application::warning("{}: reply not correct, type atom({:#08x}, `{}'), format: {}", __FUNCTION__, reply->type, name.c_str(), reply->format);
+                                Application::warning("{}: reply not correct, type atom({:#08x}, `{}'), format: {}", __FUNCTION__, reply->type, name, reply->format);
                             }
 
                             recipient->selectionReceiveData(reply->type, static_cast<const uint8_t*>(buf), len);
@@ -2093,7 +2089,7 @@ namespace LTSM {
 
                         auto name = Atom::getName(ptr.get(), reply->type);
                         Application::warning("{}: reply empty, type atom({:#08x}, `{}'), format: {}",
-                                __FUNCTION__, reply->type, name.c_str(), reply->format);
+                                __FUNCTION__, reply->type, name, reply->format);
                     }
                 }
             } else {
@@ -2140,7 +2136,7 @@ namespace LTSM {
 
         Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection atom({:#08x}, `{}'), time: {}, selection time: {} ]",
                            __FUNCTION__, ev->sequence, ev->window, ev->owner,
-                           ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+                           ev->selection, name, ev->timestamp, ev->selection_timestamp);
     }
 
     void XCB::ModuleCopySelection::xfixesSelectionWindowDestroyEvent(const xcb_xfixes_selection_notify_event_t* ev) {
@@ -2155,7 +2151,7 @@ namespace LTSM {
 
         Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection atom({:#08x}, `{}'), time: {}, selection time: {} ]",
                            __FUNCTION__, ev->sequence, ev->window, ev->owner,
-                           ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+                           ev->selection, name, ev->timestamp, ev->selection_timestamp);
     }
 
     void XCB::ModuleCopySelection::xfixesSetSelectionOwnerEvent(const xcb_xfixes_selection_notify_event_t* ev) {
@@ -2171,7 +2167,7 @@ namespace LTSM {
 
             Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: {:#08x}, owner: {:#08x}, selection atom({:#08x}, `{}'), time: {}, selection time: {} ]",
                                __FUNCTION__, ev->sequence, ev->window, ev->owner,
-                               ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
+                               ev->selection, name, ev->timestamp, ev->selection_timestamp);
 
             if(sourceIncr) {
                 sourceIncr.reset();
@@ -2192,7 +2188,7 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Xcb, "{}: window id: {:#08x}, selection atom({:#08x}, `{}'), target: {:#08x}",
-                __FUNCTION__, selectionWin, selectionType, selectionName.c_str(), target);
+                __FUNCTION__, selectionWin, selectionType, selectionName, target);
 
         selectionTrgt = target;
         recipient = std::addressof(rcpt);
@@ -2307,7 +2303,7 @@ namespace LTSM {
 
         if(int err = xcb_connection_has_error(_conn.get())) {
             Application::error("{}: {} failed, addr: `{}', error: `{}'",
-                               __FUNCTION__, "xcb_connect", displayAddr.c_str(), Connector::errorString(err));
+                               __FUNCTION__, "xcb_connect", displayAddr, Connector::errorString(err));
             return false;
         }
 
@@ -2486,7 +2482,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_ATOM) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "atom", reply->type, name1, name2);
             } else if(auto res = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()))) {
                 return *res;
             }
@@ -2505,7 +2501,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_ATOM) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "atom", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "atom", reply->type, name1, name2);
             } else {
                 auto beg = static_cast<xcb_atom_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
@@ -2528,7 +2524,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_WINDOW) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "window", reply->type, name1, name2);
             } else if(auto res = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get()))) {
                 return *res;
             }
@@ -2547,7 +2543,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_WINDOW) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "window", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "window", reply->type, name1, name2);
             } else {
                 auto beg = static_cast<xcb_window_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(xcb_window_t);
@@ -2570,14 +2566,14 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_CARDINAL) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "cardinal", reply->type, name1, name2);
             } else if(reply->format == 32) {
                 if(auto res = static_cast<uint32_t*>(xcb_get_property_value(reply.get()))) {
                     return *res;
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
             }
         }
 
@@ -2594,7 +2590,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_CARDINAL) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "cardinal", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "cardinal", reply->type, name1, name2);
             } else if(reply->format == 32) {
                 auto beg = static_cast<uint32_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(uint32_t);
@@ -2604,7 +2600,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
             }
         }
 
@@ -2620,7 +2616,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_INTEGER) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "integer", reply->type, name1, name2);
             } else if(reply->format == 8) {
                 if(auto res = static_cast<int8_t*>(xcb_get_property_value(reply.get()))) {
                     return *res;
@@ -2639,7 +2635,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
             }
         }
 
@@ -2656,7 +2652,7 @@ namespace LTSM {
             if(reply->type != XCB_ATOM_INTEGER) {
                 auto name1 = getAtomName(reply->type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "integer", reply->type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "integer", reply->type, name1, name2);
             } else if(reply->format == 8) {
                 auto beg = static_cast<int8_t*>(xcb_get_property_value(reply.get()));
                 auto end = beg + xcb_get_property_value_length(reply.get()) / sizeof(int8_t);
@@ -2687,7 +2683,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2);
             }
         }
 
@@ -2701,7 +2697,7 @@ namespace LTSM {
             if(type != Atom::utf8String) {
                 auto name1 = getAtomName(type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "string", type, name1, name2);
                 return "";
             }
 
@@ -2732,7 +2728,7 @@ namespace LTSM {
             if(type != Atom::utf8String) {
                 auto name1 = getAtomName(type);
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "string", type, name1.c_str(), name2.c_str());
+                Application::warning("{}: type not {}, type atom({:#08x}, `{}'), property: {}", __FUNCTION__, "string", type, name1, name2);
                 return res;
             }
 
@@ -3343,7 +3339,7 @@ namespace LTSM {
             auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
 
             Application::debug(DebugType::Xcb, "{}: selection notify, subtype: {}, window: {:#08x}, owner: {:#08x}, selection atom({:#08x}, `{}'), time1: {}, time2: {}",
-                               __FUNCTION__, sn->subtype, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
+                               __FUNCTION__, sn->subtype, sn->window, sn->owner, sn->selection, getAtomName(sn->selection), sn->timestamp, sn->selection_timestamp);
 
             if(_modSelectionCopy) {
                 _modSelectionCopy->xfixesSelectionNotifyEvent(sn);
@@ -3352,7 +3348,7 @@ namespace LTSM {
             auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
 
             Application::debug(DebugType::Xcb, "{}: cursor notify, serial: {:#08x}, name: atom({:#08x}, `{}'), sequence: {}, timestamp: {}",
-                               __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
+                               __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name), cn->sequence, cn->timestamp);
 
             xcbFixesCursorChangedEvent();
         } else if(isRandrNotify(ev, XCB_RANDR_NOTIFY_CRTC_CHANGE)) {
@@ -3532,7 +3528,7 @@ namespace LTSM {
         }
 
         if(_modXkb) {
-            Application::warning("{}: keysym not found {:#08x}, group names: [{}]", __FUNCTION__, keysym, Tools::join(_modXkb->getNames(), ",").c_str());
+            Application::warning("{}: keysym not found {:#08x}, group names: [{}]", __FUNCTION__, keysym, Tools::join(_modXkb->getNames(), ","));
         }
 
         return empty;

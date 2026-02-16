@@ -496,7 +496,7 @@ namespace LTSM {
         std::filesystem::remove(socketPath, err);
 
         if(err) {
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), socketPath.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), socketPath.native(), getuid());
         }
     }
 
@@ -551,7 +551,7 @@ namespace LTSM {
 
                 if(Application::isDebugLevel(DebugLevel::Trace)) {
                     std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                    Application::trace(DebugType::Sock, "from remote: [{}]", str.c_str());
+                    Application::trace(DebugType::Sock, "from remote: [{}]", str);
                 }
             }
         }
@@ -572,7 +572,7 @@ namespace LTSM {
 
                 if(Application::isDebugLevel(DebugLevel::Trace)) {
                     std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-                    Application::trace(DebugType::Sock, "from local: [{}]", str.c_str());
+                    Application::trace(DebugType::Sock, "from local: [{}]", str);
                 }
             }
         }
@@ -594,7 +594,7 @@ namespace LTSM {
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
@@ -602,7 +602,7 @@ namespace LTSM {
         int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
 
         if(0 > err) {
-            Application::warning("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.c_str(), port);
+            Application::warning("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr, port);
         }
 
         struct sockaddr_in sockaddr;
@@ -613,17 +613,17 @@ namespace LTSM {
         sockaddr.sin_port = htons(port);
         sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.c_str());
 
-        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: {}", __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: {}", __FUNCTION__, ipaddr, port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "bind", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "bind", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
         Application::debug(DebugType::Sock, "{}: listen: {}, conn: {}", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn)) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "listen", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "listen", strerror(errno), errno, ipaddr, port);
             close(fd);
             return -1;
         }
@@ -647,7 +647,7 @@ namespace LTSM {
         struct in_addr in;
 
         if(0 == inet_aton(ipaddr.c_str(), &in)) {
-            Application::error("{}: invalid ip address: `{}'", __FUNCTION__, ipaddr.c_str());
+            Application::error("{}: invalid ip address: `{}'", __FUNCTION__, ipaddr);
         } else {
             std::vector<char> strbuf(1024, 0);
             struct hostent st = {};
@@ -659,7 +659,7 @@ namespace LTSM {
                     return std::string(res->h_name);
                 }
             } else {
-                Application::error("{}: error: {}, ipaddr: `{}'", __FUNCTION__, hstrerror(h_errno), ipaddr.c_str());
+                Application::error("{}: error: {}, ipaddr: `{}'", __FUNCTION__, hstrerror(h_errno), ipaddr);
             }
         }
 
@@ -685,7 +685,7 @@ namespace LTSM {
                 }
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname.c_str());
+            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname);
         }
 
         return list;
@@ -708,7 +708,7 @@ namespace LTSM {
                 }
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname.c_str());
+            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, hstrerror(h_errno), hostname);
         }
 
         return "";
@@ -725,7 +725,7 @@ namespace LTSM {
                 return std::string(inet_ntoa(in));
             }
         } else {
-            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, "gethostbyname", hostname.c_str());
+            Application::error("{}: error: {}, hostname: `{}'", __FUNCTION__, "gethostbyname", hostname);
         }
 
         return "";
@@ -736,7 +736,7 @@ namespace LTSM {
         int sock = socket(AF_INET, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr, port);
             return -1;
         }
 
@@ -747,10 +747,10 @@ namespace LTSM {
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
         sockaddr.sin_port = htons(port);
 
-        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: {}", __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: {}", __FUNCTION__, ipaddr, port);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "connect", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: {}, addr `{}', port: {}", __FUNCTION__, "connect", strerror(errno), errno, ipaddr, port);
             close(sock);
             sock = -1;
         } else {
@@ -765,7 +765,7 @@ namespace LTSM {
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.c_str());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.native());
             return -1;
         }
 
@@ -785,7 +785,7 @@ namespace LTSM {
         Application::debug(DebugType::Sock, "{}: path: {}", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "connect", strerror(errno), errno, path.c_str());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "connect", strerror(errno), errno, path.native());
             close(sock);
             sock = -1;
         } else {
@@ -799,7 +799,7 @@ namespace LTSM {
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.c_str());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "socket", strerror(errno), errno, path.native());
             return -1;
         }
 
@@ -807,7 +807,7 @@ namespace LTSM {
         std::filesystem::remove(path, err);
 
         if(err) {
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.native(), getuid());
         }
 
         struct sockaddr_un sockaddr;
@@ -825,7 +825,7 @@ namespace LTSM {
         Application::debug(DebugType::Sock, "{}: bind path: {}", __FUNCTION__, sockaddr.sun_path);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un))) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "bind", strerror(errno), errno, path.c_str());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "bind", strerror(errno), errno, path.native());
             close(fd);
             return -1;
         }
@@ -863,7 +863,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::is_socket(path, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not socket"), path.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not socket"), path.native(), getuid());
             return false;
         }
 
@@ -941,7 +941,7 @@ namespace LTSM {
             }
 
             if(srvmode) {
-                Application::debug(DebugType::Tls, "{}: tls server mode, priority: `{}'", __FUNCTION__, priority.c_str());
+                Application::debug(DebugType::Tls, "{}: tls server mode, priority: `{}'", __FUNCTION__, priority);
                 dhparams.generate(1024);
                 cred = std::make_unique<gnutls::anon_server_credentials>();
 
@@ -951,7 +951,7 @@ namespace LTSM {
 
                 session = std::make_unique<gnutls::server_session>();
             } else {
-                Application::debug(DebugType::Tls, "{}: tls client mode, priority: `{}'", __FUNCTION__, priority.c_str());
+                Application::debug(DebugType::Tls, "{}: tls client mode, priority: `{}'", __FUNCTION__, priority);
                 cred = std::make_unique<gnutls::anon_client_credentials>();
                 session = std::make_unique<gnutls::client_session>();
             }
@@ -986,12 +986,12 @@ namespace LTSM {
             std::error_code err;
 
             if(! std::filesystem::exists(certFile, err)) {
-                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), certFile.c_str(), getuid());
+                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), certFile, getuid());
                 return false;
             }
 
             if(! std::filesystem::exists(keyFile, err)) {
-                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), keyFile.c_str(), getuid());
+                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), keyFile, getuid());
                 return false;
             }
 
@@ -1015,7 +1015,7 @@ namespace LTSM {
                 }
 
                 if(err) {
-                    Application::warning("{}, {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), caFile.c_str(), getuid());
+                    Application::warning("{}, {}, path: `{}', uid: {}", __FUNCTION__, err.message(), caFile, getuid());
                 }
             }
 
@@ -1027,7 +1027,7 @@ namespace LTSM {
                 }
 
                 if(err) {
-                    Application::warning("{}, {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), crlFile.c_str(), getuid());
+                    Application::warning("{}, {}, path: `{}', uid: {}", __FUNCTION__, err.message(), crlFile, getuid());
                 }
             }
 
@@ -1493,7 +1493,7 @@ namespace LTSM {
 
         void Server::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err, code1, code2);
         }
 
         // GssApi::Client
@@ -1526,7 +1526,7 @@ namespace LTSM {
 
         void Client::error(const char* func, const char* subfunc, OM_uint32 code1, OM_uint32 code2) const {
             auto err = Gss::error2str(code1, code2);
-            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err.c_str(), code1, code2);
+            Application::error("{}: {} failed, error: \"{}\", codes: [ {:#08x}, {:#08x}]", func, subfunc, err, code1, code2);
         }
     } // GssApi
 

@@ -64,7 +64,7 @@ namespace LTSM::SDBus {
                 return static_cast<Type>(proxy->getProperty(prop).onInterface(interface));
             } catch(const sdbus::Error &err) {
                 Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
+                                   __FUNCTION__, err.getName(), err.getMessage());
             }
 
             return {};
@@ -82,7 +82,7 @@ namespace LTSM::SDBus {
                 .storeResultsTo(res);
             } catch(const sdbus::Error &err) {
                 Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
+                                   __FUNCTION__, err.getName(), err.getMessage());
             }
 
             return res;
@@ -97,7 +97,7 @@ namespace LTSM::SDBus {
                 .withArguments(std::forward<Args>(args)...);
             } catch(const sdbus::Error &err) {
                 Application::error("{}: failed, sdbus error: {}, msg: {}",
-                                   __FUNCTION__, err.getName().c_str(), err.getMessage().c_str());
+                                   __FUNCTION__, err.getName(), err.getMessage());
             }
         }
     };

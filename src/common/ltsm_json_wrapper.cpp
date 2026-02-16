@@ -240,7 +240,7 @@ namespace LTSM {
         try {
             return std::stoi(content, nullptr, 0);
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not number: `{}'", __FUNCTION__, content.c_str());
+            Application::error("{}: not number: `{}'", __FUNCTION__, content);
         }
 
         return 0;
@@ -256,7 +256,7 @@ namespace LTSM {
         try {
             return std::stod(content, nullptr);
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not number: `{}'", __FUNCTION__, content.c_str());
+            Application::error("{}: not number: `{}'", __FUNCTION__, content);
         }
 
         return 0;
@@ -276,7 +276,7 @@ namespace LTSM {
         try {
             return static_cast<bool>(std::stoi(content, nullptr, 0));
         } catch(const std::invalid_argument &) {
-            Application::error("{}: not boolean: `{}'", __FUNCTION__, content.c_str());
+            Application::error("{}: not boolean: `{}'", __FUNCTION__, content);
         }
 
         return false;

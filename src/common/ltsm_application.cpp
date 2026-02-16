@@ -194,7 +194,7 @@ namespace LTSM {
             } else if(slower == "all") {
                 types |= DebugType::All;
             } else {
-                Application::warning("{}: unknown debug marker: `{}'", __FUNCTION__, slower.c_str());
+                Application::warning("{}: unknown debug marker: `{}'", __FUNCTION__, slower);
             }
         }
 
@@ -403,7 +403,7 @@ namespace LTSM {
 
                 if(errno != EBADF) {
                     Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                       __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
+                                       __FUNCTION__, "inotify read", strerror(errno), errno, _fileName);
                 }
 
                 break;
@@ -411,7 +411,7 @@ namespace LTSM {
 
             if(len < sizeof(struct inotify_event)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
+                                   __FUNCTION__, "inotify read", strerror(errno), errno, _fileName);
                 break;
             }
 
@@ -435,7 +435,7 @@ namespace LTSM {
     bool WatchModification::inotifyWatchStart(const std::filesystem::path & file) {
 
         if(! std::filesystem::is_regular_file(file)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, file.c_str());
+            Application::error("{}: path not found: `{}'", __FUNCTION__, file.native());
             return false;
         }
 
@@ -452,7 +452,7 @@ namespace LTSM {
 
         if(0 > _inotifyWd) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.c_str());
+                               __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.native());
 
             inotifyWatchStop();
             return false;
@@ -460,7 +460,7 @@ namespace LTSM {
 
         _inotifyJob = std::thread(& WatchModification::inotifyWatchCb, this);
 
-        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, file.c_str());
+        Application::debug(DebugType::App, "{}: path: `{}'", __FUNCTION__, file.native());
         return true;
     }
 
@@ -540,22 +540,22 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"), file.native(), getuid());
             return false;
         }
 
         if((std::filesystem::status(file, err).permissions() &
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "permission failed"), file.native(), getuid());
             return false;
         }
 
 
-        Application::info("{}: path: `{}', uid: {}", __FUNCTION__, file.c_str(), getuid());
+        Application::info("{}: path: `{}', uid: {}", __FUNCTION__, file.native(), getuid());
         JsonContentFile jsonFile(file);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject()) {
-            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "json object", file.c_str());
+            Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "json object", file.native());
             return false;
         }
 
@@ -654,7 +654,7 @@ namespace LTSM {
             close(fd);
         } else {
             const char* devnull = "/dev/null";
-            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, "open failed", file.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", __FUNCTION__, "open failed", file.native(), getuid());
 
             if(file != devnull) {
                 redirectStdoutStderrTo(out, err, devnull);
@@ -755,9 +755,9 @@ namespace LTSM {
             auto senvs = Tools::join(envs.begin(), envs.end(), ",");
 
             Application::info("{}: pid: {}, cmd: `{}', args: `{}', envs: [ {} ]",
-                              __FUNCTION__, getpid(), cmd.c_str(), sargs.c_str(), senvs.c_str());
+                              __FUNCTION__, getpid(), cmd.native(), sargs, senvs);
         } else {
-            Application::info("{}: pid: {}, cmd: `{}'", __FUNCTION__, getpid(), cmd.c_str());
+            Application::info("{}: pid: {}, cmd: `{}'", __FUNCTION__, getpid(), cmd.native());
         }
 
         for(const auto & env : envs) {
@@ -811,7 +811,7 @@ namespace LTSM {
 
         if(int res = execv(cmd.c_str(), (char* const*) argv.data()); res < 0) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "execv", strerror(errno), errno, cmd.c_str());
+                               __FUNCTION__, "execv", strerror(errno), errno, cmd.native());
         }
 
         runChildSuccess();

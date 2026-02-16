@@ -142,7 +142,7 @@ namespace LTSM {
         dll.reset(dlopen(name.c_str(), RTLD_LAZY));
 
         if(! dll) {
-            Application::error("{}: {} failed, name: {}", __FUNCTION__, "dlopen", name.c_str());
+            Application::error("{}: {} failed, name: {}", __FUNCTION__, "dlopen", name);
             throw pkcs11_error(NS_FuncName);
         }
 
@@ -852,7 +852,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString());
             return {};
         }
 
@@ -906,7 +906,7 @@ namespace LTSM {
 
             if(! publicHandle)
             {
-                Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString().c_str());
+                Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString());
                 return false;
             }
 
@@ -945,7 +945,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE publicHandle = findPublicKey(certId);
 
         if(! publicHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "public key", certId.toHexString());
             return {};
         }
 
@@ -1002,7 +1002,7 @@ namespace LTSM {
         CK_OBJECT_HANDLE privateHandle = findPrivateKey(certId);
 
         if(! privateHandle) {
-            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString().c_str());
+            Application::error("{}: {} not found, id: `{}'", __FUNCTION__, "private key", certId.toHexString());
             return {};
         }
 
