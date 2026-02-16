@@ -173,12 +173,12 @@ namespace LTSM {
             if(auto dt = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tp); dt.count()) {
                 if(bytesIn) {
                     auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
-                    Application::info("{}: recv {} bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesIn, mbIn);
+                    Application::info("{}: recv {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesIn, mbIn);
                 }
 
                 if(bytesOut) {
                     auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
-                    Application::info("{}: send {} bytes, bandwith: %.2f MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+                    Application::info("{}: send {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesOut, mbOut);
                 }
             }
         }

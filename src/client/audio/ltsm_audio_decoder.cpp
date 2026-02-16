@@ -61,7 +61,7 @@ namespace LTSM {
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 
         if(nSamples < 0) {
-            Application::error("%: {} failed, error: {}", __FUNCTION__, "opus_decode", nSamples);
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_decode", nSamples);
             return false;
         }
 
