@@ -442,7 +442,7 @@ namespace LTSM {
 
             if(std::ranges::none_of(encodings, [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; })) {
                 Application::warning("{}: incorrect encoding: {}", __FUNCTION__,
-                                     prefferedEncoding.c_str());
+                                     prefferedEncoding);
                 prefferedEncoding.clear();
             }
         }
@@ -502,7 +502,7 @@ namespace LTSM {
 
             if(! std::filesystem::exists(pkcs11Auth)) {
                 Application::warning("{}: parse {} failed, not exist: {}",
-                                     __FUNCTION__, "pkcs11-auth", pkcs11Auth.c_str());
+                                     __FUNCTION__, "pkcs11-auth", pkcs11Auth);
                 pkcs11Auth.clear();
             }
         }
@@ -676,9 +676,9 @@ namespace LTSM {
             }
 
             Application::info("{}: kerberos remote service: {}", __FUNCTION__,
-                              rfbsec.krb5Service.c_str());
+                              rfbsec.krb5Service);
             Application::info("{}: kerberos local name: {}", __FUNCTION__,
-                              rfbsec.krb5Name.c_str());
+                              rfbsec.krb5Name);
         }
 
         // connected
@@ -1412,7 +1412,7 @@ namespace LTSM {
 
                 Application::warning("{}: {} failed, error: {}", __FUNCTION__,
                                      "SDL_CreateColorCursor", SDL_GetError());
-                Application::warning("{}: pixels: [{}], mask: [{}]", __FUNCTION__, tmp1.c_str(), tmp2.c_str());
+                Application::warning("{}: pixels: [{}], mask: [{}]", __FUNCTION__, tmp1, tmp2);
                 return;
             }
 
@@ -1578,12 +1578,12 @@ namespace LTSM {
 
         if(! printerUrl.empty()) {
             Application::info("{}: {} url: {}", __FUNCTION__, "printer",
-                              printerUrl.c_str());
+                              printerUrl);
             jo.push("redirect:cups", printerUrl);
         }
 
         if(! saneUrl.empty()) {
-            Application::info("{}: {} url: {}", __FUNCTION__, "sane", saneUrl.c_str());
+            Application::info("{}: {} url: {}", __FUNCTION__, "sane", saneUrl);
             jo.push("redirect:sane", saneUrl);
         }
 
@@ -1612,7 +1612,7 @@ namespace LTSM {
             if(std::ranges::any_of(allowEncoding, [&](auto & enc) { return enc == audioEncoding; })) {
                 jo.push("redirect:audio", audioEncoding);
             } else {
-                Application::warning("{}: unsupported audio: {}", __FUNCTION__, audioEncoding.c_str());
+                Application::warning("{}: unsupported audio: {}", __FUNCTION__, audioEncoding);
             }
         }
 
@@ -1627,7 +1627,7 @@ namespace LTSM {
         } else {
             auto error = jo.getString("error");
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "login",
-                               error.c_str());
+                               error);
         }
     }
 
@@ -1641,7 +1641,7 @@ namespace LTSM {
                                      const Channel::ConnectorMode & mode) const {
         if(type == Channel::ConnectorType::Fuse) {
             if(std::ranges::none_of(shareFolders, [&](auto & val) { return val == content; })) {
-                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "share", content.c_str());
+                Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "share", content);
                 return false;
             }
         }

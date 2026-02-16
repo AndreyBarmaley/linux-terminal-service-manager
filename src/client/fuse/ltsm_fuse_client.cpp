@@ -73,18 +73,18 @@ namespace LTSM {
 
         if(len < 0) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "readlink", strerror(errno), errno, path);
             throw fuse_error(NS_FuncName);
         }
 
         if(len < dir.size()) {
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path.c_str());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
             throw fuse_error(NS_FuncName);
         }
 
         // check scope
         if(! std::equal(dir.begin(), dir.end(), linkto.begin(), linkto.begin() + dir.size())) {
-            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path.c_str());
+            Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
             throw fuse_error(NS_FuncName);
         }
 
@@ -92,7 +92,7 @@ namespace LTSM {
 
         if(0 > ::stat(linkto.data(), & st2)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
+                               __FUNCTION__, "stat", strerror(errno), errno, path);
             throw fuse_error(NS_FuncName);
         }
 
@@ -110,7 +110,7 @@ namespace LTSM {
 
             if(0 > ::stat(path.c_str(), & st)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
+                                   __FUNCTION__, "stat", strerror(errno), errno, path);
                 continue;
             }
 
@@ -130,7 +130,7 @@ namespace LTSM {
 
                 default:
                     Application::warning("{}: {}, mode: {:#016x}, path: `{}'",
-                                         __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path.c_str());
+                                         __FUNCTION__, "special skipped", static_cast<uint64_t>(st.st_mode), path);
                     continue;
             }
 
@@ -169,7 +169,7 @@ namespace LTSM {
 // createClientFuseConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url,
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
@@ -299,10 +299,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
     auto mountPoint = sb.readString(len);
 
     if(! owner->createChannelAllow(Channel::ConnectorType::Fuse, mountPoint, Channel::ConnectorMode::Unknown)) {
-        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mount point", mountPoint.c_str());
+        Application::error("{}: {} failed, path: `{}'", __FUNCTION__, "mount point", mountPoint);
         fuseInit = false;
     } else {
-        Application::info("{}: version: {:#04x}, mount point: `{}'", __FUNCTION__, fuseVer, mountPoint.c_str());
+        Application::info("{}: version: {:#04x}, mount point: `{}'", __FUNCTION__, fuseVer, mountPoint);
         shareRoot.assign(mountPoint);
         fuseInit = true;
     }
@@ -439,9 +439,9 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
 
     if(0 > ret) {
         Application::error("{}: {} failed, error: {}, code: {}, path: `{}', flags: {:#08x}",
-                           __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
+                           __FUNCTION__, "open", strerror(error), error, path, flags);
     } else {
-        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#08x}, fdh: {}", __FUNCTION__, path.c_str(), flags, ret);
+        Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#08x}, fdh: {}", __FUNCTION__, path, flags, ret);
         opens.push_front(ret);
         // <FDH32> - fd handle
         reply.writeIntLE32(ret);

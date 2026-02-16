@@ -127,14 +127,14 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
-            Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp);
         }
 
         auto crypt = TLS::encryptDES(challenge, password);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
-            Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp);
         }
 
         sendRaw(crypt.data(), crypt.size());
@@ -248,7 +248,7 @@ namespace LTSM {
         }
 
         const std::string err("security kerberos failed");
-        Application::error("{}: error: {}", __FUNCTION__, err.c_str());
+        Application::error("{}: error: {}", __FUNCTION__, err);
         return false;
     }
 
@@ -265,7 +265,7 @@ namespace LTSM {
             return false;
         }
 
-        Application::debug(DebugType::Rfb, "{}: handshake version: {}", __FUNCTION__, magick.substr(0, magick.size() - 1).c_str());
+        Application::debug(DebugType::Rfb, "{}: handshake version: {}", __FUNCTION__, magick.substr(0, magick.size() - 1));
 
         if(magick != version) {
             Application::error("{}: handshake failure", __FUNCTION__);
@@ -281,7 +281,7 @@ namespace LTSM {
         if(0 == counts) {
             int len = recvIntBE32();
             auto err = recvString(len);
-            Application::error("{}: receive error: {}", __FUNCTION__, err.c_str());
+            Application::error("{}: receive error: {}", __FUNCTION__, err);
             return false;
         }
 
@@ -299,7 +299,7 @@ namespace LTSM {
             // check local ticket
             if(krb5Cred = Gss::acquireUserCredential(sec.krb5Name); krb5Cred) {
                 auto canon = Gss::displayName(krb5Cred->name);
-                Application::info("{}: kerberos local ticket: {}", __FUNCTION__, canon.c_str());
+                Application::info("{}: kerberos local ticket: {}", __FUNCTION__, canon);
             }
         }
 
@@ -348,7 +348,7 @@ namespace LTSM {
         if(RFB::SECURITY_RESULT_OK != recvIntBE32()) {
             int len = recvIntBE32();
             auto err = recvString(len);
-            Application::error("{}: receive error: {}", __FUNCTION__, err.c_str());
+            Application::error("{}: receive error: {}", __FUNCTION__, err);
             return false;
         }
 
@@ -398,7 +398,7 @@ namespace LTSM {
         // recv name desktop
         auto nameLen = recvIntBE32();
         auto nameDesktop = recvString(nameLen);
-        Application::debug(DebugType::Rfb, "{}: server desktop name: {}", __FUNCTION__, nameDesktop.c_str());
+        Application::debug(DebugType::Rfb, "{}: server desktop name: {}", __FUNCTION__, nameDesktop);
         return true;
     }
 

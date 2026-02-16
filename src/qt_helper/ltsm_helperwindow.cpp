@@ -77,7 +77,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onLoginFailure(const int32_t & display, const std::string & msg) {
         if(display == displayNum) {
             Application::debug(DebugType::Dbus, "{}: display: {}, message: `{}'",
-                               __FUNCTION__, display, msg.c_str());
+                               __FUNCTION__, display, msg);
 
             emit loginFailureNotify(QString::fromStdString(msg));
         }
@@ -86,7 +86,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
         if(display == displayNum) {
             Application::debug(DebugType::Dbus, "{}: display: {}, username: `{}', uid: {}",
-                               __FUNCTION__, display, userName.c_str(), userUid);
+                               __FUNCTION__, display, userName, userUid);
 
             emit loginSuccessNotify(QString::fromStdString(userName));
         }
@@ -96,7 +96,7 @@ namespace LTSM::LoginHelper {
             const std::string & pass, const bool & autologin) {
         if(display == displayNum) {
             Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: {}, auto login: {}",
-                               __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
+                               __FUNCTION__, display, login, pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
         }
@@ -114,7 +114,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onHelperSetTimezone(const int32_t & display, const std::string & tz) {
         if(display == displayNum) {
             Application::debug(DebugType::Dbus, "{}: display: {}, tz: `{}'",
-                               __FUNCTION__, display, tz.c_str());
+                               __FUNCTION__, display, tz);
 
             setenv("TZ", tz.c_str(), 1);
         }
@@ -427,11 +427,11 @@ namespace LTSM::LoginHelper {
             auto pass = ui->lineEditPassword->text().toStdString();
 
             Application::debug(DebugType::App, "{}: display: {}, user: `{}', pass length: {}",
-                               __FUNCTION__, displayNum, login.c_str(), pass.size());
+                               __FUNCTION__, displayNum, login, pass.size());
 
             if(! dbus->busSetAuthenticateLoginPass(displayNum, login, pass)) {
                 Application::error("{}: {}, display: {}, user: `{}'",
-                                   __FUNCTION__, "session failed", displayNum, login.c_str());
+                                   __FUNCTION__, "session failed", displayNum, login);
                 // failed
                 close();
             }
@@ -488,7 +488,7 @@ namespace LTSM::LoginHelper {
             if(listErrors.size()) {
                 for(auto & err : listErrors) {
                     setLabelError(err.errorString());
-                    Application::warning("{}: {} failed, error: {}", __FUNCTION__, "cert verify", err.errorString().toStdString().c_str());
+                    Application::warning("{}: {} failed, error: {}", __FUNCTION__, "cert verify", err.errorString().toStdString());
                 }
 
                 return returnInvalidCert();
@@ -512,7 +512,7 @@ namespace LTSM::LoginHelper {
         if(authType == "cert:email") {
             if(auto list = ssl.subjectInfo(QSslCertificate::EmailAddress); list.size()) {
                 login = list.front().toStdString();
-                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:email", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:email", login);
             } else {
                 setLabelError("cert:email not found");
                 Application::warning("{}: {} failed", __FUNCTION__, "cert:email");
@@ -521,7 +521,7 @@ namespace LTSM::LoginHelper {
         } else if(authType == "cert:cn") {
             if(auto list = ssl.subjectInfo(QSslCertificate::CommonName); list.size()) {
                 login = list.front().toStdString();
-                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:cn", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "cert:cn", login);
             } else {
                 setLabelError("cert:cn not found");
                 Application::warning("{}: {} failed", __FUNCTION__, "cert:cn");
@@ -532,10 +532,10 @@ namespace LTSM::LoginHelper {
                 auto sha256 = ssl.digest(QCryptographicHash::Sha256);
                 auto arg = QString("digest:sha256:").append(sha256.toHex());
                 login = Tools::runcmd(cmd.append(" ").append(arg.toStdString()));
-                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "script", login.c_str());
+                Application::debug(DebugType::Pkcs11, "{}: pkcs:auth = `{}', login found: `{}'", __FUNCTION__, "script", login);
             } else {
                 setLabelError("script not found");
-                Application::warning("{}: path not found: `{}'", __FUNCTION__, cmd.c_str());
+                Application::warning("{}: path not found: `{}'", __FUNCTION__, cmd);
                 return returnInvalidCert();
             }
         }
@@ -578,13 +578,13 @@ namespace LTSM::LoginHelper {
         }
 
         Application::debug(DebugType::Pkcs11, "{}: display: {}, login found: `{}'",
-                           __FUNCTION__, displayNum, login.c_str());
+                           __FUNCTION__, displayNum, login);
 
         setLabelInfo("Login found");
 
         if(! dbus->busSetAuthenticateToken(displayNum, login)) {
             Application::error("{}: {}, display: {}, user: `{}'",
-                               __FUNCTION__, "session failed", displayNum, login.c_str());
+                               __FUNCTION__, "session failed", displayNum, login);
 
             // failed
             close();

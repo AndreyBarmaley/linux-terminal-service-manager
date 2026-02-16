@@ -141,7 +141,7 @@ using namespace std::chrono_literals;
 // createClientPcscConnector
 std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscConnector(uint8_t channel,
         const std::string & url, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(),
+    Application::info("{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url,
                       Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::Unknown) {
@@ -383,7 +383,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     Application::debug(DebugType::Pcsc, "{}: >> readers count: {}", __FUNCTION__, readers.size());
 
     for(const auto & reader : readers) {
-        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}'", __FUNCTION__, reader.c_str());
+        Application::debug(DebugType::Pcsc, "{}: >> reader: `{}'", __FUNCTION__, reader);
         reply.writeIntLE32(reader.size()).write(reader);
     }
 
@@ -406,7 +406,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 
     auto readerName = sb.readString(len);
     Application::debug(DebugType::Pcsc, "{}: << context: {:#016x}, readerName: `{}', shareMode: {}, prefferedProtocols: {}",
-                       __FUNCTION__, hContext, readerName.c_str(), shareMode, prefferedProtocols);
+                       __FUNCTION__, hContext, readerName, shareMode, prefferedProtocols);
     SCARDHANDLE hCard = 0;
     DWORD activeProtocol = 0;
 #ifdef __WIN32__

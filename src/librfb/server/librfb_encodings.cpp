@@ -679,7 +679,7 @@ namespace LTSM {
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto & vec = sb.toVector();
             std::string str = Tools::buffer2hexstring(vec.begin(), vec.end(), 2);
-            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", __FUNCTION__, jobId, str.c_str());
+            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", __FUNCTION__, jobId, str);
         }
     }
 
@@ -937,7 +937,7 @@ namespace LTSM {
                         fullscreenUpdate = true;
                     }
 
-                    Application::info("{}: set sample: {}", __FUNCTION__, str.substr(it).c_str());
+                    Application::info("{}: set sample: {}", __FUNCTION__, str.substr(it));
                 }
             }
         }

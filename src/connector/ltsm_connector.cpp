@@ -147,7 +147,7 @@ namespace LTSM::Connector {
                         getuid(), getgid(), getpid(), LTSM::service_version);
 
         if(auto home = homeRuntime(); 0 == chdir(home.c_str())) {
-            Application::info("{}: working dir: `{}'", __FUNCTION__, home.c_str());
+            Application::info("{}: working dir: `{}'", __FUNCTION__, home);
         } else {
             Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "chdir", strerror(errno), errno);
         }
@@ -166,7 +166,7 @@ namespace LTSM::Connector {
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
         std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("{}: display: {}, xauthfile: {}", __FUNCTION__, screen, xauthFile.c_str());
+        Application::info("{}: display: {}, xauthfile: {}", __FUNCTION__, screen, xauthFile);
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
@@ -178,7 +178,7 @@ namespace LTSM::Connector {
         });
 
         if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath.c_str());
+            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, socketPath.native());
             return false;
         }
 
@@ -210,8 +210,8 @@ namespace LTSM::Connector {
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
-            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
-                               fileName.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"),
+                               fileName, getuid());
             fileName.clear();
         }
 
@@ -354,7 +354,7 @@ int main(int argc, const char** argv) {
     try {
         return Connector::startService(argc, argv);
     } catch(const sdbus::Error & err) {
-        Application::error("sdbus exception: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
+        Application::error("sdbus exception: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

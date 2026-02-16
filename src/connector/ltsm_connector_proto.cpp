@@ -57,7 +57,7 @@ namespace LTSM::Connector {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr.c_str());
+        Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr);
 
         _x11NoDamage = config().getBoolean("vnc:xcb:nodamage", false);
         _frameRate = config().getInteger("vnc:frame:rate", 16);
@@ -79,7 +79,7 @@ namespace LTSM::Connector {
         waitUpdateProcess();
         _shmUid = userUid;
         Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", __FUNCTION__, display,
-                            userName.c_str(), userUid);
+                            userName, userUid);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
@@ -280,16 +280,16 @@ namespace LTSM::Connector {
             std::error_code err;
 
             if(std::filesystem::is_regular_file(keytab, err)) {
-                Application::info("{}: set KRB5_KTNAME=`{}'", __FUNCTION__, keytab.c_str());
+                Application::info("{}: set KRB5_KTNAME=`{}'", __FUNCTION__, keytab);
                 setenv("KRB5_KTNAME", keytab.c_str(), 1);
 
                 if(auto debug = config().getString("vnc:kerberos:trace"); ! debug.empty()) {
-                    Application::info("{}: set KRB5_TRACE=`{}'", __FUNCTION__, debug.c_str());
+                    Application::info("{}: set KRB5_TRACE=`{}'", __FUNCTION__, debug);
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
-                                   keytab.c_str(), getuid());
+                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"),
+                                   keytab, getuid());
                 secInfo.authKrb5 = false;
             }
         }
@@ -432,7 +432,7 @@ namespace LTSM::Connector {
 
         if(xcbAllowMessages()) {
             if(auto xkb = static_cast<const XCB::ModuleXkb*>(xcbDisplay()->getExtension(XCB::Module::XKB))) {
-                Application::debug(DebugType::App, "{}: layout: {}", __FUNCTION__, layout.c_str());
+                Application::debug(DebugType::App, "{}: layout: {}", __FUNCTION__, layout);
                 auto names = xkb->getNames();
                 auto it = std::ranges::find_if(names, [&](auto & str) {
                     return Tools::lower(str).substr(0, 2) == Tools::lower(layout).substr(0, 2);
@@ -443,7 +443,7 @@ namespace LTSM::Connector {
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 } else {
                     Application::error("{}: layout not found: {}, names: [{}]",
-                                       __FUNCTION__, layout.c_str(), Tools::join(names.begin(), names.end()).c_str());
+                                       __FUNCTION__, layout, Tools::join(names.begin(), names.end()));
                 }
             }
         }
@@ -487,13 +487,13 @@ namespace LTSM::Connector {
                 size_t fsize = jo2->getInteger("size");
 
                 if(std::ranges::any_of(_transferPlanned, [&](auto & st) { return fname == std::get<0>(st); })) {
-                    Application::warning("{}: found planned and skipped, file: {}", __FUNCTION__, fname.c_str());
+                    Application::warning("{}: found planned and skipped, file: {}", __FUNCTION__, fname);
                     continue;
                 }
 
                 // check max size
                 if(fmax && fsize > fmax) {
-                    Application::warning("{}: file size exceeds and skipped, file: {}", __FUNCTION__, fname.c_str());
+                    Application::warning("{}: file size exceeds and skipped, file: {}", __FUNCTION__, fname);
                     busSendNotify(displayNum(), "Transfer Skipped",
                                   Tools::joinToString("the file size exceeds, the allowed limit: ", prettyMb, "M, file: ", fname),
                                   NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
@@ -572,7 +572,7 @@ namespace LTSM::Connector {
             });
 
             if(it == _transferPlanned.end()) {
-                Application::error("{}: transfer not found, file: {}", __FUNCTION__, filepath.c_str());
+                Application::error("{}: transfer not found, file: {}", __FUNCTION__, filepath);
                 return;
             }
 
@@ -583,7 +583,7 @@ namespace LTSM::Connector {
                               Channel::UrlMode(Channel::ConnectorType::File, tmpfile, Channel::ConnectorMode::WriteOnly),
                               Channel::Opts{Channel::Speed::Slow, 0});
                 auto dstfile = std::filesystem::path(dstdir) / std::filesystem::path(filepath).filename();
-                busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile.c_str());
+                busTransferFileStarted(displayNum(), tmpfile, std::get<1>(*it) /* size */, dstfile);
             }
 
             // remove planned
@@ -638,8 +638,8 @@ namespace LTSM::Connector {
         auto channel = jo.getInteger("id");
         auto code = jo.getInteger("code");
         auto err = jo.getString("error");
-        Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'", __FUNCTION__, channel, displayNum(), code,
-                          err.c_str());
+        Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'",
+                 __FUNCTION__, channel, displayNum(), code, err);
 
         if(isUserSession())
             busSendNotify(displayNum(), "Channel Error", err.append(", errno: ").append(std::to_string(code)),

@@ -198,7 +198,7 @@ namespace LTSM::Connector {
 
                 if(jc.isValid() && jc.isObject()) {
                     context->keymap = std::make_unique<JsonObject>(jc.toObject());
-                    Application::info("keymap loaded: {}, items: {}", keymapFile.c_str(), context->keymap->size());
+                    Application::info("keymap loaded: {}, items: {}", keymapFile, context->keymap->size());
                 }
             }
 
@@ -353,7 +353,7 @@ namespace LTSM::Connector {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr.c_str());
+        Application::info("{}: remote addr: {}", __FUNCTION__, _remoteaddr);
         proxyStartEventLoop();
         // create FreeRdpCallback
         Application::info("{}: {}", __FUNCTION__, "create freerdp context");
@@ -507,7 +507,7 @@ namespace LTSM::Connector {
             });
         }
 
-        Application::notice("{}: dbus signal, display: {}, username: {}", __FUNCTION__, display, userName.c_str());
+        Application::notice("{}: dbus signal, display: {}, username: {}", __FUNCTION__, display, userName);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
 
@@ -549,7 +549,7 @@ namespace LTSM::Connector {
 
         busConnectorConnected(newDisplay, getpid());
 
-        Application::info("dbus signal: login success, display: {}, username: {}", displayNum(), userName.c_str());
+        Application::info("dbus signal: login success, display: {}, username: {}", displayNum(), userName);
     }
 
     void ConnectorRdp::onShutdownConnector(const int32_t & display) {

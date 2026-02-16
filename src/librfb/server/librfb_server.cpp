@@ -163,7 +163,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
-            Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp);
         }
 
         sendRaw(challenge.data(), challenge.size());
@@ -172,7 +172,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto tmp = Tools::buffer2hexstring(response.begin(), response.end(), 2);
-            Application::debug(DebugType::Rfb, "{}: response: {}", __FUNCTION__, tmp.c_str());
+            Application::debug(DebugType::Rfb, "{}: response: {}", __FUNCTION__, tmp);
         }
 
         std::ifstream ifs(passwdFile, std::ifstream::in);
@@ -184,7 +184,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
-                Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp.c_str());
+                Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp);
             }
 
             if(crypt == response) {
@@ -194,7 +194,7 @@ namespace LTSM {
 
         const std::string err("password mismatch");
         sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-        Application::error("{}: {}, passwd file: {}", __FUNCTION__, err.c_str(), passwdFile.c_str());
+        Application::error("{}: {}, passwd file: {}", __FUNCTION__, err, passwdFile);
         return false;
     }
 
@@ -324,14 +324,14 @@ namespace LTSM {
         auto version = Tools::joinToString("RFB 00", RFB::VERSION_MAJOR, ".00", RFB::VERSION_MINOR, "\n");
         sendString(version).sendFlush();
         std::string magick = recvString(12);
-        Application::debug(DebugType::Rfb, "{}: handshake version {}", __FUNCTION__, magick.c_str());
+        Application::debug(DebugType::Rfb, "{}: handshake version {}", __FUNCTION__, magick);
 
         if(magick == "RFB 003.003\n") {
             protover = 33;
         } else if(magick == "RFB 003.007\n") {
             protover = 37;
         } else if(magick != version) {
-            Application::error("{}: handshake failure, unknown magic: {}", __FUNCTION__, magick.c_str());
+            Application::error("{}: handshake failure, unknown magic: {}", __FUNCTION__, magick);
             return 0;
         }
 
@@ -416,8 +416,8 @@ namespace LTSM {
                 std::error_code err;
 
                 if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                    Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
-                                       secInfo.passwdFile.c_str(), getuid());
+                    Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message() : "not found"),
+                                       secInfo.passwdFile, getuid());
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                     return false;
                 }
@@ -442,7 +442,7 @@ namespace LTSM {
             else if(clientSecurity == SECURITY_TYPE_GSSAPI) {
                 try {
                     auto krb = std::make_unique<GssApi::Server>(socket.get());
-                    Application::info("{}: kerberos service: `{}'", __FUNCTION__, secInfo.krb5Service.c_str());
+                    Application::info("{}: kerberos service: `{}'", __FUNCTION__, secInfo.krb5Service);
 
                     if(krb->handshakeLayer(secInfo.krb5Service)) {
                         auto remoteName = Gss::displayName(krb->securityContext()->name);
@@ -455,7 +455,7 @@ namespace LTSM {
 
                         // stop kerbero session
                         krb.reset();
-                        Application::info("{}: kerberos auth: {}, remote: {}", __FUNCTION__, "success", remoteName.c_str());
+                        Application::info("{}: kerberos auth: {}, remote: {}", __FUNCTION__, "success", remoteName);
 
                         if(auto pos = remoteName.find("@"); pos != std::string::npos) {
                             clientAuthName = remoteName.substr(0, pos);
@@ -482,7 +482,7 @@ namespace LTSM {
 
                 const std::string err("security kerberos failed");
                 sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                Application::error("{}: error: {}", __FUNCTION__, err.c_str());
+                Application::error("{}: error: {}", __FUNCTION__, err);
                 return false;
             }
 
@@ -490,7 +490,7 @@ namespace LTSM {
             else {
                 const std::string err("no matching security types");
                 sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(err.size()).sendString(err).sendFlush();
-                Application::error("{}: error: {}", __FUNCTION__, err.c_str());
+                Application::error("{}: error: {}", __FUNCTION__, err);
                 return false;
             }
         }
@@ -1325,7 +1325,7 @@ namespace LTSM {
             throw std::invalid_argument(NS_FuncName);
         }
 
-        Application::debug(DebugType::Rfb, "{}: cmd: {}", __FUNCTION__, cmd.c_str());
+        Application::debug(DebugType::Rfb, "{}: cmd: {}", __FUNCTION__, cmd);
 
         if(cmd == SystemCommand::ClientVariables) {
             systemClientVariables(jo);

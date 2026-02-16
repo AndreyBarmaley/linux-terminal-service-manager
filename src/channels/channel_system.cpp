@@ -221,7 +221,7 @@ LTSM::Channel::parseUrl(std::string_view url) {
 
 std::pair<std::string, int>
 LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
-    Application::debug(DebugType::Channels, "{}: addr: `{}'", __FUNCTION__, addrPort.c_str());
+    Application::debug(DebugType::Channels, "{}: addr: `{}'", __FUNCTION__, addrPort);
 
     // format url
     // url1: hostname:port
@@ -250,7 +250,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
         }
 
         if(error) {
-            Application::error("{}: {}, addr: `{}'", __FUNCTION__, "incorrect ipaddr", addrPort.c_str());
+            Application::error("{}: {}, addr: `{}'", __FUNCTION__, "incorrect ipaddr", addrPort);
         }
     } else
         // resolv hostname
@@ -258,7 +258,7 @@ LTSM::Channel::Connector::parseAddrPort(const std::string & addrPort) {
         std::string addr2 = TCPSocket::resolvHostname(list.front());
 
         if(addr2.empty()) {
-            Application::error("{}: {}, addr: `{}'", __FUNCTION__, "incorrect hostname", addrPort.c_str());
+            Application::error("{}: {}, addr: `{}'", __FUNCTION__, "incorrect hostname", addrPort);
         } else {
             addr = addr2;
         }
@@ -368,7 +368,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo) {
     int flags = jo.getInteger("flags", 0);
     bool replyError = false;
 
-    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#08x}", __FUNCTION__, channel, stype.c_str(), smode.c_str(), sspeed.c_str(), flags);
+    Application::info("{}: id: {}, type: {}, mode: {}, speed: {}, flags: {:#08x}", __FUNCTION__, channel, stype, smode, sspeed, flags);
 
     if(! isUserSession()) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "not user session", channel);
@@ -423,7 +423,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo) {
         else if(type == Channel::ConnectorType::Command) {
             replyError = ! createChannelCommand(channel, jo.getString("runcmd"), mode, chopts);
         } else {
-            Application::error("{}: {} `{}', id: {}", __FUNCTION__, "unknown channel type", stype.c_str(), channel);
+            Application::error("{}: {} `{}', id: {}", __FUNCTION__, "unknown channel type", stype, channel);
             replyError = true;
         }
     }
@@ -488,7 +488,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
     }
 
     if(0 <= job.serverFd) {
-        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), "listener");
+        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url, "listener");
 
         switch(job.serverOpts.type()) {
 #ifdef __UNIX__
@@ -507,7 +507,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
                 throw channel_error(NS_FuncName);
         }
     } else if(! job.serverOpts.content().empty()) {
-        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url.c_str(), job.serverOpts.url.c_str());
+        Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
 
         switch(job.serverOpts.type()) {
 #ifdef __UNIX__
@@ -602,12 +602,12 @@ bool LTSM::ChannelClient::sendSystemTransferFiles(std::forward_list<std::string>
         std::error_code err;
 
         if(! std::filesystem::is_regular_file(file, err)) {
-            Application::warning("{}: {}, path: `{}', uid: {}", "sendSystemTransferFiles", err.message().c_str(), file.c_str(), getuid());
+            Application::warning("{}: {}, path: `{}', uid: {}", "sendSystemTransferFiles", err.message(), file, getuid());
             return true;
         }
 
         if(0 != access(file.c_str(), R_OK)) {
-            Application::warning("{}: skip not readable, file: {}", "sendSystemTransferFiles", file.c_str());
+            Application::warning("{}: skip not readable, file: {}", "sendSystemTransferFiles", file);
             return true;
         }
 
@@ -655,15 +655,15 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
         return false;
     }
 
-    Application::debug(DebugType::Channels, "{}: server url: `{}', client url: `{}'", __FUNCTION__, serverOpts.url.c_str(), clientOpts.url.c_str());
+    Application::debug(DebugType::Channels, "{}: server url: `{}', client url: `{}'", __FUNCTION__, serverOpts.url, clientOpts.url);
 
     if(clientOpts.type() == Channel::ConnectorType::Unknown) {
-        Application::error("{}: unknown client url: `{}'", __FUNCTION__, clientOpts.url.c_str());
+        Application::error("{}: unknown client url: `{}'", __FUNCTION__, clientOpts.url);
         return false;
     }
 
     if(serverOpts.type() == Channel::ConnectorType::Unknown) {
-        Application::error("{}: unknown server url: `{}'", __FUNCTION__, serverOpts.url.c_str());
+        Application::error("{}: unknown server url: `{}'", __FUNCTION__, serverOpts.url);
         return false;
     }
 
@@ -696,7 +696,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
 
 bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #ifdef LTSM_CLIENT
-    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -708,14 +708,14 @@ bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::s
 
     return true;
 #else
-    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported audio", url.c_str());
+    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported audio", url);
     return false;
 #endif
 }
 
 bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_WITH_FUSE)
-    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -727,14 +727,14 @@ bool LTSM::ChannelClient::createChannelClientFuse(uint8_t channel, const std::st
 
     return true;
 #else
-    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported fuse", url.c_str());
+    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported fuse", url);
     return false;
 #endif
 }
 
 bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_WITH_PCSC)
-    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -746,7 +746,7 @@ bool LTSM::ChannelClient::createChannelClientPcsc(uint8_t channel, const std::st
 
     return true;
 #else
-    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported pcsc", url.c_str());
+    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported pcsc", url);
     return false;
 #endif
 }
@@ -789,7 +789,7 @@ bool LTSM::ChannelClient::createChannelUnixFd(uint8_t channel, int sock, const C
 
 bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #if defined(LTSM_CLIENT) && defined(LTSM_PKCS11_AUTH)
-    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url.c_str(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -801,7 +801,7 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
 
     return true;
 #else
-    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported pkcs11", url.c_str());
+    Application::error("{}: {}, url: `{}'", __FUNCTION__, "unsupported pkcs11", url);
     return false;
 #endif
 }
@@ -833,11 +833,11 @@ bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesyst
 
 bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::string & runcmd, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! createChannelAllow(Channel::ConnectorType::Command, runcmd, mode)) {
-        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", runcmd.c_str());
+        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", runcmd);
         return false;
     }
 
-    Application::debug(DebugType::Channels, "{}: id: {}, run cmd: `{}', mode: {}", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, run cmd: `{}', mode: {}", __FUNCTION__, channel, runcmd, Channel::Connector::modeString(mode));
 
     try {
         const std::scoped_lock guard{lockch};
@@ -853,11 +853,11 @@ bool LTSM::ChannelClient::createChannelCommand(uint8_t channel, const std::strin
 #ifdef __UNIX__
 bool LTSM::ChannelClient::createChannelSocket(uint8_t channel, std::pair<std::string, int> ipAddrPort, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
     if(! createChannelAllow(Channel::ConnectorType::Socket, ipAddrPort.first, mode)) {
-        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", ipAddrPort.first.c_str());
+        Application::error("{}: {}, content: `{}'", __FUNCTION__, "blocked", ipAddrPort.first);
         return false;
     }
 
-    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", __FUNCTION__, channel, ipAddrPort.first.c_str(), ipAddrPort.second, Channel::Connector::modeString(mode));
+    Application::debug(DebugType::Channels, "{}: id: {}, addr: {}, port: {}, mode: {}", __FUNCTION__, channel, ipAddrPort.first, ipAddrPort.second, Channel::Connector::modeString(mode));
 
     if(serverSide() && ! startsWith(ipAddrPort.first, "127.")) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "server side allow socket only for localhost", channel);
@@ -915,7 +915,7 @@ void LTSM::ChannelClient::destroyChannel(uint8_t channel) {
 }
 
 void LTSM::ChannelClient::sendSystemChannelOpen(uint8_t channel, const Channel::UrlMode & clientOpts, const Channel::Opts & chOpts) {
-    Application::info("{}: id: {}, content: `{}'", __FUNCTION__, channel, clientOpts.content().c_str());
+    Application::info("{}: id: {}, content: `{}'", __FUNCTION__, channel, clientOpts.content());
     JsonObjectStream jo;
 
     jo.push("cmd", SystemCommand::ChannelOpen);
@@ -979,7 +979,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
     if(channelDebug == channel) {
         auto str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           __FUNCTION__, channel, length, str.c_str());
+                           __FUNCTION__, channel, length, str);
     }
 
     recvLtsmEvent(channel, std::move(buf));
@@ -1014,7 +1014,7 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
     if(channelDebug == channel) {
         auto str = Tools::buffer2hexstring(buf, buf + len, 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
-                           __FUNCTION__, channel, len, str.c_str());
+                           __FUNCTION__, channel, len, str);
     }
 
     ns.sendRaw(buf, len);
@@ -1040,13 +1040,13 @@ void LTSM::ChannelClient::channelsShutdown(void) {
 #ifdef __UNIX__
 // ChannelListener
 bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, const Channel::UrlMode & serverOpts, size_t listen, const Channel::Opts & chOpts) {
-    Application::debug(DebugType::Channels, "{}: client: {}, server: {}", __FUNCTION__, clientOpts.url.c_str(), serverOpts.url.c_str());
+    Application::debug(DebugType::Channels, "{}: client: {}, server: {}", __FUNCTION__, clientOpts.url, serverOpts.url);
 
     try {
         const std::scoped_lock guard{lockls};
 
         if(std::ranges::any_of(listeners, [&](auto & ptr) { return ptr->getServerUrl() == serverOpts.url; })) {
-            Application::debug(DebugType::Channels, "{}: listen present, url: {}", __FUNCTION__, serverOpts.url.c_str());
+            Application::debug(DebugType::Channels, "{}: listen present, url: {}", __FUNCTION__, serverOpts.url);
             return true;
         }
 
@@ -1062,7 +1062,7 @@ bool LTSM::ChannelListener::createListener(const Channel::UrlMode & clientOpts, 
         return false;
     }
 
-    Application::error("{}: allow unix or socket format only, url: `{}'", __FUNCTION__, serverOpts.url.c_str());
+    Application::error("{}: allow unix or socket format only, url: `{}'", __FUNCTION__, serverOpts.url);
     return false;
 }
 
@@ -1077,7 +1077,7 @@ void LTSM::ChannelListener::destroyListener(const std::string & clientUrl, const
 
         std::this_thread::sleep_for(100ms);
         listeners.erase(it);
-        Application::info("{}: client url: `{}'", __FUNCTION__, clientUrl.c_str());
+        Application::info("{}: client url: `{}'", __FUNCTION__, clientUrl);
     }
 }
 
@@ -1099,10 +1099,10 @@ bool LTSM::ChannelListener::createChannelAcceptFd(const Channel::UrlMode & clien
     }
 
     // parse url client
-    Application::debug(DebugType::Channels, "client url: `{}', mode: {}", clientOpts.url.c_str(), Channel::Connector::modeString(clientOpts.mode));
+    Application::debug(DebugType::Channels, "client url: `{}', mode: {}", clientOpts.url, Channel::Connector::modeString(clientOpts.mode));
 
     if(clientOpts.type() == Channel::ConnectorType::Unknown) {
-        Application::error("{}: unknown client url: `{}'", __FUNCTION__, clientOpts.url.c_str());
+        Application::error("{}: unknown client url: `{}'", __FUNCTION__, clientOpts.url);
         return false;
     }
 
@@ -1652,7 +1652,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
     std::error_code err;
 
     if(! std::filesystem::is_socket(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
+        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.c_str(), getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1709,12 +1709,12 @@ LTSM::Channel::createUnixConnector(uint8_t channel, int sock, const ConnectorMod
 /// createTcpConnector
 LTSM::Channel::ConnectorBasePtr
 LTSM::Channel::createTcpConnector(uint8_t channel, const std::string & ipaddr, int port, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, addr: `{}', port: {}, mode: {}", __FUNCTION__, channel, ipaddr.c_str(), port, Channel::Connector::modeString(mode));
+    Application::info("{}: id: {}, addr: `{}', port: {}, mode: {}", __FUNCTION__, channel, ipaddr, port, Channel::Connector::modeString(mode));
 
     int fd = TCPSocket::connect(ipaddr, port);
 
     if(0 > fd) {
-        Application::error("{}: {}, id: {}, addr: `{}', port: {}", __FUNCTION__, "socket failed", channel, ipaddr.c_str(), port);
+        Application::error("{}: {}, id: {}, addr: `{}', port: {}", __FUNCTION__, "socket failed", channel, ipaddr, port);
         throw channel_error(NS_FuncName);
     }
 
@@ -1774,7 +1774,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(mode == ConnectorMode::ReadOnly &&
        ! std::filesystem::exists(path, err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), path.c_str(), getuid());
+        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path.c_str(), getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1829,7 +1829,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 /// createCommandConnector
 LTSM::Channel::ConnectorBasePtr
 LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcmd, const ConnectorMode & mode, const Opts & chOpts, ChannelClient & sender) {
-    Application::info("{}: id: {}, run cmd: `{}', mode: {}", __FUNCTION__, channel, runcmd.c_str(), Channel::Connector::modeString(mode));
+    Application::info("{}: id: {}, run cmd: `{}', mode: {}", __FUNCTION__, channel, runcmd, Channel::Connector::modeString(mode));
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "cmd mode failed", Channel::Connector::modeString(mode));
@@ -1846,7 +1846,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
     std::error_code err;
 
     if(! std::filesystem::exists(list.front(), err)) {
-        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message().c_str(), list.front().c_str(), getuid());
+        Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), list.front(), getuid());
         throw channel_error(NS_FuncName);
     }
 
@@ -1976,7 +1976,7 @@ LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
     auto [ ipaddr, port ] = Connector::parseAddrPort(serverOpts.content());
 
     if(0 >= port) {
-        Application::error("{}: {}, url: `{}'", __FUNCTION__, "socket format", serverOpts.content().c_str());
+        Application::error("{}: {}, url: `{}'", __FUNCTION__, "socket format", serverOpts.content());
         throw channel_error(NS_FuncName);
     }
 
@@ -1988,7 +1988,7 @@ LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
     int srvfd = TCPSocket::listen(ipaddr, port, listen);
 
     if(0 > srvfd) {
-        Application::error("{}: {}, ipaddr: {}, port: {}", __FUNCTION__, "socket failed", ipaddr.c_str(), port);
+        Application::error("{}: {}, ipaddr: {}, port: {}", __FUNCTION__, "socket failed", ipaddr, port);
         throw channel_error(NS_FuncName);
     }
 

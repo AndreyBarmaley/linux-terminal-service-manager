@@ -102,8 +102,8 @@ void Pkcs11Client::run(void) {
 
     if(err) {
         auto str = sock.recvString(err);
-        Application::error("{}: recv error: {}", __FUNCTION__, str.c_str());
-        emit pkcs11Error(QString("PKCS11 error: %1").arg(QString(str.c_str())));
+        Application::error("{}: recv error: {}", __FUNCTION__, str);
+        emit pkcs11Error(QString("PKCS11 error: %1").arg(str.c_str()));
         emit pkcs11Shutdown();
         return;
     }
