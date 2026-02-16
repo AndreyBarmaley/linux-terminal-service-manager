@@ -911,9 +911,9 @@ namespace LTSM::Connector {
         auto xcbDisplay = static_cast<XCB::RootDisplay*>(connector);
 
         if(1) {
-            Application::info("peer settings: {}: 0x%08x", "RdpVersion", peer->settings->RdpVersion);
-            Application::info("peer settings: {}: 0x%04x", "OsMajorType", peer->settings->OsMajorType);
-            Application::info("peer settings: {}: 0x%04x", "OsMinorType", peer->settings->OsMinorType);
+            Application::info("peer settings: {}: {:#08x}", "RdpVersion", peer->settings->RdpVersion);
+            Application::info("peer settings: {}: {:#04x}", "OsMajorType", peer->settings->OsMajorType);
+            Application::info("peer settings: {}: {:#04x}", "OsMinorType", peer->settings->OsMinorType);
             Application::info("peer settings: {}: {}", "Username", peer->settings->Username);
             Application::info("peer settings: {}: {}", "Domain", peer->settings->Domain);
             Application::info("peer settings: {}: {}", "DesktopWidth", peer->settings->DesktopWidth);

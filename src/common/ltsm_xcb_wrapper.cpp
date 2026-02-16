@@ -1310,7 +1310,7 @@ namespace LTSM {
     }
 
     XCB::ShmIdShared XCB::ModuleShm::createShm(size_t shmsz, int mode, bool readOnly, uid_t owner) const {
-        Application::debug(DebugType::Xcb, "{}: size: {}, mode: 0x%08x, read only: {}, owner: {}", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
+        Application::debug(DebugType::Xcb, "{}: size: {}, mode: {:#08x}, read only: {}, owner: {}", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
 
         const size_t pagesz = 4096;
 

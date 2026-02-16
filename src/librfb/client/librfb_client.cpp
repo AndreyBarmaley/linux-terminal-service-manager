@@ -584,7 +584,7 @@ namespace LTSM {
                     break;
 
                 default: {
-                    Application::error("{}: unknown message: 0x%02x", __FUNCTION__, msgType);
+                    Application::error("{}: unknown message: {:#02x}", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
                 }
             }

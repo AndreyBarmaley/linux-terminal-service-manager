@@ -31,7 +31,7 @@ class X11Test : public XCB::RootDisplay {
             Application::info("allowed depth: {}, visuals: {}", dIter.data->depth, dIter.data->visuals_len);
 
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
-                Application::info("visual id: 0x%02x, class: 0x%02x, bits per rgb value: {}, red: %08x, green: %08x, blue: %08x, color entries: {}",
+                Application::info("visual id: {:#02x}, class: {:#02x}, bits per rgb value: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}, color entries: {}",
                                   vIter.data->visual_id, vIter.data->_class, vIter.data->bits_per_rgb_value, vIter.data->red_mask, vIter.data->green_mask, vIter.data->blue_mask, vIter.data->colormap_entries);
         }
 
@@ -117,7 +117,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(auto info : modes) {
             if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
-                Application::info("mode 0x%08x, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
+                Application::info("mode {:#08x}, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
             }
         }
 

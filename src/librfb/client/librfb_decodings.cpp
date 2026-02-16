@@ -156,7 +156,7 @@ namespace LTSM {
         auto subRects = cli.recvIntBE32();
         auto bgColor = cli.recvPixel();
 
-        Application::trace(DebugType::Enc, "{}: back pixel: 0x%08x, sub rects: {}", __FUNCTION__, bgColor, subRects);
+        Application::trace(DebugType::Enc, "{}: back pixel: {:#08x}, sub rects: {}", __FUNCTION__, bgColor, subRects);
 
         cli.fillPixel(reg, bgColor);
 
@@ -216,7 +216,7 @@ namespace LTSM {
         } else {
             if(flag & RFB::HEXTILE_BACKGROUND) {
                 bgColor = cli.recvPixel();
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x", __FUNCTION__, "background", bgColor);
+                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#08x}", __FUNCTION__, "background", bgColor);
             }
 
             cli.fillPixel(reg, bgColor);
@@ -225,7 +225,7 @@ namespace LTSM {
                 fgColor = cli.recvPixel();
                 flag &= ~HEXTILE_COLOURED;
 
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x", __FUNCTION__, "foreground", fgColor);
+                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#08x}", __FUNCTION__, "foreground", fgColor);
             }
 
             if(flag & HEXTILE_SUBRECTS) {
@@ -240,7 +240,7 @@ namespace LTSM {
                     if(flag & HEXTILE_COLOURED) {
                         pixel = cli.recvPixel();
 
-                        Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x", __FUNCTION__, "colored", pixel);
+                        Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#08x}", __FUNCTION__, "colored", pixel);
                     }
 
                     auto val1 = cli.recvInt8();
@@ -250,7 +250,7 @@ namespace LTSM {
                     dst.width = 1 + (0x0F & (val2 >> 4));
                     dst.height = 1 + (0x0F & val2);
 
-                    Application::trace(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}], pixel: 0x%08x",
+                    Application::trace(DebugType::Enc, "{}: type: {}, region: [{}, {}, {}, {}], pixel: {:#08x}",
                                        __FUNCTION__, "subrects", dst.x, dst.y, dst.width, dst.height, pixel);
 
                     dst.x += reg.x;
@@ -316,7 +316,7 @@ namespace LTSM {
                 auto solid = cli.recvCPixel();
                 cli.fillPixel(reg, solid);
 
-                Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x", __FUNCTION__, "solid", solid);
+                Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#08x}", __FUNCTION__, "solid", solid);
             } else if(2 <= type && type <= 16) {
                 size_t field = 1;
 
@@ -375,7 +375,7 @@ namespace LTSM {
                     auto pixel = cli.recvCPixel();
                     auto runLength = cli.recvRunLength();
 
-                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x, length: {}", __FUNCTION__, "plain rle", pixel, runLength);
+                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: {:#08x}, length: {}", __FUNCTION__, "plain rle", pixel, runLength);
 
                     while(runLength--) {
                         cli.setPixel(reg.topLeft() + coord, pixel);

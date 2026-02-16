@@ -966,7 +966,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
     int version = ns.recvInt8();
 
     if(version != LtsmProtocolVersion) {
-        Application::error("{}: unknown version: 0x%02x", __FUNCTION__, version);
+        Application::error("{}: unknown version: {:#02x}", __FUNCTION__, version);
         throw std::runtime_error(NS_FuncName);
     }
 

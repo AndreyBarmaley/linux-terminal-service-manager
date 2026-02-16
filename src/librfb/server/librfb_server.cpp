@@ -397,7 +397,7 @@ namespace LTSM {
         }
 
         int clientSecurity = recvInt8();
-        Application::debug(DebugType::Rfb, "{}, client security: 0x%02x", __FUNCTION__, clientSecurity);
+        Application::debug(DebugType::Rfb, "{}, client security: {:#02x}", __FUNCTION__, clientSecurity);
 
         if(protover == 38 || clientSecurity != RFB::SECURITY_TYPE_NONE) {
             // RFB 6.1.3 security result
@@ -502,7 +502,7 @@ namespace LTSM {
             const PixelFormat & pf) {
         // RFB 6.3.1 client init
         int clientSharedFlag = recvInt8();
-        Application::debug(DebugType::Rfb, "{}: client shared: 0x%02x", __FUNCTION__, clientSharedFlag);
+        Application::debug(DebugType::Rfb, "{}: client shared: {:#02x}", __FUNCTION__, clientSharedFlag);
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
@@ -627,7 +627,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("{}: unknown message: 0x%02x", __FUNCTION__, msgType);
+                    Application::error("{}: unknown message: {:#02x}", __FUNCTION__, msgType);
                     rfbMessagesShutdown();
                     break;
             }
@@ -743,7 +743,7 @@ namespace LTSM {
             const char* name = RFB::encodingName(encoding);
 
             if(0 == std::strcmp(name, "unknown")) {
-                Application::info("{}: request encodings: 0x%08x", __FUNCTION__, encoding);
+                Application::info("{}: request encodings: {:#08x}", __FUNCTION__, encoding);
             } else {
                 Application::info("{}: request encodings: {}", __FUNCTION__, RFB::encodingName(encoding));
             }
