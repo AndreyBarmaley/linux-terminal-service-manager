@@ -72,7 +72,7 @@ namespace LTSM {
         auto len = readlink(path.c_str(), linkto.data(), linkto.size() - 1);
 
         if(len < 0) {
-            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "readlink", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
@@ -91,7 +91,7 @@ namespace LTSM {
         struct stat st2 = {};
 
         if(0 > ::stat(linkto.data(), & st2)) {
-            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
             throw fuse_error(NS_FuncName);
         }
@@ -109,7 +109,7 @@ namespace LTSM {
             struct stat st = {};
 
             if(0 > ::stat(path.c_str(), & st)) {
-                Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+                Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                    __FUNCTION__, "stat", strerror(errno), errno, path.c_str());
                 continue;
             }
@@ -262,7 +262,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
                     break;
 
                 default:
-                    Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu", __FUNCTION__, "fuse", fuseCmd, recv.size());
+                    Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "fuse", fuseCmd, recv.size());
                     throw channel_error(NS_FuncName);
             }
         }
@@ -271,7 +271,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("{}: underflow data: %lu, func: {}", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -360,12 +360,12 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatFd(int fdh)
 
     if(0 > ret)
     {
-        Application::error("{}: {} failed, error: {}, code: %d, fd: %d",
+        Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
                     __FUNCTION__, "fstat", strerror(error), error, fdh);
     }
     else
     {
-        Application::debug(DebugType::Fuse, "{}: fd: %d", __FUNCTION__, fdh);
+        Application::debug(DebugType::Fuse, "{}: fd: {}", __FUNCTION__, fdh);
 
         // <STAT>
         replyWriteStatStruct(reply, st);
@@ -391,7 +391,7 @@ bool LTSM::Channel::ConnectorClientFuse::sendStatPath(const char* path)
 
     if(0 > ret)
     {
-        Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+        Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                     __FUNCTION__, "stat", strerror(error), error, path);
     }
     else
@@ -438,7 +438,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("{}: {} failed, error: {}, code: %d, path: `{}', flags: {:#08x}",
+        Application::error("{}: {} failed, error: {}, code: {}, path: `{}', flags: {:#08x}",
                            __FUNCTION__, "open", strerror(error), error, path.c_str(), flags);
     } else {
         Application::debug(DebugType::Fuse, "{}: path: `{}', flags: {:#08x}, fdh: {}", __FUNCTION__, path.c_str(), flags, ret);
@@ -469,7 +469,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
     reply.writeIntLE32(error);
 
     if(0 > ret) {
-        Application::error("{}: {} failed, error: {}, code: %d, fd: {}",
+        Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
                            __FUNCTION__, "close", strerror(error), error, fdh);
     } else {
         Application::debug(DebugType::Fuse, "{}: fd: {}", __FUNCTION__, fdh);
@@ -502,7 +502,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         // <ERR32> - errno
         reply.writeIntLE16(FuseOp::Read);
         reply.writeIntLE32(error);
-        Application::error("{}: {} failed, error: {}, code: %d, offset: %lu",
+        Application::error("{}: {} failed, error: {}, code: {}, offset: {}",
                            __FUNCTION__, "lseek", strerror(error), error, offset);
         owner->sendLtsmChannelData(cid, reply.rawbuf());
         return true;
@@ -518,10 +518,10 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
     reply.writeIntLE32(error);
 
     if(0 > rsz) {
-        Application::error("{}: {} failed, error: {}, code: %d, fd: %d",
+        Application::error("{}: {} failed, error: {}, code: {}, fd: {}",
                            __FUNCTION__, "read", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "{}: request block size: {}, send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "{}: request block size: {}, send block size: {}, offset: {}", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size()) {
             buf.resize(rsz);

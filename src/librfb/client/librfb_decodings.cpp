@@ -123,7 +123,7 @@ namespace LTSM {
 
         auto zip = recvData(zipsz);
 
-        Application::trace(DebugType::Enc, "{}: compress data length: %lu", __FUNCTION__, zip.size());
+        Application::trace(DebugType::Enc, "{}: compress data length: {}", __FUNCTION__, zip.size());
 
         zlib->appendData(zip);
         return zipsz;
@@ -232,7 +232,7 @@ namespace LTSM {
                 int subRects = cli.recvInt8();
                 XCB::Region dst;
 
-                Application::trace(DebugType::Enc, "{}: type: {}, count: %d", __FUNCTION__, "subrects", subRects);
+                Application::trace(DebugType::Enc, "{}: type: {}, count: {}", __FUNCTION__, "subrects", subRects);
 
                 while(0 < subRects--) {
                     auto pixel = fgColor;
@@ -296,7 +296,7 @@ namespace LTSM {
     void RFB::DecodingTRLE::updateSubRegion(DecoderStream & cli, const XCB::Region & reg) {
         auto type = cli.recvInt8();
 
-        Application::trace(DebugType::Enc, "{}: sub encoding type: {:#02x}, sub region: [{}, {}, {}, {}], zrle: %d",
+        Application::trace(DebugType::Enc, "{}: sub encoding type: {:#02x}, sub region: [{}, {}, {}, {}], zrle: {}",
                            __FUNCTION__, type, reg.x, reg.y, reg.width, reg.height, (int) isZRLE());
 
         // trle raw
@@ -340,7 +340,7 @@ namespace LTSM {
                     val = cli.recvCPixel();
                 }
 
-                Application::trace(DebugType::Enc, "{}: type: {}, size: %lu", __FUNCTION__, "packed palette", palette.size());
+                Application::trace(DebugType::Enc, "{}: type: {}, size: {}", __FUNCTION__, "packed palette", palette.size());
 
                 // recv packed rows
                 for(int oy = 0; oy < reg.height; ++oy) {
@@ -350,7 +350,7 @@ namespace LTSM {
                         auto pos = reg.topLeft() + XCB::Point(ox, oy);
                         auto index = sb.popValue(field);
 
-                        Application::trace(DebugType::Enc, "{}: type: {}, pos: [{}, {}], index: %d", __FUNCTION__, "packed palette", pos.x,
+                        Application::trace(DebugType::Enc, "{}: type: {}, pos: [{}, {}], index: {}", __FUNCTION__, "packed palette", pos.x,
                                            pos.y, index);
 
                         if(index >= palette.size()) {
@@ -375,7 +375,7 @@ namespace LTSM {
                     auto pixel = cli.recvCPixel();
                     auto runLength = cli.recvRunLength();
 
-                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x, length: %lu", __FUNCTION__, "plain rle", pixel, runLength);
+                    Application::trace(DebugType::Enc, "{}: type: {}, pixel: 0x%08x, length: {}", __FUNCTION__, "plain rle", pixel, runLength);
 
                     while(runLength--) {
                         cli.setPixel(reg.topLeft() + coord, pixel);
@@ -397,7 +397,7 @@ namespace LTSM {
                     val = cli.recvCPixel();
                 }
 
-                Application::trace(DebugType::Enc, "{}: type: {}, size: %lu", __FUNCTION__, "rle palette", palsz);
+                Application::trace(DebugType::Enc, "{}: type: {}, size: {}", __FUNCTION__, "rle palette", palsz);
 
                 auto coord = XCB::PointIterator(0, 0, reg.toSize());
 
@@ -424,7 +424,7 @@ namespace LTSM {
                         auto pixel = palette[index];
                         auto runLength = cli.recvRunLength();
 
-                        Application::trace(DebugType::Enc, "{}: type: {}, index: {}, length: %lu", __FUNCTION__, "rle palette", index, runLength);
+                        Application::trace(DebugType::Enc, "{}: type: {}, index: {}, length: {}", __FUNCTION__, "rle palette", index, runLength);
 
                         while(runLength--) {
                             cli.setPixel(reg.topLeft() + coord, pixel);
@@ -479,7 +479,7 @@ namespace LTSM {
             int ret = LZ4_decompress_safe((const char*) buf.data(), (char*) bb.data(), buf.size(), bb.size());
 
             if(ret <= 0) {
-                Application::error("{}: {} failed, ret: %d", __FUNCTION__, "LZ4_decompress_safe_continue", ret);
+                Application::error("{}: {} failed, ret: {}", __FUNCTION__, "LZ4_decompress_safe_continue", ret);
                 throw rfb_error(NS_FuncName);
             }
 
@@ -533,7 +533,7 @@ namespace LTSM {
 #ifdef tjGetErrorCode
                     int err = tjGetErrorCode(jpeg.get());
                     const char* str = tjGetErrorStr2(jpeg.get());
-                    Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "tjDecompress", str, err);
+                    Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "tjDecompress", str, err);
 #else
                     Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "tjDecompress", tjGetErrorStr());
 #endif

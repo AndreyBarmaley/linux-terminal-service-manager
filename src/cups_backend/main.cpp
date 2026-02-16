@@ -104,7 +104,7 @@ namespace LTSM {
         }
 
         int start(void) {
-            Application::info("{}: get uid: %d, get gid: %d", __FUNCTION__, getuid(), getgid());
+            Application::info("{}: get uid: {}, get gid: {}", __FUNCTION__, getuid(), getgid());
             std::string socketFormat = "/var/run/ltsm/cups/printer_username";
 
             if(auto deviceURI = getenv("DEVICE_URI")) {

@@ -1660,7 +1660,7 @@ namespace LTSM::Manager {
 
         // wait sessions
         while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
-            Application::debug(DebugType::App, "{}: wait sessions: %lu", __FUNCTION__, sessionsAlive);
+            Application::debug(DebugType::App, "{}: wait sessions: {}", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
         }
 
@@ -1672,7 +1672,7 @@ namespace LTSM::Manager {
                 return 0 < pair.first;
             });
 
-            Application::error("{}: running childs: %lu, killed process", __FUNCTION__, childsCount);
+            Application::error("{}: running childs: {}, killed process", __FUNCTION__, childsCount);
 
             for(const auto & [pid, futureStatus] : childsRunning) {
                 kill(pid, SIGTERM);
@@ -1945,7 +1945,7 @@ namespace LTSM::Manager {
     }
 
     bool DBusAdaptor::busTransferFilesRequest(const int32_t & display, const std::vector<FileNameSize> & files) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, count: %lu", __FUNCTION__, display, files.size());
+        Application::debug(DebugType::Dbus, "{}: display: {}, count: {}", __FUNCTION__, display, files.size());
         auto xvfb = findDisplaySession(display);
 
         if(! xvfb) {
@@ -2245,7 +2245,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionEnvironments(const int32_t & display, const std::map<std::string, std::string> & map) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, env counts: %lu",
+        Application::debug(DebugType::Dbus, "{}: display: {}, env counts: {}",
                            __FUNCTION__, display, map.size());
         auto xvfb = findDisplaySession(display);
 
@@ -2267,7 +2267,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionOptions(const int32_t & display, const std::map<std::string, std::string> & map) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, opts counts: %lu",
+        Application::debug(DebugType::Dbus, "{}: display: {}, opts counts: {}",
                            __FUNCTION__, display, map.size());
 
         auto xvfb = findDisplaySession(display);
@@ -3026,7 +3026,7 @@ namespace LTSM::Manager {
         signal(SIGHUP, SIG_IGN);
 
         auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
-        Application::notice("{}: service started, uid: %d, gid: %d, pid: %d, version: %d", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
+        Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");

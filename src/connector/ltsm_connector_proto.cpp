@@ -43,7 +43,7 @@ namespace LTSM::Connector {
             if(0 < displayNum()) {
                 busConnectorTerminated(displayNum(), getpid());
                 clientDisconnectedEvent(displayNum());
-                Application::info("{}: connector shutdown, display: %d", __FUNCTION__, displayNum());
+                Application::info("{}: connector shutdown, display: {}", __FUNCTION__, displayNum());
             }
 
         } catch(const std::exception & err) {
@@ -106,11 +106,11 @@ namespace LTSM::Connector {
 
         // fix new session size
         if(xcbDisplay()->size() != clientRegion.toSize()) {
-            Application::warning("{}: remote request desktop size: [{}, {}], display: %d", __FUNCTION__,
+            Application::warning("{}: remote request desktop size: [{}, {}], display: {}", __FUNCTION__,
                                  clientRegion.width, clientRegion.height, displayNum());
 
             if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
-                Application::info("{}: change session size: [{}, {}], display: %d", __FUNCTION__, clientRegion.width,
+                Application::info("{}: change session size: [{}, {}], display: {}", __FUNCTION__, clientRegion.width,
                                   clientRegion.height, displayNum());
             }
         } else {
@@ -185,7 +185,7 @@ namespace LTSM::Connector {
             throw proto_error(NS_FuncName);
         }
 
-        Application::info("{}: login session request success, display: %d", __FUNCTION__, screen);
+        Application::info("{}: login session request success, display: {}", __FUNCTION__, screen);
 
         if(! xcbConnect(screen, *this)) {
             Application::error("{}: xcb connect: failed", __FUNCTION__);
@@ -199,7 +199,7 @@ namespace LTSM::Connector {
             throw proto_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::Xcb, "{}: xcb max request: %lu", __FUNCTION__, xcbDisplay()->getMaxRequest());
+        Application::debug(DebugType::Xcb, "{}: xcb max request: {}", __FUNCTION__, xcbDisplay()->getMaxRequest());
         // init server format
         _serverPf = PixelFormat(xcbDisplay()->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
 
@@ -288,7 +288,7 @@ namespace LTSM::Connector {
                     setenv("KRB5_TRACE", debug.c_str(), 1);
                 }
             } else {
-                Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+                Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                    keytab.c_str(), getuid());
                 secInfo.authKrb5 = false;
             }
@@ -348,7 +348,7 @@ namespace LTSM::Connector {
     }
 
     void ConnectorLtsm::systemClientVariables(const JsonObject & jo) {
-        Application::debug(DebugType::App, "{}: count: %lu", __FUNCTION__, jo.size());
+        Application::debug(DebugType::App, "{}: count: {}", __FUNCTION__, jo.size());
 
         if(auto env = jo.getObject("environments")) {
             busSetSessionEnvironments(displayNum(), env->toStdMap<std::string>());
@@ -420,7 +420,7 @@ namespace LTSM::Connector {
                 }
             }
 
-            //Application::debug(DebugType::Input, "{}: pressed: %d, scancode: {:#08x}, keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
+            //Application::debug(DebugType::Input, "{}: pressed: {}, scancode: {:#08x}, keycode: %", __FUNCTION__, (int) pressed, scancode, keycode);
 
             serverRecvKeyEvent(pressed, xksym);
             X11Server::serverScreenUpdateRequest();
@@ -638,7 +638,7 @@ namespace LTSM::Connector {
         auto channel = jo.getInteger("id");
         auto code = jo.getInteger("code");
         auto err = jo.getString("error");
-        Application::info("{}: channel: %d, errno: %d, display: %d, error: `{}'", __FUNCTION__, channel, displayNum(), code,
+        Application::info("{}: channel: {}, errno: {}, display: {}, error: `{}'", __FUNCTION__, channel, displayNum(), code,
                           err.c_str());
 
         if(isUserSession())

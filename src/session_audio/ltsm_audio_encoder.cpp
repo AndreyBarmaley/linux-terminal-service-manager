@@ -38,7 +38,7 @@ namespace LTSM {
                                       & error));
 
         if(! ctx || error != OPUS_OK) {
-            Application::error("{}: {} failed, error: %d, sampleRate: {}, audioChannels: {}", __FUNCTION__,
+            Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", __FUNCTION__,
                                "opus_encoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
         }
@@ -47,14 +47,14 @@ namespace LTSM {
                 error = opus_encoder_ctl(ctx.get(), OPUS_SET_BITRATE(bitRate));
                 if(error != OPUS_OK)
                 {
-                    Application::error("{}: {} failed, error: %d", __FUNCTION__, "opus_encoder_ctl", error);
+                    Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encoder_ctl", error);
                     throw audio_error(NS_FuncName);
                 }
         */
     }
 
     bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len) {
-        Application::debug(DebugType::Audio, "{}: data size: %lu", __FUNCTION__, len);
+        Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
         if(len) {
             last.insert(last.end(), ptr, ptr + len);
@@ -70,7 +70,7 @@ namespace LTSM {
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
         if(nBytes < 0) {
-            Application::error("{}: {} failed, error: %d", __FUNCTION__, "opus_encode", nBytes);
+            Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encode", nBytes);
             return false;
         }
 
@@ -85,7 +85,7 @@ namespace LTSM {
 
     size_t AudioEncoder::Opus::size(void) const {
         if(encodeSize > tmp.size()) {
-            Application::error("{}: out of range, size: %lu, buf: %lu", __FUNCTION__, encodeSize, tmp.size());
+            Application::error("{}: out of range, size: {}, buf: {}", __FUNCTION__, encodeSize, tmp.size());
             throw audio_error(NS_FuncName);
         }
 

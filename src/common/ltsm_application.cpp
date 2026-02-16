@@ -402,7 +402,7 @@ namespace LTSM {
                 }
 
                 if(errno != EBADF) {
-                    Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+                    Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                        __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 }
 
@@ -410,7 +410,7 @@ namespace LTSM {
             }
 
             if(len < sizeof(struct inotify_event)) {
-                Application::error("{}: {} failed, error: {}, code: %d, path: `{}'",
+                Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                    __FUNCTION__, "inotify read", strerror(errno), errno, _fileName.c_str());
                 break;
             }
@@ -442,7 +442,7 @@ namespace LTSM {
         _inotifyFd = inotify_init();
 
         if(0 > _inotifyFd) {
-            Application::error("{}: {} failed, error: {}, code: %d",
+            Application::error("{}: {} failed, error: {}, code: {}",
                                __FUNCTION__, "inotify_init", strerror(errno), errno);
             return false;
         }
@@ -451,7 +451,7 @@ namespace LTSM {
         _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
 
         if(0 > _inotifyWd) {
-            Application::error("{}: {} failed, error: %d, code: %d, path: `{}'",
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "inotify_add_watch", strerror(errno), errno, file.c_str());
 
             inotifyWatchStop();
@@ -540,18 +540,18 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(file, err)) {
-            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), file.c_str(), getuid());
             return false;
         }
 
         if((std::filesystem::status(file, err).permissions() &
             std::filesystem::perms::owner_read) == std::filesystem::perms::none) {
-            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "permission failed"), file.c_str(), getuid());
             return false;
         }
 
 
-        Application::info("{}: path: `{}', uid: %d", __FUNCTION__, file.c_str(), getuid());
+        Application::info("{}: path: `{}', uid: {}", __FUNCTION__, file.c_str(), getuid());
         JsonContentFile jsonFile(file);
 
         if(! jsonFile.isValid() || ! jsonFile.isObject()) {
@@ -667,13 +667,13 @@ namespace LTSM {
         pid_t pid = fork();
 
         if(pid < 0) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "fork", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "fork", strerror(errno), errno);
             throw std::runtime_error(NS_FuncName);
         }
 
         // parent mode
         if(0 < pid) {
-            Application::debug(DebugType::App, "{}: child pid: %d", __FUNCTION__, pid);
+            Application::debug(DebugType::App, "{}: child pid: {}", __FUNCTION__, pid);
             return pid;
         }
 

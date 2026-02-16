@@ -109,7 +109,7 @@ namespace LTSM {
             if(auto err = XCB::RootDisplay::hasError()) {
                 xcbDisableMessages(true);
                 rfbMessagesShutdown();
-                Application::error("{}: xcb error, code: %d", __FUNCTION__, err);
+                Application::error("{}: xcb error, code: {}", __FUNCTION__, err);
                 return false;
             }
 
@@ -225,7 +225,7 @@ namespace LTSM {
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - frameTimePoint);
 
                 if(dt.count() < delayTimeout) {
-                    Application::debug(DebugType::X11Srv, "{}: update time ms: %lu", __FUNCTION__, dt.count());
+                    Application::debug(DebugType::X11Srv, "{}: update time ms: {}", __FUNCTION__, dt.count());
                     std::this_thread::sleep_for(std::chrono::milliseconds(delayTimeout - dt.count()));
                     continue;
                 }
@@ -343,12 +343,12 @@ namespace LTSM {
                     int bit = 1 << num;
 
                     if(bit & mask) {
-                        Application::debug(DebugType::X11Srv, "{}: xfb fake input pressed: %d", __FUNCTION__, num + 1);
+                        Application::debug(DebugType::X11Srv, "{}: xfb fake input pressed: {}", __FUNCTION__, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), true);
                         pressedMask |= bit;
                     } else if(bit & pressedMask) {
-                        Application::debug(DebugType::X11Srv, "{}: xfb fake input released: %d", __FUNCTION__, num + 1);
+                        Application::debug(DebugType::X11Srv, "{}: xfb fake input released: {}", __FUNCTION__, num + 1);
 
                         test->screenInputButton(num + 1, XCB::Point(posx, posy), false);
                         pressedMask &= ~bit;
@@ -539,7 +539,7 @@ namespace LTSM {
             auto beg = clientClipboard.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
-            Application::error("{}: invalid length: %lu, offset: {}", __FUNCTION__, length, offset);
+            Application::error("{}: invalid length: {}, offset: {}", __FUNCTION__, length, offset);
         }
 
         return {};
@@ -625,7 +625,7 @@ namespace LTSM {
                 size_t argbSize = reply->width * reply->height;
                 size_t dataSize = replyCursor.size();
 
-                Application::debug(X11Srv, "{}: data lenth: %lu", __FUNCTION__, dataSize);
+                Application::debug(X11Srv, "{}: data lenth: {}", __FUNCTION__, dataSize);
 
                 if(dataSize == argbSize) {
                     auto cursorRegion = XCB::Region(reply->x, reply->y, reply->width, reply->height);
@@ -636,7 +636,7 @@ namespace LTSM {
 #endif
                     sendEncodingRichCursor(cursorFB, reply->xhot, reply->yhot);
                 } else {
-                    Application::warning("{}: size mismatch, data: %lu, argb: %lu", __FUNCTION__, dataSize, argbSize);
+                    Application::warning("{}: size mismatch, data: {}, argb: {}", __FUNCTION__, dataSize, argbSize);
                 }
             }
         }
@@ -666,13 +666,13 @@ namespace LTSM {
             throw rfb_error(NS_FuncName);
         }
 
-        Application::trace(DebugType::X11Srv, "{}: request size [{}, {}], reply: length: %lu, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
+        Application::trace(DebugType::X11Srv, "{}: request size [{}, {}], reply: length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
                            __FUNCTION__, reg.width, reg.height, pixmapReply->size(), pixmapReply->bitsPerPixel(), pixmapReply->rmask,
                            pixmapReply->gmask, pixmapReply->bmask);
 
         // fix align
         if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel()) {
-            Application::error("{}: region not aligned, reply size: %lu, reg size: [{}, {}], byte per pixel: {}",
+            Application::error("{}: region not aligned, reply size: {}, reg size: [{}, {}], byte per pixel: {}",
                                __FUNCTION__, pixmapReply->size(), reg.width, reg.height, pixmapReply->bytePerPixel());
             throw rfb_error(NS_FuncName);
         }

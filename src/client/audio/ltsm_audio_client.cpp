@@ -91,7 +91,7 @@ void LTSM::Channel::ConnectorClientAudio::setSpeed(const Channel::Speed & speed)
 }
 
 void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv) {
-    Application::debug(DebugType::Audio, "{}: size: %lu", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Audio, "{}: size: {}", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -125,7 +125,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             } else if(AudioOp::Silent == audioCmd) {
                 audioOpSilent(sb);
             } else {
-                Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu", __FUNCTION__, "audio", audioCmd, recv.size());
+                Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", audioCmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }
@@ -134,7 +134,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("{}: underflow data: %lu, func: {}", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -282,7 +282,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
 
     if(decoder) {
         if(decoder->decode(sb.data(), len)) {
-            Application::debug(DebugType::Audio, "{}: decode size: %lu", __FUNCTION__, decoder->size());
+            Application::debug(DebugType::Audio, "{}: decode size: {}", __FUNCTION__, decoder->size());
 
             if(auto env = getenv("LTSM_AUDIO_SAVE")) {
                 Tools::binaryToFile(decoder->data(), decoder->size(), env, true);

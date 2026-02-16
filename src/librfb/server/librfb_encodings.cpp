@@ -264,7 +264,7 @@ namespace LTSM {
 
     RFB::EncodingRet RFB::EncodingRaw::sendRegion(EncoderStream* st, const XCB::Point & top, const XCB::Region & reg,
             const FrameBuffer & fb, int jobId) {
-        Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}]", __FUNCTION__, jobId, reg.x,
+        Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}]", __FUNCTION__, jobId, reg.x,
                            reg.y, reg.width, reg.height);
 
         buf.clear();
@@ -322,7 +322,7 @@ namespace LTSM {
             //const size_t rawLength = reg.width * reg.height * fb.bytePerPixel();
             //const size_t rreLength = 4 + fb.bytePerPixel() + goods.size() * (fb.bytePerPixel() + (isCoRRE() ? 4 : 8));
 
-            Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel 0x%08x, sub rects: %lu",
+            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel 0x%08x, sub rects: {}",
                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size());
 
             sendRects(& wrap, reg, fb, jobId, back, goods);
@@ -331,7 +331,7 @@ namespace LTSM {
         else {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel 0x%08x, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel 0x%08x, {}",
                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // num sub rects
@@ -384,7 +384,7 @@ namespace LTSM {
                 st->sendIntBE16(region.height);
             }
 
-            Application::trace(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel 0x%08x",
+            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel 0x%08x",
                                __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -435,7 +435,7 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel: 0x%08x, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: 0x%08x, {}",
                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // hextile flags
@@ -457,12 +457,12 @@ namespace LTSM {
 
                 // compare with raw
                 if(hextileRawLength < hextileForegroundLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], {}",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel: 0x%08x, sub rects: %lu, {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: 0x%08x, sub rects: {}, {}",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "foreground");
 
                     sendRegionForeground(& wrap, reg, fb, jobId, back, goods);
@@ -472,12 +472,12 @@ namespace LTSM {
 
                 // compare with raw
                 if(hextileRawLength < hextileColoredLength) {
-                    Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], {}",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, "raw");
 
                     sendRegionRaw(& wrap, reg, fb, jobId);
                 } else {
-                    Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel: 0x%08x, sub rects: %lu, {}",
+                    Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: 0x%08x, sub rects: {}, {}",
                                        __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, goods.size(), "colored");
 
                     sendRegionColored(& wrap, reg, fb, jobId, back, goods);
@@ -503,7 +503,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel: 0x%08x",
+            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: 0x%08x",
                                __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height, pair.pixel());
         }
     }
@@ -524,7 +524,7 @@ namespace LTSM {
             st->sendInt8(0xFF & ((region.x - reg.x) << 4 | (region.y - reg.y)));
             st->sendInt8(0xFF & ((region.width - 1) << 4 | (region.height - 1)));
 
-            Application::trace(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}]",
+            Application::trace(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}]",
                                __FUNCTION__, jobId, region.x - reg.x, region.y - reg.y, region.width, region.height);
         }
     }
@@ -588,7 +588,7 @@ namespace LTSM {
         if(map.size() == 1) {
             int back = fb.pixel(reg.topLeft());
 
-            Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], back pixel: 0x%08x, {}",
+            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], back pixel: 0x%08x, {}",
                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, back, "solid");
 
             // subencoding type: solid tile
@@ -603,7 +603,7 @@ namespace LTSM {
                 fieldWidth = 2;
             }
 
-            Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], palsz: %lu, packed: %lu",
+            Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], palsz: {}, packed: {}",
                                __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), fieldWidth);
 
             sendRegionPacked(& wrap, reg, fb, jobId, fieldWidth, map);
@@ -626,17 +626,17 @@ namespace LTSM {
             const size_t rawLength = 1 + 3 * reg.width * reg.height;
 
             if(rlePlainLength < rlePaletteLength && rlePlainLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], length: %lu, rle plain",
+                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], length: {}, rle plain",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, rleList.size());
 
                 sendRegionPlain(& wrap, reg, fb, rleList);
             } else if(rlePaletteLength < rlePlainLength && rlePaletteLength < rawLength) {
-                Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], pal size: %lu, length: %lu, rle palette",
+                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], pal size: {}, length: {}, rle palette",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height, map.size(), rleList.size());
 
                 sendRegionPalette(& wrap, reg, fb, map, rleList);
             } else {
-                Application::debug(DebugType::Enc, "{}: job id: %d, [{}, {}, {}, {}], raw",
+                Application::debug(DebugType::Enc, "{}: job id: {}, [{}, {}, {}, {}], raw",
                                    __FUNCTION__, jobId, top.x + reg.x, top.y + reg.y, reg.width, reg.height);
 
                 sendRegionRaw(& wrap, reg, fb);
@@ -679,7 +679,7 @@ namespace LTSM {
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto & vec = sb.toVector();
             std::string str = Tools::buffer2hexstring(vec.begin(), vec.end(), 2);
-            Application::debug(DebugType::Enc, "{}: job id: %d, packed stream: {}", __FUNCTION__, jobId, str.c_str());
+            Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", __FUNCTION__, jobId, str.c_str());
         }
     }
 
@@ -785,13 +785,13 @@ namespace LTSM {
                         zlevel = std::stoi(str.substr(it));
 
                         if(zlevel < Z_BEST_SPEED || zlevel > Z_BEST_COMPRESSION) {
-                            Application::warning("{}: incorrect value, zlevel: %d", __FUNCTION__, zlevel);
+                            Application::warning("{}: incorrect value, zlevel: {}", __FUNCTION__, zlevel);
                             zlevel = Z_BEST_SPEED;
                         }
                     } catch(...) {
                     }
 
-                    Application::info("{}: set zlevel: %d", __FUNCTION__, zlevel);
+                    Application::info("{}: set zlevel: {}", __FUNCTION__, zlevel);
                     zlib = std::make_unique<ZLib::DeflateStream>(zlevel);
                 }
             }
@@ -871,7 +871,7 @@ namespace LTSM {
         }
 
         if(ret < 0) {
-            Application::error("{}: {} failed, ret: %d", __FUNCTION__, "LZ4_compress_fast_continue", ret);
+            Application::error("{}: {} failed, ret: {}", __FUNCTION__, "LZ4_compress_fast_continue", ret);
             throw rfb_error(NS_FuncName);
         }
 
@@ -894,7 +894,7 @@ namespace LTSM {
                         jpegQuality = std::stoi(str.substr(it));
 
                         if(10 > jpegQuality || 100 < jpegQuality) {
-                            Application::warning("{}: incorrect value, quality: %d", __FUNCTION__, jpegQuality);
+                            Application::warning("{}: incorrect value, quality: {}", __FUNCTION__, jpegQuality);
                             jpegQuality = 85;
                         } else {
                             fullscreenUpdate = true;
@@ -902,7 +902,7 @@ namespace LTSM {
                     } catch(...) {
                     }
 
-                    Application::info("{}: set quality: %d", __FUNCTION__, jpegQuality);
+                    Application::info("{}: set quality: {}", __FUNCTION__, jpegQuality);
                 }
             } else if(startsWith(str, "samp")) {
                 // parce sample
@@ -1034,7 +1034,7 @@ namespace LTSM {
 #ifdef tjGetErrorCode
             int err = tjGetErrorCode(jpeg.get());
             const char* str = tjGetErrorStr2(jpeg.get());
-            Application::error("{}: {} failed, error: `{}', code: %d", __FUNCTION__, "tjCompress", str, err);
+            Application::error("{}: {} failed, error: `{}', code: {}", __FUNCTION__, "tjCompress", str, err);
 #else
             Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "tjCompress", tjGetErrorStr());
 #endif

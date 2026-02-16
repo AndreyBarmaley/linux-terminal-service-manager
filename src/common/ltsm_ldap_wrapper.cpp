@@ -89,14 +89,14 @@ namespace LTSM {
 
     LdapWrapper::LdapWrapper() {
         if(int ret = ldap_initialize(& ldap, nullptr); ret != LDAP_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "ldap_initialize", ldap_err2string(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_initialize", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncName);
         }
 
         int protover = 3;
 
         if(int ret = ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, & protover); ret != LDAP_SUCCESS) {
-            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
+            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_set_option", ldap_err2string(ret), ret);
         }
 
         struct berval cred {
@@ -104,7 +104,7 @@ namespace LTSM {
         };
 
         if(int ret = ldap_sasl_bind_s(ldap, nullptr, nullptr, & cred, nullptr, nullptr, nullptr); ret != LDAP_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
             throw ldap_error(NS_FuncName);
         }
 
@@ -129,11 +129,11 @@ namespace LTSM {
         std::unique_ptr<LDAPMessage, int(*)(LDAPMessage*)> guard_msg{ msg, ldap_msgfree };
 
         if(ret != LDAP_SUCCESS) {
-            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "ldap_search", ldap_err2string(ret), ret);
+            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_search", ldap_err2string(ret), ret);
             return {};
         }
 
-        Application::debug(DebugType::Ldap, "{}: found entries: %d", __FUNCTION__, ldap_count_entries(ldap, msg));
+        Application::debug(DebugType::Ldap, "{}: found entries: {}", __FUNCTION__, ldap_count_entries(ldap, msg));
         std::list<LdapResult> res;
 
         for(LDAPMessage* entry = ldap_first_entry(ldap, msg); entry; entry = ldap_next_entry(ldap, entry)) {

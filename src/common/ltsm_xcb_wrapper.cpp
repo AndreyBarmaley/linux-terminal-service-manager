@@ -244,7 +244,7 @@ namespace LTSM {
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rects: %lu, resource id: {:#08x}", __FUNCTION__, counts, res);
+            Application::debug(DebugType::Xcb, "{}: rects: {}, resource id: {:#08x}", __FUNCTION__, counts, res);
             return std::make_unique<FixesRegionId>(conn, res);
         }
 
@@ -919,7 +919,7 @@ namespace LTSM {
         std::error_code err;
 
         if(! std::filesystem::exists(cvt, err)) {
-            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"), cvt, getuid());
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"), cvt, getuid());
             return 0;
         }
 
@@ -931,7 +931,7 @@ namespace LTSM {
 
         // params: Modeline "1024x600_60.00"   49.00  1024 1072 1168 1312  600 603 613 624 -hsync +vsync
         if(params.size() != 13) {
-            Application::error("{}: incorrect cvt format, params: %lu", __FUNCTION__, params.size());
+            Application::error("{}: incorrect cvt format, params: {}", __FUNCTION__, params.size());
             return 0;
         }
 
@@ -1188,7 +1188,7 @@ namespace LTSM {
             });
 
             if(ito == outputs.end()) {
-                Application::error("{}: {} failed, outputs count: %lu", __FUNCTION__, "getOutputs", outputs.size());
+                Application::error("{}: {} failed, outputs count: {}", __FUNCTION__, "getOutputs", outputs.size());
                 return false;
             }
 
@@ -1254,7 +1254,7 @@ namespace LTSM {
                     *sequence = reply->sequence;
                 }
 
-                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], id: %lu, sequence: {}", __FUNCTION__, szw, szh, sizeID, reply->sequence);
+                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], id: {}, sequence: {}", __FUNCTION__, szw, szh, sizeID, reply->sequence);
             }
 
             return true;
@@ -1310,7 +1310,7 @@ namespace LTSM {
     }
 
     XCB::ShmIdShared XCB::ModuleShm::createShm(size_t shmsz, int mode, bool readOnly, uid_t owner) const {
-        Application::debug(DebugType::Xcb, "{}: size: %lu, mode: 0x%08x, read only: %d, owner: %d", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
+        Application::debug(DebugType::Xcb, "{}: size: {}, mode: 0x%08x, read only: {}, owner: {}", __FUNCTION__, shmsz, mode, (int) readOnly, owner);
 
         const size_t pagesz = 4096;
 
@@ -1322,7 +1322,7 @@ namespace LTSM {
         int shmId = shmget(IPC_PRIVATE, shmsz, IPC_CREAT | mode);
 
         if(shmId == -1) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "shmget", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmget", strerror(errno), errno);
             return nullptr;
         }
 
@@ -1330,7 +1330,7 @@ namespace LTSM {
 
         // man shmat: check result
         if(shmAddr == reinterpret_cast<uint8_t*>(-1) && 0 != errno) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "shmaddr", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmaddr", strerror(errno), errno);
             return nullptr;
         }
 
@@ -1338,12 +1338,12 @@ namespace LTSM {
             shmid_ds info;
 
             if(-1 == shmctl(shmId, IPC_STAT, & info)) {
-                Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmctl", strerror(errno), errno);
             } else {
                 info.shm_perm.uid = owner;
 
                 if(-1 == shmctl(shmId, IPC_SET, & info)) {
-                    Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "shmctl", strerror(errno), errno);
+                    Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "shmctl", strerror(errno), errno);
                 }
             }
         }
@@ -3246,7 +3246,7 @@ namespace LTSM {
         PixmapInfoReply res;
 
         if(pitch == 0) {
-            Application::error("{}: copy root image error, empty size: [{}, {}], bpp: %lu", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
+            Application::error("{}: copy root image error, empty size: [{}, {}], bpp: {}", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
@@ -3285,7 +3285,7 @@ namespace LTSM {
 
                 auto data = xcb_get_image_data(reply.get());
                 auto length = xcb_get_image_data_length(reply.get());
-                Application::debug(DebugType::Xcb, "{}: receive length: %d", __FUNCTION__, length);
+                Application::debug(DebugType::Xcb, "{}: receive length: {}", __FUNCTION__, length);
 
                 info->pixels.insert(info->pixels.end(), data, data + length);
             }
@@ -3507,7 +3507,7 @@ namespace LTSM {
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::trace(DebugType::Xcb, "{}: keysym: {:#08x}, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::trace(DebugType::Xcb, "{}: keysym: {:#08x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                            __FUNCTION__, keysym, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         // shifted/unshifted
@@ -3519,7 +3519,7 @@ namespace LTSM {
                 int index = ii * keysymsPerKeycode + group * 2;
 
                 if(index + 1 >= keysymsLength) {
-                    Application::error("{}: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                    Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                                        __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                     return empty;
                 }
@@ -3571,14 +3571,14 @@ namespace LTSM {
         int groupsCount = keysymsPerKeycode >> 1;
 
         if(0 > group || groupsCount <= group) {
-            Application::error("{}: unknown group: %d, groups count: %d", __FUNCTION__, group, groupsCount);
+            Application::error("{}: unknown group: {}, groups count: {}", __FUNCTION__, group, groupsCount);
             return NULL_KEYCODE;
         }
 
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug(DebugType::Xcb, "{}: keysym: {:#08x}, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug(DebugType::Xcb, "{}: keysym: {:#08x}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                            __FUNCTION__, keysym, group, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         for(int ii = 0; ii < keycodesCount; ++ii) {
@@ -3586,7 +3586,7 @@ namespace LTSM {
             int index = ii * keysymsPerKeycode + group * 2;
 
             if(index + 1 >= keysymsLength) {
-                Application::error("{}: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+                Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                                    __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
                 return NULL_KEYCODE;
             }
@@ -3602,7 +3602,7 @@ namespace LTSM {
             }
         }
 
-        Application::warning("{}: keysym not found {:#08x}, curent group: %d", __FUNCTION__, keysym, group);
+        Application::warning("{}: keysym not found {:#08x}, curent group: {}", __FUNCTION__, keysym, group);
         return NULL_KEYCODE;
     }
 
@@ -3638,13 +3638,13 @@ namespace LTSM {
         int keysymsLength = xcb_get_keyboard_mapping_keysyms_length(reply.get());
         int keycodesCount = keysymsLength / keysymsPerKeycode;
 
-        Application::debug(DebugType::Xcb, "{}: keycode: {:#02x}, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+        Application::debug(DebugType::Xcb, "{}: keycode: {:#02x}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                            __FUNCTION__, keycode, keysymsPerKeycode, keysymsLength, keycodesCount);
 
         int index = (keycode - _setup->min_keycode) * keysymsPerKeycode + group * 2;
 
         if(index + 1 >= keysymsLength) {
-            Application::error("{}: index out of range %d, current group: %d, keysym per keycode: %d, keysyms counts: %d, keycodes count: %d",
+            Application::error("{}: index out of range {}, current group: {}, keysym per keycode: {}, keysyms counts: {}, keycodes count: {}",
                                __FUNCTION__, index, group, keysymsPerKeycode, keysymsLength, keycodesCount);
             return 0;
         }
@@ -3690,7 +3690,7 @@ namespace LTSM {
                 {
                     if(pressed)
                     {
-                        Application::debug(DebugType::Xcb, "{}: keysym {:#08x} was found the another group %d, switched it", __FUNCTION__, keysym, keysymGroup);
+                        Application::debug(DebugType::Xcb, "{}: keysym {:#08x} was found the another group {}, switched it", __FUNCTION__, keysym, keysymGroup);
                     }
 
                     if(_modXkb)
@@ -3733,7 +3733,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("{}: unknown depth: %lu", __FUNCTION__, depth());
+                Application::error("{}: unknown depth: {}", __FUNCTION__, depth());
                 throw xcb_error(NS_FuncName);
         }
 

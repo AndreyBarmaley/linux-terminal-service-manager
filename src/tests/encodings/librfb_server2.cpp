@@ -41,7 +41,7 @@ namespace LTSM {
     // ServerEncoder
     RFB::ServerEncoderBuf::ServerEncoderBuf(const FrameBuffer* fb)
         : dsz(fb->region().toSize()), clientPf(fb->pixelFormat()), serverPf(fb->pixelFormat()) {
-        LTSM::Application::info("{}: dsz: %lu, %lu", NS_FuncName.c_str(), dsz.width, dsz.height);
+        LTSM::Application::info("{}: dsz: {}, {}", NS_FuncName.c_str(), dsz.width, dsz.height);
         bufData.reserve(30 * 1024 * 1024);
         socket = std::make_unique<EncoderWrapper>(&bufData, this);
 
@@ -132,7 +132,7 @@ namespace LTSM {
     void RFB::ServerEncoderBuf::sendFrameBufferUpdate(const FrameBuffer & fb) {
         auto & reg = fb.region();
 
-        Application::debug(DebugType::App, "{}: region: [%d, %d, %d, %d]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::App, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
 
         std::scoped_lock guard{ sendLock };
 
@@ -157,11 +157,11 @@ namespace LTSM {
             threads = 1;
         } else if(std::thread::hardware_concurrency() < threads) {
             threads = std::thread::hardware_concurrency();
-            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: %d", __FUNCTION__, threads);
+            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", __FUNCTION__, threads);
         }
 
         if(encoder) {
-            Application::info("{}: using encoding threads: %d", __FUNCTION__, threads);
+            Application::info("{}: using encoding threads: {}", __FUNCTION__, threads);
             encoder->setThreads(threads);
         }
     }

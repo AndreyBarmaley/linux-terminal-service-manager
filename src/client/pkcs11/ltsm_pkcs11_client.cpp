@@ -83,7 +83,7 @@ void LTSM::Channel::ConnectorClientPkcs11::setSpeed(const Channel::Speed & speed
 }
 
 void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv) {
-    Application::debug(DebugType::Pkcs11, "{}: size: %lu", __FUNCTION__, recv.size());
+    Application::debug(DebugType::Pkcs11, "{}: size: {}", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -121,7 +121,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             } else if(Pkcs11Op::DecryptData == pkcs11Cmd) {
                 pkcs11DecryptData(sb);
             } else {
-                Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
+                Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
                 throw channel_error(NS_FuncName);
             }
         }
@@ -130,7 +130,7 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error &) {
-        Application::warning("{}: underflow data: %lu", __FUNCTION__, sb.last());
+        Application::warning("{}: underflow data: {}", __FUNCTION__, sb.last());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);

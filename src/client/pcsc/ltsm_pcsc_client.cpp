@@ -177,7 +177,7 @@ void LTSM::Channel::ConnectorClientPcsc::setSpeed(const Channel::Speed & speed) 
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) {
-    Application::trace(DebugType::Pcsc, "{}: data size: %lu", __FUNCTION__, recv.size());
+    Application::trace(DebugType::Pcsc, "{}: data size: {}", __FUNCTION__, recv.size());
     StreamBufRef sb;
 
     if(last.empty()) {
@@ -208,7 +208,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
                 pcscCommand(cmd, sb);
                 //
             } else {
-                Application::error("{}: {} failed, cmd: {:#04x}, recv size: %lu",
+                Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}",
                                    __FUNCTION__, "pcsc init", pcscInit, recv.size());
                 throw channel_error(NS_FuncName);
             }
@@ -218,7 +218,7 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
             throw std::underflow_error(NS_FuncName);
         }
     } catch(const std::underflow_error & err) {
-        Application::warning("{}: underflow data: %lu, func: {}", __FUNCTION__, sb.last(), err.what());
+        Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
 
         if(beginPacket) {
             last.assign(beginPacket, endPacket);
@@ -281,7 +281,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamB
             break;
     }
 
-    Application::error("{}: {} failed, cmd: {:#04x}, last size: %lu",
+    Application::error("{}: {} failed, cmd: {:#04x}, last size: {}",
                        __FUNCTION__, "pcsc", cmd, sb.last());
     throw channel_error(NS_FuncName);
 }
@@ -380,7 +380,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
     // reply
     StreamBuf reply(256);
     reply.writeIntLE32(readers.size());
-    Application::debug(DebugType::Pcsc, "{}: >> readers count: %lu", __FUNCTION__, readers.size());
+    Application::debug(DebugType::Pcsc, "{}: >> readers count: {}", __FUNCTION__, readers.size());
 
     for(const auto & reader : readers) {
         Application::debug(DebugType::Pcsc, "{}: >> reader: `{}'", __FUNCTION__, reader.c_str());

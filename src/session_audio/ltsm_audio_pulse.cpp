@@ -477,7 +477,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamCorkNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: %d", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamCork, success ? this : nullptr);
     }
 
@@ -498,7 +498,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamTriggerNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: %d", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamTrigger, success ? this : nullptr);
     }
 
@@ -515,7 +515,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamFlushNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: %d", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamFlush, success ? this : nullptr);
     }
 
@@ -532,7 +532,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamDrainNotify(int success) {
-        Application::debug(DebugType::Audio, "{}: success: %d", __FUNCTION__, success);
+        Application::debug(DebugType::Audio, "{}: success: {}", __FUNCTION__, success);
         waitNotify.notify(WaitOp::StreamDrain, success ? this : nullptr);
     }
 
@@ -573,7 +573,7 @@ namespace LTSM {
     }
 
     void PulseAudio::BaseStream::streamSuspendedEvent(int state) {
-        Application::info("{}: state: %d", __FUNCTION__, state);
+        Application::info("{}: state: {}", __FUNCTION__, state);
     }
 
     void PulseAudio::BaseStream::streamOverflowEvent(void) {
@@ -702,7 +702,7 @@ namespace LTSM {
     }
 
     void PulseAudio::InputStream::streamWriteSilent(size_t len) {
-        Application::debug(DebugType::Audio, "{}: data size: %lu", __FUNCTION__, len);
+        Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
         std::vector<uint8_t> buf(len, 0);
         streamWriteData(buf.data(), buf.size());
     }
@@ -712,7 +712,7 @@ namespace LTSM {
     }
 
     void PulseAudio::InputStream::streamWriteData(const uint8_t* ptr, size_t len) {
-        Application::info("{}: data size: %lu", __FUNCTION__, len);
+        Application::info("{}: data size: {}", __FUNCTION__, len);
         std::scoped_lock guard{ lock };
         pcm.insert(pcm.end(), ptr, ptr + len);
         auto writableSize = pa_stream_writable_size(stream.get());
@@ -747,7 +747,7 @@ namespace LTSM {
                 }
             }
         } else if(auto len = std::min(nbytes, pcm.size())) {
-            Application::info("{}: request: %lu, last: %lu, write: %lu, latency: %8d, neg: %d", __FUNCTION__, nbytes, pcm.size(), len,
+            Application::info("{}: request: {}, last: {}, write: {}, latency: %8d, neg: {}", __FUNCTION__, nbytes, pcm.size(), len,
                               usec, neg);
 
             if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE)) {
@@ -821,7 +821,7 @@ namespace LTSM {
     }
 
     void PulseAudio::OutputStream::streamReadEvent(const size_t & nbytes) {
-        Application::debug(DebugType::Audio, "{}: bytes: %lu", __FUNCTION__, nbytes);
+        Application::debug(DebugType::Audio, "{}: bytes: {}", __FUNCTION__, nbytes);
         const uint8_t* streamData = nullptr;
         size_t streamBytes = 0;
 

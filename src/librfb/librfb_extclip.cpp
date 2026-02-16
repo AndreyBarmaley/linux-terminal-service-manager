@@ -196,7 +196,7 @@ namespace LTSM {
     }
 
     void RFB::ExtClip::recvExtClipboardCapsContinue(uint32_t flags, StreamBuf && sb) {
-        Application::debug(DebugType::Clip, "{}: flags: {:#08x}, data length: %lu", __FUNCTION__, flags, sb.last());
+        Application::debug(DebugType::Clip, "{}: flags: {:#08x}, data length: {}", __FUNCTION__, flags, sb.last());
 
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
         auto typesCount = Tools::maskCountBits(flags & 0xFFFF);
@@ -288,7 +288,7 @@ namespace LTSM {
     }
 
     void RFB::ExtClip::recvExtClipboardProvide(StreamBuf && sb) {
-        Application::debug(DebugType::Clip, "{}, data length: %lu", __FUNCTION__, sb.last());
+        Application::debug(DebugType::Clip, "{}, data length: {}", __FUNCTION__, sb.last());
         // This message includes the actual clipboard data and should be sent whenever the clipboard changes and the data for each format.
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
 

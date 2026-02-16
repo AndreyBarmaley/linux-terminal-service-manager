@@ -16,7 +16,7 @@ using namespace std::chrono_literals;
 class X11Clip : public Application, public XCB::RootDisplay {
   public:
     X11Clip(int display) : Application("x11clip"), XCB::RootDisplay(display) {
-        Application::info("DisplayInfo: width: %lu, height: %lu, depth: %lu, maxreq: %lu", width(), height(), depth(), getMaxRequest());
+        Application::info("DisplayInfo: width: {}, height: {}, depth: {}, maxreq: {}", width(), height(), depth(), getMaxRequest());
         XCB::RootDisplay::extensionDisable(XCB::Module::DAMAGE);
     }
 
@@ -32,7 +32,7 @@ class X11ClipCopy : public X11Clip, public XCB::SelectionRecipient {
   protected:
     void selectionReceiveData(xcb_atom_t atom, const uint8_t* ptr, uint32_t len) const override {
         auto name = getAtomName(atom);
-        Application::info("{}: atom: `{}', size: %lu", __FUNCTION__, name.data(), len);
+        Application::info("{}: atom: `{}', size: {}", __FUNCTION__, name.data(), len);
 
         if(! file.empty()) {
             Tools::binaryToFile(ptr, len, file);
@@ -111,13 +111,13 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
     }
 
     std::vector<uint8_t> selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const override {
-        Application::info("{}, atom: `{}', offset: %lu, length: %lu", __FUNCTION__, getAtomName(atom).data(), offset, length);
+        Application::info("{}, atom: `{}', offset: {}, length: {}", __FUNCTION__, getAtomName(atom).data(), offset, length);
 
         if(atom == target) {
             if(offset + length <= buf.size()) {
                 return std::vector<uint8_t>(buf.begin() + offset, buf.begin() + offset + length);
             } else {
-                Application::error("invalid length: %lu, offset: %lu", length, offset);
+                Application::error("invalid length: {}, offset: {}", length, offset);
             }
         }
 
@@ -144,7 +144,7 @@ class X11ClipPaste : public X11Clip, public XCB::SelectionSource {
             buf.assign(test.begin(), test.end());
         }
 
-        Application::info("mode: {}, target: `{}', data size: %lu", "paste", getAtomName(target).data(), buf.size());
+        Application::info("mode: {}, target: `{}', data size: {}", "paste", getAtomName(target).data(), buf.size());
         paste = static_cast<XCB::ModulePasteSelection*>(getExtension(XCB::Module::SELECTION_PASTE));
     }
 

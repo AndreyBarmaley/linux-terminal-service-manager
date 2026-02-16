@@ -697,7 +697,7 @@ namespace LTSM {
 #ifdef __UNIX__
 
                 if(auto err = XCB::RootDisplay::hasError()) {
-                    Application::warning("{}: x11 error: %d", __FUNCTION__, err);
+                    Application::warning("{}: x11 error: {}", __FUNCTION__, err);
                     this->rfbMessagesShutdown();
                     break;
                 }
@@ -1193,7 +1193,7 @@ namespace LTSM {
             }
 
             if(err) {
-                Application::error("{}: status: %d, error code: %d", __FUNCTION__, status, err);
+                Application::error("{}: status: {}, error code: {}", __FUNCTION__, status, err);
 
                 //if(! nsz.isEmpty())
                 //    primarySize.reset();
@@ -1441,7 +1441,7 @@ namespace LTSM {
                              cursorFmt.rmask(), cursorFmt.gmask(), cursorFmt.bmask(), cursorFmt.amask());
 
             if(pixels.size() < static_cast<size_t>(reg.width) * reg.height * 4) {
-                Application::error("{}: invalid pixels, length: %lu, id: {:#08x}", __FUNCTION__, pixels.size(), cursorId);
+                Application::error("{}: invalid pixels, length: {}, id: {:#08x}", __FUNCTION__, pixels.size(), cursorId);
                 return;
             }
 
@@ -1705,7 +1705,7 @@ int main(int argc, const char** argv)
     WSADATA wsaData;
 
     if(int ret = WSAStartup(MAKEWORD(2, 2), & wsaData); ret != 0) {
-        std::cerr << "WSAStartup failed: %d" << std::endl;
+        std::cerr << "WSAStartup failed: {}" << std::endl;
         return 1;
     }
 

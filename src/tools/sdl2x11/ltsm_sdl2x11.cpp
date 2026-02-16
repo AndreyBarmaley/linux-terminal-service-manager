@@ -128,7 +128,7 @@ namespace LTSM {
                     auto beg = clientClipboard.get() + offset;
                     return std::vector<uint8_t>(beg, beg + length);
                 } else {
-                    Application::error("{}: invalid length: %lu, offset: {}", __FUNCTION__, length, offset);
+                    Application::error("{}: invalid length: {}, offset: {}", __FUNCTION__, length, offset);
                 }
             }
 
@@ -239,7 +239,7 @@ namespace LTSM {
                 // processing xcb events
                 while(auto ev = XCB::RootDisplay::pollEvent()) {
                     if(auto err = XCB::RootDisplay::hasError()) {
-                        Application::error("{}: xcb error, code: %d", __FUNCTION__, err);
+                        Application::error("{}: xcb error, code: {}", __FUNCTION__, err);
                         return EXIT_SUCCESS;
                     }
                 }

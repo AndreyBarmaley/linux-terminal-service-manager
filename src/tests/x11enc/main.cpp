@@ -28,7 +28,7 @@ void signalHandler(int sig) {
     if(sig == SIGTERM || sig == SIGINT) {
         Run::process = false;
     } else {
-        Application::warning("{}: receive signal: %d", __FUNCTION__, sig);
+        Application::warning("{}: receive signal: {}", __FUNCTION__, sig);
     }
 }
 
@@ -185,8 +185,8 @@ class EncodingTest : public Application {
             pitch += 8 - align8;
         }
 
-        Application::info("{}: settings - fps: %d, threads: %d, iterations: %d", __FUNCTION__, frameRate, threadsCount, countLoop);
-        Application::info("{}: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: settings - fps: {}, threads: {}, iterations: {}", __FUNCTION__, frameRate, threadsCount, countLoop);
+        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
@@ -287,7 +287,7 @@ class EncodingTest : public Application {
             }
 
             if(int err = xcb->hasError()) {
-                Application::error("xcb error: %d", err);
+                Application::error("xcb error: {}", err);
                 return err;
             }
 

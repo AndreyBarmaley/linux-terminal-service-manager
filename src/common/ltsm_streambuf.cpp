@@ -362,7 +362,7 @@ namespace LTSM {
 
     void StreamBufRef::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -378,7 +378,7 @@ namespace LTSM {
 
     BinaryBuf StreamBufRef::read(size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -393,7 +393,7 @@ namespace LTSM {
 
     void StreamBufRef::skip(size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -509,7 +509,7 @@ namespace LTSM {
 
     void StreamBuf::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -530,7 +530,7 @@ namespace LTSM {
 
     BinaryBuf StreamBuf::read(size_t len) const {
         if(len > last()) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -545,7 +545,7 @@ namespace LTSM {
 
     void StreamBuf::skip(size_t len) const {
         if(len > last()) {
-            Application::error("{}: incorrect len, last: %lu, len: %lu", __FUNCTION__, last(), len);
+            Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncName);
         }
 
@@ -631,7 +631,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "read", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "read", strerror(errno), errno);
             throw streambuf_error(NS_FuncName);
         }
     }
@@ -661,7 +661,7 @@ namespace LTSM {
                 continue;
             }
 
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "write", strerror(errno), errno);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "write", strerror(errno), errno);
             throw streambuf_error(NS_FuncName);
         }
     }

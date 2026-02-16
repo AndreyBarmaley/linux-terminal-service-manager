@@ -77,7 +77,7 @@ class EncodingTest : public Application {
 
             srv = std::make_unique<RFB::ServerEncoderBuf>(images.front().fb.get());
 
-            Application::info("{}: pixel format, bpp: %d, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
+            Application::info("{}: pixel format, bpp: {}, rmask: 0x%08x, gmask: 0x%08x, bmask: 0x%08x, amask: 0x%08x",
                               __FUNCTION__, (int) pf.bitsPerPixel(), pf.rmask(), pf.gmask(), pf.bmask(), pf.amask());
 
 
@@ -93,7 +93,7 @@ class EncodingTest : public Application {
                 }
 
                 auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);
-                Application::info("{}: encoding: {}, time: %dms, stream sz: %dMb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
+                Application::info("{}: encoding: {}, time: {}ms, stream sz: {}Mb", __FUNCTION__, RFB::encodingName(type), dt.count(), srv->getBuffer().size() / (1024 * 1024));
 
                 srv->resetBuffer();
             }

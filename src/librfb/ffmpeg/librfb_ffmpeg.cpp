@@ -109,7 +109,7 @@ namespace LTSM {
         }
 
         if(! codec) {
-            Application::error("{}: {} failed, type: %d, encoding: {}", __FUNCTION__, "avcodec_find_encoder", type,
+            Application::error("{}: {} failed, type: {}, encoding: {}", __FUNCTION__, "avcodec_find_encoder", type,
                                encodingName(type));
             throw ffmpeg_error(NS_FuncName);
         }
@@ -238,14 +238,14 @@ namespace LTSM {
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
         frame.reset(av_frame_alloc());
 
         if(! frame) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -262,7 +262,7 @@ namespace LTSM {
         ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -284,7 +284,7 @@ namespace LTSM {
         if(! avcctx) {
             initContext(fb.region().toSize());
         } else if(fb.width() != avcctx->width || fb.height() != avcctx->height) {
-            Application::warning("{}: incorrect region size: [%lu, %lu]", __FUNCTION__, fb.width(), fb.height());
+            Application::warning("{}: incorrect region size: [{}, {}]", __FUNCTION__, fb.width(), fb.height());
             initContext(fb.region().toSize());
         }
 
@@ -295,12 +295,12 @@ namespace LTSM {
         int ret = 0;
 
         if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
         if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_packet", FFMPEG::error(ret),
                                ret);
 
             if(ret != EAGAIN) {
@@ -314,7 +314,7 @@ namespace LTSM {
         // send region
         if(ret == 0) {
             st->sendIntBE32(packet->size);
-            Application::trace(DebugType::Enc, "{}: packet size: %d", __FUNCTION__, packet->size);
+            Application::trace(DebugType::Enc, "{}: packet size: {}", __FUNCTION__, packet->size);
             st->sendRaw(packet->data, packet->size);
         } else {
             st->sendIntBE32(0);
@@ -439,7 +439,7 @@ namespace LTSM {
         int ret = avcodec_open2(avcctx.get(), codec, nullptr);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -463,7 +463,7 @@ namespace LTSM {
         ret = av_frame_get_buffer(frame.get(), 0 /* align auto*/);
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -478,7 +478,7 @@ namespace LTSM {
         if(Tools::AV_PixelFormatEnumToMasks(avPixelFormat, & bpp, & rmask, & gmask, & bmask, & amask, false)) {
             pf = PixelFormat(bpp, rmask, gmask, bmask, amask);
         } else {
-            Application::error("{}: unknown pixel format: {}, id: %d", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat),
+            Application::error("{}: unknown pixel format: {}, id: {}", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat),
                                (int) avPixelFormat);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -488,7 +488,7 @@ namespace LTSM {
         packet.reset(av_packet_alloc());
 
         if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -501,7 +501,7 @@ namespace LTSM {
 
         if(ret = av_image_fill_arrays(rgb->data, rgb->linesize, rgbdata.get(),
                                       (AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -543,8 +543,8 @@ namespace LTSM {
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(57, 48, 101)
 
         if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
-            Application::error("{}: %d %d", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
+            Application::error("{}: {} {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
             throw ffmpeg_error(NS_FuncName);
         }
 
@@ -553,7 +553,7 @@ namespace LTSM {
         } while(ret == AVERROR(EAGAIN));
 
         if(0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -563,7 +563,7 @@ namespace LTSM {
         int gotFrame = 0;
 
         if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
                                ret);
             throw ffmpeg_error(NS_FuncName);
         }
@@ -576,7 +576,7 @@ namespace LTSM {
                                          frame->linesize, 0, avcctx->height, rgb->data, rgb->linesize);
 
             if(heightResult < 0) {
-                Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
+                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
                                    heightResult);
                 throw ffmpeg_error(NS_FuncName);
             }

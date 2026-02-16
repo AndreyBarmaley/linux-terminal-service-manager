@@ -432,7 +432,7 @@ namespace LTSM {
                 Application::error("{}: invalid value `%.*s`", __FUNCTION__, 8, (const char*) ref.data());
             }
         } else {
-            Application::error("{}: invalid size: %lu", __FUNCTION__, ref.size());
+            Application::error("{}: invalid size: {}", __FUNCTION__, ref.size());
         }
     }
 

@@ -105,13 +105,13 @@ class EncodingTest : public Application {
             pitch += 8 - align8;
         }
 
-        Application::info("{}: xcb - width: %lu, height: %lu, bpp: %lu, pitch: %lu, max request: %lu", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
+        Application::info("{}: xcb - width: {}, height: {}, bpp: {}, pitch: {}, max request: {}", __FUNCTION__, dsz.width, dsz.height, bpp, pitch, xcb->getMaxRequest());
 
         auto shm = static_cast<const XCB::ModuleShm*>(xcb->getExtension(XCB::Module::SHM));
         auto shmId = shm ? shm->createShm(pitch * dsz.height, 0600, false) : nullptr;
 
         if(int err = xcb->hasError()) {
-            Application::error("xcb error: %d", err);
+            Application::error("xcb error: {}", err);
             return err;
         }
 
@@ -124,19 +124,19 @@ class EncodingTest : public Application {
             auto map1 = fb.pixelMapPalette(reg);
             auto dt1 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp1);
 
-            Application::info("{}: pixelMapPalette: %lu", __FUNCTION__, dt1.count());
+            Application::info("{}: pixelMapPalette: {}", __FUNCTION__, dt1.count());
 
             auto tp2 = std::chrono::steady_clock::now();
             auto map2 = fb.pixelMapWeight(reg);
             auto dt2 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp2);
 
-            Application::info("{}: pixelMapWeight: %lu", __FUNCTION__, dt2.count());
+            Application::info("{}: pixelMapWeight: {}", __FUNCTION__, dt2.count());
 
             auto tp3 = std::chrono::steady_clock::now();
             auto map3 = fb.toRLE(reg);
             auto dt3 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp3);
 
-            Application::info("{}: toRLE: %lu", __FUNCTION__, dt3.count());
+            Application::info("{}: toRLE: {}", __FUNCTION__, dt3.count());
         }
 
         return 0;

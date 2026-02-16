@@ -24,14 +24,14 @@ class X11Test : public XCB::RootDisplay {
 
     bool test_extinfo(void) {
         for(auto iter = xcb_setup_pixmap_formats_iterator(_setup); iter.rem; xcb_format_next(& iter)) {
-            Application::info("pixmap format: depth: %d, bpp: %d", iter.data->depth, iter.data->bits_per_pixel);
+            Application::info("pixmap format: depth: {}, bpp: {}", iter.data->depth, iter.data->bits_per_pixel);
         }
 
         for(auto dIter = xcb_screen_allowed_depths_iterator(_screen); dIter.rem; xcb_depth_next(& dIter)) {
-            Application::info("allowed depth: %d, visuals: %d", dIter.data->depth, dIter.data->visuals_len);
+            Application::info("allowed depth: {}, visuals: {}", dIter.data->depth, dIter.data->visuals_len);
 
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
-                Application::info("visual id: 0x%02x, class: 0x%02x, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
+                Application::info("visual id: 0x%02x, class: 0x%02x, bits per rgb value: {}, red: %08x, green: %08x, blue: %08x, color entries: {}",
                                   vIter.data->visual_id, vIter.data->_class, vIter.data->bits_per_rgb_value, vIter.data->red_mask, vIter.data->green_mask, vIter.data->blue_mask, vIter.data->colormap_entries);
         }
 
@@ -99,11 +99,11 @@ class X11Test : public XCB::RootDisplay {
         auto outputs = randr->getOutputs();
         xcb_randr_output_t curout;
 
-        Application::info("outputs: %d", outputs.size());
+        Application::info("outputs: {}", outputs.size());
 
         for(const auto & val : outputs) {
             auto info = randr->getOutputInfo(val);
-            Application::info("output name: {}, connected: {}, width: %d, height: %d", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
+            Application::info("output name: {}, connected: {}, width: {}, height: {}", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
 
             if(info->connected) {
                 curout = val;
@@ -111,18 +111,18 @@ class X11Test : public XCB::RootDisplay {
         }
 
         auto modes = randr->getModesInfo();
-        Application::info("modes: %d", modes.size());
+        Application::info("modes: {}", modes.size());
 
         auto modes2 = randr->getOutputModes(curout);
 
         for(auto info : modes) {
             if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
-                Application::info("mode 0x%08x, width: %d, height: %d, clock: %d", info.id, info.width, info.height, info.dot_clock);
+                Application::info("mode 0x%08x, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
             }
         }
 
         for(const auto & size : randr->getScreenSizes()) {
-            Application::info("screen size: %d, %d", size.width, size.height);
+            Application::info("screen size: {}, {}", size.width, size.height);
         }
 
         return true;
@@ -133,7 +133,7 @@ class X11Test : public XCB::RootDisplay {
         auto sizes = randr->getScreenSizes();
 
         if(std::ranges::any_of(sizes, [&](auto & st) { return st.width == nsz.width && st.height == nsz.height; })) {
-            Application::warning("mode present, size: %d, %d", nsz.width, nsz.height);
+            Application::warning("mode present, size: {}, {}", nsz.width, nsz.height);
             return false;
         }
 
@@ -167,7 +167,7 @@ class TestApp : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
+        Application::info("xcb display info, width: {}, height: {}, depth: {}", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
 
@@ -176,7 +176,7 @@ class TestApp : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: {}", __FUNCTION__, _xcbDisplay->getMaxRequest());
         _xcbDisplay->test_extinfo();
         return EXIT_SUCCESS;
 

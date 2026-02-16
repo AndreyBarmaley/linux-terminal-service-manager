@@ -146,13 +146,13 @@ namespace LTSM {
         // server VenCrypt version
         int majorVer = recvInt8();
         int minorVer = recvInt8();
-        Application::debug(DebugType::Rfb, "{}: server vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
+        Application::debug(DebugType::Rfb, "{}: server vencrypt version {}.{}", __FUNCTION__, majorVer, minorVer);
         // client VenCrypt version 0.2
         sendInt8(0).sendInt8(2).sendFlush();
 
         // recv support flag
         if(int unsupportedVersion = recvInt8()) {
-            Application::error("{}: server unsupported vencrypt version: %d", __FUNCTION__, unsupportedVersion);
+            Application::error("{}: server unsupported vencrypt version: {}", __FUNCTION__, unsupportedVersion);
             return false;
         }
 
@@ -161,7 +161,7 @@ namespace LTSM {
         int typesCount = recvInt8();
 
         if(0 >= typesCount) {
-            Application::error("{}: server vencrypt sub-types failure: %d", __FUNCTION__, typesCount);
+            Application::error("{}: server vencrypt sub-types failure: {}", __FUNCTION__, typesCount);
             return false;
         }
 
@@ -185,7 +185,7 @@ namespace LTSM {
             mode = RFB::SECURITY_VENCRYPT02_X509NONE;
         }
 
-        Application::debug(DebugType::Rfb, "{}: send vencrypt mode: %d", __FUNCTION__, mode);
+        Application::debug(DebugType::Rfb, "{}: send vencrypt mode: {}", __FUNCTION__, mode);
         sendIntBE32(mode).sendFlush();
         int status = recvInt8();
 
@@ -202,7 +202,7 @@ namespace LTSM {
                 tls = std::make_unique<TLS::AnonSession>(socket.get(), sec.tlsPriority, false, sec.tlsDebug);
             }
         } catch(gnutls::exception & err) {
-            Application::error("gnutls error: {}, code: %d", err.what(), err.get_code());
+            Application::error("gnutls error: {}, code: {}", err.what(), err.get_code());
             return false;
         }
 
@@ -276,7 +276,7 @@ namespace LTSM {
         sendString(version).sendFlush();
         // RFB 1.7.1.2 security
         int counts = recvInt8();
-        Application::debug(DebugType::Rfb, "{}: security counts: %d", __FUNCTION__, counts);
+        Application::debug(DebugType::Rfb, "{}: security counts: {}", __FUNCTION__, counts);
 
         if(0 == counts) {
             int len = recvIntBE32();
@@ -353,7 +353,7 @@ namespace LTSM {
         }
 
         bool shared = false;
-        Application::debug(DebugType::Rfb, "{}: send share flags: %d", __FUNCTION__, (int) shared);
+        Application::debug(DebugType::Rfb, "{}: send share flags: {}", __FUNCTION__, (int) shared);
         // RFB 6.3.1 client init (shared flag)
         sendInt8(shared ? 1 : 0).sendFlush();
         // RFB 6.3.2 server init
@@ -373,7 +373,7 @@ namespace LTSM {
         int bshift = recvInt8();
         recvSkip(3);
         serverPf = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
-        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: {}, depth: %d, bigendian: %d, true color: %d, red({},{}), green({},{}), blue({},{})",
+        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: {}, depth: {}, bigendian: {}, true color: {}, red({},{}), green({},{}), blue({},{})",
                            __FUNCTION__, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
                            serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
 
@@ -385,7 +385,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("{}: unknown pixel format, bpp: %d, depth: %d", __FUNCTION__, bpp, depth);
+                Application::error("{}: unknown pixel format, bpp: {}, depth: {}", __FUNCTION__, bpp, depth);
                 return false;
         }
 
@@ -608,7 +608,7 @@ namespace LTSM {
 
     void RFB::ClientDecoder::sendPixelFormat(void) {
         auto & pf = clientFormat();
-        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: %d, red({},{}), green({},{}), blue({},{})",
+        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
                            __FUNCTION__, pf.bitsPerPixel(), (int) platformBigEndian(),
                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         std::scoped_lock guard{ sendLock };
@@ -647,7 +647,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendKeyEvent(bool pressed, uint32_t keysym) {
-        Application::debug(DebugType::Rfb, "{}: keysym: {:#08x}, pressed: %d", __FUNCTION__, keysym, (int) pressed);
+        Application::debug(DebugType::Rfb, "{}: keysym: {:#08x}, pressed: {}", __FUNCTION__, keysym, (int) pressed);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_KEY);
         sendInt8(pressed ? 1 : 0);
@@ -856,7 +856,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto dt = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
-            Application::debug(DebugType::Rfb, "{}: update time: %luus", __FUNCTION__, dt.count());
+            Application::debug(DebugType::Rfb, "{}: update time: {}us", __FUNCTION__, dt.count());
         }
 
         clientRecvFBUpdateEvent();
@@ -949,12 +949,12 @@ namespace LTSM {
         auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
 
-        Application::trace(DebugType::Rfb, "{}: bufsz: %lu, masksz: %lu", __FUNCTION__, buf.size(), mask.size());
+        Application::trace(DebugType::Rfb, "{}: bufsz: {}, masksz: {}", __FUNCTION__, buf.size(), mask.size());
         clientRecvRichCursorEvent(reg, std::move(buf), std::move(mask));
     }
 
     void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz) {
-        Application::info("{}: status: %d, error: %d, size: [{}, {}]", __FUNCTION__, status, err, sz.width,
+        Application::info("{}: status: {}, error: {}, size: [{}, {}]", __FUNCTION__, status, err, sz.width,
                           sz.height);
         auto numOfScreens = recvInt8();
         recvSkip(3);

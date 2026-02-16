@@ -41,7 +41,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::X11Cli, "{}, length: %lu", __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "{}, length: {}", __FUNCTION__, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -102,7 +102,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::X11Cli, "{}, type: {:#04x}, length: %lu", __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::X11Cli, "{}, type: {:#04x}, length: {}", __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
@@ -217,7 +217,7 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> RFB::X11Client::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}, offset: %lu, length: {}", __FUNCTION__, atom, offset, length);
+        Application::debug(DebugType::X11Cli, "{}, atom: {:#08x}, offset: {}, length: {}", __FUNCTION__, atom, offset, length);
 
         auto targets = selectionSourceTargets();
 
@@ -231,14 +231,14 @@ namespace LTSM {
             auto beg = clientClipboard.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
-            Application::error("{}: invalid length: {}, offset: %lu", __FUNCTION__, length, offset);
+            Application::error("{}: invalid length: {}, offset: {}", __FUNCTION__, length, offset);
         }
 
         return {};
     }
 
     void RFB::X11Client::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::X11Cli, "{}: data length: %lu", __FUNCTION__, buf.size());
+        Application::debug(DebugType::X11Cli, "{}: data length: {}", __FUNCTION__, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);

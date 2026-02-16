@@ -338,7 +338,7 @@ namespace LTSM {
     std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data1) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, pciProtocol: {:#08x}, pciLength: {}, send size: %lu, recv size: {}",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, pciProtocol: {:#08x}, pciLength: {}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -391,7 +391,7 @@ namespace LTSM {
     std::tuple<uint32_t, binary_buf>
     PcscRemote::sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, controlCode: {:#08x}, send size: %lu, recv size: {}",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, controlCode: {:#08x}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -439,7 +439,7 @@ namespace LTSM {
     std::tuple<uint32_t>
     PcscRemote::sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr) {
         const std::scoped_lock guard{ sockLock };
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle {:#016x}, attrId: {}, attrLength %lu",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle {:#016x}, attrId: {}, attrLength {}",
                            __FUNCTION__, id, handle, attrId, attr.size());
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1062,7 +1062,7 @@ namespace LTSM {
         }
 
         if(sendLength != data1.size()) {
-            Application::error("{}: clientId: {}, invalid length, send: {}, data: %lu", __FUNCTION__, id(),
+            Application::error("{}: clientId: {}, invalid length, send: {}, data: {}", __FUNCTION__, id(),
                                sendLength, data1.size());
             return false;
         }
@@ -1085,7 +1085,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, pciProtocol: {:#08x}, pciLength: {}, recv size: %lu",
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, pciProtocol: {:#08x}, pciLength: {}, recv size: {}",
                                __FUNCTION__, id(), handle, ioRecvPciProtocol, ioRecvPciLength, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1200,7 +1200,7 @@ namespace LTSM {
         }
 
         if(sendLength != data1.size()) {
-            Application::error("{}: clientId: {}, invalid length, send: {}, data: %lu", __FUNCTION__, id(),
+            Application::error("{}: clientId: {}, invalid length, send: {}, data: {}", __FUNCTION__, id(),
                                sendLength, data1.size());
             return false;
         }
@@ -1223,7 +1223,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, controlCode: {:#08x}, bytesReturned: %lu",
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, controlCode: {:#08x}, bytesReturned: {}",
                                __FUNCTION__, id(), handle, controlCode, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1278,7 +1278,7 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, attrId: {}, attrLen: %lu",
+            Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, attrId: {}, attrLen: {}",
                                __FUNCTION__, id(), handle, attrId, attr.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
@@ -1651,7 +1651,7 @@ namespace LTSM {
     }
 
     int PcscSessionBus::start(void) {
-        Application::info("{}: uid: %d, pid: %d, version: %d", __FUNCTION__, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
+        Application::info("{}: uid: {}, pid: {}, version: {}", __FUNCTION__, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
         if(auto envSockName = getenv("PCSCLITE_CSOCK_NAME")) {
             pcscSocketPath = envSockName;
@@ -1740,7 +1740,7 @@ namespace LTSM {
     }
 
     void PcscSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "{}: pid: %d", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 

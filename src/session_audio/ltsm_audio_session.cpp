@@ -234,7 +234,7 @@ namespace LTSM {
     }
 
     int AudioSessionBus::start(void) {
-        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
+        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
 #endif
 
         if(! LTSM::conn) {
-            LTSM::Application::error("dbus connection failed, uid: %d", getuid());
+            LTSM::Application::error("dbus connection failed, uid: {}", getuid());
             return EXIT_FAILURE;
         }
 

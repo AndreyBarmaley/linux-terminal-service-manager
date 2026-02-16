@@ -35,7 +35,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_flush(ctx.get(), & error)) {
-            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_flush", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_flush", pa_strerror(error));
             return false;
         }
 
@@ -47,7 +47,7 @@ namespace LTSM {
         auto res = pa_simple_get_latency(ctx.get(), & error);
 
         if(error) {
-            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_get_latency", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_get_latency", pa_strerror(error));
             return 0;
         }
 
@@ -98,7 +98,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_write(ctx.get(), ptr, len, & error)) {
-            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_write", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_write", pa_strerror(error));
             return false;
         }
 
@@ -109,7 +109,7 @@ namespace LTSM {
         int error = 0;
 
         if(0 != pa_simple_drain(ctx.get(), & error)) {
-            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_drain", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_drain", pa_strerror(error));
             return false;
         }
 
@@ -143,7 +143,7 @@ namespace LTSM {
         std::vector<uint8_t> buf(len, 0);
 
         if(0 != pa_simple_read(ctx.get(), buf.data(), buf.size(), & error)) {
-            Application::error("{}: {} failed, error: `%d'", __FUNCTION__, "pa_simple_read", pa_strerror(error));
+            Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_read", pa_strerror(error));
             return {};
         }
 

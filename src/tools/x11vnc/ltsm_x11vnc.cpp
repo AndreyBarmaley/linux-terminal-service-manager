@@ -163,7 +163,7 @@ namespace LTSM {
             return -1;
         }
 
-        Application::info("listen inet port: %d", port);
+        Application::info("listen inet port: {}", port);
         signal(SIGCHLD, SIG_IGN);
 
         while(int sock = TCPSocket::accept(fd)) {
@@ -213,7 +213,7 @@ namespace LTSM {
     }
 
     int X11Vnc::start(void) {
-        Application::info("x11vnc version: %d", LTSM_X11VNC_VERSION);
+        Application::info("x11vnc version: {}", LTSM_X11VNC_VERSION);
 
         if(configGetBoolean("background") && fork()) {
             return 0;

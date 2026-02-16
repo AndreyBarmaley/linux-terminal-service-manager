@@ -423,7 +423,7 @@ namespace LTSM::DisplaySession {
     // Starter
     Starter::Starter(int displayNum, const char* xauthFile)
         : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()) {
-        Application::info("service started, uid: %d, gid: %d, pid: %d, version: %d",
+        Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                                 getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
         startX11Display(displayNum, xauthFile);
     }
@@ -672,7 +672,7 @@ namespace LTSM::DisplaySession {
 #endif
 
         if(! DisplaySession::sessionConn) {
-            Application::error("{}: dbus connection failed, uid: %d", __FUNCTION__, getuid());
+            Application::error("{}: dbus connection failed, uid: {}", __FUNCTION__, getuid());
             return EXIT_FAILURE;
         }
 

@@ -204,12 +204,12 @@ namespace LTSM {
         // client req
         int majorVer = recvInt8();
         int minorVer = recvInt8();
-        Application::debug(DebugType::Rfb, "{}: client vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
+        Application::debug(DebugType::Rfb, "{}: client vencrypt version {}.{}", __FUNCTION__, majorVer, minorVer);
 
         if(majorVer != 0 || (minorVer < 1 || minorVer > 2)) {
             // send unsupported
             sendInt8(255).sendFlush();
-            Application::error("{}: unsupported vencrypt version %d.%d", __FUNCTION__, majorVer, minorVer);
+            Application::error("{}: unsupported vencrypt version {}.{}", __FUNCTION__, majorVer, minorVer);
             return false;
         }
 
@@ -225,7 +225,7 @@ namespace LTSM {
             }
 
             int mode = recvInt8();
-            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: %d", __FUNCTION__, mode);
+            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", __FUNCTION__, mode);
 
             switch(mode) {
                 case RFB::SECURITY_VENCRYPT01_TLSNONE:
@@ -241,7 +241,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("{}: unsupported vencrypt mode: %d", __FUNCTION__, mode);
+                    Application::error("{}: unsupported vencrypt mode: {}", __FUNCTION__, mode);
                     return false;
             }
         } else
@@ -254,7 +254,7 @@ namespace LTSM {
             }
 
             int mode = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: %d", __FUNCTION__, mode);
+            Application::debug(DebugType::Rfb, "{}: client choice vencrypt mode: {}", __FUNCTION__, mode);
 
             switch(mode) {
                 case RFB::SECURITY_VENCRYPT02_TLSNONE:
@@ -270,7 +270,7 @@ namespace LTSM {
                     break;
 
                 default:
-                    Application::error("{}: unsupported vencrypt mode: %d", __FUNCTION__, mode);
+                    Application::error("{}: unsupported vencrypt mode: {}", __FUNCTION__, mode);
                     return false;
             }
         }
@@ -308,7 +308,7 @@ namespace LTSM {
                 tls = std::make_unique<TLS::AnonSession>(socket.get(), secInfo.tlsPriority, true, secInfo.tlsDebug);
             }
         } catch(gnutls::exception & err) {
-            Application::error("gnutls error: {}, code: %d", err.what(), err.get_code());
+            Application::error("gnutls error: {}, code: {}", err.what(), err.get_code());
             return false;
         }
 
@@ -416,7 +416,7 @@ namespace LTSM {
                 std::error_code err;
 
                 if(! std::filesystem::exists(secInfo.passwdFile, err)) {
-                    Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+                    Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                        secInfo.passwdFile.c_str(), getuid());
                     sendIntBE32(RFB::SECURITY_RESULT_ERR).sendIntBE32(0).sendFlush();
                     return false;
@@ -506,7 +506,7 @@ namespace LTSM {
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("{}: server pf - bpp: {}, depth: %d, bigendian: %d, red({},{}), green({},{}), blue({},{})",
+        Application::notice("{}: server pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
                             __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
                             pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         clientPf = serverFormat();
@@ -651,7 +651,7 @@ namespace LTSM {
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: %d, red({},{}), green({},{}), blue({},{})",
+        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: {}, red({},{}), green({},{}), blue({},{})",
                             __FUNCTION__, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel) {
@@ -692,7 +692,7 @@ namespace LTSM {
         // skip padding
         recvSkip(1);
         int numEncodings = recvIntBE16();
-        Application::info("{}: encoding counts: %d", __FUNCTION__, numEncodings);
+        Application::info("{}: encoding counts: {}", __FUNCTION__, numEncodings);
 
         bool extendedClipboard = false;
         bool continueUpdates = false;
@@ -783,7 +783,7 @@ namespace LTSM {
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, {}, {}], incremental: %d",
+        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, {}, {}], incremental: {}",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
@@ -840,7 +840,7 @@ namespace LTSM {
         int16_t regy = recvIntBE16();
         uint16_t regw = recvIntBE16();
         uint16_t regh = recvIntBE16();
-        Application::info("{}: region: [{}, {}, {}, {}], enabled: %d", __FUNCTION__, regx,
+        Application::info("{}: region: [{}, {}, {}, {}], enabled: {}", __FUNCTION__, regx,
                           regy, regw, regh, enable);
         continueUpdatesProcessed = enable;
         serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
@@ -853,7 +853,7 @@ namespace LTSM {
         uint16_t height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::info("{}: size [{}, {}], screens: %d", __FUNCTION__, width, height, numOfScreens);
+        Application::info("{}: size [{}, {}], screens: {}", __FUNCTION__, width, height, numOfScreens);
         // screens array
         std::vector<RFB::ScreenInfo> screens;
 
@@ -886,11 +886,11 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::clientDisconnectedEvent(int display) {
-        Application::warning("{}: display: %d", __FUNCTION__, display);
+        Application::warning("{}: display: {}", __FUNCTION__, display);
     }
 
     void RFB::ServerEncoder::sendColourMap(int first) {
-        Application::info("{}: first: %d, colour map length: %lu", __FUNCTION__, first, colourMap.size());
+        Application::info("{}: first: {}, colour map length: {}", __FUNCTION__, first, colourMap.size());
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.2
         sendInt8(RFB::SERVER_SET_COLOURMAP);
@@ -1000,11 +1000,11 @@ namespace LTSM {
             threads = 1;
         } else if(std::thread::hardware_concurrency() < threads) {
             threads = std::thread::hardware_concurrency();
-            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: %d", __FUNCTION__, threads);
+            Application::error("{}: encoding threads incorrect, fixed to hardware concurrency: {}", __FUNCTION__, threads);
         }
 
         if(encoder) {
-            Application::info("{}: using encoding threads: %d", __FUNCTION__, threads);
+            Application::info("{}: using encoding threads: {}", __FUNCTION__, threads);
             encoder->setThreads(threads);
         }
     }
@@ -1116,7 +1116,7 @@ namespace LTSM {
             const XCB::Size & desktopSize) {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
-        Application::info("{}: status: %d, error: %d, size [{}, {}]", __FUNCTION__, statusCode, errorCode,
+        Application::info("{}: status: {}, error: {}, size [{}, {}]", __FUNCTION__, statusCode, errorCode,
                           desktopSize.width, desktopSize.height);
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE)) {
@@ -1205,7 +1205,7 @@ namespace LTSM {
         const std::vector<uint8_t> & bitmaskBuf = bitmask.toVector();
 
         if(bitmaskSize != bitmaskBuf.size()) {
-            Application::error("{}: bitmask missmatch, buf size: %lu, bitmask size: %lu", __FUNCTION__, bitmaskBuf.size(),
+            Application::error("{}: bitmask missmatch, buf size: {}, bitmask size: {}", __FUNCTION__, bitmaskBuf.size(),
                                bitmaskSize);
             throw rfb_error(NS_FuncName);
         }

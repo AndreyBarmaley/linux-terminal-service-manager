@@ -143,13 +143,13 @@ namespace LTSM::Connector {
 
         registerProxy();
 
-        Application::info("service started, uid: %d, gid: %d, pid: %d, version: %d",
+        Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                         getuid(), getgid(), getpid(), LTSM::service_version);
 
         if(auto home = homeRuntime(); 0 == chdir(home.c_str())) {
             Application::info("{}: working dir: `{}'", __FUNCTION__, home.c_str());
         } else {
-            Application::warning("{}: {} failed, error: {}, code: %d", __FUNCTION__, "chdir", strerror(errno), errno);
+            Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "chdir", strerror(errno), errno);
         }
     }
 
@@ -166,7 +166,7 @@ namespace LTSM::Connector {
 
     bool DBusProxy::xcbConnect(int screen, XCB::RootDisplay & xcbDisplay) {
         std::string xauthFile = busDisplayAuthFile(screen);
-        Application::info("{}: display: %d, xauthfile: {}", __FUNCTION__, screen, xauthFile.c_str());
+        Application::info("{}: display: {}, xauthfile: {}", __FUNCTION__, screen, xauthFile.c_str());
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         std::filesystem::path socketPath = Tools::x11UnixPath(screen);
 
@@ -210,7 +210,7 @@ namespace LTSM::Connector {
         std::error_code err;
 
         if(! fileName.empty() && ! std::filesystem::exists(fileName, err)) {
-            Application::error("{}: {}, path: `{}', uid: %d", __FUNCTION__, (err ? err.message().c_str() : "not found"),
+            Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, (err ? err.message().c_str() : "not found"),
                                fileName.c_str(), getuid());
             fileName.clear();
         }

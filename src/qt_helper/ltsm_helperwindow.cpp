@@ -95,7 +95,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
             const std::string & pass, const bool & autologin) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: {}, auto login: %d",
+            Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: {}, auto login: {}",
                                __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
@@ -191,7 +191,7 @@ namespace LTSM::LoginHelper {
             }
         }
 
-        Application::info("helper started, display: %d, pid: %d", displayNum, getpid());
+        Application::info("helper started, display: {}, pid: {}", displayNum, getpid());
     }
 
     LoginWindow::~LoginWindow() {
@@ -243,7 +243,7 @@ namespace LTSM::LoginHelper {
 #ifdef LTSM_PKCS11_AUTH
         auto & tokens = pkcs11->getTokens();
 
-        Application::debug(DebugType::App, "{}: tokens count: %lu", __FUNCTION__, tokens.size());
+        Application::debug(DebugType::App, "{}: tokens count: {}", __FUNCTION__, tokens.size());
 
         if(tokens.empty()) {
             switchLoginMode();
@@ -285,7 +285,7 @@ namespace LTSM::LoginHelper {
             auto buf = ui->comboBoxDomain->itemData(index, Qt::UserRole).toByteArray();
 
             if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Token)) {
-                Application::error("{}: {} failed, index: %d", __FUNCTION__, "item", index);
+                Application::error("{}: {} failed, index: {}", __FUNCTION__, "item", index);
                 return;
             }
 
@@ -334,7 +334,7 @@ namespace LTSM::LoginHelper {
             auto buf = ui->comboBoxUsername->itemData(index, Qt::UserRole).toByteArray();
 
             if(buf.isEmpty() || buf.size() != sizeof(Pkcs11Cert)) {
-                Application::error("{}: {} failed, index: %d", __FUNCTION__, "item", index);
+                Application::error("{}: {} failed, index: {}", __FUNCTION__, "item", index);
                 return;
             }
 
@@ -372,7 +372,7 @@ namespace LTSM::LoginHelper {
         gnutls_x509_crt_t ptr1 = nullptr;
 
         if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
                                err);
             throw LTSM::gnutls_error(NS_FuncName);
         }
@@ -382,7 +382,7 @@ namespace LTSM::LoginHelper {
         std::unique_ptr<gnutls_x509_crt_int, void(*)(gnutls_x509_crt_t)> cert = { ptr1, gnutls_x509_crt_deinit };
 
         if(int err = gnutls_x509_crt_import(cert.get(), & dt1, GNUTLS_X509_FMT_DER); err != GNUTLS_E_SUCCESS) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
                                err);
             throw gnutls_error(NS_FuncName);
         }
@@ -390,14 +390,14 @@ namespace LTSM::LoginHelper {
         gnutls_pubkey_t ptr2 = nullptr;
 
         if(int err = gnutls_pubkey_init(& ptr2); GNUTLS_E_SUCCESS != err) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
 
         std::unique_ptr<gnutls_pubkey_st, void(*)(gnutls_pubkey_t)> pkey = { ptr2, gnutls_pubkey_deinit };
 
         if(int err = gnutls_pubkey_import_x509(pkey.get(), cert.get(), 0); GNUTLS_E_SUCCESS != err) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_import_x509",
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_import_x509",
                                gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
@@ -405,7 +405,7 @@ namespace LTSM::LoginHelper {
         gnutls_datum_t res;
 
         if(int err = gnutls_pubkey_encrypt_data(pkey.get(), 0, & dt2, & res); GNUTLS_E_SUCCESS != err) {
-            Application::error("{}: {} failed, error: {}, code: %d", __FUNCTION__, "gnutls_pubkey_encrypt_data",
+            Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_encrypt_data",
                                gnutls_strerror(err), err);
             throw gnutls_error(NS_FuncName);
         }
@@ -416,7 +416,7 @@ namespace LTSM::LoginHelper {
 #endif
 
     void LoginWindow::loginClicked(void) {
-        Application::error("{}: tokenAuthMode: %d", __FUNCTION__, (int) tokenAuthMode);
+        Application::error("{}: tokenAuthMode: {}", __FUNCTION__, (int) tokenAuthMode);
 
         ui->pushButtonLogin->setDisabled(true);
         ui->comboBoxUsername->setDisabled(true);
@@ -451,7 +451,7 @@ namespace LTSM::LoginHelper {
         // generate 32byte hash
         std::vector<uint8_t> hash1 = Tools::randomBytes(32);
 
-        Application::debug(DebugType::Pkcs11, "{}: hash1 random bytes: %lu", __FUNCTION__, hash1.size());
+        Application::debug(DebugType::Pkcs11, "{}: hash1 random bytes: {}", __FUNCTION__, hash1.size());
         setLabelInfo("check token...");
 
         auto returnInvalidCert = [ui = this->ui]() {
@@ -464,12 +464,12 @@ namespace LTSM::LoginHelper {
 
         try {
             auto dt = gnutlsEncryptData(certPtr->objectValue, hash1);
-            Application::debug(DebugType::Pkcs11, "{}: hash1 encrypted size: %lu", __FUNCTION__, dt->size);
+            Application::debug(DebugType::Pkcs11, "{}: hash1 encrypted size: {}", __FUNCTION__, dt->size);
 
             std::vector<uint8_t> hash2 = pkcs11->decryptData(tokenPtr->slotId, pin, certPtr->objectId, dt->data, dt->size,
                                          CKM_RSA_PKCS);
 
-            Application::debug(DebugType::Pkcs11, "{}: hash2 decrypted size: %lu", __FUNCTION__, hash2.size());
+            Application::debug(DebugType::Pkcs11, "{}: hash2 decrypted size: {}", __FUNCTION__, hash2.size());
 
             if(hash1 != hash2) {
                 setLabelError("invalid token hash");
@@ -662,7 +662,7 @@ namespace LTSM::LoginHelper {
             }
         } else if(ev->timerId() == timer200ms) {
             if(auto err = XCB::RootDisplay::hasError()) {
-                Application::error("{}: x11 has error: %d", __FUNCTION__, err);
+                Application::error("{}: x11 has error: {}", __FUNCTION__, err);
                 return;
             }
 
@@ -790,7 +790,7 @@ namespace LTSM::LoginHelper {
         // QDateTime::fromString expected localized format and return invalid
         struct tm tm;
 
-        if(strptime(str.c_str(), "%b %d %H:%M:%S %Y", & tm))
+        if(strptime(str.c_str(), "%b {} %H:%M:%S %Y", & tm))
             return QDateTime(QDate(1900 + tm.tm_year, tm.tm_mon + 1, tm.tm_mday), QTime(tm.tm_hour, tm.tm_min, tm.tm_sec), Qt::UTC);
 
         return QDateTime();

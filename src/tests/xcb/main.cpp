@@ -29,14 +29,14 @@ class X11Test : public XCB::RootDisplay {
 
     bool test_extinfo(void) {
         for(auto iter = xcb_setup_pixmap_formats_iterator(_setup); iter.rem; xcb_format_next(& iter)) {
-            Application::info("pixmap format: depth:%d, bpp:%d", iter.data->depth, iter.data->bits_per_pixel);
+            Application::info("pixmap format: depth:{}, bpp:{}", iter.data->depth, iter.data->bits_per_pixel);
         }
 
         for(auto dIter = xcb_screen_allowed_depths_iterator(_screen); dIter.rem; xcb_depth_next(& dIter)) {
-            Application::info("allowed depth:%d, visuals:%d", dIter.data->depth, dIter.data->visuals_len);
+            Application::info("allowed depth:{}, visuals:{}", dIter.data->depth, dIter.data->visuals_len);
 
             for(auto vIter = xcb_depth_visuals_iterator(dIter.data); vIter.rem; xcb_visualtype_next(& vIter))
-                Application::info("visual id: 0x%02x, class: 0x%02x, bits per rgb value: %d, red: %08x, green: %08x, blue: %08x, color entries: %d",
+                Application::info("visual id: 0x%02x, class: 0x%02x, bits per rgb value: {}, red: %08x, green: %08x, blue: %08x, color entries: {}",
                                   vIter.data->visual_id, vIter.data->_class, vIter.data->bits_per_rgb_value, vIter.data->red_mask, vIter.data->green_mask, vIter.data->blue_mask, vIter.data->colormap_entries);
         }
 
@@ -52,7 +52,7 @@ class X11Test : public XCB::RootDisplay {
         }
 
         // reply info dump
-        Application::info("get_image: request size [%d, %d], reply length: %d, bits per pixel: %d, red: %08x, green: %08x, blue: %08x",
+        Application::info("get_image: request size [{}, {}], reply length: {}, bits per pixel: {}, red: %08x, green: %08x, blue: %08x",
                           damage.width, damage.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
 
         return true;
@@ -82,7 +82,7 @@ class X11Test : public XCB::RootDisplay {
                             // window, crtc, mode, rotation, x, y, width, height
                             if(0 < cc.width && 0 < cc.height)
                             {
-                	        Application::info("randr crtc change: %d,%d, screen: %d,%d", cc.width, cc.height, width(), height());
+                	        Application::info("randr crtc change: {},{}, screen: {},{}", cc.width, cc.height, width(), height());
                             }
                         }
                         else
@@ -98,7 +98,7 @@ class X11Test : public XCB::RootDisplay {
                         {
                             // windows, timestamps, sizeID, subpixel, width, height, mwidth, mheight,
                             auto scn = reinterpret_cast<xcb_randr_screen_change_notify_event_t*>(ev.get());
-                	    Application::info("change notify: %d,%d", scn->width, scn->height);
+                	    Application::info("change notify: {},{}", scn->width, scn->height);
                         }
         	    }
 
@@ -112,7 +112,7 @@ class X11Test : public XCB::RootDisplay {
         std::thread([ = ] {
             for(int i = 0; i < 20; ++i) {
                 int group = this->getXkbLayoutGroup();
-                Application::info("info active layout group: %d", group);
+                Application::info("info active layout group: {}", group);
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
         }).detach();
@@ -121,13 +121,13 @@ class X11Test : public XCB::RootDisplay {
             while(auto ev = XCB::RootDisplay::pollEvent()) {
                 if(isXkbKeyboardNotify(ev)) {
                     auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-                    Application::info("keyboard notify, devid: %d, old devid: %d, changed: %d", xn->keyboard_notify.deviceID, xn->keyboard_notify.oldDeviceID, xn->keyboard_notify.changed);
+                    Application::info("keyboard notify, devid: {}, old devid: {}, changed: {}", xn->keyboard_notify.deviceID, xn->keyboard_notify.oldDeviceID, xn->keyboard_notify.changed);
                 } else if(isXkbMapNotify(ev)) {
                     auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-                    Application::info("map notify, deviceID: %d, ptrBtnActions %d, changed %d", xn->map_notify.deviceID, xn->map_notify.ptrBtnActions, xn->map_notify.changed);
+                    Application::info("map notify, deviceID: {}, ptrBtnActions {}, changed {}", xn->map_notify.deviceID, xn->map_notify.ptrBtnActions, xn->map_notify.changed);
                 } else if(isXkbStateNotify(ev)) {
                     auto xn = reinterpret_cast<xkb_notify_event_t*>(ev.get());
-                    Application::info("state notify, deviceID: %d, mods: baseMods: %d, latchedMods: %d, lockedMods: %d, group: %d, baseGroup: %d, latchedGroup: %d, lockedGroup: %d, compatState: %d, grabMods: %d, compatGrabMods: %d, lookupMods: %d, compatLoockupMods: %d, ptrBtnState: %d, changed: %d",
+                    Application::info("state notify, deviceID: {}, mods: baseMods: {}, latchedMods: {}, lockedMods: {}, group: {}, baseGroup: {}, latchedGroup: {}, lockedGroup: {}, compatState: {}, grabMods: {}, compatGrabMods: {}, lookupMods: {}, compatLoockupMods: {}, ptrBtnState: {}, changed: {}",
                                       xn->state_notify.deviceID, xn->state_notify.mods, xn->state_notify.baseMods, xn->state_notify.latchedMods, xn->state_notify.lockedMods,
                                       xn->state_notify.group, xn->state_notify.baseGroup, xn->state_notify.latchedGroup, xn->state_notify.lockedGroup, xn->state_notify.compatState,
                                       xn->state_notify.grabMods, xn->state_notify.compatGrabMods, xn->state_notify.lookupMods, xn->state_notify.compatLoockupMods,
@@ -157,11 +157,11 @@ class X11Test : public XCB::RootDisplay {
         auto outputs = getRandrOutputs();
         xcb_randr_output_t curout;
 
-        Application::info("outputs: %d", outputs.size());
+        Application::info("outputs: {}", outputs.size());
 
         for(const auto & val : outputs) {
             auto info = getRandrOutputInfo(val);
-            Application::info("output name: {}, connected: {}, width: %d, height: %d", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
+            Application::info("output name: {}, connected: {}, width: {}, height: {}", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
 
             if(info.connected) {
                 curout = val;
@@ -175,18 +175,18 @@ class X11Test : public XCB::RootDisplay {
         }
 
         auto modes = getRandrModesInfo();
-        Application::info("modes: %d", modes.size());
+        Application::info("modes: {}", modes.size());
 
         auto modes2 = getRandrOutputModes(curout);
 
         for(auto info : modes) {
             if(std::ranges::any_of(modes2, [&](auto & id) { return id == info.id; })) {
-                Application::info("mode 0x%08x, width: %d, height: %d, clock: %d", info.id, info.width, info.height, info.dot_clock);
+                Application::info("mode 0x%08x, width: {}, height: {}, clock: {}", info.id, info.width, info.height, info.dot_clock);
             }
         }
 
         for(const auto & size : getRandrScreenSizes()) {
-            Application::info("screen size: %d, %d", size.width, size.height);
+            Application::info("screen size: {}, {}", size.width, size.height);
         }
 
         return true;
@@ -199,7 +199,7 @@ class X11Test : public XCB::RootDisplay {
         if(auto err = xcbReply.error()) {
             Application::error("xcb_xkb_get_state: {}", "failed");
         } else if(auto reply = xcbReply.reply()) {
-            Application::info("current layout: %d", reply->group);
+            Application::info("current layout: {}", reply->group);
             return true;
         }
 
@@ -223,7 +223,7 @@ class X11Test : public XCB::RootDisplay {
         //test_xkblayoutcur();
 
         Application::info("xkb group names1: {}", Tools::join(getXkbNames(), ",").c_str());
-        Application::info("xkb layout group: %d", getXkbLayoutGroup());
+        Application::info("xkb layout group: {}", getXkbLayoutGroup());
 
         fakeInputKeycode(96, true);
         Application::info("xkb group names2: {}", Tools::join(getXkbNames(), ",").c_str());
@@ -264,17 +264,17 @@ class X11Test : public XCB::RootDisplay {
 
                     if(pn && pn->atom == active) {
                         auto type = getPropertyType(_screen->root, active);
-                        Application::info("property: %d, `{}'", type, getAtomName(type).c_str());
+                        Application::info("property: {}, `{}'", type, getAtomName(type).c_str());
 
                         auto win = getPropertyWindow(_screen->root, active);
                         Application::info("property change for window id: %08x", win);
 
                         auto str1 = getPropertyString(win, XCB_ATOM_WM_CLASS);
                         //auto str2 = getPropertyString(win, XCB_ATOM_WM_CLASS, str1.size() + 1);
-                        Application::info("win: %08x, wmclass: `{}', %d", win, str1.c_str(), str1.size());
+                        Application::info("win: %08x, wmclass: `{}', {}", win, str1.c_str(), str1.size());
                         /*
                                                 auto list = getPropertyStringList(win, XCB_ATOM_WM_CLASS);
-                            	                Application::info("list: %d", list.size());
+                            	                Application::info("list: {}", list.size());
                             	                if(1 < list.size())
                                                     Application::info("win: %08x, wmclass: `{}', `{}'", win, list.front().c_str(), list.back().c_str());
                         */
@@ -309,7 +309,7 @@ class App : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("xcb display info, width: %d, height: %d, depth: %d", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
+        Application::info("xcb display info, width: {}, height: {}, depth: {}", _xcbDisplay->width(), _xcbDisplay->height(), _xcbDisplay->depth());
 
         const xcb_visualtype_t* visual = _xcbDisplay->visual();
 
@@ -318,7 +318,7 @@ class App : public Application {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: xcb max request: %d", __FUNCTION__, _xcbDisplay->getMaxRequest());
+        Application::info("{}: xcb max request: {}", __FUNCTION__, _xcbDisplay->getMaxRequest());
 
         // _xcbDisplay->test_randr();
         _xcbDisplay->test_extinfo();
@@ -326,7 +326,7 @@ class App : public Application {
 
         //XCB::Region reg{10, 10, 9, 9};
         //for(auto coord = reg.coordBegin(); coord.isValid(); ++coord)
-        //    Application::info("region coord: %d, %d", coord.x, coord.y);
+        //    Application::info("region coord: {}, {}", coord.x, coord.y);
 
         //_xcbDisplay->test_randr_outputs();
         //_xcbDisplay->setRandrScreenSize(XCB::Size(1201, 887));

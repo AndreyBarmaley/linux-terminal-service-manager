@@ -683,7 +683,7 @@ namespace LTSM {
         struct stat st = {};
 
         if(0 > ::stat(local.c_str(), & st)) {
-            Application::error("{}: {} failed, error: {}, code: %d, path: `{}'", __FUNCTION__, "stat", strerror(errno), errno,
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "stat", strerror(errno), errno,
                                local.c_str());
             throw fuse_error(NS_FuncName);
         }
@@ -890,7 +890,7 @@ namespace LTSM {
     }
 
     int FuseSessionBus::start(void) {
-        Application::info("service started, uid: %d, pid: %d, version: %d", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
+        Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_FUSE_VERSION);
 
         signal(SIGTERM, signalHandler);
         signal(SIGINT, signalHandler);
@@ -915,7 +915,7 @@ namespace LTSM {
     }
 
     void FuseSessionBus::serviceShutdown(void) {
-        Application::debug(DebugType::Dbus, "{}: pid: %d", __FUNCTION__, getpid());
+        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
         conn->leaveEventLoop();
     }
 
@@ -983,7 +983,7 @@ int main(int argc, char** argv) {
 #endif
 
         if(! LTSM::conn) {
-            LTSM::Application::error("dbus connection failed, uid: %d", getuid());
+            LTSM::Application::error("dbus connection failed, uid: {}", getuid());
             return EXIT_FAILURE;
         }
 

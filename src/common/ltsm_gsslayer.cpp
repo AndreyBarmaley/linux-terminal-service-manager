@@ -435,7 +435,7 @@ namespace Gss {
         OM_uint32 stat;
         auto buf = recvToken();
 
-        Application::debug(DebugType::Gss, "{}: data length: %lu", __FUNCTION__, buf.size());
+        Application::debug(DebugType::Gss, "{}: data length: {}", __FUNCTION__, buf.size());
 
         gss_buffer_desc in_buf{ buf.size(), (void*) buf.data() };
         gss_buffer_desc out_buf{ 0, nullptr, };
@@ -459,7 +459,7 @@ namespace Gss {
             throw std::invalid_argument("context is null");
         }
 
-        Application::debug(DebugType::Gss, "{}: data length: %lu", __FUNCTION__, len);
+        Application::debug(DebugType::Gss, "{}: data length: {}", __FUNCTION__, len);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ len, (void*) buf };
@@ -487,7 +487,7 @@ namespace Gss {
         // recv token
         auto buf = recvToken();
 
-        Application::debug(DebugType::Gss, "{}: data length: %lu", __FUNCTION__, buf.size());
+        Application::debug(DebugType::Gss, "{}: data length: {}", __FUNCTION__, buf.size());
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
@@ -508,7 +508,7 @@ namespace Gss {
             throw std::invalid_argument("context is null");
         }
 
-        Application::debug(DebugType::Gss, "{}: data length: %lu", __FUNCTION__, msgsz);
+        Application::debug(DebugType::Gss, "{}: data length: {}", __FUNCTION__, msgsz);
 
         OM_uint32 stat;
         gss_buffer_desc in_buf{ msgsz, (void*) msg };
@@ -569,7 +569,7 @@ namespace Gss {
 
     // ClientContext
     bool ClientContext::connectService(std::string_view service, bool mutual, CredentialPtr ptr) {
-        Application::debug(DebugType::Gss, "{}: service: `%.*s', mutual: %d", __FUNCTION__, static_cast<int>(service.size()), service.data(), static_cast<int>(mutual));
+        Application::debug(DebugType::Gss, "{}: service: `%.*s', mutual: {}", __FUNCTION__, static_cast<int>(service.size()), service.data(), static_cast<int>(mutual));
 
         ErrorCodes err;
         auto name = importName(service, NameType::NtHostService, & err);
