@@ -110,7 +110,7 @@ namespace LTSM {
 
         if(err) {
             auto str = sock->recvString(err);
-            Application::error("{}: recv error: {}", __FUNCTION__, str.c_str());
+            Application::error("{}: recv error: {}", __FUNCTION__, str);
             return false;
         }
 
@@ -256,15 +256,15 @@ namespace LTSM {
     }
 
     void AudioSessionBus::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
         setDebugLevel(level);
     }
 
     bool AudioSessionBus::connectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket);
 
         if(std::ranges::any_of(clients, [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
-            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, clientSocket.c_str());
+            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, clientSocket);
             return false;
         }
 
@@ -273,7 +273,7 @@ namespace LTSM {
     }
 
     void AudioSessionBus::disconnectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket.c_str());
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket);
         std::erase_if(clients, [&clientSocket](auto & cli) {
             return cli.socketPath == clientSocket;
         });
@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
         LTSM::AudioSessionBus audioSession(*LTSM::conn, debug);
         return audioSession.start();
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

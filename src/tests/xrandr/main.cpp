@@ -103,7 +103,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(const auto & val : outputs) {
             auto info = randr->getOutputInfo(val);
-            Application::info("output name: {}, connected: {}, width: {}, height: {}", info->name.c_str(), (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
+            Application::info("output name: {}, connected: {}, width: {}, height: {}", info->name, (info->connected ? "+" : "-"), info->mm_width, info->mm_height);
 
             if(info->connected) {
                 curout = val;

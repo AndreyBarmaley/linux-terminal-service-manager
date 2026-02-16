@@ -241,7 +241,7 @@ namespace LTSM {
 
         const std::scoped_lock guard{ sockLock };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
-                           __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName.c_str());
+                           __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
         // send
         sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Connect);
         sock.sendIntLE64(context).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols);
@@ -343,7 +343,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
         // send
@@ -396,7 +396,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
         // send
@@ -444,7 +444,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
         }
 
         // send
@@ -543,7 +543,7 @@ namespace LTSM {
             std::string reader = sock.recvString(szReader);
 
             if(reader != state.szReader) {
-                Application::warning("{}: invalid reader, `{}' != `'", __FUNCTION__, reader.c_str(), state.szReader);
+                Application::warning("{}: invalid reader, `{}' != `'", __FUNCTION__, reader, state.szReader);
             }
 
             assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
@@ -813,7 +813,7 @@ namespace LTSM {
         auto currentReader = PcscLite::findReaderState(readerName);
 
         if(! currentReader) {
-            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName.c_str());
+            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName);
             replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
             return false;
         }
@@ -829,7 +829,7 @@ namespace LTSM {
 
             std::tie(remoteHandle, activeProtocol, ret) = ptr->sendConnect(id(), remoteContext, shareMode, prefferedProtocols, readerName);
         } else {
-            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName.c_str());
+            Application::error("{}: failed, reader not found: `{}'", __FUNCTION__, readerName);
             replyError(PcscLite::Connect, SCARD_E_INVALID_VALUE);
             return false;
         }
@@ -1090,7 +1090,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str.c_str());
+                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1111,7 +1111,7 @@ namespace LTSM {
 
     void PcscLocal::statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} reader: `{}', state: {:#08x}, protocol: {}, atrLen: {}",
-                           __FUNCTION__, id(), name.c_str(), state, protocol, atr.size());
+                           __FUNCTION__, id(), name, state, protocol, atr.size());
 
         assertm(reader, "reader not connected");
         assertm(atr.size() <= sizeof(reader->atr), "atr length invalid");
@@ -1126,7 +1126,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str.c_str());
+                Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
             }
         }
 
@@ -1228,7 +1228,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str.c_str());
+                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1283,7 +1283,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str.c_str());
+                Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1542,11 +1542,11 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Pcsc, "{}: reader: `{}', currentState: {:#08x}, eventState: {:#08x}, atrLen: {}",
-                           __FUNCTION__, readerName.c_str(), state.dwCurrentState, state.dwEventState, state.cbAtr);
+                           __FUNCTION__, readerName, state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str.c_str());
+            Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
         }
 
         if(state.dwEventState & SCARD_STATE_CHANGED) {
@@ -1603,7 +1603,7 @@ namespace LTSM {
 
             // not found, add new
             if(it == PcscLite::readers.end()) {
-                Application::debug(DebugType::Pcsc, "{}: added reader, name: `{}'", __FUNCTION__, name.c_str());
+                Application::debug(DebugType::Pcsc, "{}: added reader, name: `{}'", __FUNCTION__, name);
                 // find unused slot
                 auto rd = std::ranges::find_if(PcscLite::readers, [](auto & rd) {
                     return 0 == rd.name[0];
@@ -1662,11 +1662,11 @@ namespace LTSM {
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: socket path: `{}'", __FUNCTION__, pcscSocketPath.c_str());
+        Application::info("{}: socket path: `{}'", __FUNCTION__, pcscSocketPath.native());
 
         if(std::filesystem::is_socket(pcscSocketPath)) {
             std::filesystem::remove(pcscSocketPath);
-            Application::warning("{}: socket found: {}", __FUNCTION__, pcscSocketPath.c_str());
+            Application::warning("{}: socket found: {}", __FUNCTION__, pcscSocketPath.native());
         }
 
         signal(SIGTERM, signalHandler);
@@ -1745,19 +1745,19 @@ namespace LTSM {
     }
 
     void PcscSessionBus::setDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
         setDebugLevel(level);
     }
 
     bool PcscSessionBus::connectChannel(const std::string & clientPath) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath.c_str());
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath);
 
         bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &]() {
             return Tools::checkUnixSocket(clientPath);
         });
 
         if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, clientPath.c_str());
+            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, clientPath);
             return false;
         }
 
@@ -1772,7 +1772,7 @@ namespace LTSM {
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath.c_str());
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath);
         remote.reset();
     }
 }
@@ -1812,7 +1812,7 @@ int main(int argc, char** argv) {
         LTSM::PcscSessionBus pcscSession(*LTSM::conn, debug);
         return pcscSession.start();
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

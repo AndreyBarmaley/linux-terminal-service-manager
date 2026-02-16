@@ -119,7 +119,7 @@ namespace LTSM {
     bool Connector::X11VNC::xcbConnect(void) {
         // FIXM XAUTH
         std::string xauthFile = _config->getString("authfile");
-        Application::debug(DebugType::App, "{}: xauthfile: `{}'", __FUNCTION__, xauthFile.c_str());
+        Application::debug(DebugType::App, "{}: xauthfile: `{}'", __FUNCTION__, xauthFile);
         // Xvfb: wait display starting
         setenv("XAUTHORITY", xauthFile.c_str(), 1);
         size_t screen = _config->getInteger("display", 0);

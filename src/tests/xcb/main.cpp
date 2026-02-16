@@ -161,7 +161,7 @@ class X11Test : public XCB::RootDisplay {
 
         for(const auto & val : outputs) {
             auto info = getRandrOutputInfo(val);
-            Application::info("output name: {}, connected: {}, width: {}, height: {}", info.name.c_str(), (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
+            Application::info("output name: {}, connected: {}, width: {}, height: {}", info.name, (info.connected ? "+" : "-"), info.mm_width, info.mm_height);
 
             if(info.connected) {
                 curout = val;
@@ -222,11 +222,11 @@ class X11Test : public XCB::RootDisplay {
         //test_xkbgroup(1);
         //test_xkblayoutcur();
 
-        Application::info("xkb group names1: {}", Tools::join(getXkbNames(), ",").c_str());
+        Application::info("xkb group names1: {}", Tools::join(getXkbNames(), ","));
         Application::info("xkb layout group: {}", getXkbLayoutGroup());
 
         fakeInputKeycode(96, true);
-        Application::info("xkb group names2: {}", Tools::join(getXkbNames(), ",").c_str());
+        Application::info("xkb group names2: {}", Tools::join(getXkbNames(), ","));
         fakeInputKeycode(96, false);
 
         return false;
@@ -264,19 +264,19 @@ class X11Test : public XCB::RootDisplay {
 
                     if(pn && pn->atom == active) {
                         auto type = getPropertyType(_screen->root, active);
-                        Application::info("property: {}, `{}'", type, getAtomName(type).c_str());
+                        Application::info("property: {}, `{}'", type, getAtomName(type));
 
                         auto win = getPropertyWindow(_screen->root, active);
                         Application::info("property change for window id: {:#08x}", win);
 
                         auto str1 = getPropertyString(win, XCB_ATOM_WM_CLASS);
                         //auto str2 = getPropertyString(win, XCB_ATOM_WM_CLASS, str1.size() + 1);
-                        Application::info("win: {:#08x}, wmclass: `{}', {}", win, str1.c_str(), str1.size());
+                        Application::info("win: {:#08x}, wmclass: `{}', {}", win, str1, str1.size());
                         /*
                                                 auto list = getPropertyStringList(win, XCB_ATOM_WM_CLASS);
                             	                Application::info("list: {}", list.size());
                             	                if(1 < list.size())
-                                                    Application::info("win: {:#08x}, wmclass: `{}', `{}'", win, list.front().c_str(), list.back().c_str());
+                                                    Application::info("win: {:#08x}, wmclass: `{}', `{}'", win, list.front(), list.back());
                         */
                     }
                 }

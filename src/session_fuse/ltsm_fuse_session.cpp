@@ -683,12 +683,12 @@ namespace LTSM {
         struct stat st = {};
 
         if(0 > ::stat(local.c_str(), & st)) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'", __FUNCTION__, "stat", strerror(errno), errno,
-                               local.c_str());
+            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
+                    __FUNCTION__, "stat", strerror(errno), errno, local);
             throw fuse_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: added ino: {}, path: `{}'", __FUNCTION__, 1, local.c_str());
+        Application::debug(DebugType::App, "{}: added ino: {}, path: `{}'", __FUNCTION__, 1, local);
         auto pair = inodes.emplace(1, PathStat{"/", std::move(st)});
         pathes.emplace("/", pair.first->second.statPtr());
         // fuse init
@@ -711,7 +711,7 @@ namespace LTSM {
         fuse_set_signal_handlers(ses.get());
 
         if(0 > fuse_session_mount(ses.get(), local.c_str())) {
-            Application::error("{}: {} failed, local point: `{}'", __FUNCTION__, "fuse_session_mount", local.c_str());
+            Application::error("{}: {} failed, local point: `{}'", __FUNCTION__, "fuse_session_mount", local);
             throw fuse_error(NS_FuncName);
         }
 
@@ -799,7 +799,7 @@ namespace LTSM {
             if(ino != 1 &&
                startsWith(path, remotePoint)) {
                 path = path.substr(remotePoint.size());
-                Application::debug(DebugType::App, "{}: added ino: {}, path: `{}'", __FUNCTION__, ino, path.c_str());
+                Application::debug(DebugType::App, "{}: added ino: {}, path: `{}'", __FUNCTION__, ino, path);
                 // added relative path
                 auto pair = inodes.emplace(ino, PathStat{path, std::move(st)});
                 pathes.emplace(std::move(path), pair.first->second.statPtr());
@@ -847,7 +847,7 @@ namespace LTSM {
             return itp->second;
         }
 
-        Application::warning("{}: not found, ino: {}, path: `{}'", __FUNCTION__, parent, path.c_str());
+        Application::warning("{}: not found, ino: {}, path: `{}'", __FUNCTION__, parent, path);
         return nullptr;
     }
 
@@ -921,11 +921,11 @@ namespace LTSM {
 
     bool FuseSessionBus::mountPoint(const std::string & localPoint, const std::string & remotePoint,
                                     const std::string & fuseSocket) {
-        Application::debug(DebugType::Dbus, "{}: local point: `{}', remote point: `{}', fuse socket: `{}'", __FUNCTION__, localPoint.c_str(),
-                           remotePoint.c_str(), fuseSocket.c_str());
+        Application::debug(DebugType::Dbus, "{}: local point: `{}', remote point: `{}', fuse socket: `{}'",
+                    __FUNCTION__, localPoint, remotePoint, fuseSocket);
 
         if(std::ranges::any_of(childs, [&](auto & ptr) { return ptr->localPoint == localPoint; })) {
-            Application::error("{}: point busy, point: `{}'", __FUNCTION__, localPoint.c_str());
+            Application::error("{}: point busy, point: `{}'", __FUNCTION__, localPoint);
             return false;
         }
 
@@ -943,12 +943,12 @@ namespace LTSM {
     }
 
     void FuseSessionBus::setDebug(const std::string & level) {
-        LTSM::Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level.c_str());
+        LTSM::Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
         setDebugLevel(level);
     }
 
     void FuseSessionBus::umountPoint(const std::string & localPoint) {
-        LTSM::Application::debug(DebugType::Dbus, "{}: local point: `{}'", __FUNCTION__, localPoint.c_str());
+        LTSM::Application::debug(DebugType::Dbus, "{}: local point: `{}'", __FUNCTION__, localPoint);
         std::erase_if(childs, [&](auto & ptr) {
             return ptr->localPoint == localPoint;
         });
@@ -990,7 +990,7 @@ int main(int argc, char** argv) {
         LTSM::FuseSessionBus fuseSession(*LTSM::conn, debug);
         return fuseSession.start();
     } catch(const sdbus::Error & err) {
-        LTSM::Application::error("sdbus: [{}] {}", err.getName().c_str(), err.getMessage().c_str());
+        LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
         LTSM::Application::error("{}: exception: {}", NS_FuncNameV, err.what());
     }

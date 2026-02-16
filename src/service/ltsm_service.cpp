@@ -2585,7 +2585,7 @@ namespace LTSM::Manager {
         }
 
         Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket);
 
         if(! xvfb->dbusPcscChannelConnect(pcscSocket)) {
             auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket);
@@ -2646,7 +2646,7 @@ namespace LTSM::Manager {
         auto pcscSocket = std::filesystem::path(pcscFolder) / "sock";
 
         Application::info("{}: display: {}, user: {}, socket: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket.native());
 
         xvfb->dbusPcscChannelDisconnect(pcscSocket);
     }
@@ -2767,7 +2767,7 @@ namespace LTSM::Manager {
         auto localPoint = fusePointFolder.native();
 
         Application::info("{}: display: {}, user: {}, local point: `{}'",
-                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint.c_str());
+                          __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint);
 
         xvfb->dbusFuseUmountPoint(localPoint);
     }

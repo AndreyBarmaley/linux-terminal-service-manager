@@ -133,7 +133,7 @@ namespace LTSM {
             std::string file = configGetString("authfile");
 
             if(! file.empty() && ! std::filesystem::exists(file)) {
-                Application::warning("authfile not found: `{}'", file.c_str());
+                Application::warning("authfile not found: `{}'", file);
             }
         }
 
@@ -144,7 +144,7 @@ namespace LTSM {
                 Application::error("error: {}", "passwdfile not defined");
                 error = true;
             } else if(! std::filesystem::exists(file)) {
-                Application::error("passwdfile not found: `{}'", file.c_str());
+                Application::error("passwdfile not found: `{}'", file);
                 error = true;
             }
         }
