@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <format>
 #include <algorithm>
 
 #include "ltsm_application.h"
@@ -201,10 +202,10 @@ namespace LTSM {
     std::string RFB::encodingOpts(int type) {
         switch(type) {
             case ENCODING_ZLIB:
-                return Tools::joinToString("--encoding ", Tools::lower(encodingName(type)), ",zlev:<[1],2,3,4,5,6,7,8,9>");
+                return std::format("--encoding {},zlev:<[1],2,3,4,5,6,7,8,9>", Tools::lower(encodingName(type)));
 
             case ENCODING_LTSM_TJPG:
-                return Tools::joinToString("--encoding ", Tools::lower(encodingName(type)), ",qual:85,samp:<[420],422,440,444,gray,411>");
+                return std::format("--encoding {},qual:85,samp:<[420],422,440,444,gray,411>", Tools::lower(encodingName(type)));
 
             default:
                 break;

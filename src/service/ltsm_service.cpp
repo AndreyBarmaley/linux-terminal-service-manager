@@ -32,6 +32,7 @@
 #include <chrono>
 #include <atomic>
 #include <thread>
+#include <format>
 #include <cstring>
 #include <numeric>
 #include <cstdlib>
@@ -477,7 +478,7 @@ namespace LTSM::Manager {
         if(0 < displayNum && userInfo) {
             // path generated from /etc/ltsm/xclients
             // format userRuntimeDir / ltsm / dbus_session_%{display}
-            return userInfo->xdgRuntimeDir() / "ltsm" / Tools::joinToString("dbus_session_", displayNum);
+            return userInfo->xdgRuntimeDir() / "ltsm" / std::format("dbus_session_{}", displayNum);
         }
         return {};
     }
@@ -1103,8 +1104,8 @@ namespace LTSM::Manager {
                     const uint16_t fh = 24;
                     emitAddRenderRect(ptr->displayNum, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
                     // send render text
-                    const char* type = lastSecStarted < lastSecOnlined ? "Session limit - " : "Onlined limit - ";
-                    auto text = Tools::joinToString(type, "time left: ", lastsec, "sec");
+                    auto text = std::format("{} limit - time left: {}sec",
+                                (lastSecStarted < lastSecOnlined ? "Session" : "Online"), lastsec);
                     const int16_t px = (fw - text.size() * 8) / 2;
                     const int16_t py = (fh - 16) / 2;
                     emitAddRenderText(ptr->displayNum, text, {px, py}, {0xFF, 0xFF, 0});
@@ -1403,7 +1404,7 @@ namespace LTSM::Manager {
         sess->mode = loginMode ? SessionMode::Login : SessionMode::Started;
         sess->displayNum = freeDisplay;
         sess->tpStart = std::chrono::system_clock::now();
-        sess->displayAddr = Tools::joinToString(":", sess->displayNum);
+        sess->displayAddr = std::format(":{}", sess->displayNum);
         sess->lifeTimeLimitSec = configGetInteger("session:lifetime:timeout", 0);
 
         // session xauthfile
@@ -1882,7 +1883,7 @@ namespace LTSM::Manager {
 
             if(std::filesystem::exists(dstfile, err)) {
                 Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile.native());
-                sendNotifyCall(xvfb, "Transfer Skipping", Tools::joinToString("such a file exists: ", dstfile), NotifyParams::Warning);
+                sendNotifyCall(xvfb, "Transfer Skipping", std::format("such a file exists: {}", dstfile.native()), NotifyParams::Warning);
                 continue;
             }
 
@@ -1938,8 +1939,8 @@ namespace LTSM::Manager {
         if(! error) {
             Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
             sendNotifyCall(xvfb, "Transfer Complete",
-                          Tools::joinToString("new file added: <a href=\"file://", dstfile, "\">",
-                                              std::filesystem::path(dstfile).filename(), "</a>"),
+                          std::format("new file added: <a href='file://{}'>{}</a>",
+                                              dstfile, std::filesystem::path(dstfile).filename().native()),
                           NotifyParams::Information);
         }
     }
@@ -1973,8 +1974,6 @@ namespace LTSM::Manager {
             }
         }
 
-        auto msg = Tools::joinToString("Can you receive remote files? (", files.size(), ")");
-
         TransferRejectFunc emitTransferReject = [this](int display, const std::vector<FileNameSize> & files) {
             for(const auto & info : files) {
                 // empty dst/file erase job
@@ -1984,7 +1983,8 @@ namespace LTSM::Manager {
 
         //run background
         std::thread(& DBusAdaptor::transferFilesRequestCommunication, this, xvfb,
-                    files, std::move(emitTransferReject), msg).detach();
+                    files, std::move(emitTransferReject),
+                    std::format("Can you receive remote files? ({})", files.size())).detach();
         return true;
     }
 
@@ -2193,7 +2193,7 @@ namespace LTSM::Manager {
                 Application::error("{}: session busy, policy: {}, user: {}, session display: {}, from: {}, display: {}",
                                    __FUNCTION__, "authlock", login, userSess->displayNum, userSess->remoteAddr, xvfb->displayNum);
                 // informer login display
-                emitLoginFailure(xvfb->displayNum, Tools::joinToString("session busy, from: ", userSess->remoteAddr));
+                emitLoginFailure(xvfb->displayNum, std::format("session busy, from: {}", userSess->remoteAddr));
                 return false;
             } else if(userSess->policy == SessionPolicy::AuthTake) {
                 // shutdown prev connect

@@ -22,6 +22,7 @@
  **********************************************************************/
 
 #include <chrono>
+#include <format>
 #include <thread>
 #include <exception>
 
@@ -495,7 +496,7 @@ namespace LTSM::Connector {
                 if(fmax && fsize > fmax) {
                     Application::warning("{}: file size exceeds and skipped, file: {}", __FUNCTION__, fname);
                     busSendNotify(displayNum(), "Transfer Skipped",
-                                  Tools::joinToString("the file size exceeds, the allowed limit: ", prettyMb, "M, file: ", fname),
+                                  std::format("the file size exceeds, the allowed limit: {}M, file: {}", prettyMb, fname),
                                   NotifyParams::IconType::Error, NotifyParams::UrgencyLevel::Normal);
                     continue;
                 }

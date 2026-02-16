@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include <chrono>
+#include <format>
 #include <clocale>
 #include <cstring>
 #include <iostream>
@@ -514,7 +515,7 @@ namespace LTSM {
             files.emplace_back(env);
         }
 
-        auto ident_json = Tools::joinToString(ident, ".json");
+        auto ident_json = std::string(ident).append(".json");
         files.emplace_back(std::filesystem::current_path() / ident_json);
 
         auto ident_conf = std::filesystem::path("/etc/ltsm") / ident_json;
@@ -701,7 +702,7 @@ namespace LTSM {
         }
 
         if(debug) {
-            auto file = Tools::joinToString("/var/tmp/.fork_", ident, "_", getpid(), ".log");
+            auto file = std::format("/var/tmp/.fork_{}_{}.log", ident, getpid());
             Application::setDebugTarget(DebugTarget::SyslogFile, file);
             appDebugTypes = DebugType::All;
             appLogSync = true;
