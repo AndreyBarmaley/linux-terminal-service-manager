@@ -38,7 +38,7 @@ namespace LTSM {
                                       & error));
 
         if(! ctx || error != OPUS_OK) {
-            Application::error("{}: {} failed, error: %d, sampleRate: %" PRIu32 ", audioChannels: %" PRIu16, __FUNCTION__,
+            Application::error("{}: {} failed, error: %d, sampleRate: {}, audioChannels: {}", __FUNCTION__,
                                "opus_encoder_create", error, samplesPerSec, audioChannels);
             throw audio_error(NS_FuncName);
         }

@@ -972,13 +972,13 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
 
     auto channel = ns.recvInt8();
     auto length = ns.recvIntBE16();
-    Application::debug(DebugType::Channels, "{}: id: {}, data size: %" PRIu16, __FUNCTION__, channel, length);
+    Application::debug(DebugType::Channels, "{}: id: {}, data size: {}", __FUNCTION__, channel, length);
 
     auto buf = ns.recvData(length);
 
     if(channelDebug == channel) {
         auto str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
-        Application::trace(DebugType::Channels, "{}: id: {}, size: %" PRIu16 ", content: [{}]",
+        Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            __FUNCTION__, channel, length, str.c_str());
     }
 
@@ -1142,7 +1142,7 @@ LTSM::Channel::Remote2Local::Remote2Local(uint8_t cid, int flags) : id(cid) {
 }
 
 LTSM::Channel::Remote2Local::~Remote2Local() {
-    Application::info("{}: channel: %" PRIu8 ", receive: %lu byte, transfer: %lu byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
+    Application::info("{}: channel: {}, receive: %lu byte, transfer: %lu byte, error: %d", "Remote2Local", id, transfer1, transfer2, error);
 }
 
 bool LTSM::Channel::Remote2Local::isEmpty(void) const {
@@ -1265,7 +1265,7 @@ LTSM::Channel::Local2Remote::Local2Remote(uint8_t cid, int flags) : id(cid) {
 }
 
 LTSM::Channel::Local2Remote::~Local2Remote() {
-    Application::info("{}: channel: %" PRIu8 ", receive: %lu byte, transfer: %lu byte, error: %d", "Local2Remote", id, transfer1, transfer2, error);
+    Application::info("{}: channel: {}, receive: %lu byte, transfer: %lu byte, error: %d", "Local2Remote", id, transfer1, transfer2, error);
 }
 
 bool LTSM::Channel::Local2Remote::readData(void) {

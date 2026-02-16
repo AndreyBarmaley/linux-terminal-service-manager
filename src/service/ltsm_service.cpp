@@ -1057,7 +1057,7 @@ namespace LTSM::Manager {
                 auto startedSec = ptr->sessionStartedSec();
 
                 if(startedSec.count() > ptr->lifeTimeLimitSec) {
-                    Application::notice("{}: {} limit, display: {}, limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
                     displayShutdown(ptr, true);
                     continue;
@@ -1073,7 +1073,7 @@ namespace LTSM::Manager {
                 auto onlinedSec = ptr->sessionOnlinedSec();
 
                 if(onlinedSec.count() > ptr->onlineTimeLimitSec) {
-                    Application::notice("{}: {} limit, display: {}, limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "online", ptr->displayNum, static_cast<uint32_t>(ptr->onlineTimeLimitSec), onlinedSec.count());
                     emitShutdownConnector(ptr->displayNum);
                     continue;
@@ -1087,7 +1087,7 @@ namespace LTSM::Manager {
                 auto offlinedSec = ptr->sessionOfflinedSec();
 
                 if(offlinedSec.count() > ptr->offlineTimeLimitSec) {
-                    Application::notice("{}: {} limit, display: {}, limit: %" PRIu32 "sec, session alive: %" PRIu64 "sec",
+                    Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
                     displayShutdown(ptr, true);
                     continue;
@@ -2778,7 +2778,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetChannelDebug(const int32_t & display, const uint8_t & channel, const bool & debug) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, channel: %" PRIu8 ", debug: {}",
+        Application::debug(DebugType::Dbus, "{}: display: {}, channel: {}, debug: {}",
                            __FUNCTION__, display, channel, (debug ? "true" : "false"));
         emitDebugChannel(display, channel, debug);
     }
@@ -2796,7 +2796,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busDisplayResized(const int32_t & display, const uint16_t & width, const uint16_t & height) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, width: %" PRIu16 ", height: %" PRIu16,
+        Application::debug(DebugType::Dbus, "{}: display: {}, width: {}, height: {}",
                            __FUNCTION__, display, width, height);
 
         if(auto xvfb = findDisplaySession(display)) {
@@ -2818,7 +2818,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionLifetimeLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: {}, limit: {}", __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->lifeTimeLimitSec = limit;
@@ -2829,7 +2829,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionOnlineLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: {}, limit: {}", __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->onlineTimeLimitSec = limit;
@@ -2840,7 +2840,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionOfflineLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: {}, limit: {}", __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->offlineTimeLimitSec = limit;
@@ -2851,7 +2851,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::busSetSessionIdleLimitSec(const int32_t & display, const uint32_t & limit) {
-        Application::debug(DebugType::Dbus, "{}: display: {}, limit: %" PRIu32, __FUNCTION__, display, limit);
+        Application::debug(DebugType::Dbus, "{}: display: {}, limit: {}", __FUNCTION__, display, limit);
 
         if(auto xvfb = findDisplaySession(display)) {
             xvfb->idleTimeLimitSec = limit;

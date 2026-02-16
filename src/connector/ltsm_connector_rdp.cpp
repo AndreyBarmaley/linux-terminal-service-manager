@@ -540,7 +540,7 @@ namespace LTSM::Connector {
             if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
                                                     freeRdp->peer->settings->DesktopHeight))) {
                 wsz = XCB::RootDisplay::size();
-                Application::info("change session size [%" PRIu16 ", %" PRIu16 "], display: %d", wsz.width, wsz.height, displayNum());
+                Application::info("change session size [{}, {}], display: %d", wsz.width, wsz.height, displayNum());
             }
         } else {
             // full update
@@ -580,14 +580,14 @@ namespace LTSM::Connector {
     }
 
     void ConnectorRdp::desktopResizeEvent(freerdp_peer & peer, uint16_t width, uint16_t height) {
-        Application::info("{}: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, width, height);
+        Application::info("{}: size: [{}, {}]", __FUNCTION__, width, height);
         auto context = static_cast<ServerContext*>(peer.context);
         context->activated = false;
         peer.settings->DesktopWidth = width;
         peer.settings->DesktopHeight = height;
 
         if(peer.update->DesktopResize(peer.update->context)) {
-            Application::error("{}: [%" PRIu16 ", %" PRIu16 "] failed", __FUNCTION__, width, height);
+            Application::error("{}: [{}, {}] failed", __FUNCTION__, width, height);
         }
     }
 
@@ -595,8 +595,7 @@ namespace LTSM::Connector {
         //auto context = static_cast<ServerContext*>(freeRdp->peer->context);
         auto reply = XCB::RootDisplay::copyRootImageRegion(reg);
         // reply info dump
-        Application::debug(DebugType::App, "{}: request size: [%" PRIu16 ", %" PRIu16 "], reply length: %lu, bits per pixel: %" PRIu8
-                           ", red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
+        Application::debug(DebugType::App, "{}: request size: [{}, {}], reply length: %lu, bits per pixel: {}, red: %08" PRIx32 ", green: %08" PRIx32 ", blue: %08" PRIx32,
                            __FUNCTION__, reg.width, reg.height, reply->size(), reply->bitsPerPixel(), reply->rmask, reply->gmask, reply->bmask);
         FrameBuffer frameBuffer(reply->data(), reg, serverFormat);
         // apply render primitives
@@ -612,7 +611,7 @@ namespace LTSM::Connector {
         const size_t pixelFormat = freeRdp->peer->settings->OsMajorType == 6 ? PIXEL_FORMAT_RGBX32 : PIXEL_FORMAT_BGRX32;
 
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
-            Application::error("{}: {} failed, length: %lu, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
+            Application::error("{}: {} failed, length: %lu, size: [{}, {}], bpp: {}", __FUNCTION__,
                                "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
@@ -638,8 +637,7 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [{}, {}, %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
-                           ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+        Application::debug(DebugType::App, "{}: area [{}, {}, {}, {}], bits per pixel: {}, scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -716,7 +714,7 @@ namespace LTSM::Connector {
         const size_t tileSize = 64;
 
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
-            Application::error("{}: {} failed, length: %lu, size: [%" PRIu16 ", %" PRIu16 "], bpp: %" PRIu8, __FUNCTION__,
+            Application::error("{}: {} failed, length: %lu, size: [{}, {}], bpp: {}", __FUNCTION__,
                                "align region", reply->size(), reg.height, reg.width, reply->bytePerPixel());
             throw rdp_error(NS_FuncName);
         }
@@ -765,8 +763,7 @@ namespace LTSM::Connector {
             throw rdp_error(NS_FuncName);
         }
 
-        Application::debug(DebugType::App, "{}: area [{}, {}, %" PRIu16 ", %" PRIu16 "], bits per pixel: %" PRIu8
-                           ", scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
+        Application::debug(DebugType::App, "{}: area [{}, {}, {}, {}], bits per pixel: {}, scanline: %lu", __FUNCTION__, reg.x, reg.y, reg.width, reg.height, reply->bitsPerPixel(), scanLineBytes);
         auto blocks = reg.divideBlocks(XCB::Size(tileSize, tileSize));
         // Compressed header of bitmap
         // http://msdn.microsoft.com/en-us/library/cc240644.aspx
@@ -1065,7 +1062,7 @@ namespace LTSM::Connector {
     ///               PTR_FLAGS_WHEEL(0x0200), PTR_FLAGS_WHEEL_NEGATIVE(0x0100), PTR_FLAGS_MOVE(0x0800), PTR_FLAGS_DOWN(0x8000)
     /// @see:  freerdp/input.h
     BOOL ConnectorRdp::cbServerMouseEvent(rdpInput* input, UINT16 flags, UINT16 posx, UINT16 posy) {
-        Application::debug(DebugType::App, "{}: flags: 0x%04" PRIx16 ", pos: [%" PRIu16 ", %" PRIu16 "], input: {}, context: {}", __FUNCTION__,
+        Application::debug(DebugType::App, "{}: flags: 0x%04" PRIx16 ", pos: [{}, {}], input: {}, context: {}", __FUNCTION__,
                            flags, posx, posy, fmt::ptr(input), fmt::ptr(input->context));
         auto context = static_cast<ServerContext*>(input->context);
         auto connector = context->conrdp;

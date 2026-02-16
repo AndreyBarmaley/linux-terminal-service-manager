@@ -359,7 +359,7 @@ namespace LTSM {
         // RFB 6.3.2 server init
         auto fbWidth = recvIntBE16();
         auto fbHeight = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, fbWidth, fbHeight);
+        Application::debug(DebugType::Rfb, "{}: remote framebuffer size: [{}, {}]", __FUNCTION__, fbWidth, fbHeight);
         // recv server pixel format
         int bpp = recvInt8();
         int depth = recvInt8();
@@ -373,8 +373,7 @@ namespace LTSM {
         int bshift = recvInt8();
         recvSkip(3);
         serverPf = PixelFormat(bpp, rmax, gmax, bmax, 0, rshift, gshift, bshift, 0);
-        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: %" PRIu8 ", depth: %d, bigendian: %d, true color: %d, red(%" PRIu16
-                           ",%" PRIu8 "), green(%" PRIu16 ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+        Application::debug(DebugType::Rfb, "{}: remote pixel format: bpp: {}, depth: %d, bigendian: %d, true color: %d, red({},{}), green({},{}), blue({},{})",
                            __FUNCTION__, serverPf.bitsPerPixel(), depth, (int) serverBigEndian, (int) serverTrueColor,
                            serverPf.rmax(), serverPf.rshift(), serverPf.gmax(), serverPf.gshift(), serverPf.bmax(), serverPf.bshift());
 
@@ -593,7 +592,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::displayResizeEvent(const XCB::Size & dsz) {
-        Application::info("{}: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("{}: display resized, new size: [{}, {}]", __FUNCTION__, dsz.width, dsz.height);
 #ifdef LTSM_DECODING_FFMPEG
         // event background
         std::thread([this, sz = dsz]() {
@@ -609,8 +608,7 @@ namespace LTSM {
 
     void RFB::ClientDecoder::sendPixelFormat(void) {
         auto & pf = clientFormat();
-        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
-                           ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+        Application::debug(DebugType::Rfb, "{}: local pixel format: bpp: {}, bigendian: %d, red({},{}), green({},{}), blue({},{})",
                            __FUNCTION__, pf.bitsPerPixel(), (int) platformBigEndian(),
                            pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         std::scoped_lock guard{ sendLock };
@@ -660,7 +658,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendPointerEvent(uint8_t buttons, uint16_t posx, uint16_t posy) {
-        Application::debug(DebugType::Rfb, "{}: pointer: [%" PRIu16 ", %" PRIu16 "], buttons: 0x%02" PRIx8, __FUNCTION__, posx, posy, buttons);
+        Application::debug(DebugType::Rfb, "{}: pointer: [{}, {}], buttons: 0x%02" PRIx8, __FUNCTION__, posx, posy, buttons);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_EVENT_POINTER);
         sendInt8(buttons);
@@ -686,7 +684,7 @@ namespace LTSM {
             // is used and abs(length) is the total number of following bytes.
             sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - len + 1);
         } else {
-            Application::debug(DebugType::Rfb, "{}: length text: %" PRIu32, __FUNCTION__, len);
+            Application::debug(DebugType::Rfb, "{}: length text: {}", __FUNCTION__, len);
             sendIntBE32(len);
         }
 
@@ -695,7 +693,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendContinuousUpdates(bool enable, const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: status: {}, region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__,
+        Application::debug(DebugType::Rfb, "{}: status: {}, region [{}, {}, {}, {}]", __FUNCTION__,
                            (enable ? "enable" : "disable"), reg.x, reg.y, reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         sendInt8(CLIENT_CONTINUOUS_UPDATES);
@@ -714,7 +712,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendFrameBufferUpdate(const XCB::Region & reg, bool incr) {
-        Application::debug(DebugType::Rfb, "{}: region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::Rfb, "{}: region [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         // send framebuffer update request
@@ -809,7 +807,7 @@ namespace LTSM {
         recvSkip(1);
         auto numRects = recvIntBE16();
         XCB::Region reg;
-        Application::debug(DebugType::Rfb, "{}: num rects: %" PRIu16, __FUNCTION__, numRects);
+        Application::debug(DebugType::Rfb, "{}: num rects: {}", __FUNCTION__, numRects);
 
         while(0 < numRects--) {
             reg.x = recvIntBE16();
@@ -817,7 +815,7 @@ namespace LTSM {
             reg.width = recvIntBE16();
             reg.height = recvIntBE16();
             int encodingType = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: region [{}, {}, %" PRIu16 ", %" PRIu16 "], encodingType: {}",
+            Application::debug(DebugType::Rfb, "{}: region [{}, {}, {}, {}], encodingType: {}",
                                __FUNCTION__, reg.x, reg.y, reg.width, reg.height, RFB::encodingName(encodingType));
 
             switch(encodingType) {
@@ -869,7 +867,7 @@ namespace LTSM {
         recvSkip(1);
         auto firstColor = recvIntBE16();
         auto numColors = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: num colors: %" PRIu16 ", first color: %" PRIu16, __FUNCTION__, numColors, firstColor);
+        Application::debug(DebugType::Rfb, "{}: num colors: {}, first color: {}", __FUNCTION__, numColors, firstColor);
         std::vector<Color> colors(numColors);
 
         for(auto & col : colors) {
@@ -919,12 +917,12 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingLastRect(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
     }
 
     void RFB::ClientDecoder::recvDecodingLtsmCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
 
         auto cursorId = recvIntBE32();
@@ -946,7 +944,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingRichCursor(const XCB::Region & reg) {
-        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Rfb, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
         auto buf = recvData(static_cast<size_t>(reg.width) * reg.height * clientFormat().bytePerPixel());
         auto mask = recvData(std::floor((reg.width + 7) / 8) * reg.height);
@@ -956,7 +954,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::recvDecodingExtDesktopSize(int status, int err, const XCB::Size & sz) {
-        Application::info("{}: status: %d, error: %d, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, status, err, sz.width,
+        Application::info("{}: status: %d, error: %d, size: [{}, {}]", __FUNCTION__, status, err, sz.width,
                           sz.height);
         auto numOfScreens = recvInt8();
         recvSkip(3);
@@ -969,7 +967,7 @@ namespace LTSM {
             screen.width = recvIntBE16();
             screen.height = recvIntBE16();
             auto flags = recvIntBE32();
-            Application::debug(DebugType::Rfb, "{}: screen: %" PRIu32 ", area: [{}, {}, %" PRIu16 ", %" PRIu16 "], flags: 0x%08"
+            Application::debug(DebugType::Rfb, "{}: screen: {}, area: [{}, {}, {}, {}], flags: 0x%08"
                                PRIx32, __FUNCTION__, screen.id, posx, posy, screen.width, screen.height, flags);
         }
 
@@ -977,7 +975,7 @@ namespace LTSM {
     }
 
     void RFB::ClientDecoder::sendSetDesktopSize(const XCB::Size & wsz) {
-        Application::info("{}: size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, wsz.width, wsz.height);
+        Application::info("{}: size: [{}, {}]", __FUNCTION__, wsz.width, wsz.height);
         std::scoped_lock guard{ sendLock };
         sendInt8(RFB::CLIENT_SET_DESKTOP_SIZE);
         sendZero(1);
@@ -1015,7 +1013,7 @@ namespace LTSM {
             auto buf = recvData(len);
             clientRecvLtsmDataEvent(buf);
         } else {
-            Application::error("{}: unknown type: %" PRIu32, __FUNCTION__, type);
+            Application::error("{}: unknown type: {}", __FUNCTION__, type);
             throw rfb_error(NS_FuncName);
         }
     }

@@ -128,7 +128,7 @@ namespace LTSM {
                     auto beg = clientClipboard.get() + offset;
                     return std::vector<uint8_t>(beg, beg + length);
                 } else {
-                    Application::error("{}: invalid length: %lu, offset: %" PRIu32, __FUNCTION__, length, offset);
+                    Application::error("{}: invalid length: %lu, offset: {}", __FUNCTION__, length, offset);
                 }
             }
 

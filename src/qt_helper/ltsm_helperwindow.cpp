@@ -85,7 +85,7 @@ namespace LTSM::LoginHelper {
 
     void DBusProxy::onLoginSuccess(const int32_t & display, const std::string & userName, const uint32_t & userUid) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: {}, username: `{}', uid: %" PRIu32,
+            Application::debug(DebugType::Dbus, "{}: display: {}, username: `{}', uid: {}",
                                __FUNCTION__, display, userName.c_str(), userUid);
 
             emit loginSuccessNotify(QString::fromStdString(userName));
@@ -95,7 +95,7 @@ namespace LTSM::LoginHelper {
     void DBusProxy::onHelperSetLoginPassword(const int32_t & display, const std::string & login,
             const std::string & pass, const bool & autologin) {
         if(display == displayNum) {
-            Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: %" PRIu32 ", auto login: %d",
+            Application::debug(DebugType::Dbus, "{}: display: {}, login: `{}', pass length: {}, auto login: %d",
                                __FUNCTION__, display, login.c_str(), pass.size(), static_cast<int>(autologin));
 
             emit loginPasswordChangedNotify(QString::fromStdString(login), QString::fromStdString(pass), autologin);
@@ -426,7 +426,7 @@ namespace LTSM::LoginHelper {
             auto login = ui->comboBoxUsername->currentText().toStdString();
             auto pass = ui->lineEditPassword->text().toStdString();
 
-            Application::debug(DebugType::App, "{}: display: {}, user: `{}', pass length: %" PRIu32,
+            Application::debug(DebugType::App, "{}: display: {}, user: `{}', pass length: {}",
                                __FUNCTION__, displayNum, login.c_str(), pass.size());
 
             if(! dbus->busSetAuthenticateLoginPass(displayNum, login, pass)) {

@@ -114,7 +114,7 @@ namespace LTSM {
     }
 
     void RFB::X11Client::selectionReceiveData(xcb_atom_t atom, const uint8_t* buf, uint32_t len) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: 0x%08" PRIx32 ", length: %" PRIu32, __FUNCTION__, atom, len);
+        Application::debug(DebugType::X11Cli, "{}, atom: 0x%08" PRIx32 ", length: {}", __FUNCTION__, atom, len);
 
         if(auto ptr = const_cast<RFB::X11Client*>(this)) {
             if(extClipboardRemoteCaps()) {
@@ -217,7 +217,7 @@ namespace LTSM {
     }
 
     std::vector<uint8_t> RFB::X11Client::selectionSourceData(xcb_atom_t atom, size_t offset, uint32_t length) const {
-        Application::debug(DebugType::X11Cli, "{}, atom: 0x%08" PRIx32 ", offset: %lu, length: %" PRIu32, __FUNCTION__, atom, offset, length);
+        Application::debug(DebugType::X11Cli, "{}, atom: 0x%08" PRIx32 ", offset: %lu, length: {}", __FUNCTION__, atom, offset, length);
 
         auto targets = selectionSourceTargets();
 
@@ -231,7 +231,7 @@ namespace LTSM {
             auto beg = clientClipboard.begin() + offset;
             return std::vector<uint8_t>(beg, beg + length);
         } else {
-            Application::error("{}: invalid length: %" PRIu32 ", offset: %lu", __FUNCTION__, length, offset);
+            Application::error("{}: invalid length: {}, offset: %lu", __FUNCTION__, length, offset);
         }
 
         return {};

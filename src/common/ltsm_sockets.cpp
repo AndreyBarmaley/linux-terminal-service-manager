@@ -594,7 +594,7 @@ namespace LTSM {
         int fd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 
         if(0 > fd) {
-            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
             return -1;
         }
 
@@ -602,7 +602,7 @@ namespace LTSM {
         int err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, & reuse, sizeof(reuse));
 
         if(0 > err) {
-            Application::warning("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.c_str(), port);
+            Application::warning("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "socket reuseaddr", strerror(errno), err, ipaddr.c_str(), port);
         }
 
         struct sockaddr_in sockaddr;
@@ -613,17 +613,17 @@ namespace LTSM {
         sockaddr.sin_port = htons(port);
         sockaddr.sin_addr.s_addr = ipaddr == "any" ? htonl(INADDR_ANY) : inet_addr(ipaddr.c_str());
 
-        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "{}: bind addr: `{}', port: {}", __FUNCTION__, ipaddr.c_str(), port);
 
         if(0 != bind(fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "bind", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "bind", strerror(errno), errno, ipaddr.c_str(), port);
             return -1;
         }
 
         Application::debug(DebugType::Sock, "{}: listen: %d, conn: %d", __FUNCTION__, fd, conn);
 
         if(0 != ::listen(fd, conn)) {
-            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "listen", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "listen", strerror(errno), errno, ipaddr.c_str(), port);
             close(fd);
             return -1;
         }
@@ -736,7 +736,7 @@ namespace LTSM {
         int sock = socket(AF_INET, SOCK_STREAM, 0);
 
         if(0 > sock) {
-            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "socket", strerror(errno), errno, ipaddr.c_str(), port);
             return -1;
         }
 
@@ -747,10 +747,10 @@ namespace LTSM {
         sockaddr.sin_addr.s_addr = inet_addr(ipaddr.c_str());
         sockaddr.sin_port = htons(port);
 
-        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: %" PRIu16, __FUNCTION__, ipaddr.c_str(), port);
+        Application::debug(DebugType::Sock, "{}: ipaddr: `{}', port: {}", __FUNCTION__, ipaddr.c_str(), port);
 
         if(0 != connect(sock, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_in))) {
-            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: %" PRIu16, __FUNCTION__, "connect", strerror(errno), errno, ipaddr.c_str(), port);
+            Application::error("{}: {} failed, error: {}, code: %d, addr `{}', port: {}", __FUNCTION__, "connect", strerror(errno), errno, ipaddr.c_str(), port);
             close(sock);
             sock = -1;
         } else {

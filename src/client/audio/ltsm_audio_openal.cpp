@@ -71,7 +71,7 @@ namespace LTSM {
         }
 
         if(! fmtFormat) {
-            Application::error("{}: {} failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
+            Application::error("{}: {} failed, bits: {}, rate: {}, channels: {}",
                                __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
             throw audio_error(NS_FuncName);
         }

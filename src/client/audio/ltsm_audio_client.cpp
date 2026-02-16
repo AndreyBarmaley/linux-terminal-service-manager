@@ -70,7 +70,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
-    Application::info("{}: channelId: %" PRIu8, __FUNCTION__, cid);
+    Application::info("{}: channelId: {}", __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
@@ -154,7 +154,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 
     audioVer = sb.readIntLE16();
     auto numEnc = sb.readIntLE16();
-    Application::info("{}: server proto version: %" PRIu16 ", encodings count: %" PRIu16, __FUNCTION__, audioVer, numEnc);
+    Application::info("{}: server proto version: {}, encodings count: {}", __FUNCTION__, audioVer, numEnc);
     formats.clear();
 
     if(numEnc * 10 > sb.last()) {
@@ -216,7 +216,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
         return false;
     }
 
-    Application::info("{}: audio format: channels: %" PRIu16 ", samples: %" PRIu32 ", bits: %" PRIu16,
+    Application::info("{}: audio format: channels: {}, samples: {}, bits: {}",
                       __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
 
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
@@ -262,7 +262,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     }
 
     auto len = sb.readIntLE32();
-    Application::debug(DebugType::Audio, "{}: data size: %" PRIu32, __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
     std::vector<uint8_t> buf(len, 0);
     player->streamWrite(buf.data(), buf.size());
@@ -274,7 +274,7 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
     }
 
     auto len = sb.readIntLE32();
-    Application::debug(DebugType::Audio, "{}: data size: %" PRIu32, __FUNCTION__, len);
+    Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
     if(len > sb.last()) {
         throw std::underflow_error(NS_FuncName);

@@ -70,7 +70,7 @@ namespace LTSM {
                 break;
 
             default:
-                Application::error("{}: {} failed, bits: %" PRIu16 ", rate: %" PRIu16 ", channels: %" PRIu16,
+                Application::error("{}: {} failed, bits: {}, rate: {}, channels: {}",
                                    __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
                 throw audio_error(NS_FuncName);
         }
@@ -79,7 +79,7 @@ namespace LTSM {
         audioSpec.channels = fmt.channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
-            Application::error("{}: {} failed, format: `{}', rate: %" PRIu32 ", channels: %" PRIu8,
+            Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
         }
@@ -123,7 +123,7 @@ namespace LTSM {
         audioSpec.channels = channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
-            Application::error("{}: {} failed, format: `{}', rate: %" PRIu32 ", channels: %" PRIu8,
+            Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
         }

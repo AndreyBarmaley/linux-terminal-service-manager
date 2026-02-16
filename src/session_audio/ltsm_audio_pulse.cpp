@@ -296,7 +296,7 @@ namespace LTSM {
         audioSpec.channels = channels;
 
         if(0 == pa_sample_spec_valid(& audioSpec)) {
-            Application::error("{}: {} failed, format: `{}', rate: %" PRIu32 ", channels: %" PRIu8,
+            Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
             throw audio_error(NS_FuncName);
         }
@@ -660,7 +660,7 @@ namespace LTSM {
         bufferAttr.maxlength = pa_usec_to_bytes(latency, & audioSpec);
         bufferAttr.tlength = pa_usec_to_bytes(latency, & audioSpec);
         bufferAttr.minreq = pa_usec_to_bytes(0, & audioSpec);
-        Application::debug(DebugType::Audio, "{}: latency: %" PRIu32 "ms, buffer max length: %" PRIu32 ", target length: %" PRIu32,
+        Application::debug(DebugType::Audio, "{}: latency: {}ms, buffer max length: {}, target length: {}",
                            __FUNCTION__, ms, bufferAttr.maxlength, bufferAttr.tlength);
 
         if(auto op = pa_stream_set_buffer_attr(stream.get(), & bufferAttr, nullptr, nullptr)) {

@@ -67,7 +67,7 @@ namespace LTSM {
         }
 
         void error(const xcb_generic_error_t* err, const char* func, const char* xcbname) {
-            Application::error("{}: {} failed, error code: %" PRIu8 ", major: 0x%02" PRIx8 ", minor: 0x%04" PRIx16 ", sequence: %" PRIu16,
+            Application::error("{}: {} failed, error code: {}, major: 0x%02" PRIx8 ", minor: 0x%04" PRIx16 ", sequence: {}",
                                func, xcbname, err->error_code, err->major_code, err->minor_code, err->sequence);
         }
 
@@ -208,7 +208,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
@@ -224,7 +224,7 @@ namespace LTSM {
                 res = 0;
             }
 
-            Application::debug(DebugType::Xcb, "{}: rect: [{}, {}, %" PRIu16 ", %" PRIu16 "], resource id: 0x%08" PRIx32,
+            Application::debug(DebugType::Xcb, "{}: rect: [{}, {}, {}, {}], resource id: 0x%08" PRIx32,
                                __FUNCTION__, rect.x, rect.y, rect.width, rect.height, res);
 
             return std::make_unique<FixesRegionId>(conn, res);
@@ -393,7 +393,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
@@ -426,7 +426,7 @@ namespace LTSM {
 
     bool XCB::ModuleWindowDamage::addRegion(const xcb_rectangle_t & reg) const {
         if(addRegions(& reg, 1)) {
-            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, %" PRIu16 ", %" PRIu16 "]",
+            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, {}, {}]",
                                __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
 
             return true;
@@ -465,7 +465,7 @@ namespace LTSM {
             xcb_damage_subtract_checked(ptr.get(), xid, regid, XCB_XFIXES_REGION_NONE);
             xcb_xfixes_destroy_region(ptr.get(), regid);
 
-            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, %" PRIu16 ", %" PRIu16 "]",
+            Application::debug(DebugType::Xcb, "{}: damage: 0x%08" PRIx32 ", window: 0x%08" PRIx32 ", region: [{}, {}, {}, {}]",
                                __FUNCTION__, xid, win, reg.x, reg.y, reg.width, reg.height);
 
             return true;
@@ -491,7 +491,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension, version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension, version: {}.{}",
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
 
@@ -585,7 +585,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
 
@@ -997,7 +997,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: id: %08" PRIx32 ", mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
+            Application::debug(DebugType::Xcb, "{}: id: %08" PRIx32 ", mode: [{}, {}]", __FUNCTION__, reply->mode, mode_info.width, mode_info.height);
             return reply->mode;
         }
 
@@ -1089,7 +1089,7 @@ namespace LTSM {
                 auto modes = getOutputModes(output);
 
                 if(std::ranges::none_of(modes, [&](auto & val) { return mode == val; })) {
-                    Application::error("{}: output mode not found, mode: %" PRIu32 ", output: %" PRIu32, __FUNCTION__, mode, output);
+                    Application::error("{}: output mode not found, mode: {}, output: {}", __FUNCTION__, mode, output);
                     return false;
                 }
             }
@@ -1142,7 +1142,7 @@ namespace LTSM {
             width += 8 - alignW;
         }
 
-        Application::debug(DebugType::Xcb,  "{}: size: [%" PRIu16 ", %" PRIu16 "], dpi: %" PRIu16, __FUNCTION__, width, height, dpi);
+        Application::debug(DebugType::Xcb,  "{}: size: [{}, {}], dpi: {}", __FUNCTION__, width, height, dpi);
 
         uint32_t mm_width = width * 25.4 / dpi;
         uint32_t mm_height = height * 25.4 / dpi;
@@ -1200,7 +1200,7 @@ namespace LTSM {
             }
 
             if(! addOutputMode(output, mode)) {
-                Application::error("{}: {} failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "addOutputMode", szw, szh);
+                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "addOutputMode", szw, szh);
                 destroyMode(mode);
                 return false;
             }
@@ -1212,7 +1212,7 @@ namespace LTSM {
             });
 
             if(itm == modes.end()) {
-                Application::error("{}: {} failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getModesInfo", szw, szh);
+                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "getModesInfo", szw, szh);
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
@@ -1228,7 +1228,7 @@ namespace LTSM {
             });
 
             if(its == screenSizes.end()) {
-                Application::error("{}: {} failed, mode: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, "getScreenSizes", szw, szh);
+                Application::error("{}: {} failed, mode: [{}, {}]", __FUNCTION__, "getScreenSizes", szw, szh);
                 deleteOutputMode(output, mode);
                 destroyMode(mode);
                 return false;
@@ -1242,7 +1242,7 @@ namespace LTSM {
                                            screenInfo->config_timestamp, sizeID, screenInfo->rotation, 0 /* set auto*/);
 
             if(const auto & err = xcbReply2.error()) {
-                Application::debug(DebugType::Xcb, "{}: set size: [%" PRIu16 ", %" PRIu16 "], timestamp: %" PRIu32 ", config_timestamp: %" PRIu32 ", id: %" PRIu16 ", rotation: %" PRIu16 ", rate: %" PRIu16,
+                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], timestamp: {}, config_timestamp: {}, id: {}, rotation: {}, rate: {}",
                                    __FUNCTION__, szw, szh, screenInfo->timestamp, screenInfo->config_timestamp, static_cast<uint16_t>(sizeID), screenInfo->rotation, screenInfo->rate);
 
                 error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_set_screen_config");
@@ -1254,7 +1254,7 @@ namespace LTSM {
                     *sequence = reply->sequence;
                 }
 
-                Application::debug(DebugType::Xcb, "{}: set size: [%" PRIu16 ", %" PRIu16 "], id: %lu, sequence: %" PRIu16, __FUNCTION__, szw, szh, sizeID, reply->sequence);
+                Application::debug(DebugType::Xcb, "{}: set size: [{}, {}], id: %lu, sequence: {}", __FUNCTION__, szw, szh, sizeID, reply->sequence);
             }
 
             return true;
@@ -1280,7 +1280,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
                                __FUNCTION__, reply->major_version, reply->minor_version);
         }
     }
@@ -1386,7 +1386,7 @@ namespace LTSM {
         }
 
         if(const auto & reply = xcbReply.reply()) {
-            Application::debug(DebugType::Xcb, "{}: extension version: %" PRIu32 ".%" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: extension version: {}.{}",
                                __FUNCTION__, reply->serverMajor, reply->serverMinor);
         }
 
@@ -1597,12 +1597,12 @@ namespace LTSM {
         auto prop = Atom::getName(ptr.get(), ev->property);
 
         if(warn) {
-            Application::warning("{}: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32
+            Application::warning("{}: EVENT[ sequence: {}, time: {}, owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32
                                  ", selection atom(0x%08" PRIx32 ", `{}'), target atom(0x%08" PRIx32 ", `{}'), property atom(0x%08" PRIx32 ", `{}') ]",
                                  __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
                                  ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
         } else {
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, owner: 0x%08" PRIx32 ", requestor: 0x%08" PRIx32
                                ", selection atom(0x%08" PRIx32 ", `{}'), target atom(0x%08" PRIx32 ", `{}'), property atom(0x%08" PRIx32 ", `{}') ]",
                                __FUNCTION__, ev->sequence, ev->time, ev->owner, ev->requestor,
                                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
@@ -1652,7 +1652,7 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::destroyNotifyEvent(const xcb_destroy_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: %" PRIu16 ", event: 0x%08" PRIx32 ", window: 0x%08" PRIx32 "]",
+        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: {}, event: 0x%08" PRIx32 ", window: 0x%08" PRIx32 "]",
                            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->event, ev->window);
 
         if(ev->window) {
@@ -1663,7 +1663,7 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::selectionClearEvent(const xcb_selection_clear_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}' EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", owner: 0x%08" PRIx32 ", selection: 0x%08" PRIx32 " ]",
+        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}' EVENT[ sequence: {}, time: {}, owner: 0x%08" PRIx32 ", selection: 0x%08" PRIx32 " ]",
                            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->time, ev->owner, ev->selection);
 
         if(ev->owner == selectionWin && ev->selection == selectionType && requestsIncr.size()) {
@@ -1674,7 +1674,7 @@ namespace LTSM {
     }
 
     void XCB::ModulePasteSelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: %" PRIu32 ", state: 0x%02" PRIx8 " ]",
+        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: {}, window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: {}, state: 0x%02" PRIx8 " ]",
                            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_DELETE) {
@@ -1958,12 +1958,12 @@ namespace LTSM {
         auto prop = Atom::getName(ptr.get(), ev->property);
 
         if(warn) {
-            Application::warning("{}: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", requestor: 0x%08" PRIx32
+            Application::warning("{}: EVENT[ sequence: {}, time: {}, requestor: 0x%08" PRIx32
                                  ", selection atom(0x%08" PRIx32 ", `{}'), target atom(0x%08" PRIx32 ", `{}'), property atom(0x%08" PRIx32 ", `{}') ]",
                                  __FUNCTION__, ev->sequence, ev->time, ev->requestor,
                                  ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
         } else {
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: %" PRIu16 ", time: %" PRIu32 ", requestor: 0x%08" PRIx32
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, time: {}, requestor: 0x%08" PRIx32
                                ", selection atom(0x%08" PRIx32 ", `{}'), target atom(0x%08" PRIx32 ", `{}'), property atom(0x%08" PRIx32 ", `{}') ]",
                                __FUNCTION__, ev->sequence, ev->time, ev->requestor,
                                ev->selection, sel.c_str(), ev->target, tgt.c_str(), ev->property, prop.c_str());
@@ -1971,7 +1971,7 @@ namespace LTSM {
     }
 
     void XCB::ModuleCopySelection::propertyNotifyEvent(const xcb_property_notify_event_t* ev) {
-        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: %" PRIu32 ", state: 0x%02" PRIx8 " ]",
+        Application::debug(DebugType::Xcb, "{}: owner: 0x%08" PRIx32 ", selection: `{}', EVENT[ sequence: {}, window: 0x%08" PRIx32 ", atom: 0x%08" PRIx32 ", time: {}, state: 0x%02" PRIx8 " ]",
                            __FUNCTION__, selectionWin, selectionName.c_str(), ev->sequence, ev->window, ev->atom, ev->time, ev->state);
 
         if(ev->state != XCB_PROPERTY_NEW_VALUE) {
@@ -2080,14 +2080,14 @@ namespace LTSM {
                     if(buf && len) {
                         if(Atom::incr == reply->type) {
                             auto psize = static_cast<const uint32_t*>(buf);
-                            Application::debug(DebugType::Xcb, "{}: incr size: %" PRIu32, __FUNCTION__, *psize);
+                            Application::debug(DebugType::Xcb, "{}: incr size: {}", __FUNCTION__, *psize);
                             sourceIncr = std::make_unique<WindowSource>(*ev, *psize);
                         } else {
                             if(selectionTrgt != reply->type) {
                                 eventNotifyWarning(ptr, ev);
 
                                 auto name = Atom::getName(ptr.get(), reply->type);
-                                Application::warning("{}: reply not correct, type atom(0x%08" PRIx32 ", `{}'), format: %" PRIu8, __FUNCTION__, reply->type, name.c_str(), reply->format);
+                                Application::warning("{}: reply not correct, type atom(0x%08" PRIx32 ", `{}'), format: {}", __FUNCTION__, reply->type, name.c_str(), reply->format);
                             }
 
                             recipient->selectionReceiveData(reply->type, static_cast<const uint8_t*>(buf), len);
@@ -2096,7 +2096,7 @@ namespace LTSM {
                         eventNotifyWarning(ptr, ev);
 
                         auto name = Atom::getName(ptr.get(), reply->type);
-                        Application::warning("{}: reply empty, type atom(0x%08" PRIx32 ", `{}'), format: %" PRIu8, __FUNCTION__, reply->type, name.c_str(), reply->format);
+                        Application::warning("{}: reply empty, type atom(0x%08" PRIx32 ", `{}'), format: {}", __FUNCTION__, reply->type, name.c_str(), reply->format);
                     }
                 }
             } else {
@@ -2141,8 +2141,8 @@ namespace LTSM {
 
         auto name = Atom::getName(ptr.get(), ev->selection);
 
-        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
-                           ", selection atom(0x%08" PRIx32 ", `{}'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+                           ", selection atom(0x%08" PRIx32 ", `{}'), time: {}, selection time: {} ]",
                            __FUNCTION__, ev->sequence, ev->window, ev->owner,
                            ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
     }
@@ -2157,8 +2157,8 @@ namespace LTSM {
 
         auto name = Atom::getName(ptr.get(), ev->selection);
 
-        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
-                           ", selection atom(0x%08" PRIx32 ", `{}'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+        Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+                           ", selection atom(0x%08" PRIx32 ", `{}'), time: {}, selection time: {} ]",
                            __FUNCTION__, ev->sequence, ev->window, ev->owner,
                            ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
     }
@@ -2174,8 +2174,8 @@ namespace LTSM {
         if(ev->selection == selectionType) {
             auto name = Atom::getName(ptr.get(), ev->selection);
 
-            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: %" PRIu16 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
-                               ", selection atom(0x%08" PRIx32 ", `{}'), time: %" PRIu32 ", selection time: %" PRIu32 " ]",
+            Application::debug(DebugType::Xcb, "{}: EVENT[ sequence: {}, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32
+                               ", selection atom(0x%08" PRIx32 ", `{}'), time: {}, selection time: {} ]",
                                __FUNCTION__, ev->sequence, ev->window, ev->owner,
                                ev->selection, name.c_str(), ev->timestamp, ev->selection_timestamp);
 
@@ -2240,7 +2240,7 @@ namespace LTSM {
         const char* minor = xcb_errors_get_name_for_minor_code(ctx, err->major_code, err->minor_code);
         const char* error = xcb_errors_get_name_for_error(ctx, err->error_code, & extension);
 
-        Application::error("{}: {} failed, error: {}, extension: {}, major: {}, minor: {}, resource: 0x%08" PRIx32 ", sequence: %" PRIu16,
+        Application::error("{}: {} failed, error: {}, extension: {}, major: {}, minor: {}, resource: 0x%08" PRIx32 ", sequence: {}",
                            func, xcbname, error, (extension ? extension : "none"), major, (minor ? minor : "none"),
                            err->resource_id, err->sequence);
 
@@ -2582,7 +2582,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: %" PRIu8 ", property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
             }
         }
 
@@ -2609,7 +2609,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: %" PRIu8 ", property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
             }
         }
 
@@ -2644,7 +2644,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: %" PRIu8 ", property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
             }
         }
 
@@ -2692,7 +2692,7 @@ namespace LTSM {
                 }
             } else {
                 auto name2 = getAtomName(prop);
-                Application::warning("{}: unknown format: %" PRIu8 ", property: {}", __FUNCTION__, reply->format, name2.c_str());
+                Application::warning("{}: unknown format: {}, property: {}", __FUNCTION__, reply->format, name2.c_str());
             }
         }
 
@@ -3113,7 +3113,7 @@ namespace LTSM {
             return false;
         }
 
-        Application::debug(DebugType::Xcb, "{}: screen area: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
+        Application::debug(DebugType::Xcb, "{}: screen area: [{}, {}, {}, {}]", __FUNCTION__, screenArea.x, screenArea.y, screenArea.width, screenArea.height);
 
         auto outputs = _modRandr->getOutputs();
         auto crtcs = _modRandr->getCrtcs();
@@ -3223,7 +3223,7 @@ namespace LTSM {
     }
 
     XCB::PixmapInfoReply XCB::RootDisplay::copyRootImageRegion(const Region & reg, ShmIdShared shm) const {
-        Application::debug(DebugType::Xcb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
+        Application::debug(DebugType::Xcb, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y, reg.width, reg.height);
         const uint32_t planeMask = 0xFFFFFFFF;
 
         if(shm && 0 < shm->id) {
@@ -3251,14 +3251,14 @@ namespace LTSM {
         PixmapInfoReply res;
 
         if(pitch == 0) {
-            Application::error("{}: copy root image error, empty size: [%" PRIu16 ", %" PRIu16 "], bpp: %lu", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
+            Application::error("{}: copy root image error, empty size: [{}, {}], bpp: %lu", __FUNCTION__, reg.width, reg.height, bitsPerPixel());
             return res;
         }
 
         uint32_t maxReqLength = xcb_get_maximum_request_length(_conn.get());
         uint16_t allowRows = std::min(static_cast<uint16_t>(maxReqLength / pitch), reg.height);
 
-        Application::debug(DebugType::Xcb, "{}: max request size: %" PRIu32 ", allow rows: %" PRIu16, __FUNCTION__, maxReqLength, allowRows);
+        Application::debug(DebugType::Xcb, "{}: max request size: {}, allow rows: {}", __FUNCTION__, maxReqLength, allowRows);
 
         for(int32_t yy = reg.y; yy < reg.y + reg.height; yy += allowRows) {
             // last rows
@@ -3334,20 +3334,20 @@ namespace LTSM {
             auto dn = reinterpret_cast<xcb_damage_notify_event_t*>(ev.get());
 
             if(dn->area.x + dn->area.width > wsz.width || dn->area.y + dn->area.height > wsz.height) {
-                Application::warning("{}: damage discard, region: [{}, {}, %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+                Application::warning("{}: damage discard, region: [{}, {}, {}, {}], level: {}, sequence: {}, timestamp: {}",
                                      __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
                 xcb_discard_reply(_conn.get(), dn->sequence);
                 return GenericEvent();
             }
 
-            Application::debug(DebugType::Xcb, "{}: damage notify, region: [{}, {}, %" PRIu16 ", %" PRIu16 "], level: %" PRIu8 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: damage notify, region: [{}, {}, {}, {}], level: {}, sequence: {}, timestamp: {}",
                                __FUNCTION__, dn->area.x, dn->area.y, dn->area.width, dn->area.height, dn->level, dn->sequence, dn->timestamp);
 
             xcbDamageNotifyEvent(dn->area);
         } else if(isXFixesSelectionNotify(ev)) {
             auto sn = reinterpret_cast<xcb_xfixes_selection_notify_event_t*>(ev.get());
 
-            Application::debug(DebugType::Xcb, "{}: selection notify, subtype: %" PRIu8 ", window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `{}'), time1: %" PRIu32 ", time2: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: selection notify, subtype: {}, window: 0x%08" PRIx32 ", owner: 0x%08" PRIx32 ", selection atom(0x%08" PRIx32 ", `{}'), time1: {}, time2: {}",
                                __FUNCTION__, sn->subtype, sn->window, sn->owner, sn->selection, getAtomName(sn->selection).c_str(), sn->timestamp, sn->selection_timestamp);
 
             if(_modSelectionCopy) {
@@ -3356,7 +3356,7 @@ namespace LTSM {
         } else if(isXFixesCursorNotify(ev)) {
             auto cn = reinterpret_cast<xcb_xfixes_cursor_notify_event_t*>(ev.get());
 
-            Application::debug(DebugType::Xcb, "{}: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `{}'), sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: cursor notify, serial: 0x%08" PRIx32 ", name: atom(0x%08" PRIx32 ", `{}'), sequence: {}, timestamp: {}",
                                __FUNCTION__, cn->cursor_serial, cn->name, getAtomName(cn->name).c_str(), cn->sequence, cn->timestamp);
 
             xcbFixesCursorChangedEvent();
@@ -3368,13 +3368,13 @@ namespace LTSM {
                 auto wsz = updateGeometrySize();
 
                 if(cc.width != wsz.width || cc.height != wsz.height) {
-                    Application::warning("{}: crtc change discard, size: [%" PRIu16 ", %" PRIu16 "], current: [%" PRIu16 ", %" PRIu16 "], sequence: %" PRIu16 ", timestamp: %" PRIu32,
+                    Application::warning("{}: crtc change discard, size: [{}, {}], current: [{}, {}], sequence: {}, timestamp: {}",
                                          __FUNCTION__, cc.width, cc.height, wsz.width, wsz.height, rn->sequence, cc.timestamp);
                     xcb_discard_reply(_conn.get(), rn->sequence);
                     return GenericEvent();
                 }
 
-                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: [%" PRIu16 ", %" PRIu16 "], crtc: 0x%08" PRIx32 ", mode: %" PRIu32 ", rotation: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+                Application::debug(DebugType::Xcb, "{}: crtc change notify, size: [{}, {}], crtc: 0x%08" PRIx32 ", mode: {}, rotation: 0x%04" PRIx16 ", sequence: {}, timestamp: {}",
                                    __FUNCTION__, cc.width, cc.height, cc.crtc, cc.mode, cc.rotation, rn->sequence, cc.timestamp);
 
                 if(createFullScreenDamage()) {
@@ -3385,7 +3385,7 @@ namespace LTSM {
             }
         } else if(isXkbNotify(ev, XCB_XKB_MAP_NOTIFY)) {
             auto mn = reinterpret_cast<xcb_xkb_map_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, min keycode: {}, max keycode: {}, changed: 0x%04" PRIx16 ", sequence: {}, timestamp: {}",
                                __FUNCTION__, "map", mn->minKeyCode, mn->maxKeyCode, mn->changed, mn->sequence, mn->time);
 
             /*
@@ -3398,7 +3398,7 @@ namespace LTSM {
             _modXkb->resetMapState();
         } else if(isXkbNotify(ev, XCB_XKB_NEW_KEYBOARD_NOTIFY)) {
             auto kn = reinterpret_cast<xcb_xkb_new_keyboard_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, devid: %" PRIu8 ", old devid: %" PRIu8 ", min keycode: %" PRIu8 ", max keycode: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, devid: {}, old devid: {}, min keycode: {}, max keycode: {}, changed: 0x%04" PRIx16 ", sequence: {}, timestamp: {}",
                                __FUNCTION__, "new keyboard", kn->deviceID, kn->oldDeviceID, kn->minKeyCode, kn->maxKeyCode, kn->changed, kn->sequence, kn->time);
 
             if(kn->deviceID == _modXkb->devid && (kn->changed & XCB_XKB_NKN_DETAIL_KEYCODES)) {
@@ -3409,12 +3409,12 @@ namespace LTSM {
                                     setup->max_keycode = kn->maxKeyCode;
                                 }
                 */
-                Application::debug(DebugType::Xcb, "{}: reset map, devid: %" PRIu8, __FUNCTION__, kn->deviceID);
+                Application::debug(DebugType::Xcb, "{}: reset map, devid: {}", __FUNCTION__, kn->deviceID);
                 _modXkb->resetMapState();
             }
         } else if(isXkbNotify(ev, XCB_XKB_STATE_NOTIFY)) {
             auto sn = reinterpret_cast<xcb_xkb_state_notify_event_t*>(ev.get());
-            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, xkb type: 0x%02" PRIx8 ", devid: %" PRIu8 ", mods: 0x%02" PRIx8 ", group: %" PRIu8 ", changed: 0x%04" PRIx16 ", sequence: %" PRIu16 ", timestamp: %" PRIu32,
+            Application::debug(DebugType::Xcb, "{}: xkb notify: {}, xkb type: 0x%02" PRIx8 ", devid: {}, mods: 0x%02" PRIx8 ", group: {}, changed: 0x%04" PRIx16 ", sequence: {}, timestamp: {}",
                                __FUNCTION__, "state", sn->xkbType, sn->deviceID, sn->mods, sn->group, sn->changed, sn->sequence, sn->time);
 
             xkb_state_update_mask(_modXkb->state.get(), sn->baseMods, sn->latchedMods, sn->lockedMods,

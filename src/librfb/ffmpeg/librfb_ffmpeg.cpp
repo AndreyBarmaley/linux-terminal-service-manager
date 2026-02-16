@@ -274,7 +274,7 @@ namespace LTSM {
         swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avPixelFormat,
                                     frame->width, frame->height, (AVPixelFormat) frame->format, SWS_BILINEAR, nullptr, nullptr, nullptr));
         packet.reset(av_packet_alloc());
-        Application::info("{}: {}, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
+        Application::info("{}: {}, size: [{}, {}]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
                           csz.height);
     }
 
@@ -505,12 +505,12 @@ namespace LTSM {
             throw ffmpeg_error(NS_FuncName);
         }
 
-        Application::info("{}: {}, size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
+        Application::info("{}: {}, size: [{}, {}]", __FUNCTION__, RFB::encodingName(getType()), csz.width,
                           csz.height);
     }
 
     void RFB::DecodingFFmpeg::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
-        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x,
+        Application::debug(DebugType::Enc, "{}: decoding region [{}, {}, {}, {}]", __FUNCTION__, reg.x,
                            reg.y, reg.width, reg.height);
 
         auto len = cli.recvIntBE32();
@@ -521,7 +521,7 @@ namespace LTSM {
         }
 
         if(reg.toSize() != cli.clientSize()) {
-            Application::warning("{}: incorrect region size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.width, reg.height);
+            Application::warning("{}: incorrect region size: [{}, {}]", __FUNCTION__, reg.width, reg.height);
             return;
         }
 

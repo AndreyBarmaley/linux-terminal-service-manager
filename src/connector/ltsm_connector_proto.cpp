@@ -78,7 +78,7 @@ namespace LTSM::Connector {
         xcbDisableMessages(true);
         waitUpdateProcess();
         _shmUid = userUid;
-        Application::notice("{}: dbus signal, display: {}, username: {}, uid: %" PRIu32, __FUNCTION__, display,
+        Application::notice("{}: dbus signal, display: {}, username: {}, uid: {}", __FUNCTION__, display,
                             userName.c_str(), userUid);
         int oldDisplay = displayNum();
         int newDisplay = busStartUserSession(oldDisplay, getpid(), userName, _remoteaddr, connectorType());
@@ -106,11 +106,11 @@ namespace LTSM::Connector {
 
         // fix new session size
         if(xcbDisplay()->size() != clientRegion.toSize()) {
-            Application::warning("{}: remote request desktop size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__,
+            Application::warning("{}: remote request desktop size: [{}, {}], display: %d", __FUNCTION__,
                                  clientRegion.width, clientRegion.height, displayNum());
 
             if(0 < xcbDisplay()->setRandrScreenSize(clientRegion)) {
-                Application::info("{}: change session size: [%" PRIu16 ", %" PRIu16 "], display: %d", __FUNCTION__, clientRegion.width,
+                Application::info("{}: change session size: [{}, {}], display: %d", __FUNCTION__, clientRegion.width,
                                   clientRegion.height, displayNum());
             }
         } else {

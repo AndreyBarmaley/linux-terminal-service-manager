@@ -37,7 +37,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardSendEvent(const std::vector<uint8_t> & buf) {
-        Application::debug(DebugType::WinCli, "{}, length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}, length: {}", __FUNCTION__, buf.size());
         sendCutTextEvent(buf.data(), buf.size(), true);
     }
 
@@ -98,7 +98,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::WinCli, "{}, type: 0x%04" PRIx16 ", length: %" PRIu32, __FUNCTION__, type, buf.size());
+        Application::debug(DebugType::WinCli, "{}, type: 0x%04" PRIx16 ", length: {}", __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
@@ -110,7 +110,7 @@ namespace LTSM {
     }
 
     void RFB::WinClient::clientRecvCutTextEvent(std::vector<uint8_t> && buf) {
-        Application::debug(DebugType::WinCli, "{}: data length: %" PRIu32, __FUNCTION__, buf.size());
+        Application::debug(DebugType::WinCli, "{}: data length: {}", __FUNCTION__, buf.size());
 
         const std::scoped_lock guard{ clientLock };
         clientClipboard.swap(buf);

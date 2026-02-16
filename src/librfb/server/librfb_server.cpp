@@ -506,8 +506,7 @@ namespace LTSM {
         // RFB 6.3.2 server init
         sendIntBE16(displaySize.width);
         sendIntBE16(displaySize.height);
-        Application::notice("{}: server pf - bpp: %" PRIu8 ", depth: %d, bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16 ",%"
-                            PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+        Application::notice("{}: server pf - bpp: {}, depth: %d, bigendian: %d, red({},{}), green({},{}), blue({},{})",
                             __FUNCTION__, pf.bitsPerPixel(), displayDepth, (int) platformBigEndian(),
                             pf.rmax(), pf.rshift(), pf.gmax(), pf.gshift(), pf.bmax(), pf.bshift());
         clientPf = serverFormat();
@@ -652,8 +651,7 @@ namespace LTSM {
         auto blueShift = recvInt8();
         // skip padding
         recvSkip(3);
-        Application::notice("{}: client pf - bpp: %" PRIu8 ", depth: %" PRIu8 ", bigendian: %d, red(%" PRIu16 ",%" PRIu8 "), green(%" PRIu16
-                            ",%" PRIu8 "), blue(%" PRIu16 ",%" PRIu8 ")",
+        Application::notice("{}: client pf - bpp: {}, depth: {}, bigendian: %d, red({},{}), green({},{}), blue({},{})",
                             __FUNCTION__, bitsPerPixel, depth, (int) bigEndian, redMax, redShift, greenMax, greenShift, blueMax, blueShift);
 
         switch(bitsPerPixel) {
@@ -785,7 +783,7 @@ namespace LTSM {
         clientRegion.y = recvIntBE16();
         clientRegion.width = recvIntBE16();
         clientRegion.height = recvIntBE16();
-        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, %" PRIu16 ", %" PRIu16 "], incremental: %d",
+        Application::debug(DebugType::Rfb, "{}: request update, region [{}, {}, {}, {}], incremental: %d",
                            __FUNCTION__, clientRegion.x, clientRegion.y, clientRegion.width, clientRegion.height, incremental);
         serverRecvFBUpdateEvent(incremental != 0, clientRegion);
     }
@@ -842,7 +840,7 @@ namespace LTSM {
         int16_t regy = recvIntBE16();
         uint16_t regw = recvIntBE16();
         uint16_t regh = recvIntBE16();
-        Application::info("{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], enabled: %d", __FUNCTION__, regx,
+        Application::info("{}: region: [{}, {}, {}, {}], enabled: %d", __FUNCTION__, regx,
                           regy, regw, regh, enable);
         continueUpdatesProcessed = enable;
         serverRecvSetContinuousUpdatesEvent(enable, XCB::Region(regx, regy, regw, regh));
@@ -855,7 +853,7 @@ namespace LTSM {
         uint16_t height = recvIntBE16();
         int numOfScreens = recvInt8();
         recvSkip(1);
-        Application::info("{}: size [%" PRIu16 ", %" PRIu16 "], screens: %d", __FUNCTION__, width, height, numOfScreens);
+        Application::info("{}: size [{}, {}], screens: %d", __FUNCTION__, width, height, numOfScreens);
         // screens array
         std::vector<RFB::ScreenInfo> screens;
 
@@ -873,7 +871,7 @@ namespace LTSM {
     }
 
     void RFB::ServerEncoder::displayResizeEvent(const XCB::Size & dsz) {
-        Application::info("{}: display resized, new size: [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, dsz.width, dsz.height);
+        Application::info("{}: display resized, new size: [{}, {}]", __FUNCTION__, dsz.width, dsz.height);
 #ifdef LTSM_ENCODING_FFMPEG
         // event background
         std::thread([this, sz = dsz]() {
@@ -937,7 +935,7 @@ namespace LTSM {
             // is used and abs(length) is the total number of following bytes.
             sendIntBE32(static_cast<uint32_t>(0xFFFFFFFF) - len + 1);
         } else {
-            Application::debug(DebugType::Rfb, "{}: length text: %" PRIu32, __FUNCTION__, len);
+            Application::debug(DebugType::Rfb, "{}: length text: {}", __FUNCTION__, len);
             sendIntBE32(len);
         }
 
@@ -960,7 +958,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "]", __FUNCTION__, reg.x, reg.y,
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}]", __FUNCTION__, reg.x, reg.y,
                            reg.width, reg.height);
         std::scoped_lock guard{ sendLock };
         // RFB: 6.5.1
@@ -1118,7 +1116,7 @@ namespace LTSM {
             const XCB::Size & desktopSize) {
         int statusCode = desktopResizeStatusCode(status);
         int errorCode = desktopResizeErrorCode(error);
-        Application::info("{}: status: %d, error: %d, size [%" PRIu16 ", %" PRIu16 "]", __FUNCTION__, statusCode, errorCode,
+        Application::info("{}: status: %d, error: %d, size [{}, {}]", __FUNCTION__, statusCode, errorCode,
                           desktopSize.width, desktopSize.height);
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE)) {
@@ -1164,7 +1162,7 @@ namespace LTSM {
         }
 
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}], hot: [{}, {}]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         Tools::StreamBitsPack bitmask;
@@ -1219,7 +1217,7 @@ namespace LTSM {
 
     void RFB::ServerEncoder::sendEncodingLtsmCursor(const FrameBuffer & fb, uint16_t xhot, uint16_t yhot) {
         auto & reg = fb.region();
-        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, %" PRIu16 ", %" PRIu16 "], hot: [%" PRIu16 ", %" PRIu16 "]",
+        Application::debug(DebugType::Rfb, "{}: region: [{}, {}, {}, {}], hot: [{}, {}]",
                            __FUNCTION__, reg.x, reg.y, reg.width, reg.height, xhot, yhot);
 
         std::scoped_lock guard{ sendLock };

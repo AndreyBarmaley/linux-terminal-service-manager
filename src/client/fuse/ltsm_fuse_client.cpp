@@ -184,7 +184,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseCon
 LTSM::Channel::ConnectorClientFuse::ConnectorClientFuse(uint8_t ch, const std::string & url, const ConnectorMode & mod,
         const Opts & chOpts, ChannelClient & srv)
     : ConnectorBase(ch, mod, chOpts, srv), reply(4096), cid(ch) {
-    Application::info("{}: channelId: %" PRIu8, __FUNCTION__, cid);
+    Application::info("{}: channelId: {}", __FUNCTION__, cid);
     // start threads
     setRunning(true);
 }
@@ -521,7 +521,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
         Application::error("{}: {} failed, error: {}, code: %d, fd: %d",
                            __FUNCTION__, "read", strerror(error), error, fdh);
     } else {
-        Application::debug(DebugType::Fuse, "{}: request block size: %" PRIu16 ", send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
+        Application::debug(DebugType::Fuse, "{}: request block size: {}, send block size: %lu, offset: %lu", __FUNCTION__, blocksz, rsz, offset);
 
         if(rsz < buf.size()) {
             buf.resize(rsz);
