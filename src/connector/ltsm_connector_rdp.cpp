@@ -535,7 +535,7 @@ namespace LTSM::Connector {
         auto wsz = XCB::RootDisplay::size();
 
         if(wsz.width != freeRdp->peer->settings->DesktopWidth || wsz.height != freeRdp->peer->settings->DesktopHeight) {
-            Application::warning("{}: remote request desktop size [{}x{}], display: {}", __FUNCTION__,
+            Application::warning("{}: remote request desktop size [{}, {}], display: {}", __FUNCTION__,
                                  freeRdp->peer->settings->DesktopWidth, freeRdp->peer->settings->DesktopHeight, displayNum());
 
             if(XCB::RootDisplay::setRandrScreenSize(XCB::Size(freeRdp->peer->settings->DesktopWidth,
@@ -841,7 +841,7 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerCapabilities(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->conrdp;
@@ -856,13 +856,13 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerAdjustMonitorsLayout(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
     BOOL ConnectorRdp::cbServerClientCapabilities(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         [[maybe_unused]] auto context = static_cast<ServerContext*>(peer->context);
         //auto connector = context->conrdp;
@@ -874,7 +874,7 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerPostConnect(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         auto context = static_cast<ServerContext*>(peer->context);
         auto connector = context->conrdp;
@@ -882,7 +882,7 @@ namespace LTSM::Connector {
         auto wsz = xcbDisplay->size();
 
         if(wsz.width != peer->settings->DesktopWidth || wsz.height != peer->settings->DesktopHeight) {
-            Application::info("{}: request desktop resize [{},{}], display: {}", __FUNCTION__, peer->settings->DesktopWidth,
+            Application::info("{}: request desktop resize [{}, {}], display: {}", __FUNCTION__, peer->settings->DesktopWidth,
                               peer->settings->DesktopHeight, connector->displayNum());
             xcbDisplay->setRandrScreenSize(XCB::Size(peer->settings->DesktopWidth, peer->settings->DesktopHeight));
         }
@@ -895,13 +895,13 @@ namespace LTSM::Connector {
     }
 
     BOOL ConnectorRdp::cbServerClose(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
         return TRUE;
     }
 
     void ConnectorRdp::cbServerDisconnect(freerdp_peer* peer) {
-        Application::info("{}: peer: {}, desktop: [{},{}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
+        Application::info("{}: peer: {}, desktop: [{}, {}], peer depth: {}", __FUNCTION__, fmt::ptr(peer), peer->settings->DesktopWidth,
                           peer->settings->DesktopHeight, peer->settings->ColorDepth);
     }
 

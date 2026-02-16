@@ -953,12 +953,12 @@ namespace LTSM {
                     return true;
 
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    Application::debug(DebugType::App, "{}: size changed: [{}x{}]",
+                    Application::debug(DebugType::App, "{}: size changed: [{}, {}]",
                                        __FUNCTION__, we->data1, we->data2);
                     return true;
 
                 case SDL_WINDOWEVENT_RESIZED:
-                    Application::debug(DebugType::App, "{}: event resized: [{}x{}]",
+                    Application::debug(DebugType::App, "{}: event resized: [{}, {}]",
                                        __FUNCTION__, we->data1, we->data2);
                     windowResizedEvent(we->data1, we->data2);
                     return true;

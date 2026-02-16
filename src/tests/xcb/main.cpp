@@ -82,7 +82,7 @@ class X11Test : public XCB::RootDisplay {
                             // window, crtc, mode, rotation, x, y, width, height
                             if(0 < cc.width && 0 < cc.height)
                             {
-                	        Application::info("randr crtc change: {},{}, screen: {},{}", cc.width, cc.height, width(), height());
+                	        Application::info("randr crtc change: [{}, {}], screen: [{}, {}]", cc.width, cc.height, width(), height());
                             }
                         }
                         else
@@ -98,7 +98,7 @@ class X11Test : public XCB::RootDisplay {
                         {
                             // windows, timestamps, sizeID, subpixel, width, height, mwidth, mheight,
                             auto scn = reinterpret_cast<xcb_randr_screen_change_notify_event_t*>(ev.get());
-                	    Application::info("change notify: {},{}", scn->width, scn->height);
+                	    Application::info("change notify: [{}, {}]", scn->width, scn->height);
                         }
         	    }
 
