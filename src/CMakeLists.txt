@@ -149,10 +149,6 @@ if(LTSM_BUILD_SERVER)
 
         set(LTSM_WITH_PKCS11 ${LTSM_HELPER_PKCS11_AUTH})
 
-        set(CMAKE_AUTOMOC ON)
-        set(CMAKE_AUTORCC ON)
-        set(CMAKE_AUTOUIC ON)
-
         add_executable(${CUR_TARGET} ltsm_service_proxy.h)
 
         find_package(sdbus-c++ REQUIRED)
