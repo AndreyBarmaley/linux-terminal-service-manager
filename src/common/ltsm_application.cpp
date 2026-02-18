@@ -224,7 +224,11 @@ namespace LTSM {
                 if(forceSyslog) {
                     log = spdlog::syslog_logger_mt(name, ident);
                 } else {
+#if 11000 <= SPDLOG_VERSION
                     log = spdlog::systemd_logger_mt(name, ident);
+#else
+                    log = spdlog::systemd_logger_mt(name);
+#endif
                 }
 
 #else
