@@ -146,7 +146,7 @@ namespace LTSM::DisplaySession {
         if(0 > pipe(pipefd)) {
             Application::error("{}: {} failed, error: {}, code: {}",
                                __FUNCTION__, "pipe", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         int pid = ForkMode::forkStart(pipefd[1]);
@@ -183,7 +183,7 @@ namespace LTSM::DisplaySession {
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
             if(auto ver = sb.readIntBE16(); ver != 0x0100) {
                 Application::error("{}: invalid xauth format, ver: {:#04x}", __FUNCTION__, ver);
-                throw std::runtime_error(NS_FuncName);
+                throw std::runtime_error(NS_FuncNameS);
             }
 
             len = sb.readIntBE16();
@@ -208,7 +208,7 @@ namespace LTSM::DisplaySession {
         Application::error("{}: {} found, display: {}",
                            __FUNCTION__, "xcb cookie not", displayNum);
 
-        throw std::runtime_error(NS_FuncName);
+        throw std::runtime_error(NS_FuncNameS);
     }
 
     std::unique_ptr<XCB::Connector> waitX11DisplayStarting(int displayNum, const XCB::AuthCookie & mcookie, uint32_t ms) {
@@ -460,7 +460,7 @@ namespace LTSM::DisplaySession {
 
         if(! std::filesystem::exists(xorgBin)) {
             Application::error("{}: path not found: `{}'", __FUNCTION__, xorgBin);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         const bool useXorg = std::filesystem::path(xorgBin).filename() == "Xorg";

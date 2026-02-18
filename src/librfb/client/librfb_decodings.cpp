@@ -61,7 +61,7 @@ namespace LTSM {
         }
 
         Application::error("{}: {}", __FUNCTION__, "unknown format");
-        throw rfb_error(NS_FuncName);
+        throw rfb_error(NS_FuncNameS);
     }
 
     void RFB::DecoderStream::recvRegionUpdatePixels(const XCB::Region & reg) {
@@ -181,7 +181,7 @@ namespace LTSM {
 
             if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height) {
                 Application::error("{}: {}", __FUNCTION__, "sub region out of range");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             cli.fillPixel(dst, pixel);
@@ -191,7 +191,7 @@ namespace LTSM {
     void RFB::DecodingHexTile::updateRegion(DecoderStream & cli, const XCB::Region & reg) {
         if(16 < reg.width || 16 < reg.height) {
             Application::error("{}: invalid hextile region: {}", __FUNCTION__, reg);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Enc, "{}: decoding region: {}", __FUNCTION__, reg);
@@ -253,7 +253,7 @@ namespace LTSM {
 
                     if(dst.x + dst.width > reg.x + reg.width || dst.y + dst.height > reg.y + reg.height) {
                         Application::error("{}: {}", __FUNCTION__, "sub region out of range");
-                        throw rfb_error(NS_FuncName);
+                        throw rfb_error(NS_FuncNameS);
                     }
 
                     cli.fillPixel(dst, pixel);
@@ -348,7 +348,7 @@ namespace LTSM {
 
                         if(index >= palette.size()) {
                             Application::error("{}: {}", __FUNCTION__, "index out of range");
-                            throw rfb_error(NS_FuncName);
+                            throw rfb_error(NS_FuncNameS);
                         }
 
                         cli.setPixel(pos, palette[index]);
@@ -358,7 +358,7 @@ namespace LTSM {
                 Application::trace(DebugType::Enc, "{}: complete: {}", __FUNCTION__, "packed palette");
             } else if((17 <= type && type <= 127) || type == 129) {
                 Application::error("{}: {}", __FUNCTION__, "invalid trle type");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             } else if(128 == type) {
                 Application::trace(DebugType::Enc, "{}: type: {}", __FUNCTION__, "plain rle");
 
@@ -376,7 +376,7 @@ namespace LTSM {
 
                         if(! coord.isValid() && runLength) {
                             Application::error("{}: {}", __FUNCTION__, "plain rle: coord out of range");
-                            throw rfb_error(NS_FuncName);
+                            throw rfb_error(NS_FuncNameS);
                         }
                     }
                 }
@@ -400,7 +400,7 @@ namespace LTSM {
                     if(index < 128) {
                         if(index >= palette.size()) {
                             Application::error("{}: {}", __FUNCTION__, "index out of range");
-                            throw rfb_error(NS_FuncName);
+                            throw rfb_error(NS_FuncNameS);
                         }
 
                         auto pixel = palette[index];
@@ -411,7 +411,7 @@ namespace LTSM {
 
                         if(index >= palette.size()) {
                             Application::error("{}: {}", __FUNCTION__, "index out of range");
-                            throw rfb_error(NS_FuncName);
+                            throw rfb_error(NS_FuncNameS);
                         }
 
                         auto pixel = palette[index];
@@ -425,7 +425,7 @@ namespace LTSM {
 
                             if(! coord.isValid() && runLength) {
                                 Application::error("{}: {}", __FUNCTION__, "rle palette: coord out of range");
-                                throw rfb_error(NS_FuncName);
+                                throw rfb_error(NS_FuncNameS);
                             }
                         }
                     }
@@ -471,7 +471,7 @@ namespace LTSM {
 
             if(ret <= 0) {
                 Application::error("{}: {} failed, ret: {}", __FUNCTION__, "LZ4_decompress_safe_continue", ret);
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             bb.resize(ret);
@@ -648,7 +648,7 @@ namespace LTSM {
 
                 if(0 == sb.last()) {
                     Application::error("{}: {}", __FUNCTION__, "unknown format");
-                    throw rfb_error(NS_FuncName);
+                    throw rfb_error(NS_FuncNameS);
                 }
 
                 auto type = sb.readInt8();
@@ -668,12 +668,12 @@ namespace LTSM {
                 if((type & QOI::Tag::MASK2) == QOI::Tag::INDEX) {
                     if(hashes.size() <= type) {
                         Application::error("{}: {}", __FUNCTION__, "unknown index");
-                        throw rfb_error(NS_FuncName);
+                        throw rfb_error(NS_FuncNameS);
                     }
 
                     if(0 > hashes[type]) {
                         Application::error("{}: {}", __FUNCTION__, "unknown type");
-                        throw rfb_error(NS_FuncName);
+                        throw rfb_error(NS_FuncNameS);
                     }
 
                     prevPixel = hashes[type];
@@ -716,7 +716,7 @@ namespace LTSM {
                     continue;
                 } else {
                     Application::error("{}: {}", __FUNCTION__, "unknown tag");
-                    throw rfb_error(NS_FuncName);
+                    throw rfb_error(NS_FuncNameS);
                 }
             }
         }

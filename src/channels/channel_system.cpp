@@ -300,7 +300,7 @@ size_t LTSM::ChannelClient::countFreeChannels(void) const {
 
     if(used > 0xFF) {
         Application::error("{}: used channel count is large, count: {}", __FUNCTION__, used);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return 0xFF - used;
@@ -317,7 +317,7 @@ void LTSM::ChannelClient::sendLtsmChannelData(uint8_t channel, const std::vector
 void LTSM::ChannelClient::recvLtsmEvent(uint8_t channel, std::vector<uint8_t> && buf) {
     if(channel == static_cast<uint8_t>(ChannelType::Reserved)) {
         Application::error("{}: reserved channel blocked", __FUNCTION__);
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     if(channel == static_cast<uint8_t>(ChannelType::System)) {
@@ -334,7 +334,7 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
 
     if(! channelConn) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "channel not found", channel);
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
 #ifndef LTSM_CLIENT
@@ -342,19 +342,19 @@ void LTSM::ChannelClient::recvChannelData(uint8_t channel, std::vector<uint8_t> 
     if((channelConn->isAllowSessionFor(true) && ! isUserSession()) ||
        (channelConn->isAllowSessionFor(false) && isUserSession())) {
         Application::error("{}: ltsm channel disable for session: `{}'", __FUNCTION__, (isUserSession() ? "user" : "login"));
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
 #endif
 
     if(! channelConn->isRemoteConnected()) {
         Application::error("{}: {}, id: {}, error: {}", __FUNCTION__, "channel not connected", channel, channelConn->error());
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     if(! channelConn->isRunning()) {
         Application::error("{}: {}, id: {}, error: {}", __FUNCTION__, "channel not running", channel, channelConn->error());
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     channelConn->pushData(std::move(buf));
@@ -504,7 +504,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
 
             default:
                 Application::error("{}: {}, id: {}", __FUNCTION__, "channel type not implemented", channel);
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
         }
     } else if(! job.serverOpts.content().empty()) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url, job.serverOpts.url);
@@ -531,7 +531,7 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
 
             default:
                 Application::error("{}: {}, id: {}", __FUNCTION__, "channel type not implemented", channel);
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
         }
     }
 
@@ -967,7 +967,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
 
     if(version != LtsmProtocolVersion) {
         Application::error("{}: unknown version: {:#02x}", __FUNCTION__, version);
-        throw std::runtime_error(NS_FuncName);
+        throw std::runtime_error(NS_FuncNameS);
     }
 
     auto channel = ns.recvInt8();
@@ -1000,12 +1000,12 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
 
     if(len == 0 || ! buf) {
         Application::error("{}: empty data", __FUNCTION__);
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     if(0xFFFF < len) {
         Application::error("{}: data size large", __FUNCTION__);
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     // data
@@ -1653,7 +1653,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
 
     if(! std::filesystem::is_socket(path, err)) {
         Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     Application::info("{}: id: {}, path: `{}', mode: {}", __FUNCTION__, channel, path, Channel::Connector::modeString(mode));
@@ -1662,7 +1662,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
 
     if(0 > fd) {
         Application::error("{}: {}, id: {}, path: `{}'", __FUNCTION__, "unix failed", channel, path);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
@@ -1678,7 +1678,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, const std::filesystem::path 
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 LTSM::Channel::ConnectorBasePtr
@@ -1687,7 +1687,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, int sock, const ConnectorMod
 
     if(0 > sock) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "unix failed", channel);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
@@ -1703,7 +1703,7 @@ LTSM::Channel::createUnixConnector(uint8_t channel, int sock, const ConnectorMod
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 /// createTcpConnector
@@ -1715,7 +1715,7 @@ LTSM::Channel::createTcpConnector(uint8_t channel, const std::string & ipaddr, i
 
     if(0 > fd) {
         Application::error("{}: {}, id: {}, addr: `{}', port: {}", __FUNCTION__, "socket failed", channel, ipaddr, port);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
@@ -1731,7 +1731,7 @@ LTSM::Channel::createTcpConnector(uint8_t channel, const std::string & ipaddr, i
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 LTSM::Channel::ConnectorBasePtr
@@ -1740,7 +1740,7 @@ LTSM::Channel::createTcpConnector(uint8_t channel, int sock, const ConnectorMode
 
     if(0 > sock) {
         Application::error("{}: {}, id: {}", __FUNCTION__, "socket failed", channel);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
@@ -1756,7 +1756,7 @@ LTSM::Channel::createTcpConnector(uint8_t channel, int sock, const ConnectorMode
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 #endif
 
@@ -1767,7 +1767,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "file mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     std::error_code err;
@@ -1775,7 +1775,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
     if(mode == ConnectorMode::ReadOnly &&
        ! std::filesystem::exists(path, err)) {
         Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), path, getuid());
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     int fd = 0;
@@ -1807,7 +1807,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
 
     if(0 > fd) {
         Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "open file", strerror(errno), errno);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadWrite) {
@@ -1823,7 +1823,7 @@ LTSM::Channel::createFileConnector(uint8_t channel, const std::filesystem::path 
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 /// createCommandConnector
@@ -1833,21 +1833,21 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
 
     if(mode == ConnectorMode::ReadWrite || mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "cmd mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     auto list = Tools::split(runcmd, 0x20);
 
     if(list.empty()) {
         Application::error("{}: {}", __FUNCTION__, "cmd empty");
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     std::error_code err;
 
     if(! std::filesystem::exists(list.front(), err)) {
         Application::error("{}: {}, path: `{}', uid: {}", __FUNCTION__, err.message(), list.front(), getuid());
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     FILE* fcmd = nullptr;
@@ -1869,7 +1869,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
 
     if(! fcmd) {
         Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "open cmd", strerror(errno), errno);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     if(mode == ConnectorMode::ReadOnly) {
@@ -1881,7 +1881,7 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
     }
 
     Application::error("{}: id: {}, {} failed", __FUNCTION__, channel, "mode");
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 #ifdef __UNIX__
@@ -1957,14 +1957,14 @@ LTSM::Channel::createUnixListener(const UrlMode & serverOpts, size_t listen,
     if(std::filesystem::exists(path, err) &&
        ! std::filesystem::is_socket(path, err)) {
         Application::error("{}: {}, path: `{}'", __FUNCTION__, "not socket", path);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     int srvfd = UnixSocket::listen(path, listen);
 
     if(0 > srvfd) {
         Application::error("{}: {}, path: `{}'", __FUNCTION__, "unix failed", path);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<Listener>(srvfd, serverOpts, clientOpts, chOpts, sender);
@@ -1977,7 +1977,7 @@ LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
 
     if(0 >= port) {
         Application::error("{}: {}, url: `{}'", __FUNCTION__, "socket format", serverOpts.content());
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     // hardcore server listen
@@ -1989,7 +1989,7 @@ LTSM::Channel::createTcpListener(const UrlMode & serverOpts, size_t listen,
 
     if(0 > srvfd) {
         Application::error("{}: {}, ipaddr: {}, port: {}", __FUNCTION__, "socket failed", ipaddr, port);
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<Listener>(srvfd, serverOpts, clientOpts, chOpts, sender);

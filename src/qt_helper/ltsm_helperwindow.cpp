@@ -136,7 +136,7 @@ namespace LTSM::LoginHelper {
         timerReloadUsers(0), labelPause(0), loginAutoComplete(false), initArguments(false), tokenAuthMode(false) {
         if(! RootDisplay::displayConnect(-1, XCB::InitModules::Xkb, nullptr)) {
             Application::error("{}: xcb connect failed", __FUNCTION__);
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         ui->setupUi(this);
@@ -374,7 +374,7 @@ namespace LTSM::LoginHelper {
         if(int err = gnutls_x509_crt_init(& ptr1); err != GNUTLS_E_SUCCESS) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_x509_crt_init", gnutls_strerror(err),
                                err);
-            throw LTSM::gnutls_error(NS_FuncName);
+            throw LTSM::gnutls_error(NS_FuncNameS);
         }
 
         const gnutls_datum_t dt1 = { .data = (unsigned char*) certder.data(), .size = (unsigned int) certder.size() };
@@ -384,14 +384,14 @@ namespace LTSM::LoginHelper {
         if(int err = gnutls_x509_crt_import(cert.get(), & dt1, GNUTLS_X509_FMT_DER); err != GNUTLS_E_SUCCESS) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_x509_crt_import", gnutls_strerror(err),
                                err);
-            throw gnutls_error(NS_FuncName);
+            throw gnutls_error(NS_FuncNameS);
         }
 
         gnutls_pubkey_t ptr2 = nullptr;
 
         if(int err = gnutls_pubkey_init(& ptr2); GNUTLS_E_SUCCESS != err) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_init", gnutls_strerror(err), err);
-            throw gnutls_error(NS_FuncName);
+            throw gnutls_error(NS_FuncNameS);
         }
 
         std::unique_ptr<gnutls_pubkey_st, void(*)(gnutls_pubkey_t)> pkey = { ptr2, gnutls_pubkey_deinit };
@@ -399,7 +399,7 @@ namespace LTSM::LoginHelper {
         if(int err = gnutls_pubkey_import_x509(pkey.get(), cert.get(), 0); GNUTLS_E_SUCCESS != err) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_import_x509",
                                gnutls_strerror(err), err);
-            throw gnutls_error(NS_FuncName);
+            throw gnutls_error(NS_FuncNameS);
         }
 
         gnutls_datum_t res;
@@ -407,7 +407,7 @@ namespace LTSM::LoginHelper {
         if(int err = gnutls_pubkey_encrypt_data(pkey.get(), 0, & dt2, & res); GNUTLS_E_SUCCESS != err) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "gnutls_pubkey_encrypt_data",
                                gnutls_strerror(err), err);
-            throw gnutls_error(NS_FuncName);
+            throw gnutls_error(NS_FuncNameS);
         }
 
         return std::make_unique<DatumAlloc>(res);

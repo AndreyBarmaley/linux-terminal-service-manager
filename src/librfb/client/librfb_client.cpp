@@ -677,7 +677,7 @@ namespace LTSM {
             // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
             if(0 == extClipboardRemoteCaps()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             // A negative value of length indicates that the extended message format
@@ -790,7 +790,7 @@ namespace LTSM {
 
                 default: {
                     Application::error("{}: {}", __FUNCTION__, "unknown decoding");
-                    throw rfb_error(NS_FuncName);
+                    throw rfb_error(NS_FuncNameS);
                 }
             }
 
@@ -899,7 +899,7 @@ namespace LTSM {
         } else if(length < 0) {
             if(0 == extClipboardLocalCaps()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             length = std::abs(length);
@@ -1009,7 +1009,7 @@ namespace LTSM {
             clientRecvLtsmDataEvent(buf);
         } else {
             Application::error("{}: unknown type: {}", __FUNCTION__, type);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -1023,7 +1023,7 @@ namespace LTSM {
 
         if(! jc.isObject()) {
             Application::error("{}: {}", __FUNCTION__, "json broken");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         auto jo = jc.toObject();
@@ -1031,7 +1031,7 @@ namespace LTSM {
 
         if(cmd.empty()) {
             Application::error("{}: {}", __FUNCTION__, "format message broken");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         if(cmd == SystemCommand::ChannelOpen) {
@@ -1048,7 +1048,7 @@ namespace LTSM {
             systemLoginSuccess(jo);
         } else {
             Application::error("{}: {}", __FUNCTION__, "unknown cmd");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
     }
 }

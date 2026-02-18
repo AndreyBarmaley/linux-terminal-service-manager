@@ -72,7 +72,7 @@ namespace LTSM {
             default:
                 Application::error("{}: {} failed, bits: {}, rate: {}, channels: {}",
                                    __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
-                throw audio_error(NS_FuncName);
+                throw audio_error(NS_FuncNameS);
         }
 
         audioSpec.rate = fmt.samplePerSec;
@@ -81,7 +81,7 @@ namespace LTSM {
         if(0 == pa_sample_spec_valid(& audioSpec)) {
             Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         int error = 0;
@@ -90,7 +90,7 @@ namespace LTSM {
 
         if(! ctx) {
             Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
     }
 
@@ -125,7 +125,7 @@ namespace LTSM {
         if(0 == pa_sample_spec_valid(& audioSpec)) {
             Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         int error = 0;
@@ -134,7 +134,7 @@ namespace LTSM {
 
         if(! ctx) {
             Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "pa_simple_new", pa_strerror(error));
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
     }
 

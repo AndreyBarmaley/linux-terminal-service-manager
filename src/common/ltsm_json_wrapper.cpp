@@ -1051,7 +1051,7 @@ namespace LTSM {
     JsonObject JsonContent::toObject(void) const {
         if(! isObject()) {
             Application::error("{}: not json object", __FUNCTION__);
-            throw json_error(NS_FuncName);
+            throw json_error(NS_FuncNameS);
         }
 
         JsonObject res;
@@ -1063,7 +1063,7 @@ namespace LTSM {
     JsonArray JsonContent::toArray(void) const {
         if(! isArray()) {
             Application::error("{}: not json array", __FUNCTION__);
-            throw json_error(NS_FuncName);
+            throw json_error(NS_FuncNameS);
         }
 
         JsonArray res;

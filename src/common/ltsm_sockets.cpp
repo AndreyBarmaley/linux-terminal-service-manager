@@ -96,7 +96,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "poll", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
         // A value of 0 indicates that the call timed out and no file descriptors were ready
@@ -127,7 +127,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "poll", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
         // A value of 0 indicates that the call timed out and no file descriptors were ready
@@ -149,7 +149,7 @@ namespace LTSM {
 
         if(0 > ioctlsocket(fd, FIONREAD, & count)) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ioctlsocket", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
 #else
@@ -157,7 +157,7 @@ namespace LTSM {
 
         if(0 > ioctl(fd, FIONREAD, & count)) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ioctl", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
 #endif
@@ -308,7 +308,7 @@ namespace LTSM {
             // eof
             if(0 == real) {
                 Application::warning("{}: {}", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
+                throw network_error(NS_FuncNameS);
             }
 
             // error
@@ -317,7 +317,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
     }
 
@@ -342,7 +342,7 @@ namespace LTSM {
             // eof
             if(0 == real) {
                 Application::warning("{}: {}", __FUNCTION__, "end stream");
-                throw network_error(NS_FuncName);
+                throw network_error(NS_FuncNameS);
             }
 
             // error
@@ -351,7 +351,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "send", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
     }
 
@@ -407,7 +407,7 @@ namespace LTSM {
 
         if(1 != recv(sock, & res, 1, MSG_PEEK)) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
         return res;
@@ -462,7 +462,7 @@ namespace LTSM {
 
         if(1 != recv(fdin, & res, 1, MSG_PEEK)) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "recv", strerror(errno), errno);
-            throw network_error(NS_FuncName);
+            throw network_error(NS_FuncNameS);
         }
 
         return res;
@@ -907,7 +907,7 @@ namespace LTSM {
         Stream::Stream(const NetworkStream* bs) : layer(bs) {
             if(! bs) {
                 Application::error("{}: {}", __FUNCTION__, "tls stream failed");
-                throw std::invalid_argument(NS_FuncName);
+                throw std::invalid_argument(NS_FuncNameS);
             }
         }
 
@@ -1081,14 +1081,14 @@ namespace LTSM {
                 Application::error("gnutls_record_recv ret: {}, error: {}", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret)) {
-                    throw gnutls_error(NS_FuncName);
+                    throw gnutls_error(NS_FuncNameS);
                 }
             } else
 
                 // eof
                 if(0 == ret) {
                     Application::warning("{}: {}", __FUNCTION__, "end stream");
-                    throw gnutls_error(NS_FuncName);
+                    throw gnutls_error(NS_FuncNameS);
                 }
 
 
@@ -1120,7 +1120,7 @@ namespace LTSM {
                 Application::error("gnutls_record_send ret: {}, error: {}", ret, gnutls_strerror(ret));
 
                 if(gnutls_error_is_fatal(ret)) {
-                    throw gnutls_error(NS_FuncName);
+                    throw gnutls_error(NS_FuncNameS);
                 }
             }
 
@@ -1173,12 +1173,12 @@ namespace LTSM {
             while(offset < res.size()) {
                 if(int ret = gnutls_cipher_init(& ctx, GNUTLS_CIPHER_DES_CBC, & key, & iv)) {
                     Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_cipher_init", gnutls_strerror(ret));
-                    throw gnutls_error(NS_FuncName);
+                    throw gnutls_error(NS_FuncNameS);
                 }
 
                 if(int ret = gnutls_cipher_encrypt(ctx, res.data() + offset, std::min(_key.size(), res.size() - offset))) {
                     Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_cipher_encrypt", gnutls_strerror(ret));
-                    throw gnutls_error(NS_FuncName);
+                    throw gnutls_error(NS_FuncNameS);
                 }
 
                 gnutls_cipher_deinit(ctx);
@@ -1193,7 +1193,7 @@ namespace LTSM {
 
             if(int ret = gnutls_rnd(GNUTLS_RND_KEY, res.data(), res.size())) {
                 Application::error("{}: {} error: {}", __FUNCTION__, "gnutls_rnd", gnutls_strerror(ret));
-                throw gnutls_error(NS_FuncName);
+                throw gnutls_error(NS_FuncNameS);
             }
 
             return res;
@@ -1217,7 +1217,7 @@ namespace LTSM {
 
             if(ret < Z_OK) {
                 Application::error("{}: {} failed, error code: {}", __FUNCTION__, "deflateInit2", ret);
-                throw zlib_error(NS_FuncName);
+                throw zlib_error(NS_FuncNameS);
             }
         }
 
@@ -1241,7 +1241,7 @@ namespace LTSM {
 
                 if(ret < Z_OK) {
                     Application::error("{}: {} failed, error code: {}", __FUNCTION__, "deflate", ret);
-                    throw zlib_error(NS_FuncName);
+                    throw zlib_error(NS_FuncNameS);
                 }
 
                 if(zs.avail_out < tmp.size()) {
@@ -1277,22 +1277,22 @@ namespace LTSM {
 
         void DeflateStream::recvRaw(void* ptr, size_t len) const {
             Application::error("{}: {}", __FUNCTION__, "disabled");
-            throw zlib_error(NS_FuncName);
+            throw zlib_error(NS_FuncNameS);
         }
 
         bool DeflateStream::hasInput(void) const {
             Application::error("{}: {}", __FUNCTION__, "disabled");
-            throw zlib_error(NS_FuncName);
+            throw zlib_error(NS_FuncNameS);
         }
 
         size_t DeflateStream::hasData(void) const {
             Application::error("{}: {}", __FUNCTION__, "disabled");
-            throw zlib_error(NS_FuncName);
+            throw zlib_error(NS_FuncNameS);
         }
 
         uint8_t DeflateStream::peekInt8(void) const {
             Application::error("{}: {}", __FUNCTION__, "disabled");
-            throw zlib_error(NS_FuncName);
+            throw zlib_error(NS_FuncNameS);
         }
 
         /* Zlib::InflateBase */
@@ -1303,7 +1303,7 @@ namespace LTSM {
 
             if(ret < Z_OK) {
                 Application::error("{}: {} failed, error code: {}", __FUNCTION__, "inflateInit2", ret);
-                throw zlib_error(NS_FuncName);
+                throw zlib_error(NS_FuncNameS);
             }
         }
 
@@ -1328,7 +1328,7 @@ namespace LTSM {
 
                 if(ret < Z_OK) {
                     Application::error("{}: {} failed, error code: {}", __FUNCTION__, "inflate", ret);
-                    throw zlib_error(NS_FuncName);
+                    throw zlib_error(NS_FuncNameS);
                 }
 
                 if(zs.avail_out < tmp.size()) {
@@ -1351,7 +1351,7 @@ namespace LTSM {
         void InflateStream::recvRaw(void* ptr, size_t len) const {
             if(sb.last() < len) {
                 Application::error("{}: stream last: {}, expected: {}", __FUNCTION__, sb.last(), len);
-                throw std::invalid_argument(NS_FuncName);
+                throw std::invalid_argument(NS_FuncNameS);
             }
 
             sb.readTo(static_cast<uint8_t*>(ptr), len);
@@ -1368,7 +1368,7 @@ namespace LTSM {
         uint8_t InflateStream::peekInt8(void) const {
             if(0 == sb.last()) {
                 Application::error("{}: stream empty", __FUNCTION__);
-                throw zlib_error(NS_FuncName);
+                throw zlib_error(NS_FuncNameS);
             }
 
             return sb.peek();
@@ -1376,7 +1376,7 @@ namespace LTSM {
 
         void InflateStream::sendRaw(const void* ptr, size_t len) {
             Application::error("{}: {}", __FUNCTION__, "disabled");
-            throw zlib_error(NS_FuncName);
+            throw zlib_error(NS_FuncNameS);
         }
     } // ZLib
 
@@ -1445,7 +1445,7 @@ namespace LTSM {
         std::vector<uint8_t> BaseLayer::recvLayer(void) const {
             if(! layer) {
                 Application::error("{}: {}", __FUNCTION__, "network layer is null");
-                throw gssapi_error(NS_FuncName);
+                throw gssapi_error(NS_FuncNameS);
             }
 
             auto len = layer->recvIntBE32();
@@ -1457,7 +1457,7 @@ namespace LTSM {
         void BaseLayer::sendLayer(const void* buf, size_t len) {
             if(! layer) {
                 Application::error("{}: {}", __FUNCTION__, "network layer is null");
-                throw gssapi_error(NS_FuncName);
+                throw gssapi_error(NS_FuncNameS);
             }
 
             layer->sendIntBE32(len);

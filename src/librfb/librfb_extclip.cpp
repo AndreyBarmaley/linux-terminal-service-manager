@@ -153,7 +153,7 @@ namespace LTSM {
     void RFB::ExtClip::recvExtClipboardCaps(StreamBuf && sb) {
         if(4 > sb.last()) {
             Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "length");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         auto flags = sb.readIntBE32();
@@ -164,7 +164,7 @@ namespace LTSM {
 
             if(typesCount * 4 > sb.last()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "types count");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             recvExtClipboardCapsContinue(flags, std::move(sb));
@@ -254,7 +254,7 @@ namespace LTSM {
             sendExtClipboardProvide(allowTypes);
         } else {
             Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -268,7 +268,7 @@ namespace LTSM {
             sendExtClipboardNotify(allowTypes & extClipboardLocalTypes());
         } else {
             Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -284,7 +284,7 @@ namespace LTSM {
             extClipboardRemoteTypesEvent(allowTypes);
         } else {
             Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -316,7 +316,7 @@ namespace LTSM {
             }
         } else {
             Application::error("{}: ext clipboard unsupport op: {:#08x}", __FUNCTION__, localExtClipboardFlags);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 

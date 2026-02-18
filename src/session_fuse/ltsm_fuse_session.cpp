@@ -685,7 +685,7 @@ namespace LTSM {
         if(0 > ::stat(local.c_str(), & st)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                     __FUNCTION__, "stat", strerror(errno), errno, local);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::App, "{}: added ino: {}, path: `{}'", __FUNCTION__, 1, local);
@@ -705,14 +705,14 @@ namespace LTSM {
 
         if(! ses) {
             Application::error("{}: {} failed", __FUNCTION__, "fuse_session_new");
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         fuse_set_signal_handlers(ses.get());
 
         if(0 > fuse_session_mount(ses.get(), local.c_str())) {
             Application::error("{}: {} failed, local point: `{}'", __FUNCTION__, "fuse_session_mount", local);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         thloop = std::thread([ses = ses.get()]() {

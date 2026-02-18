@@ -929,7 +929,7 @@ namespace LTSM::Manager {
 #else
     DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : displayNum(display) {
         Application::warning("{}: sdbus address not supported, use 1.2 version", __FUNCTION__);
-        throw service_error(NS_FuncName);
+        throw service_error(NS_FuncNameS);
     }
 #endif
 

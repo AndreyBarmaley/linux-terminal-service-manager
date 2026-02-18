@@ -73,7 +73,7 @@ namespace LTSM {
         if(! fmtFormat) {
             Application::error("{}: {} failed, bits: {}, rate: {}, channels: {}",
                                __FUNCTION__, "AudioFormat", fmt.bitsPerSample, fmt.samplePerSec, fmt.channels);
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         if(autoPlayAfterSec) {
@@ -104,26 +104,26 @@ namespace LTSM {
 
         if(! dev) {
             Application::error("{}: {} failed", __FUNCTION__, "alcOpenDevice");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         ctx.reset(alcCreateContext(dev.get(), nullptr /* attr list */));
 
         if(! ctx) {
             Application::error("{}: {} failed", __FUNCTION__, "alcCreateContext");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         if(! alcMakeContextCurrent(ctx.get())) {
             Application::error("{}: {} failed", __FUNCTION__, "alcMakeContextCurrent");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         alGenSources(1, & sourceId);
 
         if(auto err = alGetError(); err != AL_NO_ERROR) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "alcMakeContextCurrent", alcErrorName(err));
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
     }
 

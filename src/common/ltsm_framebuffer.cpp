@@ -266,7 +266,7 @@ namespace LTSM {
 
             default:
                 Application::error("{}: unknown bpp: {}", __FUNCTION__, bitsPerPixel());
-                throw std::invalid_argument(NS_FuncName);
+                throw std::invalid_argument(NS_FuncNameS);
         }
     }
 
@@ -407,7 +407,7 @@ namespace LTSM {
         }
 
         Application::error("{}: unknown bpp: {}", __FUNCTION__, bpp);
-        throw std::invalid_argument(NS_FuncName);
+        throw std::invalid_argument(NS_FuncNameS);
     }
 
     uint32_t FrameBuffer::pixel(const XCB::Point & pos) const {

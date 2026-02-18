@@ -136,21 +136,21 @@ namespace LTSM {
         dll{ nullptr, dlclose } {
         if(name.empty()) {
             Application::error("{}: failed, name empty", __FUNCTION__);
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
 
         dll.reset(dlopen(name.c_str(), RTLD_LAZY));
 
         if(! dll) {
             Application::error("{}: {} failed, name: {}", __FUNCTION__, "dlopen", name);
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
 
         auto pfGetFunctionList = (CK_C_GetFunctionList) dlsym(dll.get(), "C_GetFunctionList");
 
         if(! pfGetFunctionList) {
             Application::error("{}: {} symbol not found", __FUNCTION__, "C_GetFunctionList");
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
 
         auto ret = pfGetFunctionList(& pFunctionList);
@@ -158,14 +158,14 @@ namespace LTSM {
         if(ret != CKR_OK) {
             Application::error("{}: {} failed, code: {:#016x}, rv: `{}'", __FUNCTION__, "C_GetFunctionList", ret,
                                rvString(ret));
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
 
         ret = pFunctionList->C_Initialize(nullptr);
 
         if(ret != CKR_OK) {
             Application::error("{}: {} failed, code: {:#016x}, rv: `{}'", __FUNCTION__, "C_Initialize", ret, rvString(ret));
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
     }
 
@@ -285,7 +285,7 @@ namespace LTSM {
     PKCS11::Slot::Slot(const SlotId & val, const LibraryPtr & lib) : weak(lib), id(val) {
         if(! lib) {
             Application::error("{}: lib failed", __FUNCTION__);
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
     }
 
@@ -452,7 +452,7 @@ namespace LTSM {
         sid = lib->sessionOpen(id, rwmode);
 
         if(sid == CK_INVALID_HANDLE) {
-            throw pkcs11_error(NS_FuncName);
+            throw pkcs11_error(NS_FuncNameS);
         }
     }
 

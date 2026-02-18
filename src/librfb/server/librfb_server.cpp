@@ -574,7 +574,7 @@ namespace LTSM {
             if(msgType == RFB::PROTOCOL_LTSM) {
                 if(! clientLtsmSupported) {
                     Application::error("{}: client not support encoding: {}", __FUNCTION__, RFB::encodingName(RFB::ENCODING_LTSM));
-                    throw rfb_error(NS_FuncName);
+                    throw rfb_error(NS_FuncNameS);
                 }
 
                 try {
@@ -662,13 +662,13 @@ namespace LTSM {
 
             default: {
                 Application::error("{}: {}", __FUNCTION__, " unknown pixel format");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
         }
 
         if(trueColor == 0 || redMax == 0 || greenMax == 0 || blueMax == 0) {
             Application::error("{}: {}", __FUNCTION__, " unsupported pixel format");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         clientTrueColor = trueColor;
@@ -826,7 +826,7 @@ namespace LTSM {
         } else if(length < 0) {
             if(0 == extClipboardLocalCaps()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             auto buffer = recvData(std::abs(length));
@@ -929,7 +929,7 @@ namespace LTSM {
             // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
             if(0 == extClipboardRemoteCaps()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "ext clipboard");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             // A negative value of length indicates that the extended message format
@@ -1121,7 +1121,7 @@ namespace LTSM {
 
         if(! isClientSupportedEncoding(RFB::ENCODING_EXT_DESKTOP_SIZE)) {
             Application::error("{}: {}", __FUNCTION__, "client not supported ExtDesktopResize encoding");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         // send
@@ -1207,7 +1207,7 @@ namespace LTSM {
         if(bitmaskSize != bitmaskBuf.size()) {
             Application::error("{}: bitmask missmatch, buf size: {}, bitmask size: {}", __FUNCTION__, bitmaskBuf.size(),
                                bitmaskSize);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         // part2: send bitmask buf
@@ -1314,7 +1314,7 @@ namespace LTSM {
 
         if(! jc.isObject()) {
             Application::error("{}: {}", __FUNCTION__, "json broken");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         auto jo = jc.toObject();
@@ -1322,7 +1322,7 @@ namespace LTSM {
 
         if(cmd.empty()) {
             Application::error("{}: {}", __FUNCTION__, "format message broken");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Rfb, "{}: cmd: {}", __FUNCTION__, cmd);
@@ -1347,7 +1347,7 @@ namespace LTSM {
             systemLoginSuccess(jo);
         } else {
             Application::error("{}: {}", __FUNCTION__, "unknown cmd");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
     }
 

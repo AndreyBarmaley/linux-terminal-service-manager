@@ -151,7 +151,7 @@ namespace LTSM {
     void Connector::X11VNC::serverHandshakeVersionEvent(void) {
         if(! xcbConnect()) {
             Application::error("{}: {}", __FUNCTION__, "xcb connect failed");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 }

@@ -40,7 +40,7 @@ namespace LTSM {
         if(! ctx || error != OPUS_OK) {
             Application::error("{}: {} failed, error: {}, sampleRate: {}, audioChannels: {}", __FUNCTION__,
                                "opus_encoder_create", error, samplesPerSec, audioChannels);
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         /*
@@ -48,7 +48,7 @@ namespace LTSM {
                 if(error != OPUS_OK)
                 {
                     Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encoder_ctl", error);
-                    throw audio_error(NS_FuncName);
+                    throw audio_error(NS_FuncNameS);
                 }
         */
     }
@@ -86,7 +86,7 @@ namespace LTSM {
     size_t AudioEncoder::Opus::size(void) const {
         if(encodeSize > tmp.size()) {
             Application::error("{}: out of range, size: {}, buf: {}", __FUNCTION__, encodeSize, tmp.size());
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         return encodeSize;

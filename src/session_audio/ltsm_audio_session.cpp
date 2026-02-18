@@ -163,7 +163,7 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
 #else
             Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
 #endif
         } else {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");

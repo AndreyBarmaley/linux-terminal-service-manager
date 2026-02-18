@@ -40,14 +40,14 @@ class FakeStream : public RFB::EncoderStream {
     FakeStream(const XCB::RootDisplay* xcb) {
         if(! xcb) {
             Application::error("{}: xcb failed", __FUNCTION__);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         auto visual = xcb->visual();
 
         if(! visual) {
             Application::error("{}: xcb visual failed", __FUNCTION__);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         pf = PixelFormat(xcb->bitsPerPixel(), visual->red_mask, visual->green_mask, visual->blue_mask, 0);
@@ -166,7 +166,7 @@ class EncodingTest : public Application {
 
         if(! xcb) {
             Application::warning("xcb failed");
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         xcb->extensionDisable(XCB::Module::DAMAGE);
@@ -301,7 +301,7 @@ class EncodingTest : public Application {
                 }
             } else {
                 Application::error("{}: {}", __FUNCTION__, "xcb copy region failed");
-                throw std::runtime_error(NS_FuncName);
+                throw std::runtime_error(NS_FuncNameS);
             }
 
             auto dtFrame = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tp);

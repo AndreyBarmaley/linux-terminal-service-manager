@@ -36,7 +36,7 @@ namespace LTSM {
     RFB::X11Client::X11Client() {
         if(! displayConnect(-1,
                             XCB::InitModules::Xkb | XCB::InitModules::SelCopy | XCB::InitModules::SelPaste, nullptr)) {
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
     }
 
@@ -52,7 +52,7 @@ namespace LTSM {
     std::vector<uint8_t> RFB::X11Client::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardLocalCaps()) {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::X11Cli, "{}", __FUNCTION__);
@@ -97,7 +97,7 @@ namespace LTSM {
             }
         } else {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -109,7 +109,7 @@ namespace LTSM {
             clientClipboard = buf;
         } else {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 

@@ -85,7 +85,7 @@ namespace LTSM::Connector {
 
         if(newDisplay < 0) {
             Application::error("{}: {} failed", __FUNCTION__, "user session request");
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         if(newDisplay != oldDisplay) {
@@ -94,7 +94,7 @@ namespace LTSM::Connector {
 
             if(! xcbConnect(newDisplay, *this)) {
                 Application::error("{}: {} failed", __FUNCTION__, "xcb connect");
-                throw std::runtime_error(NS_FuncName);
+                throw std::runtime_error(NS_FuncNameS);
             }
 
             busShutdownDisplay(oldDisplay);
@@ -182,21 +182,21 @@ namespace LTSM::Connector {
 
         if(screen <= 0) {
             Application::error("{}: login session request: failure", __FUNCTION__);
-            throw proto_error(NS_FuncName);
+            throw proto_error(NS_FuncNameS);
         }
 
         Application::info("{}: login session request success, display: {}", __FUNCTION__, screen);
 
         if(! xcbConnect(screen, *this)) {
             Application::error("{}: xcb connect: failed", __FUNCTION__);
-            throw proto_error(NS_FuncName);
+            throw proto_error(NS_FuncNameS);
         }
 
         const xcb_visualtype_t* visual = xcbDisplay()->visual();
 
         if(! visual) {
             Application::error("{}: xcb visual empty", __FUNCTION__);
-            throw proto_error(NS_FuncName);
+            throw proto_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Xcb, "{}: xcb max request: {}", __FUNCTION__, xcbDisplay()->getMaxRequest());

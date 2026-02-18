@@ -60,7 +60,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 
     if(mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "audio mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<ConnectorClientAudio>(channel, url, mode, chOpts, sender);
@@ -118,7 +118,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
 
             if(AudioOp::Init == audioCmd) {
                 if(! audioOpInit(sb)) {
-                    throw channel_error(NS_FuncName);
+                    throw channel_error(NS_FuncNameS);
                 }
             } else if(AudioOp::Data == audioCmd) {
                 audioOpData(sb);
@@ -126,12 +126,12 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
                 audioOpSilent(sb);
             } else {
                 Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", audioCmd, recv.size());
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
             }
         }
 
         if(sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error & err) {
         Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
@@ -149,7 +149,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     // <VER16> - proto ver
     // <NUM16> - encodings
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     audioVer = sb.readIntLE16();
@@ -158,7 +158,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     formats.clear();
 
     if(numEnc * 10 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     while(0 < numEnc) {
@@ -258,7 +258,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb) {
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto len = sb.readIntLE32();
@@ -270,14 +270,14 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
     if(len > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     if(decoder) {

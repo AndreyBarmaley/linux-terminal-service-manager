@@ -272,7 +272,7 @@ namespace LTSM {
 
         if(len < toVector().size()) {
             Application::error("{}: {}", __FUNCTION__, "incorrect data size");
-            throw std::out_of_range(NS_FuncName);
+            throw std::out_of_range(NS_FuncNameS);
         }
 
         bitpos = (len << 3) - bits;
@@ -281,7 +281,7 @@ namespace LTSM {
     bool Tools::StreamBitsUnpack::popBit(void) {
         if(vecbuf.empty()) {
             Application::error("{}: {}", __FUNCTION__, "empty data");
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         uint8_t mask = 1 << bitpos;

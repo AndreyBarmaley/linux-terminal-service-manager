@@ -111,7 +111,7 @@ namespace LTSM {
         if(! codec) {
             Application::error("{}: {} failed, type: {}, encoding: {}", __FUNCTION__, "avcodec_find_encoder", type,
                                encodingName(type));
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
     }
 
@@ -187,7 +187,7 @@ namespace LTSM {
 
         if(! avcctx) {
             Application::error("{}: {} failed", __FUNCTION__, "avcodec_alloc_context3");
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         avcctx->delay = 0;
@@ -239,14 +239,14 @@ namespace LTSM {
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         frame.reset(av_frame_alloc());
 
         if(! frame) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_alloc", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         frame->width = avcctx->width;
@@ -263,7 +263,7 @@ namespace LTSM {
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -295,7 +295,7 @@ namespace LTSM {
 
         if(ret = avcodec_send_frame(avcctx.get(), frame.get()); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_frame", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         if(ret = avcodec_receive_packet(avcctx.get(), packet.get()); 0 > ret) {
@@ -303,7 +303,7 @@ namespace LTSM {
                                ret);
 
             if(ret != EAGAIN) {
-                throw ffmpeg_error(NS_FuncName);
+                throw ffmpeg_error(NS_FuncNameS);
             }
         }
 
@@ -359,7 +359,7 @@ namespace LTSM {
 
         if(! codec) {
             Application::error("{}: {} failed", __FUNCTION__, "avcodec_find_encoder");
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
     }
 
@@ -418,7 +418,7 @@ namespace LTSM {
 
         if(! avcctx) {
             Application::error("{}: {} failed", __FUNCTION__, "avcodec_alloc_context3");
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         // if(codec->capabilities & AV_CODEC_CAP_TRUNCATED)
@@ -439,14 +439,14 @@ namespace LTSM {
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_open2", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         frame.reset(av_frame_alloc());
 
         if(! frame) {
             Application::error("{}: {} failed", __FUNCTION__, "av_frame_alloc");
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         frame->width = avcctx->width;
@@ -463,7 +463,7 @@ namespace LTSM {
 
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_frame_get_buffer", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
 #if (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -479,7 +479,7 @@ namespace LTSM {
         } else {
             Application::error("{}: unknown pixel format: {}, id: {}", __FUNCTION__, av_get_pix_fmt_name(avPixelFormat),
                                (int) avPixelFormat);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         swsctx.reset(sws_getContext(avcctx->width, avcctx->height, avcctx->pix_fmt,
@@ -489,7 +489,7 @@ namespace LTSM {
         if(ret = av_image_get_buffer_size(avPixelFormat, avcctx->width, avcctx->height, 1); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_get_buffer_size", FFMPEG::error(ret),
                                ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         rgb.reset(av_frame_alloc());
@@ -501,7 +501,7 @@ namespace LTSM {
         if(ret = av_image_fill_arrays(rgb->data, rgb->linesize, rgbdata.get(),
                                       (AVPixelFormat) rgb->format, rgb->width, rgb->height, 1); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "av_image_fill_arrays", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         Application::info("{}: {}, size: {}", __FUNCTION__, RFB::encodingName(getType()), csz);
@@ -542,7 +542,7 @@ namespace LTSM {
         if(ret = avcodec_send_packet(avcctx.get(), packet.get()); 0 > ret) {
             Application::error("{}: {} {}", __FUNCTION__, AV_INPUT_BUFFER_PADDING_SIZE, packet->size);
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_send_packet", FFMPEG::error(ret), ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         do {
@@ -552,7 +552,7 @@ namespace LTSM {
         if(0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_receive_frame", FFMPEG::error(ret),
                                ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         haveFrame = (ret == 0);
@@ -562,7 +562,7 @@ namespace LTSM {
         if(ret = avcodec_decode_video2(avcctx.get(), frame.get(), & gotFrame, packet.get()); 0 > ret) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "avcodec_decode_video2", FFMPEG::error(ret),
                                ret);
-            throw ffmpeg_error(NS_FuncName);
+            throw ffmpeg_error(NS_FuncNameS);
         }
 
         haveFrame = (gotFrame != 0);
@@ -575,7 +575,7 @@ namespace LTSM {
             if(heightResult < 0) {
                 Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "sws_scale", FFMPEG::error(heightResult),
                                    heightResult);
-                throw ffmpeg_error(NS_FuncName);
+                throw ffmpeg_error(NS_FuncNameS);
             }
 
             if(heightResult == avcctx->height) {

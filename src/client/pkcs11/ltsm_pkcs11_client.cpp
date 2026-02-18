@@ -52,7 +52,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPkcs11C
 
     if(mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "pkcs11 mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<ConnectorClientPkcs11>(channel, url, mode, chOpts, sender);
@@ -122,12 +122,12 @@ void LTSM::Channel::ConnectorClientPkcs11::pushData(std::vector<uint8_t> && recv
                 pkcs11DecryptData(sb);
             } else {
                 Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "audio", pkcs11Cmd, recv.size());
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
             }
         }
 
         if(sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error &) {
         Application::warning("{}: underflow data: {}", __FUNCTION__, sb.last());
@@ -144,7 +144,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
     // pkcs11 format:
     // <VER16> - proto ver
     if(2 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     protoVer = sb.readIntLE16();
@@ -186,7 +186,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11Init(const StreamBufRef & sb) {
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & sb) {
     if(1 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     // pkcs11 format:
@@ -254,7 +254,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlots(const StreamBufRef & s
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     // pkcs11 format:
@@ -292,7 +292,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotMechanisms(const StreamB
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const StreamBufRef & sb) {
     if(9 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     // pkcs11 format:
@@ -337,7 +337,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11GetSlotCertificates(const Strea
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & sb) {
     if(18 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     // pkcs11 format:
@@ -351,20 +351,20 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
     auto pinLen = sb.readIntLE16();
 
     if(pinLen > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto pin = sb.readString(pinLen);
     auto certLen = sb.readIntLE16();
 
     if(certLen > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto certId = sb.read(certLen);
 
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto valLen = sb.readIntLE32();
@@ -393,7 +393,7 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11SignData(const StreamBufRef & s
 
 bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef & sb) {
     if(18 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     // pkcs11 format:
@@ -407,20 +407,20 @@ bool LTSM::Channel::ConnectorClientPkcs11::pkcs11DecryptData(const StreamBufRef 
     auto pinLen = sb.readIntLE16();
 
     if(pinLen > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto pin = sb.readString(pinLen);
     auto certLen = sb.readIntLE16();
 
     if(certLen > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto certId = sb.read(certLen);
 
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto valLen = sb.readIntLE32();

@@ -49,7 +49,7 @@ namespace LTSM {
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, & width, nullptr)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
 
             return width;
@@ -64,7 +64,7 @@ namespace LTSM {
 
             if(0 != SDL_QueryTexture(get(), nullptr, nullptr, nullptr, & height)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
 
             return height;
@@ -77,7 +77,7 @@ namespace LTSM {
         if(isValid()) {
             if(0 != SDL_UpdateTexture(get(), rect, pixels, pitch)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_UpdateTexture", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
     }
@@ -96,7 +96,7 @@ namespace LTSM {
 
         if(! _window) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateWindow", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         _accel = accel;
@@ -110,14 +110,14 @@ namespace LTSM {
 
         if(! _renderer) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateRender", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, rendsz_w, rendsz_h));
 
         if(! _display) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
@@ -148,14 +148,14 @@ namespace LTSM {
 
             if(! _renderer) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateRenderer", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
 
             _display.reset(SDL_CreateTexture(_renderer.get(), TEXTURE_FMT, SDL_TEXTUREACCESS_TARGET, dispsz_w, dispsz_h));
 
             if(! _display) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_CreateTexture", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
 
             SDL_SetRenderDrawBlendMode(_renderer.get(), SDL_BLENDMODE_BLEND);
@@ -173,7 +173,7 @@ namespace LTSM {
 
         if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, & width, & height)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         return std::make_pair(width, height);
@@ -184,7 +184,7 @@ namespace LTSM {
 
         if(0 != SDL_QueryTexture(_display.get(), & format, nullptr, nullptr, nullptr)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         return format;
@@ -196,18 +196,18 @@ namespace LTSM {
 
             if(0 != SDL_QueryTexture(target, nullptr, & access, nullptr, nullptr)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
 
             if(access != SDL_TEXTUREACCESS_TARGET) {
                 Application::error("{}: not target texture", __FUNCTION__);
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
 
         if(0 != SDL_SetRenderTarget(_renderer.get(), target)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_SetRenderTarget", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
     }
 
@@ -216,12 +216,12 @@ namespace LTSM {
 
         if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         if(0 != SDL_RenderClear(_renderer.get())) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderClear", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
     }
 
@@ -230,17 +230,17 @@ namespace LTSM {
 
         if(0 != SDL_SetRenderDrawColor(_renderer.get(), col->r, col->g, col->b, col->a)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderDrawColor", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         if(rt->w == 1 && rt->h == 1) {
             if(0 != SDL_RenderDrawPoint(_renderer.get(), rt->x, rt->y)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderDrawPoint", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         } else if(0 != SDL_RenderFillRect(_renderer.get(), rt)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderFillRect", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
     }
 
@@ -250,7 +250,7 @@ namespace LTSM {
 
             if(0 != SDL_RenderCopy(_renderer.get(), source, srcrt, dstrt)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
     }
@@ -261,7 +261,7 @@ namespace LTSM {
         if(sync) {
             if(0 != SDL_RenderCopy(_renderer.get(), _display.get(), nullptr, nullptr)) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderCopy", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
 
@@ -287,7 +287,7 @@ namespace LTSM {
 
         if(0 != SDL_QueryTexture(_display.get(), nullptr, nullptr, &rendsz_w, &rendsz_h)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_QueryTexture", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         res.first = posx * rendsz_w / winsz_w;

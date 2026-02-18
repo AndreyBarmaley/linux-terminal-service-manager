@@ -372,7 +372,7 @@ namespace LTSM {
     std::vector<uint8_t> RFB::X11Server::extClipboardLocalData(uint16_t type) const {
         if(0 == extClipboardRemoteCaps()) {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         auto ptr = const_cast<RFB::X11Server*>(this);
@@ -413,7 +413,7 @@ namespace LTSM {
             }
         } else {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -423,7 +423,7 @@ namespace LTSM {
             clientClipboard = buf;
         } else {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
     }
 
@@ -660,7 +660,7 @@ namespace LTSM {
 
         if(! pixmapReply) {
             Application::error("{}: {}", __FUNCTION__, "xcb copy region empty");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         Application::trace(DebugType::X11Srv, "{}: request size: {}, reply: length: {}, bits per pixel: {}, red: {:#08x}, green: {:#08x}, blue: {:#08x}",
@@ -671,7 +671,7 @@ namespace LTSM {
         if(pixmapReply->size() != reg.width * reg.height * pixmapReply->bytePerPixel()) {
             Application::error("{}: region not aligned, reply size: {}, reg size: {}, byte per pixel: {}",
                                __FUNCTION__, pixmapReply->size(), reg.toSize(), pixmapReply->bytePerPixel());
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         FrameBuffer fb(pixmapReply->data(), reg, serverFormat());

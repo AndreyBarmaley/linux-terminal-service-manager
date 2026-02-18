@@ -146,7 +146,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientPcscCon
 
     if(mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "pcsc mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<ConnectorClientPcsc>(channel, url, mode, chOpts, sender);
@@ -210,12 +210,12 @@ void LTSM::Channel::ConnectorClientPcsc::pushData(std::vector<uint8_t> && recv) 
             } else {
                 Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}",
                                    __FUNCTION__, "pcsc init", pcscInit, recv.size());
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
             }
         }
 
         if(sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error & err) {
         Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
@@ -283,12 +283,12 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCommand(uint16_t cmd, const StreamB
 
     Application::error("{}: {} failed, cmd: {:#04x}, last size: {}",
                        __FUNCTION__, "pcsc", cmd, sb.last());
-    throw channel_error(NS_FuncName);
+    throw channel_error(NS_FuncNameS);
 }
 
 void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef & sb) {
     if(4 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     uint32_t scope = sb.readIntLE32();
@@ -310,7 +310,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEstablishContext(const StreamBufRef
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReleaseContext(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
@@ -371,7 +371,7 @@ std::list<std::string> getListReaders(SCARDCONTEXT hContext) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
@@ -392,7 +392,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscListReaders(const StreamBufRef & sb
 
 void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
     if(20 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDCONTEXT hContext = sb.readIntLE64();
@@ -401,7 +401,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
     uint32_t len = sb.readIntLE32();
 
     if(len > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto readerName = sb.readString(len);
@@ -429,7 +429,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscConnect(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) {
     if(20 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -455,7 +455,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscReconnect(const StreamBufRef & sb) 
 
 void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb) {
     if(12 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -478,7 +478,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscDisconnect(const StreamBufRef & sb)
 
 void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -500,7 +500,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscBeginTransaction(const StreamBufRef
 
 void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef & sb) {
     if(12 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -523,7 +523,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscEndTransaction(const StreamBufRef &
 
 void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
     if(24 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARD_IO_REQUEST ioSendPci = {};
@@ -535,7 +535,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
     uint32_t sendLength = sb.readIntLE32();
 
     if(sendLength > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto sendBuffer = sb.read(sendLength);
@@ -566,7 +566,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscTransmit(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -601,7 +601,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef & sb) {
     if(16 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hContext = sb.readIntLE64();
@@ -612,12 +612,12 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
     std::forward_list<std::string> names;
 
     if(statesCount * 12 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     for(auto & state : states) {
         if(12 > sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
 
         auto szReader = sb.readIntLE32();
@@ -630,7 +630,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
         assertm(state.cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
 
         if(szReader + state.cbAtr > sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
 
         if(szReader) {
@@ -686,7 +686,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetStatusChange(const StreamBufRef 
 
 void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
     if(20 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -695,7 +695,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
     uint32_t recvLength = sb.readIntLE32();
 
     if(sendLength > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto sendBuffer = sb.read(sendLength);
@@ -725,7 +725,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscControl(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
     if(8 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hContext = sb.readIntLE64();
@@ -746,7 +746,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscCancel(const StreamBufRef & sb) {
 
 void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) {
     if(12 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -775,7 +775,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscGetAttrib(const StreamBufRef & sb) 
 
 void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) {
     if(16 > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     SCARDHANDLE hCard = sb.readIntLE64();
@@ -783,7 +783,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscSetAttrib(const StreamBufRef & sb) 
     uint32_t attrLen = sb.readIntLE32();
 
     if(attrLen > sb.last()) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto attrBuf = sb.read(attrLen);

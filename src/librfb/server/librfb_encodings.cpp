@@ -81,7 +81,7 @@ namespace LTSM {
                 break;
         }
 
-        throw rfb_error(NS_FuncName);
+        throw rfb_error(NS_FuncNameS);
     }
 
     int RFB::EncoderStream::sendPixel(uint32_t pixel) {
@@ -118,7 +118,7 @@ namespace LTSM {
     int RFB::EncoderStream::sendRunLength(uint32_t length) {
         if(0 == length) {
             Application::error("{}: {}", __FUNCTION__, "length is zero");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         int res = 0;
@@ -139,7 +139,7 @@ namespace LTSM {
         if(uint16sz) {
             if(0xFFFF < zip.size()) {
                 Application::error("{}: {}", __FUNCTION__, "size is large");
-                throw rfb_error(NS_FuncName);
+                throw rfb_error(NS_FuncNameS);
             }
 
             sendIntBE16(zip.size());
@@ -160,22 +160,22 @@ namespace LTSM {
 
     bool RFB::EncoderWrapper::hasInput(void) const {
         LTSM::Application::error("{}: disabled", __FUNCTION__);
-        throw network_error(NS_FuncName);
+        throw network_error(NS_FuncNameS);
     }
 
     size_t RFB::EncoderWrapper::hasData(void) const {
         LTSM::Application::error("{}: disabled", __FUNCTION__);
-        throw network_error(NS_FuncName);
+        throw network_error(NS_FuncNameS);
     }
 
     void RFB::EncoderWrapper::recvRaw(void* ptr, size_t len) const {
         LTSM::Application::error("{}: disabled", __FUNCTION__);
-        throw network_error(NS_FuncName);
+        throw network_error(NS_FuncNameS);
     }
 
     uint8_t RFB::EncoderWrapper::peekInt8(void) const {
         LTSM::Application::error("{}: disabled", __FUNCTION__);
-        throw network_error(NS_FuncName);
+        throw network_error(NS_FuncNameS);
     }
 
     // EncodingBase
@@ -312,7 +312,7 @@ namespace LTSM {
 
         if(map.empty()) {
             Application::error("{}: {}", __FUNCTION__, "pixels map is empty");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         if(map.size() > 1) {
@@ -428,7 +428,7 @@ namespace LTSM {
 
         if(map.empty()) {
             Application::error("{}: {}", __FUNCTION__, "pixels map is empty");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         if(map.size() == 1) {
@@ -871,7 +871,7 @@ namespace LTSM {
 
         if(ret < 0) {
             Application::error("{}: {} failed, ret: {}", __FUNCTION__, "LZ4_compress_fast_continue", ret);
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         bb.resize(ret);
@@ -997,7 +997,7 @@ namespace LTSM {
 
         if(! jpeg) {
             Application::error("{}: {} failed", __FUNCTION__, "tjInitCompress");
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)
@@ -1037,7 +1037,7 @@ namespace LTSM {
 #else
             Application::error("{}: {} failed, error: `{}'", __FUNCTION__, "tjCompress", tjGetErrorStr());
 #endif
-            throw rfb_error(NS_FuncName);
+            throw rfb_error(NS_FuncNameS);
         }
 
         bb.resize(jpegSize);

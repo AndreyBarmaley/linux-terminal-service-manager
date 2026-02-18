@@ -214,14 +214,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "XFIXES");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_xfixes_query_version, ptr.get(), XCB_XFIXES_MAJOR_VERSION, XCB_XFIXES_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_xfixes_query_version");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -399,14 +399,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "DAMAGE");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_damage_query_version, ptr.get(), XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_query_version");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -425,7 +425,7 @@ namespace LTSM {
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_damage_create");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Xcb, "{}: resource id: {:#08x}", __FUNCTION__, xid);
@@ -497,14 +497,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "XTEST");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_test_get_version, ptr.get(), XCB_TEST_MAJOR_VERSION, XCB_TEST_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_test_query_version");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -591,14 +591,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "RANDR");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_randr_query_version, ptr.get(), XCB_RANDR_MAJOR_VERSION, XCB_RANDR_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_randr_query_version");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -1287,14 +1287,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "SHM");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_shm_query_version, ptr.get());
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_shm_query_version");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -1393,14 +1393,14 @@ namespace LTSM {
 
         if(! ext || ! ext->present) {
             Application::error("{}: extension not found: {}", __FUNCTION__, "XKB");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         auto xcbReply = getReplyFunc2(xcb_xkb_use_extension, ptr.get(), XCB_XKB_MAJOR_VERSION, XCB_XKB_MINOR_VERSION);
 
         if(const auto & err = xcbReply.error()) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_xkb_use_extension");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(const auto & reply = xcbReply.reply()) {
@@ -1412,18 +1412,18 @@ namespace LTSM {
 
         if(0 > devid) {
             Application::error("{}: {} failed", __FUNCTION__, "xkb_x11_get_core_keyboard_device_id");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         ctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS));
 
         if(! ctx) {
             Application::error("{}: {} failed", __FUNCTION__, "xkb_context_new");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         if(! resetMapState()) {
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         // notify xkb filter
@@ -1570,7 +1570,7 @@ namespace LTSM {
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         // set _wm_name
@@ -1934,7 +1934,7 @@ namespace LTSM {
 
         if(auto err = GenericError(xcb_request_check(ptr.get(), cookie))) {
             error(ptr.get(), err.get(), __FUNCTION__, "xcb_create_window");
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
 
         // set _wm_name
@@ -2259,7 +2259,7 @@ namespace LTSM {
     /* XCB::Connector */
     XCB::Connector::Connector(int displayNum, const AuthCookie* cookie) {
         if(! connectorDisplayConnect(displayNum, cookie)) {
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
     }
 
@@ -2781,7 +2781,7 @@ namespace LTSM {
     /* XCB::RootDisplay */
     XCB::RootDisplay::RootDisplay(int displayNum, const AuthCookie* auth) {
         if(! displayConnect(displayNum, InitModules::All, auth)) {
-            throw xcb_error(NS_FuncName);
+            throw xcb_error(NS_FuncNameS);
         }
     }
 
@@ -3738,7 +3738,7 @@ namespace LTSM {
 
             default:
                 Application::error("{}: unknown depth: {}", __FUNCTION__, depth());
-                throw xcb_error(NS_FuncName);
+                throw xcb_error(NS_FuncNameS);
         }
 
         uint32_t colors[] = { color };

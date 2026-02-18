@@ -218,7 +218,7 @@ namespace LTSM {
 
                 case SDL_QUIT:
                     Application::warning("{}: {}", __FUNCTION__, "SDL quit event");
-                    throw sdl_error(NS_FuncName);
+                    throw sdl_error(NS_FuncNameS);
 
                 default:
                     break;

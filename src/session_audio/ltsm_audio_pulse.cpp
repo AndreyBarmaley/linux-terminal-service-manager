@@ -298,28 +298,28 @@ namespace LTSM {
         if(0 == pa_sample_spec_valid(& audioSpec)) {
             Application::error("{}: {} failed, format: `{}', rate: {}, channels: {}",
                                __FUNCTION__, "pa_sample_spec_valid", pa_sample_format_to_string(audioSpec.format), audioSpec.rate, audioSpec.channels);
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         loop.reset(pa_mainloop_new());
 
         if(! loop) {
             Application::error("{}: {} failed", __FUNCTION__, "pa_mainloop_new");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         pa_mainloop_api* api = pa_mainloop_get_api(loop.get());
 
         if(! api) {
             Application::error("{}: {} failed", __FUNCTION__, "pa_mainloop_get_api");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
 
         ctx.reset(pa_context_new(api, contextName.c_str()));
 
         if(! ctx) {
             Application::error("{}: {} failed", __FUNCTION__, "pa_context_new");
-            throw audio_error(NS_FuncName);
+            throw audio_error(NS_FuncNameS);
         }
     }
 
@@ -752,7 +752,7 @@ namespace LTSM {
 
             if(0 != pa_stream_write(stream.get(), pcm.data(), len, nullptr, 0, PA_SEEK_RELATIVE)) {
                 Application::error("{}: {} failed", __FUNCTION__, "pa_stream_write");
-                throw audio_error(NS_FuncName);
+                throw audio_error(NS_FuncNameS);
             }
 
             pcm.erase(pcm.begin(), pcm.begin() + len);

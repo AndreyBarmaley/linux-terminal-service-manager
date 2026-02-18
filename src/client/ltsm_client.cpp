@@ -778,7 +778,7 @@ namespace LTSM {
                 if(! tx) {
                     Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                        "SDL_CreateTextureFromSurface", SDL_GetError());
-                    throw sdl_error(NS_FuncName);
+                    throw sdl_error(NS_FuncNameS);
                 }
 
                 window->renderReset();
@@ -786,7 +786,7 @@ namespace LTSM {
                 if(0 != SDL_RenderCopy(window->render(), tx, nullptr, nullptr)) {
                     Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_RenderCopy",
                                        SDL_GetError());
-                    throw sdl_error(NS_FuncName);
+                    throw sdl_error(NS_FuncNameS);
                 }
 
                 SDL_RenderPresent(window->render());
@@ -1224,7 +1224,7 @@ namespace LTSM {
                 &gmask, &bmask, &amask)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_PixelFormatEnumToMasks", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         clientPf = PixelFormat(bpp, rmask, gmask, bmask, amask);
@@ -1251,7 +1251,7 @@ namespace LTSM {
             if(! sfback) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
 
@@ -1262,7 +1262,7 @@ namespace LTSM {
         if(0 > SDL_FillRect(sfback.get(), &dstrt, color)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_FillRect",
                                SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
     }
 
@@ -1285,7 +1285,7 @@ namespace LTSM {
         if(! sfframe) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_CreateRGBSurfaceFrom", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         updateRawPixels3(wrt, sfframe.get());
@@ -1303,7 +1303,7 @@ namespace LTSM {
         if(! sfframe) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                "SDL_CreateRGBSurfaceWithFormatFrom", SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
 
         updateRawPixels3(wrt, sfframe.get());
@@ -1318,7 +1318,7 @@ namespace LTSM {
             if(! sfback) {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__,
                                    "SDL_CreateSurface", SDL_GetError());
-                throw sdl_error(NS_FuncName);
+                throw sdl_error(NS_FuncNameS);
             }
         }
 
@@ -1327,7 +1327,7 @@ namespace LTSM {
         if(0 > SDL_BlitSurface(sfframe, nullptr, sfback.get(), & dstrt)) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "SDL_BlitSurface",
                                SDL_GetError());
-            throw sdl_error(NS_FuncName);
+            throw sdl_error(NS_FuncNameS);
         }
     }
 

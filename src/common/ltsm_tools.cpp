@@ -80,12 +80,12 @@ namespace LTSM {
 
         if(int ret = getpwnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getpwnam_r", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
             Application::warning("{}: user not found: `{}'", __FUNCTION__, name);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
     }
 
@@ -96,12 +96,12 @@ namespace LTSM {
 
         if(int ret = getpwuid_r(uid, & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getpwuid_r", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
             Application::warning("{}: uid not found: {}", __FUNCTION__, uid);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
     }
 
@@ -132,12 +132,12 @@ namespace LTSM {
 
         if(int ret = getgrgid_r(gid, & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getgrgid_r", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
             Application::warning("{}: gid not found: {}", __FUNCTION__, gid);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
     }
 
@@ -153,12 +153,12 @@ namespace LTSM {
 
         if(int ret = getgrnam_r(name.c_str(), & st, buf.get(), buflen, & res); ret != 0) {
             Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "getgrnam_r", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         if(! res) {
             Application::warning("{}: group not found: `{}'", __FUNCTION__, name);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
     }
 
@@ -427,7 +427,7 @@ namespace LTSM {
                 res.resize(dstsz);
             } else {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "compress", ret);
-                throw std::runtime_error(NS_FuncName);
+                throw std::runtime_error(NS_FuncNameS);
             }
         }
 
@@ -453,7 +453,7 @@ namespace LTSM {
                 res.resize(dstsz);
             } else {
                 Application::error("{}: {} failed, error: {}", __FUNCTION__, "uncompress", ret);
-                throw std::runtime_error(NS_FuncName);
+                throw std::runtime_error(NS_FuncNameS);
             }
         }
 
@@ -545,7 +545,7 @@ namespace LTSM {
 
         if(str.empty() || 0 != (str.length() % 4)) {
             Application::error("{}: {} failed, data length: {}", __FUNCTION__, "base64", str.length());
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         size_t len = 3 * str.length() / 4;

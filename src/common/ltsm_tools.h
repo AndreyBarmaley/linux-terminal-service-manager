@@ -175,10 +175,6 @@ namespace LTSM {
 
         std::string_view prettyFuncNameView(std::string_view);
 
-        inline std::string prettyFuncName(std::string_view name) {
-            return view2string(prettyFuncNameView(name));
-        }
-
         std::string randomHexString(size_t len);
         std::string quotedString(std::string_view);
 
@@ -442,7 +438,7 @@ namespace LTSM {
     }
 
 }
-#define NS_FuncName  LTSM::Tools::prettyFuncName(__PRETTY_FUNCTION__)
+#define NS_FuncNameS LTSM::view2string(LTSM::Tools::prettyFuncNameView(__PRETTY_FUNCTION__))
 #define NS_FuncNameV LTSM::Tools::prettyFuncNameView(__PRETTY_FUNCTION__)
 
 #endif // _LTSM_TOOLS_

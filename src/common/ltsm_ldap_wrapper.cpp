@@ -90,7 +90,7 @@ namespace LTSM {
     LdapWrapper::LdapWrapper() {
         if(int ret = ldap_initialize(& ldap, nullptr); ret != LDAP_SUCCESS) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_initialize", ldap_err2string(ret), ret);
-            throw ldap_error(NS_FuncName);
+            throw ldap_error(NS_FuncNameS);
         }
 
         int protover = 3;
@@ -105,7 +105,7 @@ namespace LTSM {
 
         if(int ret = ldap_sasl_bind_s(ldap, nullptr, nullptr, & cred, nullptr, nullptr, nullptr); ret != LDAP_SUCCESS) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "ldap_sasl_bind", ldap_err2string(ret), ret);
-            throw ldap_error(NS_FuncName);
+            throw ldap_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::Ldap, "{}: bind success", __FUNCTION__);

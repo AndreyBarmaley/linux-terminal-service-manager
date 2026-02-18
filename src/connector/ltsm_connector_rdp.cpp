@@ -183,7 +183,7 @@ namespace LTSM::Connector {
 
             if(! freerdp_peer_context_new(peer)) {
                 Application::error("{}: failed", "freerdp_peer_context_new");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             Application::debug(DebugType::App, "peer context: {}", fmt::ptr(peer));
@@ -257,7 +257,7 @@ namespace LTSM::Connector {
 
             if(1 != peer->Initialize(peer)) {
                 Application::error("{}: failed", "peer->Initialize");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
         }
 
@@ -513,7 +513,7 @@ namespace LTSM::Connector {
 
         if(newDisplay < 0) {
             Application::error("{}: {} failed", __FUNCTION__, "user session request");
-            throw rdp_error(NS_FuncName);
+            throw rdp_error(NS_FuncNameS);
         }
 
         if(newDisplay != oldDisplay) {
@@ -522,7 +522,7 @@ namespace LTSM::Connector {
 
             if(! xcbConnect(newDisplay, *this)) {
                 Application::error("{}: {} failed", __FUNCTION__, "xcb connect");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             busShutdownDisplay(oldDisplay);
@@ -613,7 +613,7 @@ namespace LTSM::Connector {
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
             Application::error("{}: {} failed, length: {}, size: {}, bpp: {}", __FUNCTION__,
                                "align region", reply->size(), reg.toSize(), reply->bytePerPixel());
-            throw rdp_error(NS_FuncName);
+            throw rdp_error(NS_FuncNameS);
         }
 
         // planar activate
@@ -628,13 +628,13 @@ namespace LTSM::Connector {
 
             if(! context->planar) {
                 Application::error("{}: {} failed", __FUNCTION__, "bitmap_planar_context_new");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
         }
 
         if(! freerdp_bitmap_planar_context_reset(context->planar, tileSize, tileSize)) {
             Application::error("{}: {} failed", __FUNCTION__, "bitmap_planar_context_reset");
-            throw rdp_error(NS_FuncName);
+            throw rdp_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
@@ -669,7 +669,7 @@ namespace LTSM::Connector {
 
             if(freeRdp->peer->settings->MultifragMaxRequestSize < st.cbCompMainBodySize + hdrsz) {
                 Application::error("{}: {} failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             vec.emplace_back(st);
@@ -695,7 +695,7 @@ namespace LTSM::Connector {
 
             if(! freeRdp->peer->update->BitmapUpdate(context, & bitmapUpdate)) {
                 Application::error("{}: {} failed, length: {}", __FUNCTION__, "BitmapUpdate", totalSize);
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             it1 = it2;
@@ -717,7 +717,7 @@ namespace LTSM::Connector {
         if(reply->size() != reg.height * reg.width * reply->bytePerPixel()) {
             Application::error("{}: {} failed, length: {}, size: {}, bpp: {}", __FUNCTION__,
                                "align region", reply->size(), reg.toSize(), reply->bytePerPixel());
-            throw rdp_error(NS_FuncName);
+            throw rdp_error(NS_FuncNameS);
         }
 
         size_t pixelFormat = 0;
@@ -745,7 +745,7 @@ namespace LTSM::Connector {
 
             default:
                 Application::error("{}: {} failed", __FUNCTION__, "pixel format");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
         }
 
         // planar activate
@@ -755,13 +755,13 @@ namespace LTSM::Connector {
 
             if(! context->interleaved) {
                 Application::error("{}: {} failed", __FUNCTION__, "bitmap_interleaved_context_new");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
         }
 
         if(! bitmap_interleaved_context_reset(context->interleaved)) {
             Application::error("{}: {} failed", __FUNCTION__, "bitmap_interleaved_context_reset");
-            throw rdp_error(NS_FuncName);
+            throw rdp_error(NS_FuncNameS);
         }
 
         Application::debug(DebugType::App, "{}: area: {}, bits per pixel: {}, scanline: {}",
@@ -793,7 +793,7 @@ namespace LTSM::Connector {
             if(! interleaved_compress(context->interleaved, data.get(), & st.bitmapLength, st.width, st.height,
                                       reply->data() + offset, pixelFormat, scanLineBytes, 0, 0, NULL, reply->bitsPerPixel())) {
                 Application::error("{}: {} failed", __FUNCTION__, "interleaved_compress");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             st.bitmapDataStream = data.get();
@@ -801,7 +801,7 @@ namespace LTSM::Connector {
 
             if(freeRdp->peer->settings->MultifragMaxRequestSize < st.bitmapLength + 22) {
                 Application::error("{}: {} failed", __FUNCTION__, "MultifragMaxRequestSize");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
 
             BITMAP_UPDATE bitmapUpdate = {};
@@ -811,7 +811,7 @@ namespace LTSM::Connector {
 
             if(! ret) {
                 Application::error("{}: {} failed", __FUNCTION__, "BitmapUpdate");
-                throw rdp_error(NS_FuncName);
+                throw rdp_error(NS_FuncNameS);
             }
         }
 

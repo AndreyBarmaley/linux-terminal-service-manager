@@ -622,7 +622,7 @@ namespace LTSM {
 
         if(fd < 0) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "audit_open", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
     }
 
@@ -678,7 +678,7 @@ namespace LTSM {
 
         if(pid < 0) {
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "fork", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncName);
+            throw std::runtime_error(NS_FuncNameS);
         }
 
         // parent mode

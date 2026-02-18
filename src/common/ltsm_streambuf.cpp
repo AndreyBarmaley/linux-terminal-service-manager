@@ -363,7 +363,7 @@ namespace LTSM {
     void StreamBufRef::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         auto dst = static_cast<uint8_t*>(ptr);
@@ -373,13 +373,13 @@ namespace LTSM {
 
     void StreamBufRef::putRaw(const void* ptr, size_t len) {
         Application::error("{}: {}", __FUNCTION__, "disabled");
-        throw streambuf_error(NS_FuncName);
+        throw streambuf_error(NS_FuncNameS);
     }
 
     BinaryBuf StreamBufRef::read(size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         if(len == 0) {
@@ -394,7 +394,7 @@ namespace LTSM {
     void StreamBufRef::skip(size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         it1 = std::next(it1, len);
@@ -407,7 +407,7 @@ namespace LTSM {
     uint8_t StreamBufRef::peek(void) const {
         if(it1 == it2) {
             Application::error("{}: {}", __FUNCTION__, "end stream");
-            throw std::out_of_range(NS_FuncName);
+            throw std::out_of_range(NS_FuncNameS);
         }
 
         return *it1;
@@ -510,7 +510,7 @@ namespace LTSM {
     void StreamBuf::getRaw(void* ptr, size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         auto dst = static_cast<uint8_t*>(ptr);
@@ -531,7 +531,7 @@ namespace LTSM {
     BinaryBuf StreamBuf::read(size_t len) const {
         if(len > last()) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         if(len == 0) {
@@ -546,7 +546,7 @@ namespace LTSM {
     void StreamBuf::skip(size_t len) const {
         if(len > last()) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
-            throw std::invalid_argument(NS_FuncName);
+            throw std::invalid_argument(NS_FuncNameS);
         }
 
         it = std::next(it, len);
@@ -565,7 +565,7 @@ namespace LTSM {
     uint8_t StreamBuf::peek(void) const {
         if(it == vec.end()) {
             Application::error("{}: {}", __FUNCTION__, "end stream");
-            throw std::out_of_range(NS_FuncName);
+            throw std::out_of_range(NS_FuncNameS);
         }
 
         return *it;
@@ -623,7 +623,7 @@ namespace LTSM {
             // eof
             if(0 == real) {
                 Application::warning("{}: {}", __FUNCTION__, "end stream");
-                throw streambuf_error(NS_FuncName);
+                throw streambuf_error(NS_FuncNameS);
             }
 
             // error
@@ -632,7 +632,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "read", strerror(errno), errno);
-            throw streambuf_error(NS_FuncName);
+            throw streambuf_error(NS_FuncNameS);
         }
     }
 
@@ -653,7 +653,7 @@ namespace LTSM {
             // eof
             if(0 == real) {
                 Application::warning("{}: {}", __FUNCTION__, "end stream");
-                throw streambuf_error(NS_FuncName);
+                throw streambuf_error(NS_FuncNameS);
             }
 
             // error
@@ -662,7 +662,7 @@ namespace LTSM {
             }
 
             Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "write", strerror(errno), errno);
-            throw streambuf_error(NS_FuncName);
+            throw streambuf_error(NS_FuncNameS);
         }
     }
 

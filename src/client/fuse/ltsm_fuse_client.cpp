@@ -74,18 +74,18 @@ namespace LTSM {
         if(len < 0) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "readlink", strerror(errno), errno, path);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         if(len < dir.size()) {
             Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         // check scope
         if(! std::equal(dir.begin(), dir.end(), linkto.begin(), linkto.begin() + dir.size())) {
             Application::warning("{}: {}, path: `{}'", __FUNCTION__, "link skipped", path);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         struct stat st2 = {};
@@ -93,7 +93,7 @@ namespace LTSM {
         if(0 > ::stat(linkto.data(), & st2)) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
                                __FUNCTION__, "stat", strerror(errno), errno, path);
-            throw fuse_error(NS_FuncName);
+            throw fuse_error(NS_FuncNameS);
         }
 
         return std::make_pair(st1.st_ino, st2.st_ino);
@@ -174,7 +174,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientFuseCon
 
     if(mode == ConnectorMode::Unknown) {
         Application::error("{}: {}, mode: {}", __FUNCTION__, "fuse mode failed", Channel::Connector::modeString(mode));
-        throw channel_error(NS_FuncName);
+        throw channel_error(NS_FuncNameS);
     }
 
     return std::make_unique<ConnectorClientFuse>(channel, url, mode, chOpts, sender);
@@ -235,7 +235,7 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
 
             if(! fuseInit && fuseCmd != FuseOp::Init) {
                 Application::error("{}: {} failed, cmd: {:#04x}", __FUNCTION__, "initialize", fuseCmd);
-                throw channel_error(NS_FuncName);
+                throw channel_error(NS_FuncNameS);
             }
 
             switch(fuseCmd) {
@@ -263,12 +263,12 @@ void LTSM::Channel::ConnectorClientFuse::pushData(std::vector<uint8_t> && recv) 
 
                 default:
                     Application::error("{}: {} failed, cmd: {:#04x}, recv size: {}", __FUNCTION__, "fuse", fuseCmd, recv.size());
-                    throw channel_error(NS_FuncName);
+                    throw channel_error(NS_FuncNameS);
             }
         }
 
         if(sb.last()) {
-            throw std::underflow_error(NS_FuncName);
+            throw std::underflow_error(NS_FuncNameS);
         }
     } catch(const std::underflow_error & err) {
         Application::warning("{}: underflow data: {}, func: {}", __FUNCTION__, sb.last(), err.what());
@@ -286,14 +286,14 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpInit(const StreamBufRef & sb) {
     // <VER16> - proto version
     // <LEN16><MOUNTPOINT> - mount point
     if(sb.last() < 4) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     fuseVer = sb.readIntLE16();
     auto len = sb.readIntLE16();
 
     if(sb.last() < len) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto mountPoint = sb.readString(len);
@@ -417,14 +417,14 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpOpen(const StreamBufRef & sb) {
     // <FLAG32> - open flags
     // <LEN16><PATH> - fuse path
     if(sb.last() < 6) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto flags = sb.readIntLE32();
     auto len = sb.readIntLE16();
 
     if(sb.last() < len) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto path = shareRoot + sb.readString(len);
@@ -455,7 +455,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRelease(const StreamBufRef & sb) 
     // cmd format:
     // <FDH32> - fd handle
     if(sb.last() < 4) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     auto fdh = sb.readIntLE32();
@@ -486,7 +486,7 @@ bool LTSM::Channel::ConnectorClientFuse::fuseOpRead(const StreamBufRef & sb) {
     // <SIZE16> - blocksz
     // <OFF64> - offset
     if(sb.last() < 14) {
-        throw std::underflow_error(NS_FuncName);
+        throw std::underflow_error(NS_FuncNameS);
     }
 
     int fdh = sb.readIntLE32();
