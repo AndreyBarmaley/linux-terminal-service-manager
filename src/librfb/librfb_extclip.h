@@ -107,8 +107,8 @@ namespace LTSM {
             virtual uint16_t extClipboardLocalTypes(void) const = 0;
             virtual std::vector<uint8_t> extClipboardLocalData(uint16_t type) const = 0;
             virtual void extClipboardRemoteTypesEvent(uint16_t type) = 0;
-            virtual void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) = 0;
-            virtual void extClipboardSendEvent(const std::vector<uint8_t> & buf) = 0;
+            virtual void extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> &) = 0;
+            virtual void extClipboardSendEvent(const std::vector<uint8_t> &) = 0;
 
           public:
             ExtClip() = default;

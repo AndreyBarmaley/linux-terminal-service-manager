@@ -101,12 +101,12 @@ namespace LTSM {
         }
     }
 
-    void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+    void RFB::X11Client::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
         Application::debug(DebugType::X11Cli, "{}, type: {:#04x}, length: {}", __FUNCTION__, type, buf.size());
 
         if(extClipboardRemoteCaps()) {
             const std::scoped_lock guard{ clientLock };
-            clientClipboard.swap(buf);
+            clientClipboard = buf;
         } else {
             Application::error("{}: unsupported encoding: {}", __FUNCTION__, encodingName(ENCODING_EXT_CLIPBOARD));
             throw rfb_error(NS_FuncName);

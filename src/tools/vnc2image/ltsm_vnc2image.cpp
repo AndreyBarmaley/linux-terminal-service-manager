@@ -172,7 +172,7 @@ namespace LTSM {
     void Vnc2Image::extClipboardRemoteTypesEvent(uint16_t type) {
     }
 
-    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> && buf) {
+    void Vnc2Image::extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> & buf) {
     }
 
     void Vnc2Image::extClipboardSendEvent(const std::vector<uint8_t> & buf) {

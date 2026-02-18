@@ -55,7 +55,7 @@ namespace LTSM {
         uint16_t extClipboardLocalTypes(void) const override;
         std::vector<uint8_t> extClipboardLocalData(uint16_t type) const override;
         void extClipboardRemoteTypesEvent(uint16_t type) override;
-        void extClipboardRemoteDataEvent(uint16_t type, std::vector<uint8_t> &&) override;
+        void extClipboardRemoteDataEvent(uint16_t type, const std::vector<uint8_t> &) override;
         void extClipboardSendEvent(const std::vector<uint8_t> &) override;
         void decoderInitEvent(RFB::DecodingBase*) override;
 

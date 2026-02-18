@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <bit>
 #include <string>
 #include <stdexcept>
 #include <algorithm>
@@ -159,7 +160,7 @@ namespace LTSM {
         Application::debug(DebugType::Clip, "{}: flags: {:#08x}", __FUNCTION__, flags);
 
         if(flags & ExtClipCaps::OpCaps) {
-            auto typesCount = Tools::maskCountBits(flags & 0xFFFF);
+            auto typesCount = std::popcount(flags & 0xFFFF);
 
             if(typesCount * 4 > sb.last()) {
                 Application::error("{}: invalid format, failed `{}'", __FUNCTION__, "types count");
@@ -168,8 +169,8 @@ namespace LTSM {
 
             recvExtClipboardCapsContinue(flags, std::move(sb));
         } else {
-            const int allop = ExtClipCaps::OpRequest | ExtClipCaps::OpPeek | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide;
-            auto opCount = Tools::maskCountBits(flags & allop);
+            const uint32_t allop = ExtClipCaps::OpRequest | ExtClipCaps::OpPeek | ExtClipCaps::OpNotify | ExtClipCaps::OpProvide;
+            auto opCount = std::popcount(flags & allop);
 
             if(1 != opCount) {
                 Application::warning("{}: ext clipboard invalid flags: {:#08x}", __FUNCTION__, flags);
@@ -199,7 +200,7 @@ namespace LTSM {
         Application::debug(DebugType::Clip, "{}: flags: {:#08x}, data length: {}", __FUNCTION__, flags, sb.last());
 
         // ref: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#extended-clipboard-pseudo-encoding
-        auto typesCount = Tools::maskCountBits(flags & 0xFFFF);
+        auto typesCount = std::popcount(flags & 0xFFFF);
 
         remoteExtClipTypeTextSz = 0;
         remoteExtClipTypeRtfSz  = 0;
@@ -301,12 +302,14 @@ namespace LTSM {
                 zlib->appendData(sb.read(len));
 
                 // The header is followed by a Zlib stream which contains a pair of size and data for each format
-                for(const auto & type : Tools::maskUnpackBits(localProvideTypes)) {
-                    auto len = zlib->recvIntBE32();
-                    auto raw = zlib->recvData(len);
+                for(uint64_t it = 1; it <= 0x80000000; it <<= 1) {
+                    if(auto type = static_cast<uint32_t>(it); localProvideTypes & type) {
+                        auto len = zlib->recvIntBE32();
+                        auto raw = zlib->recvData(len);
 
-                    extClipboardRemoteDataEvent(type, std::move(raw));
-                    localProvideTypes &= ~type;
+                        extClipboardRemoteDataEvent(type, raw);
+                        localProvideTypes &= ~type;
+                    }
                 }
             } else {
                 Application::warning("{}: zlib empty", __FUNCTION__);

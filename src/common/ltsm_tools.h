@@ -238,11 +238,6 @@ namespace LTSM {
         uint32_t crc32b(const uint8_t* ptr, size_t size);
         uint32_t crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
 
-        int maskShifted(uint32_t mask);
-        int maskCountBits(uint32_t mask);
-        uint32_t maskMaxValue(uint32_t mask);
-        std::vector<uint32_t> maskUnpackBits(uint32_t mask);
-
         std::wstring string2wstring(const std::string &);
         std::string wstring2string(const std::wstring &);
 

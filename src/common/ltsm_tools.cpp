@@ -36,6 +36,7 @@
 #include <gnutls/gnutls.h>
 #endif
 
+#include <bit>
 #include <ctime>
 #include <cstdio>
 #include <memory>
@@ -929,69 +930,6 @@ namespace LTSM {
         });
 
         return ~res;
-    }
-
-    int Tools::maskShifted(uint32_t mask) {
-        int res = 0;
-
-        if(mask) {
-            while((mask & 1) == 0) {
-                mask = mask >> 1;
-                res = res + 1;
-            }
-        }
-
-        return res;
-    }
-
-    uint32_t Tools::maskMaxValue(uint32_t mask) {
-        if(mask) {
-            while((mask & 1) == 0) {
-                mask = mask >> 1;
-            }
-
-            return UINT32_MAX & mask;
-        }
-
-        return 0;
-    }
-
-    int Tools::maskCountBits(uint32_t mask) {
-        int res = 0;
-
-        uint32_t itr = 0x80000000;
-
-        while(itr) {
-            if(mask & itr) {
-                ++res;
-            }
-
-            itr >>= 1;
-        }
-
-        return res;
-    }
-
-    std::vector<uint32_t> Tools::maskUnpackBits(uint32_t mask) {
-        std::vector<uint32_t> res;
-        res.reserve(32);
-
-        const uint32_t end = 0x80000000;
-        uint32_t itr = 1;
-
-        while(true) {
-            if(mask & itr) {
-                res.push_back(itr);
-            }
-
-            if(itr == end) {
-                break;
-            }
-
-            itr <<= 1;
-        }
-
-        return res;
     }
 
     bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file, bool append) {

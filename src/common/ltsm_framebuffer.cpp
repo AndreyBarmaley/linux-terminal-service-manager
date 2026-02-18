@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <bit>
 #include <cctype>
 #include <thread>
 #include <future>
@@ -42,18 +43,19 @@
 #include "ltsm_parallels_jobs.h"
 
 namespace LTSM {
-    PixelFormat::PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask) : bitsPixel(bpp), bytePixel(bpp >> 3) {
-        redMax = Tools::maskMaxValue(rmask);
-        greenMax = Tools::maskMaxValue(gmask);
-        blueMax = Tools::maskMaxValue(bmask);
-        alphaMax = Tools::maskMaxValue(amask);
-        redShift = Tools::maskShifted(rmask);
-        greenShift = Tools::maskShifted(gmask);
-        blueShift = Tools::maskShifted(bmask);
-        alphaShift = Tools::maskShifted(amask);
+    PixelFormat::PixelFormat(uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask) : bitsPixel(bpp), bytePixel(bpp >> 3) {
+        redShift = std::countr_zero(rmask);
+        greenShift = std::countr_zero(gmask);
+        blueShift = std::countr_zero(bmask);
+        alphaShift = std::countr_zero(amask);
+        redMax = rmask >> redShift;
+        greenMax = gmask >> greenShift;
+        blueMax = bmask >> blueShift;
+        alphaMax = amask >> alphaShift;
     }
 
-    PixelFormat::PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift)
+    PixelFormat::PixelFormat(uint8_t bpp, uint16_t rmax, uint16_t gmax, uint16_t bmax, uint16_t amax,
+                                uint8_t rshift, uint8_t gshift, uint8_t bshift, uint8_t ashift)
         : redMax(rmax), greenMax(gmax), blueMax(bmax), alphaMax(amax), redShift(rshift), greenShift(gshift), blueShift(bshift), alphaShift(ashift),
           bitsPixel(bpp), bytePixel(bpp >> 3) {
     }

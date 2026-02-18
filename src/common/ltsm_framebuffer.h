@@ -85,8 +85,9 @@ namespace LTSM {
 
       public:
         PixelFormat() = default;
-        PixelFormat(int bpp, int rmask, int gmask, int bmask, int amask);
-        PixelFormat(int bpp, int rmax, int gmax, int bmax, int amax, int rshift, int gshift, int bshift, int ashift);
+        PixelFormat(uint8_t bpp, uint32_t rmask, uint32_t gmask, uint32_t bmask, uint32_t amask);
+        PixelFormat(uint8_t bpp, uint16_t rmax, uint16_t gmax, uint16_t bmax, uint16_t amax,
+                        uint8_t rshift, uint8_t gshift, uint8_t bshift, uint8_t ashift);
 
         bool operator!= (const PixelFormat & pf) const {
             return bitsPerPixel() != pf.bitsPerPixel() ||
