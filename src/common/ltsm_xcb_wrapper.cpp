@@ -30,7 +30,6 @@
 #include <unistd.h>
 
 #include <chrono>
-#include <format>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -941,7 +940,7 @@ namespace LTSM {
             return 0;
         }
 
-        std::string cmd = Tools::runcmd(std::format("{} {} {}", cvt, sz.width, sz.height));
+        std::string cmd = Tools::runcmd(fmt::format("{} {} {}", cvt, sz.width, sz.height));
         auto params = Tools::split(cmd.substr(cmd.find('\n', 0) + 1), 0x20);
         std::erase_if(params, [](auto & val) {
             return val.empty();
@@ -1005,7 +1004,7 @@ namespace LTSM {
             mode_info.mode_flags |= XCB_RANDR_MODE_FLAG_VSYNC_POSITIVE;
         }
 
-        auto name = std::format("{}x{}_{}", mode_info.width, mode_info.height, vertRef);
+        auto name = fmt::format("{}x{}_{}", mode_info.width, mode_info.height, vertRef);
         mode_info.name_len = name.size();
         auto xcbReply = getReplyFunc2(xcb_randr_create_mode, ptr.get(), screen, mode_info, name.size(), name.data());
 
@@ -2254,7 +2253,7 @@ namespace LTSM {
             return std::string(env ? env : "");
         }
 
-        return std::format(":{}", displayNum);
+        return fmt::format(":{}", displayNum);
     }
 
     /* XCB::Connector */

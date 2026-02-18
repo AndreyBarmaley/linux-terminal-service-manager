@@ -31,7 +31,6 @@
 
 #include <chrono>
 #include <future>
-#include <format>
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
@@ -235,7 +234,7 @@ namespace LTSM::DisplaySession {
 
     void clearSessionDbusAddress(int displayNum) {
         if(auto env = getenv("XDG_RUNTIME_DIR")) {
-            auto dbusPath = std::filesystem::path{env} / "ltsm" / std::format("dbus_session_{}", displayNum);
+            auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
             std::filesystem::remove(dbusPath);
         }
     }
@@ -243,7 +242,7 @@ namespace LTSM::DisplaySession {
     std::string waitSessionDbusAddress(int displayNum, uint32_t ms) {
         if(auto env = getenv("XDG_RUNTIME_DIR")) {
             // ltsm path from /etc/ltsm/xclients
-            auto dbusPath = std::filesystem::path{env} / "ltsm" / std::format("dbus_session_{}", displayNum);
+            auto dbusPath = std::filesystem::path{env} / "ltsm" / fmt::format("dbus_session_{}", displayNum);
             std::string res;
 
             Tools::waitCallable<std::chrono::milliseconds>(ms, 100, [&dbusPath, &res]() {

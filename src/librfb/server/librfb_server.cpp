@@ -25,7 +25,6 @@
 #include <string>
 #include <chrono>
 #include <thread>
-#include <format>
 #include <cstring>
 #include <fstream>
 #include <algorithm>
@@ -322,7 +321,7 @@ namespace LTSM {
     int RFB::ServerEncoder::serverHandshakeVersion(void) {
         // RFB 6.1.1 version
         int protover = RFB::VERSION_MAJOR * 10 + RFB::VERSION_MINOR;
-        auto version = std::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
+        auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
         sendString(version).sendFlush();
         std::string magick = recvString(12);
         Application::debug(DebugType::Rfb, "{}: handshake version {}", __FUNCTION__, magick);

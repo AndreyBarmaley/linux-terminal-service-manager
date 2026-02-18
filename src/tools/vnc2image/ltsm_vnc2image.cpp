@@ -21,7 +21,6 @@
  **************************************************************************/
 
 #include <chrono>
-#include <format>
 #include <cstring>
 #include <iostream>
 
@@ -148,7 +147,7 @@ namespace LTSM {
         /*
                 if(reg.width == 1024)
                 {
-                    PNG::save(fb, std::format("test_{}.png", reg.y));
+                    PNG::save(fb, fmt::format("test_{}.png", reg.y));
                 }
         */
     }

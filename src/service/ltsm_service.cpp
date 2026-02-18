@@ -32,7 +32,6 @@
 #include <chrono>
 #include <atomic>
 #include <thread>
-#include <format>
 #include <cstring>
 #include <numeric>
 #include <cstdlib>
@@ -478,7 +477,7 @@ namespace LTSM::Manager {
         if(0 < displayNum && userInfo) {
             // path generated from /etc/ltsm/xclients
             // format userRuntimeDir / ltsm / dbus_session_%{display}
-            return userInfo->xdgRuntimeDir() / "ltsm" / std::format("dbus_session_{}", displayNum);
+            return userInfo->xdgRuntimeDir() / "ltsm" / fmt::format("dbus_session_{}", displayNum);
         }
         return {};
     }
@@ -1104,7 +1103,7 @@ namespace LTSM::Manager {
                     const uint16_t fh = 24;
                     emitAddRenderRect(ptr->displayNum, {0, 0, fw, fh}, {0x10, 0x17, 0x80}, true);
                     // send render text
-                    auto text = std::format("{} limit - time left: {}sec",
+                    auto text = fmt::format("{} limit - time left: {}sec",
                                 (lastSecStarted < lastSecOnlined ? "Session" : "Online"), lastsec);
                     const int16_t px = (fw - text.size() * 8) / 2;
                     const int16_t py = (fh - 16) / 2;
@@ -1404,7 +1403,7 @@ namespace LTSM::Manager {
         sess->mode = loginMode ? SessionMode::Login : SessionMode::Started;
         sess->displayNum = freeDisplay;
         sess->tpStart = std::chrono::system_clock::now();
-        sess->displayAddr = std::format(":{}", sess->displayNum);
+        sess->displayAddr = fmt::format(":{}", sess->displayNum);
         sess->lifeTimeLimitSec = configGetInteger("session:lifetime:timeout", 0);
 
         // session xauthfile
@@ -1883,7 +1882,7 @@ namespace LTSM::Manager {
 
             if(std::filesystem::exists(dstfile, err)) {
                 Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile);
-                sendNotifyCall(xvfb, "Transfer Skipping", std::format("such a file exists: {}", dstfile.native()), NotifyParams::Warning);
+                sendNotifyCall(xvfb, "Transfer Skipping", fmt::format("such a file exists: {}", dstfile.native()), NotifyParams::Warning);
                 continue;
             }
 
@@ -1939,7 +1938,7 @@ namespace LTSM::Manager {
         if(! error) {
             Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
             sendNotifyCall(xvfb, "Transfer Complete",
-                          std::format("new file added: <a href='file://{}'>{}</a>",
+                          fmt::format("new file added: <a href='file://{}'>{}</a>",
                                               dstfile, std::filesystem::path(dstfile).filename().native()),
                           NotifyParams::Information);
         }
@@ -1984,7 +1983,7 @@ namespace LTSM::Manager {
         //run background
         std::thread(& DBusAdaptor::transferFilesRequestCommunication, this, xvfb,
                     files, std::move(emitTransferReject),
-                    std::format("Can you receive remote files? ({})", files.size())).detach();
+                    fmt::format("Can you receive remote files? ({})", files.size())).detach();
         return true;
     }
 
@@ -2193,7 +2192,7 @@ namespace LTSM::Manager {
                 Application::error("{}: session busy, policy: {}, user: {}, session display: {}, from: {}, display: {}",
                                    __FUNCTION__, "authlock", login, userSess->displayNum, userSess->remoteAddr, xvfb->displayNum);
                 // informer login display
-                emitLoginFailure(xvfb->displayNum, std::format("session busy, from: {}", userSess->remoteAddr));
+                emitLoginFailure(xvfb->displayNum, fmt::format("session busy, from: {}", userSess->remoteAddr));
                 return false;
             } else if(userSess->policy == SessionPolicy::AuthTake) {
                 // shutdown prev connect

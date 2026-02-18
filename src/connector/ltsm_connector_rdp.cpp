@@ -28,7 +28,6 @@
 #include <string>
 #include <thread>
 #include <memory>
-#include <format>
 #include <cstring>
 #include <cstdlib>
 #include <iomanip>
@@ -959,24 +958,24 @@ namespace LTSM::Connector {
         std::string encryptionInfo;
 
         if(0 < peer->settings->TlsSecLevel) {
-            encryptionInfo = std::format("TLS security level: {}", peer->settings->TlsSecLevel);
+            encryptionInfo = fmt::format("TLS security level: {}", peer->settings->TlsSecLevel);
         }
 
         switch(peer->settings->EncryptionMethods) {
             case ENCRYPTION_METHOD_40BIT:
-                encryptionInfo = std::format("{}, RDP method: {}", encryptionInfo, "40bit");
+                encryptionInfo = fmt::format("{}, RDP method: {}", encryptionInfo, "40bit");
                 break;
 
             case ENCRYPTION_METHOD_56BIT:
-                encryptionInfo = std::format("{}, RDP method: {}", encryptionInfo, "56bit");
+                encryptionInfo = fmt::format("{}, RDP method: {}", encryptionInfo, "56bit");
                 break;
 
             case ENCRYPTION_METHOD_128BIT:
-                encryptionInfo = std::format("{}, RDP method: {}", encryptionInfo, "128bit");
+                encryptionInfo = fmt::format("{}, RDP method: {}", encryptionInfo, "128bit");
                 break;
 
             case ENCRYPTION_METHOD_FIPS:
-                encryptionInfo = std::format("{}, RDP method: {}", encryptionInfo, "fips");
+                encryptionInfo = fmt::format("{}, RDP method: {}", encryptionInfo, "fips");
                 break;
 
             default:

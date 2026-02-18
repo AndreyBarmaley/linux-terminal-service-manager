@@ -23,7 +23,6 @@
 #include <cmath>
 #include <chrono>
 #include <thread>
-#include <format>
 #include <cstring>
 #include <algorithm>
 
@@ -258,7 +257,7 @@ namespace LTSM {
     bool RFB::ClientDecoder::rfbHandshake(const SecurityInfo & sec) {
         // https://vncdotool.readthedocs.io/en/0.8.0/rfbproto.html
         // RFB 1.7.1.1 version
-        auto version = std::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
+        auto version = fmt::format("RFB {:03}.{:03}\n", RFB::VERSION_MAJOR, RFB::VERSION_MINOR);
         std::string magick = recvString(12);
 
         if(magick.empty()) {

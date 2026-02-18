@@ -25,7 +25,6 @@
 #include <string.h>
 
 #include <chrono>
-#include <format>
 #include <clocale>
 #include <cstring>
 #include <iostream>
@@ -712,7 +711,7 @@ namespace LTSM {
         }
 
         if(debug) {
-            auto file = std::format("/var/tmp/.fork_{}_{}.log", ident, getpid());
+            auto file = fmt::format("/var/tmp/.fork_{}_{}.log", ident, getpid());
             appDebugTypes = DebugType::All;
             appLogSync = true;
             Application::setDebugTarget(DebugTarget::SyslogFile, file);
