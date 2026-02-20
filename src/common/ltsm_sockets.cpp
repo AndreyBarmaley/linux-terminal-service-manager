@@ -550,7 +550,7 @@ namespace LTSM {
                 sendTo(bridgeSock, buf.data(), buf.size());
 
                 if(Application::isDebugLevel(DebugLevel::Trace)) {
-                    std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
+                    std::string str = Tools::hexString(buf, 2);
                     Application::trace(DebugType::Sock, "from remote: [{}]", str);
                 }
             }
@@ -571,7 +571,7 @@ namespace LTSM {
                 sendFlush();
 
                 if(Application::isDebugLevel(DebugLevel::Trace)) {
-                    std::string str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
+                    std::string str = Tools::hexString(buf, 2);
                     Application::trace(DebugType::Sock, "from local: [{}]", str);
                 }
             }
@@ -1203,6 +1203,7 @@ namespace LTSM {
 
 #endif
 
+#ifdef LTSM_WITH_ZLIB
     namespace ZLib {
         /* Zlib::DeflateBase */
         DeflateBase::DeflateBase(int level) {
@@ -1379,6 +1380,7 @@ namespace LTSM {
             throw zlib_error(NS_FuncNameS);
         }
     } // ZLib
+#endif
 
 #ifdef LTSM_WITH_GSSAPI
     namespace GssApi {

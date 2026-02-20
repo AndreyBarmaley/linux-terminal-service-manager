@@ -425,6 +425,7 @@ namespace LTSM {
 
 #endif // LTSM_WITH_GSSAPI
 
+#ifdef LTSM_WITH_ZLIB
     struct zlib_error : public std::runtime_error {
         explicit zlib_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
@@ -499,6 +500,7 @@ namespace LTSM {
             void sendRaw(const void*, size_t) override;
         };
     } // Zlib
+#endif // LTSM_WITH_ZLIB
 } // LTSM
 
 #endif // _LTSM_SOCKETS_

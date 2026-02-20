@@ -765,8 +765,8 @@ namespace LTSM {
     void ForkMode::runChildProcess(const std::filesystem::path & cmd, const std::vector<std::string> & args,
                                    const std::vector<std::string> & envs, const RedirectLog & rmode, int redirectFd) {
         if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args.begin(), args.end(), " ");
-            auto senvs = Tools::join(envs.begin(), envs.end(), ",");
+            auto sargs = Tools::join(args, " ");
+            auto senvs = Tools::join(envs, ",");
 
             Application::info("{}: pid: {}, cmd: `{}', args: `{}', envs: [ {} ]",
                               __FUNCTION__, getpid(), cmd, sargs, senvs);

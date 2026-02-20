@@ -1,7 +1,7 @@
 project(ltsm_test_unixsocket)
 set(CUR_TARGET ltsm_test_unixsocket)
 
-CommonDefaults(GNUTLS)
+CommonDefaults(GNUTLS ZLIB)
 
 add_executable(${CUR_TARGET} main.cpp)
 

@@ -26,9 +26,10 @@
 #include <cstring>
 #include <algorithm>
 
-#include "ltsm_application.h"
+#include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "librfb_client.h"
+#include "ltsm_application.h"
 
 #ifdef LTSM_DECODING_FFMPEG
 #include "librfb_ffmpeg.h"
@@ -126,14 +127,14 @@ namespace LTSM {
         auto challenge = recvData(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
+            auto tmp = Tools::hexString(challenge, 2);
             Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp);
         }
 
         auto crypt = TLS::encryptDES(challenge, password);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
+            auto tmp = Tools::hexString(crypt, 2);
             Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp);
         }
 
@@ -928,7 +929,7 @@ namespace LTSM {
             auto zipsz = recvIntBE32();
 
             if(zipsz) {
-                const BinaryBuf zip(recvData(zipsz));
+                const auto zip = recvData(zipsz);
                 auto buf = Tools::zlibUncompress(zip, rawsz);
                 clientRecvLtsmCursorEvent(reg, cursorId, std::move(buf));
             } else {

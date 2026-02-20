@@ -1,7 +1,7 @@
 project(ltsm_test_encodings)
 set(CUR_TARGET ltsm_test_encodings)
 
-CommonDefaults(FFMPEG ENCODER JSON)
+CommonDefaults(FFMPEG ENCODER JSON ZLIB)
 
 add_executable(${CUR_TARGET} main.cpp librfb_server2.cpp)
 

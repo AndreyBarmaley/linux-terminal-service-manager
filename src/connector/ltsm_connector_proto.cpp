@@ -443,7 +443,7 @@ namespace LTSM::Connector {
                     xkb->switchLayoutGroup(std::distance(names.begin(), it));
                 } else {
                     Application::error("{}: layout not found: {}, names: [{}]",
-                                       __FUNCTION__, layout, Tools::join(names.begin(), names.end()));
+                                       __FUNCTION__, layout, Tools::join(names));
                 }
             }
         }

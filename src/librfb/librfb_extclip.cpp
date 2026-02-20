@@ -237,7 +237,7 @@ namespace LTSM {
 
         // skip unknown types size
         if(sb.last()) {
-            auto tmp = Tools::buffer2hexstring(sb.data(), sb.data() + sb.last(), 2, ",", false);
+            auto tmp = Tools::rangeHexString(sb.data(), sb.data() + sb.last(), 2, ",", false);
             Application::warning("{}: ext clipboard unknown data: [{}]", __FUNCTION__, tmp);
         }
 

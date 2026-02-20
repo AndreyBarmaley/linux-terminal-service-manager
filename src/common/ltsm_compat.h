@@ -34,7 +34,7 @@ template <>
 struct std::formatter<std::filesystem::path> : std::formatter<std::string> {
     auto format(const std::filesystem::path& path, std::format_context& ctx) const {
         return std::formatter<std::string>::format(
-            std::format("{}", p.native()), ctx);
+            std::format("{}", p.string()), ctx);
     }
 };
 */
@@ -47,7 +47,7 @@ struct fmt::formatter<std::filesystem::path> {
 
     template <typename FormatContext>
     auto format(const std::filesystem::path& path, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "{}", path.native());
+        return fmt::format_to(ctx.out(), "{}", path.string());
     }
 };
 

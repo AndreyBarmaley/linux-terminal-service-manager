@@ -677,7 +677,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto & vec = sb.toVector();
-            std::string str = Tools::buffer2hexstring(vec.begin(), vec.end(), 2);
+            std::string str = Tools::hexString(vec, 2);
             Application::debug(DebugType::Enc, "{}: job id: {}, packed stream: {}", __FUNCTION__, jobId, str);
         }
     }

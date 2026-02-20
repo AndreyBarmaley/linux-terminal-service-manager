@@ -342,7 +342,7 @@ namespace LTSM {
                            __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
+            auto str = Tools::hexString(data1, 2, ",", false);
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
@@ -395,7 +395,7 @@ namespace LTSM {
                            __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto str = Tools::buffer2hexstring(data1.begin(), data1.end(), 2, ",", false);
+            auto str = Tools::hexString(data1, 2, ",", false);
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
@@ -443,7 +443,7 @@ namespace LTSM {
                            __FUNCTION__, id, handle, attrId, attr.size());
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
+            auto str = Tools::hexString(attr, 2, ",", false);
             Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
         }
 
@@ -1089,7 +1089,7 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ioRecvPciProtocol, ioRecvPciLength, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
-                auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
+                auto str = Tools::hexString(data2, 2, ",", false);
                 Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
@@ -1125,7 +1125,7 @@ namespace LTSM {
             reader->atrLen = atr.size();
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
-                auto str = Tools::buffer2hexstring(atr.begin(), atr.end(), 2, ",", false);
+                auto str = Tools::hexString(atr, 2, ",", false);
                 Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
             }
         }
@@ -1227,7 +1227,7 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, controlCode, data2.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
-                auto str = Tools::buffer2hexstring(data2.begin(), data2.end(), 2, ",", false);
+                auto str = Tools::hexString(data2, 2, ",", false);
                 Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
@@ -1282,7 +1282,7 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, attrId, attr.size());
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
-                auto str = Tools::buffer2hexstring(attr.begin(), attr.end(), 2, ",", false);
+                auto str = Tools::hexString(attr, 2, ",", false);
                 Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
             }
         } else {
@@ -1545,7 +1545,7 @@ namespace LTSM {
                            __FUNCTION__, readerName, state.dwCurrentState, state.dwEventState, state.cbAtr);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto str = Tools::buffer2hexstring(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
+            auto str = Tools::rangeHexString(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
             Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
         }
 

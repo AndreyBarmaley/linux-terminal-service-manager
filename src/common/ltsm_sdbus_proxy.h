@@ -113,10 +113,8 @@ namespace LTSM::SDBus {
         SessionProxy(const std::string &name, const std::string &path, const std::string &inter)
             :  ProxyBase(sdbus::createSessionBusConnection(), name, path, inter) {}
 
-#ifdef SDBUS_ADDRESS_SUPPORT
         SessionProxy(const std::string &addr, const std::string &name, const std::string &path, const std::string &inter)
             : ProxyBase(sdbus::createSessionBusConnectionWithAddress(addr), name, path, inter) {}
-#endif
     };
 
     class SessionProxySignals : public SessionProxy {

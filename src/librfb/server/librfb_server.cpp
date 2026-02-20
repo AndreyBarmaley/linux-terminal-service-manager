@@ -29,8 +29,9 @@
 #include <fstream>
 #include <algorithm>
 
-#include "ltsm_application.h"
+#include "ltsm_zlib.h"
 #include "librfb_server.h"
+#include "ltsm_application.h"
 
 #ifdef LTSM_ENCODING_FFMPEG
 #include "librfb_ffmpeg.h"
@@ -162,7 +163,7 @@ namespace LTSM {
         std::vector<uint8_t> challenge = TLS::randomKey(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto tmp = Tools::buffer2hexstring(challenge.begin(), challenge.end(), 2);
+            auto tmp = Tools::hexString(challenge, 2);
             Application::debug(DebugType::Rfb, "{}: challenge: {}", __FUNCTION__, tmp);
         }
 
@@ -171,7 +172,7 @@ namespace LTSM {
         auto response = recvData(16);
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
-            auto tmp = Tools::buffer2hexstring(response.begin(), response.end(), 2);
+            auto tmp = Tools::hexString(response, 2);
             Application::debug(DebugType::Rfb, "{}: response: {}", __FUNCTION__, tmp);
         }
 
@@ -183,7 +184,7 @@ namespace LTSM {
             auto crypt = TLS::encryptDES(challenge, pass);
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
-                auto tmp = Tools::buffer2hexstring(crypt.begin(), crypt.end(), 2);
+                auto tmp = Tools::hexString(crypt, 2);
                 Application::debug(DebugType::Rfb, "{}: encrypt: {}", __FUNCTION__, tmp);
             }
 
@@ -1233,7 +1234,7 @@ namespace LTSM {
         sendIntBE32(ENCODING_LTSM_CURSOR);
         // cursor id
         auto rawPtr = fb.rawPtr();
-        auto cursorId = rawPtr.crc32b();
+        auto cursorId = Tools::crc32b(rawPtr.data(), rawPtr.size());
         sendIntBE32(cursorId);
 
         // cursor rgba data

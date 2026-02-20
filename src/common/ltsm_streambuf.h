@@ -45,10 +45,7 @@ namespace LTSM {
         virtual uint8_t* data(void) = 0;
         virtual const uint8_t* data(void) const = 0;
 
-        std::string hexString(std::string_view sep = ", ", bool prefix = true) const;
         std::string toString(void) const;
-
-        uint32_t crc32b(void) const;
 
         bool operator== (const ByteArray &) const;
         bool operator!= (const ByteArray &) const;
@@ -57,10 +54,10 @@ namespace LTSM {
     /// @brief: raw array wrapper
     template<typename T>
     struct RawPtr : ByteArray, std::pair<T*, size_t> {
-        RawPtr(T* ptr, size_t len) : std::pair<T *, size_t>(ptr, len) {}
+        RawPtr(T* ptr, size_t len) : std::pair<T*, size_t>(ptr, len) {}
 
         template<size_t N>
-        explicit RawPtr(T(&arr)[N]) : std::pair<T *, size_t>(arr, N) {}
+        explicit RawPtr(T(&arr)[N]) : std::pair<T*, size_t>(arr, N) {}
 
 
         size_t size(void) const override {

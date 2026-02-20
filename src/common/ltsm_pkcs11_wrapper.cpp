@@ -410,7 +410,7 @@ namespace LTSM {
     }
 
     std::string PKCS11::RawDataRef::toHexString(std::string_view sep, bool pref) const {
-        return Tools::buffer2hexstring(data(), data() + size(), 2, sep, pref);
+        return Tools::rangeHexString(data(), data() + size(), 2, sep, pref);
     }
 
     bool PKCS11::RawDataRef::operator== (const RawDataRef & raw) const {

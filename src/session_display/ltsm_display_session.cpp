@@ -37,6 +37,7 @@
 #include <iostream>
 #include <filesystem>
 
+#include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_streambuf.h"
@@ -67,8 +68,8 @@ namespace LTSM::DisplaySession {
 
         // parent
         if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args.begin(), args.end(), ", ");
-            auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
+            auto sargs = Tools::join(args, ", ");
+            auto senvs = Tools::join(envs, ", ");
             Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
         } else {
@@ -159,8 +160,8 @@ namespace LTSM::DisplaySession {
 
         // parent
         if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args.begin(), args.end(), ", ");
-            auto senvs = Tools::join(envs.begin(), envs.end(), ", ");
+            auto sargs = Tools::join(args, ", ");
+            auto senvs = Tools::join(envs, ", ");
             Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
                               __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
         } else {
@@ -348,7 +349,7 @@ namespace LTSM::DisplaySession {
     }
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        auto sargs = Tools::join(args, ", ");
         Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
 
         try {
@@ -365,7 +366,7 @@ namespace LTSM::DisplaySession {
     }
 
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        auto sargs = Tools::join(args, ", ");
         Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
 
         try {
@@ -380,7 +381,7 @@ namespace LTSM::DisplaySession {
     }
 
     StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string> & args) {
-        auto sargs = Tools::join(args.begin(), args.end(), ", ");
+        auto sargs = Tools::join(args, ", ");
         Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
 
         auto zenityBin = starter_.configGetString("zenity:path", "/usr/bin/zenity");
@@ -542,7 +543,7 @@ namespace LTSM::DisplaySession {
         }
         else if(auto env = getenv("LTSM_CLIENT_OPTS")) {
             try {
-                auto content = Tools::zlibUncompress(BinaryBuf(Tools::base64Decode(env)));
+                auto content = Tools::zlibUncompress(Tools::base64Decode(env));
                 auto jo = JsonContentString(std::string_view{(const char*) content.data(), content.size()}).toObject();
                 // set session dpi
                 if(auto dpi = jo.getInteger("x11:dpi", 0); 0 < dpi) {

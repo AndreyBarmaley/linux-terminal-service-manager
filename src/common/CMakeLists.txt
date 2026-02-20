@@ -147,6 +147,11 @@ else()
     endif()
 endif()
 
+if(LTSM_WITH_ZLIB)
+    target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_ZLIB)
+    target_link_libraries(${CUR_TARGET} PUBLIC z)
+endif()
+
 if(LTSM_WITH_SYSTEMD)
     if(UNIX AND NOT APPLE)
         pkg_check_modules(SYSTEMD libsystemd)
@@ -190,5 +195,3 @@ elseif(MINGW)
     target_compile_options(${CUR_TARGET} PRIVATE -fpermissive)
     target_link_libraries(${CUR_TARGET} PUBLIC pthread stdc++fs)
 endif()
-
-target_link_libraries(${CUR_TARGET} PUBLIC z)

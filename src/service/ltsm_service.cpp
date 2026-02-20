@@ -47,6 +47,7 @@
 #endif
 
 #include "ltsm_fuse.h"
+#include "ltsm_zlib.h"
 #include "ltsm_pcsc.h"
 #include "ltsm_audio.h"
 #include "ltsm_tools.h"
@@ -882,7 +883,7 @@ namespace LTSM::Manager {
 
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto cwd = std::filesystem::current_path();
-            auto sgroups = Tools::join(gids.begin(), gids.end(), ",");
+            auto sgroups = Tools::join(gids, ",");
             Application::debug(DebugType::App, "{}: groups: ({}), current dir: `{}'", __FUNCTION__, sgroups, cwd);
         }
 
@@ -915,7 +916,6 @@ namespace LTSM::Manager {
     }
 #endif
 
-#ifdef SDBUS_ADDRESS_SUPPORT
     DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) :
 #ifdef SDBUS_2_0_API
         ProxyInterfaces(sdbus::createSessionBusConnectionWithAddress(addr), sdbus::ServiceName {LTSM::dbus_session_display_name}, sdbus::ObjectPath {dbus_session_display_path}),
@@ -926,12 +926,6 @@ namespace LTSM::Manager {
         registerProxy();
         Application::debug(DebugType::App, "{}: create for display: {}", __FUNCTION__, displayNum);
     }
-#else
-    DisplaySessionProxy::DisplaySessionProxy(const std::string & addr, int display) : displayNum(display) {
-        Application::warning("{}: sdbus address not supported, use 1.2 version", __FUNCTION__);
-        throw service_error(NS_FuncNameS);
-    }
-#endif
 
     DisplaySessionProxy::~DisplaySessionProxy() {
         unregisterProxy();
@@ -1393,7 +1387,7 @@ namespace LTSM::Manager {
             }
             try {
                 auto json = jos.flush();
-                auto base64 = Tools::base64Encode(BinaryBuf(Tools::zlibCompress(RawPtr(json.data(), json.size()))));
+                auto base64 = Tools::base64Encode(Tools::zlibCompress(json));
                 sess->environments.emplace("LTSM_CLIENT_OPTS", std::move(base64));
             } catch(const std::exception & err) {
                 Application::error("{}: exception: `{}'", __FUNCTION__, err.what());

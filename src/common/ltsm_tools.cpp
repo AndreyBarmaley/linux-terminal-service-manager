@@ -29,8 +29,6 @@
 #include <sys/socket.h>
 #endif
 
-#include <zlib.h>
-
 #ifdef LTSM_WITH_GNUTLS
 #include "gnutls/x509.h"
 #include <gnutls/gnutls.h>
@@ -49,7 +47,6 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
-#include <numeric>
 #include <iterator>
 #include <algorithm>
 #include <stdexcept>
@@ -359,7 +356,7 @@ namespace LTSM {
             }
 
 #ifdef __WIN32__
-            res.emplace_back(wstring2string(entry.path().native()));
+            res.emplace_back(entry.path().string());
 #else
             res.emplace_back(entry.path().native());
 #endif
@@ -414,52 +411,6 @@ namespace LTSM {
 #endif
     }
 
-    std::vector<uint8_t> Tools::zlibCompress(const ByteArray & arr) {
-        std::vector<uint8_t> res;
-
-        if(arr.data() && arr.size()) {
-            res.resize(::compressBound(arr.size()));
-            uLong dstsz = res.size();
-            int ret = ::compress(reinterpret_cast<Bytef*>(res.data()), & dstsz,
-                                 reinterpret_cast<const Bytef*>(arr.data()), arr.size());
-
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-            } else {
-                Application::error("{}: {} failed, error: {}", __FUNCTION__, "compress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
-
-        return res;
-    }
-
-    std::vector<uint8_t> Tools::zlibUncompress(const ByteArray & arr, size_t real) {
-        std::vector<uint8_t> res;
-
-        if(arr.data() && arr.size()) {
-            res.resize(real ? real : arr.size() * 7);
-            uLong dstsz = res.size();
-            int ret = Z_BUF_ERROR;
-
-            while(Z_BUF_ERROR ==
-                  (ret = ::uncompress(reinterpret_cast<Bytef*>(res.data()), &dstsz,
-                                      reinterpret_cast<const Bytef*>(arr.data()), arr.size()))) {
-                dstsz = res.size() * 2;
-                res.resize(dstsz);
-            }
-
-            if(ret == Z_OK) {
-                res.resize(dstsz);
-            } else {
-                Application::error("{}: {} failed, error: {}", __FUNCTION__, "uncompress", ret);
-                throw std::runtime_error(NS_FuncNameS);
-            }
-        }
-
-        return res;
-    }
-
     char base64EncodeChar(char v) {
         // 0 <=> 25
         if(v <= ('Z' - 'A')) {
@@ -511,14 +462,14 @@ namespace LTSM {
         return 0;
     }
 
-    std::string Tools::base64Encode(const ByteArray & arr) {
+    std::string Tools::base64Encode(const std::vector<uint8_t> & arr) {
         size_t len = 4 * arr.size() / 3 + 1;
 
         std::string res;
         res.reserve(len);
 
-        auto beg = arr.data();
-        auto end = beg + arr.size();
+        auto beg = std::cbegin(arr);
+        auto end = std::cend(arr);
 
         while(beg < end) {
             auto next1 = beg + 1;
@@ -601,8 +552,7 @@ namespace LTSM {
     }
 
     std::string Tools::randomHexString(size_t len) {
-        auto buf = randomBytes(len);
-        return buffer2hexstring(buf.begin(), buf.end(), 2, "", false);
+        return hexString(randomBytes(len), 2, "", false);
     }
 
     std::string Tools::quotedString(std::string_view str) {
@@ -907,29 +857,6 @@ namespace LTSM {
 
         std::erase(str, 0);
         return str;
-    }
-
-    uint32_t Tools::crc32b(std::string_view str) {
-        return crc32b((const uint8_t*) str.data(), str.size());
-    }
-
-    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size) {
-        return crc32b(ptr, size, 0xEDB88320);
-    }
-
-    uint32_t Tools::crc32b(const uint8_t* ptr, size_t size, uint32_t magic) {
-        uint32_t res = std::accumulate(ptr, ptr + size, 0xFFFFFFFF, [ = ](uint64_t crc, auto val) {
-            crc ^= val;
-
-            for(int bit = 0; bit < 8; ++bit) {
-                uint32_t mask = crc & 1 ? 0xFFFFFFFF : 0;
-                crc = (crc >> 1) ^ (magic & mask);
-            }
-
-            return crc;
-        });
-
-        return ~res;
     }
 
     bool Tools::binaryToFile(const void* buf, size_t len, const std::filesystem::path & file, bool append) {

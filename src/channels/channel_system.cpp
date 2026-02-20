@@ -808,8 +808,7 @@ bool LTSM::ChannelClient::createChannelClientPkcs11(uint8_t channel, const std::
 
 bool LTSM::ChannelClient::createChannelFile(uint8_t channel, const std::filesystem::path & path, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
 #ifdef __WIN32__
-
-    if(! createChannelAllow(Channel::ConnectorType::File, Tools::wstring2string(path.native()), mode))
+    if(! createChannelAllow(Channel::ConnectorType::File, path.string(), mode))
 #else
     if(! createChannelAllow(Channel::ConnectorType::File, path.native(), mode))
 #endif
@@ -977,7 +976,7 @@ void LTSM::ChannelClient::recvLtsmProto(const NetworkStream & ns) {
     auto buf = ns.recvData(length);
 
     if(channelDebug == channel) {
-        auto str = Tools::buffer2hexstring(buf.begin(), buf.end(), 2);
+        auto str = Tools::hexString(buf, 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            __FUNCTION__, channel, length, str);
     }
@@ -1012,7 +1011,7 @@ void LTSM::ChannelClient::sendLtsmProto(NetworkStream & ns, std::mutex & sendLoc
     ns.sendIntBE16(len);
 
     if(channelDebug == channel) {
-        auto str = Tools::buffer2hexstring(buf, buf + len, 2);
+        auto str = Tools::rangeHexString(buf, buf + len, 2);
         Application::trace(DebugType::Channels, "{}: id: {}, size: {}, content: [{}]",
                            __FUNCTION__, channel, len, str);
     }
@@ -1856,11 +1855,11 @@ LTSM::Channel::createCommandConnector(uint8_t channel, const std::string & runcm
         auto cmd = Tools::resolveSymLink(list.front());
         list.pop_front();
 #ifdef __WIN32__
-        list.push_front(Tools::wstring2string(cmd.native()));
+        list.push_front(cmd.string());
 #else
         list.push_front(cmd.native());
 #endif
-        auto runcmd2 = Tools::join(list.begin(), list.end(), " ");
+        auto runcmd2 = Tools::join(list, " ");
 
         fcmd = popen(runcmd2.c_str(), (mode == ConnectorMode::ReadOnly ? "r" : "w"));
     } else if(std::filesystem::is_regular_file(list.front(), err)) {

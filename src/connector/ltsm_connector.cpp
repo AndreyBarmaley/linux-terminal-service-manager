@@ -64,7 +64,7 @@ namespace LTSM::Connector {
 #endif
 
         std::cout << "usage: " << prog << " --config <path> --type <" <<
-                  Tools::join(proto.begin(), proto.end(), "|") << ">" << std::endl;
+                  Tools::join(proto, "|") << ">" << std::endl;
     }
 
     int autoDetectType(void) {

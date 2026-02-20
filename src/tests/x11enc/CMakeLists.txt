@@ -1,7 +1,7 @@
 project(ltsm_test_x11enc)
 set(CUR_TARGET ltsm_test_x11enc)
 
-CommonDefaults(FFMPEG ENCODER JSON)
+CommonDefaults(FFMPEG ENCODER JSON ZLIB)
 
 add_executable(${CUR_TARGET} main.cpp)
 

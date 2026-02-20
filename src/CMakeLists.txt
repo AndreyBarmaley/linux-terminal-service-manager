@@ -2,7 +2,7 @@ function(CommonDefaults)
     set(LTSM_WITH_FB_PARALLELS ON PARENT_SCOPE)
     set(LTSM_WITH_XCB_ERRORS ON PARENT_SCOPE)
 
-    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP)
+    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB)
 
     foreach(ARG IN ITEMS ${OPTS})
         string(JOIN "" PARAM LTSM_WITH_ ${ARG})
@@ -99,7 +99,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_service)
         set(CUR_TARGET ltsm_service)
 
-        CommonDefaults(SDBUS JSON SYSTEMD)
+        CommonDefaults(SDBUS JSON SYSTEMD ZLIB)
 
         add_executable(${CUR_TARGET} ltsm_service_adaptor.h ltsm_display_proxy.h)
 
@@ -118,7 +118,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_connector)
         set(CUR_TARGET ltsm_connector)
 
-        CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER)
+        CommonDefaults(SDBUS JSON SYSTEMD SDL ENCODER ZLIB)
 
         set(LTSM_CONNECTOR_GSSAPI_AUTH ON CACHE BOOL "connector: kerberos auth")
         set(LTSM_CONNECTOR_GNUTLS_SUPPORT ON CACHE BOOL "connector: tls support")
@@ -197,7 +197,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_session_display)
         set(CUR_TARGET ltsm_session_display)
 
-        CommonDefaults(SDBUS SYSTEMD JSON)
+        CommonDefaults(SDBUS SYSTEMD JSON ZLIB)
 
         add_executable(${CUR_TARGET} ltsm_display_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)
@@ -293,7 +293,7 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
 
-    CommonDefaults(JSON PNG SDL DECODER SYSTEMD)
+    CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB)
 
     set(LTSM_WITH_FFMPEG ${LTSM_CLIENT_FFMPEG_SUPPORT})
     set(LTSM_WITH_GSSAPI ${LTSM_CLIENT_GSSAPI_AUTH})
@@ -336,7 +336,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_vnc2image)
     set(CUR_TARGET ltsm_vnc2image)
 
-    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI)
+    CommonDefaults(PNG JSON DECODER GNUTLS GSSAPI ZLIB)
 
     add_executable(${CUR_TARGET} tools/vnc2image/ltsm_vnc2image.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
@@ -351,7 +351,7 @@ if(LTSM_BUILD_TOOLS)
     project(ltsm_x11vnc)
     set(CUR_TARGET ltsm_x11vnc)
 
-    CommonDefaults(GNUTLS GSSAPI JSON ENCODER)
+    CommonDefaults(GNUTLS GSSAPI JSON ENCODER ZLIB)
 
     add_executable(${CUR_TARGET} tools/x11vnc/ltsm_x11vnc.cpp tools/x11vnc/ltsm_connector_x11vnc.cpp)
     target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)

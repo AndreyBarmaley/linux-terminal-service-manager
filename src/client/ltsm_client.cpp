@@ -1372,7 +1372,7 @@ namespace LTSM {
     */
     void Vnc2SDL::clientRecvRichCursorEvent(const XCB::Region & reg,
                                             std::vector<uint8_t> && pixels, std::vector<uint8_t> && mask) {
-        uint32_t key = Tools::crc32b(pixels.data(), pixels.size());
+        uint32_t key = Tools::crc32b(pixels);
         auto it = cursors.find(key);
 
         if(cursors.end() == it) {
@@ -1406,8 +1406,8 @@ namespace LTSM {
 
             if(! curs) {
                 auto & pixels = (*it).second.pixels;
-                auto tmp1 = Tools::buffer2hexstring(pixels.begin(), pixels.end(), 2, ",", false);
-                auto tmp2 = Tools::buffer2hexstring(mask.begin(), mask.end(), 2, ",", false);
+                auto tmp1 = Tools::hexString(pixels, 2, ",", false);
+                auto tmp2 = Tools::hexString(mask, 2, ",", false);
 
                 Application::warning("{}: {} failed, error: {}", __FUNCTION__,
                                      "SDL_CreateColorCursor", SDL_GetError());

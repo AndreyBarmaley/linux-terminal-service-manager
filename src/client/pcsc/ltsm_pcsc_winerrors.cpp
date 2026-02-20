@@ -237,7 +237,7 @@ const char* pcsc_stringify_error(int err) {
             break;
     }
 
-    snprintf(hexbuf, sizeof(hexbuf), "{:#08x}", err);
+    snprintf(hexbuf, sizeof(hexbuf), "0x%08x", err);
     hexbuf[sizeof(hexbuf) -1] = 0;
 
     return hexbuf;

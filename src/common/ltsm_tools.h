@@ -46,6 +46,7 @@
 #include <memory>
 #include <atomic>
 #include <thread>
+#include <numeric>
 #include <utility>
 #include <cinttypes>
 #include <filesystem>
@@ -67,8 +68,6 @@ int getgid(void);
 #endif
 
 namespace LTSM {
-    class ByteArray;
-
 #ifdef __UNIX__
     class UserInfo {
         struct passwd st = {};
@@ -185,10 +184,7 @@ namespace LTSM {
 
         std::string getTimeZone(void);
 
-        std::vector<uint8_t> zlibCompress(const ByteArray &);
-        std::vector<uint8_t> zlibUncompress(const ByteArray &, size_t real = 0);
-
-        std::string base64Encode(const ByteArray &);
+        std::string base64Encode(const std::vector<uint8_t> &);
         std::vector<uint8_t> base64Decode(std::string_view);
 
         template<typename Cont, typename Iterator>
@@ -200,7 +196,7 @@ namespace LTSM {
         std::list<std::string> split(std::string_view str, std::string_view sep);
 
         template<typename Iterator>
-        std::string join(Iterator it1, Iterator it2, std::string_view sep = "") {
+        std::string rangeJoin(Iterator it1, Iterator it2, std::string_view sep = "") {
             std::ostringstream os;
 
             for(auto it = it1; it != it2; ++it) {
@@ -215,8 +211,8 @@ namespace LTSM {
         }
 
         template<typename Container>
-        std::string join(const Container & cont, std::string_view sep = "") {
-            return join(cont.begin(), cont.end(), sep);
+        inline std::string join(const Container & cont, std::string_view sep = "") {
+            return rangeJoin(cont.begin(), cont.end(), sep);
         }
 
         std::string lower(std::string_view);
@@ -230,15 +226,33 @@ namespace LTSM {
 
         std::string hex(int value, int width = 8);
 
-        uint32_t crc32b(std::string_view);
-        uint32_t crc32b(const uint8_t* ptr, size_t size);
-        uint32_t crc32b(const uint8_t* ptr, size_t size, uint32_t magic);
+        template<typename Iterator>
+        uint32_t rangeCrc32b(Iterator it1, Iterator it2, const uint32_t magic = 0xEDB88320) {
+            uint32_t res = std::accumulate(it1, it2, 0xFFFFFFFF, [ = ](uint64_t crc, auto val) {
+                crc ^= static_cast<uint32_t>(val);
+                for(int bit = 0; bit < 8; ++bit) {
+                    uint32_t mask = crc & 1 ? 0xFFFFFFFF : 0;
+                    crc = (crc >> 1) ^ (magic & mask);
+                }
+                return crc;
+            });
+            return ~res;
+        }
+
+        template<typename Cont>
+        inline uint32_t crc32b(const Cont & cont) {
+            return rangeCrc32b(cont.begin(), cont.end());
+        }
+
+        inline uint32_t crc32b(const uint8_t* ptr, size_t len) {
+            return rangeCrc32b(ptr, ptr + len);
+        }
 
         std::wstring string2wstring(const std::string &);
         std::string wstring2string(const std::wstring &);
 
         template<typename Iterator>
-        std::string buffer2hexstring(Iterator it1, Iterator it2, size_t width = 8, std::string_view sep = ",", bool prefix = true) {
+        std::string rangeHexString(Iterator it1, Iterator it2, size_t width = 8, std::string_view sep = ",", bool prefix = true) {
             std::ostringstream os;
 
             while(it1 != it2) {
@@ -257,6 +271,11 @@ namespace LTSM {
             }
 
             return os.str();
+        }
+
+        template<typename Cont>
+        inline std::string hexString(const Cont & cont, size_t width = 8, std::string_view sep = ",", bool prefix = true) {
+            return rangeHexString(std::cbegin(cont), std::cend(cont), width, sep, prefix);
         }
 
         // BaseSpinLock

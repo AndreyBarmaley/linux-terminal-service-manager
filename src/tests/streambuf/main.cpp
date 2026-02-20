@@ -50,7 +50,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
         sb.readTo(res.data(), res.size());
 
         assert(sb.last() == 0);
-        assert(res.crc32b() == buf.crc32b());
+        assert(Tools::crc32b(res) == Tools::crc32b(buf));
         std::cout << "passed" << std::endl;
     }
 
@@ -61,7 +61,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
         auto res1 = sb.read();
 
         assert(sb.last() == 0);
-        assert(res1.crc32b() == buf.crc32b());
+        assert(Tools::crc32b(res1) == Tools::crc32b(buf));
         std::cout << "passed" << std::endl;
     }
 
@@ -88,7 +88,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt8(sb.readInt8());
         }
 
-        assert(sb2.rawbuf().crc32b() == buf.crc32b());
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf));
         std::cout << "passed" << std::endl;
     }
 
@@ -103,7 +103,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt16(sb.readInt16());
         }
 
-        assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
@@ -118,7 +118,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt32(sb.readInt32());
         }
 
-        assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
@@ -133,7 +133,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
             sb2.writeInt64(sb.readInt64());
         }
 
-        assert(sb2.rawbuf().crc32b() == Tools::crc32b(buf.data(), bufsz));
+        assert(Tools::crc32b(sb2.rawbuf()) == Tools::crc32b(buf.data(), bufsz));
         std::cout << "passed" << std::endl;
     }
 
@@ -144,7 +144,7 @@ void testStreamBufInterface(const BinaryBuf & buf) {
         auto res1 = sb2.read();
 
         assert(sb2.last() == 0);
-        assert(res1.crc32b() == sb2.rawbuf().crc32b());
+        assert(Tools::crc32b(res1) == Tools::crc32b(sb2.rawbuf()));
         std::cout << "passed" << std::endl;
     }
 
@@ -180,7 +180,7 @@ void testRawPtrInterface(const BinaryBuf & buf) {
 
         std::cout << "test ::stream <<: ";
         assert(sb.last() == ptr.size());
-        assert(Tools::crc32b(ptr.data(), len) == sb.rawbuf().crc32b());
+        assert(Tools::crc32b(ptr.data(), len) == Tools::crc32b(sb.rawbuf()));
         std::cout << "passed" << std::endl;
     }
 
@@ -269,7 +269,7 @@ void testByteOrderInterface(const BinaryBuf & buf) {
 int main() {
     RandomBuf buf(335);
 
-    std::cout << "fill random, buf size: " << buf.size() << ", crc32b: " << Tools::hex(buf.crc32b()) << std::endl;
+    std::cout << "fill random, buf size: " << buf.size() << ", crc32b: " << Tools::hex(Tools::crc32b(buf)) << std::endl;
 
     testStreamBufInterface(buf);
     testRawPtrInterface(buf);

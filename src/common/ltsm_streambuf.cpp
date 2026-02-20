@@ -39,16 +39,8 @@ namespace LTSM {
         return ba.size() != size() || 0 != std::memcmp(ba.data(), data(), size());
     }
 
-    std::string ByteArray::hexString(std::string_view sep, bool prefix) const {
-        return Tools::buffer2hexstring(data(), data() + size(), 2, sep, prefix);
-    }
-
     std::string ByteArray::toString(void) const {
         return std::string(data(), data() + size());
-    }
-
-    uint32_t ByteArray::crc32b(void) const {
-        return Tools::crc32b(data(), size());
     }
 
     /* BinaryBuf */
