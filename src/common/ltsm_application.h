@@ -155,7 +155,7 @@ namespace LTSM {
 
     class WatchModification {
         std::thread _inotifyJob;
-        std::string _fileName;
+        std::filesystem::path _filePath;
 
         int _inotifyFd = -1;
         int _inotifyWd = -1;

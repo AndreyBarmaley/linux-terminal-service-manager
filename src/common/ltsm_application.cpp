@@ -376,7 +376,6 @@ namespace LTSM {
         auto target = jo->getString("debug:target", "console");
 
         if(target == "syslog") {
-            //auto facility = jo->getString("debug:syslog", "user");
             setDebugTarget(DebugTarget::Syslog);
         } else if(target == "file") {
             auto file = jo->getString("debug:file");
@@ -411,7 +410,7 @@ namespace LTSM {
 
                 if(errno != EBADF) {
                     Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                       __FUNCTION__, "inotify read", strerror(errno), errno, _fileName);
+                                       __FUNCTION__, "inotify read", strerror(errno), errno, _filePath.string());
                 }
 
                 break;
@@ -419,7 +418,7 @@ namespace LTSM {
 
             if(len < sizeof(struct inotify_event)) {
                 Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                                   __FUNCTION__, "inotify read", strerror(errno), errno, _fileName);
+                                   __FUNCTION__, "inotify read", strerror(errno), errno, _filePath.string());
                 break;
             }
 
@@ -430,8 +429,8 @@ namespace LTSM {
                 auto st = (const struct inotify_event*) std::addressof(*beg);
 
                 if(st->mask == IN_CLOSE_WRITE) {
-                    if(st->len && _fileName == st->name && closeWriteCb) {
-                        closeWriteCb(_fileName);
+                    if(st->len && _filePath.filename() == st->name && closeWriteCb) {
+                        closeWriteCb(_filePath.string());
                     }
                 }
 
@@ -455,7 +454,7 @@ namespace LTSM {
             return false;
         }
 
-        _fileName = file.filename();
+        _filePath = file;
         _inotifyWd = inotify_add_watch(_inotifyFd, file.parent_path().c_str(), IN_CLOSE_WRITE);
 
         if(0 > _inotifyWd) {
