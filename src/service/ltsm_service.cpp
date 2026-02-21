@@ -2982,8 +2982,13 @@ namespace LTSM::Manager {
             return EXIT_FAILURE;
         }
 
-        if(isBackground && fork()) {
-            return EXIT_SUCCESS;
+        if(isBackground) {
+            Application::setDebugTarget(DebugTarget::Syslog, "ltsm_service");
+            Application::setDebugLevel(DebugLevel::Info);
+        
+            if(fork()) {
+                return EXIT_SUCCESS;
+            }
         }
 
 #ifdef SDBUS_2_0_API

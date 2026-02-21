@@ -49,6 +49,7 @@
 #include "spdlog/sinks/stdout_sinks.h"
 
 #ifdef __UNIX__
+#include "systemd/sd-daemon.h"
 #include "spdlog/sinks/syslog_sink.h"
 #ifdef LTSM_WITH_SYSTEMD
 #include "spdlog/sinks/systemd_sink.h"
@@ -64,12 +65,9 @@ namespace LTSM {
     DebugLevel appDebugLevel = DebugLevel::Info;
     uint32_t appDebugTypes = DebugType::All;
 
-    std::string ident{"application"};
+    std::string appIdent{"application"};
 
     bool appLogSync = false;
-
-    // used with docker
-    bool forceSyslog = false;
 
     const char* debugTypeToName(const DebugType & type) {
         switch(type) {
@@ -221,19 +219,17 @@ namespace LTSM {
             case DebugTarget::Syslog:
 #ifdef __UNIX__
 #ifdef LTSM_WITH_SYSTEMD
-                if(forceSyslog) {
-                    log = spdlog::syslog_logger_mt(name, ident);
-                } else {
-#if 11000 <= SPDLOG_VERSION
-                    log = spdlog::systemd_logger_mt(name, ident);
-#else
+                if(sd_booted()) {
+ #if 11000 <= SPDLOG_VERSION
+                    log = spdlog::systemd_logger_mt(name, appIdent);
+ #else
                     log = spdlog::systemd_logger_mt(name);
-#endif
+ #endif
                 }
-
-#else
-                log = spdlog::syslog_logger_mt(name, ident);
 #endif
+                if(! log) {
+                    log = spdlog::syslog_logger_mt(name, appIdent);
+                }
 #endif
                 break;
 
@@ -246,7 +242,13 @@ namespace LTSM {
                 break;
         }
 
+        log->set_level(static_cast<spdlog::level::level_enum>(appDebugLevel));
+#if 11503 <= SPDLOG_VERSION
+        spdlog::register_or_replace(log);
+#else
+        spdlog::drop(name);
         spdlog::register_logger(log);
+#endif
         return log;
     }
 
@@ -271,6 +273,9 @@ namespace LTSM {
 
             case DebugTarget::Syslog:
                 appDebugTarget = tgt;
+                if(ext.size()) {
+                    appIdent.assign(ext.begin(), ext.end());
+                }
                 break;
 
             case DebugTarget::SyslogFile:
@@ -279,7 +284,6 @@ namespace LTSM {
                 break;
         }
 
-        spdlog::drop_all();
         auto log = logger(DebugType::Default);
         spdlog::set_default_logger(log);
     }
@@ -291,7 +295,7 @@ namespace LTSM {
 
 #ifdef __UNIX__
         else if(tgt == "syslog") {
-            setDebugTarget(DebugTarget::Syslog);
+            setDebugTarget(DebugTarget::Syslog, ext);
         }
 
 #endif
@@ -344,21 +348,11 @@ namespace LTSM {
         std::setlocale(LC_ALL, "ru_RU.utf8");
         std::setlocale(LC_NUMERIC, "C");
 
+        appIdent.assign(sid.begin(), sid.end());
+
         spdlog::set_automatic_registration(false);
         auto log = logger(DebugType::Default);
         spdlog::set_default_logger(log);
-
-        ident.assign(sid.begin(), sid.end());
-#ifdef LTSM_WITH_SYSTEMD
-        // check systemd or docker
-        auto res = Tools::runcmd("systemctl is-system-running");
-
-        // systemd not running switch to syslog
-        if(res.empty() || res == "offline") {
-            forceSyslog = true;
-        }
-
-#endif
     }
 
 #ifdef LTSM_WITH_JSON
@@ -372,8 +366,8 @@ namespace LTSM {
         }
 
         if(auto jc = JsonContentFile(applog); jc.isObject()) {
-            if(auto jo = jc.toObject(); jo.isObject(ident)) {
-                setAppLog(jo.getObject(ident));
+            if(auto jo = jc.toObject(); jo.isObject(appIdent)) {
+                setAppLog(jo.getObject(appIdent));
             }
         }
     }
@@ -382,8 +376,8 @@ namespace LTSM {
         auto target = jo->getString("debug:target", "console");
 
         if(target == "syslog") {
-            auto facility = jo->getString("debug:syslog", "user");
-            setDebugTarget(DebugTarget::Syslog, facility);
+            //auto facility = jo->getString("debug:syslog", "user");
+            setDebugTarget(DebugTarget::Syslog);
         } else if(target == "file") {
             auto file = jo->getString("debug:file");
             setDebugTarget(DebugTarget::SyslogFile, file);
@@ -528,14 +522,13 @@ namespace LTSM {
             files.emplace_back(env);
         }
 
-        auto ident_json = std::string(ident).append(".json");
+        auto ident_json = std::string(appIdent).append(".json");
         files.emplace_back(std::filesystem::current_path() / ident_json);
 
         auto ident_conf = std::filesystem::path("/etc/ltsm") / ident_json;
         files.emplace_back(std::move(ident_conf));
 
         files.emplace_back(std::filesystem::current_path() / "config.json");
-        files.emplace_back("/etc/ltsm/config.json");
 
         for(const auto & path : files) {
             auto st = std::filesystem::status(path);
@@ -703,8 +696,6 @@ namespace LTSM {
             Application::setDebugLevel(DebugLevel::Quiet);
         }
 
-        spdlog::drop_all();
-
         // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
         for(int fd = 3; fd < 1024; ++fd) {
             if(fd == redirectFd) {
@@ -715,7 +706,7 @@ namespace LTSM {
         }
 
         if(debug) {
-            auto file = fmt::format("/var/tmp/.fork_{}_{}.log", ident, getpid());
+            auto file = fmt::format("/var/tmp/.fork_{}_{}.log", appIdent, getpid());
             appDebugTypes = DebugType::All;
             appLogSync = true;
             Application::setDebugTarget(DebugTarget::SyslogFile, file);
@@ -752,7 +743,6 @@ namespace LTSM {
     }
 
     int ForkMode::runChildFailure(int res) {
-        spdlog::drop_all();
         execl("/bin/true", "/bin/true", nullptr);
         std::exit(res);
         return res;
@@ -820,8 +810,6 @@ namespace LTSM {
             // redirect stdout, stderr
             redirectStdoutStderrTo(true, true, logFile.native());
         }
-
-        spdlog::drop_all();
 
         if(int res = execv(cmd.c_str(), (char* const*) argv.data()); res < 0) {
             Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",

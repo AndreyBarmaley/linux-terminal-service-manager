@@ -319,7 +319,7 @@ int main(int argc, const char** argv) {
             } else if(0 == std::strcmp(argv[it], "--accel")) {
                 accel = true;
             } else if(0 == std::strcmp(argv[it], "--syslog")) {
-                LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog);
+                LTSM::Application::setDebugTarget(LTSM::DebugTarget::Syslog, "ltsm_sdl2x11");
             } else if(0 == std::strcmp(argv[it], "--auth") && it + 1 < argc) {
                 xauth.assign(argv[it + 1]);
             } else if(0 == std::strcmp(argv[it], "--title") && it + 1 < argc) {
