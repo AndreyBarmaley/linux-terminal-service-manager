@@ -149,14 +149,14 @@ namespace LTSM::Manager {
                 return;
             }
 
-            if(! pam->validateAccount()) {
-                return;
-            }
-
             if(! userInfo->password().empty()) {
                 if(! pam->authenticate()) {
                     return;
                 }
+            }
+
+            if(! pam->validateAccount()) {
+                return;
             }
 
             if(! std::filesystem::is_directory(userInfo->home())) {

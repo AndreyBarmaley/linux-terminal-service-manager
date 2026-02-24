@@ -103,9 +103,12 @@ namespace LTSM {
         }
 
         template<typename... Args>
-        static void info(std::string_view fmt, Args&& ... args) {
+        static void info(std::string_view fmt, Args&& ... args) noexcept {
             if(isDebugLevel(DebugLevel::Info)) {
-                spdlog::info(fmt::runtime(fmt), args...);
+                try {
+                    spdlog::info(fmt::runtime(fmt), args...);
+                } catch(...) {
+                }
             }
         }
 
@@ -115,18 +118,26 @@ namespace LTSM {
         }
 
         template<typename... Args>
-        static void debug(const DebugType & type, std::string_view fmt, Args&& ... args) {
+        static void debug(const DebugType & type, std::string_view fmt, Args&& ... args) noexcept {
             if(isDebugLevel(DebugLevel::Debug)) {
-                auto log = logger(type);
-                log->debug(fmt::runtime(fmt), args...);
+                try {
+                    if(auto log = logger(type)) {
+                        log->debug(fmt::runtime(fmt), args...);
+                    }
+                } catch(...) {
+                }
             }
         }
 
         template<typename... Args>
-        static void trace(const DebugType & type, std::string_view fmt, Args&& ... args) {
+        static void trace(const DebugType & type, std::string_view fmt, Args&& ... args) noexcept {
             if(isDebugLevel(DebugLevel::Trace)) {
-                auto log = logger(type);
-                log->debug(fmt::runtime(fmt), args...);
+                try {
+                    if(auto log = logger(type)) {
+                        log->debug(fmt::runtime(fmt), args...);
+                    }
+                } catch(...) {
+                }
             }
         }
         
@@ -169,7 +180,7 @@ namespace LTSM {
         WatchModification & operator=(const WatchModification &) = delete;
 
       public:
-        WatchModification(WatchModificationCb && cb) : closeWriteCb(std::forward<WatchModificationCb>(cb)) {};
+        WatchModification(const WatchModificationCb & cb) : closeWriteCb(cb) {};
         ~WatchModification();
 
         bool inotifyWatchStart(const std::filesystem::path &);
