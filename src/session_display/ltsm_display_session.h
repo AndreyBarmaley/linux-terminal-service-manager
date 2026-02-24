@@ -33,6 +33,8 @@
 #include <utility>
 #include <forward_list>
 
+#include <boost/asio.h>
+
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"

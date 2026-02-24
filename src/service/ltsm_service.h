@@ -32,6 +32,8 @@
 #include <string_view>
 #include <forward_list>
 
+#include <boost/asio.hpp>
+
 #include <security/pam_appl.h>
 #include <security/pam_misc.h>
 

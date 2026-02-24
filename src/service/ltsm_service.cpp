@@ -2989,6 +2989,9 @@ namespace LTSM::Manager {
             if(fork()) {
                 return EXIT_SUCCESS;
             }
+            
+            setsid();
+            chdir("/");
         }
 
 #ifdef SDBUS_2_0_API
@@ -2998,43 +3001,40 @@ namespace LTSM::Manager {
 #endif
 
         if(! serviceConn) {
-            Application::error("{}: {} failed",
-                               "ServiceStart", "dbus connection");
+            Application::error("{}: {} failed", __FUNCTION__, "dbus connection");
             return EXIT_FAILURE;
         }
 
-        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
-
-        if(! std::filesystem::is_directory(connectorHome)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, connectorHome);
-            return EXIT_FAILURE;
-        }
-
-        // remove old sockets
-        for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome}) {
-            if(dirEntry.is_socket()) {
-                std::filesystem::remove(dirEntry);
+        if(auto connectorHome = Tools::getUserHome(ltsm_user_conn);
+                                std::filesystem::is_directory(connectorHome)) {
+            // remove old sockets
+            for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome}) {
+                if(dirEntry.is_socket()) {
+                    std::filesystem::remove(dirEntry);
+                }
             }
         }
-
+    
         signal(SIGTERM, Manager::signalHandler);
         signal(SIGINT, isBackground ? SIG_IGN : signalHandler);
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
-        Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, *serviceConn, confile);
+        Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
+                __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
 
+        ctx.run();
         serviceConn->enterEventLoop();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
-        Application::notice("{}: service stopped", "ServiceStart");
+        Application::notice("{}: service stopped", __FUNCTION__);
         serviceAdaptor.reset();
 
         return EXIT_SUCCESS;
