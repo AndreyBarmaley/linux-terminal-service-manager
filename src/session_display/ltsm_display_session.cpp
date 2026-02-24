@@ -197,7 +197,7 @@ namespace LTSM::DisplaySession {
             auto magic = sb.readString(len);
 
             len = sb.readIntBE16();
-            std::vector<uint8_t> cookie = sb.read(len);
+            auto cookie = sb.read(len);
 
             if(display == std::to_string(displayNum)) {
                 Application::debug(DebugType::App, "{}: {} found, display {}",

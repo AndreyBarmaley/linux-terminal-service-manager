@@ -368,7 +368,7 @@ namespace LTSM {
         throw streambuf_error(NS_FuncNameS);
     }
 
-    BinaryBuf StreamBufRef::read(size_t len) const {
+    std::vector<uint8_t> StreamBufRef::read(size_t len) const {
         if(last() < len) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
@@ -380,7 +380,7 @@ namespace LTSM {
 
         auto it0 = it1;
         it1 = std::next(it1, len);
-        return BinaryBuf(it0, len);
+        return std::vector<uint8_t>(it0, it1);
     }
 
     void StreamBufRef::skip(size_t len) const {
@@ -520,7 +520,7 @@ namespace LTSM {
         it = rangesNext(vec.begin(), offset, vec.end());
     }
 
-    BinaryBuf StreamBuf::read(size_t len) const {
+    std::vector<uint8_t> StreamBuf::read(size_t len) const {
         if(len > last()) {
             Application::error("{}: incorrect len, last: {}, len: {}", __FUNCTION__, last(), len);
             throw std::invalid_argument(NS_FuncNameS);
@@ -532,7 +532,7 @@ namespace LTSM {
 
         auto it0 = it;
         it = std::next(it, len);
-        return BinaryBuf(it0, it);
+        return std::vector<uint8_t>(it0, it);
     }
 
     void StreamBuf::skip(size_t len) const {

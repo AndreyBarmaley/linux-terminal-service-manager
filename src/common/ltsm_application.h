@@ -93,13 +93,19 @@ namespace LTSM {
         static Logger logger(const DebugType & type = DebugType::Default);
 
         template<typename... Args>
-        static void error(std::string_view fmt, Args&& ... args) {
-            spdlog::error(fmt::runtime(fmt), args...);
+        static void error(std::string_view fmt, Args&& ... args) noexcept {
+            try {
+                spdlog::error(fmt::runtime(fmt), args...);
+            } catch(...) {
+            }
         }
 
         template<typename... Args>
-        static void warning(std::string_view fmt, Args&& ... args) {
-            spdlog::warn(fmt::runtime(fmt), args...);
+        static void warning(std::string_view fmt, Args&& ... args) noexcept {
+            try {
+                spdlog::warn(fmt::runtime(fmt), args...);
+            } catch(...) {
+            }
         }
 
         template<typename... Args>

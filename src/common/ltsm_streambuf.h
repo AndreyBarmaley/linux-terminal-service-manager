@@ -210,7 +210,7 @@ namespace LTSM {
 
         void readTo(void*, size_t) const;
 
-        virtual BinaryBuf read(size_t = 0) const = 0;
+        virtual std::vector<uint8_t> read(size_t = 0) const = 0;
         std::string readString(size_t = 0) const;
         virtual void skip(size_t) const = 0;
 
@@ -330,7 +330,7 @@ namespace LTSM {
 
         void reset(const void* ptr, size_t len);
 
-        BinaryBuf read(size_t = 0) const override;
+        std::vector<uint8_t> read(size_t = 0) const override;
         size_t last(void) const override;
         uint8_t peek(void) const override;
         void skip(size_t) const override;
@@ -374,7 +374,7 @@ namespace LTSM {
         void reset(void);
         void reset(const std::vector<uint8_t> &);
 
-        BinaryBuf read(size_t = 0) const override;
+        std::vector<uint8_t> read(size_t = 0) const override;
         size_t last(void) const override;
         uint8_t peek(void) const override;
         void skip(size_t) const override;
