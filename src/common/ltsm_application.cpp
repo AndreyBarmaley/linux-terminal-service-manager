@@ -284,6 +284,7 @@ namespace LTSM {
                 break;
         }
 
+        spdlog::drop("default");
         auto log = logger(DebugType::Default);
         spdlog::set_default_logger(log);
     }
