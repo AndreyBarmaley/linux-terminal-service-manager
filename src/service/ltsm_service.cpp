@@ -3015,12 +3015,14 @@ namespace LTSM::Manager {
             }
         }
     
+        //boost::asio::io_context ctx{4}; 
+   
         signal(SIGTERM, Manager::signalHandler);
         signal(SIGINT, isBackground ? SIG_IGN : signalHandler);
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, *serviceConn, confile);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
                 __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 
@@ -3028,7 +3030,7 @@ namespace LTSM::Manager {
         sd_notify(0, "READY=1");
 #endif
 
-        ctx.run();
+        //ctx.run();
         serviceConn->enterEventLoop();
 
 #ifdef LTSM_WITH_SYSTEMD

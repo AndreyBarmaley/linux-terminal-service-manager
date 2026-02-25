@@ -43,6 +43,7 @@ if(LTSM_WITH_BOOST)
     set(Boost_USE_STATIC_LIBS OFF)
     set(Boost_USE_MULTITHREADED ON)
     find_package(Boost 1.78 REQUIRED)
+    target_include_directories(${CUR_TARGET} PRIVATE ${Boost_INCLUDE_DIR})
     target_link_libraries(${CUR_TARGET} PRIVATE ${Boost_LIBRARIES})
 endif()
 
