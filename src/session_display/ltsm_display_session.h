@@ -46,6 +46,7 @@ namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = sdbus::Struct<int, StdoutBuf>;
     using PidFd = std::pair<int, int>;
+    using PidJob = std::pair<int, std::future<void>>;
 
     class Starter;
 
@@ -78,6 +79,7 @@ namespace LTSM::DisplaySession {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::steady_timer timer_sdbus_;
+        boost::asio::steady_timer timer_childs_;
 
         std::string_view xauth_file_;
         const XCB::AuthCookie mcookie_;
@@ -86,19 +88,21 @@ namespace LTSM::DisplaySession {
         int default_height_ = 0;
         int default_depth_ = 0;
         int display_num_ = -1;
-        int pid_xorg_ = 0;
-        int pid_sess_ = 0;
     
-        std::forward_list<int> childs_;
+        std::mutex lock_childs_;
+        std::list<PidJob> childs_;
 
         std::unique_ptr<sdbus::IConnection> dbus_conn_;
         std::unique_ptr<DBusAdaptor> dbus_adaptor_;
         std::unique_ptr<XCB::Connector> xcb_;
 
+        PidJob pid_xorg_, pid_sess_;
+
       protected:
         friend class DBusAdaptor;
 
-        void timerDbusConnectionLoopAsync(const boost::system::error_code&);
+        void timerDbusConnectionLoop(const boost::system::error_code&);
+        void timerChildsAliveCheck(const boost::system::error_code&);
 
         void stop(void);
         bool startX11Display(void);
