@@ -106,29 +106,35 @@ namespace LTSM {
         uint32_t bmask(void) const;
         uint32_t amask(void) const;
 
-        const uint16_t & rmax(void) const {
+        inline const uint16_t & rmax(void) const {
             return redMax;
         }
-        const uint16_t & gmax(void) const {
+
+        inline const uint16_t & gmax(void) const {
             return greenMax;
         }
-        const uint16_t & bmax(void) const {
+
+        inline const uint16_t & bmax(void) const {
             return blueMax;
         }
-        const uint16_t & amax(void) const {
+
+        inline const uint16_t & amax(void) const {
             return alphaMax;
         }
 
-        const uint8_t & rshift(void) const {
+        inline const uint8_t & rshift(void) const {
             return redShift;
         }
-        const uint8_t & gshift(void) const {
+
+        inline const uint8_t & gshift(void) const {
             return greenShift;
         }
-        const uint8_t & bshift(void) const {
+
+        inline const uint8_t & bshift(void) const {
             return blueShift;
         }
-        const uint8_t & ashift(void) const {
+
+        inline const uint8_t & ashift(void) const {
             return alphaShift;
         }
 
@@ -147,11 +153,11 @@ namespace LTSM {
         uint32_t convertFrom(const PixelFormat & pf, uint32_t pixel) const;
         uint32_t convertTo(uint32_t pixel, const PixelFormat & pf) const;
 
-        const uint8_t & bitsPerPixel(void) const {
+        inline const uint8_t & bitsPerPixel(void) const {
             return bitsPixel;
         }
 
-        const uint8_t & bytePerPixel(void) const {
+        inline const uint8_t & bytePerPixel(void) const {
             return bytePixel;
         }
     };
