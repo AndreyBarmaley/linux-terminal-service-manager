@@ -47,6 +47,10 @@
 using namespace std::chrono_literals;
 
 namespace LTSM::DisplaySession {
+    void forkWaitPid(int pid) {
+        ForkMode::waitPid(pid);
+    }
+
     int runForkCommand(boost::asio::io_context & ioc, const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
 
         ioc.notify_fork(boost::asio::execution_context::fork_prepare);
@@ -318,6 +322,7 @@ namespace LTSM::DisplaySession {
     Starter::Starter(int displayNum, const char* xauthFile)
         : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()),
         ioc_{2}, signals_{ioc_}, timer_sdbus_{ioc_, boost::asio::chrono::milliseconds(1)},
+        timer_childs_{ioc_, boost::asio::chrono::milliseconds(250)},
         xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
     }
 
@@ -394,13 +399,10 @@ namespace LTSM::DisplaySession {
         }
 
         // start Xorg
-        pid_xorg_ = runForkCommand(ioc_, xorgBin, xorgArgs, {});
+        int pid = runForkCommand(ioc_, xorgBin, xorgArgs, {});
 
-        boost::asio::post(ioc_, [this](){
-            ForkMode::waitPid(this->pid_xorg_);
-            this->pid_xorg_ = 0;
-            this->stop();
-        });
+        pid_xorg_.second = std::async(std::launch::async, &forkWaitPid, pid);
+        pid_xorg_.first = pid;
 
         return true;
     }
@@ -458,13 +460,10 @@ namespace LTSM::DisplaySession {
         }
 
         // start Session
-        pid_sess_ = runForkCommand(ioc_, sessionBin, sessionArgs, sessionEnvs);
+        int pid = runForkCommand(ioc_, sessionBin, sessionArgs, sessionEnvs);
 
-        boost::asio::post(ioc_, [this](){
-            ForkMode::waitPid(this->pid_sess_);
-            this->pid_sess_ = 0;
-            this->stop();
-        });
+        pid_sess_.second = std::async(std::launch::async, &forkWaitPid, pid);
+        pid_sess_.first = pid;
 
         return true;
     }
@@ -495,20 +494,21 @@ namespace LTSM::DisplaySession {
     }
 
     void Starter::waitSessionCommandAsync(const PidFd & pidFd) {
-        childs_.push_front(pidFd.first);
-
-        boost::asio::post(ioc_, [this, pidFd](){
-            StatusStdout res;
-
-            if(waitCommandStdout(pidFd, res)) {
-                const int & wstatus = std::get<0>(res);
-                const StdoutBuf & buf = std::get<1>(res);
-                dbus_adaptor_->emitRunSessionCommandAsyncComplete(pidFd.first, static_cast<bool>(WIFEXITED(wstatus)), wstatus, buf);
-            }
-        });
+        std::scoped_lock guard{ lock_childs_ };
+        childs_.emplace_back(
+                pidFd.first,
+                std::async(std::launch::async, [this, pidFd](){
+                    StatusStdout res;
+                    if(waitCommandStdout(pidFd, res)) {
+                        const int & wstatus = std::get<0>(res);
+                        const StdoutBuf & buf = std::get<1>(res);
+                        dbus_adaptor_->emitRunSessionCommandAsyncComplete(pidFd.first, static_cast<bool>(WIFEXITED(wstatus)), wstatus, buf);
+                    }
+                })
+        );
     }
 
-    void Starter::timerDbusConnectionLoopAsync(const boost::system::error_code& ec)
+    void Starter::timerDbusConnectionLoop(const boost::system::error_code& ec)
     {
         if(ec) {
             return;
@@ -519,26 +519,66 @@ namespace LTSM::DisplaySession {
             dbus_conn_->enterEventLoopAsync();
 
             timer_sdbus_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
-            timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoopAsync, this, std::placeholders::_1));
+            timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoop, this, std::placeholders::_1));
         }
+    }
+
+    void Starter::timerChildsAliveCheck(const boost::system::error_code& ec)
+    {
+        if(ec) {
+            return;
+        }
+
+        // xorg stopped
+        if(pid_xorg_.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
+            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg". pid_xorg_.first);
+            pid_xorg_.first = 0;
+            boost::asio::post(ioc_, std::bind(&Starter::stop, this));
+            return;
+        }
+
+        // session stopped
+        if(pid_sess_.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
+            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "session", pid_sess_.first);
+            pid_sess_.first = 0;
+            boost::asio::post(ioc_, std::bind(&Starter::stop, this));
+            return;
+        }
+
+        // remove ended
+        std::scoped_lock guard{ lock_childs_ };
+        std::erase_if(childs_, [](auto & ps)
+        {
+            return ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
+        });
+
+        timer_childs_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(250));
+        timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
     }
 
     void Starter::stop(void) {
         signals_.cancel();
         timer_sdbus_.cancel();
+        timer_childs_.cancel();
 
-        if(0 < pid_xorg_) {
-            kill(pid_xorg_, SIGTERM);
-            pid_xorg_ = 0;
+        if(0 < pid_xorg_.first) {
+            kill(pid_xorg_.first, SIGTERM);
+            pid_xorg_.first = 0;
+            pid_xorg_.second.wait();
         }
 
-        if(0 < pid_sess_) {
-            kill(pid_sess_, SIGTERM);
-            pid_sess_ = 0;
+        if(0 < pid_sess_.first) {
+            kill(pid_sess_.first, SIGTERM);
+            pid_sess_.first = 0;
+            pid_sess_.second.wait();
         }
 
-        for(const auto & pid: childs_) {
-            kill(pid, SIGTERM);
+        std::scoped_lock guard{ lock_childs_ };
+
+        for(const auto & ps: childs_) {
+            if(ps.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                kill(ps.first, SIGTERM);
+            }
         }
 
         childs_.clear();
@@ -585,7 +625,7 @@ namespace LTSM::DisplaySession {
 #endif
 
         dbus_adaptor_ = std::make_unique<DBusAdaptor>(*dbus_conn_, *this);
-        timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoopAsync, this, std::placeholders::_1));
+        timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoop, this, std::placeholders::_1));
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -599,8 +639,10 @@ namespace LTSM::DisplaySession {
             }
         });
 
-        ioc_.run();
+        timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
 
+        ioc_.run();
+    
         return EXIT_SUCCESS;
     }
 
@@ -646,8 +688,8 @@ namespace LTSM::DisplaySession {
         JsonObjectStream jos;
 
         jos.push("display:num", display_num_);
-        jos.push("xorg:pid", pid_xorg_);
-        jos.push("session:pid", pid_sess_);
+        jos.push("xorg:pid", pid_xorg_.first);
+        jos.push("session:pid", pid_sess_.first);
         jos.push("running:sec", std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - started_).count());
 
         return jos.flush();
