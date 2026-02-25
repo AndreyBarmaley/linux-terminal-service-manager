@@ -47,26 +47,21 @@
 using namespace std::chrono_literals;
 
 namespace LTSM::DisplaySession {
-    std::unique_ptr<sdbus::IConnection> sessionConn;
+    int runForkCommand(boost::asio::io_context & ioc, const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
 
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            if(sessionConn) {
-                sessionConn->leaveEventLoop();
-            }
-        }
-    }
-
-    PidStatus runForkCommand(const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+        ioc.notify_fork(boost::asio::execution_context::fork_prepare);
         pid_t pid = ForkMode::forkStart();
 
         // child
         if(0 == pid) {
             ForkMode::runChildProcess(cmd, args, envs, RedirectLog::StdoutStderr);
             // child ended
+            exit(0);
         }
 
         // parent
+        ioc.notify_fork(boost::asio::execution_context::fork_parent);
+
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args, ", ");
             auto senvs = Tools::join(envs, ", ");
@@ -76,72 +71,10 @@ namespace LTSM::DisplaySession {
             Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd);
         }
 
-        // main thread processed
-        auto future = std::async(std::launch::async, [pid]() {
-            return ForkMode::waitPid(pid);
-        });
-        return std::make_pair(pid, std::move(future));
+        return pid;
     }
 
-    std::vector<uint8_t> jobBlockRead(int fd) {
-        const size_t block = 1024;
-        std::vector<uint8_t> res(block);
-        uint8_t* ptr = res.data();
-        size_t last = block;
-
-        while(true) {
-            int ret = read(fd, ptr, last);
-
-            if(ret < 0) {
-                // EAGAIN or EINTR continue
-                if(EAGAIN == errno && EINTR == errno) {
-                    continue;
-                }
-
-                // end stream: pipe close
-                if(EBADF == errno) {
-                    res.resize(res.size() - last);
-                    break;
-                }
-
-                Application::error("{}: {} failed, error: {}, code: {}", __FUNCTION__, "read", strerror(errno), errno);
-                res.clear();
-                break;
-            }
-
-            // no data: continue
-            if(ret == 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
-            }
-
-            ptr += ret;
-            last -= ret;
-
-            if(last == 0) {
-                auto pos = res.size();
-                res.resize(res.size() + block);
-                last = block;
-                ptr = res.data() + pos;
-            }
-        }
-
-        return res;
-    }
-
-    StatusStdout jobWaitStdout(int pid, int fd) {
-        auto future = std::async(std::launch::async, &jobBlockRead, fd);
-        int status = ForkMode::waitPid(pid);
-
-        if(future.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready) {
-            // force stop jobBlockRead
-            close(fd);
-        }
-
-        return std::make_pair(status, future.get());
-    }
-
-    PidStatusStdout runForkCommandStdout(const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+    PidFd runForkCommandStdout(boost::asio::io_context & ioc, const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         int pipefd[2] = {};
 
         if(0 > pipe(pipefd)) {
@@ -150,15 +83,19 @@ namespace LTSM::DisplaySession {
             throw std::runtime_error(NS_FuncNameS);
         }
 
+        ioc.notify_fork(boost::asio::execution_context::fork_prepare);
         int pid = ForkMode::forkStart(pipefd[1]);
 
         // child
         if(0 == pid) {
             ForkMode::runChildProcess(cmd, args, envs, RedirectLog::StdoutFd, pipefd[1]);
             // child ended
+            exit(0);
         }
 
         // parent
+        ioc.notify_fork(boost::asio::execution_context::fork_parent);
+
         if(Application::isDebugLevel(DebugLevel::Debug)) {
             auto sargs = Tools::join(args, ", ");
             auto senvs = Tools::join(envs, ", ");
@@ -171,8 +108,7 @@ namespace LTSM::DisplaySession {
         // main thread processed
         close(pipefd[1]);
 
-        auto future = std::async(std::launch::async, &jobWaitStdout, pid, pipefd[0]);
-        return std::make_pair(pid, std::move(future));
+        return std::make_pair(pid, pipefd[0]);
     }
 
     std::vector<uint8_t> readXauthFile(const std::filesystem::path & xauthFilePath, int displayNum) {
@@ -337,7 +273,7 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::serviceShutdown(void) {
-        starter_.dbusServiceShutdown();
+        starter_.stop();
     }
 
     void DBusAdaptor::setDebug(const std::string & level) {
@@ -349,64 +285,21 @@ namespace LTSM::DisplaySession {
     }
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        auto sargs = Tools::join(args, ", ");
-        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
-
-        try {
-            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
-                int pid = pidStatus.first;
-                starter_.storeChild(std::move(pidStatus));
-                return pid;
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
-
-        return -1;
+        return starter_.dbusRunSessionCommandAsync(cmd, args, envs);
     }
 
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        auto sargs = Tools::join(args, ", ");
-        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
-
-        try {
-            if(auto pidStatus = runForkCommandStdout(cmd, args, envs); 0 < pidStatus.first) {
-                return pidStatus.second.get();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
-
-        return StatusStdout{ -1, {} };
+        return starter_.dbusRunSessionCommandSync(cmd, args, envs);
     }
 
     StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string> & args) {
-        auto sargs = Tools::join(args, ", ");
-        Application::debug(DebugType::Dbus, "{}: args: [ {} ]", __FUNCTION__, sargs);
-
         auto zenityBin = starter_.configGetString("zenity:path", "/usr/bin/zenity");
-
-        try {
-            if(auto pidStatus = runForkCommandStdout(zenityBin, args, {}); 0 < pidStatus.first) {
-                return pidStatus.second.get();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
-
-        return StatusStdout{ -1, {} };
+        return runSessionCommandSync(zenityBin, args, {});
     }
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
         Application::debug(DebugType::Dbus, "{}: [ {} ]", __FUNCTION__, layout);
-
-        try {
-            if(auto pidStatus = runForkCommandStdout("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {}); 0 < pidStatus.first) {
-                pidStatus.second.wait();
-            }
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
+        runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
     }
 
     void DBusAdaptor::notifyInfo(const std::string& summary, const std::string& body) {
@@ -423,26 +316,19 @@ namespace LTSM::DisplaySession {
 
     // Starter
     Starter::Starter(int displayNum, const char* xauthFile)
-        : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()) {
-        Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
-                                getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
-        startX11Display(displayNum, xauthFile);
+        : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()),
+        ioc_{2}, signals_{ioc_}, timer_sdbus_{ioc_, boost::asio::chrono::milliseconds(1)},
+        xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
     }
 
     Starter::~Starter() {
-        if(timer1_) {
-            timer1_->stop();
-        }
-
-        stopChilds();
+        stop();
     }
 
-    void Starter::startX11Display(int displayNum, const char* xauthFile) {
-        defaultWidth_ = configGetInteger("default:width", 1280);
-        defaultHeight_ = configGetInteger("default:height", 1024);
-        defaultDepth_ = configGetInteger("default:depth", 24);
-        displayNum_ = displayNum;
-        mcookie_ = readXauthFile(xauthFile, displayNum);
+    bool Starter::startX11Display(void) {
+        default_width_ = configGetInteger("default:width", 1280);
+        default_height_ = configGetInteger("default:height", 1024);
+        default_depth_ = configGetInteger("default:depth", 24);
 
         std::string xorgBin;
         std::vector<std::string> xorgArgs;
@@ -461,7 +347,7 @@ namespace LTSM::DisplaySession {
 
         if(! std::filesystem::exists(xorgBin)) {
             Application::error("{}: path not found: `{}'", __FUNCTION__, xorgBin);
-            throw std::runtime_error(NS_FuncNameS);
+            return false;
         }
 
         const bool useXorg = std::filesystem::path(xorgBin).filename() == "Xorg";
@@ -500,15 +386,23 @@ namespace LTSM::DisplaySession {
         }
 
         for(auto & str : xorgArgs) {
-            str = Tools::replace(str, "%{width}", defaultWidth_);
-            str = Tools::replace(str, "%{height}", defaultHeight_);
-            str = Tools::replace(str, "%{depth}", defaultDepth_);
-            str = Tools::replace(str, "%{display}", displayNum_);
-            str = Tools::replace(str, "%{authfile}", xauthFile);
+            str = Tools::replace(str, "%{width}", default_width_);
+            str = Tools::replace(str, "%{height}", default_height_);
+            str = Tools::replace(str, "%{depth}", default_depth_);
+            str = Tools::replace(str, "%{display}", display_num_);
+            str = Tools::replace(str, "%{authfile}", xauth_file_);
         }
 
         // start Xorg
-        pidXorg_ = runForkCommand(xorgBin, xorgArgs, {});
+        pid_xorg_ = runForkCommand(ioc_, xorgBin, xorgArgs, {});
+
+        boost::asio::post(ioc_, [this](){
+            ForkMode::waitPid(this->pid_xorg_);
+            this->pid_xorg_ = 0;
+            this->stop();
+        });
+
+        return true;
     }
 
     bool Starter::startX11Session(void) {
@@ -555,142 +449,159 @@ namespace LTSM::DisplaySession {
             }
         }
 
-        std::scoped_lock guard{ lockCommands_ };
-
         const char* xsetupBin = "/etc/ltsm/xsetup";
 
         if(std::filesystem::exists(xsetupBin)) {
             // wait xsetup stopped
-            auto pidStatus = runForkCommand(xsetupBin, {}, {});
-            pidStatus.second.wait();
+            int pid = runForkCommand(ioc_, xsetupBin, {}, {});
+            ForkMode::waitPid(pid);
         }
 
         // start Session
-        pidSession_ = runForkCommand(sessionBin, sessionArgs, sessionEnvs);
+        pid_sess_ = runForkCommand(ioc_, sessionBin, sessionArgs, sessionEnvs);
 
-        timer1_ = Tools::BaseTimer::create<std::chrono::milliseconds>(300, true,
-                  std::bind(& Starter::checkChildCommandsComplete, this));
+        boost::asio::post(ioc_, [this](){
+            ForkMode::waitPid(this->pid_sess_);
+            this->pid_sess_ = 0;
+            this->stop();
+        });
 
         return true;
     }
 
-    void Starter::stopChilds(void) {
-        std::scoped_lock guard{ lockCommands_ };
+    bool Starter::waitCommandStdout(const PidFd & pidFd, StatusStdout & res) noexcept {
+        int & wstatus = std::get<0>(res);
+        StdoutBuf & buf = std::get<1>(res);
 
-        if(0 < pidXorg_.first) {
-            kill(pidXorg_.first, SIGTERM);
-        }
+        wstatus = ForkMode::waitPid(pidFd.first);
 
-        if(0 < pidSession_.first) {
-            kill(pidSession_.first, SIGTERM);
-        }
+        try {
+            boost::asio::readable_pipe rp{ioc_, pidFd.second};
 
-        if(! childCommands_.empty()) {
-            for(auto & pidStatus : childCommands_) {
-                kill(pidStatus.first, SIGTERM);
+            auto future = boost::asio::async_read(rp, boost::asio::dynamic_buffer(buf),
+                boost::asio::transfer_all(), boost::asio::use_future);
+
+            // always: boost::asio::error::eof
+            future.get();
+        } catch(const boost::system::system_error& ex) {
+            if(ex.code() != boost::asio::error::eof) {
+                Application::error("{}: exception: {}", __FUNCTION__, ex.code().message());
+                return false;
             }
-
-            for(auto & pidStatus : childCommands_) {
-                auto & statusStdout = pidStatus.second;
-                statusStdout.wait();
-            }
-
-            childCommands_.clear();
         }
+
+        close(pidFd.second);
+        return true;
     }
 
-    void Starter::childProcessEnded(int pid, StatusStdout statusStdout) {
-        if(dbus_) {
-            const int & wstatus = std::get<0>(statusStdout);
-            dbus_->emitRunSessionCommandAsyncComplete(pid, static_cast<bool>(WIFEXITED(wstatus)), wstatus, std::get<1>(statusStdout));
-        }
-    }
+    void Starter::waitSessionCommandAsync(const PidFd & pidFd) {
+        childs_.push_front(pidFd.first);
 
-    void Starter::checkChildCommandsComplete(void) {
-        // check xorg shutdown
-        if(pidXorg_.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-            pidXorg_.first = -1;
-            sessionConn->leaveEventLoop();
-            return;
-        }
+        boost::asio::post(ioc_, [this, pidFd](){
+            StatusStdout res;
 
-        // check session shutdown
-        if(pidSession_.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-            pidSession_.first = -1;
-            sessionConn->leaveEventLoop();
-            return;
-        }
-
-        std::scoped_lock guard{ lockCommands_ };
-
-        if(childCommands_.empty()) {
-            return;
-        }
-
-        // timer job
-        std::erase_if(childCommands_, [this](auto & pidStatus) {
-            auto & futureStatus = pidStatus.second;
-
-            if(futureStatus.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-                this->childProcessEnded(pidStatus.first, futureStatus.get());
-                return true;
+            if(waitCommandStdout(pidFd, res)) {
+                const int & wstatus = std::get<0>(res);
+                const StdoutBuf & buf = std::get<1>(res);
+                dbus_adaptor_->emitRunSessionCommandAsyncComplete(pidFd.first, static_cast<bool>(WIFEXITED(wstatus)), wstatus, buf);
             }
-
-            return false;
         });
     }
 
-    int Starter::run(void) {
+    void Starter::timerDbusConnectionLoopAsync(const boost::system::error_code& ec)
+    {
+        if(ec) {
+            return;
+        }
+
+        if(dbus_conn_)
+        {
+            dbus_conn_->enterEventLoopAsync();
+
+            timer_sdbus_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
+            timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoopAsync, this, std::placeholders::_1));
+        }
+    }
+
+    void Starter::stop(void) {
+        signals_.cancel();
+        timer_sdbus_.cancel();
+
+        if(0 < pid_xorg_) {
+            kill(pid_xorg_, SIGTERM);
+            pid_xorg_ = 0;
+        }
+
+        if(0 < pid_sess_) {
+            kill(pid_sess_, SIGTERM);
+            pid_sess_ = 0;
+        }
+
+        for(const auto & pid: childs_) {
+            kill(pid, SIGTERM);
+        }
+
+        childs_.clear();
+    }
+
+    int Starter::start(void) {
+        if(! startX11Display()) {
+            return EXIT_FAILURE;
+        }
+
         const uint32_t x11Timeout = configGetInteger("xvfb:timeout", 3500);
 
-        xcb_ = waitX11DisplayStarting(displayNum_, mcookie_, x11Timeout);
+        xcb_ = waitX11DisplayStarting(display_num_, mcookie_, x11Timeout);
 
         if(! xcb_) {
             Application::error("{}: {} failed", __FUNCTION__, "X11 connect");
             return EXIT_FAILURE;
         }
 
-        clearSessionDbusAddress(displayNum_);
+        clearSessionDbusAddress(display_num_);
 
         if(! startX11Session()) {
             Application::error("{}: {} failed", __FUNCTION__, "X11 session");
             return EXIT_FAILURE;
         }
 
-        auto dbusAddress = waitSessionDbusAddress(displayNum_, x11Timeout);
+        auto dbusAddress = waitSessionDbusAddress(display_num_, x11Timeout);
 
         if(dbusAddress.empty()) {
             Application::error("{}: {} failed", __FUNCTION__, "dbus session");
             return EXIT_FAILURE;
         }
 
+        Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
+                                getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
+
+        // start main loop
         setenv("DBUS_SESSION_BUS_ADDRESS", dbusAddress.c_str(), 1);
 
 #ifdef SDBUS_2_0_API
-        DisplaySession::sessionConn = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
+        dbus_conn_ = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
 #else
-        DisplaySession::sessionConn = sdbus::createSessionBusConnection(dbus_session_display_name);
+        dbus_conn_ = sdbus::createSessionBusConnection(dbus_session_display_name);
 #endif
 
-        if(! DisplaySession::sessionConn) {
-            Application::error("{}: dbus connection failed, uid: {}", __FUNCTION__, getuid());
-            return EXIT_FAILURE;
-        }
+        dbus_adaptor_ = std::make_unique<DBusAdaptor>(*dbus_conn_, *this);
+        timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoopAsync, this, std::placeholders::_1));
 
-        signal(SIGTERM, signalHandler);
-        signal(SIGINT, signalHandler);
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
 
-        dbus_ = std::make_unique<DBusAdaptor>(*sessionConn, *this);
+        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
+        {
+            // skip canceled
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
+            {
+                this->stop();
+            }
+        });
 
-        // start main loop
-        sessionConn->enterEventLoop();
+        ioc_.run();
 
         return EXIT_SUCCESS;
-    }
-
-    void Starter::dbusServiceShutdown(void) const {
-        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
-        sessionConn->leaveEventLoop();
     }
 
     void Starter::dbusSetDebug(const std::string & level) {
@@ -698,17 +609,45 @@ namespace LTSM::DisplaySession {
         setDebugLevel(level);
     }
 
-    void Starter::storeChild(PidStatusStdout pidStatus) {
-        std::scoped_lock guard{ lockCommands_ };
-        childCommands_.emplace_front(std::move(pidStatus));
+    int32_t Starter::dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+
+        try {
+            if(auto pidFd = runForkCommandStdout(ioc_, cmd, args, envs); 0 < pidFd.first) {
+                waitSessionCommandAsync(pidFd);
+                return pidFd.first;
+            }
+
+        } catch(const std::exception & err) {
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+        }
+
+        return -1;
+    }
+
+    StatusStdout Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+        try {
+            if(auto pidFd = runForkCommandStdout(ioc_, cmd, args, envs); 0 < pidFd.first) {
+                StatusStdout statusStdout;
+
+                if(waitCommandStdout(pidFd, statusStdout)) {
+                    return statusStdout;
+                }
+            }
+        } catch(const std::exception & err) {
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+        }
+
+        return StatusStdout{ -1, {} };
     }
 
     std::string Starter::dbusJsonStatus(void) const {
         JsonObjectStream jos;
 
-        jos.push("display:num", displayNum_);
-        jos.push("xorg:pid", pidXorg_.first);
-        jos.push("session:pid", pidSession_.first);
+        jos.push("display:num", display_num_);
+        jos.push("xorg:pid", pid_xorg_);
+        jos.push("session:pid", pid_sess_);
         jos.push("running:sec", std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - started_).count());
 
         return jos.flush();
@@ -768,7 +707,7 @@ int main(int argc, char** argv) {
 
     try {
         int displayNum = std::stoi(displayAddr + 1);
-        return DisplaySession::Starter(displayNum, xauthFile).run();
+        return DisplaySession::Starter(displayNum, xauthFile).start();
     } catch(const sdbus::Error & err) {
         Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {

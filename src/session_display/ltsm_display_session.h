@@ -33,20 +33,19 @@
 #include <utility>
 #include <forward_list>
 
-#include <boost/asio.h>
+#include <boost/asio.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
 
-#define LTSM_SESSION_DISPLAY_VERSION 20260110
+#define LTSM_SESSION_DISPLAY_VERSION 20260210
 
 namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = sdbus::Struct<int, StdoutBuf>;
-    using PidStatus = std::pair<int, std::future<int>>;
-    using PidStatusStdout = std::pair<int, std::future<StatusStdout>>;
+    using PidFd = std::pair<int, int>;
 
     class Starter;
 
@@ -76,42 +75,49 @@ namespace LTSM::DisplaySession {
     class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;
 
-        XCB::AuthCookie mcookie_;
+        boost::asio::io_context ioc_;
+        boost::asio::signal_set signals_;
+        boost::asio::steady_timer timer_sdbus_;
 
-        int defaultWidth_ = 0;
-        int defaultHeight_ = 0;
-        int defaultDepth_ = 0;
-        int displayNum_ = -1;
+        std::string_view xauth_file_;
+        const XCB::AuthCookie mcookie_;
 
-        std::forward_list<PidStatusStdout> childCommands_;
-        std::mutex lockCommands_;
+        int default_width_ = 0;
+        int default_height_ = 0;
+        int default_depth_ = 0;
+        int display_num_ = -1;
+        int pid_xorg_ = 0;
+        int pid_sess_ = 0;
+    
+        std::forward_list<int> childs_;
 
+        std::unique_ptr<sdbus::IConnection> dbus_conn_;
+        std::unique_ptr<DBusAdaptor> dbus_adaptor_;
         std::unique_ptr<XCB::Connector> xcb_;
-        std::unique_ptr<Tools::BaseTimer> timer1_;
-        std::unique_ptr<DBusAdaptor> dbus_;
-
-        PidStatus pidXorg_, pidSession_;
 
       protected:
         friend class DBusAdaptor;
 
-        void startX11Display(int displayNum, const char* xauthFile);
+        void timerDbusConnectionLoopAsync(const boost::system::error_code&);
+
+        void stop(void);
+        bool startX11Display(void);
         bool startX11Session(void);
-        void checkChildCommandsComplete(void);
-        void childProcessEnded(int pid, StatusStdout);
-        void stopChilds(void);
-        void storeChild(PidStatusStdout);
+
+        bool waitCommandStdout(const PidFd &, StatusStdout &) noexcept;
+        void waitSessionCommandAsync(const PidFd &);
 
         // dbus callbacks
-        void dbusServiceShutdown(void) const;
         void dbusSetDebug(const std::string & level);
+        int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
+        StatusStdout dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
         std::string dbusJsonStatus(void) const;
 
       public:
         Starter(int displayNum, const char* xauthFile);
         ~Starter();
 
-        int run(void);
+        int start(void);
     };
 }
 
