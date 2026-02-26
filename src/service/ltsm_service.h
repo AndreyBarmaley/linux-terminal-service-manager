@@ -355,13 +355,20 @@ namespace LTSM::Manager {
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
+        boost::asio::io_context & ioc_;
+        boost::asio::signal_set signals_;
+        boost::asio::steady_timer timer_sdbus_;
+
+        boost::asio::steady_timer timer_limit_;
+        boost::asio::steady_timer timer_ended_;
+        boost::asio::steady_timer timer_alive_;
+
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
         std::list<PidStatus> childsRunning;
         std::mutex lockRunning;
 
-        std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT
@@ -369,6 +376,12 @@ namespace LTSM::Manager {
 #endif
 
       private:
+        void stop(void);
+        void timerDbusConnectionLoop(const boost::system::error_code&);
+        void timerSessionsTimeLimitAction(const boost::system::error_code&);
+        void timerSessionsEndedAction(const boost::system::error_code&);
+        void timerSessionsCheckConnectedAction(const boost::system::error_code&);
+
         void waitPidBackgroundSafe(pid_t pid);
 
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
@@ -392,12 +405,8 @@ namespace LTSM::Manager {
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
 
-        void sessionsTimeLimitAction(void);
-        void sessionsEndedAction(void);
-        void sessionsCheckConnectedAction(void);
-
       public:
-        DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
+        DBusAdaptor(boost::asio::io_context &, sdbus::IConnection &, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
         void shutdownService(void);
