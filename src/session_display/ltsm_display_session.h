@@ -46,8 +46,7 @@
 namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = sdbus::Struct<int, StdoutBuf>;
-    using PidFd = std::pair<int, int>;
-    using PidJob = std::pair<int, std::future<void>>;
+    using ProcJob = std::pair<boost::process::child, std::future<int>>;
 
     class Starter;
 
@@ -91,7 +90,7 @@ namespace LTSM::DisplaySession {
         int display_num_ = -1;
     
         std::mutex lock_childs_;
-        std::list<PidJob> childs_;
+        std::list<ProcJob> childs_;
 
         std::unique_ptr<sdbus::IConnection> dbus_conn_;
         std::unique_ptr<DBusAdaptor> dbus_adaptor_;
@@ -108,9 +107,6 @@ namespace LTSM::DisplaySession {
         void stop(void);
         bool startX11Display(void);
         bool startX11Session(void);
-
-        bool waitCommandStdout(const PidFd &, StatusStdout &) noexcept;
-        void waitSessionCommandAsync(const PidFd &);
 
         // dbus callbacks
         void dbusSetDebug(const std::string & level);

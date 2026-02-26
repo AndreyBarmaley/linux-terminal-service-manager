@@ -51,70 +51,6 @@
 using namespace std::chrono_literals;
 
 namespace LTSM::DisplaySession {
-    int runForkCommand(boost::asio::io_context & ioc, const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-
-        ioc.notify_fork(boost::asio::execution_context::fork_prepare);
-        pid_t pid = ForkMode::forkStart();
-
-        // child
-        if(0 == pid) {
-            ForkMode::runChildProcess(cmd, args, envs, RedirectLog::StdoutStderr);
-            // child ended
-            exit(0);
-        }
-
-        // parent
-        ioc.notify_fork(boost::asio::execution_context::fork_parent);
-
-        if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args, ", ");
-            auto senvs = Tools::join(envs, ", ");
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
-                              __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
-        } else {
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd);
-        }
-
-        return pid;
-    }
-
-    PidFd runForkCommandStdout(boost::asio::io_context & ioc, const std::filesystem::path & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        int pipefd[2] = {};
-
-        if(0 > pipe(pipefd)) {
-            Application::error("{}: {} failed, error: {}, code: {}",
-                               __FUNCTION__, "pipe", strerror(errno), errno);
-            throw std::runtime_error(NS_FuncNameS);
-        }
-
-        ioc.notify_fork(boost::asio::execution_context::fork_prepare);
-        int pid = ForkMode::forkStart(pipefd[1]);
-
-        // child
-        if(0 == pid) {
-            ForkMode::runChildProcess(cmd, args, envs, RedirectLog::StdoutFd, pipefd[1]);
-            // child ended
-            exit(0);
-        }
-
-        // parent
-        ioc.notify_fork(boost::asio::execution_context::fork_parent);
-
-        if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args, ", ");
-            auto senvs = Tools::join(envs, ", ");
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}', args: [ {} ], envs: [ {} ]",
-                              __FUNCTION__, getuid(), pid, cmd, sargs, senvs);
-        } else {
-            Application::info("{}: uid: {}, pid: {}, cmd: `{}'", __FUNCTION__, getuid(), pid, cmd);
-        }
-
-        // main thread processed
-        close(pipefd[1]);
-
-        return std::make_pair(pid, pipefd[0]);
-    }
-
     std::vector<uint8_t> readXauthFile(const std::filesystem::path & xauthFilePath, int displayNum) {
         std::vector<uint8_t> buf = Tools::fileToBinaryBuf(xauthFilePath);
         StreamBufRef sb(buf.data(), buf.size());
@@ -462,46 +398,6 @@ namespace LTSM::DisplaySession {
         return true;
     }
 
-    bool Starter::waitCommandStdout(const PidFd & pidFd, StatusStdout & res) noexcept {
-        int & wstatus = std::get<0>(res);
-        StdoutBuf & buf = std::get<1>(res);
-
-        wstatus = ForkMode::waitPid(pidFd.first);
-
-        try {
-            boost::asio::readable_pipe rp{ioc_, pidFd.second};
-
-            auto future = boost::asio::async_read(rp, boost::asio::dynamic_buffer(buf),
-                boost::asio::transfer_all(), boost::asio::use_future);
-
-            // always: boost::asio::error::eof
-            future.get();
-        } catch(const boost::system::system_error& ex) {
-            if(ex.code() != boost::asio::error::eof) {
-                Application::error("{}: exception: {}", __FUNCTION__, ex.code().message());
-                return false;
-            }
-        }
-
-        close(pidFd.second);
-        return true;
-    }
-
-    void Starter::waitSessionCommandAsync(const PidFd & pidFd) {
-        std::scoped_lock guard{ lock_childs_ };
-        childs_.emplace_back(
-                pidFd.first,
-                std::async(std::launch::async, [this, pidFd](){
-                    StatusStdout res;
-                    if(waitCommandStdout(pidFd, res)) {
-                        const int & wstatus = std::get<0>(res);
-                        const StdoutBuf & buf = std::get<1>(res);
-                        dbus_adaptor_->emitRunSessionCommandAsyncComplete(pidFd.first, static_cast<bool>(WIFEXITED(wstatus)), wstatus, buf);
-                    }
-                })
-        );
-    }
-
     void Starter::timerDbusConnectionLoop(const boost::system::error_code& ec)
     {
         if(ec) {
@@ -541,7 +437,7 @@ namespace LTSM::DisplaySession {
         std::scoped_lock guard{ lock_childs_ };
         std::erase_if(childs_, [](auto & ps)
         {
-            return ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
+            return ! ps.second.valid() || ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
         });
 
         timer_childs_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(250));
@@ -568,8 +464,8 @@ namespace LTSM::DisplaySession {
         std::scoped_lock guard{ lock_childs_ };
 
         for(const auto & ps: childs_) {
-            if(ps.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                kill(ps.first, SIGTERM);
+            if(ps.second.valid() && ps.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                kill(ps.first.id(), SIGTERM);
             }
         }
 
@@ -646,11 +542,20 @@ namespace LTSM::DisplaySession {
     int32_t Starter::dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
 
-        try {
-            if(auto pidFd = runForkCommandStdout(ioc_, cmd, args, envs); 0 < pidFd.first) {
-                waitSessionCommandAsync(pidFd);
-                return pidFd.first;
+        boost::process::environment env = boost::this_process::environment();
+        for(auto & str: envs) {
+            if(auto pos = str.find("="); pos != std::string::npos) {
+                env[str.substr(0, pos)] = str.substr(pos + 1);
             }
+        }
+
+        try {
+            std::future<int> code;
+            auto proc = boost::process::child(cmd, args, envs, ioc_, boost::process::on_exit = code);
+
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(std::move(proc), std::move(code));
+            return childs_.back().first.id();
 
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
@@ -661,14 +566,24 @@ namespace LTSM::DisplaySession {
 
     StatusStdout Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
-        try {
-            if(auto pidFd = runForkCommandStdout(ioc_, cmd, args, envs); 0 < pidFd.first) {
-                StatusStdout statusStdout;
 
-                if(waitCommandStdout(pidFd, statusStdout)) {
-                    return statusStdout;
-                }
+        boost::process::environment env = boost::this_process::environment();
+        for(auto & str: envs) {
+            if(auto pos = str.find("="); pos != std::string::npos) {
+                env[str.substr(0, pos)] = str.substr(pos + 1);
             }
+        }
+
+        try {
+            boost::process::ipstream ips;
+            auto proc = boost::process::child(cmd, args, env, boost::process::std_out > ips);
+
+            StdoutBuf res{std::istreambuf_iterator<char>(ips),
+                  std::istreambuf_iterator<char>()};
+
+            proc.wait();
+            return StatusStdout{proc.exit_code(), std::move(res)};
+
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
         }
