@@ -691,10 +691,9 @@ namespace LTSM {
         signal(SIGHUP, SIG_IGN);
 
         // skip closelog, glibc dead lock
-        if(Application::isDebugTarget(DebugTarget::Syslog)) {
-            Application::setDebugTarget(DebugTarget::Console);
-            Application::setDebugLevel(DebugLevel::Quiet);
-        }
+        spdlog::drop("default");
+        auto log = logger(DebugType::Default);
+        spdlog::set_default_logger(log);
 
         // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
         for(int fd = 3; fd < 1024; ++fd) {
