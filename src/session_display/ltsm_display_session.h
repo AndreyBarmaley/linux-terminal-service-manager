@@ -34,6 +34,7 @@
 #include <forward_list>
 
 #include <boost/asio.hpp>
+#include <boost/process/child.hpp>
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
@@ -96,7 +97,7 @@ namespace LTSM::DisplaySession {
         std::unique_ptr<DBusAdaptor> dbus_adaptor_;
         std::unique_ptr<XCB::Connector> xcb_;
 
-        PidJob pid_xorg_, pid_sess_;
+        boost::process::child ps_xorg_, ps_sess_;
 
       protected:
         friend class DBusAdaptor;
