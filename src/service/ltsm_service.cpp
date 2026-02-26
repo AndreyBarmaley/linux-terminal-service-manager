@@ -1261,7 +1261,7 @@ namespace LTSM::Manager {
         }
 
         // script run in thread
-        std::thread([wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
+        boost::asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
             if(wait) {
                 std::this_thread::sleep_for(100ms);
             }
@@ -1276,7 +1276,7 @@ namespace LTSM::Manager {
                 this->auditLog->auditSessionStop();
 #endif
             }
-        }).detach();
+        });
 
         return true;
     }
@@ -1681,10 +1681,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
         if(auto ptr = findDisplaySession(display)) {
-            std::thread([this, xvfb = std::move(ptr)]() {
-                std::this_thread::sleep_for(10ms);
-                this->displayShutdown(xvfb, true);
-            }).detach();
+            displayShutdown(std::move(ptr), true);
         } else {
             Application::warning("{}: display not found: {}", __FUNCTION__, display);
         }
@@ -1692,10 +1689,10 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
-        std::thread([this, display]() {
+        boost::asio::post(ioc_, [this, display]() {
             std::this_thread::sleep_for(10ms);
             this->emitShutdownConnector(display);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busShutdownService(void) {
@@ -1769,10 +1766,10 @@ namespace LTSM::Manager {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
             if(ptr->idleDisconnect) {
-                std::thread([this, xvfb = std::move(ptr)]() {
+                boost::asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
                     std::this_thread::sleep_for(10ms);
                     this->emitShutdownConnector(xvfb->displayNum);
-                }).detach();
+                });
             }
         } else {
             Application::warning("{}: display not found: {}", __FUNCTION__, display);
@@ -2087,7 +2084,9 @@ namespace LTSM::Manager {
             if(xvfb->mode == SessionMode::Connected ||
                xvfb->mode == SessionMode::Disconnected) {
                 // thread mode
-                std::thread(& sendNotifyCall, std::move(xvfb), summary, body, icontype /*, urgency2 = urgency */).detach();
+                boost::asio::post(ioc_, [ptr = std::move(xvfb), summary, body, icontype](){
+                    sendNotifyCall(ptr, summary, body, icontype /*, urgency2 = urgency */);
+                });
                 return;
             }
 
@@ -2142,7 +2141,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            std::thread(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true).detach();
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true));
             return true;
         }
 
@@ -2156,7 +2155,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            std::thread(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false).detach();
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false));
             return true;
         }
 
@@ -2508,7 +2507,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        std::thread(threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
 
@@ -2569,7 +2568,7 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
         // fix permissions job
-        std::thread(threadPermissionJob, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         // start session audio helper
         std::thread(startAudioSessionJob, this, std::move(xvfb), audioSocket.native()).detach();
         return true;
@@ -2626,8 +2625,8 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        std::thread(threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+        boost::asio::post(std::bind(&threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
 
@@ -2687,7 +2686,7 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5, 0);
         // fix permissions job
-        std::thread(threadPermissionJob, pcscSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, pcscSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         // start session pcsc helper
         std::thread(startPcscSessionJob, this, std::move(xvfb), pcscSocket.native()).detach();
         return true;
@@ -2735,7 +2734,7 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        std::thread(threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         return true;
     }
 
@@ -2806,7 +2805,7 @@ namespace LTSM::Manager {
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
         // fix permissions job
-        std::thread(threadPermissionJob, fuseSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, fuseSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         // start session fuse helper
         std::thread(startFuseSessionJob, this, std::move(xvfb), fusePointFolder.native(), remotePoint,
                     fuseSocket.native()).detach();
@@ -2934,10 +2933,10 @@ namespace LTSM::Manager {
             const std::string & password, const bool & action) {
         Application::info("{}: display: {}, user: {}", __FUNCTION__, display, login);
 
-        std::thread([this, display, login, password, action]() {
+        boost::asio::post(ioc_, [this, display, login, password, action]() {
             std::this_thread::sleep_for(10ms);
             this->emitHelperSetLoginPassword(display, login, password, action);
-        }).detach();
+        });
     }
 
     std::string DBusAdaptor::busGetSessionJson(const int32_t & display) {
@@ -2959,28 +2958,28 @@ namespace LTSM::Manager {
     void DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display, rect, color, fill]() {
+        boost::asio::post(ioc_, [this, display, rect, color, fill]() {
             std::this_thread::sleep_for(10ms);
             this->emitAddRenderRect(display, rect, color, fill);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display, text, pos, color]() {
+        boost::asio::post(ioc_, [this, display, text, pos, color]() {
             std::this_thread::sleep_for(10ms);
             this->emitAddRenderText(display, text, pos, color);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busRenderClear(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display]() {
+        boost::asio::post(ioc_, [this, display]() {
             std::this_thread::sleep_for(10ms);
             this->emitClearRenderPrimitives(display);
-        }).detach();
+        });
     }
 
     bool DBusAdaptor::busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
