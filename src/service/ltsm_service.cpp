@@ -935,14 +935,19 @@ namespace LTSM::Manager {
     }
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::filesystem::path & confile)
+    DBusAdaptor::DBusAdaptor(boost::asio::io_context& ctx, sdbus::IConnection & conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
         , AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
         , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300) {
+        , XvfbSessions(300)
+        , ioc_{ctx}, signals_{ioc_}
+        , timer_sdbus_{ioc_, boost::asio::chrono::milliseconds(1)}
+        , timer_limit_{ioc_, boost::asio::chrono::seconds(3)}
+        , timer_ended_{ioc_, boost::asio::chrono::seconds(1)}
+        , timer_alive_{ioc_, boost::asio::chrono::seconds(20)} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -958,19 +963,26 @@ namespace LTSM::Manager {
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").native();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").native();
 
-        // registry
-        registerAdaptor();
+        timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
+
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
+        {
+            // skip canceled
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
+            {
+                this->stop();
+            }
+        });
+
         // check sessions timepoint limit
-        timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true,
-                 std::bind(& DBusAdaptor::sessionsTimeLimitAction, this));
-
+        timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
         // check sessions killed
-        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(1, true,
-                 std::bind(& DBusAdaptor::sessionsEndedAction, this));
-
+        timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
         // check sessions alive
-        timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true,
-                 std::bind(& DBusAdaptor::sessionsCheckConnectedAction, this));
+        timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
 
         inotifyWatchStart();
 
@@ -979,6 +991,8 @@ namespace LTSM::Manager {
         auditLog->auditServiceStart();
 #endif
 
+        // registry
+        registerAdaptor();
     }
 
     DBusAdaptor::~DBusAdaptor() {
@@ -986,6 +1000,27 @@ namespace LTSM::Manager {
         auditLog->auditServiceStop();
 #endif
         unregisterAdaptor();
+        stop();
+    }
+
+    void DBusAdaptor::timerDbusConnectionLoop(const boost::system::error_code& ec)
+    {
+        if(ec) {
+            return;
+        }
+
+        serviceConn->enterEventLoopAsync();
+
+        timer_sdbus_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
+        timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
+    }
+
+    void DBusAdaptor::stop(void) {
+        signals_.cancel();
+        timer_sdbus_.cancel();
+        timer_limit_.cancel();
+        timer_ended_.cancel();
+        timer_alive_.cancel();
     }
 
     void DBusAdaptor::createRuntimeDir(void) const {
@@ -1041,7 +1076,11 @@ namespace LTSM::Manager {
         Application::notice("{}: success", __FUNCTION__);
     }
 
-    void DBusAdaptor::sessionsTimeLimitAction(void) {
+    void DBusAdaptor::timerSessionsTimeLimitAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
+        }
+
         for(const auto & ptr : findTimepointLimitSessions()) {
             uint32_t lastSecStarted = UINT32_MAX;
             uint32_t lastSecOnlined = UINT32_MAX;
@@ -1110,6 +1149,9 @@ namespace LTSM::Manager {
                 }
             }
         }
+
+        timer_limit_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(3));
+        timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
     std::forward_list<XvfbSessionPtr> DBusAdaptor::moveEndedSessions(void) {
@@ -1148,14 +1190,25 @@ namespace LTSM::Manager {
         return res;
     }
 
-    void DBusAdaptor::sessionsEndedAction(void) {
+    void DBusAdaptor::timerSessionsEndedAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
+        }
+
         for(const auto & ptr : moveEndedSessions()) {
             ptr->pid1 = 0;
             displayShutdown(ptr, true);
         }
+
+        timer_ended_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
+        timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
     }
 
-    void DBusAdaptor::sessionsCheckConnectedAction(void) {
+    void DBusAdaptor::timerSessionsCheckConnectedAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
+        }
+
         for(const auto & ptr : getOnlineSessions()) {
             // check alive connectors
             if(! ptr->checkStatus(Flags::SessionStatus::CheckConnection)) {
@@ -1174,6 +1227,9 @@ namespace LTSM::Manager {
                 }
             }
         }
+
+        timer_alive_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(20));
+        timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
     }
 
     bool DBusAdaptor::displayShutdown(XvfbSessionPtr xvfb, bool emitSignal) {
@@ -1682,7 +1738,7 @@ namespace LTSM::Manager {
         }
 
         Application::notice("{}: {}, pid: {}", __FUNCTION__, "complete", getpid());
-        serviceConn->leaveEventLoop();
+        stop();
     }
 
     void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message) {
@@ -2953,14 +3009,6 @@ namespace LTSM::Manager {
     }
 
     /* Manager::startService */
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            if(serviceConn) {
-                serviceConn->leaveEventLoop();
-            }
-        }
-    }
-
     int startService(int argc, const char** argv) {
         bool isBackground = false;
         std::filesystem::path confile;
@@ -3015,14 +3063,11 @@ namespace LTSM::Manager {
             }
         }
     
-        //boost::asio::io_context ctx{4}; 
-   
-        signal(SIGTERM, Manager::signalHandler);
-        signal(SIGINT, isBackground ? SIG_IGN : signalHandler);
+        boost::asio::io_context ctx{4}; 
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, *serviceConn, confile);
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
                 __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 
@@ -3030,8 +3075,7 @@ namespace LTSM::Manager {
         sd_notify(0, "READY=1");
 #endif
 
-        //ctx.run();
-        serviceConn->enterEventLoop();
+        ctx.run();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
