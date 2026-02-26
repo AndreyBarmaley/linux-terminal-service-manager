@@ -21,14 +21,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
-#include <fcntl.h>
-#include <unistd.h>
-#include <signal.h>
-
 #include <chrono>
 #include <future>
 #include <cstring>
@@ -47,36 +39,35 @@
 #include "ltsm_zlib.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
-#include "ltsm_streambuf.h"
 #include "ltsm_sdbus_proxy.h"
+#include "ltsm_byte_stream.h"
 #include "ltsm_display_session.h"
 
 using namespace std::chrono_literals;
 
 namespace LTSM::DisplaySession {
     std::vector<uint8_t> readXauthFile(const std::filesystem::path & xauthFilePath, int displayNum) {
-        std::vector<uint8_t> buf = Tools::fileToBinaryBuf(xauthFilePath);
-        StreamBufRef sb(buf.data(), buf.size());
-        uint16_t len = 0;
+        std::ifstream ifs(xauthFilePath);
+        byte::istream bs(ifs);
 
-        while(sb.last()) {
+        while(ifs) {
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
-            if(auto ver = sb.readIntBE16(); ver != 0x0100) {
+            if(auto ver = bs.read_be16(); ver != 0x0100) {
                 Application::error("{}: invalid xauth format, ver: {:#04x}", __FUNCTION__, ver);
                 throw std::runtime_error(NS_FuncNameS);
             }
 
-            len = sb.readIntBE16();
-            auto host = sb.readString(len);
+            auto len = bs.read_be16();
+            auto host = bs.read_string(len);
 
-            len = sb.readIntBE16();
-            auto display = sb.readString(len);
+            len = bs.read_be16();
+            auto display = bs.read_string(len);
 
-            len = sb.readIntBE16();
-            auto magic = sb.readString(len);
+            len = bs.read_be16();
+            auto magic = bs.read_string(len);
 
-            len = sb.readIntBE16();
-            auto cookie = sb.read(len);
+            len = bs.read_be16();
+            auto cookie = bs.read_bytes(len);
 
             if(display == std::to_string(displayNum)) {
                 Application::debug(DebugType::App, "{}: {} found, display {}",
@@ -241,7 +232,7 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::setSessionKeyboardLayout(const std::string & layout) {
-        Application::debug(DebugType::Dbus, "{}: [ {} ]", __FUNCTION__, layout);
+        Application::debug(DebugType::Dbus, "{}: layout: {}", __FUNCTION__, layout);
         runSessionCommandSync("/usr/bin/setxkbmap", { "-layout", layout, "-option", "\"\"" }, {});
     }
 
