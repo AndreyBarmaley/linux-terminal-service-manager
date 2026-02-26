@@ -56,6 +56,7 @@
 #include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
+#include "ltsm_byte_stream.h"
 #include "ltsm_sdbus_proxy.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -1313,24 +1314,23 @@ namespace LTSM::Manager {
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
         if(ofs) {
+            byte::ostream bs(ofs);
+
             // create xautfile
             auto host = Tools::getHostname();
             auto display = std::to_string(displayNum);
             std::string_view magic{"MIT-MAGIC-COOKIE-1"};
-            StreamBuf sb;
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
-            sb.writeInt8(1);
-            sb.writeInt8(0);
-            sb.writeIntBE16(host.size());
-            sb.write(host);
-            sb.writeIntBE16(display.size());
-            sb.write(display);
-            sb.writeIntBE16(magic.size());
-            sb.write(magic);
-            sb.writeIntBE16(mcookie.size());
-            sb.write(mcookie);
-            auto & rawbuf = sb.rawbuf();
-            ofs.write((const char*) rawbuf.data(), rawbuf.size());
+            bs.write_byte(1);
+            bs.write_byte(0);
+            bs.write_be16(host.size());
+            bs.write_string(host);
+            bs.write_be16(display.size());
+            bs.write_string(display);
+            bs.write_be16(magic.size());
+            bs.write_string(magic);
+            bs.write_be16(mcookie.size());
+            bs.write_bytes(mcookie);
             ofs.close();
         } else {
             Application::error("{}: create xauthfile failed, path: `{}'", __FUNCTION__, xauthFilePath);
