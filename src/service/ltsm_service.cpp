@@ -1466,6 +1466,7 @@ namespace LTSM::Manager {
 
         // set permissons user,auth, 0440
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0440);
+        ioc_.notify_fork(boost::asio::execution_context::fork_prepare);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -1475,12 +1476,15 @@ namespace LTSM::Manager {
                 ChildProcess::pamOpenDisplaySession(std::move(sess), *this);
                 ForkMode::runChildSuccess();
                 // ended
+                exit(0);
             }
         } catch(const std::exception &) {
             return nullptr;
         }
 
         // main thread
+        ioc_.notify_fork(boost::asio::execution_context::fork_parent);
+
         Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
