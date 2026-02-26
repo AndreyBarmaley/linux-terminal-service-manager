@@ -531,7 +531,7 @@ namespace LTSM::DisplaySession {
 
         // xorg stopped
         if(pid_xorg_.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg". pid_xorg_.first);
+            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg", pid_xorg_.first);
             pid_xorg_.first = 0;
             boost::asio::post(ioc_, std::bind(&Starter::stop, this));
             return;
