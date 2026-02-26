@@ -37,9 +37,12 @@
 #include <iostream>
 #include <filesystem>
 
+#if BOOST_VERSION >= 108700
+#include <boost/process/v1/environment.hpp>
+#else
 #include <boost/process.hpp>
-#include <boost/process/system.hpp>
 #include <boost/process/environment.hpp>
+#endif
 
 #include "ltsm_zlib.h"
 #include "ltsm_tools.h"
@@ -335,7 +338,7 @@ namespace LTSM::DisplaySession {
         }
 
         // start Xorg
-        ps_xorg_ = boost::process::child(xorgBin, xorgArgs);
+        ps_xorg_ = bp::child(xorgBin, xorgArgs);
 
         return true;
     }
@@ -345,7 +348,7 @@ namespace LTSM::DisplaySession {
         std::string sessionBin = configGetString("session:path");
         std::vector<std::string> sessionArgs;
         //std::vector<std::string> sessionEnvs;
-        boost::process::environment sessionEnvs = boost::this_process::environment();
+        bp::environment sessionEnvs = boost::this_process::environment();
 
         if(! std::filesystem::exists(sessionBin)) {
             Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin);
@@ -389,11 +392,11 @@ namespace LTSM::DisplaySession {
 
         if(std::filesystem::exists(xsetupBin)) {
             // wait xsetup stopped
-            boost::process::system(xsetupBin);
+            bp::system(xsetupBin);
         }
 
         // start Session
-        ps_sess_ = boost::process::child(sessionBin, sessionArgs, sessionEnvs);
+        ps_sess_ = bp::child(sessionBin, sessionArgs, sessionEnvs);
 
         return true;
     }
@@ -542,7 +545,7 @@ namespace LTSM::DisplaySession {
     int32_t Starter::dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
 
-        boost::process::environment env = boost::this_process::environment();
+        bp::environment env = boost::this_process::environment();
         for(auto & str: envs) {
             if(auto pos = str.find("="); pos != std::string::npos) {
                 env[str.substr(0, pos)] = str.substr(pos + 1);
@@ -551,7 +554,7 @@ namespace LTSM::DisplaySession {
 
         try {
             std::future<int> code;
-            auto proc = boost::process::child(cmd, args, envs, ioc_, boost::process::on_exit = code);
+            auto proc = bp::child(cmd, args, envs, ioc_, bp::on_exit = code);
 
             std::scoped_lock guard{ lock_childs_ };
             childs_.emplace_back(std::move(proc), std::move(code));
@@ -567,7 +570,7 @@ namespace LTSM::DisplaySession {
     StatusStdout Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
         Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
 
-        boost::process::environment env = boost::this_process::environment();
+        bp::environment env = boost::this_process::environment();
         for(auto & str: envs) {
             if(auto pos = str.find("="); pos != std::string::npos) {
                 env[str.substr(0, pos)] = str.substr(pos + 1);
@@ -575,8 +578,8 @@ namespace LTSM::DisplaySession {
         }
 
         try {
-            boost::process::ipstream ips;
-            auto proc = boost::process::child(cmd, args, env, boost::process::std_out > ips);
+            bp::ipstream ips;
+            auto proc = bp::child(cmd, args, env, bp::std_out > ips);
 
             StdoutBuf res{std::istreambuf_iterator<char>(ips),
                   std::istreambuf_iterator<char>()};

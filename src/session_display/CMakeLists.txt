@@ -1,5 +1,8 @@
 # LTSM session
 
-target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
+find_package(Boost 1.78 COMPONENTS process REQUIRED)
 target_sources(${CUR_TARGET} PRIVATE ltsm_display_session.cpp)
+
+target_compile_options(${CUR_TARGET} PUBLIC "-Wno-narrowing")
+target_link_libraries(${CUR_TARGET} PRIVATE Boost::process)
  

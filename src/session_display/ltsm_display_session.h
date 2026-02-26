@@ -34,7 +34,13 @@
 #include <forward_list>
 
 #include <boost/asio.hpp>
+
+#if BOOST_VERSION >= 108700
+#include <boost/process/v1.hpp>
+#include <boost/process/v1/child.hpp>
+#else
 #include <boost/process/child.hpp>
+#endif
 
 #include "ltsm_tools.h"
 #include "ltsm_application.h"
@@ -46,7 +52,13 @@
 namespace LTSM::DisplaySession {
     using StdoutBuf = std::vector<uint8_t>;
     using StatusStdout = sdbus::Struct<int, StdoutBuf>;
-    using ProcJob = std::pair<boost::process::child, std::future<int>>;
+
+#if BOOST_VERSION >= 108700
+    namespace bp = boost::process::v1;
+#else
+    namespace bp = boost::process;
+#endif
+    using ProcJob = std::pair<bp::child, std::future<int>>;
 
     class Starter;
 
@@ -96,7 +108,7 @@ namespace LTSM::DisplaySession {
         std::unique_ptr<DBusAdaptor> dbus_adaptor_;
         std::unique_ptr<XCB::Connector> xcb_;
 
-        boost::process::child ps_xorg_, ps_sess_;
+        bp::child ps_xorg_, ps_sess_;
 
       protected:
         friend class DBusAdaptor;
