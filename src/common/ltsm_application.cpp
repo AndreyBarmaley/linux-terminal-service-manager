@@ -692,7 +692,7 @@ namespace LTSM {
 
         // skip closelog, glibc dead lock
         spdlog::drop("default");
-        auto log = logger(DebugType::Default);
+        auto log = Application::logger(DebugType::Default);
         spdlog::set_default_logger(log);
 
         // close parend fds: skip STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO
