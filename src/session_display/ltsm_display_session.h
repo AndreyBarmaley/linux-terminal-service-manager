@@ -42,7 +42,6 @@
 #include <boost/process/child.hpp>
 #endif
 
-#include "ltsm_tools.h"
 #include "ltsm_application.h"
 #include "ltsm_xcb_wrapper.h"
 #include "ltsm_display_adaptor.h"
