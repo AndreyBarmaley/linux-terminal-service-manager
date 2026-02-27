@@ -22,6 +22,7 @@
  **********************************************************************/
 
 #include <errno.h>
+#include <unistd.h>
 #include <signal.h>
 
 #include <sys/stat.h>
@@ -212,7 +213,6 @@ namespace LTSM::Manager {
                                __FUNCTION__, "display session", getpid(), getuid());
 
             auto sessionBin = json.configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
-            ArgsList sessionArgs = { "--display", sess->displayAddr, "--xauth", sess->xauthfile };
 
             if(std::filesystem::exists(sessionBin)) {
                 if(switchToUser(*sess->userInfo)) {
@@ -222,7 +222,21 @@ namespace LTSM::Manager {
                         setenv(key.c_str(), val.c_str(), 1);
                     }
 
-                    ForkMode::runChildProcess(sessionBin, sessionArgs, {}, RedirectLog::StdoutStderr);
+                    std::vector<const char*> argv;
+                    argv.reserve(6);
+                    argv.push_back(sessionBin.c_str());
+                    argv.push_back("--display");
+                    argv.push_back(sess->displayAddr.c_str());
+                    argv.push_back("--xauth");
+                    argv.push_back(sess->xauthfile.c_str());
+                    argv.push_back(nullptr);
+
+                    if(int res = execv(sessionBin.c_str(), (char* const*) argv.data()); res < 0) {
+                        Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
+                               __FUNCTION__, "execv", strerror(errno), errno, sessionBin);
+                    }
+                    // exit
+                    exit(0);
                 }
             } else {
                 Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin);
@@ -1475,9 +1489,8 @@ namespace LTSM::Manager {
             // child process
             if(0 == sess->pid1) {
                 ChildProcess::pamOpenDisplaySession(std::move(sess), *this);
-                ForkMode::runChildSuccess();
                 // ended
-                exit(0);
+                ForkMode::runChildExit();
             }
         } catch(const std::exception &) {
             return nullptr;

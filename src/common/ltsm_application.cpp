@@ -741,81 +741,9 @@ namespace LTSM {
         return status;
     }
 
-    int ForkMode::runChildFailure(int res) {
+    void ForkMode::runChildExit(int res) {
         execl("/bin/true", "/bin/true", nullptr);
         std::exit(res);
-        return res;
-    }
-
-    void ForkMode::runChildSuccess(void) {
-        runChildFailure(0);
-    }
-
-    void ForkMode::runChildProcess(const std::filesystem::path & cmd, const std::vector<std::string> & args,
-                                   const std::vector<std::string> & envs, const RedirectLog & rmode, int redirectFd) {
-        if(Application::isDebugLevel(DebugLevel::Debug)) {
-            auto sargs = Tools::join(args, " ");
-            auto senvs = Tools::join(envs, ",");
-
-            Application::info("{}: pid: {}, cmd: `{}', args: `{}', envs: [ {} ]",
-                              __FUNCTION__, getpid(), cmd, sargs, senvs);
-        } else {
-            Application::info("{}: pid: {}, cmd: `{}'", __FUNCTION__, getpid(), cmd);
-        }
-
-        for(const auto & env : envs) {
-            putenv(const_cast<char*>(env.c_str()));
-        }
-
-        // create argv[]
-        std::vector<const char*> argv;
-        argv.reserve(args.size() + 2);
-        argv.push_back(cmd.c_str());
-
-        for(const auto & arg : args) {
-            argv.push_back(arg.c_str());
-        }
-
-        argv.push_back(nullptr);
-
-        auto procLogDir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
-
-        if(auto home = getenv("HOME")) {
-            procLogDir = std::filesystem::path{home} / ".ltsm" / "log";
-        }
-
-        if(! std::filesystem::is_directory(procLogDir)) {
-            std::error_code fserr;
-            std::filesystem::create_directories(procLogDir, fserr);
-        }
-
-        auto logFile = procLogDir / cmd.filename();
-        logFile.replace_extension(".log");
-
-        if(rmode == RedirectLog::StdoutFd) {
-            // redirect stderr
-            redirectStdoutStderrTo(false, true, logFile.native());
-
-            if(0 <= redirectFd) {
-                // redirect stdout
-                if(0 > dup2(redirectFd, STDOUT_FILENO)) {
-                    Application::warning("{}: {} failed, error: {}, code: {}", __FUNCTION__, "dup2", strerror(errno), errno);
-                }
-
-                close(redirectFd);
-                redirectFd = -1;
-            }
-        } else if(rmode == RedirectLog::StdoutStderr) {
-            // redirect stdout, stderr
-            redirectStdoutStderrTo(true, true, logFile.native());
-        }
-
-        if(int res = execv(cmd.c_str(), (char* const*) argv.data()); res < 0) {
-            Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
-                               __FUNCTION__, "execv", strerror(errno), errno, cmd);
-        }
-
-        runChildSuccess();
     }
 #endif // UNIX
 }
