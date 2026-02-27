@@ -1036,7 +1036,9 @@ namespace LTSM::Manager {
 
         for(const auto & [pid, future]: childs_) {
             if(future.valid() && future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                kill(pid, SIGTERM);
+                if(0 < pid) {
+                    kill(pid, SIGTERM);
+                }
             }
         }
 
@@ -1101,7 +1103,7 @@ namespace LTSM::Manager {
             return;
         }
 
-        for(const auto & ptr : findTimepointLimitSessions()) {
+        for(auto & ptr : findTimepointLimitSessions()) {
             uint32_t lastSecStarted = UINT32_MAX;
             uint32_t lastSecOnlined = UINT32_MAX;
 
@@ -1112,7 +1114,7 @@ namespace LTSM::Manager {
                 if(startedSec.count() > ptr->lifeTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
-                    displayShutdown(ptr, true);
+                    displayShutdown(std::move(ptr), true);
                     continue;
                 }
 
@@ -1142,7 +1144,7 @@ namespace LTSM::Manager {
                 if(offlinedSec.count() > ptr->offlineTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
-                    displayShutdown(ptr, true);
+                    displayShutdown(std::move(ptr), true);
                     continue;
                 }
             }
@@ -1260,7 +1262,7 @@ namespace LTSM::Manager {
         // script run in thread
         boost::asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
             if(wait) {
-                std::this_thread::sleep_for(100ms);
+                std::this_thread::sleep_for(10ms);
             }
 
             auto displayNum = ptr->displayNum;
@@ -1681,7 +1683,7 @@ namespace LTSM::Manager {
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
         boost::asio::post(ioc_, [this, display]() {
-            std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1ms);
             this->emitShutdownConnector(display);
         });
     }
@@ -1735,7 +1737,7 @@ namespace LTSM::Manager {
 
             if(ptr->idleDisconnect) {
                 boost::asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
-                    std::this_thread::sleep_for(10ms);
+                    std::this_thread::sleep_for(1ms);
                     this->emitShutdownConnector(xvfb->displayNum);
                 });
             }
@@ -2902,7 +2904,7 @@ namespace LTSM::Manager {
         Application::info("{}: display: {}, user: {}", __FUNCTION__, display, login);
 
         boost::asio::post(ioc_, [this, display, login, password, action]() {
-            std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1ms);
             this->emitHelperSetLoginPassword(display, login, password, action);
         });
     }
@@ -2927,7 +2929,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         boost::asio::post(ioc_, [this, display, rect, color, fill]() {
-            std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1ms);
             this->emitAddRenderRect(display, rect, color, fill);
         });
     }
@@ -2936,7 +2938,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         boost::asio::post(ioc_, [this, display, text, pos, color]() {
-            std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1ms);
             this->emitAddRenderText(display, text, pos, color);
         });
     }
@@ -2945,7 +2947,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
         boost::asio::post(ioc_, [this, display]() {
-            std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1ms);
             this->emitClearRenderPrimitives(display);
         });
     }
