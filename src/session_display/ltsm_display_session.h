@@ -85,14 +85,13 @@ namespace LTSM::DisplaySession {
 
     class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;
-
-        const std::chrono::milliseconds dur_sdbus_{1};
         const std::chrono::milliseconds dur_childs_{350};
 
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
-        boost::asio::steady_timer timer_sdbus_;
         boost::asio::steady_timer timer_childs_;
+
+        std::future<void> sdbus_job_;
 
         std::string_view xauth_file_;
         const XCB::AuthCookie mcookie_;
@@ -114,7 +113,6 @@ namespace LTSM::DisplaySession {
       protected:
         friend class DBusAdaptor;
 
-        void timerDbusConnectionLoop(const boost::system::error_code&);
         void timerChildsAliveCheck(const boost::system::error_code&);
 
         void stop(void);

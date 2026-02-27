@@ -251,7 +251,7 @@ namespace LTSM::DisplaySession {
     // Starter
     Starter::Starter(int displayNum, const char* xauthFile)
         : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()),
-            ioc_{2}, signals_{ioc_},timer_sdbus_{ioc_}, timer_childs_{ioc_},
+            ioc_{2}, signals_{ioc_}, timer_childs_{ioc_},
             xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
     }
 
@@ -391,21 +391,6 @@ namespace LTSM::DisplaySession {
         return true;
     }
 
-    void Starter::timerDbusConnectionLoop(const boost::system::error_code& ec)
-    {
-        if(ec) {
-            return;
-        }
-
-        if(dbus_conn_)
-        {
-            dbus_conn_->enterEventLoopAsync();
-
-            timer_sdbus_.expires_after(dur_sdbus_);
-            timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoop, this, std::placeholders::_1));
-        }
-    }
-
     void Starter::timerChildsAliveCheck(const boost::system::error_code& ec)
     {
         if(ec) {
@@ -446,8 +431,9 @@ namespace LTSM::DisplaySession {
     }
 
     void Starter::stop(void) {
+        dbus_conn_->leaveEventLoop();
+
         signals_.cancel();
-        timer_sdbus_.cancel();
         timer_childs_.cancel();
 
         if(ps_xorg_.running()) {
@@ -515,9 +501,10 @@ namespace LTSM::DisplaySession {
 #endif
 
         dbus_adaptor_ = std::make_unique<DBusAdaptor>(*dbus_conn_, *this);
-
-        timer_sdbus_.expires_after(dur_sdbus_);
-        timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoop, this, std::placeholders::_1));
+        sdbus_job_ = std::async(std::launch::async, [ptr = dbus_conn_.get()]()
+        {
+            ptr->enterEventLoop();
+        });
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -535,7 +522,7 @@ namespace LTSM::DisplaySession {
         timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
 
         ioc_.run();
-    
+
         return EXIT_SUCCESS;
     }
 

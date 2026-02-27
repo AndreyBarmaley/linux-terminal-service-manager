@@ -971,7 +971,7 @@ namespace LTSM::Manager {
         , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
         , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
-            timer_sdbus_{ioc_}, timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_} {
+            timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -987,8 +987,10 @@ namespace LTSM::Manager {
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
 
-        timer_sdbus_.expires_after(dur_sdbus_);
-        timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
+        jobs_.emplace_back(std::async(std::launch::async, []()
+        {
+            serviceConn->enterEventLoop();
+        }));
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -1031,21 +1033,10 @@ namespace LTSM::Manager {
         stop();
     }
 
-    void DBusAdaptor::timerDbusConnectionLoop(const boost::system::error_code& ec)
-    {
-        if(ec) {
-            return;
-        }
-
-        serviceConn->enterEventLoopAsync();
-
-        timer_sdbus_.expires_after(dur_sdbus_);
-        timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
-    }
-
     void DBusAdaptor::stop(void) {
+        serviceConn->leaveEventLoop();
+
         signals_.cancel();
-        timer_sdbus_.cancel();
         timer_limit_.cancel();
         timer_ended_.cancel();
         timer_alive_.cancel();
