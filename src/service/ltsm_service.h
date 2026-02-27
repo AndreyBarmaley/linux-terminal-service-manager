@@ -370,6 +370,8 @@ namespace LTSM::Manager {
 
         std::mutex lock_childs_;
         std::list<PidStatus> childs_;
+
+        std::mutex lock_jobs_;
         std::list<Job> jobs_;
 
         std::atomic<bool> loginsDisable = false;
