@@ -1212,7 +1212,9 @@ namespace LTSM::Manager {
         if(! ended.empty()) {
             for(auto & [pid, future]: ended) {
                 if(auto ptr = findPidSession(pid)) {
-                    Application::notice("{}: session ended, pid: {}, ret: {}", __FUNCTION__, pid, future.get());
+                    if(future.valid()) {
+                        Application::notice("{}: session ended, pid: {}, ret: {}", __FUNCTION__, pid, future.get());
+                    }
                     ptr->pid1 = 0;
                     displayShutdown(std::move(ptr), true);
                 }
@@ -1280,7 +1282,6 @@ namespace LTSM::Manager {
         Application::notice("{}: display: {}", __FUNCTION__, xvfb->displayNum);
         // dbus no wait, remove background
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
-        std::future<bool> detach;
         
         if(notSysUser) {
             std::scoped_lock guard{ lock_jobs_ };
