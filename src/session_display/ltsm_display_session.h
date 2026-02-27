@@ -57,7 +57,6 @@ namespace LTSM::DisplaySession {
 #else
     namespace bp = boost::process;
 #endif
-    using ProcJob = std::pair<bp::child, std::future<int>>;
 
     class Starter;
 
@@ -101,7 +100,7 @@ namespace LTSM::DisplaySession {
         int display_num_ = -1;
     
         std::mutex lock_childs_;
-        std::list<ProcJob> childs_;
+        std::list<bp::child> childs_;
 
         std::unique_ptr<sdbus::IConnection> dbus_conn_;
         std::unique_ptr<DBusAdaptor> dbus_adaptor_;
