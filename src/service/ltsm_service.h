@@ -48,6 +48,7 @@ namespace LTSM::Manager {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
+    using Job = std::future<void>;
     using PidStatus = std::pair<pid_t, std::future<int>>;
     using PidStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
@@ -369,6 +370,7 @@ namespace LTSM::Manager {
 
         std::mutex lock_childs_;
         std::list<PidStatus> childs_;
+        std::list<Job> jobs_;
 
         std::atomic<bool> loginsDisable = false;
 
@@ -397,7 +399,6 @@ namespace LTSM::Manager {
         bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
-        void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
@@ -468,6 +469,7 @@ namespace LTSM::Manager {
         void busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
         void busRenderClear(const int32_t & display) override;
 
+        void startSessionChannelsAsync(XvfbSessionPtr);
         void startSessionChannels(XvfbSessionPtr);
         void stopSessionChannels(XvfbSessionPtr);
 
