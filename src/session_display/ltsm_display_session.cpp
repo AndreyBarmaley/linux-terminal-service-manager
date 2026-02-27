@@ -426,16 +426,20 @@ namespace LTSM::DisplaySession {
             return;
         }
 
-        // remove ended
-        std::scoped_lock guard{ lock_childs_ };
-        auto ended = std::ranges::remove_if(childs_, [](auto & ps) { return ! ps.valid() || ! ps.running(); });
+        auto removeChildsEnded = [this](){
+            std::scoped_lock guard{ lock_childs_ };
+            auto ended = std::ranges::remove_if(childs_, [](auto & ps) { return ! ps.valid() || ! ps.running(); });
 
-        if(! ended.empty()) {
-            for(auto & ps: ended) {
-                ps.wait();
+            if(! ended.empty()) {
+                std::error_code ec;
+                for(auto & ps: ended) {
+                    ps.wait(ec);
+                }
+                childs_.erase(ended.begin(), ended.end());
             }
-            childs_.erase(ended.begin(), ended.end());
-        }
+        };
+
+        removeChildsEnded();
 
         timer_childs_.expires_after(dur_childs_);
         timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));

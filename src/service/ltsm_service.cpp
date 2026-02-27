@@ -202,9 +202,6 @@ namespace LTSM::Manager {
                     runSystemScript(sess, json.configGetString("system:logoff"));
                 }
 
-                if(detach.valid()) {
-                    detach.wait();
-                }
                 return;
             }
 
@@ -1055,7 +1052,7 @@ namespace LTSM::Manager {
 
         std::scoped_lock guard{ lock_childs_, lock_jobs_ };
         for(const auto & [pid, future]: childs_) {
-            if(future.valid() && future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+            if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
                 if(0 < pid) {
                     kill(pid, SIGTERM);
                 }
@@ -1202,32 +1199,34 @@ namespace LTSM::Manager {
             return;
         }
 
-        // remove ended childs
-        std::scoped_lock guard{ lock_childs_, lock_jobs_ };
-        auto ended = std::ranges::remove_if(childs_, [](auto & ps)
-        {
-            return ! ps.second.valid() || ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
-        });
-
-        if(! ended.empty()) {
-            for(auto & [pid, future]: ended) {
-                if(auto ptr = findPidSession(pid)) {
-                    if(future.valid()) {
-                        Application::notice("{}: session ended, pid: {}, ret: {}", __FUNCTION__, pid, future.get());
+        auto removeChildsEnded = [this]() {
+            std::scoped_lock guard{ lock_childs_ };
+            std::erase_if(childs_, [this](auto & ps)
+            {
+                auto & [pid, future] = ps;
+                if(future.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
+                {
+                    if(auto ptr = findPidSession(pid)) {
+                        Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
+                        ptr->pid1 = 0;
+                        boost::asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
                     }
-                    ptr->pid1 = 0;
-                    displayShutdown(std::move(ptr), true);
+                    return true;
                 }
-            }
+                return false;
+            });
+        };
 
-            childs_.erase(ended.begin(), ended.end());
-        }
+        auto removeJobsEnded = [this]() {
+            std::scoped_lock guard{ lock_jobs_ };
+            std::erase_if(jobs_, [](auto & ps)
+            {
+                return ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
+            });
+        };
 
-        // remove ended jobs
-        std::erase_if(jobs_, [](auto & ps)
-        {
-            return ! ps.valid() || ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
-        });
+        removeChildsEnded();
+        removeJobsEnded();
 
         timer_ended_.expires_after(dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
