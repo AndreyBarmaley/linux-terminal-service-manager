@@ -24,6 +24,7 @@
 #ifndef _LTSM_DISPLAY_SESSION_
 #define _LTSM_DISPLAY_SESSION_
 
+#include <list>
 #include <mutex>
 #include <chrono>
 #include <atomic>
@@ -31,7 +32,6 @@
 #include <future>
 #include <vector>
 #include <utility>
-#include <forward_list>
 
 #include <boost/asio.hpp>
 
