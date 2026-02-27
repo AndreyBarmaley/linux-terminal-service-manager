@@ -457,9 +457,9 @@ namespace LTSM::DisplaySession {
 
         std::scoped_lock guard{ lock_childs_ };
 
-        for(const auto & ps: childs_) {
-            if(ps.second.valid() && ps.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                kill(ps.first.id(), SIGTERM);
+        for(const auto & [proc, future]: childs_) {
+            if(future.valid() && future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                kill(proc.id(), SIGTERM);
             }
         }
 
