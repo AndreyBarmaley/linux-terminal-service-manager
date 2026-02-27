@@ -973,12 +973,8 @@ namespace LTSM::Manager {
 #else
         , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300)
-        , ioc_{ctx}, signals_{ioc_}
-        , timer_sdbus_{ioc_, dur_sdbus_}
-        , timer_limit_{ioc_, dur_limit_}
-        , timer_ended_{ioc_, dur_ended_}
-        , timer_alive_{ioc_, dur_alive_} {
+        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
+            timer_sdbus_{ioc_}, timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -994,6 +990,7 @@ namespace LTSM::Manager {
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
 
+        timer_sdbus_.expires_after(dur_sdbus_);
         timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
 
         signals_.add(SIGTERM);
@@ -1009,10 +1006,13 @@ namespace LTSM::Manager {
         });
 
         // check sessions timepoint limit
+        timer_limit_.expires_after(dur_limit_);
         timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
         // check sessions killed
+        timer_ended_.expires_after(dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
         // check sessions alive
+        timer_alive_.expires_after(dur_alive_);
         timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
 
         inotifyWatchStart();
@@ -1042,7 +1042,7 @@ namespace LTSM::Manager {
 
         serviceConn->enterEventLoopAsync();
 
-        timer_sdbus_.expires_at(timer_sdbus_.expiry() + dur_sdbus_);
+        timer_sdbus_.expires_after(dur_sdbus_);
         timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
     }
 
@@ -1193,7 +1193,7 @@ namespace LTSM::Manager {
             }
         }
 
-        timer_limit_.expires_at(timer_limit_.expiry() + dur_limit_);
+        timer_limit_.expires_after(dur_limit_);
         timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
@@ -1227,7 +1227,7 @@ namespace LTSM::Manager {
             return ! ps.valid() || ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
         });
 
-        timer_ended_.expires_at(timer_ended_.expiry() + dur_ended_);
+        timer_ended_.expires_after(dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
     }
 
@@ -1255,7 +1255,7 @@ namespace LTSM::Manager {
             }
         }
 
-        timer_alive_.expires_at(timer_alive_.expiry() + dur_alive_);
+        timer_alive_.expires_after(dur_alive_);
         timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
     }
 
