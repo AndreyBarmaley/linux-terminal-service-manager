@@ -86,6 +86,9 @@ namespace LTSM::DisplaySession {
     class Starter : public ApplicationJsonConfig {
         const std::chrono::system_clock::time_point started_;
 
+        const std::chrono::milliseconds dur_sdbus_{1};
+        const std::chrono::milliseconds dur_childs_{350};
+
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::steady_timer timer_sdbus_;
