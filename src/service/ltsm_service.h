@@ -357,14 +357,12 @@ namespace LTSM::Manager {
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
-        const std::chrono::milliseconds dur_sdbus_{1};
         const std::chrono::seconds dur_limit_{3};
         const std::chrono::seconds dur_ended_{1};
         const std::chrono::seconds dur_alive_{20};
 
         boost::asio::io_context & ioc_;
         boost::asio::signal_set signals_;
-        boost::asio::steady_timer timer_sdbus_;
 
         boost::asio::steady_timer timer_limit_;
         boost::asio::steady_timer timer_ended_;
@@ -387,7 +385,6 @@ namespace LTSM::Manager {
 
       private:
         void stop(void);
-        void timerDbusConnectionLoop(const boost::system::error_code&);
         void timerSessionsTimeLimitAction(const boost::system::error_code&);
         void timerSessionsEndedAction(const boost::system::error_code&);
         void timerSessionsCheckConnectedAction(const boost::system::error_code&);
