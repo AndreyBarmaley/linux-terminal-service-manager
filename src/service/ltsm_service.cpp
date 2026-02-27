@@ -961,10 +961,10 @@ namespace LTSM::Manager {
 #endif
         , XvfbSessions(300)
         , ioc_{ctx}, signals_{ioc_}
-        , timer_sdbus_{ioc_, boost::asio::chrono::milliseconds(1)}
-        , timer_limit_{ioc_, boost::asio::chrono::seconds(3)}
-        , timer_ended_{ioc_, boost::asio::chrono::seconds(1)}
-        , timer_alive_{ioc_, boost::asio::chrono::seconds(20)} {
+        , timer_sdbus_{ioc_, dur_sdbus_}
+        , timer_limit_{ioc_, dur_limit_}
+        , timer_ended_{ioc_, dur_ended_}
+        , timer_alive_{ioc_, dur_alive_} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -1028,7 +1028,7 @@ namespace LTSM::Manager {
 
         serviceConn->enterEventLoopAsync();
 
-        timer_sdbus_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
+        timer_sdbus_.expires_at(timer_sdbus_.expiry() + dur_sdbus_);
         timer_sdbus_.async_wait(std::bind(&DBusAdaptor::timerDbusConnectionLoop, this, std::placeholders::_1));
     }
 
@@ -1179,7 +1179,7 @@ namespace LTSM::Manager {
             }
         }
 
-        timer_limit_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::seconds(3));
+        timer_limit_.expires_at(timer_limit_.expiry() + dur_limit_);
         timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
@@ -1213,7 +1213,7 @@ namespace LTSM::Manager {
             return ! ps.valid() || ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
         });
 
-        timer_ended_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::seconds(1));
+        timer_ended_.expires_at(timer_ended_.expiry() + dur_ended_);
         timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
     }
 
@@ -1241,7 +1241,7 @@ namespace LTSM::Manager {
             }
         }
 
-        timer_alive_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::seconds(20));
+        timer_alive_.expires_at(timer_alive_.expiry() + dur_alive_);
         timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
     }
 
@@ -2056,7 +2056,7 @@ namespace LTSM::Manager {
     void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) {
         // wait new session started
         while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(1s);
+            std::this_thread::sleep_for(550ms);
         }
 
         switch(icontype) {

@@ -357,6 +357,11 @@ namespace LTSM::Manager {
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
+        const std::chrono::milliseconds dur_sdbus_{1};
+        const std::chrono::seconds dur_limit_{3};
+        const std::chrono::seconds dur_ended_{1};
+        const std::chrono::seconds dur_alive_{20};
+
         boost::asio::io_context & ioc_;
         boost::asio::signal_set signals_;
         boost::asio::steady_timer timer_sdbus_;

@@ -251,8 +251,8 @@ namespace LTSM::DisplaySession {
     // Starter
     Starter::Starter(int displayNum, const char* xauthFile)
         : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()),
-        ioc_{2}, signals_{ioc_}, timer_sdbus_{ioc_, boost::asio::chrono::milliseconds(1)},
-        timer_childs_{ioc_, boost::asio::chrono::milliseconds(250)},
+        ioc_{2}, signals_{ioc_},
+        timer_sdbus_{ioc_, dur_sdbus_}, timer_childs_{ioc_, dur_childs_},
         xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
     }
 
@@ -402,7 +402,7 @@ namespace LTSM::DisplaySession {
         {
             dbus_conn_->enterEventLoopAsync();
 
-            timer_sdbus_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
+            timer_sdbus_.expires_at(timer_sdbus_.expiry() + dur_sdbus_);
             timer_sdbus_.async_wait(std::bind(&Starter::timerDbusConnectionLoop, this, std::placeholders::_1));
         }
     }
@@ -438,7 +438,7 @@ namespace LTSM::DisplaySession {
             childs_.erase(ended.begin(), ended.end());
         }
 
-        timer_childs_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(250));
+        timer_childs_.expires_at(timer_childs_.expiry() + dur_childs_);
         timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
     }
 
