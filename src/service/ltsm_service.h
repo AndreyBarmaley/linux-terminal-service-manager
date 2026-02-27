@@ -48,7 +48,7 @@ namespace LTSM::Manager {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
+    using PidStatus = std::pair<pid_t, std::future<int>>;
     using PidStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
@@ -341,6 +341,7 @@ namespace LTSM::Manager {
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
+        XvfbSessionPtr findPidSession(int pid) const;
         XvfbSessionPtr findDisplaySession(int display) const;
         std::forward_list<XvfbSessionPtr> findUserSessions(const std::string & username) const;
         XvfbSessionPtr findUserSession(const std::string & username) const;
@@ -366,8 +367,8 @@ namespace LTSM::Manager {
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::list<PidStatus> childsRunning;
-        std::mutex lockRunning;
+        std::mutex lock_childs_;
+        std::list<PidStatus> childs_;
 
         std::atomic<bool> loginsDisable = false;
 
@@ -390,8 +391,6 @@ namespace LTSM::Manager {
 
         void checkConfigPathes(void) const;
         void createRuntimeDir(void) const;
-
-        std::forward_list<XvfbSessionPtr> moveEndedSessions(void);
 
       protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;

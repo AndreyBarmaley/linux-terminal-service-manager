@@ -714,6 +714,15 @@ namespace LTSM::Manager {
         return it != sessions.end() ? *it : nullptr;
     }
 
+    XvfbSessionPtr XvfbSessions::findPidSession(int pid) const {
+        std::scoped_lock guard{ lockSessions };
+        auto it = std::ranges::find_if(sessions, [&pid](const auto & ptr) {
+            return ptr && ptr->pid1 == pid;
+        });
+
+        return it != sessions.end() ? *it : nullptr;
+    }
+
     XvfbSessionPtr XvfbSessions::findDisplaySession(int screen) const {
         std::scoped_lock guard{ lockSessions };
         auto it = std::ranges::find_if(sessions, [&screen](const auto & ptr) {
@@ -1022,6 +1031,16 @@ namespace LTSM::Manager {
         timer_limit_.cancel();
         timer_ended_.cancel();
         timer_alive_.cancel();
+
+        std::scoped_lock guard{ lock_childs_ };
+
+        for(const auto & [pid, future]: childs_) {
+            if(future.valid() && future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                kill(pid, SIGTERM);
+            }
+        }
+
+        childs_.clear();
     }
 
     void DBusAdaptor::createRuntimeDir(void) const {
@@ -1155,50 +1174,28 @@ namespace LTSM::Manager {
         timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
-    std::forward_list<XvfbSessionPtr> DBusAdaptor::moveEndedSessions(void) {
-        std::forward_list<XvfbSessionPtr> res;
-        std::scoped_lock guard1{ lockSessions };
-
-        for(auto & ptr : sessions) {
-            if(! ptr) {
-                continue;
-            }
-
-            std::scoped_lock guard2{ lockRunning };
-
-            auto it = std::ranges::find_if(childsRunning, [pid1 = ptr->pid1](auto & pidStatus)
-            {
-                if(pid1 != pidStatus.first) {
-                    return false;
-                }
-
-                if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                    return false;
-                }
-
-                return true;
-            });
-
-            if(it != childsRunning.end()) {
-                Application::notice("{}: session ended, pid: {}, ret: {}",
-                                    __FUNCTION__, ptr->pid1, it->second.get());
-
-                res.push_front(std::move(ptr));
-                childsRunning.erase(it);
-            }
-        }
-
-        return res;
-    }
-
     void DBusAdaptor::timerSessionsEndedAction(const boost::system::error_code& ec) {
         if(ec) {
             return;
         }
 
-        for(const auto & ptr : moveEndedSessions()) {
-            ptr->pid1 = 0;
-            displayShutdown(ptr, true);
+        // remove ended
+        std::scoped_lock guard{ lock_childs_ };
+        auto ended = std::ranges::remove_if(childs_, [](auto & ps)
+        {
+            return ! ps.second.valid() || ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
+        });
+
+        if(! ended.empty()) {
+            for(auto & [pid, future]: ended) {
+                if(auto ptr = findPidSession(pid)) {
+                    Application::notice("{}: session ended, pid: {}, ret: {}", __FUNCTION__, pid, future.get());
+                    ptr->pid1 = 0;
+                    displayShutdown(std::move(ptr), true);
+                }
+            }
+
+            childs_.erase(ended.begin(), ended.end());
         }
 
         timer_ended_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(1));
@@ -1341,11 +1338,8 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::waitPidBackgroundSafe(pid_t pid) {
-        // create wait pid task
-        std::packaged_task<int(int)> waitPidTask{& ForkMode::waitPid};
-        std::scoped_lock guard{ lockRunning };
-        childsRunning.emplace_back(std::make_pair(pid, waitPidTask.get_future()));
-        std::thread(std::move(waitPidTask), pid).detach();
+        std::scoped_lock guard{ lock_childs_ };
+        childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
     }
 
     void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str) const {
@@ -1713,29 +1707,6 @@ namespace LTSM::Manager {
         while(auto sessionsAlive = std::ranges::count_if(sessions, isValidSession)) {
             Application::debug(DebugType::App, "{}: wait sessions: {}", __FUNCTION__, sessionsAlive);
             std::this_thread::sleep_for(100ms);
-        }
-
-        std::scoped_lock guard{ lockRunning };
-
-        // childEnded
-        if(! childsRunning.empty()) {
-            auto childsCount = std::ranges::count_if(childsRunning, [](auto & pair) {
-                return 0 < pair.first;
-            });
-
-            Application::error("{}: running childs: {}, killed process", __FUNCTION__, childsCount);
-
-            for(const auto & [pid, futureStatus] : childsRunning) {
-                kill(pid, SIGTERM);
-            }
-
-            std::this_thread::sleep_for(100ms);
-
-            for(const auto & [pid, futureStatus] : childsRunning) {
-                futureStatus.wait();
-            }
-
-            childsRunning.clear();
         }
 
         Application::notice("{}: {}, pid: {}", __FUNCTION__, "complete", getpid());
