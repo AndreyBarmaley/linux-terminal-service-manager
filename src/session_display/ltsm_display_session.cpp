@@ -429,10 +429,14 @@ namespace LTSM::DisplaySession {
 
         // remove ended
         std::scoped_lock guard{ lock_childs_ };
-        std::erase_if(childs_, [](auto & ps)
-        {
-            return ! ps.second.valid() || ps.second.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
-        });
+        auto ended = std::ranges::remove_if(childs_, [](auto & ps) { return ! ps.valid() || ! ps.running(); });
+
+        if(! ended.empty()) {
+            for(auto & ps: ended) {
+                ps.wait();
+            }
+            childs_.erase(ended.begin(), ended.end());
+        }
 
         timer_childs_.expires_at(timer_sdbus_.expiry() + boost::asio::chrono::milliseconds(250));
         timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
@@ -457,9 +461,10 @@ namespace LTSM::DisplaySession {
 
         std::scoped_lock guard{ lock_childs_ };
 
-        for(const auto & [proc, future]: childs_) {
-            if(future.valid() && future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                kill(proc.id(), SIGTERM);
+        for(auto & ps: childs_) {
+            if(ps.valid() && ps.running()) {
+                kill(ps.id(), SIGTERM);
+                ps.wait();
             }
         }
 
@@ -544,12 +549,9 @@ namespace LTSM::DisplaySession {
         }
 
         try {
-            std::future<int> code;
-            auto proc = bp::child(cmd, args, envs, ioc_, bp::on_exit = code);
-
             std::scoped_lock guard{ lock_childs_ };
-            childs_.emplace_back(std::move(proc), std::move(code));
-            return childs_.back().first.id();
+            childs_.emplace_back(bp::child(cmd, args, envs));
+            return childs_.back().id();
 
         } catch(const std::exception & err) {
             LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
