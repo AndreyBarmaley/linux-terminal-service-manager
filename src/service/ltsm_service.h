@@ -383,8 +383,6 @@ namespace LTSM::Manager {
         void timerSessionsEndedAction(const boost::system::error_code&);
         void timerSessionsCheckConnectedAction(const boost::system::error_code&);
 
-        void waitPidBackgroundSafe(pid_t pid);
-
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
                                                TransferRejectFunc emitTransferReject, std::string msg);
