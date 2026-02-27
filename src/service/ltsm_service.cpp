@@ -1337,11 +1337,6 @@ namespace LTSM::Manager {
         return xauthFilePath;
     }
 
-    void DBusAdaptor::waitPidBackgroundSafe(pid_t pid) {
-        std::scoped_lock guard{ lock_childs_ };
-        childs_.emplace_back(pid, std::async(std::launch::async, & ForkMode::waitPid, pid));
-    }
-
     void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str) const {
         if(! str.empty()) {
             auto args = Tools::split(Tools::replace(
@@ -1510,12 +1505,13 @@ namespace LTSM::Manager {
 
         auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
 
-        if(! sess) {
+        if(sess) {
+            // registered xvfb job
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(sess->pid1, std::async(std::launch::async, & ForkMode::waitPid, sess->pid1));
+        } else {
             return -1;
         }
-
-        // registered xvfb job
-        waitPidBackgroundSafe(sess->pid1);
 
         // update screen
         sess->remoteAddr = remoteAddr;
@@ -1591,12 +1587,13 @@ namespace LTSM::Manager {
         auto newSess = runNewDisplaySession(userName, loginSess->userInfo->password(),
                 std::move(loginSess->environments), std::move(loginSess->options));
 
-        if(! newSess) {
+        if(newSess) {
+            // registered xvfb job
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(newSess->pid1, std::async(std::launch::async, & ForkMode::waitPid, newSess->pid1));
+        } else {        
             return -1;
         }
-
-        // registered xvfb job
-        waitPidBackgroundSafe(newSess->pid1);
 
         // parent continue
         Application::info("{}: {}, display: {}, user: {}, pid: {}",
