@@ -27,7 +27,6 @@
 #include <mutex>
 #include <string>
 #include <memory>
-#include <atomic>
 #include <vector>
 #include <thread>
 #include <functional>
