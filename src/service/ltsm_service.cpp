@@ -123,8 +123,6 @@ namespace LTSM::DisplaySession {
 }
 
 namespace LTSM::Manager {
-    std::unique_ptr<sdbus::IConnection> serviceConn;
-
     //
     void runSystemScript(XvfbSessionPtr, const std::string & cmd);
     void runSessionScript(XvfbSessionPtr, const std::string & cmd);
@@ -963,15 +961,15 @@ namespace LTSM::Manager {
     }
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(boost::asio::io_context& ctx, sdbus::IConnection & conn, const std::filesystem::path & confile)
+    DBusAdaptor::DBusAdaptor(boost::asio::io_context& ctx, DBusConnectionPtr conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
-        , AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        , AdaptorInterfaces(*conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
-        , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
+        , AdaptorInterfaces(*conn, LTSM::dbus_manager_service_path)
 #endif
         , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
-            timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_} {
+            timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -987,9 +985,9 @@ namespace LTSM::Manager {
         fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
         cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
 
-        jobs_.emplace_back(std::async(std::launch::async, []()
+        jobs_.emplace_back(std::async(std::launch::async, [this]()
         {
-            serviceConn->enterEventLoop();
+            dbus_conn_->enterEventLoop();
         }));
 
         signals_.add(SIGTERM);
@@ -1034,7 +1032,7 @@ namespace LTSM::Manager {
     }
 
     void DBusAdaptor::stop(void) {
-        serviceConn->leaveEventLoop();
+        dbus_conn_->leaveEventLoop();
 
         signals_.cancel();
         timer_limit_.cancel();
@@ -3062,15 +3060,10 @@ namespace LTSM::Manager {
         }
 
 #ifdef SDBUS_2_0_API
-        serviceConn = sdbus::createSystemBusConnection(sdbus::ServiceName {LTSM::dbus_manager_service_name});
+        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName {LTSM::dbus_manager_service_name});
 #else
-        serviceConn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
+        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
 #endif
-
-        if(! serviceConn) {
-            Application::error("{}: {} failed", __FUNCTION__, "dbus connection");
-            return EXIT_FAILURE;
-        }
 
         if(auto connectorHome = Tools::getUserHome(ltsm_user_conn);
                                 std::filesystem::is_directory(connectorHome)) {
@@ -3086,7 +3079,7 @@ namespace LTSM::Manager {
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, *serviceConn, confile);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, std::move(conn), confile);
         Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
                 __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 

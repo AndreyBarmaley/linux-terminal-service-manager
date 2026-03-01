@@ -332,6 +332,7 @@ namespace LTSM::Manager {
 
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
     using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
     class XvfbSessions {
       protected:
@@ -367,6 +368,8 @@ namespace LTSM::Manager {
         boost::asio::steady_timer timer_limit_;
         boost::asio::steady_timer timer_ended_;
         boost::asio::steady_timer timer_alive_;
+
+        DBusConnectionPtr dbus_conn_;
 
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
@@ -408,7 +411,7 @@ namespace LTSM::Manager {
         std::forward_list<std::string> getAllowLogins(void) const;
 
       public:
-        DBusAdaptor(boost::asio::io_context &, sdbus::IConnection &, const std::filesystem::path & confile);
+        DBusAdaptor(boost::asio::io_context &, DBusConnectionPtr, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
         void shutdownService(void);
