@@ -21,10 +21,6 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
-#include <signal.h>
-
-#include <chrono>
-#include <thread>
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -34,83 +30,105 @@
 #include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_audio_session.h"
+#include "ltsm_byte_streambuf.h"
 
 using namespace std::chrono_literals;
 
 namespace LTSM {
     /// AudioClient
-    bool AudioClient::socketInitialize(void) {
-        std::error_code fserr;
-
-        while(! shutdown) {
-            // wait socket
-            if(std::filesystem::is_socket(socketPath, fserr)) {
-                if(int fd = UnixSocket::connect(socketPath); 0 < fd) {
-                    sock = std::make_unique<SocketStream>(fd, false /* statistic */);
-                    break;
-                }
-
-                std::this_thread::sleep_for(100ms);
-            }
+    void AudioClient::handlerSocketConnect(const boost::system::error_code & ec) {
+        // wait socket
+        if(ec) {
+            sock_.async_connect(socket_path_,
+                std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
+        } else {
+            // success
+            boost::asio::post(ioc_, std::bind(&AudioClient::clientHandshake, this));
         }
+    }
 
-        if(shutdown) {
-            return false;
-        }
-
-        if(! sock) {
-            Application::error("{}: {} failed", __FUNCTION__, "socket");
-            return false;
-        }
+    bool AudioClient::clientHandshake(void) {
+        // socket valid
+        assert(sock_.is_open());
 
         const pa_sample_format_t defaultFormat = PA_SAMPLE_S16LE;
         const uint8_t defaultChannels = 2;
         const uint16_t bitsPerSample = PulseAudio::formatBits(defaultFormat);
+
+        boost::asio::streambuf sb;
+        byte::streambuf bs(sb);
+
         // send initialize packet
-        sock->sendIntLE16(AudioOp::Init);
+        bs.write_le16(AudioOp::Init);
         // send proto ver
-        sock->sendIntLE16(1);
+        bs.write_le16(1);
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
         numenc++;
 #endif
         // send num encodings
-        sock->sendIntLE16(numenc);
+        bs.write_le16(numenc);
         // encoding type PCM
-        sock->sendIntLE16(AudioEncoding::PCM);
-        sock->sendIntLE16(defaultChannels);
-        sock->sendIntLE32(44100);
-        sock->sendIntLE16(bitsPerSample);
+        bs.write_le16(AudioEncoding::PCM);
+        bs.write_le16(defaultChannels);
+        bs.write_le32(44100);
+        bs.write_le16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
         // encoding type OPUS
-        sock->sendIntLE16(AudioEncoding::OPUS);
-        sock->sendIntLE16(defaultChannels);
-        sock->sendIntLE32(48000);
-        sock->sendIntLE16(bitsPerSample);
+        bs.write_le16(AudioEncoding::OPUS);
+        bs.write_le16(defaultChannels);
+        bs.write_le32(48000);
+        bs.write_le16(bitsPerSample);
 #endif
-        sock->sendFlush();
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            sock_.close();
+            return false;
+        }
+
+        auto rlen = boost::asio::read(sock_, sb, boost::asio::transfer_exactly(4), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            sock_.close();
+            return false;
+        }
+
         // client reply
-        auto cmd = sock->recvIntLE16();
-        auto err = sock->recvIntLE16();
+        auto cmd = bs.read_le16();
+        auto err = bs.read_le16();
 
         if(cmd != AudioOp::Init) {
-            Application::error("{}: {}: failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
+            Application::error("{}: {} failed, cmd: {:#04x}", __FUNCTION__, "id", cmd);
             return false;
         }
 
         if(err) {
-            auto str = sock->recvString(err);
+            boost::asio::read(sock_, sb, boost::asio::transfer_exactly(err), ec);
+            auto str = bs.read_string(err);
             Application::error("{}: recv error: {}", __FUNCTION__, str);
             return false;
         }
 
+        boost::asio::read(sock_, sb, boost::asio::transfer_exactly(4), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            sock_.close();
+            return false;
+        }
+
         // proto version
-        auto ver = sock->recvIntLE16();
+        auto ver = bs.read_le16();
         // encoding
-        auto enc = sock->recvIntLE16();
+        auto enc = bs.read_le16();
+
         Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
+
         uint32_t defaultBitRate = 44100;
-        uint32_t bufFragSize = 1024;
         // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
         const uint32_t opusFrames = 480;
 
@@ -118,38 +136,9 @@ namespace LTSM {
 #ifdef LTSM_WITH_OPUS
             defaultBitRate = 48000;
             const uint32_t opusFrameLength = defaultChannels * bitsPerSample / 8;
-            bufFragSize = opusFrames * opusFrameLength;
-#endif
-        }
+            frag_size_ = opusFrames * opusFrameLength;
 
-        const pa_buffer_attr bufferAttr = { bufFragSize, UINT32_MAX, UINT32_MAX, UINT32_MAX, bufFragSize };
-
-        try {
-            pulse = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels,
-                    std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
-        } catch(const std::exception & err) {
-            return false;
-        }
-
-        // wait PulseAudio started
-        while(true) {
-            if(shutdown) {
-                return false;
-            }
-
-            if(pulse->initContext()) {
-                if(pulse->streamConnect(false /* not paused */, & bufferAttr)) {
-                    break;
-                }
-            } else {
-                LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
-                std::this_thread::sleep_for(1s);
-            }
-        }
-
-        if(enc == AudioEncoding::OPUS) {
-#ifdef LTSM_WITH_OPUS
-            encoder = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
+            encoder_ = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
             Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
 #else
             Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
@@ -159,49 +148,93 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
+        try {
+            pulse_ = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels,
+                    std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+        } catch(const std::exception & err) {
+            return false;
+        }
+
+        timer_wait_pulse_.expires_after(dur_wait_pulse_);
+        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
+
         return true;
     }
 
-    void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
-        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) { return val != 0; });
-
-        if(sampleNotSilent) {
-            if(! encoder) {
-                // send raw samples
-                sock->sendIntLE16(AudioOp::Data);
-                sock->sendIntLE32(len);
-                sock->sendRaw(ptr, len);
-                sock->sendFlush();
-            } else if(encoder->encode(ptr, len)) {
-                // send enc samples
-                sock->sendIntLE16(AudioOp::Data);
-                sock->sendIntLE32(encoder->size());
-                sock->sendRaw(encoder->data(), encoder->size());
-                sock->sendFlush();
-            }
-        } else {
-            sock->sendIntLE16(AudioOp::Silent);
-            sock->sendIntLE32(len);
-            sock->sendFlush();
+    void AudioClient::timerWaitPulseStarted(const boost::system::error_code & ec) {
+        if(ec) {
+            return;
         }
+
+        const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
+
+        // wait PulseAudio started
+        if(pulse_->initContext() && pulse_->streamConnect(false /* not paused */, & bufferAttr)) {
+            pulse_ready_ = true;
+            // success
+            return;
+        }
+
+        LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
+
+        timer_wait_pulse_.expires_after(dur_wait_pulse_);
+        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
     }
 
-    AudioClient::AudioClient(const std::string & path) : socketPath(path) {
-        thread = std::thread([this]() {
-            try {
-                this->socketInitialize();
-            } catch(const std::exception & err) {
-                LTSM::Application::error("{}: exception: {}", "AudioClientThread", err.what());
+    void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
+        if(! pulse_ready_) {
+            LTSM::Application::warning("{}: wait pulseaudio, data len: {}", __FUNCTION__, len);
+            return;
+        }
+
+        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) { return val != 0; });
+
+        auto sb_ptr = std::make_unique<boost::asio::streambuf>();
+        byte::streambuf bs(*sb_ptr);
+
+        if(sampleNotSilent) {
+            if(! encoder_) {
+                // send raw samples
+                bs.write_le16(AudioOp::Data);
+                bs.write_le32(len);
+                bs.write_bytes(ptr, len);
+            } else if(encoder_->encode(ptr, len)) {
+                // send enc samples
+                bs.write_le16(AudioOp::Data);
+                bs.write_le32(encoder_->size());
+                bs.write_bytes(encoder_->data(), encoder_->size());
             }
-        });
+        } else {
+            bs.write_le16(AudioOp::Silent);
+            bs.write_le32(len);
+        }
+
+        boost::asio::async_write(sock_, *sb_ptr, boost::asio::transfer_all(),
+            boost::asio::bind_executor(sock_strand_,
+                [this, save = std::move(sb_ptr)](boost::system::error_code ec, std::size_t){
+                    if(ec) {
+                        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "async_write", ec.value(), ec.message());
+                        sock_.close();
+                    }
+                }
+            )
+        );
+    }
+
+    AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
+        : ioc_{ctx}, socket_path_(path), timer_wait_pulse_{ioc_}, sock_{ioc_}, sock_strand_{boost::asio::make_strand(ioc_)} {
+
+        sock_.async_connect(socket_path_,
+            std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
     }
 
     AudioClient::~AudioClient() {
-        shutdown = true;
-
-        if(thread.joinable()) {
-            thread.join();
-        }
+        pulse_ready_ = false;
+        sock_.cancel();
+        sock_.close();
+        timer_wait_pulse_.cancel();
+        pulse_.reset();
+        encoder_.reset();
     }
 
     /// AudioSessionBus
@@ -228,6 +261,7 @@ namespace LTSM {
     void AudioSessionBus::stop(void) {
         dbus_conn_->leaveEventLoop();
         signals_.cancel();
+        clients_.clear();
     }
 
     int AudioSessionBus::start(void) {
@@ -272,22 +306,22 @@ namespace LTSM {
         setDebugLevel(level);
     }
 
-    bool AudioSessionBus::connectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket);
+    bool AudioSessionBus::connectChannel(const std::string & socketPath) {
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
 
-        if(std::ranges::any_of(clients, [&](auto & cli) { return cli.socketPath == clientSocket && !! cli.sock; })) {
-            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, clientSocket);
+        if(std::ranges::any_of(clients_, [&](auto & cli) { return cli.socketPath(socketPath) && cli.socketConnected(); })) {
+            Application::error("{}: socket busy, path: `{}'", __FUNCTION__, socketPath);
             return false;
         }
 
-        clients.emplace_front(clientSocket);
+        clients_.emplace_front(ioc_, socketPath);
         return true;
     }
 
-    void AudioSessionBus::disconnectChannel(const std::string & clientSocket) {
-        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, clientSocket);
-        std::erase_if(clients, [&clientSocket](auto & cli) {
-            return cli.socketPath == clientSocket;
+    void AudioSessionBus::disconnectChannel(const std::string & socketPath) {
+        Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
+        std::erase_if(clients_, [&socketPath](auto & cli) {
+            return cli.socketPath(socketPath);
         });
     }
 }
