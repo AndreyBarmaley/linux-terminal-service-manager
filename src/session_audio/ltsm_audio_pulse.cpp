@@ -22,8 +22,6 @@
  **********************************************************************/
 
 #include <chrono>
-#include <thread>
-#include <atomic>
 #include <cstring>
 #include <iostream>
 
