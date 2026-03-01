@@ -184,6 +184,10 @@ namespace LTSM::DisplaySession {
         : ApplicationJsonConfig("ltsm_session_display"),
           xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
 
+        if(debug) {
+            setDebugLevel(DebugLevel::Debug);
+        }
+
         if(! startX11Display()) {
             throw std::runtime_error(NS_FuncNameS);
         }
