@@ -987,7 +987,12 @@ namespace LTSM::Manager {
 
         jobs_.emplace_back(std::async(std::launch::async, [this]()
         {
-            dbus_conn_->enterEventLoop();
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", __FUNCTION__, err.what());
+                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
+            }
         }));
 
         signals_.add(SIGTERM);
