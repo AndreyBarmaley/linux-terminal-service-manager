@@ -24,9 +24,8 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
+#include <chrono>
 #include <future>
-#include <thread>
-#include <atomic>
 #include <memory>
 #include <string>
 #include <forward_list>
@@ -40,20 +39,30 @@
 
 namespace LTSM {
     struct AudioClient {
-        std::string socketPath;
+        boost::asio::io_context & ioc_;
+        std::string socket_path_;
 
-        std::unique_ptr<PulseAudio::OutputStream> pulse;
-        std::unique_ptr<AudioEncoder::BaseEncoder> encoder;
-        std::unique_ptr<SocketStream> sock;
+        const std::chrono::seconds dur_wait_pulse_{1};
+        boost::asio::steady_timer timer_wait_pulse_;
 
-        std::thread thread;
-        std::atomic<bool> shutdown{false};
+        boost::asio::local::stream_protocol::socket sock_;
+        boost::asio::strand<boost::asio::io_context::executor_type> sock_strand_;
 
-        AudioClient(const std::string &);
+        std::unique_ptr<PulseAudio::OutputStream> pulse_;
+        std::unique_ptr<AudioEncoder::BaseEncoder> encoder_;
+        
+        uint32_t frag_size_ = 1024;
+        bool pulse_ready_{false};
+
+        AudioClient(boost::asio::io_context&, const std::string &);
         ~AudioClient();
 
+        void timerWaitPulseStarted(const boost::system::error_code & ec);
+        void handlerSocketConnect(const boost::system::error_code & ec);
         void pcmDataNotify(const uint8_t* ptr, size_t len);
-        bool socketInitialize(void);
+        bool clientHandshake(void);
+        bool socketPath(std::string_view path) const { return socket_path_ == path; }
+        bool socketConnected(void) const { return sock_.is_open(); }
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
@@ -65,7 +74,7 @@ namespace LTSM {
         std::future<void> sdbus_job_;
         DBusConnectionPtr dbus_conn_;
 
-        std::forward_list<AudioClient> clients;
+        std::forward_list<AudioClient> clients_;
 
       protected:
         void stop(void);

@@ -24,10 +24,11 @@
 #ifndef _LTSM_BYTE_STREAM_
 #define _LTSM_BYTE_STREAM_
 
+#include <string>
+#include <vector>
 #include <istream>
 #include <ostream>
 #include <cassert>
-#include <vector>
 
 #include <boost/endian.hpp>
 
