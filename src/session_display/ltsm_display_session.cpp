@@ -187,19 +187,22 @@ namespace LTSM::DisplaySession {
     };
 
     // DBusAdaptor
-    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, Starter & starter)
+    DBusAdaptor::DBusAdaptor(DBusConnectionPtr conn, int displayNum, const char* xauthFile, bool debug)
+        : ApplicationJsonConfig("ltsm_session_display"),
 #ifdef SDBUS_2_0_API
-        : AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_display_path}),
+        AdaptorInterfaces(*conn, sdbus::ObjectPath {dbus_session_display_path}),
 #else
-        :
-        AdaptorInterfaces(conn, dbus_session_display_path),
+        AdaptorInterfaces(*conn, dbus_session_display_path),
 #endif
-          starter_(starter) {
+        started_(std::chrono::system_clock::now()), ioc_{2}, signals_{ioc_}, timer_childs_{ioc_},
+        xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum},
+        dbus_conn_{std::move(conn)} {
         registerAdaptor();
     }
 
     DBusAdaptor::~DBusAdaptor() {
         unregisterAdaptor();
+        stop();
     }
 
     int32_t DBusAdaptor::getVersion(void) {
@@ -207,27 +210,77 @@ namespace LTSM::DisplaySession {
     }
 
     void DBusAdaptor::serviceShutdown(void) {
-        starter_.stop();
+        Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
+        stop();
     }
 
     void DBusAdaptor::setDebug(const std::string & level) {
-        starter_.dbusSetDebug(level);
+        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
+        setDebugLevel(level);
     }
 
     std::string DBusAdaptor::jsonStatus(void) {
-        return starter_.dbusJsonStatus();
+        JsonObjectStream jos;
+
+        jos.push("display:num", display_num_);
+        jos.push("xorg:pid", ps_xorg_.id());
+        jos.push("session:pid", ps_sess_.id());
+        jos.push("running:sec", std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - started_).count());
+
+        return jos.flush();
     }
 
     int32_t DBusAdaptor::runSessionCommandAsync(const std::string & cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        return starter_.dbusRunSessionCommandAsync(cmd, args, envs);
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+
+        bp::environment env = boost::this_process::environment();
+        for(auto & str: envs) {
+            if(auto pos = str.find("="); pos != std::string::npos) {
+                env[str.substr(0, pos)] = str.substr(pos + 1);
+            }
+        }
+
+        try {
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(bp::child(cmd, args, envs));
+            return childs_.back().id();
+
+        } catch(const std::exception & err) {
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+        }
+
+        return -1;
     }
 
     StatusStdout DBusAdaptor::runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        return starter_.dbusRunSessionCommandSync(cmd, args, envs);
+        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
+
+        bp::environment env = boost::this_process::environment();
+        for(auto & str: envs) {
+            if(auto pos = str.find("="); pos != std::string::npos) {
+                env[str.substr(0, pos)] = str.substr(pos + 1);
+            }
+        }
+
+        try {
+            bp::ipstream ips;
+            auto proc = bp::child(cmd, args, env, bp::std_out > ips);
+
+            StdoutBuf res{std::istreambuf_iterator<char>(ips),
+                  std::istreambuf_iterator<char>()};
+
+            proc.wait();
+            return StatusStdout{proc.exit_code(), std::move(res)};
+
+        } catch(const std::exception & err) {
+            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
+        }
+
+        return StatusStdout{ -1, {} };
     }
 
     StatusStdout DBusAdaptor::runSessionZenity(const std::vector<std::string> & args) {
-        auto zenityBin = starter_.configGetString("zenity:path", "/usr/bin/zenity");
+        auto zenityBin = configGetString("zenity:path", "/usr/bin/zenity");
         return runSessionCommandSync(zenityBin, args, {});
     }
 
@@ -248,18 +301,7 @@ namespace LTSM::DisplaySession {
         FreedesktopNotifications().notifyError(summary, body, 2000 /* ms */);
     }
 
-    // Starter
-    Starter::Starter(int displayNum, const char* xauthFile)
-        : ApplicationJsonConfig("ltsm_session_display"), started_(std::chrono::system_clock::now()),
-            ioc_{2}, signals_{ioc_}, timer_childs_{ioc_},
-            xauth_file_{xauthFile}, mcookie_{readXauthFile(xauthFile, displayNum)}, display_num_{displayNum} {
-    }
-
-    Starter::~Starter() {
-        stop();
-    }
-
-    bool Starter::startX11Display(void) {
+    bool DBusAdaptor::startX11Display(void) {
         default_width_ = configGetInteger("default:width", 1280);
         default_height_ = configGetInteger("default:height", 1024);
         default_depth_ = configGetInteger("default:depth", 24);
@@ -333,7 +375,7 @@ namespace LTSM::DisplaySession {
         return true;
     }
 
-    bool Starter::startX11Session(void) {
+    bool DBusAdaptor::startX11Session(void) {
         // session bin
         std::string sessionBin = configGetString("session:path");
         std::vector<std::string> sessionArgs;
@@ -391,7 +433,7 @@ namespace LTSM::DisplaySession {
         return true;
     }
 
-    void Starter::timerChildsAliveCheck(const boost::system::error_code& ec)
+    void DBusAdaptor::timerChildsAliveCheck(const boost::system::error_code& ec)
     {
         if(ec) {
             return;
@@ -400,14 +442,14 @@ namespace LTSM::DisplaySession {
         // xorg stopped
         if(ps_xorg_.valid() && ! ps_xorg_.running()) {
             Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg", ps_xorg_.id());
-            boost::asio::post(ioc_, std::bind(&Starter::stop, this));
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
 
         // session stopped
         if(ps_sess_.valid() && ! ps_sess_.running()) {
             Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "session", ps_sess_.id());
-            boost::asio::post(ioc_, std::bind(&Starter::stop, this));
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
 
@@ -427,10 +469,10 @@ namespace LTSM::DisplaySession {
         removeChildsEnded();
 
         timer_childs_.expires_after(dur_childs_);
-        timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
+        timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
     }
 
-    void Starter::stop(void) {
+    void DBusAdaptor::stop(void) {
         dbus_conn_->leaveEventLoop();
 
         signals_.cancel();
@@ -460,7 +502,7 @@ namespace LTSM::DisplaySession {
         childs_.clear();
     }
 
-    int Starter::start(void) {
+    int DBusAdaptor::start(void) {
         if(! startX11Display()) {
             return EXIT_FAILURE;
         }
@@ -494,16 +536,9 @@ namespace LTSM::DisplaySession {
         // start main loop
         setenv("DBUS_SESSION_BUS_ADDRESS", dbusAddress.c_str(), 1);
 
-#ifdef SDBUS_2_0_API
-        dbus_conn_ = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
-#else
-        dbus_conn_ = sdbus::createSessionBusConnection(dbus_session_display_name);
-#endif
-
-        dbus_adaptor_ = std::make_unique<DBusAdaptor>(*dbus_conn_, *this);
-        sdbus_job_ = std::async(std::launch::async, [ptr = dbus_conn_.get()]()
+        sdbus_job_ = std::async(std::launch::async, [this]()
         {
-            ptr->enterEventLoop();
+            dbus_conn_->enterEventLoop();
         });
 
         signals_.add(SIGTERM);
@@ -519,76 +554,11 @@ namespace LTSM::DisplaySession {
         });
 
         timer_childs_.expires_after(dur_childs_);
-        timer_childs_.async_wait(std::bind(&Starter::timerChildsAliveCheck, this, std::placeholders::_1));
+        timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
 
         ioc_.run();
 
         return EXIT_SUCCESS;
-    }
-
-    void Starter::dbusSetDebug(const std::string & level) {
-        Application::debug(DebugType::Dbus, "{}: level: {}", __FUNCTION__, level);
-        setDebugLevel(level);
-    }
-
-    int32_t Starter::dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
-
-        bp::environment env = boost::this_process::environment();
-        for(auto & str: envs) {
-            if(auto pos = str.find("="); pos != std::string::npos) {
-                env[str.substr(0, pos)] = str.substr(pos + 1);
-            }
-        }
-
-        try {
-            std::scoped_lock guard{ lock_childs_ };
-            childs_.emplace_back(bp::child(cmd, args, envs));
-            return childs_.back().id();
-
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
-
-        return -1;
-    }
-
-    StatusStdout Starter::dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) {
-        Application::debug(DebugType::Dbus, "{}: cmd: {}, args: [{}]", __FUNCTION__, cmd, Tools::join(args, ", "));
-
-        bp::environment env = boost::this_process::environment();
-        for(auto & str: envs) {
-            if(auto pos = str.find("="); pos != std::string::npos) {
-                env[str.substr(0, pos)] = str.substr(pos + 1);
-            }
-        }
-
-        try {
-            bp::ipstream ips;
-            auto proc = bp::child(cmd, args, env, bp::std_out > ips);
-
-            StdoutBuf res{std::istreambuf_iterator<char>(ips),
-                  std::istreambuf_iterator<char>()};
-
-            proc.wait();
-            return StatusStdout{proc.exit_code(), std::move(res)};
-
-        } catch(const std::exception & err) {
-            LTSM::Application::error("{}: exception: {}", __FUNCTION__, err.what());
-        }
-
-        return StatusStdout{ -1, {} };
-    }
-
-    std::string Starter::dbusJsonStatus(void) const {
-        JsonObjectStream jos;
-
-        jos.push("display:num", display_num_);
-        jos.push("xorg:pid", ps_xorg_.id());
-        jos.push("session:pid", ps_sess_.id());
-        jos.push("running:sec", std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - started_).count());
-
-        return jos.flush();
     }
 }
 
@@ -597,10 +567,11 @@ using namespace LTSM;
 int main(int argc, char** argv) {
     const char* displayAddr = nullptr;
     const char* xauthFile = nullptr;
+    bool debug = false;
 
     for(int it = 1; it < argc; ++it) {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
-            std::cout << "usage: " << argv[0] << " --display <addr> --xauth <file>" << std::endl;
+            std::cout << "usage: " << argv[0] << " --display <addr> --xauth <file> [--debug] [--version]" << std::endl;
             return EXIT_SUCCESS;
         } else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v")) {
             std::cout << "version: " << LTSM_SESSION_DISPLAY_VERSION << std::endl;
@@ -611,6 +582,8 @@ int main(int argc, char** argv) {
         } else if((0 == std::strcmp(argv[it], "--xauth") || 0 == std::strcmp(argv[it], "-x")) && it + 1 < argc) {
             xauthFile = argv[it + 1];
             it += 1;
+        } else if(0 == std::strcmp(argv[it], "--debug") || 0 == std::strcmp(argv[it], "-d")) {
+            debug = true;
         }
     }
 
@@ -644,8 +617,13 @@ int main(int argc, char** argv) {
     setenv("XAUTHORITY", xauthFile, 1);
 
     try {
+#ifdef SDBUS_2_0_API
+        auto conn = sdbus::createSessionBusConnection(sdbus::ServiceName {dbus_session_display_name});
+#else
+        auto conn = sdbus::createSessionBusConnection(dbus_session_display_name);
+#endif
         int displayNum = std::stoi(displayAddr + 1);
-        return DisplaySession::Starter(displayNum, xauthFile).start();
+        return DisplaySession::DBusAdaptor(std::move(conn), displayNum, xauthFile, debug).start();
     } catch(const sdbus::Error & err) {
         Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {

@@ -58,32 +58,9 @@ namespace LTSM::DisplaySession {
     namespace bp = boost::process;
 #endif
 
-    class Starter;
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
-    class DBusAdaptor : public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
-        Starter & starter_;
-
-      public:
-        DBusAdaptor(sdbus::IConnection &, Starter &);
-        virtual ~DBusAdaptor();
-
-        int32_t getVersion(void) override;
-        void serviceShutdown(void) override;
-        void setDebug(const std::string & level) override;
-
-        std::string jsonStatus(void) override;
-
-        int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
-        StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
-        StatusStdout runSessionZenity(const std::vector<std::string> & args) override;
-        void setSessionKeyboardLayout(const std::string& layout) override;
-
-        void notifyInfo(const std::string& summary, const std::string& body) override;
-        void notifyWarning(const std::string& summary, const std::string& body) override;
-        void notifyError(const std::string& summary, const std::string& body) override;
-    };
-
-    class Starter : public ApplicationJsonConfig {
+    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
         const std::chrono::system_clock::time_point started_;
         const std::chrono::milliseconds dur_childs_{350};
 
@@ -104,14 +81,10 @@ namespace LTSM::DisplaySession {
         std::mutex lock_childs_;
         std::list<bp::child> childs_;
 
-        std::unique_ptr<sdbus::IConnection> dbus_conn_;
-        std::unique_ptr<DBusAdaptor> dbus_adaptor_;
+        DBusConnectionPtr dbus_conn_;
         std::unique_ptr<XCB::Connector> xcb_;
 
         bp::child ps_xorg_, ps_sess_;
-
-      protected:
-        friend class DBusAdaptor;
 
         void timerChildsAliveCheck(const boost::system::error_code&);
 
@@ -119,18 +92,27 @@ namespace LTSM::DisplaySession {
         bool startX11Display(void);
         bool startX11Session(void);
 
-        // dbus callbacks
-        void dbusSetDebug(const std::string & level);
-        int32_t dbusRunSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
-        StatusStdout dbusRunSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs);
-        std::string dbusJsonStatus(void) const;
-
       public:
-        Starter(int displayNum, const char* xauthFile);
-        ~Starter();
+        DBusAdaptor(DBusConnectionPtr, int displayNum, const char* xauthFile, bool debug);
+        virtual ~DBusAdaptor();
+
+        int32_t getVersion(void) override;
+        void serviceShutdown(void) override;
+        void setDebug(const std::string & level) override;
+
+        std::string jsonStatus(void) override;
+
+        int32_t runSessionCommandAsync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+        StatusStdout runSessionCommandSync(const std::string& cmd, const std::vector<std::string> & args, const std::vector<std::string> & envs) override;
+        StatusStdout runSessionZenity(const std::vector<std::string> & args) override;
+        void setSessionKeyboardLayout(const std::string& layout) override;
+
+        void notifyInfo(const std::string& summary, const std::string& body) override;
+        void notifyWarning(const std::string& summary, const std::string& body) override;
+        void notifyError(const std::string& summary, const std::string& body) override;
 
         int start(void);
     };
 }
 
-#endif // _LTSM_USER_SESSION_
+#endif // _LTSM_DISPLAY_SESSION_
