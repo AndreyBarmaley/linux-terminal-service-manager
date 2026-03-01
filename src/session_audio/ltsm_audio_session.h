@@ -31,6 +31,7 @@
 #include <forward_list>
 
 #include <boost/asio.hpp>
+#include <boost/container/small_vector.hpp>
 
 #include "ltsm_application.h"
 #include "ltsm_audio_pulse.h"
@@ -47,6 +48,8 @@ namespace LTSM {
 
         boost::asio::steady_timer timer_wait_pulse_;
         boost::asio::local::stream_protocol::socket sock_;
+
+        boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
         std::unique_ptr<PulseAudio::OutputStream> pulse_;
         std::unique_ptr<AudioEncoder::BaseEncoder> encoder_;

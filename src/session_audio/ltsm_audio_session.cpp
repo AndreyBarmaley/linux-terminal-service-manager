@@ -189,7 +189,7 @@ namespace LTSM {
 
         // 1. send id
         auto id = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
-        boost::asio::write(sock_, boost::asio::buffer(&id, sizeof(id)));
+        buffers_.emplace_back(&id, sizeof(id));
 
         if(sampleNotSilent) {
             if(encoder_ && encoder_->encode(ptr, len)) {
@@ -200,18 +200,23 @@ namespace LTSM {
 
         // 2. send len
         auto len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
-        boost::asio::write(sock_, boost::asio::buffer(&len32, sizeof(len32)));
+        buffers_.emplace_back(&len32, sizeof(len32));
 
         // 3. send data
         if(sampleNotSilent) {
-            boost::system::error_code ec;
-            boost::asio::write(sock_, boost::asio::buffer(ptr, len), boost::asio::transfer_all(), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-                sock_.close();
-            }
+            buffers_.emplace_back(ptr, len);
         }
+
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            sock_.close();
+        }
+
+        buffers_.clear();
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
