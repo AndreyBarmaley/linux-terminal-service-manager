@@ -40,7 +40,7 @@ namespace LTSM {
         // wait socket
         if(ec) {
             sock_.async_connect(socket_path_,
-                std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
+                                std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
         } else {
             // success
             boost::asio::post(ioc_, std::bind(&AudioClient::clientHandshake, this));
@@ -51,9 +51,8 @@ namespace LTSM {
         // socket valid
         assert(sock_.is_open());
 
-        const pa_sample_format_t defaultFormat = PA_SAMPLE_S16LE;
-        const uint8_t defaultChannels = 2;
-        const uint16_t bitsPerSample = PulseAudio::formatBits(defaultFormat);
+        const uint8_t channels_ = 2;
+        const uint16_t bitsPerSample = PulseAudio::formatBits(format_);
 
         boost::asio::streambuf sb;
         byte::streambuf bs(sb);
@@ -70,13 +69,13 @@ namespace LTSM {
         bs.write_le16(numenc);
         // encoding type PCM
         bs.write_le16(AudioEncoding::PCM);
-        bs.write_le16(defaultChannels);
+        bs.write_le16(channels_);
         bs.write_le32(44100);
         bs.write_le16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
         // encoding type OPUS
         bs.write_le16(AudioEncoding::OPUS);
-        bs.write_le16(defaultChannels);
+        bs.write_le16(channels_);
         bs.write_le32(48000);
         bs.write_le16(bitsPerSample);
 #endif
@@ -128,17 +127,16 @@ namespace LTSM {
 
         Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
 
-        uint32_t defaultBitRate = 44100;
         // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
         const uint32_t opusFrames = 480;
 
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
-            defaultBitRate = 48000;
-            const uint32_t opusFrameLength = defaultChannels * bitsPerSample / 8;
+            bit_rate_ = 48000;
+            const uint32_t opusFrameLength = channels_ * bitsPerSample / 8;
             frag_size_ = opusFrames * opusFrameLength;
 
-            encoder_ = std::make_unique<AudioEncoder::Opus>(defaultBitRate, defaultChannels, bitsPerSample, opusFrames);
+            encoder_ = std::make_unique<AudioEncoder::Opus>(bit_rate_, channels_, bitsPerSample, opusFrames);
             Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
 #else
             Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
@@ -148,14 +146,7 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        try {
-            pulse_ = std::make_unique<PulseAudio::OutputStream>(defaultFormat, defaultBitRate, defaultChannels,
-                    std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
-        } catch(const std::exception & err) {
-            return false;
-        }
-
-        timer_wait_pulse_.expires_after(dur_wait_pulse_);
+        timer_wait_pulse_.expires_after(100ms);
         timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
 
         return true;
@@ -169,67 +160,68 @@ namespace LTSM {
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
 
         // wait PulseAudio started
-        if(pulse_->initContext() && pulse_->streamConnect(false /* not paused */, & bufferAttr)) {
-            pulse_ready_ = true;
+        try {
+            pulse_ = std::make_unique<PulseAudio::OutputStream>(format_, bit_rate_, channels_,
+                     std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+        } catch(const std::exception & err) {
+        }
+
+        if(pulse_ && pulse_->initContext() && pulse_->streamConnect(false /* not paused */, & bufferAttr)) {
             // success
             return;
         }
 
         LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
+        pulse_.reset();
 
-        timer_wait_pulse_.expires_after(dur_wait_pulse_);
+        timer_wait_pulse_.expires_after(1s);
         timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
     }
 
     void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
-        if(! pulse_ready_) {
-            LTSM::Application::warning("{}: wait pulseaudio, data len: {}", __FUNCTION__, len);
+        if(! sock_.is_open()) {
             return;
         }
 
-        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) { return val != 0; });
+        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) {
+            return val != 0;
+        });
 
-        auto sb_ptr = std::make_unique<boost::asio::streambuf>();
-        byte::streambuf bs(*sb_ptr);
+        // 1. send id
+        auto id = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
+        boost::asio::write(sock_, boost::asio::buffer(&id, sizeof(id)));
 
         if(sampleNotSilent) {
-            if(! encoder_) {
-                // send raw samples
-                bs.write_le16(AudioOp::Data);
-                bs.write_le32(len);
-                bs.write_bytes(ptr, len);
-            } else if(encoder_->encode(ptr, len)) {
-                // send enc samples
-                bs.write_le16(AudioOp::Data);
-                bs.write_le32(encoder_->size());
-                bs.write_bytes(encoder_->data(), encoder_->size());
+            if(encoder_ && encoder_->encode(ptr, len)) {
+                ptr = encoder_->data();
+                len = encoder_->size();
             }
-        } else {
-            bs.write_le16(AudioOp::Silent);
-            bs.write_le32(len);
         }
 
-        boost::asio::async_write(sock_, *sb_ptr, boost::asio::transfer_all(),
-            boost::asio::bind_executor(sock_strand_,
-                [this, save = std::move(sb_ptr)](boost::system::error_code ec, std::size_t){
-                    if(ec) {
-                        Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "async_write", ec.value(), ec.message());
-                        sock_.close();
-                    }
-                }
-            )
-        );
+        // 2. send len
+        auto len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
+        boost::asio::write(sock_, boost::asio::buffer(&len32, sizeof(len32)));
+
+        // 3. send data
+        if(sampleNotSilent) {
+            boost::system::error_code ec;
+            boost::asio::write(sock_, boost::asio::buffer(ptr, len), boost::asio::transfer_all(), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+                sock_.close();
+            }
+        }
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
-        : ioc_{ctx}, socket_path_(path), timer_wait_pulse_{ioc_}, sock_{ioc_}, sock_strand_{boost::asio::make_strand(ioc_)} {
+        : ioc_{ctx}, socket_path_(path), timer_wait_pulse_{ioc_}, sock_{ioc_} {
 
         sock_.async_connect(socket_path_,
-            std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
+                            std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
     }
 
     AudioClient::~AudioClient() {
-        pulse_ready_ = false;
         sock_.cancel();
         sock_.close();
         timer_wait_pulse_.cancel();
@@ -244,8 +236,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        ioc_{2}, signals_{ioc_}, dbus_conn_{std::move(conn)}
-    {
+        ioc_ {2}, signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -259,28 +250,30 @@ namespace LTSM {
     }
 
     void AudioSessionBus::stop(void) {
-        dbus_conn_->leaveEventLoop();
-        signals_.cancel();
         clients_.clear();
+        signals_.cancel();
+        dbus_conn_->leaveEventLoop();
     }
 
     int AudioSessionBus::start(void) {
 
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
 
-        sdbus_job_ = std::async(std::launch::async, [this]()
-        {
-            dbus_conn_->enterEventLoop();
+        sdbus_job_ = std::async(std::launch::async, [this]() {
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", __FUNCTION__, err.what());
+                boost::asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
+            }
         });
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
 
-        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
-        {
+        signals_.async_wait([this](const boost::system::error_code & ec, int signal) {
             // skip canceled
-            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
-            {
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
                 this->stop();
             }
         });
@@ -309,7 +302,9 @@ namespace LTSM {
     bool AudioSessionBus::connectChannel(const std::string & socketPath) {
         Application::debug(DebugType::Dbus, "{}: socket path: `{}'", __FUNCTION__, socketPath);
 
-        if(std::ranges::any_of(clients_, [&](auto & cli) { return cli.socketPath(socketPath) && cli.socketConnected(); })) {
+        if(std::ranges::any_of(clients_, [&](auto & cli) {
+        return cli.socketPath(socketPath) && cli.socketConnected();
+        })) {
             Application::error("{}: socket busy, path: `{}'", __FUNCTION__, socketPath);
             return false;
         }

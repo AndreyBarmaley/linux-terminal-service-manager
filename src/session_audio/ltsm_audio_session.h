@@ -42,27 +42,31 @@ namespace LTSM {
         boost::asio::io_context & ioc_;
         std::string socket_path_;
 
-        const std::chrono::seconds dur_wait_pulse_{1};
-        boost::asio::steady_timer timer_wait_pulse_;
+        const pa_sample_format_t format_ = PA_SAMPLE_S16LE;
+        const uint8_t channels_ = 2;
 
+        boost::asio::steady_timer timer_wait_pulse_;
         boost::asio::local::stream_protocol::socket sock_;
-        boost::asio::strand<boost::asio::io_context::executor_type> sock_strand_;
 
         std::unique_ptr<PulseAudio::OutputStream> pulse_;
         std::unique_ptr<AudioEncoder::BaseEncoder> encoder_;
-        
-        uint32_t frag_size_ = 1024;
-        bool pulse_ready_{false};
 
-        AudioClient(boost::asio::io_context&, const std::string &);
+        uint32_t bit_rate_ = 44100;
+        uint32_t frag_size_ = 1024;
+
+        AudioClient(boost::asio::io_context &, const std::string &);
         ~AudioClient();
 
         void timerWaitPulseStarted(const boost::system::error_code & ec);
         void handlerSocketConnect(const boost::system::error_code & ec);
         void pcmDataNotify(const uint8_t* ptr, size_t len);
         bool clientHandshake(void);
-        bool socketPath(std::string_view path) const { return socket_path_ == path; }
-        bool socketConnected(void) const { return sock_.is_open(); }
+        bool socketPath(std::string_view path) const {
+            return socket_path_ == path;
+        }
+        bool socketConnected(void) const {
+            return sock_.is_open();
+        }
     };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
