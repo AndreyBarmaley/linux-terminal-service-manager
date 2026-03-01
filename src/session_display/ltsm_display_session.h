@@ -60,7 +60,34 @@ namespace LTSM::DisplaySession {
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
-    class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
+    class X11Session : public ApplicationJsonConfig {
+        std::string dbus_address_;
+
+        std::string_view xauth_file_;
+        const XCB::AuthCookie mcookie_;
+
+        int default_width_ = 0;
+        int default_height_ = 0;
+        int default_depth_ = 0;
+        int display_num_ = -1;
+
+      protected:
+        DBusConnectionPtr dbus_conn_;
+        bp::child ps_xorg_, ps_sess_;
+
+      protected:
+        bool startX11Display(void);
+        bool startX11Session(void);
+
+      public:
+        X11Session(int displayNum, const char* xauthFile, bool debug);
+
+        int displayNum(void) const { return display_num_; }
+        int pidXorg(void) const { return ps_xorg_.id(); }
+        int pidSession(void) const { return ps_sess_.id(); }
+    };
+
+    class DBusAdaptor : public X11Session, public sdbus::AdaptorInterfaces<Session::Display_adaptor> {
         const std::chrono::system_clock::time_point started_;
         const std::chrono::milliseconds dur_childs_{350};
 
@@ -70,30 +97,15 @@ namespace LTSM::DisplaySession {
 
         std::future<void> sdbus_job_;
 
-        std::string_view xauth_file_;
-        const XCB::AuthCookie mcookie_;
-
-        int default_width_ = 0;
-        int default_height_ = 0;
-        int default_depth_ = 0;
-        int display_num_ = -1;
-    
         std::mutex lock_childs_;
         std::list<bp::child> childs_;
 
-        DBusConnectionPtr dbus_conn_;
-        std::unique_ptr<XCB::Connector> xcb_;
-
-        bp::child ps_xorg_, ps_sess_;
-
-        void timerChildsAliveCheck(const boost::system::error_code&);
+        void timerChildsAliveCheck(const boost::system::error_code &);
 
         void stop(void);
-        bool startX11Display(void);
-        bool startX11Session(void);
 
       public:
-        DBusAdaptor(DBusConnectionPtr, int displayNum, const char* xauthFile, bool debug);
+        DBusAdaptor(int displayNum, const char* xauthFile, bool debug);
         virtual ~DBusAdaptor();
 
         int32_t getVersion(void) override;
