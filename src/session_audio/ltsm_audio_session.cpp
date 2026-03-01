@@ -146,7 +146,7 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        timer_wait_pulse_.expires_after(100ms);
+        timer_wait_pulse_.expires_after(10ms);
         timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
 
         return true;

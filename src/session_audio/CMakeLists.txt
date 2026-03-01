@@ -4,6 +4,16 @@ if(LTSM_SERVER_BUILD_SESSION_AUDIO)
 
     target_sources(${CUR_TARGET} PRIVATE ltsm_audio_pulse.cpp ltsm_audio_encoder.cpp ltsm_audio_session.cpp)
     pkg_check_modules(OPUS opus)
+    pkg_check_modules(PIPEWIRE REQUIRED libpipewire-0.3)
+
+    if(PIPEWIRE_FOUND)
+        target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_PIPEWIRE)
+        target_compile_options(${CUR_TARGET} PRIVATE ${PIPEWIRE_CFLAGS})
+        target_include_directories(${CUR_TARGET} PRIVATE ${PIPEWIRE_INCLUDE_DIR})
+        target_link_libraries(${CUR_TARGET} PRIVATE ${PIPEWIRE_LIBRARIES})
+    else()
+        message(STATUS "Decoder PIPEWIRE not found")
+    endif()
 
     if(OPUS_FOUND)
         target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_OPUS)
