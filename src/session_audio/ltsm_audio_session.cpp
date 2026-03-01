@@ -38,16 +38,6 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
-    std::unique_ptr<sdbus::IConnection> conn;
-
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            if(conn) {
-                conn->leaveEventLoop();
-            }
-        }
-    }
-
     /// AudioClient
     bool AudioClient::socketInitialize(void) {
         std::error_code fserr;
@@ -215,12 +205,13 @@ namespace LTSM {
     }
 
     /// AudioSessionBus
-    AudioSessionBus::AudioSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_session_audio"),
+    AudioSessionBus::AudioSessionBus(DBusConnectionPtr conn, bool debug) : ApplicationLog("ltsm_session_audio"),
 #ifdef SDBUS_2_0_API
-        AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_audio_path})
+        AdaptorInterfaces(*conn, sdbus::ObjectPath {dbus_session_audio_path}),
 #else
-        AdaptorInterfaces(conn, dbus_session_audio_path)
+        AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
+        ioc_{2}, signals_{ioc_}, dbus_conn_{std::move(conn)}
     {
         registerAdaptor();
 
@@ -231,15 +222,36 @@ namespace LTSM {
 
     AudioSessionBus::~AudioSessionBus() {
         unregisterAdaptor();
+        stop();
+    }
+
+    void AudioSessionBus::stop(void) {
+        dbus_conn_->leaveEventLoop();
+        signals_.cancel();
     }
 
     int AudioSessionBus::start(void) {
+
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
 
-        signal(SIGTERM, signalHandler);
-        signal(SIGINT, signalHandler);
+        sdbus_job_ = std::async(std::launch::async, [this]()
+        {
+            dbus_conn_->enterEventLoop();
+        });
 
-        conn->enterEventLoop();
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
+        {
+            // skip canceled
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
+            {
+                this->stop();
+            }
+        });
+
+        ioc_.run();
 
         Application::debug(DebugType::App, "service stopped");
         return EXIT_SUCCESS;
@@ -252,7 +264,7 @@ namespace LTSM {
 
     void AudioSessionBus::serviceShutdown(void) {
         Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
-        conn->leaveEventLoop();
+        boost::asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
     }
 
     void AudioSessionBus::setDebug(const std::string & level) {
@@ -285,7 +297,7 @@ int main(int argc, char** argv) {
 
     for(int it = 1; it < argc; ++it) {
         if(0 == std::strcmp(argv[it], "--help") || 0 == std::strcmp(argv[it], "-h")) {
-            std::cout << "usage: " << argv[0] << std::endl;
+            std::cout << "usage: " << argv[0] << "[--debug] [--version]" << std::endl;
             return EXIT_SUCCESS;
         } else if(0 == std::strcmp(argv[it], "--version") || 0 == std::strcmp(argv[it], "-v")) {
             std::cout << "version: " << LTSM_SESSION_AUDIO_VERSION << std::endl;
@@ -302,18 +314,11 @@ int main(int argc, char** argv) {
 
     try {
 #ifdef SDBUS_2_0_API
-        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_audio_name});
+        auto conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_audio_name});
 #else
-        LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_audio_name);
+        auto conn = sdbus::createSessionBusConnection(LTSM::dbus_session_audio_name);
 #endif
-
-        if(! LTSM::conn) {
-            LTSM::Application::error("dbus connection failed, uid: {}", getuid());
-            return EXIT_FAILURE;
-        }
-
-        LTSM::AudioSessionBus audioSession(*LTSM::conn, debug);
-        return audioSession.start();
+        return LTSM::AudioSessionBus(std::move(conn), debug).start();
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {

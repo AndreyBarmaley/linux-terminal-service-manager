@@ -24,13 +24,15 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
+#include <future>
 #include <thread>
 #include <atomic>
 #include <memory>
 #include <string>
 #include <forward_list>
 
-#include "ltsm_streambuf.h"
+#include <boost/asio.hpp>
+
 #include "ltsm_application.h"
 #include "ltsm_audio_pulse.h"
 #include "ltsm_audio_encoder.h"
@@ -54,11 +56,22 @@ namespace LTSM {
         bool socketInitialize(void);
     };
 
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
+
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
+        boost::asio::io_context ioc_;
+        boost::asio::signal_set signals_;
+
+        std::future<void> sdbus_job_;
+        DBusConnectionPtr dbus_conn_;
+
         std::forward_list<AudioClient> clients;
 
+      protected:
+        void stop(void);
+
       public:
-        AudioSessionBus(sdbus::IConnection &, bool debug = false);
+        AudioSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~AudioSessionBus();
 
         int start(void);
