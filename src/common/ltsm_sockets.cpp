@@ -1083,22 +1083,20 @@ namespace LTSM {
                 if(gnutls_error_is_fatal(ret)) {
                     throw gnutls_error(NS_FuncNameS);
                 }
-            } else
-
+            } else if(0 == ret) {
                 // eof
-                if(0 == ret) {
-                    Application::warning("{}: {}", __FUNCTION__, "end stream");
-                    throw gnutls_error(NS_FuncNameS);
-                }
-
+                Application::warning("{}: {}", __FUNCTION__, "end stream");
+                throw gnutls_error(NS_FuncNameS);
+            }
 
             if(ret < static_cast<ssize_t>(len)) {
                 ptr = static_cast<uint8_t*>(ptr) + ret;
                 len = len - ret;
+                NetworkStream::bytesIn += ret;
                 recvRaw(ptr, len);
+            } else {
+                NetworkStream::bytesIn += len;
             }
-
-            NetworkStream::bytesIn += ret;
         }
 
         void Stream::sendRaw(const void* ptr, size_t len) {
