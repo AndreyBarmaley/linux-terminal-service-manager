@@ -990,7 +990,7 @@ namespace LTSM::Manager {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", __FUNCTION__, err.what());
+                Application::error("sdbus exception: {}", err.what());
                 boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             }
         }));
