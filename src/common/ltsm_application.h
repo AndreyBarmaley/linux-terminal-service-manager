@@ -125,7 +125,7 @@ namespace LTSM {
 
         template<typename... Args>
         static void debug(const DebugType & type, std::string_view fmt, Args&& ... args) noexcept {
-            if(isDebugLevel(DebugLevel::Debug)) {
+            if(isDebugLevel(DebugLevel::Debug) && isDebugTypes(type)) {
                 try {
                     if(auto log = logger(type)) {
                         log->debug(fmt::runtime(fmt), args...);
@@ -137,7 +137,7 @@ namespace LTSM {
 
         template<typename... Args>
         static void trace(const DebugType & type, std::string_view fmt, Args&& ... args) noexcept {
-            if(isDebugLevel(DebugLevel::Trace)) {
+            if(isDebugLevel(DebugLevel::Trace) && isDebugTypes(type)) {
                 try {
                     if(auto log = logger(type)) {
                         log->debug(fmt::runtime(fmt), args...);
