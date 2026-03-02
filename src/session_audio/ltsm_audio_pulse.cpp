@@ -62,12 +62,15 @@ namespace LTSM {
         uint16_t formatBits(const pa_sample_format_t & fmt) {
             switch(fmt) {
                 case PA_SAMPLE_S16LE:
+                case PA_SAMPLE_S16BE:
                     return 16;
 
                 case PA_SAMPLE_S24LE:
+                case PA_SAMPLE_S24BE:
                     return 24;
 
                 case PA_SAMPLE_S32LE:
+                case PA_SAMPLE_S32BE:
                     return 32;
 
                 default:

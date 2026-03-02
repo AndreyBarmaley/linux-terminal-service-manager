@@ -35,6 +35,13 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
+#ifdef LTSM_WITH_PULSE
+    const pa_sample_format_t def_format_pulse = platformBigEndian() ? PA_SAMPLE_S16BE : PA_SAMPLE_S16LE;
+#endif
+#ifdef LTSM_WITH_PIPEWIRE
+    const spa_audio_format def_format_pipew = platformBigEndian() ? SPA_AUDIO_FORMAT_S16_BE : SPA_AUDIO_FORMAT_S16_LE;
+#endif
+
     /// AudioClient
     void AudioClient::handlerSocketConnect(const boost::system::error_code & ec) {
         // wait socket
@@ -52,7 +59,17 @@ namespace LTSM {
         assert(sock_.is_open());
 
         const uint8_t channels_ = 2;
-        const uint16_t bitsPerSample = PulseAudio::formatBits(format_);
+
+#ifdef LTSM_WITH_PIPEWIRE
+        // pipewire priority
+        const uint16_t bitsPerSample = PipeWire::formatBits(def_format_pipew);
+#else
+#ifdef LTSM_WITH_PULSE
+        const uint16_t bitsPerSample = PulseAudio::formatBits(def_format_pulse);
+#else
+        const uint16_t bitsPerSample = 0;
+#endif
+#endif
 
         boost::asio::streambuf sb;
         byte::streambuf bs(sb);
@@ -146,22 +163,34 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        timer_wait_pulse_.expires_after(10ms);
-        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
+        // init pulse
+        timer_wait_.expires_after(10ms);
+        timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
 
         return true;
     }
 
-    void AudioClient::timerWaitPulseStarted(const boost::system::error_code & ec) {
+    void AudioClient::timerWaitEngineStarted(const boost::system::error_code & ec) {
         if(ec) {
             return;
         }
 
+#ifdef LTSM_WITH_PIPEWIRE
+        // wait PipeWire started
+        try {
+            pipew_ = std::make_unique<PipeWire::OutputStream>(def_format_pipew, bit_rate_, channels_,
+                     std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+        } catch(const std::exception & err) {
+        }
+
+        return;
+#else
+#ifdef LTSM_WITH_PULSE
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
 
         // wait PulseAudio started
         try {
-            pulse_ = std::make_unique<PulseAudio::OutputStream>(format_, bit_rate_, channels_,
+            pulse_ = std::make_unique<PulseAudio::OutputStream>(def_format_pulse, bit_rate_, channels_,
                      std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
         } catch(const std::exception & err) {
         }
@@ -173,9 +202,13 @@ namespace LTSM {
 
         LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
         pulse_.reset();
+#else
+        return;
+#endif
+#endif
 
-        timer_wait_pulse_.expires_after(1s);
-        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
+        timer_wait_.expires_after(1s);
+        timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
     }
 
     void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
@@ -220,7 +253,7 @@ namespace LTSM {
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
-        : ioc_{ctx}, socket_path_(path), timer_wait_pulse_{ioc_}, sock_{ioc_} {
+        : ioc_{ctx}, socket_path_(path), timer_wait_{ioc_}, sock_{ioc_} {
 
         sock_.async_connect(socket_path_,
                             std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
@@ -229,8 +262,13 @@ namespace LTSM {
     AudioClient::~AudioClient() {
         sock_.cancel();
         sock_.close();
-        timer_wait_pulse_.cancel();
+        timer_wait_.cancel();
+#ifdef LTSM_WITH_PIPEWIRE
+        pipew_.reset();
+#endif
+#ifdef LTSM_WITH_PULSE
         pulse_.reset();
+#endif
         encoder_.reset();
     }
 

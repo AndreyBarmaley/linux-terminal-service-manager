@@ -34,24 +34,33 @@
 #include <boost/container/small_vector.hpp>
 
 #include "ltsm_application.h"
-#include "ltsm_audio_pulse.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
+
+#ifdef LTSM_WITH_PULSE
+#include "ltsm_audio_pulse.h"
+#endif
+#ifdef LTSM_WITH_PIPEWIRE
+#include "ltsm_audio_pipewire.h"
+#endif
 
 namespace LTSM {
     struct AudioClient {
         boost::asio::io_context & ioc_;
         std::string socket_path_;
 
-        const pa_sample_format_t format_ = PA_SAMPLE_S16LE;
         const uint8_t channels_ = 2;
 
-        boost::asio::steady_timer timer_wait_pulse_;
+        boost::asio::steady_timer timer_wait_;
         boost::asio::local::stream_protocol::socket sock_;
-
         boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
+#ifdef LTSM_WITH_PIPEWIRE
+        std::unique_ptr<PipeWire::OutputStream> pipew_;
+#endif
+#ifdef LTSM_WITH_PULSE
         std::unique_ptr<PulseAudio::OutputStream> pulse_;
+#endif
         std::unique_ptr<AudioEncoder::BaseEncoder> encoder_;
 
         uint32_t bit_rate_ = 44100;
@@ -60,7 +69,7 @@ namespace LTSM {
         AudioClient(boost::asio::io_context &, const std::string &);
         ~AudioClient();
 
-        void timerWaitPulseStarted(const boost::system::error_code & ec);
+        void timerWaitEngineStarted(const boost::system::error_code & ec);
         void handlerSocketConnect(const boost::system::error_code & ec);
         void pcmDataNotify(const uint8_t* ptr, size_t len);
         bool clientHandshake(void);
