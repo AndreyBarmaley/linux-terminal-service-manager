@@ -87,13 +87,14 @@ namespace LTSM {
         // encoding type PCM
         bs.write_le16(AudioEncoding::PCM);
         bs.write_le16(channels_);
-        bs.write_le32(44100);
+        bs.write_le32(bit_rate_);
         bs.write_le16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
+        bit_rate_ = 48000;
         // encoding type OPUS
         bs.write_le16(AudioEncoding::OPUS);
         bs.write_le16(channels_);
-        bs.write_le32(48000);
+        bs.write_le32(bit_rate_);
         bs.write_le16(bitsPerSample);
 #endif
         boost::system::error_code ec;
@@ -149,7 +150,6 @@ namespace LTSM {
 
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
-            bit_rate_ = 48000;
             const uint32_t opusFrameLength = channels_ * bitsPerSample / 8;
             frag_size_ = opusFrames * opusFrameLength;
 
@@ -164,7 +164,7 @@ namespace LTSM {
         }
 
         // init pulse
-        timer_wait_.expires_after(10ms);
+        timer_wait_.expires_after(300ms);
         timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
 
         return true;
@@ -183,7 +183,10 @@ namespace LTSM {
         } catch(const std::exception & err) {
         }
 
-        return;
+        if(pipew_ && pipew_->streamConnect(false)) {
+            // success
+            return;
+        }
 #else
 #ifdef LTSM_WITH_PULSE
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
@@ -200,14 +203,15 @@ namespace LTSM {
             return;
         }
 
-        LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
         pulse_.reset();
 #else
         return;
 #endif
 #endif
 
-        timer_wait_.expires_after(1s);
+        LTSM::Application::warning("{}: wait audio engine init...", __FUNCTION__);
+
+        timer_wait_.expires_after(3s);
         timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
     }
 
@@ -220,19 +224,25 @@ namespace LTSM {
             return val != 0;
         });
 
-        // 1. send id
-        auto id = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
-        buffers_.emplace_back(&id, sizeof(id));
+        // 1. send_le16(id)
+        uint16_t id16 = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
+        buffers_.emplace_back(&id16, sizeof(id16));
 
         if(sampleNotSilent) {
-            if(encoder_ && encoder_->encode(ptr, len)) {
+            if(encoder_) {
+                if(! encoder_->encode(ptr, len)) {
+                    Application::error("{}: {} failed", __FUNCTION__, "encoder");
+                    sock_.close();
+                    return;
+                }
+
                 ptr = encoder_->data();
                 len = encoder_->size();
             }
         }
 
-        // 2. send len
-        auto len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
+        // 2. send_le32(len)
+        uint32_t len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
         buffers_.emplace_back(&len32, sizeof(len32));
 
         // 3. send data
@@ -240,13 +250,14 @@ namespace LTSM {
             buffers_.emplace_back(ptr, len);
         }
 
-
         boost::system::error_code ec;
-        boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
+        auto total = boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
 
         if(ec) {
             Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
             sock_.close();
+        } else {
+            Application::debug(DebugType::Audio, "{}: send data: {}", __FUNCTION__, total);
         }
 
         buffers_.clear();
@@ -306,7 +317,7 @@ namespace LTSM {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", __FUNCTION__, err.what());
+                Application::error("sdbus exception: {}", err.what());
                 boost::asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
             }
         });

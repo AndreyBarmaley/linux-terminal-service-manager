@@ -38,6 +38,8 @@ namespace LTSM::PipeWire {
     uint16_t formatBits(const spa_audio_format & fmt);
 
     class OutputStream {
+        std::unique_ptr<pw_context, void(*)(pw_context*)> context_{nullptr, pw_context_destroy};
+        std::unique_ptr<pw_core, int(*)(pw_core*)> core_{nullptr, pw_core_disconnect};
         std::unique_ptr<pw_main_loop, void(*)(pw_main_loop*)> loop_{nullptr, pw_main_loop_destroy};
         std::unique_ptr<pw_stream, void(*)(pw_stream*)> stream_{nullptr, pw_stream_destroy};
 
@@ -49,8 +51,8 @@ namespace LTSM::PipeWire {
         const uint32_t channels_;
 
       protected:
-         bool streamActivate(bool active);
-         pw_stream_state streamState(void) const;
+        bool streamActivate(bool active);
+        pw_stream_state streamState(void) const;
 
       public:
         OutputStream(const spa_audio_format &, uint32_t rate, uint8_t channels, const ReadEventFunc &);
@@ -66,6 +68,8 @@ namespace LTSM::PipeWire {
         void streamPause(void);
         void streamUnPause(void);
         bool streamPaused(void) const;
+
+        std::string streamStateString(void) const;
     };
 }
 
