@@ -433,59 +433,7 @@ void LTSM::ChannelClient::systemChannelOpen(const JsonObject & jo) {
     }
 }
 
-bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
-    int channel = jo.getInteger("id");
-    bool error = jo.getBoolean("error");
-    int flags = jo.getInteger("flags", 0);
-
-    // move planed to running
-    const std::scoped_lock guard{lockpl};
-    auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
-        return st.channel == channel;
-    });
-
-    if(it == channelsPlanned.end()) {
-        Application::error("{}: {}, id: {}", __FUNCTION__, "planned not found", channel);
-        return false;
-    }
-
-    auto job = std::move(*it);
-    channelsPlanned.erase(it);
-
-    job.chOpts.flags = flags;
-
-    if(error) {
-        Application::error("{}: {}, id: {}", __FUNCTION__, "client connect error", channel);
-
-        if(0 <= job.serverFd) {
-            close(job.serverFd);
-            job.serverFd = -1;
-        }
-
-        return false;
-    }
-
-    if(job.channel <= static_cast<uint8_t>(ChannelType::System) || job.channel >= static_cast<uint8_t>(ChannelType::Reserved)) {
-        Application::error("{}: {}, id: {}", __FUNCTION__, "channel incorrect", job.channel);
-
-        if(0 <= job.serverFd) {
-            close(job.serverFd);
-            job.serverFd = -1;
-        }
-
-        return false;
-    }
-
-    if(findChannel(job.channel)) {
-        Application::error("{}: {}, id: {}", __FUNCTION__, "channel busy", channel);
-
-        if(0 <= job.serverFd) {
-            close(job.serverFd);
-            job.serverFd = -1;
-        }
-
-        return false;
-    }
+bool LTSM::ChannelClient::channelPlannedCreate(uint8_t channel, const Channel::Planned & job) {
 
     if(0 <= job.serverFd) {
         Application::info("{}: {}, id: {}, client url: `{}', server url: `{}'", __FUNCTION__, "found planned job", channel, job.clientOpts.url, "listener");
@@ -531,7 +479,65 @@ bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
 
             default:
                 Application::error("{}: {}, id: {}", __FUNCTION__, "channel type not implemented", channel);
-                throw channel_error(NS_FuncNameS);
+                return false;
+        }
+    }
+    
+    return true;
+}
+
+bool LTSM::ChannelClient::systemChannelConnected(const JsonObject & jo) {
+    int channel = jo.getInteger("id");
+    bool error = jo.getBoolean("error");
+    int flags = jo.getInteger("flags", 0);
+
+    // move planed to running
+    const std::scoped_lock guard{lockpl};
+    auto it = std::ranges::find_if(channelsPlanned, [=](auto & st) {
+        return st.channel == channel;
+    });
+
+    if(it != channelsPlanned.end()) {
+        auto job = std::move(*it);
+        channelsPlanned.erase(it);
+
+        job.chOpts.flags = flags;
+
+        if(error) {
+            Application::error("{}: {}, id: {}", __FUNCTION__, "client connect error", channel);
+
+            if(0 <= job.serverFd) {
+                close(job.serverFd);
+                job.serverFd = -1;
+            }
+
+            return false;
+        }
+
+        if(job.channel <= static_cast<uint8_t>(ChannelType::System) || job.channel >= static_cast<uint8_t>(ChannelType::Reserved)) {
+            Application::error("{}: {}, id: {}", __FUNCTION__, "channel incorrect", job.channel);
+
+            if(0 <= job.serverFd) {
+                close(job.serverFd);
+                job.serverFd = -1;
+            }
+
+            return false;
+        }
+
+        if(findChannel(job.channel)) {
+            Application::error("{}: {}, id: {}", __FUNCTION__, "channel busy", channel);
+
+            if(0 <= job.serverFd) {
+                close(job.serverFd);
+                job.serverFd = -1;
+            }
+
+            return false;
+        }
+
+        if(! channelPlannedCreate(channel, job)) {
+            return false;
         }
     }
 
