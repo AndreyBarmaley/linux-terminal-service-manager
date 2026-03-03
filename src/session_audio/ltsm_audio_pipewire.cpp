@@ -152,6 +152,7 @@ namespace LTSM {
 
     PipeWire::OutputStream::OutputStream(const spa_audio_format & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func)
         : read_event_cb_(func), format_(fmt), rate_(rate), channels_(channels) {
+        loop_.reset(pw_main_loop_new(nullptr));
         pw_init(nullptr, nullptr);
 
         context_.reset(pw_context_new(pw_main_loop_get_loop(loop_.get()), nullptr, 0));
@@ -193,7 +194,6 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
-        loop_.reset(pw_main_loop_new(nullptr));
         loop_run_ = std::async(std::launch::async, pw_main_loop_run, loop_.get());
     }
 
