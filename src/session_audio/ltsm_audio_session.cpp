@@ -35,6 +35,13 @@
 using namespace std::chrono_literals;
 
 namespace LTSM {
+#ifdef LTSM_WITH_PULSE
+    const pa_sample_format_t def_format_pulse = platformBigEndian() ? PA_SAMPLE_S16BE : PA_SAMPLE_S16LE;
+#endif
+#ifdef LTSM_WITH_PIPEWIRE
+    const spa_audio_format def_format_pipew = platformBigEndian() ? SPA_AUDIO_FORMAT_S16_BE : SPA_AUDIO_FORMAT_S16_LE;
+#endif
+
     /// AudioClient
     void AudioClient::handlerSocketConnect(const boost::system::error_code & ec) {
         // wait socket
@@ -52,7 +59,17 @@ namespace LTSM {
         assert(sock_.is_open());
 
         const uint8_t channels_ = 2;
-        const uint16_t bitsPerSample = PulseAudio::formatBits(format_);
+
+#ifdef LTSM_WITH_PIPEWIRE
+        // pipewire priority
+        const uint16_t bitsPerSample = PipeWire::formatBits(def_format_pipew);
+#else
+#ifdef LTSM_WITH_PULSE
+        const uint16_t bitsPerSample = PulseAudio::formatBits(def_format_pulse);
+#else
+        const uint16_t bitsPerSample = 0;
+#endif
+#endif
 
         boost::asio::streambuf sb;
         byte::streambuf bs(sb);
@@ -70,13 +87,14 @@ namespace LTSM {
         // encoding type PCM
         bs.write_le16(AudioEncoding::PCM);
         bs.write_le16(channels_);
-        bs.write_le32(44100);
+        bs.write_le32(bit_rate_);
         bs.write_le16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
+        bit_rate_ = 48000;
         // encoding type OPUS
         bs.write_le16(AudioEncoding::OPUS);
         bs.write_le16(channels_);
-        bs.write_le32(48000);
+        bs.write_le32(bit_rate_);
         bs.write_le16(bitsPerSample);
 #endif
         boost::system::error_code ec;
@@ -132,7 +150,6 @@ namespace LTSM {
 
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
-            bit_rate_ = 48000;
             const uint32_t opusFrameLength = channels_ * bitsPerSample / 8;
             frag_size_ = opusFrames * opusFrameLength;
 
@@ -146,22 +163,37 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        timer_wait_pulse_.expires_after(100ms);
-        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
+        // init pulse
+        timer_wait_.expires_after(300ms);
+        timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
 
         return true;
     }
 
-    void AudioClient::timerWaitPulseStarted(const boost::system::error_code & ec) {
+    void AudioClient::timerWaitEngineStarted(const boost::system::error_code & ec) {
         if(ec) {
             return;
         }
 
+#ifdef LTSM_WITH_PIPEWIRE
+        // wait PipeWire started
+        try {
+            pipew_ = std::make_unique<PipeWire::OutputStream>(def_format_pipew, bit_rate_, channels_,
+                     std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+        } catch(const std::exception & err) {
+        }
+
+        if(pipew_ && pipew_->streamConnect(false)) {
+            // success
+            return;
+        }
+#else
+#ifdef LTSM_WITH_PULSE
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };
 
         // wait PulseAudio started
         try {
-            pulse_ = std::make_unique<PulseAudio::OutputStream>(format_, bit_rate_, channels_,
+            pulse_ = std::make_unique<PulseAudio::OutputStream>(def_format_pulse, bit_rate_, channels_,
                      std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
         } catch(const std::exception & err) {
         }
@@ -171,11 +203,16 @@ namespace LTSM {
             return;
         }
 
-        LTSM::Application::warning("{}: wait pulseaudio", __FUNCTION__);
         pulse_.reset();
+#else
+        return;
+#endif
+#endif
 
-        timer_wait_pulse_.expires_after(1s);
-        timer_wait_pulse_.async_wait(std::bind(&AudioClient::timerWaitPulseStarted, this, std::placeholders::_1));
+        LTSM::Application::warning("{}: wait audio engine init...", __FUNCTION__);
+
+        timer_wait_.expires_after(3s);
+        timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
     }
 
     void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
@@ -187,19 +224,25 @@ namespace LTSM {
             return val != 0;
         });
 
-        // 1. send id
-        auto id = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
-        buffers_.emplace_back(&id, sizeof(id));
+        // 1. send_le16(id)
+        uint16_t id16 = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
+        buffers_.emplace_back(&id16, sizeof(id16));
 
         if(sampleNotSilent) {
-            if(encoder_ && encoder_->encode(ptr, len)) {
+            if(encoder_) {
+                if(! encoder_->encode(ptr, len)) {
+                    Application::error("{}: {} failed", __FUNCTION__, "encoder");
+                    sock_.close();
+                    return;
+                }
+
                 ptr = encoder_->data();
                 len = encoder_->size();
             }
         }
 
-        // 2. send len
-        auto len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
+        // 2. send_le32(len)
+        uint32_t len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
         buffers_.emplace_back(&len32, sizeof(len32));
 
         // 3. send data
@@ -207,20 +250,21 @@ namespace LTSM {
             buffers_.emplace_back(ptr, len);
         }
 
-
         boost::system::error_code ec;
-        boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
+        auto total = boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
 
         if(ec) {
             Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
             sock_.close();
+        } else {
+            Application::debug(DebugType::Audio, "{}: send data: {}", __FUNCTION__, total);
         }
 
         buffers_.clear();
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
-        : ioc_{ctx}, socket_path_(path), timer_wait_pulse_{ioc_}, sock_{ioc_} {
+        : ioc_{ctx}, socket_path_(path), timer_wait_{ioc_}, sock_{ioc_} {
 
         sock_.async_connect(socket_path_,
                             std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
@@ -229,8 +273,13 @@ namespace LTSM {
     AudioClient::~AudioClient() {
         sock_.cancel();
         sock_.close();
-        timer_wait_pulse_.cancel();
+        timer_wait_.cancel();
+#ifdef LTSM_WITH_PIPEWIRE
+        pipew_.reset();
+#endif
+#ifdef LTSM_WITH_PULSE
         pulse_.reset();
+#endif
         encoder_.reset();
     }
 
@@ -268,7 +317,7 @@ namespace LTSM {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
-                Application::error("sdbus exception: {}", __FUNCTION__, err.what());
+                Application::error("sdbus exception: {}", err.what());
                 boost::asio::post(ioc_, std::bind(&AudioSessionBus::stop, this));
             }
         });
