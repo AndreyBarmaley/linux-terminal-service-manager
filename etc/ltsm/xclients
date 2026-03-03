@@ -48,6 +48,10 @@ if [ -x /usr/bin/dbus-update-activation-environment ]; then
     dbus-update-activation-environment --systemd --all
 fi
 
+if [ -f /etc/ltsm/xsetup ]; then
+    . /etc/ltsm/xsetup
+fi
+
 # Xorg complete
 if [ -f ${HOME}/.Xresources ]; then
     xrdb -merge ${HOME}/.Xresources
