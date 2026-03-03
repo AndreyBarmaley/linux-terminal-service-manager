@@ -32,6 +32,7 @@
 #include <future>
 #include <vector>
 #include <utility>
+#include <filesystem>
 
 #include <boost/asio.hpp>
 
@@ -57,6 +58,77 @@ namespace LTSM::DisplaySession {
 #else
     namespace bp = boost::process;
 #endif
+    using ArgsList = std::vector<std::string>;
+
+    template<typename... Args>
+    class SessionProcess {
+        std::string filename_;
+
+        mutable bp::child proc_;
+        bp::ipstream proc_out_, proc_err_;
+
+      protected:
+        void waitAndLogging(void) noexcept {
+            try {
+                std::string str_out{std::istreambuf_iterator<char>(proc_out_),
+                                    std::istreambuf_iterator<char>()};
+
+                std::string str_err{std::istreambuf_iterator<char>(proc_err_),
+                                    std::istreambuf_iterator<char>()};
+
+                proc_.wait();
+
+                auto log_dir = std::filesystem::path{"/tmp"} / ".ltsm" / "log";
+
+                if(auto home = getenv("HOME")) {
+                    log_dir = std::filesystem::path{home} / ".ltsm" / "log";
+                }
+
+                if(! std::filesystem::is_directory(log_dir)) {
+                    std::filesystem::create_directories(log_dir);
+                }
+
+                auto log_file_out = log_dir / filename_;
+                log_file_out.replace_extension(".out");
+                std::ofstream(log_file_out) << str_out;
+
+                auto log_file_err = log_dir / filename_;
+                log_file_err.replace_extension(".err");
+                std::ofstream(log_file_err) << str_err;
+
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            }
+        }
+
+      public:
+        SessionProcess() = default;
+        SessionProcess(SessionProcess &&) = default;
+        SessionProcess & operator=(SessionProcess &&) = default;
+
+        SessionProcess(const std::string & cmd, const Args&... args)
+            : filename_(std::filesystem::path(cmd).filename()) {
+            proc_ = bp::child(cmd, args..., bp::std_out > proc_out_, bp::std_err > proc_err_);
+        }
+
+        ~SessionProcess() {
+            if(! filename_.empty()) {
+                waitAndLogging();
+            }
+        }
+
+        int pid(void) const {
+            return proc_.id();
+        }
+
+        bool isValid(void) const {
+            return proc_.valid();
+        }
+
+        bool isRunning(void) const {
+            return proc_.running();
+        }
+    };
 
     using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
@@ -73,7 +145,9 @@ namespace LTSM::DisplaySession {
 
       protected:
         DBusConnectionPtr dbus_conn_;
-        bp::child ps_xorg_, ps_sess_;
+
+        SessionProcess<ArgsList> ps_xorg_;
+        SessionProcess<ArgsList, bp::environment> ps_sess_;
 
       protected:
         bool startX11Display(void);
@@ -82,9 +156,15 @@ namespace LTSM::DisplaySession {
       public:
         X11Session(int displayNum, const char* xauthFile, bool debug);
 
-        int displayNum(void) const { return display_num_; }
-        int pidXorg(void) const { return ps_xorg_.id(); }
-        int pidSession(void) const { return ps_sess_.id(); }
+        int displayNum(void) const {
+            return display_num_;
+        }
+        int pidXorg(void) const {
+            return ps_xorg_.pid();
+        }
+        int pidSession(void) const {
+            return ps_sess_.pid();
+        }
     };
 
     class DBusAdaptor : public X11Session, public sdbus::AdaptorInterfaces<Session::Display_adaptor> {

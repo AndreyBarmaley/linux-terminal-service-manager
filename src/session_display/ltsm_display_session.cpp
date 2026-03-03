@@ -228,7 +228,7 @@ namespace LTSM::DisplaySession {
         default_depth_ = configGetInteger("default:depth", 24);
 
         std::string xorgBin;
-        std::vector<std::string> xorgArgs;
+        ArgsList xorgArgs;
 
         const char* ltsmX11 = "/etc/X11/ltsm.conf";
         const char* ltsmXorg = "/usr/bin/Xorg";
@@ -291,7 +291,7 @@ namespace LTSM::DisplaySession {
         }
 
         // start Xorg
-        ps_xorg_ = bp::child(xorgBin, xorgArgs);
+        ps_xorg_ = SessionProcess(xorgBin, xorgArgs);
 
         return true;
     }
@@ -299,7 +299,7 @@ namespace LTSM::DisplaySession {
     bool X11Session::startX11Session(void) {
         // session bin
         std::string sessionBin = configGetString("session:path");
-        std::vector<std::string> sessionArgs;
+        ArgsList sessionArgs;
 
         bp::environment sessionEnvs = boost::this_process::environment();
 
@@ -342,7 +342,7 @@ namespace LTSM::DisplaySession {
         }
 
         // start Session
-        ps_sess_ = bp::child(sessionBin, sessionArgs, sessionEnvs);
+        ps_sess_ = SessionProcess(sessionBin, sessionArgs, sessionEnvs);
 
         return true;
     }
@@ -469,15 +469,15 @@ namespace LTSM::DisplaySession {
         }
 
         // xorg stopped
-        if(ps_xorg_.valid() && ! ps_xorg_.running()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg", ps_xorg_.id());
+        if(ps_xorg_.isValid() && ! ps_xorg_.isRunning()) {
+            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "xorg", ps_xorg_.pid());
             boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
 
         // session stopped
-        if(ps_sess_.valid() && ! ps_sess_.running()) {
-            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "session", ps_sess_.id());
+        if(ps_sess_.isValid() && ! ps_sess_.isRunning()) {
+            Application::warning("{}: {} exited, pid: {}, session shutdown", __FUNCTION__, "session", ps_sess_.pid());
             boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
             return;
         }
@@ -511,16 +511,12 @@ namespace LTSM::DisplaySession {
         signals_.cancel();
         timer_childs_.cancel();
 
-        if(ps_xorg_.running()) {
-            kill(ps_xorg_.id(), SIGTERM);
-            std::error_code ec;
-            ps_xorg_.wait(ec);
+        if(ps_xorg_.isRunning()) {
+            kill(ps_xorg_.pid(), SIGTERM);
         }
 
-        if(ps_sess_.running()) {
-            kill(ps_sess_.id(), SIGTERM);
-            std::error_code ec;
-            ps_sess_.wait();
+        if(ps_sess_.isRunning()) {
+            kill(ps_sess_.pid(), SIGTERM);
         }
 
         std::scoped_lock guard{ lock_childs_ };
