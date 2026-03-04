@@ -56,7 +56,7 @@ namespace LTSM {
         boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
 #ifdef LTSM_WITH_PIPEWIRE
-        std::unique_ptr<PipeWire::OutputStream> pipew_;
+        std::unique_ptr<PipeWire::AudioCapture> pipew_;
 #endif
 #ifdef LTSM_WITH_PULSE
         std::unique_ptr<PulseAudio::OutputStream> pulse_;

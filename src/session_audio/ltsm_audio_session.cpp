@@ -78,6 +78,7 @@ namespace LTSM {
         bs.write_le16(AudioOp::Init);
         // send proto ver
         bs.write_le16(1);
+
         int numenc = 1;
 #ifdef LTSM_WITH_OPUS
         numenc++;
@@ -87,14 +88,13 @@ namespace LTSM {
         // encoding type PCM
         bs.write_le16(AudioEncoding::PCM);
         bs.write_le16(channels_);
-        bs.write_le32(bit_rate_);
+        bs.write_le32(44100);
         bs.write_le16(bitsPerSample);
 #ifdef LTSM_WITH_OPUS
-        bit_rate_ = 48000;
         // encoding type OPUS
         bs.write_le16(AudioEncoding::OPUS);
         bs.write_le16(channels_);
-        bs.write_le32(bit_rate_);
+        bs.write_le32(48000);
         bs.write_le16(bitsPerSample);
 #endif
         boost::system::error_code ec;
@@ -151,6 +151,7 @@ namespace LTSM {
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
             const uint32_t opusFrameLength = channels_ * bitsPerSample / 8;
+            bit_rate_ = 48000;
             frag_size_ = opusFrames * opusFrameLength;
 
             encoder_ = std::make_unique<AudioEncoder::Opus>(bit_rate_, channels_, bitsPerSample, opusFrames);
@@ -163,7 +164,7 @@ namespace LTSM {
             Application::info("{}: selected encoder: {}", __FUNCTION__, "PCM");
         }
 
-        // init pulse
+        // init engine
         timer_wait_.expires_after(300ms);
         timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
 
@@ -176,17 +177,22 @@ namespace LTSM {
         }
 
 #ifdef LTSM_WITH_PIPEWIRE
-        // wait PipeWire started
-        try {
-            pipew_ = std::make_unique<PipeWire::OutputStream>(def_format_pipew, bit_rate_, channels_,
+
+        if(! pipew_) {
+            try {
+                pipew_ = std::make_unique<PipeWire::AudioCapture>(def_format_pipew, bit_rate_, channels_,
                      std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
-        } catch(const std::exception & err) {
+                pipew_->streamConnect(false /* pause */);
+            } catch(const std::exception & err) {
+            }
         }
 
-        if(pipew_ && pipew_->streamConnect(false)) {
+        // wait PipeWire started
+        if(pipew_ && PW_STREAM_STATE_STREAMING == pipew_->streamState()) {
             // success
             return;
         }
+
 #else
 #ifdef LTSM_WITH_PULSE
         const pa_buffer_attr bufferAttr = { frag_size_, UINT32_MAX, UINT32_MAX, UINT32_MAX, frag_size_ };

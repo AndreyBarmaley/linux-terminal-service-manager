@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <spa/debug/types.h>
 #include <spa/param/audio/raw.h>
 #include <spa/param/audio/format-utils.h>
 
@@ -51,77 +52,8 @@ namespace LTSM {
             return 0;
         }
 
-        const char* mediaAudioSubtype(int val) {
-            switch(val) {
-                case SPA_MEDIA_SUBTYPE_raw:
-                    return "raw";
-
-                case SPA_MEDIA_SUBTYPE_dsp:
-                    return "dsp";
-
-                case SPA_MEDIA_SUBTYPE_iec958:
-                    return "iec958";
-
-                case SPA_MEDIA_SUBTYPE_dsd:
-                    return "dsd";
-
-                case SPA_MEDIA_SUBTYPE_mp3:
-                    return "mp3";
-
-                case SPA_MEDIA_SUBTYPE_aac:
-                    return "aac";
-
-                case SPA_MEDIA_SUBTYPE_vorbis:
-                    return "vorbis";
-
-                case SPA_MEDIA_SUBTYPE_wma:
-                    return "wma";
-
-                case SPA_MEDIA_SUBTYPE_ra:
-                    return "ra";
-
-                case SPA_MEDIA_SUBTYPE_sbc:
-                    return "sbc";
-
-                case SPA_MEDIA_SUBTYPE_adpcm:
-                    return "aspcm";
-
-                case SPA_MEDIA_SUBTYPE_g723:
-                    return "g723";
-
-                case SPA_MEDIA_SUBTYPE_g726:
-                    return "g726";
-
-                case SPA_MEDIA_SUBTYPE_g729:
-                    return "g729";
-
-                case SPA_MEDIA_SUBTYPE_amr:
-                    return "amr";
-
-                case SPA_MEDIA_SUBTYPE_gsm:
-                    return "gsm";
-
-                case SPA_MEDIA_SUBTYPE_alac:
-                    return "alac";
-
-                case SPA_MEDIA_SUBTYPE_flac:
-                    return "flac";
-
-                case SPA_MEDIA_SUBTYPE_ape:
-                    return "ape";
-
-                case SPA_MEDIA_SUBTYPE_opus:
-                    return "opus";
-
-                default:
-                    break;
-            }
-
-            return "unknown";
-        }
-
         void on_process(void* data) {
-            if(auto pipeWire = static_cast<OutputStream*>(data)) {
+            if(auto pipeWire = static_cast<BaseStream*>(data)) {
                 pipeWire->onProcessCb();
             }
         }
@@ -131,13 +63,13 @@ namespace LTSM {
                 return;
             }
 
-            if(auto pipeWire = static_cast<OutputStream*>(data)) {
+            if(auto pipeWire = static_cast<BaseStream*>(data)) {
                 pipeWire->onStreamParamChangedCb(param);
             }
         }
 
         void on_stream_state_changed(void* data, pw_stream_state old, pw_stream_state state, const char* error) {
-            if(auto pipeWire = static_cast<OutputStream*>(data)) {
+            if(auto pipeWire = static_cast<BaseStream*>(data)) {
                 pipeWire->onStreamStateChangedCb(old, state, error);
             }
         }
@@ -148,28 +80,40 @@ namespace LTSM {
             .param_changed = on_stream_param_changed,
             .process = on_process
         };
+
+        struct PwThreadLoopLocker {
+            pw_thread_loop* loop = nullptr;
+
+            PwThreadLoopLocker(pw_thread_loop* ptr) : loop(ptr) {
+                pw_thread_loop_lock(loop);
+            }
+
+            ~PwThreadLoopLocker() {
+                if(loop) {
+                    pw_thread_loop_unlock(loop);
+                }
+            }
+        };
     }
 
-    PipeWire::OutputStream::OutputStream(const spa_audio_format & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func)
-        : read_event_cb_(func), format_(fmt), rate_(rate), channels_(channels) {
-        loop_.reset(pw_main_loop_new(nullptr));
+    PipeWire::BaseStream::BaseStream(const MediaCategory & mcat, const spa_audio_format & fmt, uint32_t rate, uint8_t channels)
+        : media_category_(mcat), format_(fmt), rate_(rate), channels_(channels) {
+
         pw_init(nullptr, nullptr);
 
-        context_.reset(pw_context_new(pw_main_loop_get_loop(loop_.get()), nullptr, 0));
-        if(! context_) {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_context_connect");
-            throw std::runtime_error(NS_FuncNameS);
-        }
+        Application::info("{}: pipewire headers version: {}, library version: {}",
+                          __FUNCTION__, pw_get_headers_version(), pw_get_library_version());
 
-        core_.reset(pw_context_connect(context_.get(), nullptr, 0));
-        if(! core_) {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_context_connect");
-            throw std::runtime_error(NS_FuncNameS);
+        loop_.reset(pw_thread_loop_new("LtsmPipeWireLoop", nullptr));
+
+        if(! loop_) {
+            Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_new");
+            throw std::runtime_error(__FUNCTION__);
         }
 
         auto props = pw_properties_new(
                          PW_KEY_MEDIA_TYPE, "Audio",
-                         PW_KEY_MEDIA_CATEGORY, "Capture",
+                         PW_KEY_MEDIA_CATEGORY, (media_category_ == MediaCategory::Capture ? "Capture" : "Playback"),
                          PW_KEY_MEDIA_ROLE, "Music",
                          nullptr
                      );
@@ -181,8 +125,8 @@ namespace LTSM {
 
         stream_.reset(
             pw_stream_new_simple(
-                pw_main_loop_get_loop(loop_.get()),
-                "LtsmAudioCapture",
+                pw_thread_loop_get_loop(loop_.get()),
+                (media_category_ == MediaCategory::Capture ? "LtsmCaptureStream" : "LtsmPlaybackStream"),
                 props,
                 &stream_events,
                 this
@@ -194,14 +138,14 @@ namespace LTSM {
             throw std::runtime_error(NS_FuncNameS);
         }
 
-        loop_run_ = std::async(std::launch::async, pw_main_loop_run, loop_.get());
+        if(0 != pw_thread_loop_start(loop_.get())) {
+            Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_start");
+            throw std::runtime_error(__FUNCTION__);
+        }
     }
 
-    PipeWire::OutputStream::~OutputStream() {
-        if(loop_run_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-            pw_main_loop_quit(loop_.get());
-        }
-        loop_run_.wait();
+    PipeWire::BaseStream::~BaseStream() {
+        pw_thread_loop_stop(loop_.get());
 
         if(stream_) {
             pw_stream_disconnect(stream_.get());
@@ -213,25 +157,9 @@ namespace LTSM {
         pw_deinit();
     }
 
-    void PipeWire::OutputStream::onProcessCb(void) {
-        if(auto buf = pw_stream_dequeue_buffer(stream_.get())) {
-            const auto & ptr = static_cast<uint8_t*>(buf->buffer->datas[0].data);
-            const auto & len = buf->buffer->datas[0].chunk->size;
+    void PipeWire::BaseStream::onStreamParamChangedCb(const spa_pod* param) {
+        const PwThreadLoopLocker lock{ loop_.get() };
 
-            if(ptr && len) {
-                Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
-                               __FUNCTION__, buf->size, len, buf->requested);
-
-                read_event_cb_(ptr, len);
-            }
-
-            pw_stream_queue_buffer(stream_.get(), buf);
-        } else {
-            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");
-        }
-    }
-
-    void PipeWire::OutputStream::onStreamParamChangedCb(const spa_pod* param) {
         uint32_t media_type;
         uint32_t media_subtype;
 
@@ -241,33 +169,50 @@ namespace LTSM {
         }
 
         if(media_type != SPA_MEDIA_TYPE_audio) {
-            Application::warning("{}: unknown media type: {:#08x}", __FUNCTION__, media_type);
+            const char* type_name = spa_debug_type_find_name(spa_type_media_type, media_type);
+            Application::warning("{}: unsupported media type: {}({:#08x})", __FUNCTION__, type_name, media_type);
             return;
         }
 
-        Application::info("{}: media subtype: {}({:#08x})", __FUNCTION__, mediaAudioSubtype(media_subtype), media_subtype);
-
         if(media_subtype == SPA_MEDIA_SUBTYPE_raw) {
-            spa_audio_info_raw raw;
+            const char* subtype_name = spa_debug_type_find_name(spa_type_media_subtype, media_subtype);
+            Application::warning("{}: unsupported media subtype: {}({:#08x})", __FUNCTION__, subtype_name, media_subtype);
+            return;
+        }
 
-            if(int ret = spa_format_audio_raw_parse(param, & raw); 0 > ret) {
-                Application::error("{}: {} failed, code: {}", __FUNCTION__, "spa_format_audio_raw_parse", ret);
-            } else {
-                Application::info("{}: raw format - rate: {}, channels: {}", __FUNCTION__, raw.rate, raw.channels);
-            }
+        spa_audio_info_raw raw;
+
+        if(int ret = spa_format_audio_raw_parse(param, & raw); 0 > ret) {
+            Application::error("{}: {} failed, code: {}", __FUNCTION__, "spa_format_audio_raw_parse", ret);
+            return;
+        }
+
+        if(raw.format != format_) {
+            const char* format_name = spa_debug_type_find_name(spa_type_audio_format, raw.format);
+            Application::warning("{}: unsupported audio format: {}", __FUNCTION__, format_name);
+            return;
+        }
+
+        if(raw.rate != rate_) {
+            Application::warning("{}: unsupported audio format, rate: {}", __FUNCTION__, raw.rate);
+            return;
+        }
+
+        if(raw.channels != channels_) {
+            Application::warning("{}: unsupported audio format, channels: {}", __FUNCTION__, raw.channels);
+            return;
         }
     }
 
-    void PipeWire::OutputStream::onStreamStateChangedCb(pw_stream_state old, pw_stream_state state, const char* error) {
+    void PipeWire::BaseStream::onStreamStateChangedCb(pw_stream_state old, pw_stream_state state, const char* error) {
+        // unconnected connecting paused error unconnected
+        // unconnected connecting paused streaming paused unconnected
         Application::info("{}: old: {}, new: {}, error: {}",
                           __FUNCTION__, pw_stream_state_as_string(old), pw_stream_state_as_string(state), error);
     }
 
-    bool PipeWire::OutputStream::streamConnect(bool pause) {
-        if(loop_run_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-            pw_main_loop_quit(loop_.get());
-        }
-        loop_run_.wait();
+    bool PipeWire::BaseStream::streamConnect(bool pause) {
+        const PwThreadLoopLocker lock{ loop_.get() };
 
         uint8_t builder_buf[1024] = {};
         spa_pod_builder builder = {};
@@ -281,76 +226,107 @@ namespace LTSM {
         //auto mp3_format = SPA_AUDIO_INFO_MP3_INIT(.rate = 128 * 1024, .channels = SPA_AUDIO_MP3_CHANNEL_MODE_STEREO);
         //params[0] = spa_format_audio_mp3_build(&builder, SPA_PARAM_EnumFormat, & mp3_format);
 
-        auto flags = PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS;
+        auto flags = PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS;
 
         if(pause) {
             flags |= PW_STREAM_FLAG_INACTIVE;
         }
 
         int ret = pw_stream_connect(stream_.get(),
-                                    PW_DIRECTION_INPUT,
+                                    (media_category_ == MediaCategory::Capture ? PW_DIRECTION_INPUT : PW_DIRECTION_OUTPUT),
                                     PW_ID_ANY,
                                     (pw_stream_flags) flags,
                                     params, 1);
-
-        loop_run_ = std::async(std::launch::async, pw_main_loop_run, loop_.get());
 
         if(0 > ret) {
             Application::error("{}: {} failed, code: {}", __FUNCTION__, "pw_stream_connect", ret);
             return false;
         }
 
+        Application::debug(DebugType::Audio, "{}: success", __FUNCTION__);
+
         return true;
     }
 
-    void PipeWire::OutputStream::streamDisconnect(void) {
-        if(loop_run_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-            pw_main_loop_quit(loop_.get());
+    void PipeWire::BaseStream::streamDisconnect(void) {
+        if(stream_) {
+            const PwThreadLoopLocker lock{ loop_.get() };
+            pw_stream_disconnect(stream_.get());
+            stream_.reset();
         }
-        loop_run_.wait();
-
-        pw_stream_disconnect(stream_.get());
-        loop_run_ = std::async(std::launch::async, pw_main_loop_run, loop_.get());
     }
 
-    bool PipeWire::OutputStream::streamActivate(bool active) {
-        if(loop_run_.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-            pw_main_loop_quit(loop_.get());
-        }
-        loop_run_.wait();
+    bool PipeWire::BaseStream::streamActivate(bool active) {
+        const PwThreadLoopLocker lock{ loop_.get() };
 
-        int ret = pw_stream_set_active(stream_.get(), active);
-
-        if(0 > ret) {
+        if(int ret = pw_stream_set_active(stream_.get(), active); 0 > ret) {
             Application::error("{}: {} failed, code: {}", __FUNCTION__, "pw_stream_set_active", ret);
             return false;
         }
 
-        loop_run_ = std::async(std::launch::async, pw_main_loop_run, loop_.get());
         return true;
     }
 
-    pw_stream_state PipeWire::OutputStream::streamState(void) const {
+    pw_stream_state PipeWire::BaseStream::streamState(void) const {
+        const PwThreadLoopLocker lock{ loop_.get() };
+
         return pw_stream_get_state(stream_.get(), nullptr);
     }
 
-    void PipeWire::OutputStream::streamPause(void) {
+    void PipeWire::BaseStream::streamPause(void) {
         if(! streamPaused()) {
             streamActivate(false);
         }
     }
 
-    void PipeWire::OutputStream::streamUnPause(void) {
+    void PipeWire::BaseStream::streamUnPause(void) {
         if(streamPaused()) {
             streamActivate(true);
         }
     }
 
-    bool PipeWire::OutputStream::streamPaused(void) const {
+    bool PipeWire::BaseStream::streamPaused(void) const {
         return PW_STREAM_STATE_PAUSED == streamState();
     }
 
-    std::string PipeWire::OutputStream::streamStateString(void) const {
-        return pw_stream_state_as_string(pw_stream_get_state(stream_.get(), nullptr));
+    // CaptureStream
+    void PipeWire::AudioCapture::onProcessCb(void) {
+        const PwThreadLoopLocker lock{ loop_.get() };
+
+        if(auto buf = pw_stream_dequeue_buffer(stream_.get())) {
+            const auto & ptr = static_cast<uint8_t*>(buf->buffer->datas[0].data);
+            const auto & len = buf->buffer->datas[0].chunk->size;
+
+            if(ptr && len) {
+                Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
+                                   __FUNCTION__, buf->size, len, buf->requested);
+
+                read_event_cb_(ptr, len);
+            }
+
+            pw_stream_queue_buffer(stream_.get(), buf);
+        } else {
+            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");
+        }
+    }
+
+    // PlaybackStream
+    void PipeWire::AudioPlayback::onProcessCb(void) {
+        const PwThreadLoopLocker lock{ loop_.get() };
+
+        if(auto buf = pw_stream_dequeue_buffer(stream_.get())) {
+/*
+            auto & ptr = static_cast<uint8_t*>(buf->buffer->datas[0].data);
+            auto & len = buf->buffer->datas[0].chunk->size;
+
+            if(ptr && len) {
+                Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
+                                   __FUNCTION__, buf->size, len, buf->requested);
+            }
+*/
+            pw_stream_queue_buffer(stream_.get(), buf);
+        } else {
+            Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");
+        }
     }
 }

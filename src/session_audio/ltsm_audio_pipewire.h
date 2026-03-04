@@ -33,32 +33,31 @@
 #include <spa/param/audio/format.h>
 
 namespace LTSM::PipeWire {
-    using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
 
+    using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
     uint16_t formatBits(const spa_audio_format & fmt);
 
-    class OutputStream {
-        std::unique_ptr<pw_context, void(*)(pw_context*)> context_{nullptr, pw_context_destroy};
-        std::unique_ptr<pw_core, int(*)(pw_core*)> core_{nullptr, pw_core_disconnect};
-        std::unique_ptr<pw_main_loop, void(*)(pw_main_loop*)> loop_{nullptr, pw_main_loop_destroy};
+    enum class MediaCategory { Playback, Capture };
+
+    class BaseStream {
+      protected:
+        std::unique_ptr<pw_thread_loop, void(*)(pw_thread_loop*)> loop_{nullptr, pw_thread_loop_destroy};
         std::unique_ptr<pw_stream, void(*)(pw_stream*)> stream_{nullptr, pw_stream_destroy};
 
-        std::future<int> loop_run_;
-        ReadEventFunc read_event_cb_;
-
+        const MediaCategory media_category_;
         const spa_audio_format format_;
         const uint32_t rate_;
         const uint32_t channels_;
 
       protected:
         bool streamActivate(bool active);
-        pw_stream_state streamState(void) const;
 
       public:
-        OutputStream(const spa_audio_format &, uint32_t rate, uint8_t channels, const ReadEventFunc &);
-        ~OutputStream();
+        BaseStream(const MediaCategory &, const spa_audio_format &, uint32_t rate, uint8_t channels);
+        virtual ~BaseStream();
 
-        void onProcessCb(void);
+        virtual void onProcessCb(void) = 0;
+
         void onStreamParamChangedCb(const spa_pod* param);
         void onStreamStateChangedCb(pw_stream_state old, pw_stream_state state, const char* error);
 
@@ -69,7 +68,26 @@ namespace LTSM::PipeWire {
         void streamUnPause(void);
         bool streamPaused(void) const;
 
-        std::string streamStateString(void) const;
+        // PW_STREAM_STATE_ERROR, PW_STREAM_STATE_UNCONNECTED, PW_STREAM_STATE_CONNECTING, PW_STREAM_STATE_PAUSED, PW_STREAM_STATE_STREAMING
+        pw_stream_state streamState(void) const;
+    };
+
+    class AudioCapture : public BaseStream {
+        ReadEventFunc read_event_cb_;
+
+      public:
+        AudioCapture(const spa_audio_format & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func) :
+            BaseStream(MediaCategory::Capture, fmt, rate, channels), read_event_cb_{func} {}
+
+        void onProcessCb(void) override;
+    };
+
+    class AudioPlayback : public BaseStream {
+      public:
+        AudioPlayback(const spa_audio_format & fmt, uint32_t rate, uint8_t channels) :
+            BaseStream(MediaCategory::Capture, fmt, rate, channels) {}
+
+        void onProcessCb(void) override;
     };
 }
 
