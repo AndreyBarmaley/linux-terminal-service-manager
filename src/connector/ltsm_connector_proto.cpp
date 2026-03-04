@@ -127,6 +127,7 @@ namespace LTSM::Connector {
         _userSession = true;
 
         busConnectorConnected(newDisplay, getpid());
+        busSetSessionEncodings(newDisplay, getClientEncodings().toVector());
 
         std::thread([this]() {
             JsonObjectStream jos;

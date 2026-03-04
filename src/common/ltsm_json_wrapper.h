@@ -583,13 +583,10 @@ namespace LTSM {
       public:
         JsonArrayStream();
 
-        template <typename Iterator>
-        JsonArrayStream(Iterator it1, Iterator it2) {
+        template <typename Cont>
+        JsonArrayStream(const Cont & cont) {
             os << "[";
-
-            while(it1 != it2) {
-                push(*it1++);
-            }
+            push(cont);
         }
 
         JsonArrayStream & push(void);
@@ -600,7 +597,11 @@ namespace LTSM {
                 os << ",";
             }
 
-            if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
+            if constexpr (std::ranges::range<T>) {
+                for(const auto & v: val) {
+                    push(v);
+                }
+            } else if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
                 os << std::quoted(val);
             } else if constexpr(std::is_pointer<T>::value && sizeof(std::remove_reference<T>) == 1) {
                 os << std::quoted(val ? val : "");

@@ -34,10 +34,7 @@
 #include <filesystem>
 #include <forward_list>
 
-//#ifdef LTSM_CLIENT
-// #include "ltsm_audio.h"
-// #include "ltsm_audio_decoder.h"
-//#endif
+#include "ltsm_audio.h"
 
 #ifdef LTSM_PKCS11_AUTH
 #include "ltsm_pkcs11_wrapper.h"
@@ -391,6 +388,7 @@ namespace LTSM {
 
         /// ConnectorClientAudio
         class ConnectorClientAudio : public ConnectorBase {
+            const AudioPlayback engineType;
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
 
@@ -505,7 +503,9 @@ namespace LTSM {
 #ifdef LTSM_WITH_FUSE
         ConnectorBasePtr createClientFuseConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 #endif
+#ifdef LTSM_WITH_AUDIO
         ConnectorBasePtr createClientAudioConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
+#endif
         ConnectorBasePtr createFileConnector(uint8_t channel, const std::filesystem::path &, const ConnectorMode &, const Opts &, ChannelClient &);
         ConnectorBasePtr createCommandConnector(uint8_t channel, const std::string &, const ConnectorMode &, const Opts &, ChannelClient &);
 
@@ -576,6 +576,7 @@ namespace LTSM {
             return false;
         }
 
+
         // recv system events
         virtual void systemClientVariables(const JsonObject &) { /* empty */ }
         virtual void systemCursorFailed(const JsonObject &) { /* empty */ }
@@ -593,6 +594,7 @@ namespace LTSM {
 
         bool createChannel(const Channel::UrlMode & curlMod, const Channel::UrlMode & surlMod, const Channel::Opts &);
         void destroyChannel(uint8_t channel);
+
 
 #ifdef __UNIX__
         bool createChannelUnix(uint8_t channel, const std::filesystem::path &, const Channel::ConnectorMode &, const Channel::Opts &);
@@ -637,6 +639,7 @@ namespace LTSM {
             return false;
         }
 
+        virtual AudioPlayback clientAudioPlayback(void) const { return AudioPlayback::Default; }
         virtual bool createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
             return false;
         }

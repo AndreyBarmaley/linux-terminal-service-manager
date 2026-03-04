@@ -162,11 +162,25 @@ namespace LTSM {
             case ENCODING_LTSM_CURSOR:
                 return "LTSM_CURSOR";
 
+            case ENCODING_LTSM_OPUS:
+                return "LTSM_OPUS";
+
+            case ENCODING_LTSM_PCM:
+                return "LTSM_PCM";
+
             default:
                 break;
         }
 
         return "unknown";
+    }
+
+    bool RFB::isAudioEncoding(int type) {
+        auto types = {
+            ENCODING_LTSM_PCM, ENCODING_LTSM_OPUS
+        };
+
+        return std::ranges::any_of(types, [=](auto & enc) { return enc == type; });
     }
 
     bool RFB::isVideoEncoding(int type) {
@@ -186,7 +200,8 @@ namespace LTSM {
             ENCODING_DESKTOP_SIZE, ENCODING_EXT_DESKTOP_SIZE, ENCODING_LAST_RECT, ENCODING_RICH_CURSOR,
             ENCODING_COMPRESS9, ENCODING_COMPRESS8, ENCODING_COMPRESS7, ENCODING_COMPRESS6, ENCODING_COMPRESS5, ENCODING_COMPRESS4, ENCODING_COMPRESS3, ENCODING_COMPRESS2, ENCODING_COMPRESS1,
             ENCODING_EXT_CLIPBOARD, ENCODING_CONTINUOUS_UPDATES,
-            ENCODING_LTSM, ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI
+            ENCODING_LTSM, ENCODING_FFMPEG_H264, ENCODING_FFMPEG_AV1, ENCODING_FFMPEG_VP8, ENCODING_LTSM_LZ4, ENCODING_LTSM_TJPG, ENCODING_LTSM_QOI,
+            ENCODING_LTSM_OPUS, ENCODING_LTSM_PCM
         };
 
         for(const auto & type : types) {
@@ -201,10 +216,10 @@ namespace LTSM {
     std::string RFB::encodingOpts(int type) {
         switch(type) {
             case ENCODING_ZLIB:
-                return fmt::format("--encoding {},zlev:<[1],2,3,4,5,6,7,8,9>", Tools::lower(encodingName(type)));
+                return fmt::format("--video {},zlev:<[1],2,3,4,5,6,7,8,9>", Tools::lower(encodingName(type)));
 
             case ENCODING_LTSM_TJPG:
-                return fmt::format("--encoding {},qual:85,samp:<[420],422,440,444,gray,411>", Tools::lower(encodingName(type)));
+                return fmt::format("--video {},qual:85,samp:<[420],422,440,444,gray,411>", Tools::lower(encodingName(type)));
 
             default:
                 break;

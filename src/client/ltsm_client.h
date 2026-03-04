@@ -63,14 +63,17 @@ namespace LTSM {
 
         std::forward_list<std::string> dropFiles;
         std::forward_list<std::string> shareFolders;
-        std::forward_list<std::string> encodingOptions;
+        std::forward_list<std::string> videoEncodingOptions;
+        std::forward_list<std::string> audioEncodingOptions;
 
         std::string host{"localhost"};
         std::string username, seamless, pkcs11Auth;
         std::string printerUrl, saneUrl;
-        std::string prefferedEncoding;
-        std::string audioEncoding{"auto"};
+        std::string audioPlayback;
         std::string passfile;
+
+        int videoEncoding = 0;
+        int audioEncoding = 0;
 
         std::unique_ptr<SDL::Window> window;
         std::unique_ptr<SDL_Surface, void(*)(SDL_Surface*)> sfback { nullptr, SDL_FreeSurface };
@@ -117,7 +120,8 @@ namespace LTSM {
         const PixelFormat & clientFormat(void) const override;
         XCB::Size clientSize(void) const override;
 
-        std::string clientPrefferedEncoding(void) const override;
+        int clientPrefferedVideoEncoding(void) const override;
+        int clientPrefferedAudioEncoding(void) const override;
 
         bool sdlEventProcessing(void);
         bool pushEventWindowResize(const XCB::Size &);
@@ -159,6 +163,8 @@ namespace LTSM {
 #endif
         void clientRecvLtsmHandshakeEvent(int flags) override;
         void systemLoginSuccess(const JsonObject &) override;
+
+        AudioPlayback clientAudioPlayback(void) const override;
 
         const char* pkcs11Library(void) const override;
         bool createChannelAllow(const Channel::ConnectorType &, const std::string &,

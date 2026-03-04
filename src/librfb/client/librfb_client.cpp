@@ -451,10 +451,14 @@ namespace LTSM {
 #endif
 #endif
             ENCODING_LTSM_CURSOR,
-
             // compatible RFB encodings
             ENCODING_ZRLE, ENCODING_TRLE, ENCODING_HEXTILE,
-            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE
+            ENCODING_ZLIB, ENCODING_CORRE, ENCODING_RRE,
+            // audio
+#ifdef LTSM_WITH_OPUS
+            ENCODING_LTSM_OPUS,
+#endif
+            ENCODING_LTSM_PCM
         };
 
         if(extclip) {
@@ -475,32 +479,34 @@ namespace LTSM {
         encodings.push_front(ENCODING_EXT_DESKTOP_SIZE);
         encodings.push_front(ENCODING_CONTINUOUS_UPDATES);
 
+        if(auto audioEncoding = clientPrefferedAudioEncoding(); 0 < audioEncoding) {
+            encodings.push_front(audioEncoding);
+        }
+
         if(clientLtsmSupported()) {
             encodings.push_front(ENCODING_LTSM);
         }
 
-        auto prefferedEncoding = clientPrefferedEncoding();
+        if(auto prefferedEncoding = clientPrefferedVideoEncoding(); 0 < prefferedEncoding) {
 #ifdef LTSM_DECODING_FFMPEG
 
-        // experimental feature remove and added from preffered
-        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_H264))) {
-            encodings.remove(ENCODING_FFMPEG_H264);
-        }
+            // experimental feature remove and added from preffered
+            if(prefferedEncoding != ENCODING_FFMPEG_H264) {
+                encodings.remove(ENCODING_FFMPEG_H264);
+            }
 
-        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_AV1))) {
-            encodings.remove(ENCODING_FFMPEG_AV1);
-        }
+            if(prefferedEncoding != ENCODING_FFMPEG_AV1) {
+                encodings.remove(ENCODING_FFMPEG_AV1);
+            }
 
-        if(prefferedEncoding != Tools::lower(encodingName(ENCODING_FFMPEG_VP8))) {
-            encodings.remove(ENCODING_FFMPEG_VP8);
-        }
+            if(prefferedEncoding != ENCODING_FFMPEG_VP8) {
+                encodings.remove(ENCODING_FFMPEG_VP8);
+            }
 
 #endif
-
-        if(! prefferedEncoding.empty()) {
             // preffered set priority
             auto it = std::ranges::find_if(encodings, [&](auto & enc) {
-                return prefferedEncoding == Tools::lower(RFB::encodingName(enc));
+                return prefferedEncoding == enc;
             });
 
             if(it != encodings.end()) {

@@ -239,6 +239,7 @@ namespace LTSM::Manager {
     struct XvfbSession {
         EnvironmentsMap environments;
         OptionsMap options;
+        std::vector<int32_t> encodings;
 
         std::filesystem::path xauthfile;
         UserSessionPtr userInfo;
@@ -432,6 +433,7 @@ namespace LTSM::Manager {
                                        const std::map<std::string, std::string> & map) override;
         void busSetSessionOptions(const int32_t & display,
                                   const std::map<std::string, std::string> & map) override;
+        void busSetSessionEncodings(const int32_t& display, const std::vector<int32_t>& vals) override;
         void busSetSessionKeyboardLayouts(const int32_t & display,
                                           const std::vector<std::string> & layouts) override;
         void busSendMessage(const int32_t & display, const std::string & message) override;

@@ -49,6 +49,10 @@ namespace LTSM {
         encs.insert(encs.begin(), priorities.begin(), priorities.end());
     }
 
+    std::vector<int> ClientEncodings::toVector(void) const {
+        return std::vector<int>{ encs.begin(), encs.end() };
+    }
+
     bool ClientEncodings::isPresent(int type) const {
         return std::ranges::any_of(encs, [=](auto & val) { return val == type; });
     }
@@ -725,6 +729,7 @@ namespace LTSM {
                 case RFB::ENCODING_FFMPEG_H264:
                 case RFB::ENCODING_FFMPEG_AV1:
                 case RFB::ENCODING_FFMPEG_VP8:
+                    clientLtsmSupported = true;
                     clientVideoSupported = true;
                     break;
 

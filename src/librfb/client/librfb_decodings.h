@@ -51,9 +51,8 @@ namespace LTSM {
             virtual void updateRawPixels2(const XCB::Region &, const void*, uint8_t depth, uint32_t pitch, uint32_t sdlFormat) = 0;
 
             virtual XCB::Size clientSize(void) const = 0;
-            virtual std::string clientPrefferedEncoding(void) const {
-                return "";
-            }
+            virtual int clientPrefferedVideoEncoding(void) const { return 0; }
+            virtual int clientPrefferedAudioEncoding(void) const { return 0; }
         };
 
         /// DecoderWrapper
@@ -125,8 +124,12 @@ namespace LTSM {
                 return owner->clientSize();
             }
 
-            std::string clientPrefferedEncoding(void) const override {
-                return owner->clientPrefferedEncoding();
+            int clientPrefferedVideoEncoding(void) const override {
+                return owner->clientPrefferedVideoEncoding();
+            }
+
+            int clientPrefferedAudioEncoding(void) const override {
+                return owner->clientPrefferedAudioEncoding();
             }
         };
 

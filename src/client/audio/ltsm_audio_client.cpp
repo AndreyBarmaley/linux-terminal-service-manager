@@ -69,7 +69,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 /// ConnectorClientAudio
 LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
+    : ConnectorBase(ch, mod, chOpts, srv), engineType(srv.clientAudioPlayback()), cid(ch) {
     Application::info("{}: channelId: {}", __FUNCTION__, cid);
     // start threads
     setRunning(true);
@@ -219,25 +219,36 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     Application::info("{}: audio format: channels: {}, samples: {}, bits: {}",
                       __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
 
+    if(engineType == AudioPlayback::OpenAl || engineType == AudioPlayback::Default) {
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
 
-    try {
-        player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
-    } catch(const std::exception &) {
-        error.assign("openal failed");
-    }
+        try {
+            player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
+        } catch(const std::exception &) {
+            error.assign("openal failed");
+        }
 
+#else
+        throw std::runtime_error("openal unsupported");
 #endif
-
+    } else if(engineType == AudioPlayback::OpenAl) {
 #ifdef LTSM_WITH_PLAYBACK_PULSE
 
-    try {
-        player = std::make_unique<PulseAudio::Playback>("ltsm_client", "LTSM Audio Input", *format);
-    } catch(const std::exception &) {
-        error.assign("pulseaudio failed");
-    }
+        try {
+            player = std::make_unique<PulseAudio::Playback>("ltsm_client", "LTSM Audio Input", *format);
+        } catch(const std::exception &) {
+            error.assign("pulseaudio failed");
+        }
 
+#else
+        throw std::runtime_error("pulseaudio unsupported");
 #endif
+    } else if(engineType == AudioPlayback::PipeWire) {
+#ifdef LTSM_WITH_PLAYBACK_PIPEWIRE
+#else
+        throw std::runtime_error("pipewire unsupported");
+#endif
+    }
 
     if(! player) {
         reply.writeIntLE16(error.size());

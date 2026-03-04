@@ -125,6 +125,8 @@ namespace LTSM {
         const int ENCODING_LTSM_LZ4 = 0x4C5A3400;
         const int ENCODING_LTSM_TJPG = 0x544A5047;
         const int ENCODING_LTSM_QOI = 0x514F4900;
+        const int ENCODING_LTSM_OPUS = 0x4F505553;
+        const int ENCODING_LTSM_PCM = 0x50434D00;
         const int PROTOCOL_LTSM = 119;
 
         struct ScreenInfo : XCB::Region {
@@ -143,6 +145,7 @@ namespace LTSM {
         int desktopResizeStatusCode(const DesktopResizeStatus &);
 
         bool isVideoEncoding(int type);
+        bool isAudioEncoding(int type);
         const char* encodingName(int type);
         int encodingType(std::string_view);
         std::string encodingOpts(int type);

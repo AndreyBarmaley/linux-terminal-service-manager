@@ -32,6 +32,8 @@
 #include "ltsm_compat.h"
 
 namespace LTSM {
+    enum class AudioPlayback { Default, PulseAudio, OpenAl, PipeWire };
+
     namespace AudioOp {
         enum {
             Init = 0xFE01,
