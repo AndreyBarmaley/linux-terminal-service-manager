@@ -597,11 +597,7 @@ namespace LTSM {
                 os << ",";
             }
 
-            if constexpr (std::ranges::range<T>) {
-                for(const auto & v: val) {
-                    push(v);
-                }
-            } else if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
+            if constexpr(std::is_array<T>::value && sizeof(typename std::remove_extent<T>::type) == 1) {
                 os << std::quoted(val);
             } else if constexpr(std::is_pointer<T>::value && sizeof(std::remove_reference<T>) == 1) {
                 os << std::quoted(val ? val : "");
@@ -611,6 +607,10 @@ namespace LTSM {
                 os << std::quoted(val);
             } else if constexpr(std::is_integral_v<T> && sizeof(T) == 1) {
                 os << static_cast<int>(val);
+            } else if constexpr (std::ranges::range<T>) {
+                for(const auto & v: val) {
+                    push(v);
+                }
             } else {
                 os << val;
             }
