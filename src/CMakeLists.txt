@@ -292,6 +292,7 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_CLIENT_FFMPEG_SUPPORT ON CACHE BOOL "client: ffmpeg decoder")
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
+    set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect")
 
     CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB)
 
@@ -307,8 +308,7 @@ if(LTSM_BUILD_CLIENT)
     endif()
 
     target_compile_definitions(${CUR_TARGET} PRIVATE -DLTSM_CLIENT)
-    target_include_directories(${CUR_TARGET} PRIVATE common channels librfb
-            session_audio session_fuse session_pcsc)
+    target_include_directories(${CUR_TARGET} PRIVATE common channels librfb)
 
     if(UNIX AND NOT APPLE)
         target_compile_definitions(${CUR_TARGET} PUBLIC -DLTSM_WITH_X11)
@@ -328,6 +328,7 @@ else()
     unset(LTSM_CLIENT_GNUTLS_SUPPORT CACHE)
     unset(LTSM_CLIENT_FFMPEG_SUPPORT CACHE)
     unset(LTSM_CLIENT_SCARD_REDIRECT CACHE)
+    unset(LTSM_CLIENT_AUDIO_REDIRECT CACHE)
     unset(LTSM_CLIENT_FOLDER_REDIRECT CACHE)
 endif()
 

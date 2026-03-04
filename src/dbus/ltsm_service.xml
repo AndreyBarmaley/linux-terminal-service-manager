@@ -86,6 +86,10 @@
             <arg type="i" name="display" direction="in" />
             <arg type="a{ss}" name="map" direction="in" />
         </method>
+        <method name="busSetSessionEncodings">
+            <arg type="i" name="display" direction="in" />
+            <arg type="ai" name="vals" direction="in" />
+        </method>
         <method name="busSetSessionKeyboardLayouts">
             <arg type="i" name="display" direction="in" />
             <arg type="as" name="layouts" direction="in" />

@@ -55,8 +55,32 @@ namespace LTSM {
     const auto usercfgdef = "$HOME/.config/ltsm/client.cfg";
 #endif
 
+    std::list<std::string> supportedPlaybacks(void) {
+        std::list<std::string> audioEngines;
+#ifdef LTSM_WITH_PLAYBACK_PIPEWIRE
+        audioEngines.emplace_back("pipewire");
+#endif
+#ifdef LTSM_WITH_PLAYBACK_OPENAL
+        audioEngines.emplace_back("openal");
+#endif
+#ifdef LTSM_WITH_PLAYBACK_PULSE
+        audioEngines.emplace_back("pulse");
+#endif
+        return audioEngines;
+    }
+
     void printHelp(const char* prog) {
-        auto encodings = RFB::ClientDecoder::supportedEncodings();
+        std::list<std::string> videoEncodings;
+        std::list<std::string> audioEncodings;
+        for(const auto & enc : RFB::ClientDecoder::supportedEncodings()) {
+            if(RFB::isVideoEncoding(enc)) {
+                videoEncodings.emplace_back(Tools::lower(RFB::encodingName(enc)));
+            }
+            if(RFB::isAudioEncoding(enc)) {
+                audioEncodings.emplace_back(Tools::lower(RFB::encodingName(enc)));
+            }
+        }
+        std::list<std::string> audioEngines = supportedPlaybacks();
         std::cout << std::endl <<
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
@@ -89,7 +113,10 @@ namespace LTSM {
         "[--vp8] " <<
 #endif
 #endif
-        "[--encoding <string>] " <<
+        "[--video <enc>] " <<
+#ifdef LTSM_WITH_AUDIO
+        "[--audio [<enc>]] " <<
+#endif
 #ifdef LTSM_WITH_GNUTLS
         "[--notls] [--tls-priority <string>] [--tls-ca-file <path>] [--tls-cert-file <path>] [--tls-key-file <path>] " <<
 #endif
@@ -131,27 +158,27 @@ namespace LTSM {
 #endif
 #ifdef LTSM_DECODING
 #ifdef LTSM_DECODING_QOI
-                                  "    --qoi (the same as --encoding ltsm_qoi)" << std::endl <<
+                                  "    --qoi (the same as --video ltsm_qoi)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_LZ4
-                                  "    --lz4 (the same as --encoding ltsm_lz4)" << std::endl <<
+                                  "    --lz4 (the same as --video ltsm_lz4)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_TJPG
-                                  "    --tjpg (the same as --encoding ltsm_tjpg)" << std::endl <<
+                                  "    --tjpg (the same as --video ltsm_tjpg)" << std::endl <<
 #endif
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
-                                  "    --h264 (the same as --encoding ffmpeg_h264)" << std::endl <<
+                                  "    --h264 (the same as --video ffmpeg_h264)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_AV1
-                                  "    --av1 (the same as --encoding ffmpeg_av1)" << std::endl <<
+                                  "    --av1 (the same as --video ffmpeg_av1)" << std::endl <<
 #endif
 #ifdef LTSM_DECODING_VP8
-                                  "    --vp8 (the same as --encoding ffmpeg_vp8)" << std::endl <<
+                                  "    --vp8 (the same as --video ffmpeg_vp8)" << std::endl <<
 #endif
 #endif
-                                  "    --encoding <string> (set preffered encoding)" << std::endl <<
+                                  "    --video <enc> (set preffered encoding: " << Tools::join(videoEncodings, ",") << ")" << std::endl <<
 #ifdef LTSM_WITH_GNUTLS
                                   "    --tls-priority <string> " << std::endl <<
                                   "    --tls-ca-file <path> " << std::endl <<
@@ -164,39 +191,42 @@ namespace LTSM {
                                   "    --seamless <path> (seamless remote program)" << std::endl <<
                                   "    --noxkb (disable send xkb)" << std::endl <<
                                   "    --nocaps (disable send capslock)" << std::endl <<
-                                  "    --loop (always reconnecting)" << std::endl <<
-                                  "    --audio [ " <<
-#ifdef LTSM_WITH_OPUS
-                                  "opus, pcm" <<
-#else
-                                  "pcm" <<
+                                  "    --loop (always reconnecting)" << std::endl;
+
+#ifdef LTSM_WITH_AUDIO
+        if(! audioEncodings.empty()) {
+            std::cout <<
+                                  "    --audio [<enc>] (audio support, and preffered encoding: " << Tools::join(audioEncodings, ",") << ")" << std::endl;
+        }
+        std::cout <<              "    --audio-playback <engine> (audio playback preffered: " << Tools::join(audioEngines, ",") << ")" << std::endl;
 #endif
-                                  " ] (audio support)" << std::endl <<
+        std::cout <<
                                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
                                   "    --sane [" << sanedef << "] (redirect scanner)" << std::endl <<
 #ifdef LTSM_WITH_PCSC
                                   "    --smartcard (redirect smartcard)" << std::endl <<
 #endif
 #ifdef LTSM_PKCS11_AUTH
-                                  "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" <<
+                                  "    --pkcs11-auth [" << librtdef << "] (pkcs11 autenfication, and the user's certificate is in the LDAP database)" << std::endl <<
 #endif
-                                  " ] (audio support)" << std::endl <<
                                   "    --load <path> (external params from config)" << std::endl <<
                                   "    --save [" << usercfgdef << "](save params to local config)" << std::endl;
 
-        std::cout << std::endl << "supported encodings: " << std::endl <<
-                                  "    ";
-
-        for(const auto & enc : encodings) {
-            if(RFB::isVideoEncoding(enc)) {
-                std::cout << Tools::lower(RFB::encodingName(enc)) << " ";
-            }
+        if(! audioEncodings.empty()) {
+            std::cout << std::endl << "supported audio encodings: " << std::endl <<
+                                  "    [" << audioEncodings.front() << "] " <<
+                                  Tools::rangeJoin(std::next(audioEncodings.begin()), audioEncodings.end(), " ") << std::endl;
         }
 
-        std::cout << std::endl;
+        if(! videoEncodings.empty()) {
+            std::cout << std::endl << "supported video encodings: " << std::endl <<
+                                  "    [" << videoEncodings.front() << "] " <<
+                                  Tools::rangeJoin(std::next(videoEncodings.begin()), videoEncodings.end(), " ") << std::endl;
+        }
+
         std::cout << std::endl << "encoding options: " << std::endl;
 
-        for(const auto & enc : encodings) {
+        for(const auto & enc : RFB::ClientDecoder::supportedEncodings()) {
             if(auto opts = RFB::encodingOpts(enc); ! opts.empty()) {
                 std::cout << "    " << opts << std::endl;
             }
@@ -297,6 +327,19 @@ namespace LTSM {
             }
         }
 
+        if(0 == videoEncoding) {
+#ifdef LTSM_WITH_QOI
+            videoEncoding = RFB::ENCODING_LTSM_QOI;
+#endif
+        }
+
+        if(0 == audioEncoding) {
+            audioEncoding = RFB::ENCODING_LTSM_PCM;
+#ifdef LTSM_WITH_OPUS
+            audioEncoding = RFB::ENCODING_LTSM_OPUS;
+#endif
+        }
+
         if(pkcs11Auth.size() && rfbsec.passwdFile.size() && username.size()) {
             pkcs11Auth.clear();
         }
@@ -389,61 +432,51 @@ namespace LTSM {
 
 #ifdef LTSM_DECODING
         else if(cmd == "--qoi") {
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_LTSM_QOI)));
+            videoEncoding = RFB::ENCODING_LTSM_QOI;
         } else if(cmd == "--lz4") {
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_LTSM_LZ4)));
+            videoEncoding = RFB::ENCODING_LTSM_LZ4;
         } else if(startsWith(cmd, "--tjpg")) {
             if(auto opts = Tools::split(cmd, ','); 1 < opts.size()) {
                 opts.pop_front();
-                encodingOptions.assign(opts.begin(), opts.end());
+                videoEncodingOptions.assign(opts.begin(), opts.end());
             }
-
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_LTSM_TJPG)));
+            videoEncoding = RFB::ENCODING_LTSM_TJPG;
         }
 
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
         else if(cmd == "--h264") {
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_H264)));
+            videoEncoding = RFB::ENCODING_FFMPEG_H264;
         }
 
 #endif
 #ifdef LTSM_DECODING_AV1
         else if(cmd == "--av1") {
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_AV1)));
+            videoEncoding = RFB::ENCODING_FFMPEG_AV1;
         }
 
 #endif
 #ifdef LTSM_DECODING_VP8
         else if(cmd == "--vp8") {
-            prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_VP8)));
+            videoEncoding = RFB::ENCODING_FFMPEG_VP8;
         }
 
 #endif
 #endif
-        else if(cmd == "--encoding") {
+        else if(cmd == "--video") {
             if(arg.size()) {
                 auto opts = Tools::split(arg, ',');
-
-                prefferedEncoding.assign(Tools::lower(opts.front()));
-
+                auto val = opts.front();
+                videoEncoding = RFB::encodingType(val);
                 opts.pop_front();
-                encodingOptions.assign(opts.begin(), opts.end());
-            }
+                videoEncodingOptions.assign(opts.begin(), opts.end());
 
-            auto encodings = ClientDecoder::supportedEncodings(extClipboardLocalCaps());
-
-            if(std::ranges::none_of(encodings, [&](auto & str) { return Tools::lower(RFB::encodingName(str)) == prefferedEncoding; })) {
-                Application::warning("{}: incorrect encoding: {}", __FUNCTION__,
-                                     prefferedEncoding);
-                prefferedEncoding.clear();
+                if(std::ranges::none_of(ClientDecoder::supportedEncodings(),
+                    [&](auto & enc) { return RFB::isVideoEncoding(enc) && enc == videoEncoding; })) {
+                    Application::warning("{}: incorrect video encoding: {}", __FUNCTION__, val);
+                    videoEncoding = 0;
+                }
             }
         }
 
@@ -458,13 +491,39 @@ namespace LTSM {
         }
 
 #endif
+#ifdef LTSM_WITH_AUDIO
         else if(cmd == "--audio") {
             audioEnable = true;
 
             if(arg.size()) {
-                audioEncoding.assign(arg.begin(), arg.end());
+                auto opts = Tools::split(arg, ',');
+                auto val = opts.front();
+                audioEncoding = RFB::encodingType(val);
+                opts.pop_front();
+                audioEncodingOptions.assign(opts.begin(), opts.end());
+
+                if(std::ranges::none_of(ClientDecoder::supportedEncodings(),
+                    [&](auto & enc) { return RFB::isAudioEncoding(enc) && enc == audioEncoding; })) {
+                    Application::warning("{}: incorrect audio encoding: {}", __FUNCTION__, val);
+                    audioEncoding = 0;
+                    audioEnable = false;
+                }
             }
-        } else if(cmd == "--printer") {
+        } else if(cmd == "--audio-playback") {
+            audioEnable = true;
+
+            if(arg.size()) {
+                std::string val = Tools::lower(arg);
+                audioPlayback.assign(arg);
+                if(std::ranges::none_of(supportedPlaybacks(), [&](auto & enc) { return enc == audioPlayback; })) {
+                    Application::warning("{}: incorrect audio playback: {}", __FUNCTION__, val);
+                    audioPlayback.clear();
+                    audioEnable = false;
+                }
+            }
+        }
+#endif
+        else if(cmd == "--printer") {
             printerUrl.assign(printdef);
 
             if(arg.size()) {
@@ -545,29 +604,34 @@ namespace LTSM {
             try {
                 port = std::stoi(view2string(arg));
             } catch(const std::invalid_argument &) {
-                std::cerr << "incorrect port number" << std::endl;
+                std::cerr << "invalid port" << std::endl;
                 port = 5900;
             }
+            if(0 > port || 0xFFFF < port) {
+                Application::warning("{}: invalid port: {}", __FUNCTION__, port);
+                port = 5900;
+            }
+
         } else if(cmd == "--framerate" && arg.size()) {
             try {
                 frameRate = std::stoi(view2string(arg));
-
-                if(frameRate < 5) {
-                    frameRate = 5;
-                    std::cerr << "set frame rate: " << frameRate << std::endl;
-                } else if(frameRate > 25) {
-                    frameRate = 25;
-                    std::cerr << "set frame rate: " << frameRate << std::endl;
-                }
             } catch(const std::invalid_argument &) {
-                std::cerr << "incorrect frame rate" << std::endl;
+                std::cerr << "invalid framerate" << std::endl;
+                frameRate = 16;
+            }
+            if(5 > frameRate || 25 < frameRate) {
+                Application::warning("{}: invalid framerate: {}", __FUNCTION__, frameRate);
                 frameRate = 16;
             }
         } else if(cmd == "--dpi" && arg.size()) {
             try {
                 xcbDpi = std::stoi(view2string(arg));
             } catch(const std::invalid_argument &) {
-                std::cerr << "incorrect dpi" << std::endl;
+                std::cerr << "invalid dpi" << std::endl;
+                xcbDpi = 0;
+            }
+            if(50 > xcbDpi || 250 < xcbDpi) {
+                Application::warning("{}: invalid dpi: {}", __FUNCTION__, xcbDpi);
                 xcbDpi = 0;
             }
         } else if(cmd == "--geometry" && arg.size()) {
@@ -580,6 +644,11 @@ namespace LTSM {
                 primarySize = XCB::Size(width, height);
             } catch(const std::invalid_argument &) {
                 std::cerr << "invalid geometry" << std::endl;
+            }
+            if(320 > primarySize.width || 0xFFFF < primarySize.width ||
+                240 > primarySize.height || 0xFFFF < primarySize.height) {
+                Application::warning("{}: invalid geometry: {}x{}", __FUNCTION__, primarySize.width, primarySize.height);
+                primarySize.reset();
             }
         }
 
@@ -1339,8 +1408,23 @@ namespace LTSM {
         return windowSize;
     }
 
-    std::string Vnc2SDL::clientPrefferedEncoding(void) const {
-        return prefferedEncoding;
+    int Vnc2SDL::clientPrefferedVideoEncoding(void) const {
+        return videoEncoding;
+    }
+
+    int Vnc2SDL::clientPrefferedAudioEncoding(void) const {
+        return audioEncoding;
+    }
+
+    AudioPlayback Vnc2SDL::clientAudioPlayback(void) const {
+        if(startsWith(audioPlayback, "puls")) {
+            return AudioPlayback::PulseAudio;
+        } else if(startsWith(audioPlayback, "pipe")) {
+            return AudioPlayback::PipeWire;
+        } else if(startsWith(audioPlayback, "open")) {
+            return AudioPlayback::OpenAl;
+        }
+        return AudioPlayback::Default;
     }
 
     /*
@@ -1537,6 +1621,10 @@ namespace LTSM {
     }
 
     json_plain Vnc2SDL::clientOptions(void) const {
+        JsonArrayStream opts;
+        opts.push(videoEncodingOptions);
+        opts.push(audioEncodingOptions);
+
         // other
         JsonObjectStream jo;
 #ifdef __UNIX__
@@ -1555,7 +1643,7 @@ namespace LTSM {
         jo.push("x11:nodamage", xcbNoDamage);
         jo.push("x11:dpi", xcbDpi);
         jo.push("frame:rate", frameRate);
-        jo.push("enc:opts", JsonArrayStream(encodingOptions.begin(), encodingOptions.end()).flush());
+        jo.push("enc:opts", opts.flush());
 
         if(username.empty()) {
             if(auto env = std::getenv("USER")) {
@@ -1587,7 +1675,7 @@ namespace LTSM {
         }
 
         if(! shareFolders.empty()) {
-            jo.push("redirect:fuse", JsonArrayStream(shareFolders.begin(), shareFolders.end()).flush());
+            jo.push("redirect:fuse", JsonArrayStream(shareFolders).flush());
         }
 
         if(pcscEnable) {
@@ -1603,16 +1691,7 @@ namespace LTSM {
 #endif
 
         if(audioEnable) {
-            std::forward_list<std::string> allowEncoding = { "auto", "pcm" };
-#ifdef LTSM_WITH_OPUS
-            allowEncoding.emplace_front("opus");
-#endif
-
-            if(std::ranges::any_of(allowEncoding, [&](auto & enc) { return enc == audioEncoding; })) {
-                jo.push("redirect:audio", audioEncoding);
-            } else {
-                Application::warning("{}: unsupported audio: {}", __FUNCTION__, audioEncoding);
-            }
+            jo.push("redirect:audio", "enable");
         }
 
         return jo.flush();

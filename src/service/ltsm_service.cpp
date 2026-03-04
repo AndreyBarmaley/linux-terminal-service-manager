@@ -2326,6 +2326,20 @@ namespace LTSM::Manager {
         }
     }
 
+    void DBusAdaptor::busSetSessionEncodings(const int32_t& display, const std::vector<int32_t>& encs) {
+        Application::debug(DebugType::Dbus, "{}: display: {}, encodings counts: {}",
+                           __FUNCTION__, display, encs.size());
+
+        auto xvfb = findDisplaySession(display);
+
+        if(! xvfb) {
+            Application::warning("{}: display not found: {}", __FUNCTION__, display);
+            return;
+        }
+
+        xvfb->encodings = encs;
+    }
+
     void DBusAdaptor::busSetSessionOptions(const int32_t & display, const std::map<std::string, std::string> & map) {
         Application::debug(DebugType::Dbus, "{}: display: {}, opts counts: {}",
                            __FUNCTION__, display, map.size());
@@ -2540,7 +2554,7 @@ namespace LTSM::Manager {
         return true;
     }
 
-    bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & encoding) {
+    bool DBusAdaptor::startAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
         if(xvfb->mode == SessionMode::Login) {
             Application::error("{}: login session skipped, display: {}", __FUNCTION__, xvfb->displayNum);
             return false;
@@ -2553,7 +2567,7 @@ namespace LTSM::Manager {
             return false;
         }
 
-        Application::info("{}: encoding: {}", __FUNCTION__, encoding);
+        Application::info("{}: param: `{}'", __FUNCTION__, param);
         auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         std::error_code err;
 
@@ -2590,8 +2604,8 @@ namespace LTSM::Manager {
         return true;
     }
 
-    void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & encoding) {
-        Application::info("{}: encoding: {}", __FUNCTION__, encoding);
+    void DBusAdaptor::stopAudioListener(XvfbSessionPtr xvfb, const std::string & param) {
+        Application::info("{}: param: `{}'", __FUNCTION__, param);
         auto audioFolder = std::filesystem::path(Tools::replace(audioRuntimeFmt, "%{user}", xvfb->userInfo->user()));
         auto audioSocket = std::filesystem::path(audioFolder) / std::to_string(xvfb->connectorId);
         audioSocket += ".sock";

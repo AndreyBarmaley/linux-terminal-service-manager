@@ -49,6 +49,7 @@ namespace LTSM {
         void setPriority(const std::vector<int> &);
         bool isPresent(int) const;
         int findPriorityFrom(std::initializer_list<int>) const;
+        std::vector<int> toVector(void) const;
     };
 
     namespace RFB {
@@ -97,6 +98,10 @@ namespace LTSM {
 
             const EncodingBase* getEncoder(void) const {
                 return encoder.get();
+            }
+
+            const ClientEncodings & getClientEncodings(void) const {
+                return clientEncodings;
             }
 
             // ServerEncoder

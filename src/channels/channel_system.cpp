@@ -563,7 +563,7 @@ void LTSM::ChannelClient::sendSystemClientVariables(const json_plain & vars, con
     jo.push("environments", env);
 
     JsonObjectStream jo2;
-    jo2.push("layouts", JsonArrayStream(layouts.begin(), layouts.end()).flush());
+    jo2.push("layouts", JsonArrayStream(layouts).flush());
     jo2.push("current", group);
 
     jo.push("keyboard", jo2.flush());
@@ -595,7 +595,7 @@ void LTSM::ChannelClient::sendSystemKeyboardChange(const std::vector<std::string
         jo.push("cmd", SystemCommand::KeyboardChange);
         jo.push("layout", names[group]);
         jo.push("group", group);
-        jo.push("names", JsonArrayStream(names.begin(), names.end()).flush());
+        jo.push("names", JsonArrayStream(names).flush());
 
         sendLtsmChannelData(static_cast<uint8_t>(ChannelType::System), jo.flush());
     }
@@ -701,7 +701,7 @@ bool LTSM::ChannelClient::createChannel(const Channel::UrlMode & clientOpts, con
 }
 
 bool LTSM::ChannelClient::createChannelClientAudio(uint8_t channel, const std::string & url, const Channel::ConnectorMode & mode, const Channel::Opts & chOpts) {
-#ifdef LTSM_CLIENT
+#if defined(LTSM_CLIENT) && defined(LTSM_WITH_AUDIO)
     Application::debug(DebugType::Channels, "{}: id: {}, url: `{}', mode: {}", __FUNCTION__, channel, url, Channel::Connector::modeString(mode));
 
     try {
