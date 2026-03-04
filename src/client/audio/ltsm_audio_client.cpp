@@ -37,7 +37,7 @@
 #endif
 
 #ifdef LTSM_WITH_PLAYBACK_PULSE
-#include "ltsm_audio_pulse.h"
+#include "ltsm_pulse_simple.h"
 #endif
 
 namespace LTSM {
@@ -221,6 +221,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 
     if(engineType == AudioPlayback::OpenAl || engineType == AudioPlayback::Default) {
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
+        Application::info("{}: audio playback: {}", __FUNCTION__, "OpenAL");
 
         try {
             player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
@@ -233,6 +234,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 #endif
     } else if(engineType == AudioPlayback::OpenAl) {
 #ifdef LTSM_WITH_PLAYBACK_PULSE
+        Application::info("{}: audio playback: {}", __FUNCTION__, "PulseAudio");
 
         try {
             player = std::make_unique<PulseAudio::Playback>("ltsm_client", "LTSM Audio Input", *format);
@@ -245,6 +247,7 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
 #endif
     } else if(engineType == AudioPlayback::PipeWire) {
 #ifdef LTSM_WITH_PLAYBACK_PIPEWIRE
+        Application::info("{}: audio playback: {}", __FUNCTION__, "PipeWire");
 #else
         throw std::runtime_error("pipewire unsupported");
 #endif
