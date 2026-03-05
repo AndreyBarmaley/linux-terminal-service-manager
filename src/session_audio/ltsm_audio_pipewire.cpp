@@ -174,7 +174,7 @@ namespace LTSM {
             return;
         }
 
-        if(media_subtype == SPA_MEDIA_SUBTYPE_raw) {
+        if(media_subtype != SPA_MEDIA_SUBTYPE_raw) {
             const char* subtype_name = spa_debug_type_find_name(spa_type_media_subtype, media_subtype);
             Application::warning("{}: unsupported media subtype: {}({:#08x})", __FUNCTION__, subtype_name, media_subtype);
             return;
@@ -202,6 +202,8 @@ namespace LTSM {
             Application::warning("{}: unsupported audio format, channels: {}", __FUNCTION__, raw.channels);
             return;
         }
+        
+        // FIXME format changes
     }
 
     void PipeWire::BaseStream::onStreamStateChangedCb(pw_stream_state old, pw_stream_state state, const char* error) {
@@ -298,9 +300,6 @@ namespace LTSM {
             const auto & len = buf->buffer->datas[0].chunk->size;
 
             if(ptr && len) {
-                Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
-                                   __FUNCTION__, buf->size, len, buf->requested);
-
                 data_ready_cb_(ptr, len);
             }
 

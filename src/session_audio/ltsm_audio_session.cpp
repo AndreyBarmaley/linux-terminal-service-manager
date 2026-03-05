@@ -222,10 +222,11 @@ namespace LTSM {
     }
 
     void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
-        Application::trace(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
         std::scoped_lock guard{ queue_lock_ };
         queue_.emplace(ptr, ptr + len);
+
+        Application::trace(DebugType::Audio, "{}: queue: {}, data size: {}", __FUNCTION__, queue_.size(), len);
 
         if(! sending_) {
             sending_ = true;

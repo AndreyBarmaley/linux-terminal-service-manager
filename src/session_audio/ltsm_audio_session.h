@@ -51,7 +51,7 @@ namespace LTSM {
 
     struct AudioPacket {
         uint16_t id_ = 0;
-        uint16_t len_ = 0;
+        uint32_t len_ = 0;
         QueueData data_;
         boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
