@@ -24,7 +24,6 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
-#include <queue>
 #include <chrono>
 #include <future>
 #include <memory>
@@ -33,7 +32,6 @@
 
 #include <boost/asio.hpp>
 #include <boost/container/small_vector.hpp>
-#include <boost/lockfree/queue.hpp>
 
 #include "ltsm_application.h"
 #include "ltsm_audio_encoder.h"
@@ -47,33 +45,27 @@
 #endif
 
 namespace LTSM {
-    using QueueData = std::vector<uint8_t>;
-
     struct AudioPacket {
         uint16_t id_ = 0;
         uint32_t len_ = 0;
-        QueueData data_;
+        std::vector<uint8_t> data_;
         boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
         AudioPacket() = default;
 
-        void assign(bool silent, QueueData &&);
+        void assign(bool silent, std::vector<uint8_t> &&);
     };
 
     struct AudioClient {
         boost::asio::io_context & ioc_;
-        std::string socket_path_;
-
-        const uint8_t channels_ = 2;
-
+        boost::asio::strand<boost::asio::io_context::executor_type> strand_;
         boost::asio::steady_timer timer_wait_;
         boost::asio::local::stream_protocol::socket sock_;
 
-        AudioPacket packet_;
+        std::string socket_path_;
+        const uint8_t channels_ = 2;
 
-        std::mutex queue_lock_;
-        std::queue<QueueData> queue_;
-        std::atomic<bool> sending_{false};
+        AudioPacket packet_;
 
 #ifdef LTSM_WITH_PIPEWIRE
         std::unique_ptr<PipeWire::AudioCapture> pipew_;
@@ -92,7 +84,7 @@ namespace LTSM {
         void timerWaitEngineStarted(const boost::system::error_code & ec);
         void handlerSocketConnect(const boost::system::error_code & ec);
         void dataReadyNotify(const uint8_t* ptr, size_t len);
-        void dataEncodeAndSend(void);
+        void dataEncodeAndSend(std::vector<uint8_t>);
         void dataSendComplete(const boost::system::error_code &, size_t);
         bool clientHandshake(void);
         bool socketPath(std::string_view path) const {

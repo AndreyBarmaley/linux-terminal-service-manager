@@ -223,19 +223,14 @@ namespace LTSM {
 
     void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
 
-        std::scoped_lock guard{ queue_lock_ };
-        queue_.emplace(ptr, ptr + len);
+        Application::trace(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
-        Application::trace(DebugType::Audio, "{}: queue: {}, data size: {}", __FUNCTION__, queue_.size(), len);
-
-        if(! sending_) {
-            sending_ = true;
-            // next part async - to encode & send
-            boost::asio::post(ioc_, std::bind(&AudioClient::dataEncodeAndSend, this));
-        }
+        // next part async - to encode & send
+        boost::asio::post(ioc_,
+                std::bind(&AudioClient::dataEncodeAndSend, this, std::vector<uint8_t>{ptr, ptr + len}));
     }
 
-    void AudioPacket::assign(bool silent, QueueData && data) {
+    void AudioPacket::assign(bool silent, std::vector<uint8_t> && data) {
         buffers_.clear();
 
         id_ = boost::endian::native_to_little(static_cast<uint16_t>(silent ? AudioOp::Silent : AudioOp::Data));
@@ -250,15 +245,7 @@ namespace LTSM {
         }
     }
 
-    void AudioClient::dataEncodeAndSend(void) {
-
-        QueueData data;
-
-        if(data.empty()) {
-            std::scoped_lock guard{ queue_lock_ };
-            data.swap(queue_.front());
-            queue_.pop();
-        }
+    void AudioClient::dataEncodeAndSend(std::vector<uint8_t> data) {
 
         const bool silent = std::ranges::all_of(data, [](auto & val) {
             return val == 0;
@@ -272,13 +259,14 @@ namespace LTSM {
                 return;
             }
 
-            data = QueueData{encoder_->data(), encoder_->data() + encoder_->size()};
+            data.assign(encoder_->data(), encoder_->data() + encoder_->size());
         }
 
         packet_.assign(silent, std::move(data));
 
         boost::asio::async_write(sock_, packet_.buffers_, boost::asio::transfer_all(),
-                                 std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2));
+                boost::asio::bind_executor(strand_,
+                    std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2)));
     }
 
     void AudioClient::dataSendComplete(const boost::system::error_code & ec, size_t sz) {
@@ -286,20 +274,10 @@ namespace LTSM {
             sock_.close();
             return;
         }
-
-        std::scoped_lock guard{ queue_lock_ };
-
-        if(queue_.empty()) {
-            sending_ = false;
-            return;
-        }
-
-        // next part async - to encode & send
-        boost::asio::post(ioc_, std::bind(&AudioClient::dataEncodeAndSend, this));
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
-        : ioc_{ctx}, socket_path_(path), timer_wait_{ioc_}, sock_{ioc_} {
+        : ioc_{ctx}, strand_{boost::asio::make_strand(ioc_)}, timer_wait_{ioc_}, sock_{ioc_}, socket_path_(path) {
 
         sock_.async_connect(socket_path_,
                             std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
