@@ -271,8 +271,11 @@ namespace LTSM {
 
     pw_stream_state PipeWire::BaseStream::streamState(void) const {
         const PwThreadLoopLocker lock{ loop_.get() };
-
         return pw_stream_get_state(stream_.get(), nullptr);
+    }
+
+    std::string PipeWire::BaseStream::streamStateName(void) const {
+        return std::string{pw_stream_state_as_string(streamState())};
     }
 
     void PipeWire::BaseStream::streamPause(void) {

@@ -188,9 +188,13 @@ namespace LTSM {
         }
 
         // wait PipeWire started
-        if(pipew_ && PW_STREAM_STATE_STREAMING == pipew_->streamState()) {
-            // success
-            return;
+        if(pipew_) {
+            if(PW_STREAM_STATE_STREAMING == pipew_->streamState()) {
+                // success
+                return;
+            } else {
+                LTSM::Application::warning("{}: stream state: {}", __FUNCTION__, pipew_->streamStateName());
+            }
         }
 
 #else

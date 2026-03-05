@@ -70,6 +70,7 @@ namespace LTSM::PipeWire {
 
         // PW_STREAM_STATE_ERROR, PW_STREAM_STATE_UNCONNECTED, PW_STREAM_STATE_CONNECTING, PW_STREAM_STATE_PAUSED, PW_STREAM_STATE_STREAMING
         pw_stream_state streamState(void) const;
+        std::string streamStateName(void) const;
     };
 
     class AudioCapture : public BaseStream {
