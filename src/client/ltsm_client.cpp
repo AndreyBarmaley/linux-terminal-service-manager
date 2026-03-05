@@ -409,21 +409,21 @@ namespace LTSM {
 #ifdef LTSM_DECODING_H264
         else if(cmd == "--h264") {
             prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_H264)));
+                    RFB::ENCODING_LTSM_H264)));
         }
 
 #endif
 #ifdef LTSM_DECODING_AV1
         else if(cmd == "--av1") {
             prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_AV1)));
+                    RFB::ENCODING_LTSM_AV1)));
         }
 
 #endif
 #ifdef LTSM_DECODING_VP8
         else if(cmd == "--vp8") {
             prefferedEncoding.assign(Tools::lower(RFB::encodingName(
-                    RFB::ENCODING_FFMPEG_VP8)));
+                    RFB::ENCODING_LTSM_VP8)));
         }
 
 #endif

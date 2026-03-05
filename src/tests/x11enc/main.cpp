@@ -143,9 +143,9 @@ namespace LTSM::RFB {
             ENCODING_LTSM_QOI,
             ENCODING_LTSM_TJPG,
 
-            ENCODING_FFMPEG_H264,
-            ENCODING_FFMPEG_AV1,
-            ENCODING_FFMPEG_VP8,
+            ENCODING_LTSM_H264,
+            ENCODING_LTSM_AV1,
+            ENCODING_LTSM_VP8,
 
             ENCODING_RAW };
     }
@@ -210,8 +210,8 @@ class EncodingTest : public Application {
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(false), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_ZRLE
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
-            // RFB::ENCODING_FFMPEG_H264
-            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_FFMPEG_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
+            // RFB::ENCODING_LTSM_H264
+            pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_LZ4
             pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingLZ4>(), .stream = std::make_unique<FakeStream>(xcb.get()) });
             // RFB::ENCODING_LTSM_TJPG
@@ -242,8 +242,8 @@ class EncodingTest : public Application {
                         pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingTRLE>(true), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
-                    case RFB::ENCODING_FFMPEG_H264:
-                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_FFMPEG_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
+                    case RFB::ENCODING_LTSM_H264:
+                        pool.emplace_back(EncodingTime{ .enc = std::make_unique<RFB::EncodingFFmpeg>(RFB::ENCODING_LTSM_H264), .stream = std::make_unique<FakeStream>(xcb.get()) });
                         break;
 
                     case RFB::ENCODING_LTSM_LZ4:

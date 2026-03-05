@@ -62,7 +62,7 @@ class EncodingTest : public Application {
             /*
                         auto encodings = { RFB::ENCODING_RRE, RFB::ENCODING_CORRE, RFB::ENCODING_HEXTILE,
             #ifdef LTSM_ENCODING_FFMPEG
-                            RFB::ENCODING_FFMPEG_H264,
+                            RFB::ENCODING_LTSM_H264,
             #endif
             #ifdef LTSM_ENCODING
                             RFB::ENCODING_LTSM_QOI, RFB::ENCODING_LTSM_LZ4, RFB::ENCODING_LTSM_TJPG,

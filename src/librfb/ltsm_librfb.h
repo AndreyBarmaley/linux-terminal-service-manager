@@ -119,9 +119,9 @@ namespace LTSM {
 
         const int ENCODING_LTSM = 0x4C54534D;
         const int ENCODING_LTSM_CURSOR = 0x4C54534E;
-        const int ENCODING_FFMPEG_H264 = 0x48464D50;
-        const int ENCODING_FFMPEG_AV1 = 0x41563100;
-        const int ENCODING_FFMPEG_VP8 = 0x56503800;
+        const int ENCODING_LTSM_H264 = 0x48464D50;
+        const int ENCODING_LTSM_AV1 = 0x41563100;
+        const int ENCODING_LTSM_VP8 = 0x56503800;
         const int ENCODING_LTSM_LZ4 = 0x4C5A3400;
         const int ENCODING_LTSM_TJPG = 0x544A5047;
         const int ENCODING_LTSM_QOI = 0x514F4900;
