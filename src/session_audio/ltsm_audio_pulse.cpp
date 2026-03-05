@@ -772,8 +772,8 @@ namespace LTSM {
 #else
 
     /// PulseAudio::OutputStream
-    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func)
-        : BaseStream("ltsm_audio_session", fmt, rate, channels), readEventCb(func) {
+    PulseAudio::OutputStream::OutputStream(const pa_sample_format_t & fmt, uint32_t rate, uint8_t channels, const DataReadyFunc & func)
+        : BaseStream("ltsm_audio_session", fmt, rate, channels), dataReadyCb(func) {
         // loop
         thread = std::thread(& pa_mainloop_run, loop.get(), nullptr);
     }
@@ -828,7 +828,7 @@ namespace LTSM {
 
         if(0 == pa_stream_peek(stream.get(), (const void**) & streamData, & streamBytes)) {
             if(streamBytes) {
-                readEventCb(streamData, streamBytes);
+                dataReadyCb(streamData, streamBytes);
                 pa_stream_drop(stream.get());
             }
         } else {

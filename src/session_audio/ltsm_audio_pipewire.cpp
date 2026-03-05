@@ -315,15 +315,15 @@ namespace LTSM {
         const PwThreadLoopLocker lock{ loop_.get() };
 
         if(auto buf = pw_stream_dequeue_buffer(stream_.get())) {
-/*
-            auto & ptr = static_cast<uint8_t*>(buf->buffer->datas[0].data);
-            auto & len = buf->buffer->datas[0].chunk->size;
+            /*
+                        auto & ptr = static_cast<uint8_t*>(buf->buffer->datas[0].data);
+                        auto & len = buf->buffer->datas[0].chunk->size;
 
-            if(ptr && len) {
-                Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
-                                   __FUNCTION__, buf->size, len, buf->requested);
-            }
-*/
+                        if(ptr && len) {
+                            Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
+                                               __FUNCTION__, buf->size, len, buf->requested);
+                        }
+            */
             pw_stream_queue_buffer(stream_.get(), buf);
         } else {
             Application::error("{}: {} failed", __FUNCTION__, "pw_stream_dequeue_buffer");

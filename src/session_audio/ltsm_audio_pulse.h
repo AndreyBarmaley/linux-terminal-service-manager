@@ -200,19 +200,19 @@ namespace LTSM {
         };
 
 #else
-        using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
+        using DataReadyFunc = std::function<void(const uint8_t*, size_t)>;
 
         class OutputStream : public BaseStream {
             std::thread thread;
             std::string monitorName;
-            ReadEventFunc readEventCb;
+            DataReadyFunc dataReadyCb;
 
           protected:
             static void streamReadCallback(pa_stream * stream, const size_t nbytes, void* userData);
             void streamReadEvent(const size_t &);
 
           public:
-            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, const ReadEventFunc &);
+            OutputStream(const pa_sample_format_t &, uint32_t rate, uint8_t channels, const DataReadyFunc &);
             ~OutputStream();
 
             const char* streamName(void) const override {

@@ -56,7 +56,8 @@ namespace LTSM {
         boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
         AudioPacket() = default;
-        AudioPacket(QueueData &&);
+
+        void assign(bool silent, QueueData &&);
     };
 
     struct AudioClient {
@@ -67,7 +68,8 @@ namespace LTSM {
 
         boost::asio::steady_timer timer_wait_;
         boost::asio::local::stream_protocol::socket sock_;
-        boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
+
+        AudioPacket packet_;
 
         std::mutex queue_lock_;
         std::queue<QueueData> queue_;
@@ -92,7 +94,6 @@ namespace LTSM {
         void dataReadyNotify(const uint8_t* ptr, size_t len);
         void dataEncodeAndSend(void);
         void dataSendComplete(const boost::system::error_code &, size_t);
-        void pcmDataNotify(const uint8_t* ptr, size_t len);
         bool clientHandshake(void);
         bool socketPath(std::string_view path) const {
             return socket_path_ == path;

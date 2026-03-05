@@ -181,7 +181,7 @@ namespace LTSM {
         if(! pipew_) {
             try {
                 pipew_ = std::make_unique<PipeWire::AudioCapture>(def_format_pipew, bit_rate_, channels_,
-                     std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1, std::placeholders::_2));
+                         std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1, std::placeholders::_2));
                 pipew_->streamConnect(false /* pause */);
             } catch(const std::exception & err) {
             }
@@ -200,7 +200,7 @@ namespace LTSM {
         // wait PulseAudio started
         try {
             pulse_ = std::make_unique<PulseAudio::OutputStream>(def_format_pulse, bit_rate_, channels_,
-                     std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+                     std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1, std::placeholders::_2));
         } catch(const std::exception & err) {
         }
 
@@ -234,10 +234,8 @@ namespace LTSM {
         }
     }
 
-    AudioPacket::AudioPacket(QueueData && data) {
-        const bool silent = std::ranges::all_of(data, [](auto & val) {
-            return val == 0;
-        });
+    void AudioPacket::assign(bool silent, QueueData && data) {
+        buffers_.clear();
 
         id_ = boost::endian::native_to_little(static_cast<uint16_t>(silent ? AudioOp::Silent : AudioOp::Data));
         buffers_.emplace_back(&id_, sizeof(id_));
@@ -245,7 +243,7 @@ namespace LTSM {
         len_ = boost::endian::native_to_little(static_cast<uint32_t>(data.size()));
         buffers_.emplace_back(&len_, sizeof(len_));
 
-        if(!silent) {
+        if(! silent) {
             data_ = std::move(data);
             buffers_.emplace_back(data_.data(), data_.size());
         }
@@ -254,16 +252,32 @@ namespace LTSM {
     void AudioClient::dataEncodeAndSend(void) {
 
         QueueData data;
+
         if(data.empty()) {
             std::scoped_lock guard{ queue_lock_ };
             data.swap(queue_.front());
             queue_.pop();
         }
 
-        // FIXME
-        AudioPacket packet(std::move(data));
-        boost::asio::async_write(sock_, packet.buffers_, boost::asio::transfer_all(),
-                        std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2));
+        const bool silent = std::ranges::all_of(data, [](auto & val) {
+            return val == 0;
+        });
+
+        // encode data
+        if(! silent && encoder_) {
+            if(! encoder_->encode(data.data(), data.size())) {
+                Application::error("{}: {} failed", __FUNCTION__, "encoder");
+                sock_.close();
+                return;
+            }
+
+            data = QueueData{encoder_->data(), encoder_->data() + encoder_->size()};
+        }
+
+        packet_.assign(silent, std::move(data));
+
+        boost::asio::async_write(sock_, packet_.buffers_, boost::asio::transfer_all(),
+                                 std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2));
     }
 
     void AudioClient::dataSendComplete(const boost::system::error_code & ec, size_t sz) {
@@ -281,54 +295,6 @@ namespace LTSM {
 
         // next part async - to encode & send
         boost::asio::post(ioc_, std::bind(&AudioClient::dataEncodeAndSend, this));
-    }
-
-    void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {
-        if(! sock_.is_open()) {
-            return;
-        }
-
-        bool sampleNotSilent = std::ranges::any_of(ptr, ptr + len, [](auto & val) {
-            return val != 0;
-        });
-
-        // 1. send_le16(id)
-        uint16_t id16 = boost::endian::native_to_little(static_cast<uint16_t>(sampleNotSilent ? AudioOp::Data : AudioOp::Silent));
-        buffers_.emplace_back(&id16, sizeof(id16));
-
-        if(sampleNotSilent) {
-            if(encoder_) {
-                if(! encoder_->encode(ptr, len)) {
-                    Application::error("{}: {} failed", __FUNCTION__, "encoder");
-                    sock_.close();
-                    return;
-                }
-
-                ptr = encoder_->data();
-                len = encoder_->size();
-            }
-        }
-
-        // 2. send_le32(len)
-        uint32_t len32 = boost::endian::native_to_little(static_cast<uint32_t>(len));
-        buffers_.emplace_back(&len32, sizeof(len32));
-
-        // 3. send data
-        if(sampleNotSilent) {
-            buffers_.emplace_back(ptr, len);
-        }
-
-        boost::system::error_code ec;
-        auto total = boost::asio::write(sock_, buffers_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            sock_.close();
-        } else {
-            Application::debug(DebugType::Audio, "{}: send data: {}", __FUNCTION__, total);
-        }
-
-        buffers_.clear();
     }
 
     AudioClient::AudioClient(boost::asio::io_context & ctx, const std::string & path)
