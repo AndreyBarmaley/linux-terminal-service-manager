@@ -441,13 +441,13 @@ namespace LTSM {
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
-            ENCODING_FFMPEG_H264,
+            ENCODING_LTSM_H264,
 #endif
 #ifdef LTSM_DECODING_AV1
-            ENCODING_FFMPEG_AV1,
+            ENCODING_LTSM_AV1,
 #endif
 #ifdef LTSM_DECODING_VP8
-            ENCODING_FFMPEG_VP8,
+            ENCODING_LTSM_VP8,
 #endif
 #endif
             ENCODING_LTSM_CURSOR,
@@ -491,15 +491,15 @@ namespace LTSM {
 #ifdef LTSM_DECODING_FFMPEG
 
             // experimental feature remove and added from preffered
-            if(prefferedEncoding != ENCODING_FFMPEG_H264) {
-                encodings.remove(ENCODING_FFMPEG_H264);
+            if(prefferedEncoding != ENCODING_LTSM_H264) {
+                encodings.remove(ENCODING_LTSM_H264);
             }
 
-            if(prefferedEncoding != ENCODING_FFMPEG_AV1) {
-                encodings.remove(ENCODING_FFMPEG_AV1);
+            if(prefferedEncoding != ENCODING_LTSM_AV1) {
+                encodings.remove(ENCODING_LTSM_AV1);
             }
 
-            if(prefferedEncoding != ENCODING_FFMPEG_VP8) {
+            if(prefferedEncoding != ENCODING_LTSM_VP8) {
                 encodings.remove(ENCODING_FFMPEG_VP8);
             }
 
@@ -604,8 +604,8 @@ namespace LTSM {
         // event background
         std::thread([this, sz = dsz]() {
             if(this->decoder &&
-               (this->decoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
-                this->decoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->decoder->getType() == RFB::ENCODING_FFMPEG_VP8)) {
+               (this->decoder->getType() == RFB::ENCODING_LTSM_H264 ||
+                this->decoder->getType() == RFB::ENCODING_LTSM_AV1 || this->decoder->getType() == RFB::ENCODING_LTSM_VP8)) {
                 this->decoder->resizedEvent(sz);
             }
         }).detach();
@@ -786,9 +786,9 @@ namespace LTSM {
 #endif
 #ifdef LTSM_DECODING_FFMPEG
 
-                case ENCODING_FFMPEG_H264:
-                case ENCODING_FFMPEG_AV1:
-                case ENCODING_FFMPEG_VP8:
+                case ENCODING_LTSM_H264:
+                case ENCODING_LTSM_AV1:
+                case ENCODING_LTSM_VP8:
                     decoder = std::make_unique<DecodingFFmpeg>(type);
                     // FIXME
                     // decoder->setDebug(4 /* AV_LOG_VERBOSE */);

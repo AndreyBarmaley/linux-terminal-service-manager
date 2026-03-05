@@ -194,9 +194,9 @@ namespace LTSM {
 
 #ifdef LTSM_ENCODING_FFMPEG
 
-            case RFB::ENCODING_FFMPEG_H264:
-            case RFB::ENCODING_FFMPEG_VP8:
-            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_LTSM_H264:
+            case RFB::ENCODING_LTSM_VP8:
+            case RFB::ENCODING_LTSM_AV1:
                 encoder = std::make_unique<EncodingFFmpeg>(type);
                 return true;
 #endif

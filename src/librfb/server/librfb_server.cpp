@@ -726,9 +726,9 @@ namespace LTSM {
                     clientLtsmSupported = true;
                     break;
 
-                case RFB::ENCODING_FFMPEG_H264:
-                case RFB::ENCODING_FFMPEG_AV1:
-                case RFB::ENCODING_FFMPEG_VP8:
+                case RFB::ENCODING_LTSM_H264:
+                case RFB::ENCODING_LTSM_AV1:
+                case RFB::ENCODING_LTSM_VP8:
                     clientLtsmSupported = true;
                     clientVideoSupported = true;
                     break;
@@ -883,8 +883,8 @@ namespace LTSM {
         // event background
         std::thread([this, sz = dsz]() {
             if(this->encoder &&
-               (this->encoder->getType() == RFB::ENCODING_FFMPEG_H264 ||
-                this->encoder->getType() == RFB::ENCODING_FFMPEG_AV1 || this->encoder->getType() == RFB::ENCODING_FFMPEG_VP8)) {
+               (this->encoder->getType() == RFB::ENCODING_LTSM_H264 ||
+                this->encoder->getType() == RFB::ENCODING_LTSM_AV1 || this->encoder->getType() == RFB::ENCODING_LTSM_VP8)) {
                 this->encoder->resizedEvent(sz);
             }
         }).detach();
@@ -1019,9 +1019,9 @@ namespace LTSM {
         // server priority
         std::initializer_list<int> encs = {
 #ifdef LTSM_ENCODING_FFMPEG
-            RFB::ENCODING_FFMPEG_H264,
-            RFB::ENCODING_FFMPEG_AV1,
-            RFB::ENCODING_FFMPEG_VP8,
+            RFB::ENCODING_LTSM_H264,
+            RFB::ENCODING_LTSM_AV1,
+            RFB::ENCODING_LTSM_VP8,
 #endif
 #ifdef LTSM_ENCODING
             RFB::ENCODING_LTSM_QOI,
@@ -1082,9 +1082,9 @@ namespace LTSM {
                 break;
 #ifdef LTSM_ENCODING_FFMPEG
 
-            case RFB::ENCODING_FFMPEG_H264:
-            case RFB::ENCODING_FFMPEG_VP8:
-            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_LTSM_H264:
+            case RFB::ENCODING_LTSM_VP8:
+            case RFB::ENCODING_LTSM_AV1:
                 encoder = std::make_unique<EncodingFFmpeg>(compatible);
                 break;
 #endif

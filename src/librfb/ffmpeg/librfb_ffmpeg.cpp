@@ -92,15 +92,15 @@ namespace LTSM {
 #endif
 
         switch(type) {
-            case RFB::ENCODING_FFMPEG_H264:
+            case RFB::ENCODING_LTSM_H264:
                 codec = avcodec_find_encoder(AV_CODEC_ID_H264);
                 break;
 
-            case RFB::ENCODING_FFMPEG_VP8:
+            case RFB::ENCODING_LTSM_VP8:
                 codec = avcodec_find_encoder(AV_CODEC_ID_VP8);
                 break;
 
-            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_LTSM_AV1:
                 codec = avcodec_find_encoder(AV_CODEC_ID_AV1);
                 break;
 
@@ -117,13 +117,13 @@ namespace LTSM {
 
     const char* RFB::EncodingFFmpeg::getTypeName(void) const {
         switch(getType()) {
-            case RFB::ENCODING_FFMPEG_H264:
+            case RFB::ENCODING_LTSM_H264:
                 return "FFMPEG_H264";
 
-            case RFB::ENCODING_FFMPEG_VP8:
+            case RFB::ENCODING_LTSM_VP8:
                 return "FFMPEG_VP8";
 
-            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_LTSM_AV1:
                 return "FFMPEG_AV1";
 
             default:
@@ -336,19 +336,19 @@ namespace LTSM {
         switch(type) {
 #ifdef LTSM_DECODING_H264
 
-            case RFB::ENCODING_FFMPEG_H264:
+            case RFB::ENCODING_LTSM_H264:
                 codec = avcodec_find_decoder(AV_CODEC_ID_H264);
                 break;
 #endif
 #ifdef LTSM_DECODING_VP8
 
-            case RFB::ENCODING_FFMPEG_VP8:
+            case RFB::ENCODING_LTSM_VP8:
                 codec = avcodec_find_decoder(AV_CODEC_ID_VP8);
                 break;
 #endif
 #ifdef LTSM_DECODING_AV1
 
-            case RFB::ENCODING_FFMPEG_AV1:
+            case RFB::ENCODING_LTSM_AV1:
                 codec = avcodec_find_decoder(AV_CODEC_ID_AV1);
                 break;
 #endif

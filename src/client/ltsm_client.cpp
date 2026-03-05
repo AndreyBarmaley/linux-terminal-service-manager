@@ -447,19 +447,19 @@ namespace LTSM {
 #ifdef LTSM_DECODING_FFMPEG
 #ifdef LTSM_DECODING_H264
         else if(cmd == "--h264") {
-            videoEncoding = RFB::ENCODING_FFMPEG_H264;
+            videoEncoding = RFB::ENCODING_LTSM_H264;
         }
 
 #endif
 #ifdef LTSM_DECODING_AV1
         else if(cmd == "--av1") {
-            videoEncoding = RFB::ENCODING_FFMPEG_AV1;
+            videoEncoding = RFB::ENCODING_LTSM_AV1;
         }
 
 #endif
 #ifdef LTSM_DECODING_VP8
         else if(cmd == "--vp8") {
-            videoEncoding = RFB::ENCODING_FFMPEG_VP8;
+            videoEncoding = RFB::ENCODING_LTSM_VP8;
         }
 
 #endif
