@@ -181,7 +181,7 @@ namespace LTSM {
         if(! pipew_) {
             try {
                 pipew_ = std::make_unique<PipeWire::AudioCapture>(def_format_pipew, bit_rate_, channels_,
-                     std::bind(& AudioClient::pcmDataNotify, this, std::placeholders::_1, std::placeholders::_2));
+                     std::bind(& AudioClient::dataReadyNotify, this, std::placeholders::_1, std::placeholders::_2));
                 pipew_->streamConnect(false /* pause */);
             } catch(const std::exception & err) {
             }
@@ -219,6 +219,68 @@ namespace LTSM {
 
         timer_wait_.expires_after(3s);
         timer_wait_.async_wait(std::bind(&AudioClient::timerWaitEngineStarted, this, std::placeholders::_1));
+    }
+
+    void AudioClient::dataReadyNotify(const uint8_t* ptr, size_t len) {
+        Application::trace(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
+
+        std::scoped_lock guard{ queue_lock_ };
+        queue_.emplace(ptr, ptr + len);
+
+        if(! sending_) {
+            sending_ = true;
+            // next part async - to encode & send
+            boost::asio::post(ioc_, std::bind(&AudioClient::dataEncodeAndSend, this));
+        }
+    }
+
+    AudioPacket::AudioPacket(QueueData && data) {
+        const bool silent = std::ranges::all_of(data, [](auto & val) {
+            return val == 0;
+        });
+
+        id_ = boost::endian::native_to_little(static_cast<uint16_t>(silent ? AudioOp::Silent : AudioOp::Data));
+        buffers_.emplace_back(&id_, sizeof(id_));
+
+        len_ = boost::endian::native_to_little(static_cast<uint32_t>(data.size()));
+        buffers_.emplace_back(&len_, sizeof(len_));
+
+        if(!silent) {
+            data_ = std::move(data);
+            buffers_.emplace_back(data_.data(), data_.size());
+        }
+    }
+
+    void AudioClient::dataEncodeAndSend(void) {
+
+        QueueData data;
+        if(data.empty()) {
+            std::scoped_lock guard{ queue_lock_ };
+            data.swap(queue_.front());
+            queue_.pop();
+        }
+
+        // FIXME
+        AudioPacket packet(std::move(data));
+        boost::asio::async_write(sock_, packet.buffers_, boost::asio::transfer_all(),
+                        std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2));
+    }
+
+    void AudioClient::dataSendComplete(const boost::system::error_code & ec, size_t sz) {
+        if(ec) {
+            sock_.close();
+            return;
+        }
+
+        std::scoped_lock guard{ queue_lock_ };
+
+        if(queue_.empty()) {
+            sending_ = false;
+            return;
+        }
+
+        // next part async - to encode & send
+        boost::asio::post(ioc_, std::bind(&AudioClient::dataEncodeAndSend, this));
     }
 
     void AudioClient::pcmDataNotify(const uint8_t* ptr, size_t len) {

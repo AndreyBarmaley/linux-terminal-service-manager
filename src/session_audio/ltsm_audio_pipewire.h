@@ -34,7 +34,7 @@
 
 namespace LTSM::PipeWire {
 
-    using ReadEventFunc = std::function<void(const uint8_t*, size_t)>;
+    using DataReadyFunc = std::function<void(const uint8_t*, size_t)>;
     uint16_t formatBits(const spa_audio_format & fmt);
 
     enum class MediaCategory { Playback, Capture };
@@ -73,11 +73,11 @@ namespace LTSM::PipeWire {
     };
 
     class AudioCapture : public BaseStream {
-        ReadEventFunc read_event_cb_;
+        DataReadyFunc data_ready_cb_;
 
       public:
-        AudioCapture(const spa_audio_format & fmt, uint32_t rate, uint8_t channels, const ReadEventFunc & func) :
-            BaseStream(MediaCategory::Capture, fmt, rate, channels), read_event_cb_{func} {}
+        AudioCapture(const spa_audio_format & fmt, uint32_t rate, uint8_t channels, const DataReadyFunc & func) :
+            BaseStream(MediaCategory::Capture, fmt, rate, channels), data_ready_cb_{func} {}
 
         void onProcessCb(void) override;
     };

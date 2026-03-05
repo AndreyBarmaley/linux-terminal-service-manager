@@ -97,7 +97,7 @@ namespace LTSM {
     }
 
     PipeWire::BaseStream::BaseStream(const MediaCategory & mcat, const spa_audio_format & fmt, uint32_t rate, uint8_t channels)
-        : media_category_(mcat), format_(fmt), rate_(rate), channels_(channels) {
+        : media_category_{mcat}, format_{fmt}, rate_{rate}, channels_{channels} {
 
         pw_init(nullptr, nullptr);
 
@@ -301,7 +301,7 @@ namespace LTSM {
                 Application::debug(DebugType::Audio, "{}: buf - size: {}, chunk: {}, requested: {}",
                                    __FUNCTION__, buf->size, len, buf->requested);
 
-                read_event_cb_(ptr, len);
+                data_ready_cb_(ptr, len);
             }
 
             pw_stream_queue_buffer(stream_.get(), buf);
