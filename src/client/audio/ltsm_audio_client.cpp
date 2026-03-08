@@ -26,11 +26,13 @@
 #include <filesystem>
 
 #include "ltsm_audio.h"
-#include "ltsm_audio_decoder.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_channels.h"
 #include "ltsm_application.h"
+#include "ltsm_audio_decoder.h"
+
+#include "librfb_client.h"
 
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
 #include "ltsm_audio_openal.h"
@@ -170,7 +172,16 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     std::string error;
 #ifdef LTSM_WITH_OPUS
 
-    if(! format) {
+    int prefferedAudioEnc = RFB::ENCODING_LTSM_OPUS;
+    
+    if(auto rfb = dynamic_cast<const RFB::ClientDecoder*>(owner)) {
+        // opus or pcm
+        if(rfb->clientPrefferedAudioEncoding()) {
+            prefferedAudioEnc = rfb->clientPrefferedAudioEncoding();
+        }
+    }
+
+    if(! format && (prefferedAudioEnc == RFB::ENCODING_LTSM_OPUS)) {
         auto it = std::ranges::find_if(formats, [](auto & fmt) {
             return fmt.type == AudioEncoding::OPUS;
         });
