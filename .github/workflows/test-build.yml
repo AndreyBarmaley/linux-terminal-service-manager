@@ -39,7 +39,7 @@ jobs:
             libldap-dev libcups2-dev libfuse3-dev libsystemd-dev libopus-dev libpcsclite-dev libp11-kit-dev \
             liblz4-dev libturbojpeg-dev libxkbfile-dev libopenal-dev \
             libavdevice-dev libavformat-dev libavcodec-dev libswscale-dev libswresample-dev libavutil-dev \
-            libspdlog-dev libboost-dev
+            libspdlog-dev libboost-dev libpipewire-dev
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
