@@ -28,7 +28,7 @@
 
 namespace LTSM {
 #ifdef LTSM_WITH_OPUS
-    AudioDecoder::Opus::Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample)
+    AudioDecoder::Opus::Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample)
         : sampleLength(audioChannels * (bitsPerSample >> 3)) {
         if(bitsPerSample != sizeof(opus_int16) * 8) {
             Application::error("{}: {} failed", __FUNCTION__, "bitsPerSample");
@@ -45,7 +45,7 @@ namespace LTSM {
         }
     }
 
-    bool AudioDecoder::Opus::decode(const uint8_t* ptr, size_t len) {
+    std::vector<uint8_t> AudioDecoder::Opus::decode(const uint8_t* ptr, size_t len) {
         int frames = opus_decoder_get_nb_samples(ctx.get(), ptr, len);
 
         if(0 > frames) {
@@ -54,32 +54,24 @@ namespace LTSM {
         }
 
         if(0 == frames) {
-            return false;
+            Application::warning("{}: {} failed, empty frames", __FUNCTION__, "opus_decoder_get_nb_samples");
+            return {};
         }
 
-        tmp.resize(frames * sampleLength);
+        Application::debug(DebugType::Audio, "{}: frames {}", __FUNCTION__, frames);
+
+        std::vector<uint8_t> tmp(frames * sampleLength);
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 
         if(nSamples < 0) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_decode", nSamples);
-            return false;
+            tmp.clear();
+        } else {
+            tmp.resize(nSamples * sampleLength);
+            Application::trace(DebugType::Audio, "{}: decode samples: {}, size: {}", __FUNCTION__, nSamples, tmp.size());
         }
 
-        decodeSize = nSamples * sampleLength;
-        return true;
-    }
-
-    const uint8_t* AudioDecoder::Opus::data(void) const {
-        return tmp.data();
-    }
-
-    size_t AudioDecoder::Opus::size(void) const {
-        if(decodeSize > tmp.size()) {
-            Application::error("{}: out of range, size: {}, buf: {}", __FUNCTION__, decodeSize, tmp.size());
-            throw audio_error(NS_FuncNameS);
-        }
-
-        return decodeSize;
+        return tmp;
     }
 
 #endif

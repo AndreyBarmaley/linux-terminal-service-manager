@@ -69,7 +69,6 @@ namespace LTSM {
         std::string host{"localhost"};
         std::string username, seamless, pkcs11Auth;
         std::string printerUrl, saneUrl;
-        std::string audioPlayback;
         std::string passfile;
 
         int videoEncoding = 0;
@@ -163,8 +162,6 @@ namespace LTSM {
 #endif
         void clientRecvLtsmHandshakeEvent(int flags) override;
         void systemLoginSuccess(const JsonObject &) override;
-
-        AudioPlayback clientAudioPlayback(void) const override;
 
         const char* pkcs11Library(void) const override;
         bool createChannelAllow(const Channel::ConnectorType &, const std::string &,

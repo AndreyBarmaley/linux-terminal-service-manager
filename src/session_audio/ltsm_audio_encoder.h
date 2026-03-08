@@ -24,7 +24,6 @@
 #ifndef _LTSM_AUDIO_ENCODER_
 #define _LTSM_AUDIO_ENCODER_
 
-#include <array>
 #include <vector>
 #include <memory>
 
@@ -39,10 +38,8 @@ namespace LTSM {
             BaseEncoder() = default;
             virtual ~BaseEncoder() = default;
 
-            virtual bool encode(const uint8_t* ptr, size_t len) = 0;
-
-            virtual const uint8_t* data(void) const = 0;
-            virtual size_t size(void) const = 0;
+            virtual void push(const uint8_t* ptr, size_t len) = 0;
+            virtual std::vector<uint8_t> encode(void) = 0;
         };
 
 #ifdef LTSM_WITH_OPUS
@@ -55,24 +52,15 @@ namespace LTSM {
         class Opus : public BaseEncoder {
             std::unique_ptr<OpusEncoder, OpusDeleter> ctx;
 
-            // ref: https://www.opus-codec.org/docs/html_api/group__opusencoder.html
-            // max_packet is the maximum number of bytes that can be written in the packet (1276 bytes is recommended)
-            std::array<uint8_t, 1276> tmp;
-            size_t encodeSize = 0;
-
             // Opus: frame size - at 48kHz the permitted values are 120, 240, 480, or 960, the remainder will be stored here.
             std::vector<uint8_t> last;
-
-            const size_t framesCount;
-            const size_t sampleLength;
+            const uint16_t sampleLength;
 
           public:
-            Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample, uint16_t frames = 480);
+            Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample);
 
-            bool encode(const uint8_t* ptr, size_t len) override;
-
-            const uint8_t* data(void) const override;
-            size_t size(void) const override;
+            void push(const uint8_t* ptr, size_t len) override;
+            std::vector<uint8_t> encode(void) override;
         };
 
 #endif

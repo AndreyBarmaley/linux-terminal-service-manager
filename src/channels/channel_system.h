@@ -388,7 +388,6 @@ namespace LTSM {
 
         /// ConnectorClientAudio
         class ConnectorClientAudio : public ConnectorBase {
-            const AudioPlayback engineType;
             std::forward_list<AudioFormat> formats;
             const AudioFormat* format = nullptr;
 
@@ -639,7 +638,6 @@ namespace LTSM {
             return false;
         }
 
-        virtual AudioPlayback clientAudioPlayback(void) const { return AudioPlayback::Default; }
         virtual bool createChannelAllow(const Channel::ConnectorType &, const std::string &, const Channel::ConnectorMode &) const {
             return false;
         }

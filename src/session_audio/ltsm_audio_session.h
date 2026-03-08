@@ -24,41 +24,99 @@
 #ifndef _LTSM_AUDIO_SESSION_
 #define _LTSM_AUDIO_SESSION_
 
-#include <thread>
-#include <atomic>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 #include <forward_list>
 
-#include "ltsm_streambuf.h"
+#include <boost/asio.hpp>
+#include <boost/container/small_vector.hpp>
+
 #include "ltsm_application.h"
-#include "ltsm_audio_pulse.h"
 #include "ltsm_audio_encoder.h"
 #include "ltsm_audio_adaptor.h"
 
+#ifdef LTSM_WITH_PULSE
+#include "ltsm_audio_pulse.h"
+#endif
+#ifdef LTSM_WITH_PIPEWIRE
+#include "ltsm_audio_pipewire.h"
+#endif
+
 namespace LTSM {
+    namespace AudioPacket {
+        struct Base {
+            uint16_t id_ = 0;
+            uint32_t len_ = 0;
+            boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
+
+            Base(uint16_t id, uint32_t len);
+        };
+
+        struct Silent : Base {
+            Silent(uint32_t len);
+        };
+
+        struct Data : Base {
+            std::vector<uint8_t> data_;
+
+            Data(std::vector<uint8_t> &&);
+        };
+    }
+
     struct AudioClient {
-        std::string socketPath;
+        boost::asio::io_context & ioc_;
+        boost::asio::strand<boost::asio::io_context::executor_type> strand_;
+        boost::asio::steady_timer timer_wait_;
+        boost::asio::local::stream_protocol::socket sock_;
 
-        std::unique_ptr<PulseAudio::OutputStream> pulse;
-        std::unique_ptr<AudioEncoder::BaseEncoder> encoder;
-        std::unique_ptr<SocketStream> sock;
+        std::string socket_path_;
+        const uint8_t channels_ = 2;
 
-        std::thread thread;
-        std::atomic<bool> shutdown{false};
+#ifdef LTSM_WITH_PIPEWIRE
+        std::unique_ptr<PipeWire::AudioCapture> pipew_;
+#endif
+#ifdef LTSM_WITH_PULSE
+        std::unique_ptr<PulseAudio::OutputStream> pulse_;
+#endif
+        std::unique_ptr<AudioEncoder::BaseEncoder> encoder_;
 
-        AudioClient(const std::string &);
+        uint32_t bit_rate_ = 44100;
+        uint32_t frag_size_ = 1024;
+
+        AudioClient(boost::asio::io_context &, const std::string &);
         ~AudioClient();
 
-        void pcmDataNotify(const uint8_t* ptr, size_t len);
-        bool socketInitialize(void);
+        void timerWaitEngineStarted(const boost::system::error_code & ec);
+        void handlerSocketConnect(const boost::system::error_code & ec);
+        void dataReadyNotify(const uint8_t* ptr, size_t len);
+        void dataEncodeAndSend(std::vector<uint8_t>);
+        bool clientHandshake(void);
+        bool socketPath(std::string_view path) const {
+            return socket_path_ == path;
+        }
+        bool socketConnected(void) const {
+            return sock_.is_open();
+        }
     };
 
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
+
     class AudioSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Audio_adaptor> {
-        std::forward_list<AudioClient> clients;
+        boost::asio::io_context ioc_;
+        boost::asio::signal_set signals_;
+
+        std::future<void> sdbus_job_;
+        DBusConnectionPtr dbus_conn_;
+
+        std::forward_list<AudioClient> clients_;
+
+      protected:
+        void stop(void);
 
       public:
-        AudioSessionBus(sdbus::IConnection &, bool debug = false);
+        AudioSessionBus(DBusConnectionPtr, bool debug = false);
         virtual ~AudioSessionBus();
 
         int start(void);

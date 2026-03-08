@@ -53,7 +53,7 @@ namespace LTSM {
         return "unknown";
     }
 
-    OpenAL::Playback::Playback(const AudioFormat & fmt, ALuint autoPlayAfterSec) {
+    OpenAL::Playback::Playback(const AudioFormat & fmt, ALuint autoPlayAfter) : autoPlayAfterSec(autoPlayAfter) {
         fmtFrequency = fmt.samplePerSec;
 
         if(8 == fmt.bitsPerSample) {
@@ -77,27 +77,7 @@ namespace LTSM {
         }
 
         if(autoPlayAfterSec) {
-            // calculate playAfterBytes
-            switch(fmtFormat) {
-                case AL_FORMAT_MONO8:
-                    playAfterBytes = 1 * fmtFrequency * autoPlayAfterSec;
-                    break;
-
-                case AL_FORMAT_STEREO8:
-                    playAfterBytes = 2 * fmtFrequency * autoPlayAfterSec;
-                    break;
-
-                case AL_FORMAT_MONO16:
-                    playAfterBytes = 2 * fmtFrequency * autoPlayAfterSec;
-                    break;
-
-                case AL_FORMAT_STEREO16:
-                    playAfterBytes = 4 * fmtFrequency * autoPlayAfterSec;
-                    break;
-
-                default:
-                    break;
-            }
+            playAfterBytes = getBufferLength(autoPlayAfterSec);
         }
 
         dev.reset(alcOpenDevice(nullptr /* pref device name */));
@@ -133,6 +113,32 @@ namespace LTSM {
 
         ctx.reset();
         dev.reset();
+    }
+
+    ALuint OpenAL::Playback::getBufferLength(ALuint sec) const {
+        ALuint length = 0;
+        // calculate playAfterBytes
+        switch(fmtFormat) {
+            case AL_FORMAT_MONO8:
+                length = 1 * fmtFrequency * sec;
+                break;
+
+            case AL_FORMAT_STEREO8:
+                length = 2 * fmtFrequency * sec;
+                break;
+
+            case AL_FORMAT_MONO16:
+                length = 2 * fmtFrequency * sec;
+                break;
+
+            case AL_FORMAT_STEREO16:
+                length = 4 * fmtFrequency * sec;
+                break;
+
+            default:
+                break;
+        }
+        return length;
     }
 
     ALint OpenAL::Playback::getBuffersProcessed(void) const {
@@ -182,7 +188,6 @@ namespace LTSM {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourcePlay", alcErrorName(err));
             return false;
         }
-
         return true;
     }
 
@@ -192,6 +197,10 @@ namespace LTSM {
         if(auto err = alGetError(); err != AL_NO_ERROR) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "alSourceStop", alcErrorName(err));
             return false;
+        }
+
+        if(autoPlayAfterSec) {
+            playAfterBytes = getBufferLength(autoPlayAfterSec);
         }
 
         return true;
@@ -208,7 +217,7 @@ namespace LTSM {
         return true;
     }
 
-    bool OpenAL::Playback::stateIsPlaying(void) const {
+    bool OpenAL::Playback::isPlaying(void) const {
         ALint sourceState = 0;
         alGetSourcei(sourceId, AL_SOURCE_STATE, & sourceState);
 
@@ -224,7 +233,7 @@ namespace LTSM {
         ALuint bufId = findFreeBufferId();
 
         if(0 == bufId) {
-            if(stateIsPlaying()) {
+            if(isPlaying()) {
                 return false;
             }
 

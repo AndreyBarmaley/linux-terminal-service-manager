@@ -39,10 +39,7 @@ namespace LTSM {
             BaseDecoder() = default;
             virtual ~BaseDecoder() = default;
 
-            virtual bool decode(const uint8_t* ptr, size_t len) = 0;
-
-            virtual const uint8_t* data(void) const = 0;
-            virtual size_t size(void) const = 0;
+            virtual std::vector<uint8_t> decode(const uint8_t* ptr, size_t len) = 0;
         };
 
 #ifdef LTSM_WITH_OPUS
@@ -54,18 +51,12 @@ namespace LTSM {
 
         class Opus : public BaseDecoder {
             std::unique_ptr<OpusDecoder, OpusDeleter> ctx;
-
-            std::vector<uint8_t> tmp;
-            size_t decodeSize = 0;
-
-            const size_t sampleLength;
+            const uint8_t sampleLength;
 
           public:
-            Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample);
+            Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample);
 
-            bool decode(const uint8_t* ptr, size_t len) override;
-            const uint8_t* data(void) const override;
-            size_t size(void) const override;
+            std::vector<uint8_t> decode(const uint8_t* ptr, size_t len) override;
         };
 
 #endif

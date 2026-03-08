@@ -34,7 +34,7 @@
 namespace LTSM {
     namespace RFB {
         /* ClientDecoder */
-        class ClientDecoder : public ChannelClient, protected DecoderStream, public ExtClip {
+        class ClientDecoder : public ChannelClient, public DecoderStream, public ExtClip {
             PixelFormat serverPf;
 
             std::unique_ptr<NetworkStream> socket; /// socket layer

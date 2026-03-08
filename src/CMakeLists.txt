@@ -2,7 +2,7 @@ function(CommonDefaults)
     set(LTSM_WITH_FB_PARALLELS ON PARENT_SCOPE)
     set(LTSM_WITH_XCB_ERRORS ON PARENT_SCOPE)
 
-    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB)
+    list(APPEND OPTS SDBUS JSON PNG SDL GNUTLS GSSAPI PKCS11 SYSTEMD FFMPEG DECODER ENCODER LDAP ZLIB BOOST)
 
     foreach(ARG IN ITEMS ${OPTS})
         string(JOIN "" PARAM LTSM_WITH_ ${ARG})
@@ -99,7 +99,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_service)
         set(CUR_TARGET ltsm_service)
 
-        CommonDefaults(SDBUS JSON SYSTEMD ZLIB)
+        CommonDefaults(SDBUS JSON SYSTEMD ZLIB BOOST)
 
         add_executable(${CUR_TARGET} ltsm_service_adaptor.h ltsm_display_proxy.h)
 
@@ -197,7 +197,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_session_display)
         set(CUR_TARGET ltsm_session_display)
 
-        CommonDefaults(SDBUS SYSTEMD JSON ZLIB)
+        CommonDefaults(SDBUS SYSTEMD JSON ZLIB BOOST)
 
         add_executable(${CUR_TARGET} ltsm_display_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)
@@ -245,7 +245,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_session_audio)
         set(CUR_TARGET ltsm_session_audio)
 
-        CommonDefaults(SDBUS SYSTEMD JSON)
+        CommonDefaults(SDBUS SYSTEMD JSON BOOST)
 
         add_executable(${CUR_TARGET} ltsm_audio_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)
@@ -292,7 +292,7 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_CLIENT_FFMPEG_SUPPORT ON CACHE BOOL "client: ffmpeg decoder")
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
-    set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect")
+    set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect (openal)")
 
     CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB)
 

@@ -26,18 +26,16 @@
 #include <filesystem>
 
 #include "ltsm_audio.h"
-#include "ltsm_audio_decoder.h"
 #include "ltsm_tools.h"
 #include "ltsm_global.h"
 #include "ltsm_channels.h"
 #include "ltsm_application.h"
+#include "ltsm_audio_decoder.h"
+
+#include "librfb_client.h"
 
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
 #include "ltsm_audio_openal.h"
-#endif
-
-#ifdef LTSM_WITH_PLAYBACK_PULSE
-#include "ltsm_pulse_simple.h"
 #endif
 
 namespace LTSM {
@@ -69,7 +67,7 @@ std::unique_ptr<LTSM::Channel::ConnectorBase> LTSM::Channel::createClientAudioCo
 /// ConnectorClientAudio
 LTSM::Channel::ConnectorClientAudio::ConnectorClientAudio(uint8_t ch, const std::string & url,
         const ConnectorMode & mod, const Opts & chOpts, ChannelClient & srv)
-    : ConnectorBase(ch, mod, chOpts, srv), engineType(srv.clientAudioPlayback()), cid(ch) {
+    : ConnectorBase(ch, mod, chOpts, srv), cid(ch) {
     Application::info("{}: channelId: {}", __FUNCTION__, cid);
     // start threads
     setRunning(true);
@@ -113,6 +111,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             // <DATA> - audio data
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
+
             auto audioCmd = sb.readIntLE16();
             Application::debug(DebugType::Audio, "{}: cmd: {:#04x}", __FUNCTION__, audioCmd);
 
@@ -173,7 +172,16 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     std::string error;
 #ifdef LTSM_WITH_OPUS
 
-    if(! format) {
+    int prefferedAudioEnc = RFB::ENCODING_LTSM_OPUS;
+    
+    if(auto rfb = dynamic_cast<const RFB::ClientDecoder*>(owner)) {
+        // opus or pcm
+        if(rfb->clientPrefferedAudioEncoding()) {
+            prefferedAudioEnc = rfb->clientPrefferedAudioEncoding();
+        }
+    }
+
+    if(! format && (prefferedAudioEnc == RFB::ENCODING_LTSM_OPUS)) {
         auto it = std::ranges::find_if(formats, [](auto & fmt) {
             return fmt.type == AudioEncoding::OPUS;
         });
@@ -219,39 +227,18 @@ bool LTSM::Channel::ConnectorClientAudio::audioOpInit(const StreamBufRef & sb) {
     Application::info("{}: audio format: channels: {}, samples: {}, bits: {}",
                       __FUNCTION__, format->channels, format->samplePerSec, format->bitsPerSample);
 
-    if(engineType == AudioPlayback::OpenAl || engineType == AudioPlayback::Default) {
 #ifdef LTSM_WITH_PLAYBACK_OPENAL
-        Application::info("{}: audio playback: {}", __FUNCTION__, "OpenAL");
+    Application::info("{}: audio playback: {}", __FUNCTION__, "OpenAL");
 
-        try {
+    try {
             player = std::make_unique<OpenAL::Playback>(*format, 1 /* buffer sec, and autoplay */);
-        } catch(const std::exception &) {
+    } catch(const std::exception &) {
             error.assign("openal failed");
-        }
-
-#else
-        throw std::runtime_error("openal unsupported");
-#endif
-    } else if(engineType == AudioPlayback::OpenAl) {
-#ifdef LTSM_WITH_PLAYBACK_PULSE
-        Application::info("{}: audio playback: {}", __FUNCTION__, "PulseAudio");
-
-        try {
-            player = std::make_unique<PulseAudio::Playback>("ltsm_client", "LTSM Audio Input", *format);
-        } catch(const std::exception &) {
-            error.assign("pulseaudio failed");
-        }
-
-#else
-        throw std::runtime_error("pulseaudio unsupported");
-#endif
-    } else if(engineType == AudioPlayback::PipeWire) {
-#ifdef LTSM_WITH_PLAYBACK_PIPEWIRE
-        Application::info("{}: audio playback: {}", __FUNCTION__, "PipeWire");
-#else
-        throw std::runtime_error("pipewire unsupported");
-#endif
     }
+
+#else
+    throw std::runtime_error("unknown audio playback");
+#endif
 
     if(! player) {
         reply.writeIntLE16(error.size());
@@ -278,8 +265,10 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
-    std::vector<uint8_t> buf(len, 0);
-    player->streamWrite(buf.data(), buf.size());
+    if(player->isPlaying()) {
+        Application::info("{}: play stop", __FUNCTION__);
+        player->playStop();
+    }
 }
 
 void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
@@ -293,19 +282,17 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
     if(len > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
-
-    if(decoder) {
-        if(decoder->decode(sb.data(), len)) {
-            Application::debug(DebugType::Audio, "{}: decode size: {}", __FUNCTION__, decoder->size());
-
-            if(auto env = getenv("LTSM_AUDIO_SAVE")) {
-                Tools::binaryToFile(decoder->data(), decoder->size(), env, true);
-            }
-
-            player->streamWrite(decoder->data(), decoder->size());
-        }
-    } else {
+ 
+    if(! decoder) {
         player->streamWrite(sb.data(), len);
+    } else if(auto buf = decoder->decode(sb.data(), len); !buf.empty()) {
+        Application::debug(DebugType::Audio, "{}: decode size: {}", __FUNCTION__, buf.size());
+
+        if(auto env = getenv("LTSM_AUDIO_SAVE_FILE")) {
+            Tools::binaryToFile(buf.data(), buf.size(), env, true);
+        }
+
+        player->streamWrite(buf.data(), buf.size());
     }
 
     sb.skip(len);

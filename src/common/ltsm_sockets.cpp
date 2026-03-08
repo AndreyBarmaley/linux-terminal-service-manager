@@ -168,17 +168,23 @@ namespace LTSM {
         tp = std::chrono::steady_clock::now();
     }
 
+    double calcBandwithMb(size_t bytes, size_t time) {
+        auto res = bytes / static_cast<double>(time * 1024 * 1024);
+        if(res < 0.0001) {
+            res = 0.0001;
+        }
+        return res;
+    }
+
     NetworkStream::~NetworkStream() {
         if(showStatistic) {
             if(auto dt = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tp); dt.count()) {
                 if(bytesIn) {
-                    auto mbIn = bytesIn / static_cast<double>(dt.count() * 1024 * 1024);
-                    Application::info("{}: recv {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesIn, mbIn);
+                    Application::info("{}: recv {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesIn, calcBandwithMb(bytesIn, dt.count()));
                 }
 
                 if(bytesOut) {
-                    auto mbOut = bytesOut / static_cast<double>(dt.count() * 1024 * 1024);
-                    Application::info("{}: send {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesOut, mbOut);
+                    Application::info("{}: send {} bytes, bandwith: {:.5} MBits/sec", "NetworkStatistic", bytesOut, calcBandwithMb(bytesOut, dt.count()));
                 }
             }
         }

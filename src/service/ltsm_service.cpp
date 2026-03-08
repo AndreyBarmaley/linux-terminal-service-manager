@@ -22,6 +22,7 @@
  **********************************************************************/
 
 #include <errno.h>
+#include <unistd.h>
 #include <signal.h>
 
 #include <sys/stat.h>
@@ -56,6 +57,7 @@
 #include "ltsm_sockets.h"
 #include "ltsm_service.h"
 #include "ltsm_channels.h"
+#include "ltsm_byte_stream.h"
 #include "ltsm_sdbus_proxy.h"
 #include "ltsm_xcb_wrapper.h"
 
@@ -121,10 +123,10 @@ namespace LTSM::DisplaySession {
 }
 
 namespace LTSM::Manager {
-    std::unique_ptr<sdbus::IConnection> serviceConn;
-
     //
-    bool runSystemScript(XvfbSessionPtr, const std::string & cmd, bool detach = true);
+    void runSystemScript(XvfbSessionPtr, const std::string & cmd);
+    void runSessionScript(XvfbSessionPtr, const std::string & cmd);
+
     bool switchToUser(const UserSession &);
     void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype);
 
@@ -181,10 +183,11 @@ namespace LTSM::Manager {
             if(pid_t pid = ForkMode::forkStart(); 0 != pid) {
                 pidNext = pid;
                 const bool notSysUser = std::string_view(ltsm_user_conn) != sess->userInfo->user();
+                std::future<void> detach;
 
                 // logon
                 if(notSysUser && json.configHasKey("system:logon")) {
-                    runSystemScript(sess, json.configGetString("system:logon"), true /* detach */);
+                    detach = std::async(std::launch::async, &runSystemScript, sess, json.configGetString("system:logon"));
                 }
 
                 // main2 thread
@@ -194,7 +197,7 @@ namespace LTSM::Manager {
 
                 // logoff
                 if(notSysUser && json.configHasKey("system:logoff")) {
-                    runSystemScript(sess, json.configGetString("system:logoff"), false /* no detach */);
+                    runSystemScript(sess, json.configGetString("system:logoff"));
                 }
 
                 return;
@@ -205,7 +208,6 @@ namespace LTSM::Manager {
                                __FUNCTION__, "display session", getpid(), getuid());
 
             auto sessionBin = json.configGetString("starter:path", "/usr/libexec/ltsm/ltsm_session_display");
-            ArgsList sessionArgs = { "--display", sess->displayAddr, "--xauth", sess->xauthfile };
 
             if(std::filesystem::exists(sessionBin)) {
                 if(switchToUser(*sess->userInfo)) {
@@ -215,7 +217,21 @@ namespace LTSM::Manager {
                         setenv(key.c_str(), val.c_str(), 1);
                     }
 
-                    ForkMode::runChildProcess(sessionBin, sessionArgs, {}, RedirectLog::StdoutStderr);
+                    std::vector<const char*> argv;
+                    argv.reserve(6);
+                    argv.push_back(sessionBin.c_str());
+                    argv.push_back("--display");
+                    argv.push_back(sess->displayAddr.c_str());
+                    argv.push_back("--xauth");
+                    argv.push_back(sess->xauthfile.c_str());
+                    argv.push_back(nullptr);
+
+                    if(int res = execv(sessionBin.c_str(), (char* const*) argv.data()); res < 0) {
+                        Application::error("{}: {} failed, error: {}, code: {}, path: `{}'",
+                               __FUNCTION__, "execv", strerror(errno), errno, sessionBin);
+                    }
+                    // exit
+                    exit(0);
                 }
             } else {
                 Application::error("{}: path not found: `{}'", __FUNCTION__, sessionBin);
@@ -633,7 +649,7 @@ namespace LTSM::Manager {
         res.insert_or_assign("DISPLAY", displayAddr);
         res.insert_or_assign("LTSM_REMOTEADDR", remoteAddr);
         res.insert_or_assign("LTSM_TYPECONN", conntype);
-        res.insert_or_assign("XDG_RUNTIME_DIR", userInfo->xdgRuntimeDir().native());
+        res.insert_or_assign("XDG_RUNTIME_DIR", userInfo->xdgRuntimeDir().string());
         res.insert_or_assign("XDG_SESSION_TYPE", "x11");
 
         if(mode == SessionMode::Login) {
@@ -708,6 +724,15 @@ namespace LTSM::Manager {
             return ptr &&
                    (ptr->mode == SessionMode::Started || ptr->mode == SessionMode::Connected || ptr->mode == SessionMode::Disconnected) &&
                    username == ptr->userInfo->user();
+        });
+
+        return it != sessions.end() ? *it : nullptr;
+    }
+
+    XvfbSessionPtr XvfbSessions::findPidSession(int pid) const {
+        std::scoped_lock guard{ lockSessions };
+        auto it = std::ranges::find_if(sessions, [&pid](const auto & ptr) {
+            return ptr && ptr->pid1 == pid;
         });
 
         return it != sessions.end() ? *it : nullptr;
@@ -802,34 +827,35 @@ namespace LTSM::Manager {
         return jas.flush();
     }
 
-    bool runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd, bool detach /* true */) {
+    void runSystemScript(XvfbSessionPtr xvfb, const std::string & cmd) {
         if(cmd.empty()) {
-            return false;
+            return;
         }
 
         std::error_code err;
 
         if(! std::filesystem::exists(cmd.substr(0, cmd.find(0x20)), err)) {
             Application::warning("{}: {}, path: `{}'", __FUNCTION__, err.message(), cmd);
-            return false;
+            return;
         }
 
         auto str = Tools::replace(cmd, "%{display}", xvfb->displayNum);
         str = Tools::replace(str, "%{user}", xvfb->userInfo->user());
 
-        auto thr = std::thread([ptr = std::move(xvfb), str]() {
-            int ret = std::system(str.c_str());
-            Application::debug(DebugType::App, "{}: command: `{}', return code: {}, display: {}",
-                               "runSystemScript", str, ret, ptr->displayNum);
-        });
+        int ret = std::system(str.c_str());
+        Application::debug(DebugType::App, "{}: command: `{}', return code: {}, display: {}",
+                               "runSystemScript", str, ret, xvfb->displayNum);
+    }
 
-        if(detach) {
-            thr.detach();
-        } else {
-            thr.join();
+    void runSessionScript(XvfbSessionPtr xvfb, const std::string & str) {
+        if(str.empty()) {
+            return;
         }
 
-        return true;
+        auto args = Tools::split(Tools::replace(
+                                         Tools::replace(str, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
+        assertm(! args.empty(), "empty args list");
+        xvfb->dbusRunSessionCommandAsync(args.front(), { std::next(args.begin()), args.end() }, {});
     }
 
     bool switchToUser(const UserSession & userInfo) {
@@ -935,14 +961,15 @@ namespace LTSM::Manager {
     }
 
     /* DBusAdaptor */
-    DBusAdaptor::DBusAdaptor(sdbus::IConnection & conn, const std::filesystem::path & confile)
+    DBusAdaptor::DBusAdaptor(boost::asio::io_context& ctx, DBusConnectionPtr conn, const std::filesystem::path & confile)
         : ApplicationJsonConfig("ltsm_service", confile)
 #ifdef SDBUS_2_0_API
-        , AdaptorInterfaces(conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
+        , AdaptorInterfaces(*conn, sdbus::ObjectPath {LTSM::dbus_manager_service_path})
 #else
-        , AdaptorInterfaces(conn, LTSM::dbus_manager_service_path)
+        , AdaptorInterfaces(*conn, LTSM::dbus_manager_service_path)
 #endif
-        , XvfbSessions(300) {
+        , XvfbSessions(300), ioc_{ctx}, signals_{ioc_},
+            timer_limit_{ioc_}, timer_ended_{ioc_}, timer_alive_{ioc_}, dbus_conn_{std::move(conn)} {
         //
         checkConfigPathes();
         createRuntimeDir();
@@ -951,26 +978,44 @@ namespace LTSM::Manager {
         sessions.resize(std::abs(configGetInteger("limit:sessions", 20)));
 
         //
-        saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
-        audioRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "audio" / "%{user}").native();
-        pcscRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "pcsc" / "%{user}").native();
-        pkcs11RuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").native();
-        fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").native();
-        cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").native();
+        saneRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").string();
+        audioRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "audio" / "%{user}").string();
+        pcscRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "pcsc" / "%{user}").string();
+        pkcs11RuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "sane" / "%{user}").string();
+        fuseRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "fuse" / "%{user}").string();
+        cupsRuntimeFmt = std::filesystem::path(ltsmRuntimeDir / "cups" / "printer_%{user}").string();
 
-        // registry
-        registerAdaptor();
+        jobs_.emplace_back(std::async(std::launch::async, [this]()
+        {
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", err.what());
+                boost::asio::post(ioc_, std::bind(&DBusAdaptor::stop, this));
+            }
+        }));
+
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
+
+        signals_.async_wait([this](const boost::system::error_code& ec, int signal)
+        {
+            // skip canceled
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT))
+            {
+                this->stop();
+            }
+        });
+
         // check sessions timepoint limit
-        timer1 = Tools::BaseTimer::create<std::chrono::seconds>(3, true,
-                 std::bind(& DBusAdaptor::sessionsTimeLimitAction, this));
-
+        timer_limit_.expires_after(dur_limit_);
+        timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
         // check sessions killed
-        timer2 = Tools::BaseTimer::create<std::chrono::seconds>(1, true,
-                 std::bind(& DBusAdaptor::sessionsEndedAction, this));
-
+        timer_ended_.expires_after(dur_ended_);
+        timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
         // check sessions alive
-        timer3 = Tools::BaseTimer::create<std::chrono::seconds>(20, true,
-                 std::bind(& DBusAdaptor::sessionsCheckConnectedAction, this));
+        timer_alive_.expires_after(dur_alive_);
+        timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
 
         inotifyWatchStart();
 
@@ -979,6 +1024,8 @@ namespace LTSM::Manager {
         auditLog->auditServiceStart();
 #endif
 
+        // registry
+        registerAdaptor();
     }
 
     DBusAdaptor::~DBusAdaptor() {
@@ -986,6 +1033,28 @@ namespace LTSM::Manager {
         auditLog->auditServiceStop();
 #endif
         unregisterAdaptor();
+        stop();
+    }
+
+    void DBusAdaptor::stop(void) {
+        dbus_conn_->leaveEventLoop();
+
+        signals_.cancel();
+        timer_limit_.cancel();
+        timer_ended_.cancel();
+        timer_alive_.cancel();
+
+        std::scoped_lock guard{ lock_childs_, lock_jobs_ };
+        for(const auto & [pid, future]: childs_) {
+            if(future.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+                if(0 < pid) {
+                    kill(pid, SIGTERM);
+                }
+            }
+        }
+
+        childs_.clear();
+        jobs_.clear();
     }
 
     void DBusAdaptor::createRuntimeDir(void) const {
@@ -1041,8 +1110,12 @@ namespace LTSM::Manager {
         Application::notice("{}: success", __FUNCTION__);
     }
 
-    void DBusAdaptor::sessionsTimeLimitAction(void) {
-        for(const auto & ptr : findTimepointLimitSessions()) {
+    void DBusAdaptor::timerSessionsTimeLimitAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
+        }
+
+        for(auto & ptr : findTimepointLimitSessions()) {
             uint32_t lastSecStarted = UINT32_MAX;
             uint32_t lastSecOnlined = UINT32_MAX;
 
@@ -1053,7 +1126,7 @@ namespace LTSM::Manager {
                 if(startedSec.count() > ptr->lifeTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "started", ptr->displayNum, static_cast<uint32_t>(ptr->lifeTimeLimitSec), startedSec.count());
-                    displayShutdown(ptr, true);
+                    displayShutdown(std::move(ptr), true);
                     continue;
                 }
 
@@ -1083,7 +1156,7 @@ namespace LTSM::Manager {
                 if(offlinedSec.count() > ptr->offlineTimeLimitSec) {
                     Application::notice("{}: {} limit, display: {}, limit: {}sec, session alive: {}sec",
                                         __FUNCTION__, "offline", ptr->displayNum, static_cast<uint32_t>(ptr->offlineTimeLimitSec), offlinedSec.count());
-                    displayShutdown(ptr, true);
+                    displayShutdown(std::move(ptr), true);
                     continue;
                 }
             }
@@ -1110,52 +1183,54 @@ namespace LTSM::Manager {
                 }
             }
         }
+
+        timer_limit_.expires_after(dur_limit_);
+        timer_limit_.async_wait(std::bind(&DBusAdaptor::timerSessionsTimeLimitAction, this, std::placeholders::_1));
     }
 
-    std::forward_list<XvfbSessionPtr> DBusAdaptor::moveEndedSessions(void) {
-        std::forward_list<XvfbSessionPtr> res;
-        std::scoped_lock guard1{ lockSessions };
+    void DBusAdaptor::timerSessionsEndedAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
+        }
 
-        for(auto & ptr : sessions) {
-            if(! ptr) {
-                continue;
-            }
-
-            std::scoped_lock guard2{ lockRunning };
-
-            auto it = std::ranges::find_if(childsRunning, [pid1 = ptr->pid1](auto & pidStatus)
+        auto removeChildsEnded = [this]() {
+            std::scoped_lock guard{ lock_childs_ };
+            std::erase_if(childs_, [this](auto & ps)
             {
-                if(pid1 != pidStatus.first) {
-                    return false;
+                auto & [pid, future] = ps;
+                if(future.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready)
+                {
+                    if(auto ptr = findPidSession(pid)) {
+                        Application::notice("{}: session ended, pid: {}, ret: {}", "removeChildsEnded", pid, future.get());
+                        ptr->pid1 = 0;
+                        boost::asio::post(ioc_, std::bind(&DBusAdaptor::displayShutdown, this, std::move(ptr), true));
+                    }
+                    return true;
                 }
-
-                if(pidStatus.second.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
-                    return false;
-                }
-
-                return true;
+                return false;
             });
+        };
 
-            if(it != childsRunning.end()) {
-                Application::notice("{}: session ended, pid: {}, ret: {}",
-                                    __FUNCTION__, ptr->pid1, it->second.get());
+        auto removeJobsEnded = [this]() {
+            std::scoped_lock guard{ lock_jobs_ };
+            std::erase_if(jobs_, [](auto & ps)
+            {
+                return ps.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready;
+            });
+        };
 
-                res.push_front(std::move(ptr));
-                childsRunning.erase(it);
-            }
-        }
+        removeChildsEnded();
+        removeJobsEnded();
 
-        return res;
+        timer_ended_.expires_after(dur_ended_);
+        timer_ended_.async_wait(std::bind(&DBusAdaptor::timerSessionsEndedAction, this, std::placeholders::_1));
     }
 
-    void DBusAdaptor::sessionsEndedAction(void) {
-        for(const auto & ptr : moveEndedSessions()) {
-            ptr->pid1 = 0;
-            displayShutdown(ptr, true);
+    void DBusAdaptor::timerSessionsCheckConnectedAction(const boost::system::error_code& ec) {
+        if(ec) {
+            return;
         }
-    }
 
-    void DBusAdaptor::sessionsCheckConnectedAction(void) {
         for(const auto & ptr : getOnlineSessions()) {
             // check alive connectors
             if(! ptr->checkStatus(Flags::SessionStatus::CheckConnection)) {
@@ -1174,6 +1249,9 @@ namespace LTSM::Manager {
                 }
             }
         }
+
+        timer_alive_.expires_after(dur_alive_);
+        timer_alive_.async_wait(std::bind(&DBusAdaptor::timerSessionsCheckConnectedAction, this, std::placeholders::_1));
     }
 
     bool DBusAdaptor::displayShutdown(XvfbSessionPtr xvfb, bool emitSignal) {
@@ -1197,16 +1275,21 @@ namespace LTSM::Manager {
         Application::notice("{}: display: {}", __FUNCTION__, xvfb->displayNum);
         // dbus no wait, remove background
         const bool notSysUser = std::string_view(ltsm_user_conn) != xvfb->userInfo->user();
-
+        
         if(notSysUser) {
-            runSessionScript(xvfb, configGetString("session:disconnect"));
-            runSystemScript(xvfb, configGetString("system:disconnect"));
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, [ptr = xvfb, system = configGetString("system:disconnect"), session = configGetString("session:disconnect")](){
+                    runSessionScript(ptr, session);
+                    runSystemScript(ptr, system);
+                })
+            );
         }
 
         // script run in thread
-        std::thread([wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
+        boost::asio::post(ioc_, [wait = emitSignal, ptr = std::move(xvfb), notsys = notSysUser, this]() {
             if(wait) {
-                std::this_thread::sleep_for(100ms);
+                std::this_thread::sleep_for(10ms);
             }
 
             auto displayNum = ptr->displayNum;
@@ -1219,7 +1302,7 @@ namespace LTSM::Manager {
                 this->auditLog->auditSessionStop();
 #endif
             }
-        }).detach();
+        });
 
         return true;
     }
@@ -1257,24 +1340,23 @@ namespace LTSM::Manager {
         std::ofstream ofs(xauthFilePath, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 
         if(ofs) {
+            byte::ostream bs(ofs);
+
             // create xautfile
             auto host = Tools::getHostname();
             auto display = std::to_string(displayNum);
             std::string_view magic{"MIT-MAGIC-COOKIE-1"};
-            StreamBuf sb;
             // format: 01 00 [ <host len:be16> [ host ]] [ <display len:be16> [ display ]] [ <magic len:be16> [ magic ]] [ <cookie len:be16> [ cookie ]]
-            sb.writeInt8(1);
-            sb.writeInt8(0);
-            sb.writeIntBE16(host.size());
-            sb.write(host);
-            sb.writeIntBE16(display.size());
-            sb.write(display);
-            sb.writeIntBE16(magic.size());
-            sb.write(magic);
-            sb.writeIntBE16(mcookie.size());
-            sb.write(mcookie);
-            auto & rawbuf = sb.rawbuf();
-            ofs.write((const char*) rawbuf.data(), rawbuf.size());
+            bs.write_byte(1);
+            bs.write_byte(0);
+            bs.write_be16(host.size());
+            bs.write_string(host);
+            bs.write_be16(display.size());
+            bs.write_string(display);
+            bs.write_be16(magic.size());
+            bs.write_string(magic);
+            bs.write_be16(mcookie.size());
+            bs.write_bytes(mcookie);
             ofs.close();
         } else {
             Application::error("{}: create xauthfile failed, path: `{}'", __FUNCTION__, xauthFilePath);
@@ -1282,23 +1364,6 @@ namespace LTSM::Manager {
         }
 
         return xauthFilePath;
-    }
-
-    void DBusAdaptor::waitPidBackgroundSafe(pid_t pid) {
-        // create wait pid task
-        std::packaged_task<int(int)> waitPidTask{& ForkMode::waitPid};
-        std::scoped_lock guard{ lockRunning };
-        childsRunning.emplace_back(std::make_pair(pid, waitPidTask.get_future()));
-        std::thread(std::move(waitPidTask), pid).detach();
-    }
-
-    void DBusAdaptor::runSessionScript(XvfbSessionPtr xvfb, const std::string & str) const {
-        if(! str.empty()) {
-            auto args = Tools::split(Tools::replace(
-                                         Tools::replace(str, "%{display}", xvfb->displayNum), "%{user}", xvfb->userInfo->user()), 0x20);
-            assertm(! args.empty(), "empty args list");
-            xvfb->dbusRunSessionCommandAsync(args.front(), { std::next(args.begin()), args.end() }, {});
-        }
     }
 
     XvfbSessionPtr DBusAdaptor::runNewDisplaySession(const std::string & username,
@@ -1374,7 +1439,7 @@ namespace LTSM::Manager {
                 if(std::string::npos != val.find("%{user}")) {
                     val = Tools::replace(val, "%{user}", sess->userInfo->user());
                 } else if(std::string::npos != val.find("%{runtime_dir}")) {
-                    val = Tools::replace(val, "%{runtime_dir}", sess->userInfo->xdgRuntimeDir().native());
+                    val = Tools::replace(val, "%{runtime_dir}", sess->userInfo->xdgRuntimeDir().string());
                 }
             }
         }
@@ -1410,6 +1475,7 @@ namespace LTSM::Manager {
 
         // set permissons user,auth, 0440
         Tools::setFileOwner(sess->xauthfile, sess->userInfo->uid(), Tools::getGroupGid(ltsm_group_auth), 0440);
+        ioc_.notify_fork(boost::asio::execution_context::fork_prepare);
 
         try {
             sess->pid1 = ForkMode::forkStart();
@@ -1417,14 +1483,16 @@ namespace LTSM::Manager {
             // child process
             if(0 == sess->pid1) {
                 ChildProcess::pamOpenDisplaySession(std::move(sess), *this);
-                ForkMode::runChildSuccess();
                 // ended
+                ForkMode::runChildExit();
             }
         } catch(const std::exception &) {
             return nullptr;
         }
 
         // main thread
+        ioc_.notify_fork(boost::asio::execution_context::fork_parent);
+
         Application::debug(DebugType::App, "{}: started, pid: {}, display: {}",
                            __FUNCTION__, sess->pid1, sess->displayNum);
 
@@ -1456,12 +1524,13 @@ namespace LTSM::Manager {
 
         auto sess = runNewDisplaySession(ltsm_user_conn, "", {}, {});
 
-        if(! sess) {
+        if(sess) {
+            // registered xvfb job
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(sess->pid1, std::async(std::launch::async, & ForkMode::waitPid, sess->pid1));
+        } else {
             return -1;
         }
-
-        // registered xvfb job
-        waitPidBackgroundSafe(sess->pid1);
 
         // update screen
         sess->remoteAddr = remoteAddr;
@@ -1528,21 +1597,25 @@ namespace LTSM::Manager {
             }
 
             oldSess->dbusSetSessionKeyboardLayout();
-            startSessionChannels(oldSess);
             runSessionScript(oldSess, configGetString("session:connect"));
-            return oldSess->displayNum;
+
+            int res = oldSess->displayNum;
+            startSessionChannelsAsync(std::move(oldSess));
+
+            return res;
         }
 
         // get owner screen
         auto newSess = runNewDisplaySession(userName, loginSess->userInfo->password(),
                 std::move(loginSess->environments), std::move(loginSess->options));
 
-        if(! newSess) {
+        if(newSess) {
+            // registered xvfb job
+            std::scoped_lock guard{ lock_childs_ };
+            childs_.emplace_back(newSess->pid1, std::async(std::launch::async, & ForkMode::waitPid, newSess->pid1));
+        } else {        
             return -1;
         }
-
-        // registered xvfb job
-        waitPidBackgroundSafe(newSess->pid1);
 
         // parent continue
         Application::info("{}: {}, display: {}, user: {}, pid: {}",
@@ -1591,14 +1664,24 @@ namespace LTSM::Manager {
         }
 
         newSess->dbusSetSessionKeyboardLayout();
-        runSystemScript(newSess, configGetString("system:connect"));
-        startSessionChannels(newSess);
-        runSessionScript(newSess, configGetString("session:connect"));
+        if(true) {
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, [ptr = newSess, system = configGetString("system:connect"), session = configGetString("session:connect")](){
+                    runSystemScript(ptr, system);
+                    runSessionScript(ptr, session);
+                })
+            );
+        }
 
 #ifdef LTSM_WITH_AUDIT
         auditLog->auditSessionStart();
 #endif
-        return newSess->displayNum;
+
+        int res = newSess->displayNum;
+        startSessionChannelsAsync(std::move(newSess));
+
+        return res;
     }
 
     int32_t DBusAdaptor::busGetServiceVersion(void) {
@@ -1621,10 +1704,7 @@ namespace LTSM::Manager {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
 
         if(auto ptr = findDisplaySession(display)) {
-            std::thread([this, xvfb = std::move(ptr)]() {
-                std::this_thread::sleep_for(10ms);
-                this->displayShutdown(xvfb, true);
-            }).detach();
+            displayShutdown(std::move(ptr), true);
         } else {
             Application::warning("{}: display not found: {}", __FUNCTION__, display);
         }
@@ -1632,10 +1712,10 @@ namespace LTSM::Manager {
 
     void DBusAdaptor::busShutdownConnector(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}: display: {}", __FUNCTION__, display);
-        std::thread([this, display]() {
-            std::this_thread::sleep_for(10ms);
+        boost::asio::post(ioc_, [this, display]() {
+            std::this_thread::sleep_for(1ms);
             this->emitShutdownConnector(display);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busShutdownService(void) {
@@ -1658,31 +1738,8 @@ namespace LTSM::Manager {
             std::this_thread::sleep_for(100ms);
         }
 
-        std::scoped_lock guard{ lockRunning };
-
-        // childEnded
-        if(! childsRunning.empty()) {
-            auto childsCount = std::ranges::count_if(childsRunning, [](auto & pair) {
-                return 0 < pair.first;
-            });
-
-            Application::error("{}: running childs: {}, killed process", __FUNCTION__, childsCount);
-
-            for(const auto & [pid, futureStatus] : childsRunning) {
-                kill(pid, SIGTERM);
-            }
-
-            std::this_thread::sleep_for(100ms);
-
-            for(const auto & [pid, futureStatus] : childsRunning) {
-                futureStatus.wait();
-            }
-
-            childsRunning.clear();
-        }
-
         Application::notice("{}: {}, pid: {}", __FUNCTION__, "complete", getpid());
-        serviceConn->leaveEventLoop();
+        stop();
     }
 
     void DBusAdaptor::busSendMessage(const int32_t & display, const std::string & message) {
@@ -1709,10 +1766,10 @@ namespace LTSM::Manager {
             emitSessionIdleTimeout(ptr->displayNum, ptr->userInfo->user());
 
             if(ptr->idleDisconnect) {
-                std::thread([this, xvfb = std::move(ptr)]() {
-                    std::this_thread::sleep_for(10ms);
+                boost::asio::post(ioc_, [this, xvfb = std::move(ptr)]() {
+                    std::this_thread::sleep_for(1ms);
                     this->emitShutdownConnector(xvfb->displayNum);
-                }).detach();
+                });
             }
         } else {
             Application::warning("{}: display not found: {}", __FUNCTION__, display);
@@ -1876,7 +1933,7 @@ namespace LTSM::Manager {
 
             if(std::filesystem::exists(dstfile, err)) {
                 Application::error("{}: file present and skipping, path: `{}'", __FUNCTION__, dstfile);
-                sendNotifyCall(xvfb, "Transfer Skipping", fmt::format("such a file exists: {}", dstfile.native()), NotifyParams::Warning);
+                sendNotifyCall(xvfb, "Transfer Skipping", fmt::format("such a file exists: {}", dstfile.string()), NotifyParams::Warning);
                 continue;
             }
 
@@ -1933,7 +1990,7 @@ namespace LTSM::Manager {
             Tools::setFileOwner(dstfile, xvfb->userInfo->uid(), xvfb->userInfo->gid());
             sendNotifyCall(xvfb, "Transfer Complete",
                           fmt::format("new file added: <a href='file://{}'>{}</a>",
-                                              dstfile, std::filesystem::path(dstfile).filename().native()),
+                                              dstfile, std::filesystem::path(dstfile).filename().string()),
                           NotifyParams::Information);
         }
     }
@@ -1975,9 +2032,12 @@ namespace LTSM::Manager {
         };
 
         //run background
-        std::thread(& DBusAdaptor::transferFilesRequestCommunication, this, xvfb,
-                    files, std::move(emitTransferReject),
-                    fmt::format("Can you receive remote files? ({})", files.size())).detach();
+        std::scoped_lock guard{ lock_jobs_ };
+        jobs_.emplace_back(
+            std::async(std::launch::async, & DBusAdaptor::transferFilesRequestCommunication, this, std::move(xvfb),
+                    files, std::move(emitTransferReject), fmt::format("Can you receive remote files? ({})", files.size()))
+        );
+
         return true;
     }
 
@@ -1987,7 +2047,12 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, tmpfile, dstfile);
 
         if(auto xvfb = findDisplaySession(display)) {
-            std::thread(&DBusAdaptor::transferFileStartBackground, this, std::move(xvfb), tmpfile, dstfile, filesz).detach();
+            //run background
+            std::scoped_lock guard{ lock_jobs_ };
+            jobs_.emplace_back(
+                std::async(std::launch::async, &DBusAdaptor::transferFileStartBackground, this,
+                    std::move(xvfb), tmpfile, dstfile, filesz)
+            );
             return true;
         }
 
@@ -1998,7 +2063,7 @@ namespace LTSM::Manager {
     void sendNotifyCall(XvfbSessionPtr xvfb, std::string summary, std::string body, uint8_t icontype) {
         // wait new session started
         while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(1s);
+            std::this_thread::sleep_for(550ms);
         }
 
         switch(icontype) {
@@ -2027,7 +2092,9 @@ namespace LTSM::Manager {
             if(xvfb->mode == SessionMode::Connected ||
                xvfb->mode == SessionMode::Disconnected) {
                 // thread mode
-                std::thread(& sendNotifyCall, std::move(xvfb), summary, body, icontype /*, urgency2 = urgency */).detach();
+                boost::asio::post(ioc_, [ptr = std::move(xvfb), summary, body, icontype](){
+                    sendNotifyCall(ptr, summary, body, icontype /*, urgency2 = urgency */);
+                });
                 return;
             }
 
@@ -2082,7 +2149,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            std::thread(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true).detach();
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, "******", true));
             return true;
         }
 
@@ -2096,7 +2163,7 @@ namespace LTSM::Manager {
                            __FUNCTION__, display, login);
 
         if(auto xvfb = this->findDisplaySession(display)) {
-            std::thread(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false).detach();
+            boost::asio::post(ioc_, std::bind(&DBusAdaptor::pamAuthenticate, this, std::move(xvfb), login, password, false));
             return true;
         }
 
@@ -2347,41 +2414,48 @@ namespace LTSM::Manager {
         }
     }
 
+    void DBusAdaptor::startSessionChannelsAsync(XvfbSessionPtr xvfb) {
+        std::scoped_lock guard{ lock_jobs_ };
+        jobs_.emplace_back(std::async(std::launch::async, & DBusAdaptor::startSessionChannels, this, std::move(xvfb)));
+    }
+
     void DBusAdaptor::startSessionChannels(XvfbSessionPtr xvfb) {
+
         auto printer = xvfb->options.find("redirect:cups");
-
-        if(xvfb->options.end() != printer) {
-            startPrinterListener(xvfb, printer->second);
-        }
-
         auto sane = xvfb->options.find("redirect:sane");
-
-        if(xvfb->options.end() != sane) {
-            startSaneListener(xvfb, sane->second);
-        }
-
         auto audio = xvfb->options.find("redirect:audio");
-
-        if(xvfb->options.end() != audio) {
-            startAudioListener(xvfb, audio->second);
-        }
-
         auto pcsc = xvfb->options.find("redirect:pcsc");
-
-        if(xvfb->options.end() != pcsc) {
-            startPcscListener(xvfb, pcsc->second);
-        }
-
         auto fuse = xvfb->options.find("redirect:fuse");
 
-        if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
-            try {
+        // wait new session started
+        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
+            std::this_thread::sleep_for(550ms);
+        }
+
+        try {
+            if(xvfb->options.end() != printer) {
+                startPrinterListener(xvfb, printer->second);
+            }
+
+            if(xvfb->options.end() != sane) {
+                startSaneListener(xvfb, sane->second);
+            }
+
+            if(xvfb->options.end() != audio) {
+                startAudioListener(xvfb, audio->second);
+            }
+
+            if(xvfb->options.end() != pcsc) {
+                startPcscListener(xvfb, pcsc->second);
+            }
+
+            if(xvfb->options.end() != fuse && ! fuse->second.empty()) {
                 for(const auto & share : JsonContentString(Tools::unescaped(fuse->second)).toArray().toStdList<std::string>()) {
                     startFuseListener(xvfb, share);
                 }
-            } catch(...) {
-                Application::warning("{}: invalid json array: `{}'", __FUNCTION__, fuse->second);
             }
+        } catch(const std::exception & err) {
+            Application::warning("{}: exception: `{}'", __FUNCTION__, err.what());
         }
     }
 
@@ -2462,16 +2536,11 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadOnly), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        std::thread(threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, printerSocket, xvfb->userInfo->uid(), lp, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
 
     bool startAudioSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string audioSocket) {
-        // wait new session started
-        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(550ms);
-        }
-
         Application::info("{}: display: {}, user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), audioSocket);
 
@@ -2519,13 +2588,19 @@ namespace LTSM::Manager {
         }
 
         auto clientUrl = Channel::createUrl(Channel::ConnectorType::Audio, "");
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.native());
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, audioSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
-        // fix permissions job
-        std::thread(threadPermissionJob, audioSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
-        // start session audio helper
-        std::thread(startAudioSessionJob, this, std::move(xvfb), audioSocket.native()).detach();
+
+        std::scoped_lock guard{ lock_jobs_ };
+        jobs_.emplace_back(
+            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(audioSocket)](){
+                // fix permissions job
+                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
+                // start session audio helper
+                startAudioSessionJob(this, std::move(ptr), path.string());
+            })
+        );
         return true;
     }
 
@@ -2580,17 +2655,12 @@ namespace LTSM::Manager {
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::ZLibCompression));
         // fix permissions job
-        std::thread(threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
-                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP).detach();
+        boost::asio::post(std::bind(&threadPermissionJob, saneSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(),
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP));
         return true;
     }
 
     bool startPcscSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string pcscSocket) {
-        // wait new session started
-        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(550ms);
-        }
-
         Application::info("{}: display: {}, user: {}, socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), pcscSocket);
 
@@ -2637,13 +2707,20 @@ namespace LTSM::Manager {
         }
 
         auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pcsc, "");
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket.native());
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pcscSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "medium", 5, 0);
-        // fix permissions job
-        std::thread(threadPermissionJob, pcscSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
-        // start session pcsc helper
-        std::thread(startPcscSessionJob, this, std::move(xvfb), pcscSocket.native()).detach();
+
+        std::scoped_lock guard{ lock_jobs_ };
+        jobs_.emplace_back(
+            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(pcscSocket)](){
+                // fix permissions job
+                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
+                // start session pcsc helper
+                startPcscSessionJob(this, std::move(ptr), path.string());
+            })
+        );
+
         return true;
     }
 
@@ -2684,12 +2761,12 @@ namespace LTSM::Manager {
         }
 
         auto clientUrl = Channel::createUrl(Channel::ConnectorType::Pkcs11, "");
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pkcs11Socket.native());
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, pkcs11Socket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "slow", 5,
                            static_cast<uint32_t>(Channel::OptsFlags::AllowLoginSession));
         // fix permissions job
-        std::thread(threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
+        boost::asio::post(ioc_, std::bind(&threadPermissionJob, pkcs11Socket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR));
         return true;
     }
 
@@ -2699,11 +2776,6 @@ namespace LTSM::Manager {
 
     bool startFuseSessionJob(DBusAdaptor* owner, XvfbSessionPtr xvfb, std::string localPoint, std::string remotePoint,
                              std::string fuseSocket) {
-        // wait new session started
-        while(xvfb->sessionOnlinedSec() < std::chrono::seconds(2)) {
-            std::this_thread::sleep_for(550ms);
-        }
-
         Application::info("{}: display: {}, user: {}, local: `{}', remote: `{}', socket: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), localPoint, remotePoint, fuseSocket);
 
@@ -2756,14 +2828,20 @@ namespace LTSM::Manager {
         }
 
         auto clientUrl = Channel::createUrl(Channel::ConnectorType::Fuse, "");
-        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket.native());
+        auto serverUrl = Channel::createUrl(Channel::ConnectorType::Unix, fuseSocket.string());
         emitCreateListener(xvfb->displayNum, clientUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite),
                            serverUrl, Channel::Connector::modeString(Channel::ConnectorMode::ReadWrite), "fast", 5, 0);
-        // fix permissions job
-        std::thread(threadPermissionJob, fuseSocket, xvfb->userInfo->uid(), xvfb->userInfo->gid(), S_IRUSR | S_IWUSR).detach();
-        // start session fuse helper
-        std::thread(startFuseSessionJob, this, std::move(xvfb), fusePointFolder.native(), remotePoint,
-                    fuseSocket.native()).detach();
+
+        std::scoped_lock guard{ lock_jobs_ };
+        jobs_.emplace_back(
+            std::async(std::launch::async, [this, ptr=std::move(xvfb), path=std::move(fuseSocket), point=fusePointFolder.string(), remote=std::move(remotePoint)](){
+                // fix permissions job
+                threadPermissionJob(path, ptr->userInfo->uid(), ptr->userInfo->gid(), S_IRUSR | S_IWUSR);
+                // start session fuse helper
+                startFuseSessionJob(this, std::move(ptr), point, remote, path.string());
+            })
+        );
+
         return true;
     }
 
@@ -2775,7 +2853,7 @@ namespace LTSM::Manager {
         Application::info("{}: display: {}, user: {}, local point: `{}'",
                           __FUNCTION__, xvfb->displayNum, xvfb->userInfo->user(), fusePointFolder);
 
-        xvfb->dbusFuseUmountPoint(fusePointFolder.native());
+        xvfb->dbusFuseUmountPoint(fusePointFolder.string());
     }
 
     void DBusAdaptor::busSetDebugLevel(const std::string & level) {
@@ -2888,10 +2966,10 @@ namespace LTSM::Manager {
             const std::string & password, const bool & action) {
         Application::info("{}: display: {}, user: {}", __FUNCTION__, display, login);
 
-        std::thread([this, display, login, password, action]() {
-            std::this_thread::sleep_for(10ms);
+        boost::asio::post(ioc_, [this, display, login, password, action]() {
+            std::this_thread::sleep_for(1ms);
             this->emitHelperSetLoginPassword(display, login, password, action);
-        }).detach();
+        });
     }
 
     std::string DBusAdaptor::busGetSessionJson(const int32_t & display) {
@@ -2913,28 +2991,28 @@ namespace LTSM::Manager {
     void DBusAdaptor::busRenderRect(const int32_t & display, const TupleRegion & rect, const TupleColor & color, const bool & fill) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display, rect, color, fill]() {
-            std::this_thread::sleep_for(10ms);
+        boost::asio::post(ioc_, [this, display, rect, color, fill]() {
+            std::this_thread::sleep_for(1ms);
             this->emitAddRenderRect(display, rect, color, fill);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display, text, pos, color]() {
-            std::this_thread::sleep_for(10ms);
+        boost::asio::post(ioc_, [this, display, text, pos, color]() {
+            std::this_thread::sleep_for(1ms);
             this->emitAddRenderText(display, text, pos, color);
-        }).detach();
+        });
     }
 
     void DBusAdaptor::busRenderClear(const int32_t & display) {
         Application::debug(DebugType::Dbus, "{}", __FUNCTION__);
 
-        std::thread([this, display]() {
-            std::this_thread::sleep_for(10ms);
+        boost::asio::post(ioc_, [this, display]() {
+            std::this_thread::sleep_for(1ms);
             this->emitClearRenderPrimitives(display);
-        }).detach();
+        });
     }
 
     bool DBusAdaptor::busCreateChannel(const int32_t & display, const std::string & client, const std::string & cmode,
@@ -2967,14 +3045,6 @@ namespace LTSM::Manager {
     }
 
     /* Manager::startService */
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            if(serviceConn) {
-                serviceConn->leaveEventLoop();
-            }
-        }
-    }
-
     int startService(int argc, const char** argv) {
         bool isBackground = false;
         std::filesystem::path confile;
@@ -3003,52 +3073,45 @@ namespace LTSM::Manager {
             if(fork()) {
                 return EXIT_SUCCESS;
             }
+            
+            setsid();
+            chdir("/");
         }
 
 #ifdef SDBUS_2_0_API
-        serviceConn = sdbus::createSystemBusConnection(sdbus::ServiceName {LTSM::dbus_manager_service_name});
+        auto conn = sdbus::createSystemBusConnection(sdbus::ServiceName {LTSM::dbus_manager_service_name});
 #else
-        serviceConn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
+        auto conn = sdbus::createSystemBusConnection(LTSM::dbus_manager_service_name);
 #endif
 
-        if(! serviceConn) {
-            Application::error("{}: {} failed",
-                               "ServiceStart", "dbus connection");
-            return EXIT_FAILURE;
-        }
-
-        auto connectorHome = Tools::getUserHome(ltsm_user_conn);
-
-        if(! std::filesystem::is_directory(connectorHome)) {
-            Application::error("{}: path not found: `{}'", __FUNCTION__, connectorHome);
-            return EXIT_FAILURE;
-        }
-
-        // remove old sockets
-        for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome}) {
-            if(dirEntry.is_socket()) {
-                std::filesystem::remove(dirEntry);
+        if(auto connectorHome = Tools::getUserHome(ltsm_user_conn);
+                                std::filesystem::is_directory(connectorHome)) {
+            // remove old sockets
+            for(auto const & dirEntry : std::filesystem::directory_iterator{connectorHome}) {
+                if(dirEntry.is_socket()) {
+                    std::filesystem::remove(dirEntry);
+                }
             }
         }
-
-        signal(SIGTERM, Manager::signalHandler);
-        signal(SIGINT, isBackground ? SIG_IGN : signalHandler);
+    
+        boost::asio::io_context ctx{4}; 
         signal(SIGPIPE, SIG_IGN);
         signal(SIGHUP, SIG_IGN);
 
-        auto serviceAdaptor = std::make_unique<DBusAdaptor>(*serviceConn, confile);
-        Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}", "ServiceStart", getuid(), getgid(), getpid(), LTSM::service_version);
+        auto serviceAdaptor = std::make_unique<DBusAdaptor>(ctx, std::move(conn), confile);
+        Application::notice("{}: service started, uid: {}, gid: {}, pid: {}, version: {}",
+                __FUNCTION__, getuid(), getgid(), getpid(), LTSM::service_version);
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "READY=1");
 #endif
 
-        serviceConn->enterEventLoop();
+        ctx.run();
 
 #ifdef LTSM_WITH_SYSTEMD
         sd_notify(0, "STOPPING=1");
 #endif
-        Application::notice("{}: service stopped", "ServiceStart");
+        Application::notice("{}: service stopped", __FUNCTION__);
         serviceAdaptor.reset();
 
         return EXIT_SUCCESS;

@@ -32,6 +32,8 @@
 #include <string_view>
 #include <forward_list>
 
+#include <boost/asio.hpp>
+
 #include <security/pam_appl.h>
 #include <security/pam_misc.h>
 
@@ -46,7 +48,8 @@ namespace LTSM::Manager {
         explicit service_error(std::string_view what) : std::runtime_error(view2string(what)) {}
     };
 
-    using PidStatus = std::pair<pid_t, std::shared_future<int>>;
+    using Job = std::future<void>;
+    using PidStatus = std::pair<pid_t, std::future<int>>;
     using PidStdout = sdbus::Struct<int32_t, std::vector<uint8_t>>;
     using FileNameSize = sdbus::Struct<std::string, uint32_t>;
     using TuplePosition = sdbus::Struct<int16_t, int16_t>;
@@ -330,6 +333,7 @@ namespace LTSM::Manager {
 
     using XvfbSessionPtr = std::shared_ptr<XvfbSession>;
     using TransferRejectFunc = std::function<void(int display, const std::vector<FileNameSize> &)>;
+    using DBusConnectionPtr = std::unique_ptr<sdbus::IConnection>;
 
     class XvfbSessions {
       protected:
@@ -340,6 +344,7 @@ namespace LTSM::Manager {
         XvfbSessions(size_t);
         virtual ~XvfbSessions() = default;
 
+        XvfbSessionPtr findPidSession(int pid) const;
         XvfbSessionPtr findDisplaySession(int display) const;
         std::forward_list<XvfbSessionPtr> findUserSessions(const std::string & username) const;
         XvfbSessionPtr findUserSession(const std::string & username) const;
@@ -354,13 +359,28 @@ namespace LTSM::Manager {
     class DBusAdaptor : public ApplicationJsonConfig, public sdbus::AdaptorInterfaces<Service_adaptor>, public XvfbSessions {
         const std::filesystem::path ltsmRuntimeDir{"/var/run/ltsm"};
 
+        const std::chrono::seconds dur_limit_{3};
+        const std::chrono::seconds dur_ended_{1};
+        const std::chrono::seconds dur_alive_{20};
+
+        boost::asio::io_context & ioc_;
+        boost::asio::signal_set signals_;
+
+        boost::asio::steady_timer timer_limit_;
+        boost::asio::steady_timer timer_ended_;
+        boost::asio::steady_timer timer_alive_;
+
+        DBusConnectionPtr dbus_conn_;
+
         std::string saneRuntimeFmt, audioRuntimeFmt,
             pcscRuntimeFmt, pkcs11RuntimeFmt, fuseRuntimeFmt, cupsRuntimeFmt;
 
-        std::list<PidStatus> childsRunning;
-        std::mutex lockRunning;
+        std::mutex lock_childs_;
+        std::list<PidStatus> childs_;
 
-        std::unique_ptr<Tools::BaseTimer> timer1, timer2, timer3;
+        std::mutex lock_jobs_;
+        std::list<Job> jobs_;
+
         std::atomic<bool> loginsDisable = false;
 
 #ifdef LTSM_WITH_AUDIT
@@ -368,7 +388,10 @@ namespace LTSM::Manager {
 #endif
 
       private:
-        void waitPidBackgroundSafe(pid_t pid);
+        void stop(void);
+        void timerSessionsTimeLimitAction(const boost::system::error_code&);
+        void timerSessionsEndedAction(const boost::system::error_code&);
+        void timerSessionsCheckConnectedAction(const boost::system::error_code&);
 
         void transferFileStartBackground(XvfbSessionPtr, std::string tmpfile, std::string dstfile, uint32_t filesz);
         void transferFilesRequestCommunication(XvfbSessionPtr, std::vector<FileNameSize> files,
@@ -377,8 +400,6 @@ namespace LTSM::Manager {
         void checkConfigPathes(void) const;
         void createRuntimeDir(void) const;
 
-        std::forward_list<XvfbSessionPtr> moveEndedSessions(void);
-
       protected:
         std::filesystem::path createXauthFile(int display, const std::vector<uint8_t> & mcookie) const;
 
@@ -386,17 +407,12 @@ namespace LTSM::Manager {
         bool waitDisplaySessionStarting(XvfbSessionPtr, uint32_t waitms) const;
         bool checkDisplaySessionAlive(int display) const;
 
-        void runSessionScript(XvfbSessionPtr, const std::string & cmd) const;
         bool displayShutdown(XvfbSessionPtr, bool emitSignal);
         bool pamAuthenticate(XvfbSessionPtr, const std::string & login, const std::string & password, bool token);
         std::forward_list<std::string> getAllowLogins(void) const;
 
-        void sessionsTimeLimitAction(void);
-        void sessionsEndedAction(void);
-        void sessionsCheckConnectedAction(void);
-
       public:
-        DBusAdaptor(sdbus::IConnection &, const std::filesystem::path & confile);
+        DBusAdaptor(boost::asio::io_context &, DBusConnectionPtr, const std::filesystem::path & confile);
         ~DBusAdaptor();
 
         void shutdownService(void);
@@ -462,6 +478,7 @@ namespace LTSM::Manager {
         void busRenderText(const int32_t & display, const std::string & text, const TuplePosition & pos, const TupleColor & color) override;
         void busRenderClear(const int32_t & display) override;
 
+        void startSessionChannelsAsync(XvfbSessionPtr);
         void startSessionChannels(XvfbSessionPtr);
         void stopSessionChannels(XvfbSessionPtr);
 

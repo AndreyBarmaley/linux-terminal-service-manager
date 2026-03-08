@@ -28,8 +28,8 @@
 
 namespace LTSM {
 #ifdef LTSM_WITH_OPUS
-    AudioEncoder::Opus::Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample, uint16_t frames)
-        : framesCount(frames), sampleLength(audioChannels * (bitsPerSample >> 3)) {
+    AudioEncoder::Opus::Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample)
+        : sampleLength(audioChannels * (bitsPerSample >> 3)) {
         const size_t reserveSize = 256 * 1024;
         last.reserve(reserveSize);
         int error = OPUS_OK;
@@ -53,43 +53,45 @@ namespace LTSM {
         */
     }
 
-    bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len) {
+    void AudioEncoder::Opus::push(const uint8_t* ptr, size_t len) {
         Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
         if(len) {
             last.insert(last.end(), ptr, ptr + len);
         }
+    }
 
+    std::vector<uint8_t> AudioEncoder::Opus::encode(void) {
         const size_t samplesCount = last.size() / sampleLength;
+        size_t framesCount = 960;
 
-        if(framesCount > samplesCount) {
-            return false;
+        // Opus: frame size - at 48kHz the permitted values are 120, 240, 480, or 960
+        if(120 > samplesCount) {
+            return {};
+        } else if(240 > samplesCount) {
+            framesCount = 120;
+        } else if(480 > samplesCount) {
+            framesCount = 240;
+        } else if(960 > samplesCount) {
+            framesCount = 480;
         }
+
+        // ref: https://www.opus-codec.org/docs/html_api/group__opusencoder.html
+        // max_packet is the maximum number of bytes that can be written in the packet (1276 bytes is recommended)
+        std::vector<uint8_t> tmp(1276);
 
         auto src = reinterpret_cast<const opus_int16*>(last.data());
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
         if(nBytes < 0) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encode", nBytes);
-            return false;
-        }
-
-        last.erase(last.begin(), rangesNext(last.begin(), framesCount * sampleLength, last.end()));
-        encodeSize = nBytes;
-        return 0 < encodeSize;
-    }
-
-    const uint8_t* AudioEncoder::Opus::data(void) const {
-        return tmp.data();
-    }
-
-    size_t AudioEncoder::Opus::size(void) const {
-        if(encodeSize > tmp.size()) {
-            Application::error("{}: out of range, size: {}, buf: {}", __FUNCTION__, encodeSize, tmp.size());
             throw audio_error(NS_FuncNameS);
         }
 
-        return encodeSize;
+        last.erase(last.begin(), rangesNext(last.begin(), framesCount * sampleLength, last.end()));
+
+        tmp.resize(nBytes);
+        return tmp;
     }
 
 #endif

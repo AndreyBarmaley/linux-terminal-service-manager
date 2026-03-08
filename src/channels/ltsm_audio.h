@@ -62,6 +62,9 @@ namespace LTSM {
         AudioPlayer() = default;
         virtual ~AudioPlayer() = default;
 
+        virtual bool playStart(void) const { return false; }
+        virtual bool playStop(void) const { return false; }
+        virtual bool isPlaying(void) const { return false; }
         virtual bool streamWrite(const uint8_t*, size_t) const = 0;
     };
 
