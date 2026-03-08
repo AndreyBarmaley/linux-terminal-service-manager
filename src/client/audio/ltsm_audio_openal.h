@@ -45,12 +45,14 @@ namespace LTSM {
             std::unique_ptr<ALCcontext, void(*)(ALCcontext*)> ctx{ nullptr, alcDestroyContext };
 
             ALuint sourceId = 0;
+            const ALuint autoPlayAfterSec = 0;
             mutable ALuint playAfterBytes = 65536;
 
             ALenum fmtFormat = 0;
             ALsizei fmtFrequency = 0;
 
           protected:
+            ALuint getBufferLength(ALuint sec) const;
             ALint getBuffersProcessed(void) const;
             ALint getBuffersQueued(void) const;
             ALuint findFreeBufferId(void) const;
@@ -60,11 +62,11 @@ namespace LTSM {
             ~Playback();
 
             bool streamWrite(const uint8_t*, size_t) const override;
+            bool playStart(void) const override;
+            bool playStop(void) const override;
+            bool isPlaying(void) const override;
 
-            bool playStart(void) const;
-            bool playStop(void) const;
             bool playPause(void) const;
-            bool stateIsPlaying(void) const;
         };
     }
 }

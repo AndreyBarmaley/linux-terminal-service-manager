@@ -292,7 +292,7 @@ if(LTSM_BUILD_CLIENT)
     set(LTSM_CLIENT_FFMPEG_SUPPORT ON CACHE BOOL "client: ffmpeg decoder")
     set(LTSM_CLIENT_SCARD_REDIRECT ON CACHE BOOL "client: smartcard redirect (pcsc)")
     set(LTSM_CLIENT_FOLDER_REDIRECT ON CACHE BOOL "client: folder redirect (fuse)")
-    set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect")
+    set(LTSM_CLIENT_AUDIO_REDIRECT ON CACHE BOOL "client: audio redirect (openal)")
 
     CommonDefaults(JSON PNG SDL DECODER SYSTEMD ZLIB)
 

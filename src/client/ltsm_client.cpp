@@ -55,20 +55,6 @@ namespace LTSM {
     const auto usercfgdef = "$HOME/.config/ltsm/client.cfg";
 #endif
 
-    std::list<std::string> supportedPlaybacks(void) {
-        std::list<std::string> audioEngines;
-#ifdef LTSM_WITH_PLAYBACK_PIPEWIRE
-        audioEngines.emplace_back("pipewire");
-#endif
-#ifdef LTSM_WITH_PLAYBACK_OPENAL
-        audioEngines.emplace_back("openal");
-#endif
-#ifdef LTSM_WITH_PLAYBACK_PULSE
-        audioEngines.emplace_back("pulse");
-#endif
-        return audioEngines;
-    }
-
     void printHelp(const char* prog) {
         std::list<std::string> videoEncodings;
         std::list<std::string> audioEncodings;
@@ -80,7 +66,6 @@ namespace LTSM {
                 audioEncodings.emplace_back(Tools::lower(RFB::encodingName(enc)));
             }
         }
-        std::list<std::string> audioEngines = supportedPlaybacks();
         std::cout << std::endl <<
                   prog << " version: " << LTSM_VNC2SDL_VERSION << std::endl;
         std::cout << std::endl <<
@@ -198,7 +183,6 @@ namespace LTSM {
             std::cout <<
                                   "    --audio [<enc>] (audio support, and preffered encoding: " << Tools::join(audioEncodings, ",") << ")" << std::endl;
         }
-        std::cout <<              "    --audio-playback <engine> (audio playback preffered: " << Tools::join(audioEngines, ",") << ")" << std::endl;
 #endif
         std::cout <<
                                   "    --printer [" << printdef << "] (redirect printer)" << std::endl <<
@@ -506,18 +490,6 @@ namespace LTSM {
                     [&](auto & enc) { return RFB::isAudioEncoding(enc) && enc == audioEncoding; })) {
                     Application::warning("{}: incorrect audio encoding: {}", __FUNCTION__, val);
                     audioEncoding = 0;
-                    audioEnable = false;
-                }
-            }
-        } else if(cmd == "--audio-playback") {
-            audioEnable = true;
-
-            if(arg.size()) {
-                std::string val = Tools::lower(arg);
-                audioPlayback.assign(arg);
-                if(std::ranges::none_of(supportedPlaybacks(), [&](auto & enc) { return enc == audioPlayback; })) {
-                    Application::warning("{}: incorrect audio playback: {}", __FUNCTION__, val);
-                    audioPlayback.clear();
                     audioEnable = false;
                 }
             }
@@ -1414,17 +1386,6 @@ namespace LTSM {
 
     int Vnc2SDL::clientPrefferedAudioEncoding(void) const {
         return audioEncoding;
-    }
-
-    AudioPlayback Vnc2SDL::clientAudioPlayback(void) const {
-        if(startsWith(audioPlayback, "puls")) {
-            return AudioPlayback::PulseAudio;
-        } else if(startsWith(audioPlayback, "pipe")) {
-            return AudioPlayback::PipeWire;
-        } else if(startsWith(audioPlayback, "open")) {
-            return AudioPlayback::OpenAl;
-        }
-        return AudioPlayback::Default;
     }
 
     /*

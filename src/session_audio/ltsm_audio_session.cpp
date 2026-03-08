@@ -257,13 +257,14 @@ namespace LTSM {
 
         // encode data
         if(! silent && encoder_) {
-            if(! encoder_->encode(data.data(), data.size())) {
-                Application::error("{}: {} failed", __FUNCTION__, "encoder");
+            try {
+                if(auto buf = encoder_->encode(data.data(), data.size()); !buf.empty()) {
+                    data.swap(buf);
+                }
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, err.what());
                 sock_.close();
-                return;
             }
-
-            data.assign(encoder_->data(), encoder_->data() + encoder_->size());
         }
 
         packet_.assign(silent, std::move(data));
@@ -277,6 +278,24 @@ namespace LTSM {
         if(ec) {
             sock_.close();
             return;
+        }
+
+        if(! encoder_) {
+            return;
+        }
+
+        // encode last data
+        try {
+            if(auto buf = encoder_->encode(); !buf.empty()) {
+                packet_.assign(false, std::move(buf));
+
+                boost::asio::async_write(sock_, packet_.buffers_, boost::asio::transfer_all(),
+                    boost::asio::bind_executor(strand_,
+                        std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2)));
+            }
+        } catch(const std::exception & err) {
+            Application::error("{}: exception: {}", __FUNCTION__, err.what());
+            sock_.close();
         }
     }
 

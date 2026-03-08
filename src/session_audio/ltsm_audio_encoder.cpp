@@ -28,7 +28,7 @@
 
 namespace LTSM {
 #ifdef LTSM_WITH_OPUS
-    AudioEncoder::Opus::Opus(uint32_t samplesPerSec, uint16_t audioChannels, uint16_t bitsPerSample, uint16_t frames)
+    AudioEncoder::Opus::Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample, uint16_t frames)
         : framesCount(frames), sampleLength(audioChannels * (bitsPerSample >> 3)) {
         const size_t reserveSize = 256 * 1024;
         last.reserve(reserveSize);
@@ -53,43 +53,39 @@ namespace LTSM {
         */
     }
 
-    bool AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len) {
+    std::vector<uint8_t> AudioEncoder::Opus::encode(const uint8_t* ptr, size_t len) {
         Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
         if(len) {
             last.insert(last.end(), ptr, ptr + len);
         }
 
+        return encode();
+    }
+
+    std::vector<uint8_t> AudioEncoder::Opus::encode(void) {
         const size_t samplesCount = last.size() / sampleLength;
 
         if(framesCount > samplesCount) {
-            return false;
+            return {};
         }
+
+        // ref: https://www.opus-codec.org/docs/html_api/group__opusencoder.html
+        // max_packet is the maximum number of bytes that can be written in the packet (1276 bytes is recommended)
+        std::vector<uint8_t> tmp(1276);
 
         auto src = reinterpret_cast<const opus_int16*>(last.data());
         int nBytes = opus_encode(ctx.get(), src, framesCount, tmp.data(), tmp.size());
 
         if(nBytes < 0) {
             Application::error("{}: {} failed, error: {}", __FUNCTION__, "opus_encode", nBytes);
-            return false;
-        }
-
-        last.erase(last.begin(), rangesNext(last.begin(), framesCount * sampleLength, last.end()));
-        encodeSize = nBytes;
-        return 0 < encodeSize;
-    }
-
-    const uint8_t* AudioEncoder::Opus::data(void) const {
-        return tmp.data();
-    }
-
-    size_t AudioEncoder::Opus::size(void) const {
-        if(encodeSize > tmp.size()) {
-            Application::error("{}: out of range, size: {}, buf: {}", __FUNCTION__, encodeSize, tmp.size());
             throw audio_error(NS_FuncNameS);
         }
 
-        return encodeSize;
+        last.erase(last.begin(), rangesNext(last.begin(), framesCount * sampleLength, last.end()));
+        tmp.resize(nBytes);
+
+        return tmp;
     }
 
 #endif

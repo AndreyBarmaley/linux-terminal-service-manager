@@ -26,6 +26,7 @@
 #include <spa/param/audio/format-utils.h>
 
 #include "ltsm_tools.h"
+#include "ltsm_audio.h"
 #include "ltsm_application.h"
 #include "ltsm_audio_pipewire.h"
 
@@ -108,7 +109,7 @@ namespace LTSM {
 
         if(! loop_) {
             Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_new");
-            throw std::runtime_error(__FUNCTION__);
+            throw audio_error(NS_FuncNameS);
         }
 
         auto props = pw_properties_new(
@@ -120,7 +121,7 @@ namespace LTSM {
 
         if(! props) {
             Application::error("{}: {} failed", __FUNCTION__, "pw_properties_new");
-            throw std::runtime_error(NS_FuncNameS);
+            throw audio_error(NS_FuncNameS);
         }
 
         stream_.reset(
@@ -135,12 +136,12 @@ namespace LTSM {
 
         if(! stream_) {
             Application::error("{}: {} failed", __FUNCTION__, "pw_stream_new_simple");
-            throw std::runtime_error(NS_FuncNameS);
+            throw audio_error(NS_FuncNameS);
         }
 
         if(0 != pw_thread_loop_start(loop_.get())) {
             Application::error("%s: %s failed", __FUNCTION__, "pw_thread_loop_start");
-            throw std::runtime_error(__FUNCTION__);
+            throw audio_error(NS_FuncNameS);
         }
     }
 
