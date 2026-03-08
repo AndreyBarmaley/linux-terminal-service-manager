@@ -109,6 +109,7 @@ void LTSM::Channel::ConnectorClientAudio::pushData(std::vector<uint8_t> && recv)
             // <DATA> - audio data
             beginPacket = sb.data();
             endPacket = beginPacket + sb.last();
+
             auto audioCmd = sb.readIntLE16();
             Application::debug(DebugType::Audio, "{}: cmd: {:#04x}", __FUNCTION__, audioCmd);
 

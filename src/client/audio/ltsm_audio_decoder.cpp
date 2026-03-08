@@ -58,6 +58,8 @@ namespace LTSM {
             return {};
         }
 
+        Application::debug(DebugType::Audio, "{}: frames {}", __FUNCTION__, frames);
+
         std::vector<uint8_t> tmp(frames * sampleLength);
         int nSamples = opus_decode(ctx.get(), ptr, len, (opus_int16*) tmp.data(), frames, 0);
 

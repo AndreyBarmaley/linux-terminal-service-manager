@@ -58,8 +58,6 @@ namespace LTSM {
         // socket valid
         assert(sock_.is_open());
 
-        const uint8_t channels_ = 2;
-
 #ifdef LTSM_WITH_PIPEWIRE
         // pipewire priority
         const uint16_t bitsPerSample = PipeWire::formatBits(def_format_pipew);
@@ -145,16 +143,15 @@ namespace LTSM {
 
         Application::info("{}: client proto version: {}, encode type: {:#04x}", __FUNCTION__, ver, enc);
 
-        // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
-        const uint32_t opusFrames = 480;
-
         if(enc == AudioEncoding::OPUS) {
 #ifdef LTSM_WITH_OPUS
+            // Opus: frame counts - at 48kHz the permitted values are 120, 240, 480, or 960
+            const uint32_t opusFrames = 960;
             const uint32_t opusFrameLength = channels_ * bitsPerSample / 8;
             bit_rate_ = 48000;
             frag_size_ = opusFrames * opusFrameLength;
 
-            encoder_ = std::make_unique<AudioEncoder::Opus>(bit_rate_, channels_, bitsPerSample, opusFrames);
+            encoder_ = std::make_unique<AudioEncoder::Opus>(bit_rate_, channels_, bitsPerSample);
             Application::info("{}: selected encoder: {}", __FUNCTION__, "OPUS");
 #else
             Application::error("{}: unsupported encoder: {}", __FUNCTION__, "OPUS");
@@ -230,23 +227,24 @@ namespace LTSM {
         Application::trace(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
         // next part async - to encode & send
-        boost::asio::post(ioc_,
-                std::bind(&AudioClient::dataEncodeAndSend, this, std::vector<uint8_t>{ptr, ptr + len}));
+        boost::asio::post(strand_,
+                          std::bind(&AudioClient::dataEncodeAndSend, this, std::vector<uint8_t> {ptr, ptr + len}));
     }
 
-    void AudioPacket::assign(bool silent, std::vector<uint8_t> && data) {
-        buffers_.clear();
-
-        id_ = boost::endian::native_to_little(static_cast<uint16_t>(silent ? AudioOp::Silent : AudioOp::Data));
+    AudioPacket::Base::Base(uint16_t id, uint32_t len) {
+        id_ = boost::endian::native_to_little(id);
         buffers_.emplace_back(&id_, sizeof(id_));
 
-        len_ = boost::endian::native_to_little(static_cast<uint32_t>(data.size()));
+        len_ = boost::endian::native_to_little(len);
         buffers_.emplace_back(&len_, sizeof(len_));
+    }
 
-        if(! silent) {
-            data_ = std::move(data);
-            buffers_.emplace_back(data_.data(), data_.size());
-        }
+    AudioPacket::Silent::Silent(uint32_t len) : Base(AudioOp::Silent, len) {
+    }
+        
+    AudioPacket::Data::Data(std::vector<uint8_t> && data) : Base(AudioOp::Data, data.size()) {
+        data_ = std::move(data);
+        buffers_.emplace_back(data_.data(), data_.size());
     }
 
     void AudioClient::dataEncodeAndSend(std::vector<uint8_t> data) {
@@ -256,46 +254,52 @@ namespace LTSM {
         });
 
         // encode data
-        if(! silent && encoder_) {
+        if(silent) {
+            auto packet = std::make_unique<AudioPacket::Silent>(data.size());
+            auto ptr = packet.get();
+
+            boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
+            boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                if(ec) {
+                    sock_.close();
+                }
+            }));
+
+        } else if(encoder_) {
+            encoder_->push(data.data(), data.size());
+
             try {
-                if(auto buf = encoder_->encode(data.data(), data.size()); !buf.empty()) {
-                    data.swap(buf);
+                while(true) {
+                    auto buf = encoder_->encode();
+
+                    if(buf.empty()) {
+                        break;
+                    }
+
+                    auto packet = std::make_unique<AudioPacket::Data>(std::move(buf));
+                    auto ptr = packet.get();
+
+                    boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
+                    boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                        if(ec) {
+                            sock_.close();
+                        }
+                    }));
                 }
             } catch(const std::exception & err) {
                 Application::error("{}: exception: {}", __FUNCTION__, err.what());
                 sock_.close();
             }
-        }
+        } else {
+            auto packet = std::make_unique<AudioPacket::Data>(std::move(data));
+            auto ptr = packet.get();
 
-        packet_.assign(silent, std::move(data));
-
-        boost::asio::async_write(sock_, packet_.buffers_, boost::asio::transfer_all(),
-                boost::asio::bind_executor(strand_,
-                    std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2)));
-    }
-
-    void AudioClient::dataSendComplete(const boost::system::error_code & ec, size_t sz) {
-        if(ec) {
-            sock_.close();
-            return;
-        }
-
-        if(! encoder_) {
-            return;
-        }
-
-        // encode last data
-        try {
-            if(auto buf = encoder_->encode(); !buf.empty()) {
-                packet_.assign(false, std::move(buf));
-
-                boost::asio::async_write(sock_, packet_.buffers_, boost::asio::transfer_all(),
-                    boost::asio::bind_executor(strand_,
-                        std::bind(&AudioClient::dataSendComplete, this, std::placeholders::_1, std::placeholders::_2)));
-            }
-        } catch(const std::exception & err) {
-            Application::error("{}: exception: {}", __FUNCTION__, err.what());
-            sock_.close();
+            boost::asio::async_write(sock_, ptr->buffers_, boost::asio::transfer_all(),
+            boost::asio::bind_executor(strand_, [this, save = std::move(packet)](const boost::system::error_code & ec, size_t sz) {
+                if(ec) {
+                    sock_.close();
+                }
+            }));
         }
     }
 

@@ -45,16 +45,25 @@
 #endif
 
 namespace LTSM {
-    struct AudioPacket {
-        uint16_t id_ = 0;
-        uint32_t len_ = 0;
-        std::vector<uint8_t> data_;
-        boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
+    namespace AudioPacket {
+        struct Base {
+            uint16_t id_ = 0;
+            uint32_t len_ = 0;
+            boost::container::small_vector<boost::asio::const_buffer, 3> buffers_;
 
-        AudioPacket() = default;
+            Base(uint16_t id, uint32_t len);
+        };
 
-        void assign(bool silent, std::vector<uint8_t> &&);
-    };
+        struct Silent : Base {
+            Silent(uint32_t len);
+        };
+
+        struct Data : Base {
+            std::vector<uint8_t> data_;
+
+            Data(std::vector<uint8_t> &&);
+        };
+    }
 
     struct AudioClient {
         boost::asio::io_context & ioc_;
@@ -64,8 +73,6 @@ namespace LTSM {
 
         std::string socket_path_;
         const uint8_t channels_ = 2;
-
-        AudioPacket packet_;
 
 #ifdef LTSM_WITH_PIPEWIRE
         std::unique_ptr<PipeWire::AudioCapture> pipew_;
@@ -85,7 +92,6 @@ namespace LTSM {
         void handlerSocketConnect(const boost::system::error_code & ec);
         void dataReadyNotify(const uint8_t* ptr, size_t len);
         void dataEncodeAndSend(std::vector<uint8_t>);
-        void dataSendComplete(const boost::system::error_code &, size_t);
         bool clientHandshake(void);
         bool socketPath(std::string_view path) const {
             return socket_path_ == path;

@@ -38,8 +38,8 @@ namespace LTSM {
             BaseEncoder() = default;
             virtual ~BaseEncoder() = default;
 
+            virtual void push(const uint8_t* ptr, size_t len) = 0;
             virtual std::vector<uint8_t> encode(void) = 0;
-            virtual std::vector<uint8_t> encode(const uint8_t* ptr, size_t len) = 0;
         };
 
 #ifdef LTSM_WITH_OPUS
@@ -54,15 +54,13 @@ namespace LTSM {
 
             // Opus: frame size - at 48kHz the permitted values are 120, 240, 480, or 960, the remainder will be stored here.
             std::vector<uint8_t> last;
-
-            const uint16_t framesCount;
             const uint16_t sampleLength;
 
           public:
-            Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample, uint16_t frames = 480);
+            Opus(uint32_t samplesPerSec, uint8_t audioChannels, uint8_t bitsPerSample);
 
+            void push(const uint8_t* ptr, size_t len) override;
             std::vector<uint8_t> encode(void) override;
-            std::vector<uint8_t> encode(const uint8_t* ptr, size_t len) override;
         };
 
 #endif
