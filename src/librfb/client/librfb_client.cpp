@@ -500,7 +500,7 @@ namespace LTSM {
             }
 
             if(prefferedEncoding != ENCODING_LTSM_VP8) {
-                encodings.remove(ENCODING_FFMPEG_VP8);
+                encodings.remove(ENCODING_LTSM_VP8);
             }
 
 #endif
