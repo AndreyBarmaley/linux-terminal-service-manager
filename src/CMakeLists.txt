@@ -213,7 +213,7 @@ if(LTSM_BUILD_SERVER)
         project(ltsm_session_pcsc)
         set(CUR_TARGET ltsm_session_pcsc)
 
-        CommonDefaults(SDBUS SYSTEMD JSON)
+        CommonDefaults(SDBUS SYSTEMD JSON BOOST)
 
         add_executable(${CUR_TARGET} ltsm_pcsc_adaptor.h)
         target_include_directories(${CUR_TARGET} PRIVATE common channels)

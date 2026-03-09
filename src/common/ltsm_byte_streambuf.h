@@ -133,6 +133,12 @@ namespace byte {
             return read_le<uint16_t>();
         }
 
+        void skip_bytes(size_t len) {
+            auto buf = sb_.data();
+            assert(len <= boost::asio::buffer_size(buf));
+            sb_.consume(len);
+        }
+
         std::string read_string(size_t len) {
             auto buf = sb_.data();
             assert(len <= boost::asio::buffer_size(buf));

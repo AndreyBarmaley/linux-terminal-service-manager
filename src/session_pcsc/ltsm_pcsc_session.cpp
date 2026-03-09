@@ -37,6 +37,7 @@
 #include "ltsm_global.h"
 #include "ltsm_sockets.h"
 #include "ltsm_pcsc_session.h"
+#include "ltsm_byte_streambuf.h"
 
 using namespace std::chrono_literals;
 
@@ -187,130 +188,248 @@ namespace PcscLite {
 }
 
 namespace LTSM {
-    std::unique_ptr<sdbus::IConnection> conn;
-
-    std::mutex transLock;
-    int32_t transactionId = 0;
-
-    void signalHandler(int sig) {
-        if(sig == SIGTERM || sig == SIGINT) {
-            if(conn) {
-                conn->leaveEventLoop();
-            }
-        }
-    }
+    std::mutex trans_lock;
+    std::atomic<int32_t> transaction_id{0};
 
     /// PcscRemote
+    PcscRemote::PcscRemote(boost::asio::io_context& ctx, const std::string & path, std::promise<bool> connected)
+        : ioc_{ctx}, sock_{ioc_} {
+
+        sock_.async_connect(path, [res = std::move(connected)](const boost::system::error_code & ec) mutable {
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "handlerRemoteConnected", "connect", ec.value(), ec.message());
+                res.set_value(false);
+            } else {
+                res.set_value(true);
+            }
+        });
+    }
+
     std::tuple<uint64_t, uint32_t>
     PcscRemote::sendEstablishedContext(const int32_t & id, const uint32_t & scope) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << scope: {}", __FUNCTION__, id, scope);
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EstablishContext);
-        sock.sendIntLE32(scope);
-        sock.sendFlush();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        // recv
-        auto context = sock.recvIntLE64();
-        auto ret = sock.recvIntLE32();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::EstablishContext).write_le32(scope);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: context64 + ret32
+        const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto context = bs.read_le64();
+        auto ret = bs.read_le32();
 
         return std::make_tuple(context, ret);
     }
 
     std::tuple<uint32_t>
     PcscRemote::sendReleaseContext(const int32_t & id, const uint64_t & context) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: {:#016x}",
                            __FUNCTION__, id, context);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ReleaseContext);
-        sock.sendIntLE64(context);
-        sock.sendFlush();
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::ReleaseContext).write_le64(context);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
         return std::make_tuple(ret);
     }
 
     std::tuple<uint64_t, uint32_t, uint32_t>
     PcscRemote::sendConnect(const int32_t & id, const uint64_t & context, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const std::string & readerName) {
-        transLock.lock();
-        transactionId = id;
+        trans_lock.lock();
+        transaction_id = id;
 
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext: {:#016x}, shareMode: {}, prefferedProtocols: {}, reader: `{}'",
                            __FUNCTION__, id, context, shareMode, prefferedProtocols, readerName);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Connect);
-        sock.sendIntLE64(context).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols);
-        sock.sendIntLE32(readerName.size()).sendString(readerName);
-        sock.sendFlush();
 
-        // recv
-        auto handle = sock.recvIntLE64();
-        auto activeProtocol = sock.recvIntLE32();
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        transactionId = 0;
-        transLock.unlock();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Connect).
+          write_le64(context).
+          write_le32(shareMode).
+          write_le32(prefferedProtocols).
+          write_le32(readerName.size()).write_string(readerName);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: handle64 + proto32 + ret32
+        const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto handle = bs.read_le64();
+        auto activeProtocol = bs.read_le32();
+        auto ret = bs.read_le32();
+
+        transaction_id = 0;
+        trans_lock.unlock();
 
         return std::make_tuple(handle, activeProtocol, ret);
     }
 
     std::tuple<uint32_t, uint32_t>
     PcscRemote::sendReconnect(const int32_t & id, const uint64_t & handle, const uint32_t & shareMode, const uint32_t & prefferedProtocols, const uint32_t & initialization) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}",
                            __FUNCTION__, id, handle, shareMode, prefferedProtocols, initialization);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Reconnect);
-        sock.sendIntLE64(handle).sendIntLE32(shareMode).sendIntLE32(prefferedProtocols).sendIntLE32(initialization);
-        sock.sendFlush();
 
-        // recv
-        auto activeProtocol = sock.recvIntLE32();
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Reconnect).
+          write_le64(handle).
+          write_le32(shareMode).
+          write_le32(prefferedProtocols).
+          write_le32(initialization);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: proto32 + ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto activeProtocol = bs.read_le32();
+        auto ret = bs.read_le32();
 
         return std::make_tuple(activeProtocol, ret);
     }
 
     std::tuple<uint32_t>
     PcscRemote::sendDisconnect(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Disconnect);
-        sock.sendIntLE64(handle).sendIntLE32(disposition);
-        sock.sendFlush();
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Disconnect).
+          write_le64(handle).
+          write_le32(disposition);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t>
     PcscRemote::sendBeginTransaction(const int32_t & id, const uint64_t & handle) {
-        transLock.lock();
-        transactionId = id;
+        trans_lock.lock();
+        transaction_id = id;
 
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}",
                            __FUNCTION__, id, handle);
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::BeginTransaction);
-        sock.sendIntLE64(handle);
-        sock.sendFlush();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::BeginTransaction).
+          write_le64(handle);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
 
         if(ret != SCARD_S_SUCCESS) {
-            transactionId = 0;
-            transLock.unlock();
+            transaction_id = 0;
+            trans_lock.unlock();
         }
 
         return std::make_tuple(ret);
@@ -318,26 +437,46 @@ namespace LTSM {
 
     std::tuple<uint32_t>
     PcscRemote::sendEndTransaction(const int32_t & id, const uint64_t & handle, const uint32_t & disposition) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, disposition: {}",
                            __FUNCTION__, id, handle, disposition);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::EndTransaction);
-        sock.sendIntLE64(handle).sendIntLE32(disposition);
-        sock.sendFlush();
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        transactionId = 0;
-        transLock.unlock();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::EndTransaction).
+          write_le64(handle).
+          write_le64(disposition);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
+
+        transaction_id = 0;
+        trans_lock.unlock();
 
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendTransmit(const int32_t & id, const uint64_t & handle, const uint32_t & ioSendPciProtocol, const uint32_t & ioSendPciLength, const uint32_t & recvLength, const binary_buf & data1) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, pciProtocol: {:#08x}, pciLength: {}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, ioSendPciProtocol, ioSendPciLength, data1.size(), recvLength);
 
@@ -346,51 +485,119 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Transmit);
-        sock.sendIntLE64(handle).sendIntLE32(ioSendPciProtocol).sendIntLE32(ioSendPciLength).sendIntLE32(recvLength).sendIntLE32(data1.size());
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Transmit).
+          write_le64(handle).
+          write_le32(ioSendPciProtocol).
+          write_le32(ioSendPciLength).
+          write_le32(recvLength).
+          write_le32(data1.size());
 
         if(data1.size()) {
-            sock.sendData(data1);
+            bs.write_bytes(data1);
         }
 
-        sock.sendFlush();
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
 
-        // recv
-        auto ioRecvPciProtocol = sock.recvIntLE32();
-        auto ioRecvPciLength = sock.recvIntLE32();
-        auto bytesReturned = sock.recvIntLE32();
-        auto ret = sock.recvIntLE32();
-        auto data2 = sock.recvData(bytesReturned);
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
 
-        return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, data2);
+        // rsz: proto32 + length32 + bytes32 + ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ioRecvPciProtocol = bs.read_le32();
+        auto ioRecvPciLength = bs.read_le32();
+        auto bytesReturned = bs.read_le32();
+        auto ret = bs.read_le32();
+
+        if(bytesReturned) {
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
+            auto data2 = bs.read_bytes(bytesReturned);
+            return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
+        }
+
+        return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, binary_buf{});
     }
 
     std::tuple<std::string, uint32_t, uint32_t, uint32_t, binary_buf>
     PcscRemote::sendStatus(const int32_t & id, const uint64_t & handle) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}",
                            __FUNCTION__, id, handle);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Status);
-        sock.sendIntLE64(handle);
-        sock.sendFlush();
 
-        // recv
-        auto nameLen = sock.recvIntLE32();
-        auto name = sock.recvString(nameLen);
-        auto state = sock.recvIntLE32();
-        auto protocol = sock.recvIntLE32();
-        auto atrLen = sock.recvIntLE32();
-        auto atr = sock.recvData(atrLen);
-        auto ret = sock.recvIntLE32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Status).
+          write_le64(handle);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: str32
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto nameLen = bs.read_le32();
+
+        // rsz: nameLen + state32 + proto32 + len32
+        const size_t rsz = nameLen + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto name = bs.read_string(nameLen);
+        auto state = bs.read_le32();
+        auto protocol = bs.read_le32();
+        auto atrLen = bs.read_le32();
+
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(atrLen + sizeof(uint32_t)), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto atr = bs.read_bytes(atrLen);
+        auto ret = bs.read_le32();
 
         return std::make_tuple(name, state, protocol, ret, atr);
     }
 
     std::tuple<uint32_t, binary_buf>
     PcscRemote::sendControl(const int32_t & id, const uint64_t & handle, const uint32_t & controlCode, const uint32_t & recvLength, const binary_buf & data1) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, controlCode: {:#08x}, send size: {}, recv size: {}",
                            __FUNCTION__, id, handle, controlCode, data1.size(), recvLength);
 
@@ -399,46 +606,102 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
         }
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Control);
-        sock.sendIntLE64(handle).sendIntLE32(controlCode).sendIntLE32(data1.size()).sendIntLE32(recvLength);
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Control).
+          write_le64(handle).
+          write_le32(controlCode).
+          write_le32(data1.size()).
+          write_le32(recvLength);
 
         if(data1.size()) {
-            sock.sendData(data1);
+            bs.write_bytes(data1);
         }
 
-        sock.sendFlush();
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
 
-        // recv
-        auto bytesReturned = sock.recvIntLE32();
-        auto ret = sock.recvIntLE32();
-        auto data2 = sock.recvData(bytesReturned);
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
 
-        return std::make_tuple(ret, data2);
+        // rsz: bytes32 + len32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto bytesReturned = bs.read_le32();
+        auto ret = bs.read_le32();
+
+        if(bytesReturned) {
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
+            auto data2 = bs.read_bytes(bytesReturned);
+            return std::make_tuple(ret, std::move(data2));
+        }
+
+        return std::make_tuple(ret, binary_buf{});
     }
 
     std::tuple<uint32_t, binary_buf>
     PcscRemote::sendGetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle: {:#016x}, attrId: {}",
                            __FUNCTION__, id, handle, attrId);
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetAttrib);
-        sock.sendIntLE64(handle).sendIntLE32(attrId);
-        sock.sendFlush();
 
-        // recv
-        auto attrLen = sock.recvIntLE32();
-        auto ret = sock.recvIntLE32();
-        assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-        auto attr = sock.recvData(attrLen);
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        return std::make_tuple(ret, attr);
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::GetAttrib).
+          write_le64(handle).
+          write_le32(attrId);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: len32 + ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto attrLen = bs.read_le32();
+        auto ret = bs.read_le32();
+
+        if(attrLen) {
+            assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(attrLen), ec);
+            auto attr = bs.read_bytes(attrLen);
+            return std::make_tuple(ret, std::move(attr));
+        }
+
+        return std::make_tuple(ret, binary_buf{});
     }
 
     std::tuple<uint32_t>
     PcscRemote::sendSetAttrib(const int32_t & id, const uint64_t & handle, const uint32_t & attrId, const binary_buf & attr) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteHandle {:#016x}, attrId: {}, attrLength {}",
                            __FUNCTION__, id, handle, attrId, attr.size());
 
@@ -447,46 +710,101 @@ namespace LTSM {
             Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
         }
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::SetAttrib);
-        sock.sendIntLE64(handle).sendIntLE32(attrId).sendIntLE32(attr.size());
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::SetAttrib).
+          write_le64(handle).
+          write_le32(attrId).
+          write_le32(attr.size());
 
         if(attr.size()) {
-            sock.sendData(attr);
+            bs.write_bytes(attr);
         }
 
-        sock.sendFlush();
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
         return std::make_tuple(ret);
     }
 
     std::tuple<uint32_t>
     PcscRemote::sendCancel(const int32_t & id, const uint64_t & context) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << remoteContext {:#016x}",
                            __FUNCTION__, id, context);
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::Cancel);
-        sock.sendIntLE64(context).sendFlush();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        // recv
-        auto ret = sock.recvIntLE32();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::Cancel).
+          write_le64(context);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: ret32
+        const size_t rsz = sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto ret = bs.read_le32();
         return std::make_tuple(ret);
     }
 
     std::list<std::string> PcscRemote::sendListReaders(const int32_t & id, const uint64_t & context) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::ListReaders);
-        sock.sendIntLE64(context);
-        sock.sendFlush();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        // recv
-        uint32_t readersCount = sock.recvIntLE32();
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::ListReaders).
+          write_le64(context);
+
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: count32
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto readersCount = bs.read_le32();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localContext: {:#08x}, readers count: {}",
                            __FUNCTION__, id, context, readersCount);
@@ -494,8 +812,23 @@ namespace LTSM {
         std::list<std::string> names;
 
         while(readersCount--) {
-            uint32_t len = sock.recvIntLE32();
-            names.emplace_back(sock.recvString(len));
+            // rsz: len32
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
+            uint32_t len = bs.read_le32();
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(len), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
+            names.emplace_back(bs.read_string(len));
 
             if(names.back().size() > MAX_READERNAME - 1) {
                 names.back().resize(MAX_READERNAME - 1);
@@ -506,26 +839,45 @@ namespace LTSM {
     }
 
     uint32_t PcscRemote::sendGetStatusChange(const int32_t & id, const uint64_t & context, uint32_t timeout, SCARD_READERSTATE* states, uint32_t statesCount) {
-        const std::scoped_lock guard{ sockLock };
+        const std::scoped_lock guard{ sock_lock_ };
 
-        // send
-        sock.sendIntLE16(PcscOp::Init).sendIntLE16(PcscLite::GetStatusChange);
-        sock.sendIntLE64(context).sendIntLE32(timeout).sendIntLE32(statesCount);
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le16(PcscOp::Init).
+          write_le16(PcscLite::GetStatusChange).
+          write_le64(context).
+          write_le32(timeout).
+          write_le32(statesCount);
 
         for(uint32_t it = 0; it < statesCount; ++it) {
             const SCARD_READERSTATE & state = states[it];
-            sock.sendIntLE32(strnlen(state.szReader, MAX_READERNAME));
-            sock.sendIntLE32(state.dwCurrentState);
-            sock.sendIntLE32(state.cbAtr);
-            sock.sendString(state.szReader);
-            sock.sendRaw(state.rgbAtr, state.cbAtr);
+            bs.write_le32(strnlen(state.szReader, MAX_READERNAME)).
+              write_le32(state.dwCurrentState).
+              write_le32(state.cbAtr).
+              write_string(state.szReader).
+              write_bytes(state.rgbAtr, state.cbAtr);
         }
 
-        sock.sendFlush();
+        boost::system::error_code ec;
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
 
-        // recv
-        uint32_t counts = sock.recvIntLE32();
-        uint32_t ret = sock.recvIntLE32();
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        // rsz: count32 + ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+            throw pcsc_error(NS_FuncNameS);
+        }
+
+        auto counts = bs.read_le32();
+        auto ret = bs.read_le32();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteContext: {:#016x}, timeout: {}, states: {}",
                            __FUNCTION__, id, context, timeout, counts);
@@ -533,74 +885,115 @@ namespace LTSM {
         assertm(counts == statesCount, "count states invalid");
 
         for(uint32_t it = 0; it < statesCount; ++it) {
+            // rsz: state32 + state32 + name32 + atr32
+            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
             SCARD_READERSTATE & state = states[it];
-            state.dwCurrentState = sock.recvIntLE32();
-            state.dwEventState = sock.recvIntLE32();
 
-            uint32_t szReader = sock.recvIntLE32();
-            uint32_t cbAtr = sock.recvIntLE32();
+            state.dwCurrentState = bs.read_le32();
+            state.dwEventState = bs.read_le32();
 
-            std::string reader = sock.recvString(szReader);
+            auto szReader = bs.read_le32();
+            auto cbAtr = bs.read_le32();
+
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(szReader), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
+
+            auto reader = bs.read_string(szReader);
 
             if(reader != state.szReader) {
                 Application::warning("{}: invalid reader, `{}' != `'", __FUNCTION__, reader, state.szReader);
             }
 
             assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
+
             state.cbAtr = cbAtr;
-            sock.recvData(state.rgbAtr, cbAtr);
+            boost::asio::read(sock_, boost::asio::buffer(state.rgbAtr, cbAtr), boost::asio::transfer_exactly(cbAtr), ec);
+
+            if(ec) {
+                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
+                throw pcsc_error(NS_FuncNameS);
+            }
         }
 
         return ret;
     }
 
     /// PcscLocal
-    PcscLocal::PcscLocal(int fd, const std::shared_ptr<PcscRemote> & ptr, PcscSessionBus* sessionBus)
-        : sock(fd, false /* disable statistic */), remote(ptr) {
+    PcscLocal::PcscLocal(boost::asio::io_context& ctx, boost::asio::local::stream_protocol::socket && sock, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* sessionBus)
+        : ioc_{ctx}, timer_{ioc_}, sock_{std::move(sock)}, remote_{ptr} {
         clientCanceledCb = std::bind(&PcscSessionBus::clientCanceledNotify, sessionBus, std::placeholders::_1);
+        clientShutdownCb = std::bind(&PcscSessionBus::clientShutdownNotify, sessionBus, std::placeholders::_1);
 
-        thread = std::thread([this, clientShutdownCb = std::bind(&PcscSessionBus::clientShutdownNotify, sessionBus, std::placeholders::_1)]() {
-            bool processed = true;
+        sock_id_ = sock_.native_handle();
 
-            while(processed) {
-                try {
-                    processed = this->clientAction();
-                } catch(const std::exception & ex) {
-                    Application::error("{}: client id: {}, context: {:#08x}, exception: {}",
-                                       "PcscLocalThread", this->id(), this->context, ex.what());
-                    processed = false;
-                }
-            }
-
-            if(transactionId == this->id()) {
-                transactionId = 0;
-                transLock.unlock();
-            }
-
-            std::thread(clientShutdownCb, this).detach();
-        });
+        timer_.expires_after(1ms);
+        timer_.async_wait(std::bind(&PcscLocal::handlerClientActionStarted, this, std::placeholders::_1));
     }
 
     PcscLocal::~PcscLocal() {
-        if(transactionId == id()) {
-            transactionId = 0;
-            transLock.unlock();
+        sock_.cancel();
+        sock_.close();
+
+        timer_.cancel();
+
+        if(transaction_id == id()) {
+            transaction_id = 0;
+            trans_lock.unlock();
         }
 
-        sock.reset();
-
         waitStatusChanged.stop();
+    }
 
-        if(thread.joinable()) {
-            thread.join();
+    void PcscLocal::handlerClientActionStarted(const boost::system::error_code & ec) {
+        if(ec) {
+            return;
+        }
+
+        bool processed = false;
+
+        try {
+            processed = clientAction();
+        } catch(const std::exception & ex) {
+            Application::error("{}: client id: {}, context: {:#08x}, exception: {}",
+                               __FUNCTION__, id(), context, ex.what());
+        }
+
+        if(processed) {
+            timer_.expires_after(1ms);
+            timer_.async_wait(std::bind(&PcscLocal::handlerClientActionStarted, this, std::placeholders::_1));
+        } else {
+            if(transaction_id == id()) {
+                transaction_id = 0;
+                trans_lock.unlock();
+            }
+
+            boost::asio::post(ioc_, std::bind(clientShutdownCb, this));
         }
     }
 
     bool PcscLocal::clientAction(void) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {}, wait command", __FUNCTION__, id());
 
-        uint32_t len = sock.recvInt32();
-        uint32_t cmd = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: len32, cmd32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        uint32_t len = bs.read_le32();
+        uint32_t cmd = bs.read_le32();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#08x}, len: {}", __FUNCTION__, id(), cmd, len);
 
@@ -712,23 +1105,30 @@ namespace LTSM {
                 return;
         }
 
-        sock.sendZero(zero).sendInt32(err).sendFlush();
+        if(zero) {
+            binary_buf buf(zero, 0);
+            boost::asio::write(sock_, boost::asio::buffer(buf.data(), buf.size()));
+        }
+
+        boost::endian::native_to_little_inplace(err);
+        boost::asio::write(sock_, boost::asio::buffer(&err, sizeof(err)), boost::asio::transfer_exactly(sizeof(err)));
     }
 
     bool PcscLocal::proxyEstablishContext(void) {
-        const uint32_t scope = sock.recvInt32();
-        // skip: context, ret
-        sock.recvSkip(8);
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
 
-        if(context) {
-            Application::error("{}: clientId: {}, invalid context", __FUNCTION__, id());
-            replyError(PcscLite::EstablishContext, SCARD_E_INVALID_PARAMETER);
-            return false;
-        }
+        // rsz: scope32, context32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t scope = bs.read_le32();
+        // skip: context, ret
+        bs.skip_bytes(sizeof(uint32_t) + sizeof(uint32_t));
 
         uint32_t ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             std::tie(remoteContext, ret) = ptr->sendEstablishedContext(id(), scope);
         } else {
             Application::error("{}: no service", __FUNCTION__);
@@ -751,14 +1151,25 @@ namespace LTSM {
                                __FUNCTION__, id(), ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(scope).sendInt32(context).sendInt32(ret).sendFlush();
+        bs.write_le32(scope).
+          write_le32(context).write_le32(ret);
+
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyReleaseContext(void) {
-        const uint32_t ctx = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: context32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t ctx = bs.read_le32();
         // skip: ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         if(! ctx || ctx != context) {
             Application::error("{}: clientId: {}, invalid localContext: {:#08x}", __FUNCTION__, id(), ctx);
@@ -766,7 +1177,7 @@ namespace LTSM {
             return false;
         }
 
-        auto ptr = remote.lock();
+        auto ptr = remote_.lock();
 
         if(! ptr) {
             Application::error("{}: no service", __FUNCTION__);
@@ -785,7 +1196,9 @@ namespace LTSM {
             }
         }
 
-        sock.sendInt32(context).sendInt32(ret).sendFlush();
+        bs.write_le32(context).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         context = 0;
         remoteContext = 0;
@@ -795,12 +1208,20 @@ namespace LTSM {
     }
 
     bool PcscLocal::proxyConnect(void) {
-        const uint32_t ctx = sock.recvInt32();
-        const auto readerData = sock.recvData(MAX_READERNAME);
-        const uint32_t shareMode = sock.recvInt32();
-        const uint32_t prefferedProtocols = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: context32, MAX_READERNAME, share32, proto32, handl32, proto32, ret32
+        const size_t rsz = sizeof(uint32_t) + MAX_READERNAME + sizeof(uint32_t) +
+                           sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t ctx = bs.read_le32();
+        const auto readerData = bs.read_bytes(MAX_READERNAME);
+        const uint32_t shareMode = bs.read_le32();
+        const uint32_t prefferedProtocols = bs.read_le32();
         // skip: handle, activeProtocol, ret
-        sock.recvSkip(12);
+        bs.skip_bytes(sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t));
 
         if(! ctx || ctx != context) {
             Application::error("{}: clientId: {}, invalid localContext: {:#08x}", __FUNCTION__, id(), ctx);
@@ -820,7 +1241,7 @@ namespace LTSM {
 
         uint32_t activeProtocol, ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteContext) {
                 Application::error("{}: clientId: {}, invalid remoteContext", __FUNCTION__, id());
                 replyError(PcscLite::Connect, SCARD_F_INTERNAL_ERROR);
@@ -840,34 +1261,48 @@ namespace LTSM {
             handle &= 0x7FFFFFFF;
 
             // sync reader
-            reader = currentReader;
+            reader_ = currentReader;
 
-            if(reader) {
+            if(reader_) {
                 std::scoped_lock guard{ PcscLite::readersLock };
-                reader->share = shareMode;
-                reader->protocol = activeProtocol;
+                reader_->share = shareMode;
+                reader_->protocol = activeProtocol;
             }
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> remoteHandle: {:#016x}, localHandle: {:#08x}, activeProtocol: {}",
-                    __FUNCTION__, id(), remoteHandle, handle, activeProtocol);
+                               __FUNCTION__, id(), remoteHandle, handle, activeProtocol);
         } else {
             Application::error("{}: clientId: {}, context: {:#08x}, error: {:#08x} ({})",
                                __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(context).sendData(readerData).sendInt32(shareMode).
-            sendInt32(prefferedProtocols).sendInt32(handle).sendInt32(activeProtocol).sendInt32(ret).sendFlush();
+        bs.write_le32(context).
+          write_bytes(readerData).
+          write_le32(shareMode).
+          write_le32(prefferedProtocols).
+          write_le32(handle).
+          write_le32(activeProtocol).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyReconnect(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t shareMode = sock.recvInt32();
-        const uint32_t prefferedProtocols = sock.recvInt32();
-        const uint32_t initialization = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, share32, proto32, init32, proto32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) +
+                           sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t shareMode = bs.read_le32();
+        const uint32_t prefferedProtocols = bs.read_le32();
+        const uint32_t initialization = bs.read_le32();
         // skip activeProtocol, ret
-        sock.recvSkip(8);
+        bs.skip_bytes(sizeof(uint32_t) + sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -877,7 +1312,7 @@ namespace LTSM {
 
         uint32_t activeProtocol, ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Reconnect, SCARD_F_INTERNAL_ERROR);
@@ -892,10 +1327,10 @@ namespace LTSM {
         }
 
         if(ret == SCARD_S_SUCCESS) {
-            assertm(reader, "reader not connected");
+            assertm(reader_, "reader not connected");
             std::scoped_lock guard{ PcscLite::readersLock };
-            reader->share = shareMode;
-            reader->protocol = activeProtocol;
+            reader_->share = shareMode;
+            reader_->protocol = activeProtocol;
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, shareMode: {}, prefferedProtocols: {}, inititalization: {}, activeProtocol: {}",
                                __FUNCTION__, id(), handle, shareMode, prefferedProtocols, initialization, activeProtocol);
         } else {
@@ -903,17 +1338,29 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(shareMode).sendInt32(prefferedProtocols).
-            sendInt32(initialization).sendInt32(activeProtocol).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(shareMode).
+          write_le32(prefferedProtocols).
+          write_le32(initialization).
+          write_le32(activeProtocol).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyDisconnect(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t disposition = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, disp32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t disposition = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -923,7 +1370,7 @@ namespace LTSM {
 
         uint32_t ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Disconnect, SCARD_F_INTERNAL_ERROR);
@@ -941,12 +1388,12 @@ namespace LTSM {
             // sync after
             handle = 0;
             remoteHandle = 0;
-            assertm(reader, "reader not connected");
+            assertm(reader_, "reader not connected");
 
             std::scoped_lock guard{ PcscLite::readersLock };
-            reader->share = 0;
-            reader->protocol = 0;
-            reader = nullptr;
+            reader_->share = 0;
+            reader_->protocol = 0;
+            reader_ = nullptr;
 
             Application::debug(DebugType::Pcsc, "{}: clientId: {} >> localHandle: {:#08x}, disposition: {}",
                                __FUNCTION__, id(), handle, disposition);
@@ -955,16 +1402,26 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(disposition).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(disposition).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
 
     bool PcscLocal::proxyBeginTransaction(void) {
-        const uint32_t hdl = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -974,14 +1431,14 @@ namespace LTSM {
 
         uint32_t ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::BeginTransaction, SCARD_F_INTERNAL_ERROR);
                 return false;
             }
 
-            assertm(reader, "reader not connected");
+            assertm(reader_, "reader not connected");
             std::tie(ret) = ptr->sendBeginTransaction(id(), remoteHandle);
         } else {
             Application::error("{}: no service", __FUNCTION__);
@@ -997,16 +1454,25 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyEndTransaction(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t disposition = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, disp32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t disposition = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -1016,7 +1482,7 @@ namespace LTSM {
 
         uint32_t ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::EndTransaction, SCARD_F_INTERNAL_ERROR);
@@ -1038,22 +1504,39 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(disposition).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(disposition).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyTransmit(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t ioSendPciProtocol = sock.recvInt32();
-        const uint32_t ioSendPciLength = sock.recvInt32();
-        const uint32_t sendLength = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, sproto32, sprotolen32, slen32, rproto32, rprotolen32, rlen32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+                           sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t ioSendPciProtocol = bs.read_le32();
+        const uint32_t ioSendPciLength = bs.read_le32();
+        const uint32_t sendLength = bs.read_le32();
         // skip ioRecvPciProtocol, ioRecvPciLength
-        sock.recvSkip(8);
-        const uint32_t recvLength = sock.recvInt32();
+        bs.skip_bytes(sizeof(uint32_t) + sizeof(uint32_t));
+        const uint32_t recvLength = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
-        const auto data1 = sock.recvData(sendLength);
+        bs.skip_bytes(sizeof(uint32_t));
+
+        binary_buf data1;
+
+        if(sendLength) {
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+            data1 = bs.read_bytes(sendLength);
+        }
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -1070,7 +1553,7 @@ namespace LTSM {
         uint32_t ioRecvPciProtocol, ioRecvPciLength, ret;
         binary_buf data2;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Transmit, SCARD_F_INTERNAL_ERROR);
@@ -1097,14 +1580,20 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(ioSendPciProtocol).sendInt32(ioSendPciLength).sendInt32(sendLength).
-            sendInt32(ioRecvPciProtocol).sendInt32(ioRecvPciLength).sendInt32(data2.size()).sendInt32(ret);
+        bs.write_le32(handle).
+          write_le32(ioSendPciProtocol).
+          write_le32(ioSendPciLength).
+          write_le32(sendLength).
+          write_le32(ioRecvPciProtocol).
+          write_le32(ioRecvPciLength).
+          write_le32(data2.size()).
+          write_le32(ret);
 
         if(data2.size()) {
-            sock.sendData(data2);
+            bs.write_bytes(data2);
         }
 
-        sock.sendFlush();
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
@@ -1113,16 +1602,16 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} reader: `{}', state: {:#08x}, protocol: {}, atrLen: {}",
                            __FUNCTION__, id(), name, state, protocol, atr.size());
 
-        assertm(reader, "reader not connected");
-        assertm(atr.size() <= sizeof(reader->atr), "atr length invalid");
+        assertm(reader_, "reader not connected");
+        assertm(atr.size() <= sizeof(reader_->atr), "atr length invalid");
         std::scoped_lock guard{ PcscLite::readersLock };
 
         // atr changed
-        if(! std::equal(atr.begin(), atr.end(), std::begin(reader->atr))) {
-            std::fill(std::begin(reader->atr), std::end(reader->atr), 0);
-            std::ranges::copy(atr, std::begin(reader->atr));
+        if(! std::equal(atr.begin(), atr.end(), std::begin(reader_->atr))) {
+            std::fill(std::begin(reader_->atr), std::end(reader_->atr), 0);
+            std::ranges::copy(atr, std::begin(reader_->atr));
 
-            reader->atrLen = atr.size();
+            reader_->atrLen = atr.size();
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(atr, 2, ",", false);
@@ -1131,19 +1620,26 @@ namespace LTSM {
         }
 
         // protocol changed
-        if(protocol != reader->protocol) {
-            reader->protocol = protocol;
+        if(protocol != reader_->protocol) {
+            reader_->protocol = protocol;
         }
 
-        if(state != reader->state) {
-            reader->state = state;
+        if(state != reader_->state) {
+            reader_->state = state;
         }
     }
 
     bool PcscLocal::proxyStatus(void) {
-        const uint32_t hdl = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -1155,7 +1651,7 @@ namespace LTSM {
         uint32_t state, protocol, ret;
         binary_buf atr;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Status, SCARD_F_INTERNAL_ERROR);
@@ -1179,19 +1675,35 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(handle).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyControl(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t controlCode = sock.recvInt32();
-        const uint32_t sendLength = sock.recvInt32();
-        const uint32_t recvLength = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, code32, slen32, rlen32, bytes32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) +
+                           sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t controlCode = bs.read_le32();
+        const uint32_t sendLength = bs.read_le32();
+        const uint32_t recvLength = bs.read_le32();
         // skip bytesReturned, ret
-        sock.recvSkip(8);
-        auto data1 = sock.recvData(sendLength);
+        bs.skip_bytes(sizeof(uint32_t) + sizeof(uint32_t));
+
+        binary_buf data1;
+
+        if(sendLength) {
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+            data1 = bs.read_bytes(sendLength);
+        }
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -1208,7 +1720,7 @@ namespace LTSM {
         uint32_t ret;
         binary_buf data2;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::Control, SCARD_F_INTERNAL_ERROR);
@@ -1235,24 +1747,35 @@ namespace LTSM {
                                __FUNCTION__, id(), handle, ret, PcscLite::err2str(ret));
         }
 
-        // reply
-        sock.sendInt32(handle).sendInt32(controlCode).sendInt32(sendLength).sendInt32(recvLength).
-            sendInt32(data2.size()).sendInt32(ret);
+        bs.write_le32(handle).
+          write_le32(controlCode).
+          write_le32(sendLength).
+          write_le32(recvLength).
+          write_le32(data2.size()).
+          write_le32(ret);
 
         if(data2.size()) {
-            sock.sendData(data2);
+            bs.write_bytes(data2);
         }
 
-        sock.sendFlush();
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyGetAttrib(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t attrId = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, attr32, MAX_BUFFER_SIZE, len32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) +
+                           MAX_BUFFER_SIZE + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t attrId = bs.read_le32();
         // skip attr[MAX_BUFFER_SIZE], attrLen, ret
-        sock.recvSkip(MAX_BUFFER_SIZE + 8);
+        bs.skip_bytes(MAX_BUFFER_SIZE + sizeof(uint32_t) + sizeof(uint32_t));
 
         if(hdl != handle) {
             Application::error("{}: clientId: {}, invalid localHandle: {:#08x}", __FUNCTION__, id(), hdl);
@@ -1263,7 +1786,7 @@ namespace LTSM {
         uint32_t ret;
         binary_buf attr;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::GetAttrib, SCARD_F_INTERNAL_ERROR);
@@ -1294,19 +1817,31 @@ namespace LTSM {
             attr.resize(MAX_BUFFER_SIZE, 0);
         }
 
-        sock.sendInt32(handle).sendInt32(attrId).
-            sendData(attr).sendInt32(attr.size()).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(attrId).
+          write_bytes(attr).
+          write_le32(attr.size()).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxySetAttrib(void) {
-        const uint32_t hdl = sock.recvInt32();
-        const uint32_t attrId = sock.recvInt32();
-        auto attr = sock.recvData(MAX_BUFFER_SIZE);
-        const uint32_t attrLen = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: handl32, attr32, MAX_BUFFER_SIZE, len32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) +
+                           MAX_BUFFER_SIZE + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t hdl = bs.read_le32();
+        const uint32_t attrId = bs.read_le32();
+        auto attr = bs.read_bytes(MAX_BUFFER_SIZE);
+        const uint32_t attrLen = bs.read_le32();
         // skip ret
-        sock.recvSkip(4);
+        bs.skip_bytes(sizeof(uint32_t));
 
         // fixed attr
         if(attrLen < attr.size()) {
@@ -1321,7 +1856,7 @@ namespace LTSM {
 
         uint32_t ret;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             if(! remoteHandle) {
                 Application::error("{}: clientId: {}, invalid remoteHandle", __FUNCTION__, id());
                 replyError(PcscLite::SetAttrib, SCARD_F_INTERNAL_ERROR);
@@ -1347,21 +1882,32 @@ namespace LTSM {
             attr.resize(MAX_BUFFER_SIZE, 0);
         }
 
-        sock.sendInt32(handle).sendInt32(attrId).
-            sendData(attr).sendInt32(attrLen).sendInt32(ret).sendFlush();
+        bs.write_le32(handle).
+          write_le32(attrId).
+          write_bytes(attr).
+          write_le32(attr.size()).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return ret == SCARD_S_SUCCESS;
     }
 
     bool PcscLocal::proxyCancel(void) {
-        const uint32_t ctx = sock.recvInt32();
-        uint32_t ret = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: ctx32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t ctx = bs.read_le32();
+        uint32_t ret = bs.read_le32();
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << context: {:#08x}",
                            __FUNCTION__, id(), ctx);
 
         if(auto remoteContext2 = clientCanceledCb(ctx)) {
-            if(auto ptr = remote.lock()) {
+            if(auto ptr = remote_.lock()) {
                 std::tie(ret) = ptr->sendCancel(id(), remoteContext2);
             } else {
                 Application::error("{}: no service", __FUNCTION__);
@@ -1381,20 +1927,35 @@ namespace LTSM {
                                __FUNCTION__, id(), context, ret, PcscLite::err2str(ret));
         }
 
-        sock.sendInt32(ctx).sendInt32(ret).sendFlush();
+        bs.write_le32(ctx).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+
         return true;
     }
 
     bool PcscLocal::proxyGetVersion(void) {
-        const uint32_t versionMajor = sock.recvInt32();
-        const uint32_t versionMinor = sock.recvInt32();
-        [[maybe_unused]] const uint32_t ret = sock.recvInt32();
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        // rsz: ver32, ver32, ret32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+        const uint32_t versionMajor = bs.read_le32();
+        const uint32_t versionMinor = bs.read_le32();
+        // skip ret32
+        bs.skip_bytes(sizeof(uint32_t));
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> protocol version: {}.{}",
                            __FUNCTION__, id(), versionMajor, versionMinor);
         PcscLite::apiVersion = versionMajor * 10 + versionMinor;
 
-        sock.sendInt32(versionMajor).sendInt32(versionMinor).sendInt32(0).sendFlush();
+        bs.write_le32(versionMajor).
+          write_le32(versionMinor).
+          write_le32(0);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+
         return true;
     }
 
@@ -1405,9 +1966,7 @@ namespace LTSM {
                            __FUNCTION__, id(), context, readersLength);
 
         std::scoped_lock guard{ PcscLite::readersLock };
-
-        sock.sendRaw(PcscLite::readers.data(), readersLength);
-        sock.sendFlush();
+        boost::asio::write(sock_, boost::asio::buffer(PcscLite::readers.data(), readersLength), boost::asio::transfer_all());
 
         return true;
     }
@@ -1464,19 +2023,36 @@ namespace LTSM {
         }
 
         Application::debug(DebugType::Pcsc, "{}: clientId: {} >> timeout: {}", __FUNCTION__, id(), timeout);
-        sock.sendInt32(timeout).sendInt32(ret).sendFlush();
+
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
+        bs.write_le32(timeout).
+          write_le32(ret);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
+
         waitStatusChanged.reset();
 
         return ret;
     }
 
     bool PcscLocal::proxyReaderStateChangeStart(void) {
+
         if(PcscLite::apiVersion < 43) {
             // old protocol: 4.2
-            const uint32_t timeout = sock.recvInt32();
-            [[maybe_unused]] const uint32_t ret = sock.recvInt32();
+            sb_.consume(sb_.size());
+            byte::streambuf bs(sb_);
+
+            // rsz: timeout32, ret32
+            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+            const uint32_t timeout = bs.read_le32();
+            [[maybe_unused]] const uint32_t ret = bs.read_le32();
+
             Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}, timeout: {}",
                                __FUNCTION__, id(), context, timeout);
+
             waitStatusChanged.stop();
             waitStatusChanged.job = std::async(std::launch::async, & PcscLocal::waitReadersStatusChanged, this, timeout);
         } else {
@@ -1488,8 +2064,8 @@ namespace LTSM {
             // send all readers
             const uint32_t readersLength = PcscLite::readers.size() * sizeof(PcscLite::ReaderState);
             std::scoped_lock guard{ PcscLite::readersLock };
-            sock.sendRaw(PcscLite::readers.data(), readersLength);
-            sock.sendFlush();
+
+            boost::asio::write(sock_, boost::asio::buffer(PcscLite::readers.data(), readersLength), boost::asio::transfer_all());
         }
 
         return true;
@@ -1499,17 +2075,27 @@ namespace LTSM {
         Application::debug(DebugType::Pcsc, "{}: clientId: {} << localContext: {:#08x}",
                            __FUNCTION__, id(), context);
 
+        sb_.consume(sb_.size());
+        byte::streambuf bs(sb_);
+
         if(PcscLite::apiVersion < 43) {
             // old protocol: 4.2
-            [[maybe_unused]] const uint32_t timeout = sock.recvInt32();
-            [[maybe_unused]] const uint32_t ret = sock.recvInt32();
+            // rsz: timeout32, ret32
+            const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+
+            [[maybe_unused]] const uint32_t timeout = bs.read_le32();
+            [[maybe_unused]] const uint32_t ret = bs.read_le32();
         } else {
             // new protocol: 4.4, empty params
         }
 
         // stop
         waitStatusChanged.stop();
-        sock.sendInt32(0).sendInt32(SCARD_S_SUCCESS).sendFlush();
+
+        bs.write_le32(0).
+          write_le32(SCARD_S_SUCCESS);
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         return true;
     }
@@ -1524,7 +2110,7 @@ namespace LTSM {
 
         uint32_t ret = SCARD_S_SUCCESS;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             ret = ptr->sendGetStatusChange(id(), remoteContext, timeout, & state, 1);
         } else {
             Application::error("{}: no service", __FUNCTION__);
@@ -1569,7 +2155,7 @@ namespace LTSM {
     uint32_t PcscLocal::syncReaders(bool* changed) {
         std::list<std::string> names;
 
-        if(auto ptr = remote.lock()) {
+        if(auto ptr = remote_.lock()) {
             names = ptr->sendListReaders(id(), remoteContext);
         } else {
             Application::error("{}: no service", __FUNCTION__);
@@ -1624,17 +2210,17 @@ namespace LTSM {
 
     void PcscLocal::canceledAction(void) {
         waitStatusChanged.cancel();
-        sock.reset();
+        sock_.close();
     }
 
     /// PcscSessionBus
-    PcscSessionBus::PcscSessionBus(sdbus::IConnection & conn, bool debug) : ApplicationLog("ltsm_session_pcsc"),
+    PcscSessionBus::PcscSessionBus(DBusConnectionPtr conn, bool debug) : ApplicationLog("ltsm_session_pcsc"),
 #ifdef SDBUS_2_0_API
-        AdaptorInterfaces(conn, sdbus::ObjectPath {dbus_session_pcsc_path})
+        AdaptorInterfaces(*conn, sdbus::ObjectPath {dbus_session_pcsc_path}),
 #else
-        AdaptorInterfaces(conn, dbus_session_pcsc_path)
+        AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-    {
+        ioc_ {2}, signals_ {ioc_}, pcsc_sock_ {ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -1644,79 +2230,87 @@ namespace LTSM {
 
     PcscSessionBus::~PcscSessionBus() {
         unregisterAdaptor();
+        stop();
+    }
 
-        if(std::filesystem::is_socket(pcscSocketPath)) {
-            std::filesystem::remove(pcscSocketPath);
-        }
+    void PcscSessionBus::stop(void) {
+        clients_.clear();
+        signals_.cancel();
+        pcsc_sock_.cancel();
+        dbus_conn_->leaveEventLoop();
     }
 
     int PcscSessionBus::start(void) {
         Application::info("{}: uid: {}, pid: {}, version: {}", __FUNCTION__, getuid(), getpid(), LTSM_SESSION_PCSC_VERSION);
 
-        if(auto envSockName = getenv("PCSCLITE_CSOCK_NAME")) {
-            pcscSocketPath = envSockName;
-        }
+        auto pcsc_path = getenv("PCSCLITE_CSOCK_NAME");
 
-        if(pcscSocketPath.empty()) {
+        if(! pcsc_path) {
             Application::error("{}: environment not found: {}", __FUNCTION__, "PCSCLITE_CSOCK_NAME");
             return EXIT_FAILURE;
         }
 
-        Application::info("{}: socket path: `{}'", __FUNCTION__, pcscSocketPath);
+        Application::info("{}: socket path: `{}'", __FUNCTION__, pcsc_path);
 
-        if(std::filesystem::is_socket(pcscSocketPath)) {
-            std::filesystem::remove(pcscSocketPath);
-            Application::warning("{}: socket found: {}", __FUNCTION__, pcscSocketPath);
+        if(std::filesystem::is_socket(pcsc_path)) {
+            std::filesystem::remove(pcsc_path);
+            Application::warning("{}: old socket found: {}, removed", __FUNCTION__, pcsc_path);
         }
 
-        signal(SIGTERM, signalHandler);
-        signal(SIGINT, signalHandler);
-        int socketFd = UnixSocket::listen(pcscSocketPath, 50);
+        signals_.add(SIGTERM);
+        signals_.add(SIGINT);
 
-        if(0 > socketFd) {
-            Application::error("{}: socket failed", __FUNCTION__);
-            return EXIT_FAILURE;
-        }
-
-        auto thrAccept = std::thread([this, socketFd]() {
-            while(true) {
-                auto sock = UnixSocket::accept(socketFd);
-
-                if(0 > sock) {
-                    break;
-                }
-
-                Application::debug(DebugType::App, "{}: add clientId: {}", "PcscSessionBusThread", sock);
-
-                const std::scoped_lock guard{ clientsLock };
-                this->clients.emplace_front(sock, remote, this);
+        signals_.async_wait([this](const boost::system::error_code & ec, int signal) {
+            // skip canceled
+            if(ec != boost::asio::error::operation_aborted && (signal == SIGTERM || signal == SIGINT)) {
+                this->stop();
             }
         });
 
+        auto sdbus_job = std::async(std::launch::async, [this]() {
+            try {
+                dbus_conn_->enterEventLoop();
+            } catch(const std::exception & err) {
+                Application::error("sdbus exception: {}", err.what());
+                boost::asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+            }
+        });
+
+        pcsc_sock_.bind(pcsc_path);
+
         // main loop
-        conn->enterEventLoop();
+        ioc_.run();
+
         Application::notice("{}: PCSC session shutdown", __FUNCTION__);
+        trans_lock.unlock();
 
-        // shutdown
-        shutdown(socketFd, SHUT_RDWR);
-        close(socketFd);
+        dbus_conn_->leaveEventLoop();
+        sdbus_job.wait();
 
-        transLock.unlock();
-
-        if(thrAccept.joinable()) {
-            thrAccept.join();
-        }
+        std::filesystem::remove(pcsc_path);
 
         return EXIT_SUCCESS;
     }
 
+    void PcscSessionBus::handlerLocalAccepted(const boost::system::error_code & ec, boost::asio::local::stream_protocol::socket peer) {
+        if(ec) {
+            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "accept", ec.value(), ec.message());
+            return;
+        }
+
+        const std::scoped_lock guard{ clients_lock_ };
+
+        Application::debug(DebugType::App, "{}: add clientId: {}", __FUNCTION__, peer.native_handle());
+        this->clients_.emplace_front(ioc_, std::move(peer), remote_, this);
+    }
+
     uint64_t PcscSessionBus::clientCanceledNotify(uint32_t ctx) {
-        const std::scoped_lock guard{ clientsLock };
-        auto it = std::ranges::find_if(clients, [&ctx](auto & cl) {
+        const std::scoped_lock guard{ clients_lock_ };
+        auto it = std::ranges::find_if(clients_, [&ctx](auto & cl) {
             return 0 <= cl.id() && cl.localContext() == ctx;
         });
 
-        if(it != clients.end()) {
+        if(it != clients_.end()) {
             Application::debug(DebugType::App, "{}: calceled clientId: {}", __FUNCTION__, it->id());
             it->canceledAction();
             return it->proxyContext();
@@ -1728,8 +2322,8 @@ namespace LTSM {
     void PcscSessionBus::clientShutdownNotify(const PcscLocal* cli) {
         Application::debug(DebugType::App, "{}: shutdown clientId: {}", __FUNCTION__, cli->id());
 
-        const std::scoped_lock guard{ clientsLock };
-        std::erase_if(clients, [cli](auto & st) {
+        const std::scoped_lock guard{ clients_lock_ };
+        std::erase_if(clients_, [cli](auto & st) {
             return cli == std::addressof(st);
         });
     }
@@ -1741,7 +2335,7 @@ namespace LTSM {
 
     void PcscSessionBus::serviceShutdown(void) {
         Application::debug(DebugType::Dbus, "{}: pid: {}", __FUNCTION__, getpid());
-        conn->leaveEventLoop();
+        boost::asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
     }
 
     void PcscSessionBus::setDebug(const std::string & level) {
@@ -1749,31 +2343,25 @@ namespace LTSM {
         setDebugLevel(level);
     }
 
-    bool PcscSessionBus::connectChannel(const std::string & clientPath) {
-        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath);
+    bool PcscSessionBus::connectChannel(const std::string & path) {
+        Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, path);
 
-        bool waitSocket = Tools::waitCallable<std::chrono::milliseconds>(5000, 100, [ &]() {
-            return Tools::checkUnixSocket(clientPath);
-        });
+        std::promise<bool> connected;
+        auto res = connected.get_future();
+        remote_ = std::make_shared<PcscRemote>(ioc_, path, std::move(connected));
 
-        if(! waitSocket) {
-            Application::error("{}: checkUnixSocket failed, `{}'", __FUNCTION__, clientPath);
-            return false;
+        if(res.get()) {
+            pcsc_sock_.async_accept(std::bind(&PcscSessionBus::handlerLocalAccepted, this, std::placeholders::_1, std::placeholders::_2));
+            return true;
         }
 
-        int sockfd = UnixSocket::connect(clientPath);
-
-        if(0 > sockfd) {
-            return false;
-        }
-
-        remote = std::make_shared<PcscRemote>(sockfd);
-        return true;
+        return false;
     }
 
     void PcscSessionBus::disconnectChannel(const std::string & clientPath) {
         Application::debug(DebugType::Dbus, "{}: client socket path: `{}'", __FUNCTION__, clientPath);
-        remote.reset();
+
+        remote_.reset();
     }
 }
 
@@ -1799,18 +2387,12 @@ int main(int argc, char** argv) {
 
     try {
 #ifdef SDBUS_2_0_API
-        LTSM::conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_pcsc_name});
+        auto conn = sdbus::createSessionBusConnection(sdbus::ServiceName {LTSM::dbus_session_pcsc_name});
 #else
-        LTSM::conn = sdbus::createSessionBusConnection(LTSM::dbus_session_pcsc_name);
+        auto conn = sdbus::createSessionBusConnection(LTSM::dbus_session_pcsc_name);
 #endif
 
-        if(! LTSM::conn) {
-            std::cerr << "dbus connection failed, uid: " << getuid() << std::endl;
-            return EXIT_FAILURE;
-        }
-
-        LTSM::PcscSessionBus pcscSession(*LTSM::conn, debug);
-        return pcscSession.start();
+        return LTSM::PcscSessionBus(std::move(conn), debug).start();
     } catch(const sdbus::Error & err) {
         LTSM::Application::error("sdbus: [{}] {}", err.getName(), err.getMessage());
     } catch(const std::exception & err) {
