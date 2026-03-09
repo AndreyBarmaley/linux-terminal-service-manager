@@ -25,7 +25,6 @@
 #define _LTSM_AUDIO_SESSION_
 
 #include <chrono>
-#include <future>
 #include <memory>
 #include <string>
 #include <forward_list>
@@ -107,9 +106,7 @@ namespace LTSM {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
 
-        std::future<void> sdbus_job_;
         DBusConnectionPtr dbus_conn_;
-
         std::forward_list<AudioClient> clients_;
 
       protected:

@@ -21,6 +21,7 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.         *
  **********************************************************************/
 
+#include <future>
 #include <cstring>
 #include <iostream>
 #include <filesystem>
@@ -353,7 +354,7 @@ namespace LTSM {
 
         Application::info("service started, uid: {}, pid: {}, version: {}", getuid(), getpid(), LTSM_SESSION_AUDIO_VERSION);
 
-        sdbus_job_ = std::async(std::launch::async, [this]() {
+        auto sdbus_job = std::async(std::launch::async, [this]() {
             try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
@@ -373,6 +374,9 @@ namespace LTSM {
         });
 
         ioc_.run();
+
+        dbus_conn_->leaveEventLoop();
+        sdbus_job.wait();
 
         Application::debug(DebugType::App, "service stopped");
         return EXIT_SUCCESS;

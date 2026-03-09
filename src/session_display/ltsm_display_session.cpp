@@ -536,7 +536,7 @@ namespace LTSM::DisplaySession {
         Application::info("service started, uid: {}, gid: {}, pid: {}, version: {}",
                           getuid(), getgid(), getpid(), LTSM_SESSION_DISPLAY_VERSION);
 
-        sdbus_job_ = std::async(std::launch::async, [this]() {
+        auto sdbus_job = std::async(std::launch::async, [this]() {
            try {
                 dbus_conn_->enterEventLoop();
             } catch(const std::exception & err) {
@@ -559,6 +559,9 @@ namespace LTSM::DisplaySession {
         timer_childs_.async_wait(std::bind(&DBusAdaptor::timerChildsAliveCheck, this, std::placeholders::_1));
 
         ioc_.run();
+
+        dbus_conn_->leaveEventLoop();
+        sdbus_job.wait();
 
         return EXIT_SUCCESS;
     }

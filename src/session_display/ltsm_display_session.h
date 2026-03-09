@@ -29,7 +29,6 @@
 #include <chrono>
 #include <atomic>
 #include <memory>
-#include <future>
 #include <vector>
 #include <utility>
 #include <filesystem>
@@ -174,8 +173,6 @@ namespace LTSM::DisplaySession {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
         boost::asio::steady_timer timer_childs_;
-
-        std::future<void> sdbus_job_;
 
         std::mutex lock_childs_;
         std::list<bp::child> childs_;
