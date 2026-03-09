@@ -2317,14 +2317,10 @@ namespace LTSM {
     void PcscSessionBus::clientShutdownNotify(const PcscLocal* cli) {
         Application::debug(DebugType::App, "{}: shutdown clientId: {}", __FUNCTION__, cli->id());
 
-        boost::asio::post(ioc_, [this, cli](){
-            std::this_thread::sleep_for(10ms);
+        const std::scoped_lock guard{ clients_lock_ };
 
-            const std::scoped_lock guard{ clients_lock_ };
-
-            std::erase_if(clients_, [cli](auto & st) {
-                return cli == std::addressof(st);
-            });
+        std::erase_if(clients_, [cli](auto & st) {
+            return cli == std::addressof(st);
         });
     }
 
