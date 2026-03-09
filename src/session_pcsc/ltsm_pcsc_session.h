@@ -212,6 +212,8 @@ namespace LTSM {
         boost::asio::signal_set signals_;
 
         boost::asio::local::stream_protocol::acceptor pcsc_sock_;
+        boost::asio::local::stream_protocol::endpoint pcsc_ep_;
+
         DBusConnectionPtr dbus_conn_;
 
         std::forward_list<PcscLocal> clients_;

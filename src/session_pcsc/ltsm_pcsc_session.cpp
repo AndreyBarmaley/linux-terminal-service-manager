@@ -2252,10 +2252,7 @@ namespace LTSM {
 
         Application::info("{}: socket path: `{}'", __FUNCTION__, pcsc_path);
 
-        if(std::filesystem::is_socket(pcsc_path)) {
-            std::filesystem::remove(pcsc_path);
-            Application::warning("{}: old socket found: {}, removed", __FUNCTION__, pcsc_path);
-        }
+        pcsc_ep_.path(pcsc_path);
 
         signals_.add(SIGTERM);
         signals_.add(SIGINT);
@@ -2275,8 +2272,6 @@ namespace LTSM {
                 boost::asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
             }
         });
-
-        pcsc_sock_.bind(pcsc_path);
 
         // main loop
         ioc_.run();
@@ -2351,6 +2346,24 @@ namespace LTSM {
         remote_ = std::make_shared<PcscRemote>(ioc_, path, std::move(connected));
 
         if(res.get()) {
+            if(pcsc_sock_.is_open()) {
+                pcsc_sock_.close();
+            }
+
+            if(std::filesystem::is_socket(pcsc_ep_.path())) {
+                std::filesystem::remove(pcsc_ep_.path());
+                Application::warning("{}: old socket removed", __FUNCTION__);
+            }
+
+            try {
+                pcsc_sock_.open(pcsc_ep_.protocol());
+                pcsc_sock_.bind(pcsc_ep_);
+                pcsc_sock_.listen();
+            } catch(const std::exception & err) {
+                Application::error("{}: exception: {}", __FUNCTION__, err.what());
+                return false;
+            }
+
             pcsc_sock_.async_accept(std::bind(&PcscSessionBus::handlerLocalAccepted, this, std::placeholders::_1, std::placeholders::_2));
             return true;
         }
