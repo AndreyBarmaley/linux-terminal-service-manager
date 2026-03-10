@@ -96,9 +96,7 @@ namespace LTSM {
     using binary_buf = std::vector<uint8_t>;
 
     class PcscRemote {
-        boost::asio::io_context & ioc_;
         boost::asio::local::stream_protocol::socket sock_;
-
         boost::asio::streambuf sb_;
         std::mutex sock_lock_;
 
@@ -131,8 +129,6 @@ namespace LTSM {
     using ClientShutdownFunc = std::function<void(const PcscLocal*)>;
 
     class PcscLocal {
-        boost::asio::io_context & ioc_;
-        boost::asio::steady_timer timer_;
         boost::asio::local::stream_protocol::socket sock_;
         boost::asio::streambuf sb_;
 
@@ -144,7 +140,7 @@ namespace LTSM {
 
         uint32_t context = 0;
         uint32_t handle = 0;
-        int sock_id_ = 0;
+        int cid_ = 0;
 
         std::weak_ptr<PcscRemote> remote_;
 
@@ -152,7 +148,8 @@ namespace LTSM {
         ClientShutdownFunc clientShutdownCb;
 
       protected:
-        void handlerClientActionStarted(const boost::system::error_code & ec);
+        void handlerClientWaitCommand(const boost::system::error_code & ec);
+        void handlerClientActionStarted(void);
         void replyError(uint32_t len, uint32_t err);
 
         bool proxyEstablishContext(void);
@@ -173,7 +170,7 @@ namespace LTSM {
         bool proxyReaderStateChangeStart(void);
         bool proxyReaderStateChangeStop(void);
 
-        bool clientAction(void);
+        bool clientAction(uint32_t cmd, uint32_t len);
         void statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr);
 
         uint32_t syncReaderStatus(const std::string &, PcscLite::ReaderState &, bool* changed = nullptr);
@@ -181,11 +178,11 @@ namespace LTSM {
         uint32_t waitReadersStatusChanged(uint32_t timeout);
 
       public:
-        PcscLocal(boost::asio::io_context &, boost::asio::local::stream_protocol::socket &&, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
+        PcscLocal(boost::asio::local::stream_protocol::socket &&, int id, std::shared_ptr<PcscRemote>, PcscSessionBus* sessionBus);
         ~PcscLocal();
 
         inline int id(void) const {
-            return sock_id_;
+            return cid_;
         }
 
         const uint64_t & proxyContext(void) const {
@@ -210,6 +207,8 @@ namespace LTSM {
     class PcscSessionBus : public ApplicationLog, public sdbus::AdaptorInterfaces<Session::Pcsc_adaptor> {
         boost::asio::io_context ioc_;
         boost::asio::signal_set signals_;
+
+        boost::asio::thread_pool pool_; // for PcscLocal clients
 
         boost::asio::local::stream_protocol::acceptor pcsc_sock_;
         boost::asio::local::stream_protocol::endpoint pcsc_ep_;

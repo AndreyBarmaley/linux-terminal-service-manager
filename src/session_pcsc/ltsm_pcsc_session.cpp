@@ -193,7 +193,7 @@ namespace LTSM {
 
     /// PcscRemote
     PcscRemote::PcscRemote(boost::asio::io_context& ctx, const std::string & path, std::promise<bool> connected)
-        : ioc_{ctx}, sock_{ioc_} {
+        : sock_{ctx} {
 
         sock_.async_connect(path, [res = std::move(connected)](const boost::system::error_code & ec) mutable {
             if(ec) {
@@ -216,22 +216,11 @@ namespace LTSM {
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::EstablishContext).write_le32(scope);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: context64 + ret32
         const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto context = bs.read_le64();
         auto ret = bs.read_le32();
@@ -251,22 +240,11 @@ namespace LTSM {
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::ReleaseContext).write_le64(context);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -291,22 +269,11 @@ namespace LTSM {
           write_le32(prefferedProtocols).
           write_le32(readerName.size()).write_string(readerName);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: handle64 + proto32 + ret32
         const size_t rsz = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto handle = bs.read_le64();
         auto activeProtocol = bs.read_le32();
@@ -334,22 +301,11 @@ namespace LTSM {
           write_le32(prefferedProtocols).
           write_le32(initialization);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: proto32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto activeProtocol = bs.read_le32();
         auto ret = bs.read_le32();
@@ -371,22 +327,11 @@ namespace LTSM {
           write_le64(handle).
           write_le32(disposition);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -408,22 +353,11 @@ namespace LTSM {
           write_le16(PcscLite::BeginTransaction).
           write_le64(handle);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
 
@@ -447,24 +381,13 @@ namespace LTSM {
         bs.write_le16(PcscOp::Init).
           write_le16(PcscLite::EndTransaction).
           write_le64(handle).
-          write_le64(disposition);
+          write_le32(disposition);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
 
@@ -500,22 +423,11 @@ namespace LTSM {
             bs.write_bytes(data1);
         }
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: proto32 + length32 + bytes32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ioRecvPciProtocol = bs.read_le32();
         auto ioRecvPciLength = bs.read_le32();
@@ -523,13 +435,7 @@ namespace LTSM {
         auto ret = bs.read_le32();
 
         if(bytesReturned) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
-
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned));
             auto data2 = bs.read_bytes(bytesReturned);
             return std::make_tuple(ioRecvPciProtocol, ioRecvPciLength, ret, std::move(data2));
         }
@@ -550,44 +456,23 @@ namespace LTSM {
           write_le16(PcscLite::Status).
           write_le64(handle);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: str32
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
 
         auto nameLen = bs.read_le32();
 
         // rsz: nameLen + state32 + proto32 + len32
         const size_t rsz = nameLen + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto name = bs.read_string(nameLen);
         auto state = bs.read_le32();
         auto protocol = bs.read_le32();
         auto atrLen = bs.read_le32();
 
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(atrLen + sizeof(uint32_t)), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(atrLen + sizeof(uint32_t)));
 
         auto atr = bs.read_bytes(atrLen);
         auto ret = bs.read_le32();
@@ -620,34 +505,17 @@ namespace LTSM {
             bs.write_bytes(data1);
         }
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: bytes32 + len32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto bytesReturned = bs.read_le32();
         auto ret = bs.read_le32();
 
         if(bytesReturned) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
-
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(bytesReturned));
             auto data2 = bs.read_bytes(bytesReturned);
             return std::make_tuple(ret, std::move(data2));
         }
@@ -669,29 +537,18 @@ namespace LTSM {
           write_le64(handle).
           write_le32(attrId);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: len32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto attrLen = bs.read_le32();
         auto ret = bs.read_le32();
 
         if(attrLen) {
             assertm(attrLen <= MAX_BUFFER_SIZE, "attr length invalid");
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(attrLen), ec);
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(attrLen));
             auto attr = bs.read_bytes(attrLen);
             return std::make_tuple(ret, std::move(attr));
         }
@@ -723,22 +580,11 @@ namespace LTSM {
             bs.write_bytes(attr);
         }
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -757,22 +603,11 @@ namespace LTSM {
           write_le16(PcscLite::Cancel).
           write_le64(context);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: ret32
         const size_t rsz = sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto ret = bs.read_le32();
         return std::make_tuple(ret);
@@ -788,21 +623,10 @@ namespace LTSM {
           write_le16(PcscLite::ListReaders).
           write_le64(context);
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: count32
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
 
         auto readersCount = bs.read_le32();
 
@@ -813,21 +637,10 @@ namespace LTSM {
 
         while(readersCount--) {
             // rsz: len32
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
-
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sizeof(uint32_t)));
             uint32_t len = bs.read_le32();
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(len), ec);
 
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
-
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(len));
             names.emplace_back(bs.read_string(len));
 
             if(names.back().size() > MAX_READERNAME - 1) {
@@ -859,22 +672,11 @@ namespace LTSM {
               write_bytes(state.rgbAtr, state.cbAtr);
         }
 
-        boost::system::error_code ec;
-        boost::asio::write(sock_, sb_, boost::asio::transfer_all(), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "write", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::write(sock_, sb_, boost::asio::transfer_all());
 
         // rsz: count32 + ret32
         const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-        if(ec) {
-            Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-            throw pcsc_error(NS_FuncNameS);
-        }
+        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
         auto counts = bs.read_le32();
         auto ret = bs.read_le32();
@@ -887,12 +689,7 @@ namespace LTSM {
         for(uint32_t it = 0; it < statesCount; ++it) {
             // rsz: state32 + state32 + name32 + atr32
             const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
 
             SCARD_READERSTATE & state = states[it];
 
@@ -902,13 +699,7 @@ namespace LTSM {
             auto szReader = bs.read_le32();
             auto cbAtr = bs.read_le32();
 
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(szReader), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
-
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(szReader));
             auto reader = bs.read_string(szReader);
 
             if(reader != state.szReader) {
@@ -918,34 +709,29 @@ namespace LTSM {
             assertm(cbAtr <= sizeof(state.rgbAtr), "atr length invalid");
 
             state.cbAtr = cbAtr;
-            boost::asio::read(sock_, boost::asio::buffer(state.rgbAtr, cbAtr), boost::asio::transfer_exactly(cbAtr), ec);
-
-            if(ec) {
-                Application::error("{}: {} failed, code: {}, error: {}", __FUNCTION__, "read", ec.value(), ec.message());
-                throw pcsc_error(NS_FuncNameS);
-            }
+            boost::asio::read(sock_, boost::asio::buffer(state.rgbAtr, cbAtr), boost::asio::transfer_exactly(cbAtr));
         }
 
         return ret;
     }
 
+    static int start_client_id = 11;
+
     /// PcscLocal
-    PcscLocal::PcscLocal(boost::asio::io_context& ctx, boost::asio::local::stream_protocol::socket && sock, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* sessionBus)
-        : ioc_{ctx}, timer_{ioc_}, sock_{std::move(sock)}, remote_{ptr} {
+    PcscLocal::PcscLocal(boost::asio::local::stream_protocol::socket && sock, int cid, std::shared_ptr<PcscRemote> ptr, PcscSessionBus* sessionBus)
+        : sock_{std::move(sock)}, remote_{ptr} {
         clientCanceledCb = std::bind(&PcscSessionBus::clientCanceledNotify, sessionBus, std::placeholders::_1);
         clientShutdownCb = std::bind(&PcscSessionBus::clientShutdownNotify, sessionBus, std::placeholders::_1);
 
-        sock_id_ = sock_.native_handle();
+        cid_ = cid;
 
-        timer_.expires_after(1ms);
-        timer_.async_wait(std::bind(&PcscLocal::handlerClientActionStarted, this, std::placeholders::_1));
+        sock_.async_wait(boost::asio::local::stream_protocol::socket::wait_read,
+                         std::bind(&PcscLocal::handlerClientWaitCommand, this, std::placeholders::_1));
     }
 
     PcscLocal::~PcscLocal() {
         sock_.cancel();
         sock_.close();
-
-        timer_.cancel();
 
         if(transaction_id == id()) {
             transaction_id = 0;
@@ -955,56 +741,71 @@ namespace LTSM {
         waitStatusChanged.stop();
     }
 
-    void PcscLocal::handlerClientActionStarted(const boost::system::error_code & ec) {
+    void PcscLocal::handlerClientWaitCommand(const boost::system::error_code & ec) {
         if(ec) {
+            Application::error("{}: error, client id: {}, message: {}", __FUNCTION__, id(), ec.message());
             return;
         }
 
+        // rsz: len32, cmd32
+        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
+
+        if(rsz > sock_.available()) {
+            // wait read data
+            sock_.async_wait(boost::asio::local::stream_protocol::socket::wait_read,
+                             std::bind(&PcscLocal::handlerClientWaitCommand, this, std::placeholders::_1));
+        }
+
+        uint8_t buf[8];
+        sock_.receive(boost::asio::buffer(buf), boost::asio::socket_base::message_peek);
+
+        uint32_t len = boost::endian::endian_load<uint32_t, sizeof(uint32_t), boost::endian::order::little>(buf);
+        uint32_t cmd = boost::endian::endian_load<uint32_t, sizeof(uint32_t), boost::endian::order::little>(buf + sizeof(uint32_t));
+
+        if(len < PcscLite::apiCmdLength(cmd)) {
+            Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#08x}, wait data...", __FUNCTION__, id(), cmd);
+            // wait read data
+            sock_.async_wait(boost::asio::local::stream_protocol::socket::wait_read,
+                             std::bind(&PcscLocal::handlerClientWaitCommand, this, std::placeholders::_1));
+            return;
+        }
+
+        handlerClientActionStarted();
+    }
+
+    void PcscLocal::handlerClientActionStarted(void) {
         bool processed = false;
 
         try {
-            processed = clientAction();
+            uint32_t len = 0;
+            sock_.read_some(boost::asio::buffer(&len, sizeof(len)));
+            boost::endian::little_to_native_inplace(len);
+
+            uint32_t cmd = 0;
+            sock_.read_some(boost::asio::buffer(&cmd, sizeof(cmd)));
+            boost::endian::little_to_native_inplace(cmd);
+
+            processed = clientAction(cmd, len);
         } catch(const std::exception & ex) {
             Application::error("{}: client id: {}, context: {:#08x}, exception: {}",
                                __FUNCTION__, id(), context, ex.what());
         }
 
         if(processed) {
-            timer_.expires_after(1ms);
-            timer_.async_wait(std::bind(&PcscLocal::handlerClientActionStarted, this, std::placeholders::_1));
+            sock_.async_wait(boost::asio::local::stream_protocol::socket::wait_read,
+                             std::bind(&PcscLocal::handlerClientWaitCommand, this, std::placeholders::_1));
         } else {
             if(transaction_id == id()) {
                 transaction_id = 0;
                 trans_lock.unlock();
             }
 
-            boost::asio::post(ioc_, std::bind(clientShutdownCb, this));
+            boost::asio::post(sock_.get_executor(), std::bind(clientShutdownCb, this));
         }
     }
 
-    bool PcscLocal::clientAction(void) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: {}, wait command", __FUNCTION__, id());
-
-        sb_.consume(sb_.size());
-        byte::streambuf bs(sb_);
-
-        // rsz: len32, cmd32
-        const size_t rsz = sizeof(uint32_t) + sizeof(uint32_t);
-        boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
-
-        uint32_t len = bs.read_le32();
-        uint32_t cmd = bs.read_le32();
-
+    bool PcscLocal::clientAction(uint32_t cmd, uint32_t len) {
         Application::debug(DebugType::Pcsc, "{}: clientId: {}, cmd: {:#08x}, len: {}", __FUNCTION__, id(), cmd, len);
-
-        if(len != PcscLite::apiCmdLength(cmd) ||
-           // transmit: cmd length + variable size
-           (cmd == PcscLite::Transmit && len < PcscLite::apiCmdLength(cmd)) ||
-           // control: cmd length + variable size
-           (cmd == PcscLite::Control && len < PcscLite::apiCmdLength(cmd))) {
-            Application::error("{}: clientId: {}, assert len: {}", __FUNCTION__, id(), len);
-            return false;
-        }
 
         switch(cmd) {
             case PcscLite::EstablishContext:
@@ -1534,7 +1335,7 @@ namespace LTSM {
         binary_buf data1;
 
         if(sendLength) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sendLength));
             data1 = bs.read_bytes(sendLength);
         }
 
@@ -1701,7 +1502,7 @@ namespace LTSM {
         binary_buf data1;
 
         if(sendLength) {
-            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(rsz));
+            boost::asio::read(sock_, sb_, boost::asio::transfer_exactly(sendLength));
             data1 = bs.read_bytes(sendLength);
         }
 
@@ -2220,7 +2021,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-        ioc_ {2}, signals_ {ioc_}, pcsc_sock_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        ioc_ {2}, signals_ {ioc_}, pool_ {8}, pcsc_sock_ {pool_.get_executor()}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
@@ -2238,6 +2039,7 @@ namespace LTSM {
         signals_.cancel();
         pcsc_sock_.cancel();
         dbus_conn_->leaveEventLoop();
+        pool_.join();
     }
 
     int PcscSessionBus::start(void) {
@@ -2294,9 +2096,13 @@ namespace LTSM {
         }
 
         const std::scoped_lock guard{ clients_lock_ };
+        int cid = start_client_id++;
 
-        Application::debug(DebugType::App, "{}: add clientId: {}", __FUNCTION__, peer.native_handle());
-        this->clients_.emplace_front(ioc_, std::move(peer), remote_, this);
+        Application::debug(DebugType::App, "{}: add clientId: {}, handler: {}", __FUNCTION__, cid, peer.native_handle());
+        this->clients_.emplace_front(std::move(peer), cid, remote_, this);
+
+        // next accept
+        pcsc_sock_.async_accept(std::bind(&PcscSessionBus::handlerLocalAccepted, this, std::placeholders::_1, std::placeholders::_2));
     }
 
     uint64_t PcscSessionBus::clientCanceledNotify(uint32_t ctx) {

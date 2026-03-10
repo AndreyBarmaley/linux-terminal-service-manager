@@ -134,8 +134,6 @@ namespace byte {
         }
 
         void skip_bytes(size_t len) {
-            auto buf = sb_.data();
-            assert(len <= boost::asio::buffer_size(buf));
             sb_.consume(len);
         }
 
