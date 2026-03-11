@@ -83,7 +83,7 @@ namespace LTSM {
         enum class ConnectorMode { Unknown, ReadOnly, ReadWrite, WriteOnly };
 
         // UltraSlow: ~10k/sec, ~40k/sec, ~80k/sec, ~800k/sec, ~1600k/sec
-        enum class Speed { VerySlow, Slow, Medium, Fast, UltraFast };
+        enum class Speed { VerySlow, Slow, Medium, Fast, UltraFast, Ultra5 };
 
         ConnectorType connectorType(std::string_view);
         ConnectorMode connectorMode(std::string_view);

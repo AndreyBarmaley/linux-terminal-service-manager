@@ -91,7 +91,7 @@ LTSM::Channel::ConnectorMode LTSM::Channel::connectorMode(std::string_view str) 
 
 LTSM::Channel::Speed LTSM::Channel::connectorSpeed(std::string_view str) {
     for(auto speed : {
-            Speed::VerySlow, Speed::Slow, Speed::Medium, Speed::Fast, Speed::UltraFast
+            Speed::VerySlow, Speed::Slow, Speed::Medium, Speed::Fast, Speed::UltraFast, Speed::Ultra5
         }) {
         if(str == Connector::speedString(speed)) {
             return speed;
@@ -166,6 +166,9 @@ const char* LTSM::Channel::Connector::speedString(const Speed & speed) {
 
         case Speed::UltraFast:
             return "ultra";
+
+        case Speed::Ultra5:
+            return "ultra5";
 
         default:
             break;
@@ -1242,6 +1245,10 @@ void LTSM::Channel::Remote2Local::setSpeed(const Channel::Speed & speed) {
         case Speed::UltraFast:
             delay = std::chrono::milliseconds(20);
             break;
+
+        case Speed::Ultra5:
+            delay = std::chrono::milliseconds(5);
+            break;
     }
 }
 
@@ -1353,6 +1360,11 @@ void LTSM::Channel::Local2Remote::setSpeed(const Channel::Speed & speed) {
         // ~1600k/sec
         case Speed::UltraFast:
             delay = std::chrono::milliseconds(20);
+            blocksz = 32768;
+            break;
+
+        case Speed::Ultra5:
+            delay = std::chrono::milliseconds(5);
             blocksz = 32768;
             break;
     }
