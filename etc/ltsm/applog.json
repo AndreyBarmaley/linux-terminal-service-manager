@@ -36,7 +36,7 @@
 	"debug:syslog": "user"
     },
     "ltsm_session_display": {
-	"debug:level": "debug",
+	"debug:level": "info",
 	"debug:types": [ "app", "dbus" ],
 	"debug:target": "syslog",
 	"debug:syslog": "user"
