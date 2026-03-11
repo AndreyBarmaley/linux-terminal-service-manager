@@ -66,12 +66,9 @@ namespace LTSM {
         size_t framesCount = 960;
 
         // Opus: frame size - at 48kHz the permitted values are 120, 240, 480, or 960
-        if(120 > samplesCount) {
+        // хрипит иногда при меньших фреймах
+        if(480 > samplesCount) {
             return {};
-        } else if(240 > samplesCount) {
-            framesCount = 120;
-        } else if(480 > samplesCount) {
-            framesCount = 240;
         } else if(960 > samplesCount) {
             framesCount = 480;
         }
