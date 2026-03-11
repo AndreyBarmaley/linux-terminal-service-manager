@@ -2115,6 +2115,10 @@ namespace LTSM {
         std::erase_if(clients_, [cli](auto & st) {
             return cli == std::addressof(st);
         });
+
+        if(remote_->isError()) {
+            boost::asio::post(ioc_, std::bind(&PcscSessionBus::stop, this));
+        }
     }
 
     int32_t PcscSessionBus::getVersion(void) {
