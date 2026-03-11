@@ -573,7 +573,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     Application::debug(DebugType::Pcsc, "{}: << handle: {:#016x}", __FUNCTION__, hCard);
     DWORD state = 0;
     DWORD protocol = 0;
-    char readerName[MAX_READERNAME];
+    char readerName[MAX_READERNAME] = {};
     DWORD readerNameLen = sizeof(readerName);
     BYTE atrBuf[MAX_ATR_SIZE];
     DWORD atrLen = sizeof(atrBuf);
@@ -591,6 +591,7 @@ void LTSM::Channel::ConnectorClientPcsc::pcscStatus(const StreamBufRef & sb) {
     }
 
     // reply
+    readerNameLen = strlen(readerName);
     StreamBuf reply(20 + sizeof(readerName) + sizeof(atrBuf));
     reply.writeIntLE32(readerNameLen).write(readerName, readerNameLen);
     reply.writeIntLE32(state).writeIntLE32(protocol);
