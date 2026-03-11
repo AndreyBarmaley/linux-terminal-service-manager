@@ -2021,7 +2021,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_pcsc_path),
 #endif
-        ioc_ {2}, signals_ {ioc_}, pool_ {8}, pcsc_sock_ {pool_}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, pool_ {8}, pcsc_sock_ {pool_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {

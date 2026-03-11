@@ -356,7 +356,7 @@ namespace LTSM::DisplaySession {
 #else
           AdaptorInterfaces(*dbus_conn_, dbus_session_display_path),
 #endif
-          started_(std::chrono::system_clock::now()), ioc_ {2}, signals_ {ioc_}, timer_childs_ {ioc_} {
+          started_(std::chrono::system_clock::now()), signals_ {ioc_}, timer_childs_ {ioc_} {
         registerAdaptor();
     }
 

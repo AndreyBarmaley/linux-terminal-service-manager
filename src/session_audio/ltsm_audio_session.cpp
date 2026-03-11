@@ -355,7 +355,7 @@ namespace LTSM {
 #else
         AdaptorInterfaces(*conn, dbus_session_audio_path),
 #endif
-        ioc_ {2}, signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
+        signals_ {ioc_}, dbus_conn_ {std::move(conn)} {
         registerAdaptor();
 
         if(debug) {
