@@ -151,7 +151,7 @@ struct fmt::formatter<LTSM::XCB::AtomName> {
 
     template <typename FormatContext>
     auto format(const LTSM::XCB::AtomName& at, FormatContext& ctx) const {
-        return fmt::format_to(ctx.out(), "atom[{:#08x}, `{}']", at.atom, at.name);
+        return fmt::format_to(ctx.out(), "atom[{:#08x}, {}]", at.atom, at.name);
     }
 };
 

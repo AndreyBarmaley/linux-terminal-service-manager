@@ -414,7 +414,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(data1, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
         }
 
         boost::asio::streambuf sb;
@@ -490,7 +490,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(data1, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: send data: [ `{}' ]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: send data: [{}]", __FUNCTION__, str);
         }
 
         boost::asio::streambuf sb;
@@ -554,7 +554,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::hexString(attr, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: attr: [{}]", __FUNCTION__, str);
         }
 
         boost::asio::streambuf sb;
@@ -1361,7 +1361,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(data2, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1387,7 +1387,7 @@ namespace LTSM {
     }
 
     void PcscLocal::statusApply(const std::string & name, const uint32_t & state, const uint32_t & protocol, const binary_buf & atr) {
-        Application::debug(DebugType::Pcsc, "{}: clientId: {} reader: `{}', state: {:#08x}, protocol: {}, atrLen: {}",
+        Application::debug(DebugType::Pcsc, "{}: clientId: {}, reader: `{}', state: {:#08x}, protocol: {}, atrLen: {}",
                            __FUNCTION__, id(), name, state, protocol, atr.size());
 
         assertm(reader_, "reader not connected");
@@ -1403,7 +1403,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(atr, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: atr: [{}]", __FUNCTION__, str);
             }
         }
 
@@ -1528,7 +1528,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(data2, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: recv data: [ `{}' ]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: recv data: [{}]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1594,7 +1594,7 @@ namespace LTSM {
 
             if(Application::isDebugLevel(DebugLevel::Trace)) {
                 auto str = Tools::hexString(attr, 2, ",", false);
-                Application::debug(DebugType::Pcsc, "{}: attr: [ `{}' ]", __FUNCTION__, str);
+                Application::debug(DebugType::Pcsc, "{}: attr: [{}]", __FUNCTION__, str);
             }
         } else {
             Application::error("{}: clientId: {}, handle: {:#08x}, error: {:#08x} ({})",
@@ -1920,7 +1920,7 @@ namespace LTSM {
 
         if(Application::isDebugLevel(DebugLevel::Trace)) {
             auto str = Tools::rangeHexString(state.rgbAtr, state.rgbAtr + state.cbAtr, 2, ",", false);
-            Application::debug(DebugType::Pcsc, "{}: atr: [ `{}' ]", __FUNCTION__, str);
+            Application::debug(DebugType::Pcsc, "{}: atr: [{}]", __FUNCTION__, str);
         }
 
         if(state.dwEventState & SCARD_STATE_CHANGED) {
