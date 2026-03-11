@@ -70,6 +70,7 @@ namespace LTSM {
         boost::asio::steady_timer timer_wait_;
         boost::asio::local::stream_protocol::socket sock_;
 
+        std::future<bool> handshake_;
         std::string socket_path_;
         const uint8_t channels_ = 2;
 
@@ -86,7 +87,7 @@ namespace LTSM {
 
         bool wait_async_send(boost::asio::streambuf &);
         bool wait_async_recv(boost::asio::streambuf &, size_t rsz);
- 
+
         AudioClient(boost::asio::io_context &, const std::string &);
         ~AudioClient();
 

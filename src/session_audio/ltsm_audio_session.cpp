@@ -59,7 +59,8 @@ namespace LTSM {
 
     bool AudioClient::wait_async_recv(boost::asio::streambuf & sb, size_t rsz) {
         auto recv = boost::asio::async_read(sock_, sb,
-                    boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+                                            boost::asio::transfer_exactly(rsz), boost::asio::use_future);
+
         try {
             [[maybe_unused]] auto bytes = recv.get();
         } catch(const boost::system::error_code & ec) {
@@ -77,7 +78,7 @@ namespace LTSM {
                                 std::bind(&AudioClient::handlerSocketConnect, this, std::placeholders::_1));
         } else {
             // success
-            boost::asio::post(ioc_, std::bind(&AudioClient::clientHandshake, this));
+            handshake_ = std::async(std::launch::async, &AudioClient::clientHandshake, this);
         }
     }
 
@@ -123,13 +124,14 @@ namespace LTSM {
         bs.write_le16(bitsPerSample);
 #endif
 
-        if(!wait_async_send(sb)) {
+        if(! wait_async_send(sb)) {
             sock_.close();
             return false;
         }
 
         // rsz: cmd16, err16
         const size_t rsz = sizeof(uint16_t) + sizeof(uint16_t);
+
         if(! wait_async_recv(sb, rsz)) {
             sock_.close();
             return false;
@@ -264,7 +266,7 @@ namespace LTSM {
 
     AudioPacket::Silent::Silent(uint32_t len) : Base(AudioOp::Silent, len) {
     }
-        
+
     AudioPacket::Data::Data(std::vector<uint8_t> && data) : Base(AudioOp::Data, data.size()) {
         data_ = std::move(data);
         buffers_.emplace_back(data_.data(), data_.size());
