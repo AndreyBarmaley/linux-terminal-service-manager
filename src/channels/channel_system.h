@@ -394,6 +394,9 @@ namespace LTSM {
             uint16_t audioVer = 0;
             uint8_t cid = 255;
 
+            using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+            std::unique_ptr<TimePoint> silent;
+
             std::unique_ptr<AudioPlayer> player;
             std::unique_ptr<AudioDecoder::BaseDecoder> decoder;
             std::vector<uint8_t> last;

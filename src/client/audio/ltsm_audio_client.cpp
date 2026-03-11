@@ -265,9 +265,18 @@ void LTSM::Channel::ConnectorClientAudio::audioOpSilent(const StreamBufRef & sb)
     auto len = sb.readIntLE32();
     Application::debug(DebugType::Audio, "{}: data size: {}", __FUNCTION__, len);
 
-    if(player->isPlaying()) {
-        Application::info("{}: play stop", __FUNCTION__);
-        player->playStop();
+    if(silent) {
+        if(std::chrono::steady_clock::now() - *silent < 3s) {
+            std::vector<uint8_t> buf(len, 0);
+            player->streamWrite(buf.data(), buf.size());
+        } else if(player->isPlaying()) {
+            Application::info("{}: play stop", __FUNCTION__);
+            player->playStop();
+        }
+    } else {
+        silent = std::make_unique<TimePoint>(std::chrono::steady_clock::now());
+        std::vector<uint8_t> buf(len, 0);
+        player->streamWrite(buf.data(), buf.size());
     }
 }
 
@@ -282,7 +291,11 @@ void LTSM::Channel::ConnectorClientAudio::audioOpData(const StreamBufRef & sb) {
     if(len > sb.last()) {
         throw std::underflow_error(NS_FuncNameS);
     }
- 
+
+    if(silent) {
+        silent.reset();
+    }
+
     if(! decoder) {
         player->streamWrite(sb.data(), len);
     } else if(auto buf = decoder->decode(sb.data(), len); !buf.empty()) {
