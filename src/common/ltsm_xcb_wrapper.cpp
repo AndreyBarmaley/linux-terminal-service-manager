@@ -3229,17 +3229,15 @@ namespace LTSM {
                                           planeMask, XCB_IMAGE_FORMAT_Z_PIXMAP, shm->id, 0);
             PixmapInfoReply res;
 
-            if(const auto & reply = xcbReply.reply()) {
+            if(const auto & err = xcbReply.error()) {
+                extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
+            } else if(const auto & reply = xcbReply.reply()) {
                 auto visptr = visual(reply->visual);
                 auto bpp = bppFromDepth(reply->depth);
 
                 if(visptr) {
                     return std::make_unique<PixmapSHM>(visptr->red_mask, visptr->green_mask, visptr->blue_mask, bpp, std::move(shm), reply->size);
                 }
-            }
-
-            if(const auto & err = xcbReply.error()) {
-                extendedError(err.get(), __FUNCTION__, "xcb_shm_get_image");
             }
 
             shm->reset();
